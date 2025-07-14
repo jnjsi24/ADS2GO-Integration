@@ -1,3 +1,13 @@
-node_modules
+# Root
+node_modules/
 .env
 .DS_Store
+
+# Ads2Go-Client
+Ads2Go-Client/node_modules/
+Ads2Go-Client/.env
+Ads2Go-Client/build/
+
+# Ads2Go-Server
+Ads2Go-Server/node_modules/
+Ads2Go-Server/.env
