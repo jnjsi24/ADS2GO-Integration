@@ -10,6 +10,7 @@ const RiderCompanyRegister: React.FC = () => {
     lastName: '',
     companyName: '',
     companyAddress: '',
+    houseAddress: '',         // <-- Added this field
     contactNumber: '',
     email: '',
     password: '',
@@ -36,6 +37,10 @@ const RiderCompanyRegister: React.FC = () => {
       case 'companyAddress':
         if (!value.trim()) return 'Company/Business address is required';
         if (value.length < 5) return 'Address must be at least 5 characters';
+        return '';
+      case 'houseAddress':               // <-- Validate houseAddress too
+        if (!value.trim()) return 'House address is required';
+        if (value.length < 5) return 'House address must be at least 5 characters';
         return '';
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
@@ -64,7 +69,6 @@ const RiderCompanyRegister: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    // Clear error when user types
     if (errors[name]) {
       setErrors(prev => {
         const newErrors = { ...prev };
@@ -79,7 +83,7 @@ const RiderCompanyRegister: React.FC = () => {
     let isValid = true;
 
     Object.keys(formData).forEach(key => {
-      if (key !== 'middleName') { // Middle name is optional
+      if (key !== 'middleName') {
         const error = validateField(key, formData[key as keyof typeof formData]);
         if (error) {
           newErrors[key] = error;
@@ -105,10 +109,11 @@ const RiderCompanyRegister: React.FC = () => {
         lastName: formData.lastName.trim(),
         companyName: formData.companyName.trim(),
         companyAddress: formData.companyAddress.trim(),
+        houseAddress: formData.houseAddress.trim(),  // <-- include here
         contactNumber: formData.contactNumber.trim(),
         email: formData.email.trim(),
-        password: formData.password,
-        userType: 'rider' // or 'company' based on your system
+        password: formData.password
+        // userType removed — backend does not expect this
       };
 
       const success = await register(registrationData);
@@ -237,16 +242,30 @@ const RiderCompanyRegister: React.FC = () => {
             </div>
 
             <div>
+              <label htmlFor="houseAddress" className="block text-sm font-medium text-gray-700">
+                House Address *
+              </label>
+              <input
+                id="houseAddress"
+                name="houseAddress"
+                type="text"
+                value={formData.houseAddress}
+                onChange={handleChange}
+                className={`mt-1 block w-full border ${errors.houseAddress ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              />
+              {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
+            </div>
+
+            <div>
               <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700">
                 Contact Number *
               </label>
               <input
                 id="contactNumber"
                 name="contactNumber"
-                type="tel"
+                type="text"
                 value={formData.contactNumber}
                 onChange={handleChange}
-                placeholder="e.g., 09123456789"
                 className={`mt-1 block w-full border ${errors.contactNumber ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
               />
               {errors.contactNumber && <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>}
@@ -254,7 +273,7 @@ const RiderCompanyRegister: React.FC = () => {
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email *
+                Email Address *
               </label>
               <input
                 id="email"
@@ -267,84 +286,60 @@ const RiderCompanyRegister: React.FC = () => {
               {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
             </div>
 
-            <div>
+            <div className="relative">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password *
               </label>
-              <div className="relative mt-1">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`block w-full border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-              </div>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={handleChange}
+                className={`mt-1 block w-full border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
               {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
             </div>
 
-            <div>
+            <div className="relative">
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                 Confirm Password *
               </label>
-              <div className="relative mt-1">
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  className={`block w-full border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                >
-                  {showConfirmPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-400" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-400" />
-                  )}
-                </button>
-              </div>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                className={`mt-1 block w-full border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm py-2 px-3 pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(prev => !prev)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
               {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
             </div>
           </div>
 
-          <div>
-            <button
-              type="submit"
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Register
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full py-3 px-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Register
+          </button>
         </form>
-
-        <div className="text-center text-sm">
-          <p className="text-gray-600">
-            Already have an account?{' '}
-            <button
-              onClick={() => navigate('/login')}
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              Sign in
-            </button>
-          </p>
-        </div>
       </div>
     </div>
   );

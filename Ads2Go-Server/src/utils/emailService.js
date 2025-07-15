@@ -5,10 +5,15 @@ require('dotenv').config();
 
 class EmailService {
   static transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true, // true for 465, false for 587
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
+    },
+    tls: {
+      rejectUnauthorized: false // Allow self-signed certs (if needed)
     }
   });
 
@@ -48,10 +53,10 @@ class EmailService {
 
     try {
       await this.transporter.sendMail(mailOptions);
-      console.log(`Verification email sent to ${email}`);
+      console.log(`✅ Verification email sent to ${email}`);
       return true;
     } catch (error) {
-      console.error('Error sending verification email:', error);
+      console.error('❌ Error sending verification email:', error);
       return false;
     }
   }
@@ -59,7 +64,6 @@ class EmailService {
   // Send password reset email
   static async sendPasswordResetEmail(email, resetToken) {
     const resetLink = `http://localhost:4000/reset-password?token=${resetToken}`;
-  
     const mailOptions = {
       from: `TradeIN <${process.env.EMAIL_USER}>`,
       to: email,
@@ -73,7 +77,14 @@ class EmailService {
       `
     };
 
-    return this.transporter.sendMail(mailOptions);
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset email sent to ${email}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending password reset email:', error);
+      return false;
+    }
   }
 }
 

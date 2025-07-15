@@ -1,5 +1,5 @@
-// pages/USERS/CreateAdvertisement.tsx
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 const CreateAdvertisement: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -71,8 +71,8 @@ const CreateAdvertisement: React.FC = () => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto mt-10 p-6 border rounded-lg shadow-lg bg-white">
-      <h1 className="text-2xl font-bold mb-6">Create Advertisement</h1>
+    <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
+      <h1 className="text-3xl font-bold text-center mb-14">Create Advertisement</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
@@ -80,7 +80,7 @@ const CreateAdvertisement: React.FC = () => {
           placeholder="Title"
           value={formData.title}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         />
 
@@ -89,7 +89,7 @@ const CreateAdvertisement: React.FC = () => {
           placeholder="Description"
           value={formData.description}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         />
 
@@ -97,7 +97,7 @@ const CreateAdvertisement: React.FC = () => {
           name="vehicleType"
           value={formData.vehicleType}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         >
           <option value="">Select Vehicle Type</option>
@@ -110,7 +110,7 @@ const CreateAdvertisement: React.FC = () => {
           name="materialsUsed"
           value={formData.materialsUsed}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
           disabled={!formData.vehicleType}
         >
@@ -124,7 +124,7 @@ const CreateAdvertisement: React.FC = () => {
           name="plan"
           value={formData.plan}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         >
           <option value="">Select Plan</option>
@@ -145,7 +145,7 @@ const CreateAdvertisement: React.FC = () => {
           name="adFormat"
           value={formData.adFormat}
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         >
           <option value="">Select Format</option>
@@ -160,16 +160,26 @@ const CreateAdvertisement: React.FC = () => {
           name="media"
           accept="image/*,video/*"
           onChange={handleChange}
-          className="w-full border p-2"
+          className="w-full border border-gray-300 rounded-lg p-2"
           required
         />
 
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          Create
-        </button>
+        <div className="flex justify-between pt-4">
+          <Link to="/advertisements">
+            <button
+              type="button"
+              className="text-black px-4 py-2 rounded hover:bg-gray-100"
+            >
+              Back
+            </button>
+          </Link>
+          <button
+            type="submit"
+            className="px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow"
+          >
+            Create
+          </button>
+        </div>
       </form>
     </div>
   );

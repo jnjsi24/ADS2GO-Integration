@@ -31,7 +31,7 @@ const SiteSettings: React.FC = () => {
     recoveryPhone: '',
   });
   // State for Notification Settings form
- const [notificationForm, setNotificationForm] = useState({
+  const [notificationForm, setNotificationForm] = useState({
     enableDesktopNotifications: false,
     enableNotificationBadge: true,
     pushNotificationTimeout: '10',
@@ -41,15 +41,18 @@ const SiteSettings: React.FC = () => {
   });
   // State for Account Settings form
   const [accountForm, setAccountForm] = useState({
-    name: user?.name || 'formique Charpentier',
-    title: 'CEO',
-    practice: 'Finance',
-    branch: 'Quezon City',
-    email: 'ceo@yes.com',
-    phoneNumber: '',
-    loginId: 'id/ceo',
-    statusHistory: 'Activated 13/05/2009',
-  });
+  name: user
+    ? `${user.firstName} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName}`.trim()
+    : 'formique Charpentier',
+  title: 'CEO',
+  practice: 'Finance',
+  branch: 'Quezon City',
+  email: 'ceo@yes.com',
+  phoneNumber: '',
+  loginId: 'id/ceo',
+  statusHistory: 'Activated 13/05/2009',
+});
+
 
   const initialAccountFormRef = useRef(accountForm);
 
@@ -153,7 +156,7 @@ const SiteSettings: React.FC = () => {
       setNotificationForm((prev) => ({ ...prev, [name]: value }));
       setSecurityForm((prev) => ({ ...prev, [name]: value }));
       setAccountForm((prev) => ({ ...prev, [name]: value }));
-      setPlaceholders((prev) => ({ ...prev, [name]: value }));
+      // setPlaceholders((prev) => ({ ...prev, [name]: value })); // This line should likely be removed or handled differently
     }
   };
 
@@ -235,7 +238,7 @@ const SiteSettings: React.FC = () => {
     return isValid;
   };
 
-  const [placeholders, setPlaceholders] = useState(accountForm);
+  // const [placeholders, setPlaceholders] = useState(accountForm); // This state seems unused or incorrectly used
 
   // Handle Account Settings form submission
   const handleAccountSubmit = async (e: React.FormEvent) => {
@@ -283,24 +286,23 @@ const SiteSettings: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 pl-64 pb-6 pr-1">
-      {/* Header Tabs */}
-      <div className="flex-1 bg-white p-6 rounded-lg shadow">
+    <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc]">
+      <div className="bg-[#f9f9fc] w-full">
         <div className="space-x-4">
           <span
-            className={`text-teal-700 cursor-pointer ${activeTab === 'Account Settings' ? 'font-bold border-b-2 border-teal-700' : ''}`}
+            className={`text-[#3674B5] cursor-pointer ${activeTab === 'Account Settings' ? 'font-bold border-b-2 border-[#3674B5]' : 'text-black'}`}
             onClick={() => handleTabChange('Account Settings')}
           >
             Account Settings
           </span>
           <span
-            className={`text-teal-700 cursor-pointer ${activeTab === 'Security and Privacy' ? 'font-bold border-b-2 border-teal-700' : ''}`}
+            className={`text-[#3674B5] cursor-pointer ${activeTab === 'Security and Privacy' ? 'font-bold border-b-2 border-[#3674B5]' : 'text-black'}`}
             onClick={() => handleTabChange('Security and Privacy')}
           >
             Security and Privacy
           </span>
           <span
-            className={`text-teal-700 cursor-pointer ${activeTab === 'Notification Settings' ? 'font-bold border-b-2 border-teal-700' : ''}`}
+            className={`text-[#3674B5] cursor-pointer ${activeTab === 'Notification Settings' ? 'font-bold border-b-2 border-[#3674B5]' : 'text-black'}`}
             onClick={() => handleTabChange('Notification Settings')}
           >
             Notification Settings
@@ -311,149 +313,149 @@ const SiteSettings: React.FC = () => {
       {activeTab === 'Account Settings' && (
         <div className="flex mt-6">
           {/* Form Section */}
-<div className="flex-1 bg-white p-6 rounded-lg shadow">
-  <div className="flex items-center justify-between mb-4">
-    <h2 className="text-xl font-semibold">My details</h2>
-    <button onClick={toggleFormEditable} className="text-teal-600 hover:text-teal-800">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L15.232 5.232z" />
-      </svg>
-    </button>
-  </div>
-  <form className="space-y-4" onSubmit={handleAccountSubmit}>
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Name</label>
-        <input
-          type="text"
-          name="name"
-          value={accountForm.name}
-          onChange={handleInputChange}
-          placeholder={isFormEditable ? "Enter name" : ""}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-          disabled={!isFormEditable}
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Title</label>
-        <input
-          type="text"
-          name="title"
-          value={accountForm.title}
-          onChange={handleInputChange}
-          placeholder={isFormEditable ? "Enter title" : ""}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-          disabled={!isFormEditable}
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Field</label>
-        <select
-          name="practice"
-          value={accountForm.practice}
-          onChange={handleInputChange}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md appearance-none ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-          disabled={!isFormEditable}
-        >
-          <option value="">{isFormEditable ? "Select a field" : accountForm.practice}</option>
-          {fieldOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Branch</label>
-        <select
-          name="branch"
-          value={accountForm.branch}
-          onChange={handleInputChange}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md appearance-none ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-          disabled={!isFormEditable}
-        >
-          <option value="">{isFormEditable ? "Select a branch" : accountForm.branch}</option>
-          {branchOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Email</label>
-        <input
-          type="email"
-          name="email"
-          value={accountForm.email}
-          onChange={handleInputChange}
-          placeholder={isFormEditable ? "Enter email" : ""}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-          disabled={!isFormEditable}
-        />
-      </div>
-      <div>
-  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-  <input
-    type="tel"
-    name="phoneNumber"
-    value={accountForm.phoneNumber}
-    onChange={handleInputChange}
-    onKeyDown={(e) => {
-      if (accountForm.phoneNumber.length >= 11 && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
-        e.preventDefault();
-      }
-    }}
-    placeholder={isFormEditable ? "Enter phone number" : ""}
-    inputMode="numeric"
-    pattern="[0-9]{11}"
-    maxLength={11}
-    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500' : 'border-gray-300 bg-gray-100'}`}
-    disabled={!isFormEditable}
-  />
-</div>
-      {/* Non-editable fields remain unchanged */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Login ID</label>
-        <input
-          type="text"
-          name="loginId"
-          value={accountForm.loginId}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'bg-white' : 'border-gray-300 bg-gray-100'}`}
-          disabled
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Status History</label>
-        <input
-          type="text"
-          name="statusHistory"
-          value={accountForm.statusHistory}
-          className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'bg-white' : 'border-gray-300 bg-gray-100'}`}
-          disabled
-        />
-      </div>
-    </div>
-    {isFormEditable && (
-      <div className="flex justify-end space-x-4 mt-4">
-        <button
-          type="submit"
-          className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700"
-        >
-          Save Changes
-        </button>
-        <button
-          type="button"
-          onClick={handleBack}
-          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
-        >
-          Back
-        </button>
-      </div>
-    )}
-  </form>
-</div>
-          
+          <div className="flex-1 bg-[#f9f9fc] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">My details</h2>
+              <button onClick={toggleFormEditable} className="text-teal-60f0 hover:text-teal-800">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.536L15.232 5.232z" />
+                </svg>
+              </button>
+            </div>
+            <form className="space-y-4" onSubmit={handleAccountSubmit}>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={accountForm.name}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter name" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Title</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={accountForm.title}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter title" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Field</label>
+                  <select
+                    name="practice"
+                    value={accountForm.practice}
+                    onChange={handleInputChange}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md appearance-none ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  >
+                    <option value="">{isFormEditable ? "Select a field" : accountForm.practice}</option>
+                    {fieldOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Branch</label>
+                  <select
+                    name="branch"
+                    value={accountForm.branch}
+                    onChange={handleInputChange}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md appearance-none ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  >
+                    <option value="">{isFormEditable ? "Select a branch" : accountForm.branch}</option>
+                    {branchOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={accountForm.email}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter email" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                  <input
+                    type="tel"
+                    name="phoneNumber"
+                    value={accountForm.phoneNumber}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                      if (accountForm.phoneNumber.length >= 11 && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
+                        e.preventDefault();
+                      }
+                    }}
+                    placeholder={isFormEditable ? "Enter phone number" : ""}
+                    inputMode="numeric"
+                    pattern="[0-9]{11}"
+                    maxLength={11}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                {/* Non-editable fields remain unchanged */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Login ID</label>
+                  <input
+                    type="text"
+                    name="loginId"
+                    value={accountForm.loginId}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Status History</label>
+                  <input
+                    type="text"
+                    name="statusHistory"
+                    value={accountForm.statusHistory}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled
+                  />
+                </div>
+              </div>
+              {isFormEditable && (
+                <div className="flex justify-end space-x-4 mt-4">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#3674B5]"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+            </form>
+          </div>
+
           {/* Profile Section */}
           <div className="w-1/4 ml-6 bg-white p-6 rounded-lg shadow flex flex-col items-center">
             <div
@@ -468,7 +470,7 @@ const SiteSettings: React.FC = () => {
             >
               {!profileImage && (
                 <span className="text-white text-4xl font-bold">
-                  {getInitials(user?.name)}
+{getInitials(`${user?.firstName ?? ''} ${user?.middleName ?? ''} ${user?.lastName ?? ''}`.trim())}
                 </span>
               )}
             </div>
@@ -484,7 +486,7 @@ const SiteSettings: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => document.getElementById('profileImageInput')?.click()}
-                  className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
+                  className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#3674B5] text-sm"
                 >
                   Upload Photo
                 </button>
@@ -493,44 +495,44 @@ const SiteSettings: React.FC = () => {
             <h3 className="text-lg font-semibold">{accountForm.name}</h3>
             <div className="text-sm text-gray-500 mb-4">{accountForm.title}</div>
             <div className="space-y-2 text-sm text-teal-600 w-full">
-  <div className="flex">
-    <span className="mr-2">📧</span> <a href={`mailto:${accountForm.email}`}>{accountForm.email}</a>
-    <div className="flex">
-      <span className="mr-2 pl-4">📞</span> <a href={`tel:${accountForm.phoneNumber}`}>{accountForm.phoneNumber}</a>
-      <span className="ml-2 pl-4 cursor-pointer">⋮</span>
-    </div>
-  </div>
-  <div className="flex flex-col items-center space-y-2">
-    <div className="flex items-center">
-      <span className="mr-2 pr-8">📅 Calendar</span> 
-    </div>
-    <div className="flex items-center">
-      <span className="mr-2 pr-6">🏖️ Vacations</span> 
-    </div>
-    <div className="flex items-center">
-      <span className="mr-2 pr-5">⏰ Timesheet</span> 
-    </div>
-    <div className="flex items-center">
-      <span className="mr-2 pr-[-5]">📄 Corporate CV</span> 
-    </div>
-  </div>
-</div>
-          </div> 
-        </div>                  
+              <div className="flex">
+                <span className="mr-2">📧</span> <a href={`mailto:${accountForm.email}`}>{accountForm.email}</a>
+                <div className="flex">
+                  <span className="mr-2 pl-4">📞</span> <a href={`tel:${accountForm.phoneNumber}`}>{accountForm.phoneNumber}</a>
+                  <span className="ml-2 pl-4 cursor-pointer">⋮</span>
+                </div>
+              </div>
+              <div className="flex flex-col items-center space-y-2">
+                <div className="flex items-center">
+                  <span className="mr-2 pr-8">📅 Calendar</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="mr-2 pr-6">🏖️ Vacations</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="mr-2 pr-5">⏰ Timesheet</span>
+                </div>
+                <div className="flex items-center">
+                  <span className="mr-2 pr-[-5]">📄 Corporate CV</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {/* Rest of the tabs (Security and Privacy, Notification Settings) remain unchanged */}
       {activeTab === 'Security and Privacy' && (
         <div className="flex">
-          <div className="flex-1 bg-white p-6 rounded-lg shadow">
+          <div className="flex-1 bg-[#f9f9fc] p-6 mt-6">
             <h2 className="text-xl font-semibold mb-4">Account Details</h2>
             <div className="space-y-6">
-              
+
               <div className="border p-4 rounded-md">
                 <h3 className="text-lg font-semibold">Verify Email Address</h3>
                 <p className="text-sm text-gray-600">Verify your email address to confirm your credentials</p>
                 <div className="flex justify-end mt-[-1]">
                   <button
-                    className="px-4 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600"
+                    className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#3674B5]"
                     disabled
                   >
                     Verified
@@ -561,10 +563,10 @@ const SiteSettings: React.FC = () => {
                     <input
                       type="email"
                       name="email"
-                      value="placeholder"
+                      value="placeholder" // This value is hardcoded, it should probably be `securityForm.recoveryEmail`
                       onChange={handleInputChange}
                       placeholder="example@gmail.com"
-                      className="mt-1 block w-full border-gray-300 rounded-md"
+                      className="mt-1 p-2 block w-full bg-gray-100 border-gray-300 rounded-md"
                     />
                   </div>
                   <div className="flex justify-end mt-[-1]">
@@ -584,7 +586,7 @@ const SiteSettings: React.FC = () => {
                 <div className="flex justify-end mt-[-1]">
                   <button
                     className="mt-2 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
-                    onClick={() => alert('clicked') }
+                    onClick={() => alert('clicked')}
                   >
                     Setup
                   </button>
@@ -609,111 +611,111 @@ const SiteSettings: React.FC = () => {
       )}
 
       {activeTab === 'Notification Settings' && (
-          <div className="flex">
-            <div className="flex-1 bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-2">Notifications</h2>
-              <form className="space-y-6" onSubmit={handleNotificationSubmit}>
-                <div className="border p-4 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Enable Desktop Notification</h3>
-                      <p className="text-sm text-gray-600">Receive notifications for all messages, contacts, and documents</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableDesktopNotifications ? 'bg-teal-500' : 'bg-gray-300'}`}
-                      onClick={() => handleToggleChange('enableDesktopNotifications')}
-                    >
-                      <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                    </button>
+        <div className="flex">
+          <div className="flex-1 bg-[#f9f9fc] p-6 mt-6 ">
+            <h2 className="text-xl font-semibold mb-2">Notifications</h2>
+            <form className="space-y-6" onSubmit={handleNotificationSubmit}>
+              <div className="border p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Enable Desktop Notification</h3>
+                    <p className="text-sm text-gray-600">Receive notifications for all messages, contacts, and documents</p>
                   </div>
-                </div>
-
-                <div className="border p-4 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Enable Notification Badge</h3>
-                      <p className="text-sm text-gray-600">Show a red badge on the app icon when you have unread messages</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableNotificationBadge ? 'bg-teal-500' : 'bg-gray-300'}`}
-                      onClick={() => handleToggleChange('enableNotificationBadge')}
-                    >
-                      <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border p-4 rounded-md">
-                  <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
-                  <select
-                    name="pushNotificationTimeout"
-                    value={notificationForm.pushNotificationTimeout}
-                    onChange={handleInputChange}
-                    className="mt-2 block w-32 border-gray-300 rounded-md"
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300 ${notificationForm.enableDesktopNotifications ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('enableDesktopNotifications')}
                   >
-                    <option value="5">5 Minutes</option>
-                    <option value="10">10 Minutes</option>
-                    <option value="15">15 Minutes</option>
-                    <option value="30">30 Minutes</option>
-                  </select>
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
                 </div>
+              </div>
 
-                <h2 className="text-xl font-semibold mt-6">Email Notifications</h2>
-
-                <div className="border p-4 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Communication Emails</h3>
-                      <p className="text-sm text-gray-600">Receive emails for messages, contacts, and documents</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.communicationEmails ? 'bg-teal-500' : 'bg-gray-300'}`}
-                      onClick={() => handleToggleChange('communicationEmails')}
-                    >
-                      <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                    </button>
+              <div className="border p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Enable Notification Badge</h3>
+                    <p className="text-sm text-gray-600">Show a red badge on the app icon when you have unread messages</p>
                   </div>
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300  ${notificationForm.enableNotificationBadge ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('enableNotificationBadge')}
+                  >
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
                 </div>
+              </div>
 
-                <div className="border p-4 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Announcements & Updates</h3>
-                      <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.announcementsEmails ? 'bg-teal-500' : 'bg-gray-300'}`}
-                      onClick={() => handleToggleChange('announcementsEmails')}
-                    >
-                      <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                    </button>
+              <div className="border p-4 rounded-md">
+                <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
+                <select
+                  name="pushNotificationTimeout"
+                  value={notificationForm.pushNotificationTimeout}
+                  onChange={handleInputChange}
+                  className="mt-2 block w-32 border-gray-300 rounded-md"
+                >
+                  <option value="5">5 Minutes</option>
+                  <option value="10">10 Minutes</option>
+                  <option value="15">15 Minutes</option>
+                  <option value="30">30 Minutes</option>
+                </select>
+              </div>
+
+              <h2 className="text-xl font-semibold mt-6">Email Notifications</h2>
+
+              <div className="border p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Communication Emails</h3>
+                    <p className="text-sm text-gray-600">Receive emails for messages, contacts, and documents</p>
                   </div>
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300  ${notificationForm.communicationEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('communicationEmails')}
+                  >
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
                 </div>
+              </div>
 
-                <h2 className="text-xl font-semibold mt-6">Sounds</h2>
-
-                <div className="border p-4 rounded-md">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">Disable All Notification Sounds</h3>
-                      <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.disableNotificationSounds ? 'bg-teal-500' : 'bg-gray-300'}`}
-                      onClick={() => handleToggleChange('disableNotificationSounds')}
-                    >
-                      <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                    </button>
+              <div className="border p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Announcements & Updates</h3>
+                    <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
                   </div>
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300  ${notificationForm.announcementsEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('announcementsEmails')}
+                  >
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
                 </div>
-              </form>
-            </div>
+              </div>
+
+              <h2 className="text-xl font-semibold mt-6">Sounds</h2>
+
+              <div className="border p-4 rounded-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Disable All Notification Sounds</h3>
+                    <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300  ${notificationForm.disableNotificationSounds ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('disableNotificationSounds')}
+                  >
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
+        </div>
       )}
 
       <div className="fixed bottom-4 right-4 space-y-2 z-50">

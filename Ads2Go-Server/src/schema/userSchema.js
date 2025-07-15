@@ -6,22 +6,24 @@ const typeDefs = gql`
     ADMIN
   }
 
-  type User {
-    id: ID!
-    firstName: String!
-    middleName: String 
-    lastName: String!
-    email: String!
-    companyName: String!
-    companyAddress: String!
-    houseAddress: String
-    contactNumber: String!
-    role: UserRole!
-    isEmailVerified: Boolean!
-    lastLogin: String
-    createdAt: String!
-    updatedAt: String!
-  }
+type User {
+  id: ID!
+  userId: ID!              # ➕ add this if you're using both id and userId
+  firstName: String!
+  middleName: String
+  lastName: String!
+  email: String!
+  companyName: String
+  companyAddress: String
+  houseAddress: String
+  contactNumber: String
+  profilePicture: String    # ➕ missing field
+  role: UserRole!
+  isEmailVerified: Boolean!
+  lastLogin: String
+  createdAt: String!
+  updatedAt: String!
+}
 
   type UserUpdateResponse {
     success: Boolean!

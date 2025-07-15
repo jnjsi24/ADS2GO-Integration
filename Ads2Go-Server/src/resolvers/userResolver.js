@@ -1,9 +1,3 @@
-// update superadmin
-// read, update, delete admin
-
-
-
-
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -200,42 +194,46 @@ const resolvers = {
 
 
 
-    login: async (_, { email, password }) => {
-      const user = await User.findOne({ email });
-      if (!user) throw new Error('No user found with this email');
-      if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+   login: async (_, { email, password }) => {
+  const user = await User.findOne({ email });
+  if (!user) throw new Error('No user found with this email');
+  if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        user.loginAttempts += 1;
-        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
-          user.accountLocked = true;
-          user.lockUntil = new Date(Date.now() + LOCK_TIME);
-        }
-        await user.save();
-        throw new Error('Invalid password');
-      }
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    user.loginAttempts += 1;
+    if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+      user.accountLocked = true;
+      user.lockUntil = new Date(Date.now() + LOCK_TIME);
+    }
+    await user.save();
+    throw new Error('Invalid password');
+  }
 
-      user.loginAttempts = 0;
-      user.accountLocked = false;
-      user.lockUntil = null;
-      user.lastLogin = new Date();
-      await user.save();
+  user.loginAttempts = 0;
+  user.accountLocked = false;
+  user.lockUntil = null;
+  user.lastLogin = new Date();
+  await user.save();
 
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          isEmailVerified: user.isEmailVerified,
-          tokenVersion: user.tokenVersion,
-        },
-        JWT_SECRET,
-        { expiresIn: '1d' }
-      );
+  // ✅ Re-fetch fresh data to ensure accurate JWT
+  const freshUser = await User.findById(user._id);
 
-      return { token, user };
+  const token = jwt.sign(
+    {
+      userId: freshUser.id,
+      email: freshUser.email,
+      role: freshUser.role,
+      isEmailVerified: freshUser.isEmailVerified,
+      tokenVersion: freshUser.tokenVersion,
     },
+    JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+
+  return { token, user: freshUser };
+},
+
 
 
 
