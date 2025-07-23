@@ -170,6 +170,18 @@ const DriverSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    
+    // ✅ NEW: For Rider Update Request System
+    editRequestStatus: {
+      type: String,
+      enum: ['NONE', 'PENDING', 'APPROVED', 'REJECTED'],
+      default: 'NONE',
+    },
+    editRequestData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+
     updatedAt: {
       type: Date,
       default: Date.now,
@@ -180,7 +192,7 @@ const DriverSchema = new mongoose.Schema(
   }
 );
 
-// Pre-save hook to hash password
+// Hash password before saving
 DriverSchema.pre('save', async function (next) {
   this.updatedAt = Date.now();
 
@@ -192,7 +204,7 @@ DriverSchema.pre('save', async function (next) {
   next();
 });
 
-// Custom instance methods
+// Custom methods
 DriverSchema.methods.isLocked = function () {
   return this.accountLocked && this.lockUntil && this.lockUntil > new Date();
 };

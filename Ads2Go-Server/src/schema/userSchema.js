@@ -4,6 +4,7 @@ const typeDefs = gql`
   enum UserRole {
     USER
     ADMIN
+    SUPERADMIN
   }
 
   type User {
@@ -18,9 +19,11 @@ const typeDefs = gql`
     contactNumber: String!
     role: UserRole!
     isEmailVerified: Boolean!
+    profilePicture: String          # ✅ Added this line
     lastLogin: String
     createdAt: String!
     updatedAt: String!
+    ads: [Ad!]
   }
 
   type UserUpdateResponse {
@@ -114,27 +117,26 @@ const typeDefs = gql`
   }
 
   type Mutation {
-  # User mutations
-  createUser(input: CreateUserInput!): AuthPayload!
-  updateUser(input: UpdateUserInput!): UserUpdateResponse!
-  deleteUser(id: ID!): ResponseMessage!
-  login(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
-  logout: Boolean!
-  logoutAllSessions: Boolean!
+    # User mutations
+    createUser(input: CreateUserInput!): AuthPayload!
+    updateUser(input: UpdateUserInput!): UserUpdateResponse!
+    deleteUser(id: ID!): ResponseMessage!
+    login(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
+    logout: Boolean!
+    logoutAllSessions: Boolean!
 
-  # Admin management
-  createAdminUser(input: CreateUserInput!): UserUpdateResponse!
+    # Admin management
+    createAdminUser(input: CreateUserInput!): UserUpdateResponse!
 
-  # Email verification
-  verifyEmail(code: String!): VerificationResponse
-  resendVerificationCode(email: String!): VerificationResponse
+    # Email verification
+    verifyEmail(code: String!): VerificationResponse
+    resendVerificationCode(email: String!): VerificationResponse
 
-  # Password management
-  requestPasswordReset(email: String!): Boolean!
-  resetPassword(token: String!, newPassword: String!): Boolean!
-  changePassword(currentPassword: String!, newPassword: String!): Boolean!
-}
-
+    # Password management
+    requestPasswordReset(email: String!): Boolean!
+    resetPassword(token: String!, newPassword: String!): Boolean!
+    changePassword(currentPassword: String!, newPassword: String!): Boolean!
+  }
 `;
 
 module.exports = typeDefs;

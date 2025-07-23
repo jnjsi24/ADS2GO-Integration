@@ -1,125 +1,219 @@
-"use client";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
-import { useState } from "react";
+// Toast notification type
+type Toast = {
+  id: number;
+  message: string;
+  type: 'error' | 'success';
+};
 
-export default function Settings() {
-  const [isEditing, setIsEditing] = useState(false);
+const Settings: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  // State for Notification Settings form
+  const [notificationForm, setNotificationForm] = useState({
+    enableDesktopNotifications: false,
+    enableNotificationBadge: true,
+    pushNotificationTimeout: '10',
+    communicationEmails: false,
+    announcementsEmails: true,
+    disableNotificationSounds: true,
+  });
 
-  const user = {
-    firstName: "Alexa",
-    middleName: "–",
-    lastName: "Rawles",
-    email: "alexarawles@gmail.com",
-    phone: "",
-    companyName: "",
-    companyAddress: "",
-    profileImage: "https://i.pravatar.cc/150?img=32", // Placeholder image
+  // State for toast notifications
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Handle form input changes for Notification Settings
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      setNotificationForm((prev) => ({ ...prev, [name]: checked }));
+    } else {
+      setNotificationForm((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
-  const handleEditToggle = () => setIsEditing(!isEditing);
+  // Handle toggle button change for notifications
+  const handleToggleChange = (field: keyof typeof notificationForm) => {
+    setNotificationForm((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  // Handle Notification Settings form submission
+  const handleNotificationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setToasts([]);
+
+    try {
+      // Simulate an API call to save notification settings
+      console.log('Saving notification settings:', notificationForm);
+      addToast('Notification settings saved successfully!', 'success');
+    } catch (err) {
+      addToast('Failed to save notification settings. Please try again.', 'error');
+    }
+  };
+
+  // Add toast notification
+  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 5000);
+  };
+
+  // Remove toast notification
+  const removeToast = (id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
 
   return (
-    <div className="max-w-5xl mx-auto p-8">
-      {/* Profile Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-4">
-          <img
-            src={user.profileImage}
-            alt="Profile"
-            className="w-20 h-20 rounded-full object-cover"
-          />
-          <div>
-            <h2 className="text-xl font-semibold">{`${user.firstName} ${user.lastName}`}</h2>
-            <p className="text-gray-500">{user.email}</p>
+    <div className="flex-1 pl-60 pr-1">
+      <div className="flex">
+        <div className="flex-1 bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-2">Notifications</h2>
+          <form className="space-y-6" onSubmit={handleNotificationSubmit}>
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Enable Desktop Notification</h3>
+                  <p className="text-sm text-gray-600">Receive notifications for all messages, contacts, and documents</p>
+                </div>
+                <button
+                  type="button"
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableDesktopNotifications ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  onClick={() => handleToggleChange('enableDesktopNotifications')}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Enable Notification Badge</h3>
+                  <p className="text-sm text-gray-600">Show a red badge on the app icon when you have unread messages</p>
+                </div>
+                <button
+                  type="button"
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableNotificationBadge ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  onClick={() => handleToggleChange('enableNotificationBadge')}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border p-4 rounded-md">
+              <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
+              <select
+                name="pushNotificationTimeout"
+                value={notificationForm.pushNotificationTimeout}
+                onChange={handleInputChange}
+                className="mt-2 block w-32 border-gray-300 rounded-md focus:outline-none"
+              >
+                <option value="5">5 Minutes</option>
+                <option value="10">10 Minutes</option>
+                <option value="15">15 Minutes</option>
+                <option value="30">30 Minutes</option>
+              </select>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6">Email Notifications</h2>
+
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Communication Emails</h3>
+                  <p className="text-sm text-gray-600">Receive emails for messages, contacts, and documents</p>
+                </div>
+                <button
+                  type="button"
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.communicationEmails ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  onClick={() => handleToggleChange('communicationEmails')}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
+                </button>
+              </div>
+            </div>
+
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Announcements & Updates</h3>
+                  <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
+                </div>
+                <button
+                  type="button"
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.announcementsEmails ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  onClick={() => handleToggleChange('announcementsEmails')}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
+                </button>
+              </div>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6">Sounds</h2>
+
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Disable All Notification Sounds</h3>
+                  <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents</p>
+                </div>
+                <button
+                  type="button"
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.disableNotificationSounds ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  onClick={() => handleToggleChange('disableNotificationSounds')}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div className="fixed bottom-4 right-4 space-y-2 z-50">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
+          >
+            <span>{toast.message}</span>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="ml-4 text-white hover:text-gray-200"
+            >
+              ✕
+            </button>
           </div>
-        </div>
-        <button
-          onClick={handleEditToggle}
-          className="bg-gray-900 text-white px-4 py-2 rounded-md"
-        >
-          {isEditing ? "Cancel" : "Edit"}
-        </button>
+        ))}
       </div>
 
-      {/* Form Fields */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-          <input
-            type="text"
-            defaultValue={user.firstName}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Middle Name</label>
-          <input
-            type="text"
-            defaultValue={user.middleName}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-          <input
-            type="text"
-            defaultValue={user.lastName}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
-          <input
-            type="text"
-            defaultValue={user.companyName}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Company Address</label>
-          <input
-            type="text"
-            defaultValue={user.companyAddress}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
-          <input
-            type="text"
-            defaultValue={user.phone}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-
-        <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-          <input
-            type="email"
-            defaultValue={user.email}
-            readOnly={!isEditing}
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100"
-          />
-        </div>
-      </div>
-
-      {/* Change Password Button */}
-      <div className="flex justify-center">
-        <button className="bg-gray-900 text-white px-6 py-2 rounded-md">
-          Change Password
-        </button>
-      </div>
+      <style>
+        {`
+          @keyframes slideIn {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          .animate-slideIn {
+            animation: slideIn 0.3s ease-out;
+          }
+        `}
+      </style>
     </div>
   );
-}
+};
+
+export default Settings;

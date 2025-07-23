@@ -155,7 +155,7 @@ export default function Home() {
   return (
     <div className="min-h-screen relative">
   {/* Hero Section - Slideshow */}
-  <section className="relative py-20 px-4 text-black min-h-[90vh] flex items-center overflow-hidden">
+  <section className="relative py-20 px-2 pr-44 text-black min-h-[90vh] flex items-center overflow-hidden">
     <video
       autoPlay
       muted
@@ -182,7 +182,7 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap gap-4">
               <Link to={slide.buttonLink}>
-                <button className="px-6 py-3 text-sm font-semibold bg-[#F6C794] text-black/80 border rounded-[8px] hover:bg-white/10 hover:scale-105 transition-all duration-300">
+                <button className="px-6 py-3 text-sm font-semibold bg-[#FADA7A] text-white border rounded-[8px] hover:bg-[#DF9755] hover:scale-105 transition-all duration-300">
                   {slide.buttonText}
                 </button>
               </Link>
@@ -287,7 +287,7 @@ export default function Home() {
 </section>
 
       {/* Vehicle Plans Section */}
-      <section className="py-16 px-4 bg-gray-800 text-white h-80">
+      <section className="py-16 px-4 bg-[#578FCA] text-white h-96">
         <div className="container mx-auto">
           <h2 className="text-3xl font-bold text-center mb-12 animate-fadeDown">Pick the perfect ride and plan for your ad</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -295,7 +295,7 @@ export default function Home() {
               <h3 className="text-3xl font-bold mb-2">Motorcycle Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱100,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 space-y-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#FADA7A] text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -312,7 +312,7 @@ export default function Home() {
               <h3 className="text-3xl font-bold mb-2">Car Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱150,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 space-y-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#FADA7A]  text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -329,7 +329,7 @@ export default function Home() {
               <h3 className="text-3xl font-bold mb-2">Bus Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱300,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 space-y-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#FADA7A]  text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -346,7 +346,7 @@ export default function Home() {
               <h3 className="text-3xl font-bold mb-2">Jeepney Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱180,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 space-y-2 bg-teal-500 text-white rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#FADA7A] text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -446,14 +446,14 @@ export default function Home() {
         <h2 className="text-5xl font-bold mb-4 animate-fadeDown">Your ads deserve wheels.</h2>
         <p className="text-5xl text-gray-600 mb-6 animate-fadeDown delay-100">Let’s drive it forward.</p>
         <Link to="/login">
-          <button className="px-6 py-3 text-sm font-semibold bg-[#2EC4B6] text-white border rounded-[8px] hover:bg-[#CBF3F0] hover:text-black/50 hover:scale-105 transition-all duration-300">
+          <button className="px-6 py-3 text-sm font-semibold bg-[#FADA7A] text-white border rounded-[8px] hover:bg-[#DF9755] hover:text-black hover:scale-105 transition-all duration-300">
             Register your ads
           </button>
         </Link>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8 px-4">
+      <footer className="bg-[#3674B5] text-white py-8 px-4">
         <div className="container mx-auto text-left">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
@@ -492,11 +492,11 @@ export default function Home() {
                   <input
                     type="email"
                     placeholder="Your email address"
-                    className="w-full p-2 pl-4 pr-10 bg-gray-800 text-white border border-gray-700 rounded focus:outline-none focus:border-teal-400"
+                    className="w-full p-2 pl-4 pr-10 bg-[#C9E6F0] text-black rounded focus:outline-none"
                   />
                   <button
                     type="submit"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white hover:text-teal-400"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-black hover:text-teal-400"
                   >
                     ➣
                   </button>

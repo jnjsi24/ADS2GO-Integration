@@ -7,7 +7,8 @@ export const LOGIN_MUTATION = gql`
       token
       user {
         id
-        name
+        firstName
+        lastName
         email
         isEmailVerified
       }
@@ -21,7 +22,8 @@ export const REGISTER_MUTATION = gql`
       token
       user {
         id
-        name
+        firstName
+        lastName
         email
         isEmailVerified
       }
@@ -52,7 +54,8 @@ export const GET_USER_PROFILE = gql`
   query GetUserProfile {
     me {
       id
-      name
+      firstName
+      lastName
       email
       houseAddress
       contactNumber
@@ -69,13 +72,13 @@ export const LOGOUT_MUTATION = gql`
   }
 `;
 
-
 // ✅ Admin Queries & Mutations
 export const GET_ALL_USERS = gql`
   query GetAllUsers {
     getAllUsers {
       id
-      name
+      firstName
+      lastName
       email
       houseAddress
       contactNumber
@@ -84,6 +87,7 @@ export const GET_ALL_USERS = gql`
     }
   }
 `;
+
 export const UPDATE_USER = gql`
   mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {
     updateUser(id: $id, input: $input) {

@@ -1,101 +1,78 @@
-const mongoose = require('mongoose');
 const Material = require('../models/Material');
+const { checkAdmin } = require('../middleware/auth');
 
 module.exports = {
   Query: {
-    getAllMaterials: async () => {
-      return await Material.find()
-        .populate('riderId')
-        .populate('advertisements.advertisementId');
+    getAllMaterials: async (_, __, context) => {
+      const { user } = context;
+      checkAdmin(user);
+      return await Material.find().sort({ createdAt: -1 });
     },
 
-    getMaterialById: async (_, { id }) => {
-      return await Material.findById(id)
-        .populate('riderId')
-        .populate('advertisements.advertisementId');
-    }
+    getMaterialsByCategory: async (_, { category }, context) => {
+      if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
+        throw new Error('Invalid material category');
+      }
+
+      return await Material.find({ category }).sort({ createdAt: -1 });
+    },
+
+    getMaterialById: async (_, { id }, context) => {
+      const { user } = context;
+      checkAdmin(user);
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+      return material;
+    },
   },
 
   Mutation: {
-    createMaterial: async (_, { input }) => {
-      try {
-        const riderId = input.riderId?.trim();
-        let castedRiderId;
+    createMaterial: async (_, { input }, context) => {
+      const { user } = context;
+      checkAdmin(user);
 
-        try {
-          castedRiderId = new mongoose.Types.ObjectId(riderId);
-        } catch (err) {
-          throw new Error('Invalid riderId');
-        }
+      // Manual validation
+      if (input.price < 0) throw new Error('Price must be non-negative');
+      if (!input.name || input.name.trim().length < 3)
+        throw new Error('Name must be at least 3 characters long');
 
-        const ads = (input.advertisements || []).map((ad, index) => {
-          const rawId = ad.advertisementId;
-          const trimmedId = rawId?.trim();
-        
-          let castedAdId;
-          try {
-            castedAdId = new mongoose.Types.ObjectId(trimmedId);
-          } catch (err) {
-            throw new Error(`Invalid advertisementId at index ${index}: ${rawId}`);
-          }
-        
-          return {
-            advertisementId: castedAdId,
-            assignedAt: ad.assignedAt,
-            removedAt: ad.removedAt
-          };
-        });
-        
-
-        const material = new Material({
-          ...input,
-          riderId: castedRiderId,
-          advertisements: ads
-        });
-
-        await material.save();
-        return material;
-      } catch (error) {
-        console.error('Error in createMaterial:', error.message);
-        throw new Error('Failed to create material. ' + error.message);
-      }
+      const material = new Material(input);
+      await material.save();
+      return material;
     },
 
-    addAdvertisementToMaterial: async (_, { materialId, ad }) => {
-      try {
-        const material = await Material.findById(materialId);
-        if (!material) throw new Error('Material not found');
+    updateMaterial: async (_, { id, input }, context) => {
+      const { user } = context;
+      checkAdmin(user);
 
-        const trimmedAdId = ad.advertisementId?.trim();
-        let castedAdId;
-        try {
-          castedAdId = new mongoose.Types.ObjectId(trimmedAdId);
-        } catch (err) {
-          throw new Error('Invalid advertisementId');
-        }
-
-        material.advertisements.push({
-          advertisementId: castedAdId,
-          assignedAt: ad.assignedAt,
-          removedAt: ad.removedAt
-        });
-
-        await material.save();
-        return material;
-      } catch (error) {
-        console.error('Error in addAdvertisementToMaterial:', error.message);
-        throw new Error('Failed to add advertisement. ' + error.message);
+      if (input.name && input.name.trim().length < 3) {
+        throw new Error('Name must be at least 3 characters long');
       }
+
+      if (input.price !== undefined && input.price < 0) {
+        throw new Error('Price must be a non-negative number');
+      }
+
+      const updated = await Material.findByIdAndUpdate(id, input, {
+        new: true,
+        runValidators: true,
+      });
+      if (!updated) throw new Error('Material not found');
+      return updated;
     },
 
-    deleteMaterial: async (_, { id }) => {
-      try {
-        await Material.findByIdAndDelete(id);
-        return "Material deleted successfully.";
-      } catch (error) {
-        console.error('Error in deleteMaterial:', error.message);
-        throw new Error('Failed to delete material.');
-      }
-    }
-  }
+    deleteMaterial: async (_, { id }, context) => {
+      const { user } = context;
+      checkAdmin(user);
+
+      const deleted = await Material.findByIdAndDelete(id);
+      if (!deleted) throw new Error('Material not found or already deleted');
+      return 'Material deleted successfully.';
+    },
+  },
+
+  // ✅ This maps MongoDB _id to GraphQL id field
+  Material: {
+    id: (parent) => parent._id.toString(),
+  },
 };

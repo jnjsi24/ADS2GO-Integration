@@ -1,3 +1,4 @@
+// index.tsx
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ApolloProvider } from '@apollo/client';
@@ -7,15 +8,13 @@ import './index.css';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 
-const AppWrapper: React.FC = () => {
+const AuthWrapper: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <ApolloProvider client={client}>
-      <AuthProvider navigate={navigate}>
-        <App />
-      </AuthProvider>
-    </ApolloProvider>
+    <AuthProvider navigate={navigate}>
+      <App />
+    </AuthProvider>
   );
 };
 
@@ -25,8 +24,10 @@ const root = ReactDOM.createRoot(
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AppWrapper />
-    </BrowserRouter>
+    <ApolloProvider client={client}>
+      <BrowserRouter>
+        <AuthWrapper />
+      </BrowserRouter>
+    </ApolloProvider>
   </React.StrictMode>
 );

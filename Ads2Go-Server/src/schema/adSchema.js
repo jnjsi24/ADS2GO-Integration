@@ -1,6 +1,14 @@
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`
+  enum AdStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    RUNNING
+    ENDED
+  }
+
   type Ad {
     id: ID!
     userId: ID!
@@ -14,14 +22,13 @@ const adTypeDefs = gql`
     mediaFile: String!
     plan: String!
     price: Float!
-    status: String!
+    status: AdStatus!
     startTime: String!
     createdAt: String!
     updatedAt: String!
   }
 
   input CreateAdInput {
-    userId: ID!
     riderId: ID
     materialsId: ID
     title: String!
@@ -44,7 +51,7 @@ const adTypeDefs = gql`
     mediaFile: String
     plan: String
     price: Float
-    status: String
+    status: AdStatus
     startTime: String
   }
 
@@ -52,6 +59,7 @@ const adTypeDefs = gql`
     getAllAds: [Ad!]!
     getAdById(id: ID!): Ad
     getAdsByUser(userId: ID!): [Ad!]!
+    getMyAds: [Ad!]!
   }
 
   type Mutation {

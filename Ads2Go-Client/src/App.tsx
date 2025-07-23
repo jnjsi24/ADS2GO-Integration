@@ -1,126 +1,233 @@
-// Ads2Go-Client/src/App.tsx
-
 import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import PrivateRoute from './components/PrivateRoute';
-import VerifiedRoute from './components/VerifiedRoute';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 
-// Navbars
+// Import Navbars
 import UserNavbar from './components/UserNavbar';
 import AdminNavbar from './components/AdminNavbar';
 import SadminNavbar from './components/SadminNavbar';
 
-// Public Pages
+// Regular user pages
 import Login from './pages/AUTH/Login';
-import AdminLogin from './pages/AUTH/AdminLogin';
 import Register from './pages/USERS/Register';
 import ForgotPass from './pages/USERS/ForgotPass';
-import VerifyEmail from './pages/USERS/VerifyEmail';
-
-// Regular User Pages
-import Landing from './pages/USERS/Landing';
 import Dashboard from './pages/USERS/Dashboard';
-import Settings from './pages/USERS/Settings';
+import VerifyEmail from './pages/USERS/VerifyEmail';
+import Landing from './pages/USERS/Landing';
+import Account from './pages/USERS/Account';
 import Payment from './pages/USERS/Payment';
 import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
+import Advertisements from './pages/USERS/Advertisements';
+import Help from './pages/USERS/Help';
+import History from './pages/USERS/PaymentHistory';
+import Settings from './pages/USERS/Settings';
 
-// Admin Pages
+// Admin pages
+import AdminLogin from './pages/AUTH/AdminLogin';
 import AdminDashboard from './pages/ADMIN/AdminDashboard';
 import ManageUsers from './pages/ADMIN/ManageUsers';
 import SiteSettings from './pages/ADMIN/SiteSettings';
 import ManageRiders from './pages/ADMIN/ManageRiders';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
+import Reports from './pages/ADMIN/Reports';
 
-// Super Admin Pages
+// Super Admin pages
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
   const location = useLocation();
 
-  const hideNavbarOnRoutes = [
+  const publicPages = [
     '/admin-login',
     '/login',
     '/register',
+    '/forgot-password',
     '/verify-email',
-    '/forgot-password'
+    '/landing',
   ];
 
-  const showNavbar = !hideNavbarOnRoutes.includes(location.pathname);
+  const hideNavbarOnRoutes = publicPages;
 
-  return (
-    <div className="min-h-screen bg-white text-black">
-      {/* Show Navbar only on authenticated pages */}
-      {showNavbar && (
-        <>
-          {user?.role === 'SUPERADMIN' && <SadminNavbar />}
-          {user?.role === 'ADMIN' && <AdminNavbar />}
-          {user?.role === 'USER' && <UserNavbar />}
-        </>
-      )}
-
+  if (hideNavbarOnRoutes.includes(location.pathname)) {
+    return (
       <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
         <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
 
-        {/* Regular User Routes - Hybrid Approach */}
-        <Route path="/landing" element={
-          <PrivateRoute><Landing /></PrivateRoute>
-        } />
-        <Route path="/dashboard" element={
-          <PrivateRoute><Dashboard /></PrivateRoute>
-        } />
-        <Route path="/settings" element={
-          <PrivateRoute><Settings /></PrivateRoute>
-        } />
-        <Route path="/payment" element={
-          <VerifiedRoute><Payment /></VerifiedRoute>
-        } />
-        <Route path="/create-advertisement" element={
-          <VerifiedRoute><CreateAdvertisement /></VerifiedRoute>
-        } />
+  return (
+    <div className="min-h-screen bg-white text-black">
+      {/* Show navbar depending on user role */}
+      {user?.role === 'SUPERADMIN' && <SadminNavbar />}
+      {user?.role === 'ADMIN' && <AdminNavbar />}
+      {user?.role === 'USER' && <UserNavbar />}
 
-        {/* Admin Private Routes */}
-        <Route path="/admin" element={
-          <PrivateRoute><AdminDashboard /></PrivateRoute>
-        } />
-        <Route path="/admin/users" element={
-          <PrivateRoute><ManageUsers /></PrivateRoute>
-        } />
-        <Route path="/admin/settings" element={
-          <PrivateRoute><SiteSettings /></PrivateRoute>
-        } />
-        <Route path="/admin/riders" element={
-          <PrivateRoute><ManageRiders /></PrivateRoute>
-        } />
-        <Route path="/admin/ads" element={
-          <PrivateRoute><AdminAdsControl /></PrivateRoute>
-        } />
-        <Route path="/admin/materials" element={
-          <PrivateRoute><Materials /></PrivateRoute>
-        } />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
 
-        {/* Super Admin Private Route */}
-        <Route path="/sadmin-dashboard" element={
-          <PrivateRoute><SadminDashboard /></PrivateRoute>
-        } />
+        {/* Protected user routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <Account />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment"
+          element={
+            <ProtectedRoute>
+              <Payment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-advertisement"
+          element={
+            <ProtectedRoute>
+              <CreateAdvertisement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/advertisements"
+          element={
+            <ProtectedRoute>
+              <Advertisements />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <Help />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <History />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* Default Routes */}
-        <Route path="/" element={<Navigate to="/landing" />} />
-        <Route path="*" element={<Navigate to="/login" />} />
+        {/* Protected Admin Routes */}
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <ProtectedRoute>
+              <ManageUsers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute>
+              <SiteSettings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/riders"
+          element={
+            <ProtectedRoute>
+              <ManageRiders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/ads"
+          element={
+            <ProtectedRoute>
+              <AdminAdsControl />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/materials"
+          element={
+            <ProtectedRoute>
+              <Materials />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected SuperAdmin Route */}
+        <Route
+          path="/sadmin-dashboard"
+          element={
+            <ProtectedRoute>
+              <SadminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Default redirects */}
+        <Route path="/" element={<Navigate to="/landing" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
   );
 };
 
 const App: React.FC = () => {
-  return <AppContent />;
+  const navigate = useNavigate();
+  return (
+    <AuthProvider navigate={navigate}>
+      <AppContent />
+    </AuthProvider>
+  );
 };
 
 export default App;

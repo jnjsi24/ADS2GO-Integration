@@ -2,9 +2,10 @@
   "name": "ads2go-integ",
   "version": "1.0.0",
   "scripts": {
-  "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm start --prefix Ads2Go-Server\""
-},
+    "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\""
+  },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "nodemon": "^3.1.10"
   }
 }
