@@ -1,12 +1,7 @@
-// update superadmin
-// read, update, delete admin
-
-
-
-
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Ad = require('../models/Ad'); // ✅ Import Ad model
 const { JWT_SECRET } = require('../middleware/auth');
 const { validateUserInput, checkPasswordStrength } = require('../utils/validations');
 const EmailService = require('../utils/emailService');
@@ -22,14 +17,11 @@ const checkAuth = (user) => {
 
 const checkAdmin = (user) => {
   checkAuth(user);
-  if (user.role !== 'ADMIN') throw new Error('Not authorized. Admin access required.');
+  if (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') throw new Error('Not authorized. Admin access required.');
   return user;
 };
 
-
-
 // ALL GET REQUESTS
-
 const resolvers = {
   Query: {
     getAllUsers: async (_, __, { user }) => {
@@ -44,52 +36,27 @@ const resolvers = {
 
     getOwnUserDetails: async (_, __, { user }) => {
       checkAuth(user);
-    
       const userRecord = await User.findById(user.id);
       if (!userRecord) throw new Error('User not found');
-    
-      return userRecord; // ✅ return the whole document so all fields can be queried
+      return userRecord;
     },
-    
 
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
   },
 
-
-
   // ALL POST REQUESTS
   Mutation: {
-
-
-
-
-
     createAdminUser: async (_, { input }, { user }) => {
-      // ✅ Ensure user is logged in
       checkAuth(user);
-    
-      // ✅ Ensure user has SUPERADMIN privileges
-      if (user.role !== 'SUPERADMIN') {
-        throw new Error('Only superadmin can create admin accounts');
-      }
-    
+      if (user.role !== 'SUPERADMIN') throw new Error('Only superadmin can create admin accounts');
+
       const {
-        firstName,
-        middleName,
-        lastName,
-        email,
-        password,
-        companyName,
-        companyAddress,
-        contactNumber
+        firstName, middleName, lastName, email,
+        password, companyName, companyAddress, contactNumber
       } = input;
-    
-      // ✅ Check if email already exists
-      if (await User.findOne({ email })) {
-        throw new Error('Email already exists');
-      }
-    
-      // ✅ Normalize and validate contact number
+
+      if (await User.findOne({ email })) throw new Error('Email already exists');
+
       let normalizedNumber = contactNumber.replace(/\s/g, '');
       const phoneRegex = /^(\+63|0)?\d{10}$/;
       if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
@@ -98,11 +65,9 @@ const resolvers = {
           ? '+63' + normalizedNumber.substring(1)
           : '+63' + normalizedNumber;
       }
-    
-      // ✅ Hash password
+
       const hashedPassword = await bcrypt.hash(password, 10);
-    
-      // ✅ Create admin user
+
       const newAdmin = new User({
         firstName: firstName.trim(),
         middleName: middleName?.trim() || null,
@@ -115,34 +80,27 @@ const resolvers = {
         companyAddress: companyAddress.trim(),
         contactNumber: normalizedNumber
       });
-    
+
       await newAdmin.save();
-    
+
       return {
         success: true,
         message: 'Admin created successfully',
         user: newAdmin
       };
     },
-    
 
-
-
-
-
-
-    
     createUser: async (_, { input }) => {
       try {
-        // Validate user input
         const validationErrors = validateUserInput(input);
-        if (validationErrors.length > 0) {
-          throw new Error(validationErrors.join(', '));
-        }
+        if (validationErrors.length > 0) throw new Error(validationErrors.join(', '));
 
-        const { firstName, middleName, lastName, companyName, companyAddress, contactNumber, email, password } = input;
+        const {
+          firstName, middleName, lastName,
+          companyName, companyAddress, contactNumber,
+          email, password, houseAddress
+        } = input;
 
-        // Normalize and validate phone number
         let normalizedNumber = contactNumber.replace(/\s/g, '');
         const phoneRegex = /^(\+63|0)?\d{10}$/;
         if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
@@ -150,21 +108,18 @@ const resolvers = {
           normalizedNumber = normalizedNumber.startsWith('0') ? '+63' + normalizedNumber.substring(1) : '+63' + normalizedNumber;
         }
 
-        // Check if email already exists
         if (await User.findOne({ email })) throw new Error('User with this email already exists');
 
-        // Hash password and generate verification code
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationCode = EmailService.generateVerificationCode();
 
-        // Create the new user
         const newUser = new User({
           firstName: firstName.trim(),
           middleName: middleName?.trim() || null,
           lastName: lastName.trim(),
           companyName: companyName.trim(),
           companyAddress: companyAddress.trim(),
-          houseAddress: input.houseAddress,
+          houseAddress,
           contactNumber: normalizedNumber,
           email: email.toLowerCase().trim(),
           password: hashedPassword,
@@ -174,22 +129,16 @@ const resolvers = {
           emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
         });
 
-        // Send verification email and save the new user
         await EmailService.sendVerificationEmail(newUser.email, verificationCode);
         await newUser.save();
 
-        // Generate JWT token
-        const token = jwt.sign(
-          {
-            userId: newUser.id,
-            email: newUser.email,
-            role: newUser.role,
-            isEmailVerified: newUser.isEmailVerified,
-            tokenVersion: newUser.tokenVersion,
-          },
-          JWT_SECRET,
-          { expiresIn: '1d' }
-        );
+        const token = jwt.sign({
+          userId: newUser.id,
+          email: newUser.email,
+          role: newUser.role,
+          isEmailVerified: newUser.isEmailVerified,
+          tokenVersion: newUser.tokenVersion,
+        }, JWT_SECRET, { expiresIn: '1d' });
 
         return { token, user: newUser };
       } catch (error) {
@@ -197,50 +146,40 @@ const resolvers = {
       }
     },
 
+    login: async (_, { email, password, deviceInfo }) => {
+    console.log(`Login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`); // Optional debug
 
+  const user = await User.findOne({ email });
+  if (!user) throw new Error('No user found with this email');
+  if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) {
+    user.loginAttempts += 1;
+    if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+      user.accountLocked = true;
+      user.lockUntil = new Date(Date.now() + LOCK_TIME);
+    }
+    await user.save();
+    throw new Error('Invalid password');
+  }
 
-    login: async (_, { email, password }) => {
-      const user = await User.findOne({ email });
-      if (!user) throw new Error('No user found with this email');
-      if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+  user.loginAttempts = 0;
+  user.accountLocked = false;
+  user.lockUntil = null;
+  user.lastLogin = new Date();
+  await user.save();
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        user.loginAttempts += 1;
-        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
-          user.accountLocked = true;
-          user.lockUntil = new Date(Date.now() + LOCK_TIME);
-        }
-        await user.save();
-        throw new Error('Invalid password');
-      }
+  const token = jwt.sign({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    isEmailVerified: user.isEmailVerified,
+    tokenVersion: user.tokenVersion,
+  }, JWT_SECRET, { expiresIn: '1d' });
 
-      user.loginAttempts = 0;
-      user.accountLocked = false;
-      user.lockUntil = null;
-      user.lastLogin = new Date();
-      await user.save();
-
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-          role: user.role,
-          isEmailVerified: user.isEmailVerified,
-          tokenVersion: user.tokenVersion,
-        },
-        JWT_SECRET,
-        { expiresIn: '1d' }
-      );
-
-      return { token, user };
-    },
-
-
-
-
-
+  return { token, user };
+},
 
     verifyEmail: async (_, { code }) => {
       const userToVerify = await User.findOne({ emailVerificationCode: code.trim() });
@@ -251,17 +190,13 @@ const resolvers = {
       userToVerify.emailVerificationCode = null;
       await userToVerify.save();
 
-      const token = jwt.sign(
-        {
-          id: userToVerify._id,
-          email: userToVerify.email,
-          role: userToVerify.role,
-          isEmailVerified: true,
-          tokenVersion: userToVerify.tokenVersion,
-        },
-        JWT_SECRET,
-        { expiresIn: '30d' }
-      );
+      const token = jwt.sign({
+        id: userToVerify._id,
+        email: userToVerify.email,
+        role: userToVerify.role,
+        isEmailVerified: true,
+        tokenVersion: userToVerify.tokenVersion,
+      }, JWT_SECRET, { expiresIn: '30d' });
 
       return { success: true, message: 'Email verified successfully', token };
     },
@@ -280,11 +215,6 @@ const resolvers = {
       return { success: true, message: 'New verification code sent to your email' };
     },
 
-
-
-
-
-
     changePassword: async (_, { currentPassword, newPassword }, { user }) => {
       checkAuth(user);
       const userRecord = await User.findById(user.id);
@@ -302,39 +232,25 @@ const resolvers = {
       return true;
     },
 
-
-
-
-
-
     updateUser: async (_, { input }, { user }) => {
       checkAuth(user);
-    
       const userRecord = await User.findById(user.id);
       if (!userRecord) throw new Error('User not found');
-    
-      // Validate password and houseAddress
+
       if ('password' in input && (!input.password || input.password.trim() === '')) {
         throw new Error('Password cannot be empty if provided');
       }
-    
+
       if ('houseAddress' in input && (!input.houseAddress || input.houseAddress.trim() === '')) {
         throw new Error('House address cannot be empty if provided');
       }
-    
+
       const {
-        firstName,
-        middleName,
-        lastName,
-        companyName,
-        companyAddress,
-        contactNumber,
-        email,
-        password,
-        houseAddress,
+        firstName, middleName, lastName,
+        companyName, companyAddress,
+        contactNumber, email, password, houseAddress
       } = input;
-    
-      // Normalize and validate phone number
+
       let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
       if (normalizedNumber && !/^(\+63|0)?\d{10}$/.test(normalizedNumber)) {
         throw new Error('Invalid Philippine mobile number');
@@ -344,41 +260,32 @@ const resolvers = {
           ? '+63' + normalizedNumber.substring(1)
           : '+63' + normalizedNumber;
       }
-    
-      // Check email if it's being updated
+
       if (email && email !== userRecord.email) {
         if (!validator.isEmail(email)) throw new Error('Invalid email address');
         const existingUser = await User.findOne({ email });
         if (existingUser) throw new Error('Email already in use');
         userRecord.email = email.toLowerCase();
       }
-    
-      // Update fields only if they are provided
+
       if (firstName) userRecord.firstName = firstName.trim();
-      if (middleName !== undefined) userRecord.middleName = middleName ? middleName.trim() : null; 
+      if (middleName !== undefined) userRecord.middleName = middleName ? middleName.trim() : null;
       if (lastName) userRecord.lastName = lastName.trim();
       if (companyName) userRecord.companyName = companyName.trim();
       if (companyAddress) userRecord.companyAddress = companyAddress.trim();
       if (normalizedNumber) userRecord.contactNumber = normalizedNumber;
       if (houseAddress !== undefined) userRecord.houseAddress = houseAddress ? houseAddress.trim() : userRecord.houseAddress;
       if (password) userRecord.password = await bcrypt.hash(password, 10);
-    
+
       await userRecord.save();
-    
+
       return {
         success: true,
         message: 'User updated successfully',
         user: userRecord,
       };
     },
-    
-    
 
-
-
-
-
-// FOR ADMIN ONLY
     deleteUser: async (_, { id }, { user }) => {
       checkAdmin(user);
       const userToDelete = await User.findById(id);
@@ -387,10 +294,6 @@ const resolvers = {
       await User.findByIdAndDelete(id);
       return { success: true, message: 'User deleted successfully' };
     },
-
-
-
-
 
     logout: async (_, __, { user }) => {
       checkAuth(user);
@@ -403,6 +306,13 @@ const resolvers = {
       return true;
     },
   },
+
+  // ✅ Add User.ads resolver
+  User: {
+    ads: async (parent) => {
+      return await Ad.find({ userId: parent.id });
+    }
+  }
 };
 
 module.exports = resolvers;

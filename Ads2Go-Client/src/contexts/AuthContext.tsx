@@ -1,28 +1,32 @@
-// src/contexts/AuthContext.tsx
-
 import React, {
   createContext,
   useContext,
   useState,
   useEffect,
-  useMemo,
   useCallback,
+  useRef,
 } from 'react';
-import { useMutation, useApolloClient } from '@apollo/client';
-import { LOGIN_MUTATION, REGISTER_MUTATION, LOGOUT_MUTATION } from '../services/graphql';
+import { useMutation, useApolloClient, useLazyQuery } from '@apollo/client';
+import {
+  LOGIN_MUTATION,
+  REGISTER_MUTATION,
+  LOGOUT_MUTATION,
+} from '../services/graphql';
+import { GET_OWN_USER_DETAILS } from '../graphql/queries/getOwnUserDetails';
 import { jwtDecode } from 'jwt-decode';
 
 // Types
-type UserRole = "ADMIN" | "USER" | "SUPERADMIN";
+type UserRole = 'ADMIN' | 'USER' | 'SUPERADMIN';
 
 interface User {
   userId: string;
   email: string;
   role: UserRole;
   isEmailVerified: boolean;
-  name?: string;
-  id?: string;
-  address?: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  houseAddress?: string;
   companyName?: string;
   companyAddress?: string;
   contactNumber?: string;
@@ -38,6 +42,8 @@ interface AuthContextType {
   register: (userData: any) => Promise<boolean>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  isInitialized: boolean;
   navigate: (path: string) => void;
   debugToken: (token: string) => User | null;
   navigateToRegister: () => void;
@@ -46,100 +52,205 @@ interface AuthContextType {
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode; navigate: (path: string) => void }> = ({
-  children,
-  navigate,
-}) => {
+export const AuthProvider: React.FC<{
+  children: React.ReactNode;
+  navigate: (path: string) => void;
+}> = ({ children, navigate }) => {
+  const hasRedirectedRef = useRef(false);
   const [user, setUser] = useState<User | null>(null);
   const [userEmail, setUserEmail] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [loginMutation] = useMutation(LOGIN_MUTATION);
   const [registerMutation] = useMutation(REGISTER_MUTATION);
   const [logoutMutation] = useMutation(LOGOUT_MUTATION);
   const apolloClient = useApolloClient();
+  const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
+
+  const publicPages = ['/login', '/register', '/forgot-password'];
 
   const navigateToRegister = useCallback(() => {
     navigate('/register');
   }, [navigate]);
 
-  const checkAuthentication = useCallback(() => {
-    const token = localStorage.getItem('token');
-    console.log('Stored Token:', token);
-  
-    if (token) {
-      try {
-        const decoded = jwtDecode<User>(token);
-        console.log('Decoded Token:', decoded);
-        setUser(decoded);
-        setUserEmail(decoded.email);
-      } catch (error) {
-        console.error('Token decoding failed:', error);
-        localStorage.removeItem('token');
-        setUser(null);
-        setUserEmail('');
-      }
-    } else {
-      setUser(null);
-      setUserEmail('');
-    }
-  }, []);
-
+  // ✅ Initialize auth state from localStorage
   useEffect(() => {
-    checkAuthentication();
-  }, [checkAuthentication]);
+    const initializeAuth = async () => {
+      setIsLoading(true);
+      setIsInitialized(false);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setIsLoading(false);
+        setIsInitialized(true);
+        return;
+      }
 
-  // Simulated static login function
-  const login = async (email: string, password: string): Promise<User | null> => {
-    const mockUsers: { [key: string]: User } = {
-      'admin@example.com': {
-        userId: '1',
-        email: 'admin@example.com',
-        role: 'ADMIN',
-        isEmailVerified: true,
-        name: 'Admin User',
-      },
-      'superadmin@example.com': {
-        userId: '2',
-        email: 'superadmin@example.com',
-        role: 'SUPERADMIN' as UserRole,
-        isEmailVerified: true,
-        name: 'Super Admin',
-      },
-      'user@example.com': {
-        userId: '3',
-        email: 'user@example.com',
-        role: 'USER',
-        isEmailVerified: true,
-        name: 'Regular User',
-      },
+      try {
+        const decoded = jwtDecode<any>(token);
+        if (!decoded?.email) {
+          localStorage.removeItem('token');
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+
+        const { data } = await fetchUserDetails();
+        const freshUserRaw = data?.getOwnUserDetails;
+
+        if (!freshUserRaw) {
+          localStorage.removeItem('token');
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+
+        const freshUser: User = {
+          userId: freshUserRaw._id || freshUserRaw.userId,
+          email: freshUserRaw.email,
+          role: freshUserRaw.role,
+          isEmailVerified: freshUserRaw.isEmailVerified,
+          firstName: freshUserRaw.firstName,
+          middleName: freshUserRaw.middleName,
+          lastName: freshUserRaw.lastName,
+          houseAddress: freshUserRaw.houseAddress,
+          companyName: freshUserRaw.companyName,
+          companyAddress: freshUserRaw.companyAddress,
+          contactNumber: freshUserRaw.contactNumber,
+          profilePicture: freshUserRaw.profilePicture,
+        };
+
+        setUser(freshUser);
+        setUserEmail(freshUser.email);
+        setIsLoading(false);
+        setIsInitialized(true);
+
+        if (!hasRedirectedRef.current) {
+          if (!freshUser.isEmailVerified) {
+            hasRedirectedRef.current = true;
+            navigate('/verify-email');
+          } else if (
+            publicPages.includes(window.location.pathname) ||
+            window.location.pathname === '/verify-email'
+          ) {
+            hasRedirectedRef.current = true;
+            const redirectPath = freshUser.role === 'ADMIN' ? '/admin' : '/home';
+            navigate(redirectPath);
+          }
+        }
+      } catch (err) {
+        console.error('Error restoring auth:', err);
+        localStorage.removeItem('token');
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
     };
 
-    const user = mockUsers[email.toLowerCase()];
-    const validPassword = password === '123'; // simple check
+    initializeAuth();
+  }, [fetchUserDetails, navigate]);
 
-    if (user && validPassword) {
-      setUser(user);
-      setUserEmail(user.email);
-      return user;
+  const login = async (email: string, password: string): Promise<User | null> => {
+    try {
+      const deviceInfo = {
+        deviceId: 'web-client',
+        deviceType: 'web',
+        deviceName: navigator.userAgent,
+      };
+
+      const { data } = await loginMutation({
+        variables: { email, password, deviceInfo },
+      });
+
+      const token = data?.login?.token;
+      const userRaw = data?.login?.user;
+
+      if (token && userRaw) {
+        localStorage.setItem('token', token);
+
+        const user: User = {
+          userId: userRaw._id || userRaw.userId,
+          email: userRaw.email,
+          role: userRaw.role,
+          isEmailVerified: userRaw.isEmailVerified,
+          firstName: userRaw.firstName,
+          middleName: userRaw.middleName,
+          lastName: userRaw.lastName,
+          houseAddress: userRaw.houseAddress,
+          companyName: userRaw.companyName,
+          companyAddress: userRaw.companyAddress,
+          contactNumber: userRaw.contactNumber,
+          profilePicture: userRaw.profilePicture,
+        };
+
+        setUser(user);
+        setUserEmail(user.email);
+
+        if (!user.isEmailVerified) {
+          navigate('/verify-email');
+          return user;
+        }
+
+        setTimeout(() => {
+          switch (user.role.toUpperCase()) {
+            case 'ADMIN':
+              navigate('/admin');
+              break;
+            case 'SUPERADMIN':
+              navigate('/sadmin-dashboard');
+              break;
+            default:
+              navigate('/home');
+          }
+        }, 0);
+
+        return user;
+      } else {
+        throw new Error('Invalid login response');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error.message || error);
+      alert(error.message || 'Login failed');
+      return null;
     }
-
-    alert('Invalid email or password');
-    return null;
   };
 
   const register = async (userData: any): Promise<boolean> => {
     try {
-      const { data } = await registerMutation({ variables: { input: userData } });
+      const { data } = await registerMutation({
+        variables: { input: userData },
+      });
 
-      if (data?.createUser?.token) {
-        const token = data.createUser.token;
-        localStorage.setItem('token', token);
+      const userRaw = data?.createUser;
+      if (!userRaw) return false;
 
-        const decoded = jwtDecode<User>(token);
-        setUser(decoded);
-        setUserEmail(decoded.email);
-        return true;
+      if (userRaw.token) {
+        localStorage.setItem('token', userRaw.token);
       }
-      return false;
+
+      const user: User = {
+        userId: userRaw._id || userRaw.userId,
+        email: userRaw.email,
+        role: userRaw.role,
+        isEmailVerified: userRaw.isEmailVerified,
+        firstName: userRaw.firstName,
+        middleName: userRaw.middleName,
+        lastName: userRaw.lastName,
+        houseAddress: userRaw.houseAddress,
+        companyName: userRaw.companyName,
+        companyAddress: userRaw.companyAddress,
+        contactNumber: userRaw.contactNumber,
+        profilePicture: userRaw.profilePicture,
+      };
+
+      setUser(user);
+      setUserEmail(user.email);
+
+      if (!user.isEmailVerified) {
+        navigate('/verify-email');
+      } else {
+        navigate(user.role === 'ADMIN' ? '/admin' : '/home');
+      }
+
+      return true;
     } catch (error) {
       console.error('Registration error:', error);
       return false;
@@ -168,24 +279,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode; navigate: (path
     }
   };
 
-  const contextValue = useMemo(
-    () => ({
-      user,
-      userEmail,
-      setUser,
-      setUserEmail,
-      login,
-      register,
-      logout,
-      isAuthenticated: !!user,
-      navigate,
-      debugToken,
-      navigateToRegister,
-    }),
-    [user, userEmail, navigate]
-  );
+  const contextValue: AuthContextType = {
+    user,
+    userEmail,
+    setUser,
+    setUserEmail,
+    login,
+    register,
+    logout,
+    isAuthenticated: !!user,
+    isLoading,
+    isInitialized,
+    navigate,
+    debugToken,
+    navigateToRegister,
+  };
 
-  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = (): AuthContextType => {

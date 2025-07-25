@@ -52,8 +52,9 @@ const AdSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'RUNNING', 'ENDED'],
-    default: 'PENDING'
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
+    default: 'PENDING',
+    required: true
   },
   startTime: {
     type: Date,

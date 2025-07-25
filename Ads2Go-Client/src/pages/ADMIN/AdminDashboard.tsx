@@ -1,235 +1,312 @@
-import React from 'react';
-import adminBackground from '../../assets/images/admin/adminbackround.webp';
+import React from "react";
 import {
-  PieChart, Pie, Cell, Tooltip, Legend,
-  LineChart, Line, XAxis, YAxis, CartesianGrid,
-  BarChart, Bar, ResponsiveContainer,
-} from 'recharts';
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieLabelRenderProps, // Still imported for potential future use or if other charts use it
+} from "recharts";
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
-const userRoleData = [
-  { name: 'Admins', value: 10 },
-  { name: 'Clients', value: 60 },
-  { name: 'Drivers', value: 30 },
-];
-
+// Dummy data for the Ad Impressions & QR Scans chart
 const adPerformanceData = [
-  { month: 'Jan', impressions: 6000, qrScans: 200 },
-  { month: 'Feb', impressions: 7500, qrScans: 250 },
-  { month: 'Mar', impressions: 7200, qrScans: 230 },
-  { month: 'Apr', impressions: 8500, qrScans: 300 },
-  { month: 'May', impressions: 8200, qrScans: 310 },
-  { month: 'Jun', impressions: 10500, qrScans: 350 },
-  { month: 'Jul', impressions: 11500, qrScans: 370 },
-  { month: 'Aug', impressions: 12000, qrScans: 390 },
-  { month: 'Sep', impressions: 11000, qrScans: 360 },
+  { month: "Jan", impressions: 7000, qrScans: 4000 },
+  { month: "Feb", impressions: 8000, qrScans: 5000 },
+  { month: "Mar", impressions: 10000, qrScans: 7000 },
+  { month: "Apr", impressions: 9000, qrScans: 6000 },
+  { month: "May", impressions: 7500, qrScans: 4500 },
+  { month: "Jun", impressions: 5000, qrScans: 3000 },
+  { month: "Jul", impressions: 6000, qrScans: 3500 },
 ];
 
-const ctrData = [
-  { campaign: 'Coffee Shop', ctr: 3 },
-  { campaign: 'Fitness Gym', ctr: 4.2 },
-  { campaign: 'Fashion', ctr: 3.6 },
-  { campaign: 'Tech Expo', ctr: 2.1 },
-  { campaign: 'Food Truck', ctr: 2.9 },
+// Dummy data for Vehicle Status Overview
+const vehicles = [
+  {
+    date: "25 Jul 12:30",
+    amount: "- $10",
+    paymentName: "Youtube",
+    method: "VISA ****3254",
+    category: "Subscription",
+  },
+  {
+    date: "26 Jul 15:00",
+    amount: "- $150",
+    paymentName: "Reserved",
+    method: "Mastercard ****2154",
+    category: "Shopping",
+  },
+  {
+    date: "27 Jul 9:00",
+    amount: "- $80",
+    paymentName: "Yaposhka",
+    method: "Mastercard ****2154",
+    category: "Cafe & Restaurants",
+  },
 ];
 
-const vehicleData = [
-  { id: 'ADS-V001', driver: 'John Smith', ad: 'Coffee Shop Promo', speed: '51 km/h', distance: '85.1 km', status: 'Active', location: 'View on map' },
-  { id: 'ADS-V002', driver: 'Emma Wilson', ad: 'Summer Festival', speed: '32 km/h', distance: '98.9 km', status: 'Active', location: 'View on map' },
-  { id: 'ADS-V003', driver: 'Michael Chen', ad: 'New Restaurant Opening', speed: '0 km/h', distance: '64.3 km', status: 'Parked', location: 'View on map' },
-  { id: 'ADS-V004', driver: 'Sarah Johnson', ad: 'Tech Conference', speed: '57 km/h', distance: '92.3 km', status: 'Active', location: 'View on map' },
-  { id: 'ADS-V005', driver: 'David Brown', ad: 'Fitness Gym Offer', speed: '0 km/h', distance: '0 km', status: 'Offline', location: 'Not available' },
-];
+const Dashboard = () => {
+  // Since Budget and Saving Goals are removed, totalBudget and renderCustomizedLabel are no longer strictly needed,
+  // but I'll keep the PieLabelRenderProps import in case you add other pie charts later.
+  // const totalBudget = budgetData.reduce((sum, entry) => sum + entry.value, 0);
 
-const AdminDashboard: React.FC = () => {
+  // Custom label for the Pie Chart to show value inside (removed as PieChart is removed)
+  // If you reintroduce a PieChart, you'll need this function again.
+  // const renderCustomizedLabel = ({
+  //   cx,
+  //   cy,
+  //   midAngle,
+  //   innerRadius,
+  //   outerRadius,
+  //   percent,
+  // }: PieLabelRenderProps) => {
+  //   const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+  //   const x = Number(cx) + radius * Math.cos(-Number(midAngle) * Math.PI / 180);
+  //   const y = Number(cy) + radius * Math.sin(-Number(midAngle) * Math.PI / 180);
+
+  //   return (
+  //     <text
+  //       x={x}
+  //       y={y}
+  //       fill="white"
+  //       textAnchor={x > Number(cx) ? "start" : "end"}
+  //       dominantBaseline="central"
+  //     >
+  //       {`${(Number(percent) * 100).toFixed(0)}%`}
+  //     </text>
+  //   );
+  // };
+
   return (
-    <div className="min-h-screen bg-cover bg-center" style={{ backgroundImage: `url(${adminBackground})` }}>
-      <div className="bg-black bg-opacity-60 min-h-screen p-8 text-white">
-        <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
-
-        <div className="bg-gray-900 p-6 rounded-lg mb-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Recent Notifications</h2>
-            <span className="text-blue-400 text-sm cursor-pointer hover:underline">View all</span>
-          </div>
-          <ul className="space-y-4 text-sm">
-            <li className="bg-gray-800 p-4 rounded">
-              <p className="font-semibold text-yellow-400">Low engagement alert: "Summer Festival" campaign</p>
-              <p className="text-gray-300">QR scan rate is 42% below average. Consider repositioning or changing creative.</p>
-              <p className="text-gray-500 text-xs mt-1">10 minutes ago</p>
-            </li>
-            <li className="bg-gray-800 p-4 rounded">
-              <p className="font-semibold text-green-400">New ad approved: "Coffee Shop Promo"</p>
-              <p className="text-gray-300">The advertisement has been approved and is now active on 5 vehicles.</p>
-              <p className="text-gray-500 text-xs mt-1">1 hour ago</p>
-            </li>
-            <li className="bg-gray-800 p-4 rounded">
-              <p className="font-semibold text-blue-400">New client registered: "Tech Solutions Inc."</p>
-              <p className="text-gray-300">A new client has registered and is ready to create their first campaign.</p>
-              <p className="text-gray-500 text-xs mt-1">3 hours ago</p>
-            </li>
-          </ul>
+    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-800">
+            Welcome back, Adaline!
+          </h2>
+          <p className="text-sm text-gray-500">
+            It is the best time to manage your finances
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <div className="bg-gray-800 p-6 rounded shadow">
-            <h2 className="text-xl font-semibold">Total Ads</h2>
-            <p className="text-3xl mt-2">128</p>
+        <div className="flex items-center gap-3">
+          {/* Calendar icon and 'This month' button */}
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 mr-2 text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            This month
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 ml-2 text-gray-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
           </div>
-          <div className="bg-gray-800 p-6 rounded shadow">
-            <h2 className="text-xl font-semibold">Active Ads</h2>
-            <p className="text-3xl mt-2">84</p>
-          </div>
-          <div className="bg-gray-800 p-6 rounded shadow">
-            <h2 className="text-xl font-semibold">Pending Ads</h2>
-            <p className="text-3xl mt-2">12</p>
-          </div>
-          <div className="bg-gray-800 p-6 rounded shadow">
-            <h2 className="text-xl font-semibold">Total QR Scans</h2>
-            <p className="text-3xl mt-2">3,521</p>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg mb-10">
-          <h2 className="text-xl font-bold mb-4">User Role Distribution</h2>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={userRoleData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                {userRoleData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">Ad Performance</h2>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={adPerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="impressions" stroke="#8884d8" />
-                <Line type="monotone" dataKey="qrScans" stroke="#82ca9d" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">CTR by Campaign</h2>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={ctrData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="campaign" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="ctr" fill="#3498db" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">Driver Compensation Overview</h2>
-            <ul className="list-disc pl-5 space-y-2 text-sm">
-              <li>Base Pay: 60%</li>
-              <li>Ad View Bonus: 25%</li>
-              <li>QR Code Scan Bonus: 15%</li>
-            </ul>
-          </div>
-
-          <div className="bg-gray-900 p-6 rounded-lg">
-            <h2 className="text-xl font-bold mb-4">Vehicle Coverage Map</h2>
-            <div className="w-full h-40 bg-gray-700 flex items-center justify-center rounded">
-              <span className="text-sm text-gray-300">Map Placeholder</span>
+          <div className="flex items-center">
+            <img
+              src="https://via.placeholder.com/40"
+              alt="User Avatar"
+              className="w-10 h-10 rounded-full object-cover border-2 border-gray-300"
+            />
+            <div className="ml-3">
+              <p className="text-sm font-medium text-gray-700">
+                Adaline Lively
+              </p>
+              <p className="text-xs text-gray-500">adaline@email.com</p>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="bg-gray-900 p-6 rounded-lg mb-10 overflow-auto">
-          <h2 className="text-xl font-bold mb-4">Live Vehicle Tracking</h2>
-          <p className="text-sm text-green-400 mb-2">3 Active</p>
-          <table className="table-auto w-full text-sm text-left">
-            <thead>
-              <tr className="bg-gray-800 text-white">
-                <th className="px-4 py-2">Vehicle ID</th>
-                <th className="px-4 py-2">Driver</th>
-                <th className="px-4 py-2">Current Ad</th>
-                <th className="px-4 py-2">Speed</th>
-                <th className="px-4 py-2">Distance Today</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Location</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vehicleData.map((vehicle) => (
-                <tr key={vehicle.id} className="border-b border-gray-700 hover:bg-gray-800">
-                  <td className="px-4 py-2">{vehicle.id}</td>
-                  <td className="px-4 py-2">{vehicle.driver}</td>
-                  <td className="px-4 py-2">{vehicle.ad}</td>
-                  <td className="px-4 py-2">{vehicle.speed}</td>
-                  <td className="px-4 py-2">{vehicle.distance}</td>
-                  <td className="px-4 py-2">{vehicle.status}</td>
-                  <td className="px-4 py-2">{vehicle.location}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {[
+          { label: "Total Advertisements", value: "$15,700.00", change: "12.1%", up: true },
+          { label: "Active Advertisements", value: "$8,500.00", change: "6.3%", up: true },
+          { label: "Pending Advertisements", value: "$6,222.00", change: "2.4%", up: false },
+          { label: "Total Riders", value: "$32,913.00", change: "12.1%", up: true },
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className="bg-white p-5 rounded-2xl shadow-sm flex flex-col justify-between"
+          >
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm text-gray-500">{stat.label}</p>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </div>
+            <p className="text-2xl font-bold text-gray-800 mb-1">
+              {stat.value}
+            </p>
+            <p
+              className={`text-sm font-medium ${
+                stat.up ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {stat.up ? "▲" : "▼"} {stat.change} vs last month
+            </p>
+          </div>
+        ))}
+      </div>
 
-        <div className="bg-yellow-600 p-4 rounded-lg text-black text-center">
-          <p className="text-xl font-semibold">📌 You have 12 ads pending approval!</p>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg mb-10">
-          <h2 className="text-xl font-bold mb-4">Ads Pending Approval</h2>
-          <p className="text-sm text-yellow-400 mb-4">3 Pending</p>
-          <div className="overflow-auto">
-            <table className="table-auto w-full text-sm text-left text-white">
-              <thead>
-                <tr className="bg-gray-800">
-                  <th className="px-4 py-2">Ad Name</th>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Submitted</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Preview</th>
-                  <th className="px-4 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[{ name: 'Summer Sale Promotion', client: 'Fashion Store Inc.', submitted: '2 hours ago', type: 'Digital Banner' },
-                  { name: 'Grand Opening Event', client: 'New Cafe Co.', submitted: '6 hours ago', type: 'Full Wrap' },
-                  { name: 'Weekend Deal Alert', client: 'Electronics World', submitted: '1 day ago', type: 'Digital Banner' }]
-                  .map((ad, index) => (
-                    <tr key={index} className="border-b border-gray-700 hover:bg-gray-800">
-                      <td className="px-4 py-2">{ad.name}</td>
-                      <td className="px-4 py-2">{ad.client}</td>
-                      <td className="px-4 py-2">{ad.submitted}</td>
-                      <td className="px-4 py-2">{ad.type}</td>
-                      <td className="px-4 py-2 text-blue-400 cursor-pointer">View</td>
-                      <td className="px-4 py-2 space-x-2">
-                        <button className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs">Approve</button>
-                        <button className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs">Reject</button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            <div className="mt-4 text-right text-blue-400 cursor-pointer hover:underline">View all pending ads →</div>
+      {/* Ad Impressions & QR Scans Chart (now spans full width below stat cards) */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Ad Impressions & QR Scans
+          </h3>
+          <div className="flex items-center space-x-4 text-sm">
+            <span className="flex items-center text-gray-600">
+              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
+              Impressions
+            </span>
+            <span className="flex items-center text-gray-600">
+              <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
+              qrScans
+            </span>
+            <div className="relative">
+              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 leading-tight focus:outline-none focus:border-blue-500">
+                <option>All accounts</option>
+                <option>Account A</option>
+                <option>Account B</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                <svg
+                  className="fill-current h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                </svg>
+              </div>
+            </div>
+            <div className="relative">
+              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 leading-tight focus:outline-none focus:border-blue-500">
+                <option>This year</option>
+                <option>Last year</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                <svg
+                  className="fill-current h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={adPerformanceData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
+            <XAxis dataKey="month" axisLine={false} tickLine={false} />
+            <YAxis axisLine={false} tickLine={false} />
+            <Tooltip />
+            <Bar dataKey="impressions" fill="#3674B5" barSize={50} radius={[10, 10, 0, 0]} />
+            <Bar dataKey="qrScans" fill="#C9E6F0" barSize={50} radius={[10, 10, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Vehicle Status Overview Table */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Vehicle Status Overview
+          </h3>
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 text-sm leading-tight focus:outline-none focus:border-blue-500">
+                <option>All accounts</option>
+                <option>Account A</option>
+                <option>Account B</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                <svg
+                  className="fill-current h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                </svg>
+              </div>
+            </div>
+            <button className="text-blue-600 text-sm flex items-center">
+              See all
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 ml-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <table className="w-full table-auto text-sm">
+          <thead className="text-gray-500">
+            <tr className="border-b border-gray-200">
+              <th className="text-left py-3 px-4 font-normal">DATE</th>
+              <th className="text-left py-3 px-4 font-normal">AMOUNT</th>
+              <th className="text-left py-3 px-4 font-normal">PAYMENT NAME</th>
+              <th className="text-left py-3 px-4 font-normal">METHOD</th>
+              <th className="text-left py-3 px-4 font-normal">CATEGORY</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vehicles.map((row, i) => (
+              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="py-3 px-4 text-gray-700">{row.date}</td>
+                <td className="py-3 px-4 text-gray-700">{row.amount}</td>
+                <td className="py-3 px-4 text-gray-700">{row.paymentName}</td>
+                <td className="py-3 px-4 text-gray-700">{row.method}</td>
+                <td className="py-3 px-4 text-gray-700">{row.category}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 };
 
-export default AdminDashboard;
+export default Dashboard;

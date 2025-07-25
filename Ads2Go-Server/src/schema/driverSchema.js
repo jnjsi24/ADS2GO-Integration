@@ -1,6 +1,7 @@
 const gql = require('graphql-tag');
 
 const typeDefs = gql`
+
   enum DriverAccountStatus {
     PENDING
     ACTIVE
@@ -13,11 +14,11 @@ const typeDefs = gql`
     ERROR
   }
 
-  enum InstalledMaterialType {
-    LCD
-    BANNER
-    HEADDRESS
-    STICKER
+  enum EditRequestStatus {
+    NONE
+    PENDING
+    APPROVED
+    REJECTED
   }
 
   type Driver {
@@ -43,13 +44,14 @@ const typeDefs = gql`
     totalDistanceTraveled: Float!
     totalAdImpressions: Int!
     installedDeviceId: String
-    installedMaterialType: InstalledMaterialType
     deviceStatus: DeviceStatus!
     qrCodeIdentifier: String!
     isEmailVerified: Boolean!
     emailVerificationCode: String
     emailVerificationCodeExpires: String
     lastLogin: String
+    editRequestStatus: EditRequestStatus
+    editRequestData: EditRequestData
   }
 
   type DriverResponse {
@@ -63,7 +65,25 @@ const typeDefs = gql`
     driver: Driver!
   }
 
+  type EditRequestData {
+    firstName: String
+    lastName: String
+    contactNumber: String
+    email: String
+    password: String
+    address: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: String
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+  }
+
   input CreateDriverInput {
+    driverId: String!
     firstName: String!
     lastName: String!
     contactNumber: String!
@@ -79,7 +99,6 @@ const typeDefs = gql`
     vehiclePhotoURL: String!
     orCrPictureURL: String!
     qrCodeIdentifier: String!
-    installedMaterialType: InstalledMaterialType
   }
 
   input UpdateDriverInput {
@@ -99,22 +118,48 @@ const typeDefs = gql`
     orCrPictureURL: String
     accountStatus: DriverAccountStatus
     deviceStatus: DeviceStatus
-    installedMaterialType: InstalledMaterialType
+  }
+
+  input EditDriverRequestInput {
+    firstName: String
+    lastName: String
+    contactNumber: String
+    email: String
+    password: String
+    address: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: String
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
   }
 
   type Query {
     getAllDrivers: [Driver!]!
     getDriverById(id: ID!): Driver
+    getDriversWithPendingEdits: [Driver!]!
+
+    # NEW: Get the logged-in driver's own info
+    getOwnDriver: Driver
   }
 
   type Mutation {
     createDriver(input: CreateDriverInput!): DriverResponse!
     updateDriver(id: ID!, input: UpdateDriverInput!): DriverResponse!
     deleteDriver(id: ID!): DriverResponse!
+
     loginDriver(email: String!, password: String!): AuthPayload!
     verifyDriverEmail(code: String!): DriverResponse!
     resendDriverVerificationCode(email: String!): DriverResponse!
+
+    requestDriverEdit(input: EditDriverRequestInput!): DriverResponse!
+    approveDriverEditRequest(id: ID!): DriverResponse!
+    rejectDriverEditRequest(id: ID!): DriverResponse!
   }
+
 `;
 
 module.exports = typeDefs;

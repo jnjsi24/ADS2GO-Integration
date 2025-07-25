@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BarChart,
   Bar,
@@ -8,119 +8,238 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell
+  Cell,
 } from 'recharts';
-import { CircleUser } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext'; // ✅ Import useAuth to access logged-in user
 
 const Dashboard = () => {
+  const { user } = useAuth(); // ✅ Get user from auth context
+  const [selectedOption, setSelectedOption] = useState('Riders');
+
+  const firstName = user?.firstName || 'User'; // ✅ Extract first name
+
   const barData = [
-    { day: '01', thisWeek: 400, lastWeek: 300 },
-    { day: '02', thisWeek: 430, lastWeek: 350 },
-    { day: '03', thisWeek: 500, lastWeek: 380 },
-    { day: '04', thisWeek: 480, lastWeek: 400 },
-    { day: '05', thisWeek: 600, lastWeek: 420 },
-    { day: '06', thisWeek: 580, lastWeek: 440 },
-    { day: '07', thisWeek: 500, lastWeek: 410 },
-    { day: '08', thisWeek: 480, lastWeek: 390 },
-    { day: '09', thisWeek: 470, lastWeek: 360 },
-    { day: '10', thisWeek: 450, lastWeek: 340 },
-    { day: '11', thisWeek: 480, lastWeek: 370 },
-    { day: '12', thisWeek: 440, lastWeek: 350 },
+    { day: 'JAN', profit: 5000, loss: 2000 },
+    { day: 'FEB', profit: 6000, loss: 2500 },
+    { day: 'MAR', profit: 7000, loss: 3000 },
+    { day: 'APR', profit: 6500, loss: 2800 },
+    { day: 'MAY', profit: 8000, loss: 3200 },
+    { day: 'JUNE', profit: 8500, loss: 3500 },
   ];
 
   const pieData = [
-    { name: 'Afternoon', value: 40 },
-    { name: 'Evening', value: 32 },
-    { name: 'Morning', value: 28 }
+    { name: 'Morning', value: 55 },
+    { name: 'Afternoon', value: 25 },
+    { name: 'Evening', value: 20 },
   ];
 
-  const colors = ['#6F7BF7', '#C6CCFB', '#E5E8FD'];
+  const colors = ['#3674B5', '#F3A26D', '#C9E6F0'];
+
+  const riderData = [
+    { name: 'Joseph Arimathea', email: 'josepharimathea@gmail.com', status: 'New', id: 'Customer ID #74598320', time: '5 min ago' },
+    { name: 'Clark Kent', email: 'clarkkent@gmail.com', status: 'Departed', id: 'Customer ID #15648399', time: '10 min ago' },
+    { name: 'Allie Grater', email: 'alliegrater@gmail.com', status: 'Departed', id: 'Customer ID #16697013', time: '15 min ago' },
+  ];
+
+  const adData = [
+    { title: 'Ad Campaign 1', status: 'Active', time: '5 min ago' },
+    { title: 'Ad Campaign 2', status: 'Decline', time: '10 min ago' },
+    { title: 'Ad Campaign 3', status: 'Active', time: '15 min ago' },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8 ml-64">
+    <div className="min-h-screen bg-white p-8 ml-60">
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center space-x-2 text-gray-600">
-          <CircleUser />
-          <span>Company Name</span>
+        <div>
+          <h1 className="text-3xl font-semibold text-gray-800">
+            Welcome back, {firstName}!
+          </h1>
+          <p className="text-gray-500 text-sm">Here's your analytic detail</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Impressions Chart */}
-        <div className="col-span-2 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold">Impressions</h2>
-          <p className="text-gray-500 mb-2">IDR 7.852.000</p>
-          <p className="text-green-600 text-sm">▲ 2.1% vs last week</p>
-          <ResponsiveContainer width="100%" height={250}>
+      {/* Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Total Advertisements */}
+        <div className="bg-gray-100 p-4 rounded-xl shadow hover:scale-105 transition-all duration-300">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-gray-500 text-md">Total Advertisements</span>
+          </div>
+          <p className="text-5xl font-bold text-gray-800 pt-2">12,832</p>
+          <p className="text-sm pt-2">
+            <span className="text-green-600">↑ +20.1%</span>
+            <span className="text-black"> +2,123 today</span>
+          </p>
+          <div className="mt-20">
+            <div className="pt-4 border-t border-gray-200 mb-2"></div>
+            <Link
+              to="/advertisements"
+              className="text-white text-sm bg-[#3674B5] hover:bg-[#578FCA] rounded-lg px-4 py-2 flex items-center w-full justify-between"
+            >
+              View Report <span>→</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Total Riders */}
+        <div className="bg-gray-100 p-4 rounded-xl shadow hover:scale-105 transition-all duration-300">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-gray-500 text-md">Total Riders</span>
+          </div>
+          <p className="text-5xl font-bold text-gray-800 pt-2">1,062</p>
+          <p className="text-sm pt-2">
+            <span className="text-red-600">↓ -4%</span>
+            <span className="text-black"> -426 today</span>
+          </p>
+          <div className="mt-20">
+            <div className="pt-4 border-t border-gray-200 mb-2"></div>
+            <Link
+              to="/riders"
+              className="text-white text-sm bg-[#3674B5] hover:bg-[#578FCA] rounded-lg px-4 py-2 flex items-center w-full justify-between"
+            >
+              View Report <span>→</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Impressions */}
+        <div className="bg-gray-100 p-4 rounded-xl shadow hover:scale-105 transition-all duration-300 col-span-2">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-gray-500 text-sm">Impressions</span>
+            <select className="text-sm text-[#3674B5] bg-transparent border-none focus:outline-none">
+              <option>Month</option>
+            </select>
+          </div>
+          <p className="text-2xl font-bold text-gray-800">$86,400.12</p>
+          <p className="text-green-600 text-sm">↑ 10% vs last month</p>
+          <ResponsiveContainer width="100%" height={150}>
             <BarChart data={barData}>
-              <XAxis dataKey="day" />
-              <YAxis />
+              <XAxis dataKey="day" stroke="#9CA3AF" />
+              <YAxis stroke="#9CA3AF" />
               <Tooltip />
-              <Bar dataKey="lastWeek" fill="#E5E8FD" />
-              <Bar dataKey="thisWeek" fill="#6F7BF7" />
+              <Bar dataKey="profit" fill="#3674B5" name="Profit" />
+              <Bar dataKey="loss" fill="#C9E6F0" name="Loss" />
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
-        {/* Right: QR Impressions Pie Chart */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">QR Impressions</h2>
-          <ResponsiveContainer width="100%" height={250}>
+      {/* Activity & QR Impressions */}
+      <div className="flex flex-row space-x-6">
+        {/* Recent Activity */}
+        <div className="bg-gray-100 p-4 rounded-xl shadow hover:scale-105 transition-all duration-300 w-7/10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 pt-3">Recent Activity</h2>
+            <select
+              className="text-sm text-[#3674B5] font-bold bg-gray-100 focus:outline-none pr-1 mt-6"
+              value={selectedOption}
+              onChange={(e) => setSelectedOption(e.target.value)}
+            >
+              <option value="Riders">Riders</option>
+              <option value="Advertisements">Advertisements</option>
+            </select>
+          </div>
+
+          {/* Header Row */}
+          <div className="grid grid-cols-[2fr_1fr_1.5fr_1fr] text-sm text-gray-500 font-medium mb-2 mt-6">
+            {selectedOption === 'Riders' ? (
+              <>
+                <span className="text-black">Rider Name</span>
+                <span className="ml-2 text-black">Status</span>
+                <span className="ml-5 text-black">Customer ID</span>
+                <span className="ml-2.5 text-black">Time</span>
+              </>
+            ) : (
+              <>
+                <span className="text-black">Ads Title</span>
+                <span className="ml-2 text-black">Status</span>
+                <span className="ml-5 text-black">Customer ID</span>
+                <span className="ml-2.5 text-black">Time</span>
+              </>
+            )}
+          </div>
+
+          <ul className="space-y-3">
+            {selectedOption === 'Riders'
+              ? riderData.map((rider, index) => (
+                  <li key={index} className="grid grid-cols-[2fr_1fr_1.5fr_1fr] items-center">
+                    <div className="flex items-center space-x-3">
+                      <div>
+                        <p className="text-gray-700">{rider.name}</p>
+                        <p className="text-gray-500 text-sm">{rider.email}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`mr-16 flex justify-center w-24 text-xs px-2 py-1 rounded ${
+                        rider.status === 'New'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-green-200 text-green-800'
+                      }`}
+                    >
+                      {rider.status}
+                    </span>
+                    <span className="text-gray-500 text-sm">{rider.id}</span>
+                    <span className="text-gray-500 text-sm ml-1.5">{rider.time}</span>
+                  </li>
+                ))
+              : adData.map((ad, index) => (
+                  <li key={index} className="grid grid-cols-[2fr_1fr_1.5fr_1fr] items-center">
+                    <div>
+                      <p className="text-gray-700">{ad.title}</p>
+                    </div>
+                    <span
+                      className={`mr-16 flex justify-center w-24 text-xs px-2 py-1 rounded ${
+                        ad.status === 'Active'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
+                    >
+                      {ad.status}
+                    </span>
+                    <span className="text-gray-500 text-sm">N/A</span>
+                    <span className="text-gray-500 text-sm ml-1.5">{ad.time}</span>
+                  </li>
+                ))}
+          </ul>
+        </div>
+
+        {/* QR Impressions */}
+        <div className="bg-gray-100 p-4 rounded-xl shadow hover:scale-105 transition-all duration-300 w-1/2">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="text-lg font-semibold text-gray-800">QR Impressions</h2>
+            <select className="text-sm font-bold text-[#3674B5] bg-transparent border-none focus:outline-none">
+              <option>All time</option>
+            </select>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
                 data={pieData}
                 cx="50%"
                 cy="50%"
-                innerRadius={50}
-                outerRadius={80}
-                fill="#8884d8"
-                paddingAngle={5}
+                innerRadius={60}
+                outerRadius={90}
                 dataKey="value"
               >
                 {pieData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
                 ))}
               </Pie>
+              <Tooltip />
             </PieChart>
           </ResponsiveContainer>
           <ul className="mt-4 text-sm text-gray-600 space-y-1">
             {pieData.map((item, index) => (
               <li key={index} className="flex items-center space-x-2">
-                <span className={`w-3 h-3 rounded-full`} style={{ backgroundColor: colors[index] }}></span>
+                <span
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: colors[index] }}
+                ></span>
                 <span>{item.name}: {item.value}%</span>
               </li>
             ))}
-          </ul>
-        </div>
-      </div>
-
-      {/* Bottom: Top Ads and Active Advertisements */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Your Top Ads */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Your Top Ads</h2>
-          <div className="flex items-center justify-around">
-            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-800 text-lg font-bold">
-              92%<br />Bam
-            </div>
-            <div className="w-24 h-24 rounded-full bg-orange-100 flex items-center justify-center text-orange-800 text-lg font-bold">
-              85%<br />Kiko
-            </div>
-            <div className="w-24 h-24 rounded-full bg-purple-100 flex items-center justify-center text-purple-800 text-lg font-bold">
-              85%<br />Akbayan
-            </div>
-          </div>
-        </div>
-
-        {/* Active Advertisements */}
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Active Advertisements</h2>
-          <ul className="space-y-3 text-gray-700">
-            <li>📢 Akbayan Campaign — UID: 001</li>
-            <li>📢 Kiko Campaign — UID: 002</li>
-            <li>📢 Bam Campaign — UID: 003</li>
-            <li>📢 Kulangot Campaign — UID: 004</li>
           </ul>
         </div>
       </div>

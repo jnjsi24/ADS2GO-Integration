@@ -1,34 +1,43 @@
 const Payment = require('../models/Payment');
-const { checkAuth } = require('../middleware/auth');
+const Ad = require('../models/Ad');
+const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const paymentResolvers = {
   Query: {
     getPaymentsByUser: async (_, __, { user }) => {
       checkAuth(user);
-      return await Payment.find({ userId: user.id });
+      return await Payment.find({ userId: user.id })
+        .sort({ createdAt: -1 })
+        .populate('adsId'); // Populate ad data
     },
-    getPaymentById: async (_, { id }, { user }) => {
-      checkAuth(user);
-      const payment = await Payment.findById(id);
-      if (!payment) throw new Error('Payment not found');
-      if (payment.userId.toString() !== user.id) throw new Error('Not authorized to view this payment');
-      return payment;
+
+    getAllPayments: async (_, __, { user }) => {
+      checkAdmin(user);
+      return await Payment.find()
+        .sort({ createdAt: -1 })
+        .populate('adsId'); // Populate ad data
     },
   },
 
   Mutation: {
     createPayment: async (_, { input }, { user }) => {
       checkAuth(user);
-
       const { adsId, paymentType, amount, receiptId } = input;
 
-      // Basic validation example
       if (amount <= 0) throw new Error('Amount must be positive');
       if (!receiptId.trim()) throw new Error('Receipt ID is required');
 
-      // Check for duplicate receiptId
       const existing = await Payment.findOne({ receiptId });
       if (existing) throw new Error('Duplicate receipt ID');
+
+      const ad = await Ad.findById(adsId);
+      if (!ad) throw new Error('Ad not found');
+      if (ad.status !== 'APPROVED') throw new Error('Ad must be approved before making a payment');
+      if (ad.userId.toString() !== user.id) throw new Error('You are not authorized to pay for this ad');
+      if (amount !== ad.price) throw new Error(`Amount must match ad price: ₱${ad.price}`);
+
+      const existingPaid = await Payment.findOne({ adsId, paymentStatus: 'PAID' });
+      if (existingPaid) throw new Error('This ad is already paid');
 
       const newPayment = new Payment({
         userId: user.id,
@@ -36,10 +45,11 @@ const paymentResolvers = {
         paymentType,
         amount,
         receiptId,
-        paymentStatus: 'PENDING', // default status
+        paymentStatus: 'PENDING',
       });
 
       await newPayment.save();
+      await newPayment.populate('adsId');
 
       return {
         success: true,
@@ -49,23 +59,22 @@ const paymentResolvers = {
     },
 
     updatePayment: async (_, { id, input }, { user }) => {
-      checkAuth(user);
+      checkAdmin(user);
 
-      const payment = await Payment.findById(id);
+      const payment = await Payment.findById(id).populate('adsId');
       if (!payment) throw new Error('Payment not found');
-      if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
 
-      if (input.paymentStatus && !['PAID', 'PENDING', 'FAILED'].includes(input.paymentStatus)) {
+      const { paymentStatus } = input;
+      if (!['PAID', 'PENDING', 'FAILED'].includes(paymentStatus)) {
         throw new Error('Invalid payment status');
       }
 
-      if (input.paymentStatus) payment.paymentStatus = input.paymentStatus;
-
+      payment.paymentStatus = paymentStatus;
       await payment.save();
 
       return {
         success: true,
-        message: 'Payment updated successfully',
+        message: 'Payment status updated successfully',
         payment,
       };
     },
@@ -75,7 +84,12 @@ const paymentResolvers = {
 
       const payment = await Payment.findById(id);
       if (!payment) throw new Error('Payment not found');
-      if (payment.userId.toString() !== user.id) throw new Error('Not authorized');
+      if (payment.userId.toString() !== user.id) {
+        throw new Error('Not authorized to delete this payment');
+      }
+      if (payment.paymentStatus === 'PAID') {
+        throw new Error('Cannot delete a paid payment');
+      }
 
       await Payment.findByIdAndDelete(id);
 
@@ -84,6 +98,13 @@ const paymentResolvers = {
         message: 'Payment deleted successfully',
         payment: null,
       };
+    },
+  },
+
+  // ✅ Custom nested resolver
+  Payment: {
+    ad: async (parent) => {
+      return await Ad.findById(parent.adsId);
     },
   },
 };

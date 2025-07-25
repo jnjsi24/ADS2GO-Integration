@@ -1,4 +1,4 @@
-const { gql } = require('graphql-tag'); 
+const { gql } = require('graphql-tag');
 
 const paymentTypeDefs = gql`
   enum PaymentStatus {
@@ -15,10 +15,17 @@ const paymentTypeDefs = gql`
     BANK_TRANSFER
   }
 
+  type Ad {
+    id: ID!
+    title: String!
+    price: Float!
+  }
+
   type Payment {
     id: ID!
     userId: ID!
     adsId: ID!
+    ad: Ad
     paymentType: PaymentType!
     amount: Float!
     receiptId: String!
@@ -35,10 +42,9 @@ const paymentTypeDefs = gql`
   }
 
   input UpdatePaymentInput {
-    paymentStatus: PaymentStatus
+    paymentStatus: PaymentStatus!
   }
 
-  # Wrapper response to include operation success & message
   type PaymentResponse {
     success: Boolean!
     message: String!
@@ -46,16 +52,13 @@ const paymentTypeDefs = gql`
   }
 
   type Query {
-    # Get all payments for the authenticated user
     getPaymentsByUser: [Payment!]!
-
-    # Get a specific payment by ID (with auth check)
-    getPaymentById(id: ID!): Payment
+    getAllPayments: [Payment!]! # Admin only
   }
 
   type Mutation {
     createPayment(input: CreatePaymentInput!): PaymentResponse!
-    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse!
+    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse! # Admin only
     deletePayment(id: ID!): PaymentResponse!
   }
 `;

@@ -1,240 +1,587 @@
-import React, { useState } from 'react';
-import { TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
 
 interface User {
-  id: string;
-  name: string;
+  id: number;
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  company: string;
+  address: string;
+  contact: string;
   email: string;
-  role: string;
-  houseAddress: string;
-  contactNumber: string;
-  isEmailVerified: boolean;
+  status: 'active' | 'inactive';
+  city: string;
+  adsCount: number;
+  ridersCount: number;
 }
 
-interface Ad {
+interface AdForm {
   id: string;
+  type: 'ads';
   title: string;
-  submittedBy: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  category: string;
   description: string;
+  vehicleType: string;
+  material: string;
+  plan: string;
+  format: string;
+  mediaUrl: string;
+  companyName: string;
+  companyEmail: string;
+  dateStarted: string;
+  dateEnded: string;
+  status: string;
 }
 
 const mockUsers: User[] = [
   {
-    id: '1',
-    name: 'Jane Doe',
-    email: 'jane@example.com',
-    role: 'USER',
-    houseAddress: '123 Elm Street',
-    contactNumber: '09123456789',
-    isEmailVerified: true,
+    id: 1,
+    lastName: 'Garcia',
+    firstName: 'Juan',
+    middleName: 'Santos',
+    company: 'TechCorp',
+    address: '123 Ayala Ave.',
+    contact: '09171234567',
+    email: 'juan.garcia@techcorp.com',
+    status: 'active',
+    city: 'Makati',
+    adsCount: 5,
+    ridersCount: 12,
   },
   {
-    id: '2',
-    name: 'John Smith',
-    email: 'john@example.com',
-    role: 'ADMIN',
-    houseAddress: '456 Oak Avenue',
-    contactNumber: '09987654321',
-    isEmailVerified: false,
+    id: 2,
+    lastName: 'Reyes',
+    firstName: 'Maria',
+    middleName: 'Lopez',
+    company: 'AgriFarm Inc.',
+    address: '456 Quezon Blvd.',
+    contact: '09987654321',
+    email: 'maria.reyes@agrifarm.com',
+    status: 'inactive',
+    city: 'Quezon City',
+    adsCount: 3,
+    ridersCount: 7,
+  },
+  {
+    id: 3,
+    lastName: 'Cruz',
+    firstName: 'Pedro',
+    middleName: 'Dela Cruz',
+    company: 'BuildIt',
+    address: '789 Katipunan St.',
+    contact: '09182345678',
+    email: 'pedro.cruz@buildit.com',
+    status: 'active',
+    city: 'Manila',
+    adsCount: 8,
+    ridersCount: 15,
+  },
+  {
+    id: 4,
+    lastName: 'Dela Rosa',
+    firstName: 'Ana',
+    middleName: 'Mendoza',
+    company: 'SmartBuild',
+    address: '101 Maginhawa St.',
+    contact: '09174561234',
+    email: 'ana.rosa@smartbuild.com',
+    status: 'active',
+    city: 'Pasig',
+    adsCount: 2,
+    ridersCount: 3,
+  },
+  {
+    id: 5,
+    lastName: 'Santos',
+    firstName: 'Carlos',
+    middleName: 'Rivera',
+    company: 'GreenFields',
+    address: '34 Davao St.',
+    contact: '09176543210',
+    email: 'carlos.santos@greenfields.com',
+    status: 'inactive',
+    city: 'Davao',
+    adsCount: 0,
+    ridersCount: 0,
+  },
+  {
+    id: 6,
+    lastName: 'Navarro',
+    firstName: 'Liza',
+    middleName: 'Gomez',
+    company: 'BioTech PH',
+    address: '88 Baguio Hilltop Rd.',
+    contact: '09171239876',
+    email: 'liza.navarro@biotechph.com',
+    status: 'active',
+    city: 'Baguio',
+    adsCount: 4,
+    ridersCount: 9,
+  },
+  {
+    id: 7,
+    lastName: 'Lopez',
+    firstName: 'Miguel',
+    middleName: 'Torres',
+    company: 'AutoMate',
+    address: '14 Iloilo Ave.',
+    contact: '09223456789',
+    email: 'miguel.lopez@automate.com',
+    status: 'inactive',
+    city: 'Iloilo',
+    adsCount: 1,
+    ridersCount: 2,
+  },
+  {
+    id: 8,
+    lastName: 'Torres',
+    firstName: 'Sofia',
+    middleName: 'Reyes',
+    company: 'NextGen',
+    address: '22 Taguig Rd.',
+    contact: '09181234567',
+    email: 'sofia.torres@nextgen.com',
+    status: 'active',
+    city: 'Taguig',
+    adsCount: 6,
+    ridersCount: 11,
+  },
+  {
+    id: 9,
+    lastName: 'Fernandez',
+    firstName: 'Marco',
+    middleName: 'Luis',
+    company: 'CloudLink',
+    address: '77 Makati Ave.',
+    contact: '09331234567',
+    email: 'marco.fernandez@cloudlink.com',
+    status: 'active',
+    city: 'Makati',
+    adsCount: 4,
+    ridersCount: 10,
+  },
+  {
+    id: 10,
+    lastName: 'Ramirez',
+    firstName: 'Isabel',
+    middleName: 'Delos Santos',
+    company: 'HealthPlus',
+    address: '65 Quezon Ave.',
+    contact: '09451234567',
+    email: 'isabel.ramirez@healthplus.com',
+    status: 'inactive',
+    city: 'Quezon City',
+    adsCount: 2,
+    ridersCount: 4,
   },
 ];
 
-const mockAds: Ad[] = [
-  {
-    id: 'AD1',
-    title: 'Concrete Sale Promo',
-    submittedBy: 'Jane Doe',
-    status: 'Pending',
-    category: 'Construction',
-    description: '50% off premium concrete materials.',
-  },
-  {
-    id: 'AD2',
-    title: 'Waterproofing Service',
-    submittedBy: 'Jane Doe',
-    status: 'Approved',
-    category: 'Services',
-    description: 'Reliable waterproofing for any structure.',
-  },
-];
+const cities = ['Manila', 'Quezon City', 'Cebu', 'Davao', 'Iloilo', 'Baguio', 'Makati', 'Taguig', 'Pasig', 'Parañaque'];
 
 const ManageUsers: React.FC = () => {
-  const [tab, setTab] = useState<'users' | 'ads'>('users');
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [ads, setAds] = useState<Ad[]>(mockAds);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('');
-  const [filterVerified, setFilterVerified] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [citySearch, setCitySearch] = useState('');
+  const [showCityModal, setShowCityModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('User List');
+  const [expandedId, setExpandedId] = useState<string | number | null>(null); // Updated to handle both string and number
+  const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
 
-  const handleDeleteUser = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+  // Mock data for ads
+  const [mockData, setMockData] = useState<AdForm[] | null>(null);
+
+  useEffect(() => {
+    const mockAdForms: AdForm[] = [
+      {
+        id: "1",
+        type: "ads",
+        title: "Summer Sale Ad",
+        description: "Promoting summer discounts on scooters",
+        vehicleType: "Scooter",
+        material: "Vinyl",
+        plan: "Premium",
+        format: "Video",
+        mediaUrl: "https://example.com/media/summer-sale.mp4",
+        companyName: "Summer Co.",
+        companyEmail: "sales@summerco.com",
+        dateStarted: "2025-06-01",
+        dateEnded: "2025-06-30",
+        status: "pending",
+      },
+      {
+        id: "2",
+        type: "ads",
+        title: "New Bike Launch",
+        description: "Introducing our latest bike model",
+        vehicleType: "Motorcycle",
+        material: "Metal",
+        plan: "Basic",
+        format: "Image",
+        mediaUrl: "https://example.com/media/bike-launch.jpg",
+        companyName: "Bike Innovations",
+        companyEmail: "info@bikeinnovations.com",
+        dateStarted: "2025-07-01",
+        dateEnded: "2025-07-15",
+        status: "pending",
+      },
+    ];
+    setMockData(mockAdForms);
+  }, []);
+
+  const filteredUsers = mockUsers.filter((user) => {
+    const matchesSearch = user.firstName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    const matchesCity = !selectedCity || user.city === selectedCity;
+    return matchesSearch && matchesStatus && matchesCity;
+  });
+
+  const forms = mockData || [];
+
+  const handleApprove = () => {
+    alert('Form approved successfully');
+    setExpandedId(null);
+    setSelectedItems(new Set());
+  };
+
+  const handleReject = () => {
+    alert('Form rejected successfully');
+    setExpandedId(null);
+    setSelectedItems(new Set());
+  };
+
+  const toggleExpand = (id: string | number) => {
+    setExpandedId(prev => (prev === id ? null : id));
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      const allIds: (string | number)[] = activeTab === 'User List' ? filteredUsers.map(user => user.id) : forms.map(form => form.id);
+      setSelectedItems(new Set(allIds));
+    } else {
+      setSelectedItems(new Set());
     }
   };
 
-  const handleAdStatusChange = (id: string, status: Ad['status']) => {
-    setAds((prev) =>
-      prev.map((ad) => (ad.id === id ? { ...ad, status } : ad))
-    );
+  const handleItemSelect = (id: string | number) => {
+    const newSelectedItems = new Set(selectedItems);
+    if (newSelectedItems.has(id)) {
+      newSelectedItems.delete(id);
+    } else {
+      newSelectedItems.add(id);
+    }
+    setSelectedItems(newSelectedItems);
   };
 
-  const filteredUsers = users.filter((user) => {
-    return (
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (filterRole ? user.role === filterRole : true) &&
-      (filterVerified ? (filterVerified === 'Verified' ? user.isEmailVerified : !user.isEmailVerified) : true)
-    );
-  });
-
   return (
-    <div className="p-8 bg-gray-900 min-h-screen text-white">
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => setTab('users')}
-          className={`px-4 py-2 rounded ${tab === 'users' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}
-        >
-          Manage Users
-        </button>
-        <button
-          onClick={() => setTab('ads')}
-          className={`px-4 py-2 rounded ${tab === 'ads' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'}`}
-        >
-          Manage Ads
-        </button>
-      </div>
+    <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] ">
+      <div className="bg-[#f9f9fc] w-full">
+        {/* Header with Dropdown Title and Add New Button */}
+        <div className="flex justify-between items-center mb-6">
+          <select
+            className="px-3 py-1 text-2xl bg-[#f9f9fc] font-bold text-gray-800 focus:outline-none"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+          >
+            <option value="User List">User List</option>
+            <option value="Manage Ads">Manage Ads</option>
+          </select>
+          <button 
+            className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] hover:scale-105 transition-all duration-300"
+          >
+            Add New User
+          </button>
+        </div>
 
-      {tab === 'users' ? (
-        <>
-          <h1 className="text-2xl font-bold mb-4">Manage Users</h1>
-          <div className="mb-4 flex flex-wrap gap-4">
-            <input
-              type="text"
-              placeholder="Search by email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="p-2 bg-gray-800 text-white border border-gray-600 rounded w-64"
-            />
+        {/* Search Bar and Filters */}
+        <div className="flex justify-between items-center mb-4">
+          <input
+            type="text"
+            className="border rounded px-3 py-1 text-sm w-64"
+            placeholder="Search by first name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <div className="flex space-x-2">
             <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="p-2 bg-gray-800 text-white border border-gray-600 rounded"
+              className="border rounded px-3 py-1 text-sm"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
             >
-              <option value="">All Roles</option>
-              <option value="USER">User</option>
-              <option value="ADMIN">Admin</option>
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </select>
             <select
-              value={filterVerified}
-              onChange={(e) => setFilterVerified(e.target.value)}
-              className="p-2 bg-gray-800 text-white border border-gray-600 rounded"
+              className="border rounded px-3 py-1 text-sm"
+              value={selectedCity || ''}
+              onChange={(e) => setSelectedCity(e.target.value || null)}
             >
-              <option value="">All Status</option>
-              <option value="Verified">Verified</option>
-              <option value="Not Verified">Not Verified</option>
+              <option value="">Filter by City</option>
+              {cities.map(city => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
             </select>
-          </div>
-
-          <table className="w-full bg-gray-800 rounded-lg overflow-hidden shadow-md">
-            <thead className="bg-gray-700 text-white">
-              <tr>
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">Email</th>
-                <th className="p-3 text-left">Address</th>
-                <th className="p-3 text-left">Contact</th>
-                <th className="p-3 text-left">Role</th>
-                <th className="p-3 text-left">Verified</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="border-b border-gray-600">
-                  <td className="p-3 cursor-pointer" onClick={() => setSelectedUser(user)}>{user.name}</td>
-                  <td className="p-3">{user.email}</td>
-                  <td className="p-3">{user.houseAddress}</td>
-                  <td className="p-3">{user.contactNumber}</td>
-                  <td className="p-3">{user.role}</td>
-                  <td className="p-3">{user.isEmailVerified ? '✅' : '❌'}</td>
-                  <td className="p-3 flex space-x-3">
-                    <button
-                      onClick={() => setSelectedUser(user)}
-                      className="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 flex items-center"
-                    >
-                      <TrashIcon className="w-4 h-4 mr-1" /> Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      ) : (
-        <>
-          <h1 className="text-2xl font-bold mb-4">Manage Ads</h1>
-          <table className="w-full bg-gray-800 rounded-lg overflow-hidden shadow-md">
-            <thead className="bg-gray-700 text-white">
-              <tr>
-                <th className="p-3 text-left">Title</th>
-                <th className="p-3 text-left">Category</th>
-                <th className="p-3 text-left">Submitted By</th>
-                <th className="p-3 text-left">Status</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ads.map((ad) => (
-                <tr key={ad.id} className="border-b border-gray-600">
-                  <td className="p-3">{ad.title}</td>
-                  <td className="p-3">{ad.category}</td>
-                  <td className="p-3">{ad.submittedBy}</td>
-                  <td className="p-3">
-                    {ad.status === 'Pending' ? '🕒' : ad.status === 'Approved' ? '✅' : '❌'} {ad.status}
-                  </td>
-                  <td className="p-3 flex gap-2">
-                    <button
-                      onClick={() => handleAdStatusChange(ad.id, 'Approved')}
-                      className="bg-green-600 px-2 py-1 rounded hover:bg-green-700"
-                    >
-                      <CheckIcon className="w-4 h-4 inline" /> Approve
-                    </button>
-                    <button
-                      onClick={() => handleAdStatusChange(ad.id, 'Rejected')}
-                      className="bg-red-600 px-2 py-1 rounded hover:bg-red-700"
-                    >
-                      <XMarkIcon className="w-4 h-4 inline" /> Reject
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {/* User Detail Modal */}
-      {selectedUser && (
-        <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-gray-800 p-6 rounded-lg w-96">
-            <h2 className="text-xl font-bold mb-4">User Details</h2>
-            <p><strong>Name:</strong> {selectedUser.name}</p>
-            <p><strong>Email:</strong> {selectedUser.email}</p>
-            <p><strong>Role:</strong> {selectedUser.role}</p>
-            <p><strong>Address:</strong> {selectedUser.houseAddress}</p>
-            <p><strong>Contact:</strong> {selectedUser.contactNumber}</p>
-            <p><strong>Verified:</strong> {selectedUser.isEmailVerified ? 'Yes' : 'No'}</p>
-            <button onClick={() => setSelectedUser(null)} className="mt-4 bg-gray-600 px-3 py-1 rounded">Close</button>
           </div>
         </div>
-      )}
+
+        {showCityModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-20 z-50">
+            <div className="bg-white p-4 rounded-lg w-80 shadow-lg">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">Select a City</h3>
+                <button onClick={() => setShowCityModal(false)}>×</button>
+              </div>
+              <input
+                type="text"
+                placeholder="Search cities..."
+                value={citySearch}
+                onChange={(e) => setCitySearch(e.target.value)}
+                className="w-full border px-2 py-1 rounded mb-3"
+              />
+              <div className="max-h-60 overflow-y-auto">
+                {cities
+                  .filter(city => city.toLowerCase().includes(citySearch.toLowerCase()))
+                  .map(city => (
+                    <div
+                      key={city}
+                      onClick={() => {
+                        setSelectedCity(city);
+                        setShowCityModal(false);
+                        setCitySearch('');
+                      }}
+                      className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
+                    >
+                      {city}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="overflow-auto rounded-md mb-4">
+          {activeTab === 'User List' ? (
+            <table className="min-w-full text-sm">
+              <thead className="bg-[#3674B5]">
+                <tr>
+                  <th className="px-2 py-2 text-left text-sm font-semibold text-white w-32">
+                    <div className="flex justify-center">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={filteredUsers.length > 0 && filteredUsers.every(user => selectedItems.has(user.id))}
+                          onChange={handleSelectAll}
+                          className="mr-1"
+                        />
+                        Select All
+                      </label>
+                    </div>
+                  </th>
+                  <th className="px-2 py-2 text-left text-sm font-semibold text-white">First Name</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Last Name</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Email</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Status</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Last Access</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <React.Fragment key={user.id}>
+                    <tr
+                      className="bg-white border-t border-gray-300 cursor-pointer hover:bg-gray-100"
+                      onClick={() => toggleExpand(user.id)}
+                    >
+                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <div className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(user.id)}
+                            onChange={() => handleItemSelect(user.id)}
+                            className="mr-1"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <img
+                          src={`https://via.placeholder.com/40?text=${user.firstName[0]}`}
+                          alt={user.firstName}
+                          className="w-8 h-8 rounded-full mr-2 inline-block"
+                        />
+                        {user.firstName}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {user.lastName}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {user.email}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                          }`}
+                        >
+                          {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {user.status === 'active' ? 'Active Now' : 'Muted for 24 hours'}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <button className="text-blue-600 text-xs">...</button>
+                      </td>
+                    </tr>
+                    {expandedId === user.id && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={7} className="p-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                            <div><strong>Middle Name:</strong> {user.middleName}</div>
+                            <div><strong>Company:</strong> {user.company}</div>
+                            <div><strong>Address:</strong> {user.address}</div>
+                            <div><strong>Contact:</strong> {user.contact}</div>
+                            <div><strong>City:</strong> {user.city}</div>
+                            <div><strong>Ads Count:</strong> {user.adsCount}</div>
+                            <div><strong>Riders Count:</strong> {user.ridersCount}</div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="bg-[#3674B5]">
+                <tr>
+                  <th className="px-2 py-2 text-left text-sm font-semibold text-white w-32">
+                    <div className="flex justify-center">
+                      <label className="flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={forms.length > 0 && forms.every(form => selectedItems.has(form.id))}
+                          onChange={handleSelectAll}
+                          className="mr-1"
+                        />
+                        Select All
+                      </label>
+                    </div>
+                  </th>
+                  <th className="px-2 py-2 text-left text-sm font-semibold text-white">Title</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Company Name</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Company Email</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Date Started</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Date Ended</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {forms.map((form, index) => (
+                  <React.Fragment key={form.id}>
+                    <tr
+                      className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} cursor-pointer hover:bg-gray-100`}
+                      onClick={() => toggleExpand(form.id)}
+                    >
+                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <div className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedItems.has(form.id)}
+                            onChange={() => handleItemSelect(form.id)}
+                            className="mr-1"
+                          />
+                        </div>
+                      </td>
+                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {form.title}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {form.companyName}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {form.companyEmail}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {form.dateStarted}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        {form.dateEnded}
+                      </td>
+                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApprove();
+                          }}
+                          className="bg-green-500 text-white px-2 py-1 rounded mr-2"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleReject();
+                          }}
+                          className="bg-red-500 text-white px-2 py-1 rounded"
+                        >
+                          Reject
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedId === form.id && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={7} className="p-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                            <div><strong>Description:</strong> {form.description}</div>
+                            <div><strong>Vehicle Type:</strong> {form.vehicleType}</div>
+                            <div><strong>Material:</strong> {form.material}</div>
+                            <div><strong>Plan:</strong> {form.plan}</div>
+                            <div><strong>Format:</strong> {form.format}</div>
+                            <div>
+                              <strong>Media:</strong><br />
+                              {form.format === 'Video' ? (
+                                <video controls className="w-40 h-40 object-cover rounded">
+                                  <source src={form.mediaUrl} type="video/mp4" />
+                                  Your browser does not support the video tag.
+                                </video>
+                              ) : form.format === 'Image' ? (
+                                <img src={form.mediaUrl} alt="Ad Media" className="w-40 h-40 object-cover rounded" />
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+                {forms.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center text-gray-500 py-3">No forms available.</td> {/* Changed to py-3 for consistency */}
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">Found: {activeTab === 'User List' ? filteredUsers.length : forms.length} {activeTab === 'User List' ? 'user(s)' : 'form(s)'}</span>
+          <div className="flex space-x-2">
+            <button className="px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 text-sm">
+              Export to Excel
+            </button>
+            <div className="flex items-center space-x-2">
+              <button className="px-2 py-1 border rounded text-sm"></button>
+              <span className="px-2 py-1">1 2 3</span>
+              <button className="px-2 py-1 border rounded text-sm"></button>
+              <span className="text-sm text-gray-600">19 20</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

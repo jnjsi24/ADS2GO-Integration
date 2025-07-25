@@ -1,26 +1,30 @@
 const mongoose = require('mongoose');
 
-const AdvertisementSubSchema = new mongoose.Schema({
-  advertisementId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Advertisement',
-    required: true
-  },
-  assignedAt: {
-    type: Date,
-    default: Date.now
-  },
-  removedAt: {
-    type: Date
-  }
-}, { _id: false });
-
 const MaterialSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  category: { type: String, enum: ['digital', 'non-digital'], required: true },
-  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
-  riderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Rider', required: true },
-  advertisements: [AdvertisementSubSchema]
+  name: {
+    type: String,
+    required: [true, 'Material name is required'],
+    trim: true,
+    minlength: [3, 'Name must be at least 3 characters long']
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  requirements: {
+    type: String,
+    trim: true
+  },
+  category: {
+    type: String,
+    enum: ['DIGITAL', 'NON_DIGITAL'],
+    required: [true, 'Category is required']
+  },
+  price: {
+    type: Number,
+    required: [true, 'Price is required'],
+    min: [0, 'Price must be a non-negative number']
+  },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Material', MaterialSchema);
