@@ -6,7 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
 
 const Login: React.FC = () => {
-  const { navigateToRegister, setUser } = useAuth(); // <-- added setUser
+  const { navigateToRegister, setUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);  
@@ -23,10 +23,19 @@ const Login: React.FC = () => {
       // Update user in context immediately
       setUser(data.login.user);
       
-      // Check user role and handle admin users
+      // Check user role and handle admin/superadmin users
       const user = data.login.user;
-      if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {
+      if (user.role?.toUpperCase() === 'ADMIN') {
         setError('Admin users must use the dedicated admin login page.');
+        // Optionally clear token/user if they tried to log in as admin here
+        localStorage.removeItem('token');
+        setUser(null);
+        return;
+      } else if (user.role?.toUpperCase() === 'SUPERADMIN') {
+        setError('SuperAdmin users must use the dedicated superadmin login page.');
+        // Optionally clear token/user if they tried to log in as superadmin here
+        localStorage.removeItem('token');
+        setUser(null);
         return;
       }
 

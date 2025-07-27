@@ -7,6 +7,7 @@ import {
   Settings,
   LogOut,
   CreditCard,
+  Users, // Added Users icon as it was in the original snippet but not imported
   HelpCircle
 } from 'lucide-react';
 
@@ -20,6 +21,7 @@ const SideNavbar: React.FC = () => {
     navigate('/login');
   };
 
+  // Combined getInitials function from UserNavbar.tsx
   const getInitials = (firstName?: string, lastName?: string) => {
     if (!firstName && !lastName) return '?';
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
@@ -34,12 +36,14 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-60 bg-white text-black flex flex-col justify-between fixed">
-      <div className="p-6">
+    <div className="w-60 bg-[#1b5087] fixed top-5 left-3 bottom-5 shadow-2xl text-white flex flex-col justify-between rounded-3xl p-6"> {/* Changed shadow-lg to shadow-2xl */}
+
+      <div>
         {/* Logo */}
         <div className="flex items-center space-x-3 mb-10">
+          {/* Ensure the path to your logo is correct */}
           <img src="/image/blue-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-black font-bold">Ads2Go</span>
+          <span className="text-2xl text-white font-bold">Ads2Go</span>
         </div>
 
         {/* Navigation */}
@@ -48,8 +52,8 @@ const SideNavbar: React.FC = () => {
             <li key={link.label}>
               <Link
                 to={link.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-3xl hover:bg-[#3674B5] hover:text-white transition ${
-                  location.pathname === link.path ? 'text-white bg-[#3674B5]' : ''
+                className={`flex items-center space-x-3 px-4 py-3 rounded-xl hover:bg-[#0E2A47] font-bold hover:text-white transition hover:scale-105 duration-300 ${
+                  location.pathname === link.path ? 'text-white bg-[#0E2A47]' : ''
                 }`}
               >
                 {link.icon}
@@ -61,12 +65,13 @@ const SideNavbar: React.FC = () => {
       </div>
 
       {/* User Profile & Logout */}
-      <div className="p-6">
+      <div>
         <div
           className="flex items-center space-x-3 mb-4 cursor-pointer"
           onClick={() => navigate('/account')}
         >
           <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
+            {/* Use the updated getInitials function with user.firstName and user.lastName */}
             <span className="text-white font-semibold">
               {user ? getInitials(user.firstName, user.lastName) : '...'}
             </span>
@@ -74,13 +79,17 @@ const SideNavbar: React.FC = () => {
           </div>
           <div>
             {user ? (
-              <p className="font-semibold text-gray-800">
-                {`${user.firstName} ${user.lastName}`}
-              </p>
+              <>
+                <p className="font-semibold text-gray-100">
+                  {/* Display full name from user object */}
+                  {`${user.firstName || ''} ${user.lastName || ''}`}
+                </p>
+                {/* Removed the line causing the TypeScript error */}
+              </>
             ) : (
               <>
-                <p className="font-semibold text-gray-800">Loading...</p>
-                <p className="text-sm text-gray-500">Please wait</p>
+                <p className="font-semibold text-gray-100">Loading...</p>
+                <p className="text-sm text-gray-300">Please wait</p>
               </>
             )}
           </div>

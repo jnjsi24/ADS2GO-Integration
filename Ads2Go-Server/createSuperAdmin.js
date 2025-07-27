@@ -20,18 +20,21 @@ mongoose.connect(process.env.MONGODB_URI, {
   const hashedPassword = await bcrypt.hash('Adminpass!', 10);
 
   await User.create({
-    firstName: 'Super',
-    middleName: 'A.',
-    lastName: 'Admin',
-    email,
-    password: hashedPassword,
-    role: 'SUPERADMIN',
-    isEmailVerified: true,
-    companyName: 'ADS TO GO',
-    companyAddress: '123 Super Street, Cityville',
-    houseAddress: '456 Admin Ave',
-    contactNumber: '+639123456789',
-    lastLogin: new Date()
+      firstName: 'Mr',
+      middleName: 'Super',
+      lastName: 'Admin',
+      email: "ads2go.superadmin@example.com", 
+      password: "Ads2gosuperadmin_123",
+      role: 'SUPERADMIN',
+      isEmailVerified: true,
+      companyName: 'ADS TO GO',
+      companyAddress: '123 Super Street, Cityville',
+      houseAddress: '456 Admin Ave',
+      contactNumber: '+639113456789',
+      lastLogin: new Date(),
+      loginAttempts: 0,
+      accountLocked: false,
+      lockUntil: null
   });
 
   console.log('✅ Superadmin created successfully.');

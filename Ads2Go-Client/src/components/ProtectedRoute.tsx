@@ -5,19 +5,26 @@ import { useAuth } from '../../src/contexts/AuthContext';
 interface ProtectedRouteProps {
   children: React.ReactElement;
   requireAuth?: boolean;
-  allowedRoles?: string[];
+  requiredRole?: string | string[]; // Support single role or array of roles
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
   requireAuth = true,
-  allowedRoles = []
+  requiredRole = [],
 }) => {
   const { user, isLoading, isInitialized } = useAuth();
   const location = useLocation();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  // Check if user has required role
+  // Normalize roles to array and convert to uppercase for case-insensitive comparison
+  const normalizedRoles = Array.isArray(requiredRole)
+    ? requiredRole.map((role) => role.toUpperCase())
+    : requiredRole
+    ? [requiredRole.toUpperCase()]
+    : [];
+
+  // Check authorization status
   useEffect(() => {
     if (!isLoading && isInitialized) {
       if (!requireAuth) {
@@ -31,16 +38,16 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
 
       // If no specific roles required, just check authentication
-      if (allowedRoles.length === 0) {
+      if (normalizedRoles.length === 0) {
         setIsAuthorized(true);
         return;
       }
 
-      // Check if user has one of the allowed roles
-      const hasRequiredRole = allowedRoles.some(role => user.role === role);
+      // Check if user has one of the required roles (case-insensitive)
+      const hasRequiredRole = normalizedRoles.includes(user.role?.toUpperCase());
       setIsAuthorized(hasRequiredRole);
     }
-  }, [user, isLoading, isInitialized, requireAuth, allowedRoles]);
+  }, [user, isLoading, isInitialized, requireAuth, normalizedRoles]);
 
   // Show loading state while checking auth
   if (isLoading || !isInitialized || isAuthorized === null) {
@@ -55,17 +62,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (requireAuth && !user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
-  // Redirect to unauthorized if user doesn't have required role
   if (requireAuth && user && isAuthorized === false) {
-    // You can create a dedicated "unauthorized" page if needed
-    return <Navigate to="/" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
-  // Redirect to dashboard if user is logged in but tries to access auth pages
+  // Redirect to appropriate dashboard if user is logged in but tries to access auth pages
   if (!requireAuth && user) {
-    const redirectPath = user.role === 'ADMIN' ? '/admin' : 
-                        user.role === 'SUPERADMIN' ? '/sadmin-dashboard' : '/home';
+    const redirectPath =
+      user.role?.toUpperCase() === 'ADMIN'
+        ? '/admin'
+        : user.role?.toUpperCase() === 'SUPERADMIN'
+        ? '/sadmin-dashboard'
+        : '/home';
     return <Navigate to={redirectPath} replace />;
   }
 

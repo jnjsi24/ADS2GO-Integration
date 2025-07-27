@@ -10,7 +10,7 @@ const typeDefs = gql`
   type User {
     id: ID!
     firstName: String!
-    middleName: String 
+    middleName: String
     lastName: String!
     email: String!
     companyName: String!
@@ -19,17 +19,70 @@ const typeDefs = gql`
     contactNumber: String!
     role: UserRole!
     isEmailVerified: Boolean!
-    profilePicture: String          # ✅ Added this line
+    profilePicture: String
     lastLogin: String
     createdAt: String!
     updatedAt: String!
     ads: [Ad!]
   }
+    type Query {
+    getAllUsers: [User!]!
+    }
 
   type UserUpdateResponse {
     success: Boolean!
     message: String!
     user: User!
+  }
+
+  input CreateUserInput {
+    firstName: String!
+    middleName: String
+    lastName: String!
+    email: String!
+    password: String!
+    companyName: String!
+    companyAddress: String!
+    contactNumber: String!
+    houseAddress: String
+    role: UserRole # Optional for createUser, mandatory for createAdminUser
+  }
+
+  input LoginInput {
+    email: String!
+    password: String!
+    deviceInfo: DeviceInfoInput!
+  }
+
+  input ForgotPasswordInput {
+    email: String!
+  }
+
+  input ResetPasswordInput {
+    token: String!
+    password: String!
+  }
+
+  input UpdateUserInput {
+    id: ID! # <--- ADD THIS LINE
+    firstName: String
+    middleName: String
+    lastName: String
+    email: String
+    companyName: String
+    companyAddress: String
+    houseAddress: String
+    contactNumber: String
+    profilePicture: String
+  }
+
+  input UpdateUserProfileInput {
+    firstName: String
+    middleName: String
+    lastName: String
+    houseAddress: String
+    contactNumber: String
+    profilePicture: String
   }
 
   type ResponseMessage {
@@ -50,6 +103,12 @@ const typeDefs = gql`
     platform: String!
   }
 
+  input DeviceInfoInput {
+    userAgent: String!
+    ip: String!
+    platform: String!
+  }
+
   type PasswordStrength {
     score: Float!
     strong: Boolean!
@@ -61,81 +120,32 @@ const typeDefs = gql`
     hasUpperCase: String
     hasLowerCase: String
     hasNumbers: String
-    hasSpecialChar: String
-  }
-
-  input CreateUserInput {
-    firstName: String!
-    middleName: String 
-    lastName: String!
-    companyName: String!
-    companyAddress: String!
-    contactNumber: String!
-    email: String!
-    password: String!
-    houseAddress: String!   
-  }
-
-  input UpdateUserInput {
-    firstName: String
-    middleName: String
-    lastName: String
-    companyName: String
-    companyAddress: String
-    contactNumber: String
-    email: String
-    houseAddress: String
-  }
-
-  input DeviceInfoInput {
-    deviceId: String!
-    deviceType: String!
-    deviceName: String!
+    hasSymbols: String
   }
 
   type AuthPayload {
-    token: String!
-    user: User!
-  }
-
-  type VerificationResponse {
-    success: Boolean!
-    message: String
     token: String
+    user: User
   }
 
   type Query {
-    # Admin queries
     getAllUsers: [User!]!
     getUserById(id: ID!): User
-    getUserSessions(userId: ID!): [Session!]!
-    
-    # User queries
     getOwnUserDetails: User
-    checkPasswordStrength(password: String!): PasswordStrength!
-    getMyActiveSessions: [Session!]!
+    checkPasswordStrength(password: String!): PasswordStrength
   }
 
   type Mutation {
-    # User mutations
     createUser(input: CreateUserInput!): AuthPayload!
+    login(input: LoginInput!): AuthPayload!
+    logout: ResponseMessage!
+    forgotPassword(input: ForgotPasswordInput!): ResponseMessage!
+    resetPassword(input: ResetPasswordInput!): ResponseMessage!
+    verifyEmail(token: String!): ResponseMessage!
     updateUser(input: UpdateUserInput!): UserUpdateResponse!
+    updateUserProfile(input: UpdateUserProfileInput!): UserUpdateResponse!
     deleteUser(id: ID!): ResponseMessage!
-    login(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
-    logout: Boolean!
-    logoutAllSessions: Boolean!
-
-    # Admin management
     createAdminUser(input: CreateUserInput!): UserUpdateResponse!
-
-    # Email verification
-    verifyEmail(code: String!): VerificationResponse
-    resendVerificationCode(email: String!): VerificationResponse
-
-    # Password management
-    requestPasswordReset(email: String!): Boolean!
-    resetPassword(token: String!, newPassword: String!): Boolean!
-    changePassword(currentPassword: String!, newPassword: String!): Boolean!
   }
 `;
 

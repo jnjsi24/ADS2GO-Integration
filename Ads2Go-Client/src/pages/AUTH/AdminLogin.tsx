@@ -13,24 +13,26 @@ const AdminLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const [login, { loading }] = useMutation(LOGIN_MUTATION, {
-    onCompleted(data) {
-      const { token, user } = data.login;
-
-      if (!user || (user.role?.toUpperCase() !== 'ADMIN' && user.role?.toUpperCase() !== 'SUPERADMIN')) {
-        setError('You are not authorized to access the admin panel.');
-        return;
-      }
-
-      localStorage.setItem('token', token);
-      setUser(user);
-      navigate('/admin');
-    },
-    onError(err) {
-      console.error('Admin login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
-    },
-  });
+  // In AdminLogin.tsx, update the useMutation onCompleted handler
+const [login, { loading }] = useMutation(LOGIN_MUTATION, {
+  onCompleted(data) {
+  console.log('Login response:', data.login);
+  const { token, user } = data.login;
+  if (!user || !['ADMIN', 'SUPERADMIN'].includes(user.role?.toUpperCase())) {
+    setError('You are not authorized to access the admin panel.');
+    localStorage.removeItem('token');
+    setUser(null);
+    return;
+  }
+    localStorage.setItem('token', token);
+    setUser(user);
+    navigate(user.role.toUpperCase() === 'SUPERADMIN' ? '/sadmin-dashboard' : '/admin');
+  },
+  onError(err) {
+    console.error('Admin login error:', err);
+    setError(err.message || 'Login failed. Please try again.');
+  },
+});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +51,8 @@ const AdminLogin: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#0A192F] px-4">
       <div className="bg-white rounded-2xl shadow-xl p-12 w-full max-w-xl">
         <div className="text-center mb-10">
-          <img alt="Ads2Go Logo" className="mx-auto my-5 w-32 h-32" />
+          {/* Assuming you have an admin logo here */}
+          <img alt="Ads2Go Admin Logo" className="mx-auto my-5 w-32 h-32" src="https://placehold.co/128x128/0A192F/FFFFFF?text=ADMIN" />
           <h2 className="text-xl font-semibold text-gray-800">Admin Login</h2>
         </div>
 
