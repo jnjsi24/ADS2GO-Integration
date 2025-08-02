@@ -35,46 +35,7 @@ const Advertisements: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [planFilter, setPlanFilter] = useState('All Plans');
-  const [showCreateAdPopup, setShowCreateAdPopup] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    vehicleType: '',
-    materialsUsed: '',
-    adFormat: '',
-    plan: '',
-    media: null as File | null,
-    status: 'Pending',
-  });
-  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
   const [fullscreenMedia, setFullscreenMedia] = useState<string | null>(null);
-
-  const materialOptionsMap: Record<string, string[]> = {
-    Car: ['LCD Screen', 'Posters', 'Vinyl Sticker'],
-    Motor: ['Posters', 'Vinyl Sticker'],
-    Jeep: ['Posters', 'Vinyl Sticker'],
-    Bus: ['LCD Screen', 'Posters'],
-  };
-
-  const priceMap: Record<string, Record<string, Record<string, number>>> = {
-    Car: {
-      'LCD Screen': { Weekly: 64, Monthly: 200 },
-      Posters: { Weekly: 35, Monthly: 100 },
-      'Vinyl Sticker': { Weekly: 40, Monthly: 120 },
-    },
-    Motor: {
-      Posters: { Weekly: 20, Monthly: 60 },
-      'Vinyl Sticker': { Weekly: 25, Monthly: 70 },
-    },
-    Jeep: {
-      Posters: { Weekly: 30, Monthly: 90 },
-      'Vinyl Sticker': { Weekly: 35, Monthly: 100 },
-    },
-    Bus: {
-      'LCD Screen': { Weekly: 80, Monthly: 250 },
-      Posters: { Weekly: 45, Monthly: 130 },
-    },
-  };
 
   // Sample ad data
   const [ads, setAds] = useState<Ad[]>([
@@ -90,21 +51,6 @@ const Advertisements: React.FC = () => {
     { id: 2641, title: 'CareClinic Awareness Ride', riders: 15, desc: 'Health awareness campaign for a local clinic', date: '03 Aug 2020', price: 67.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
     { id: 2642, title: 'FlexFit Ad Rollout', riders: 15, desc: 'Promoting a fitness app for on-the-go workouts', date: '03 Aug 2020', price: 67.00, status: 'Pending', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
   ]);
-
-  const [materialsOptions, setMaterialsOptions] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (formData.vehicleType) {
-      setMaterialsOptions(materialOptionsMap[formData.vehicleType] || []);
-      setFormData(prev => ({ ...prev, materialsUsed: '' }));
-    }
-  }, [formData.vehicleType]);
-
-  useEffect(() => {
-    const { vehicleType, materialsUsed, plan } = formData;
-    const price = priceMap[vehicleType]?.[materialsUsed]?.[plan] ?? null;
-    setEstimatedPrice(price);
-  }, [formData.vehicleType, formData.materialsUsed, formData.plan]);
 
   // Debugging filter state
   useEffect(() => {
@@ -176,55 +122,6 @@ const Advertisements: React.FC = () => {
     setSelectedAd(null);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, files } = e.target as HTMLInputElement;
-    if (name === 'media' && files) {
-      setFormData((prev) => ({ ...prev, media: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Generate a new ad ID
-    const newId = Math.max(...ads.map(ad => ad.id)) + 1;
-    
-    // Create new ad object
-    const newAd: Ad = {
-      id: newId,
-      title: formData.title.trim(), // Trim title to avoid spaces
-      riders: Math.floor(Math.random() * 100) + 1,
-      desc: formData.description,
-      date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-      price: estimatedPrice || 0,
-      status: 'Pending',
-      vehicleType: formData.vehicleType as Ad['vehicleType'],
-      material: formData.materialsUsed as Ad['material'],
-      plan: formData.plan as Ad['plan'],
-      format: formData.adFormat === 'Video' ? 'Video' : 'Image',
-      imagePath: formData.media ? URL.createObjectURL(formData.media) : undefined
-    };
-
-    // Add the new ad and reset page
-    setAds(prev => [...prev, newAd]);
-    setCurrentPage(1); // Reset to first page
-    addToast('Advertisement created successfully!', 'success');
-    setShowCreateAdPopup(false);
-    setFormData({
-      title: '',
-      description: '',
-      vehicleType: '',
-      materialsUsed: '',
-      adFormat: '',
-      plan: '',
-      media: null,
-      status: 'Pending',
-    });
-    console.log('New Ad Added:', newAd);
-  };
-
   return (
     <div className="flex-1 pl-60 pb-6 bg-white">
       {/* Header with Search and Company Name */}
@@ -247,12 +144,11 @@ const Advertisements: React.FC = () => {
         <h1 className="text-3xl font-semibold">Advertisements</h1>
         <div className="flex space-x-3">
           <span className="pt-1 text-gray-500">{filteredAds.length} Ads found</span>
-          <button 
-            onClick={() => setShowCreateAdPopup(true)}
-            className="px-4 py-2 bg-[#FADA7A] text-black text-sm font-semibold w-32 rounded-md hover:bg-[#F5F0CD] hover:scale-105 transition-all duration-300"
-          >
-            Add New Ads
-          </button>
+          <Link to="/create-advertisement">
+            <button className="px-4 py-2 bg-[#FADA7A] text-black text-sm font-semibold w-32 rounded-md hover:bg-[#F5F0CD] hover:scale-105 transition-all duration-300">
+              Add New Ads
+            </button>
+          </Link>
         </div>
       </div>
 
@@ -506,136 +402,6 @@ const Advertisements: React.FC = () => {
         </div>
       )}
 
-      {/* Create Ad Popup - Right Side Version */}
-      {showCreateAdPopup && (
-        <div className="fixed inset-0 z-50 flex justify-end pr-2">
-          {/* Overlay with click-to-close functionality */}
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-30"
-            onClick={() => setShowCreateAdPopup(false)}
-          ></div>
-          
-          {/* Form container sliding in from right */}
-          <div className="relative w-full max-w-xl h-[730px] pb-6 rounded-lg bg-white mt-2 shadow-lg transform transition-transform duration-300 ease-in-out">
-            <div className="p-6 h-full overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold">Create New Advertisement</h2>
-              </div>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-9">
-                <input
-                  type="text"
-                  name="title"
-                  placeholder="Title"
-                  value={formData.title}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                />
-
-                <textarea
-                  name="description"
-                  placeholder="Description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                  rows={3}
-                />
-
-                <select
-                  name="vehicleType"
-                  value={formData.vehicleType}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                >
-                  <option value="">Select Vehicle Type</option>
-                  <option value="Car">Car</option>
-                  <option value="Motor">Motor</option>
-                  <option value="Jeep">Jeep</option>
-                  <option value="Bus">Bus</option>
-                </select>
-
-                <select
-                  name="materialsUsed"
-                  value={formData.materialsUsed}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                  disabled={!formData.vehicleType}
-                >
-                  <option value="">Select Material</option>
-                  {materialsOptions.map((material) => (
-                    <option key={material} value={material}>{material}</option>
-                  ))}
-                </select>
-
-                <select
-                  name="plan"
-                  value={formData.plan}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                >
-                  <option value="">Select Plan</option>
-                  <option value="Weekly">Weekly</option>
-                  <option value="Monthly">Monthly</option>
-                </select>
-
-                {formData.vehicleType && formData.materialsUsed && formData.plan && (
-                  <div className="text-green-700 font-semibold">
-                    {estimatedPrice !== null
-                      ? `Total Price: $${estimatedPrice.toFixed(2)}`
-                      : <span className="text-red-600">Price unavailable for selected options</span>}
-                  </div>
-                )}
-
-                <select
-                  name="adFormat"
-                  value={formData.adFormat}
-                  onChange={handleChange}
-                  className="w-full border border-[#3674B5] rounded-lg p-2 focus outline-none"
-                  required
-                >
-                  <option value="">Select Format</option>
-                  <option value="Image">Image</option>
-                  <option value="Video">Video</option>
-                </select>
-
-                <div className="border border-[#3674B5] rounded-lg p-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Media Upload</label>
-                  <input
-                    type="file"
-                    name="media"
-                    accept="image/*,video/*"
-                    onChange={handleChange}
-                    className="w-full"
-                    required
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-4 pt-16">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateAdPopup(false)}
-                    className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100"
-                  >
-                    Cancel
-                  </button>
-                  <Link to='/payment'>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#578FCA] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
-                  >
-                    Create Advertisement
-                  </button>
-                  </Link>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
       <style> 
         {`
           @keyframes slideIn {

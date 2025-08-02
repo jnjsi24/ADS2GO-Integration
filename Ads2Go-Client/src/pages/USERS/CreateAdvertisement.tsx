@@ -1,185 +1,179 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const CreateAdvertisement: React.FC = () => {
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    vehicleType: '',
-    materialsUsed: '',
-    adFormat: '',
-    plan: '',
-    media: null as File | null,
-    status: 'PENDING',
-  });
+  const navigate = useNavigate();
+  const [category, setCategory] = useState('');
+  const [materialType, setMaterialType] = useState('');
+  const [vehicleType, setVehicleType] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [plan, setPlan] = useState('');
+  const [price, setPrice] = useState<number | null>(null);
+  const [adFile, setAdFile] = useState<File | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [qrUrl, setQrUrl] = useState('');
+  const [agreed, setAgreed] = useState(false);
 
-  const [materialsOptions, setMaterialsOptions] = useState<string[]>([]);
-  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const digitalMaterials = ['Headrest', 'LCD'];
+  const nonDigitalMaterials = ['Sticker', 'Banner'];
+  const allVehicleOptions = ['Car', 'Motorcycle', 'E-bike', 'Bus', 'Jeep'];
+  const plans = [
+    { name: 'Weekly', price: 500 },
+    { name: 'Monthly', price: 1800 },
+  ];
 
-  const vehicleOptions = ['Car', 'Motorcycle', 'Electric Tricycle'];
-  const planOptions = ['Weekly', 'Monthly'];
-
-  const materialOptionsMap: Record<string, string[]> = {
-    Car: ['LCD Screen', 'Stickers', 'Posters'],
-    Motorcycle: ['Posters'],
-    'Electric Tricycle': ['Posters'],
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setCategory(e.target.value);
+    setMaterialType('');
+    setVehicleType('');
   };
 
-  const priceMap: Record<string, Record<string, Record<string, number>>> = {
-    Car: {
-      'LCD Screen': { Weekly: 1000, Monthly: 3500 },
-      Stickers: { Weekly: 500, Monthly: 1500 },
-      Posters: { Weekly: 400, Monthly: 1200 },
-    },
-    Motorcycle: {
-      Posters: { Weekly: 200, Monthly: 600 },
-    },
-    'Electric Tricycle': {
-      Posters: { Weekly: 250, Monthly: 750 },
-    },
+  const handleMaterialChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setMaterialType(e.target.value);
+    setVehicleType('');
   };
 
-  useEffect(() => {
-    if (formData.vehicleType) {
-      setMaterialsOptions(materialOptionsMap[formData.vehicleType]);
-      setFormData((prev) => ({ ...prev, materialsUsed: '' }));
-    }
-  }, [formData.vehicleType]);
+  const handlePlanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selected = plans.find(p => p.name === e.target.value);
+    setPlan(selected?.name || '');
+    setPrice(selected?.price || null);
+  };
 
-  useEffect(() => {
-    const { vehicleType, materialsUsed, plan } = formData;
-    const price = priceMap[vehicleType]?.[materialsUsed]?.[plan] ?? null;
-    setEstimatedPrice(price);
-  }, [formData.vehicleType, formData.materialsUsed, formData.plan]);
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value, files } = e.target as HTMLInputElement;
-    if (name === 'media' && files) {
-      setFormData((prev) => ({ ...prev, media: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setAdFile(e.target.files[0]);
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Advertisement created (mocked)!');
-    console.log('Form Data:', formData);
-    console.log('Total Price:', estimatedPrice);
+    if (!agreed) {
+      alert('You must agree to the terms.');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('description', description);
+    formData.append('category', category);
+    formData.append('materialType', materialType);
+    formData.append('vehicleType', vehicleType);
+    formData.append('startDate', startDate);
+    formData.append('endDate', endDate);
+    formData.append('qrUrl', qrUrl);
+    formData.append('plan', plan);
+    formData.append('price', String(price));
+    if (adFile) formData.append('adFile', adFile);
+
+    console.log('Submitting ad:', Object.fromEntries(formData));
+    alert('Ad submitted successfully!');
+    navigate('/advertisements');
+  };
+
+  const getVehicleOptions = () => {
+    if (materialType === 'headrest') {
+      return ['Car', 'Bus'];
+    } else if (materialType === 'sticker') {
+      return ['Car', 'E-bike', 'Bus', 'Jeep'];
+    } else if (materialType === 'lcd') {
+      return ['Car', 'Motorcycle', 'E-bike', 'Jeep'];
+    }
+    return allVehicleOptions;
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
-      <h1 className="text-3xl font-bold text-center mb-14">Create Advertisement</h1>
+    <div className="p-6 max-w-3xl mx-auto bg-white rounded-lg shadow-md">
+      <h1 className="text-2xl font-bold mb-4">Create Advertisement</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="text"
-          name="title"
-          placeholder="Title"
-          value={formData.title}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        />
+        <div>
+          <label className="block mb-1">Category</label>
+          <select value={category} onChange={handleCategoryChange} required className="w-full p-2 border rounded">
+            <option value="">-- Select Category --</option>
+            <option value="digital">Digital</option>
+            <option value="non-digital">Non-Digital</option>
+          </select>
+        </div>
 
-        <textarea
-          name="description"
-          placeholder="Description"
-          value={formData.description}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        />
-
-        <select
-          name="vehicleType"
-          value={formData.vehicleType}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        >
-          <option value="">Select Vehicle Type</option>
-          {vehicleOptions.map((vehicle) => (
-            <option key={vehicle} value={vehicle}>{vehicle}</option>
-          ))}
-        </select>
-
-        <select
-          name="materialsUsed"
-          value={formData.materialsUsed}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-          disabled={!formData.vehicleType}
-        >
-          <option value="">Select Material</option>
-          {materialsOptions.map((material) => (
-            <option key={material} value={material}>{material}</option>
-          ))}
-        </select>
-
-        <select
-          name="plan"
-          value={formData.plan}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        >
-          <option value="">Select Plan</option>
-          {planOptions.map((plan) => (
-            <option key={plan} value={plan}>{plan}</option>
-          ))}
-        </select>
-
-        {formData.vehicleType && formData.materialsUsed && formData.plan && (
-          <div className="text-green-700 font-semibold">
-            {estimatedPrice !== null
-              ? `Total Price: ₱${estimatedPrice.toLocaleString()}`
-              : <span className="text-red-600">Price unavailable for selected options</span>}
+        {category && (
+          <div>
+            <label className="block mb-1">Material Type</label>
+            <select value={materialType} onChange={handleMaterialChange} required className="w-full p-2 border rounded">
+              <option value="">-- Select Material Type --</option>
+              {(category === 'digital' ? digitalMaterials : nonDigitalMaterials).map(type => (
+                <option key={type} value={type.toLowerCase()}>{type}</option>
+              ))}
+            </select>
           </div>
         )}
 
-        <select
-          name="adFormat"
-          value={formData.adFormat}
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        >
-          <option value="">Select Format</option>
-          <option value="JPG">JPG</option>
-          <option value="PNG">PNG</option>
-          <option value="SVG">SVG</option>
-          <option value="MP4">MP4</option>
-        </select>
+        {materialType && (
+          <div>
+            <label className="block mb-1">Vehicle Type</label>
+            <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} required className="w-full p-2 border rounded">
+              <option value="">-- Select Vehicle --</option>
+              {getVehicleOptions().map(v => (
+                <option key={v} value={v.toLowerCase()}>{v}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
-        <input
-          type="file"
-          name="media"
-          accept="image/*,video/*"
-          onChange={handleChange}
-          className="w-full border border-gray-300 rounded-lg p-2"
-          required
-        />
-
-        <div className="flex justify-between pt-4">
-          <Link to="/advertisements">
-            <button
-              type="button"
-              className="text-black px-4 py-2 rounded hover:bg-gray-100"
-            >
-              Back
-            </button>
-          </Link>
-          <button
-            type="submit"
-            className="px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow"
-          >
-            Create
-          </button>
+        <div>
+          <label className="block mb-1">Ad Title</label>
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} required className="w-full p-2 border rounded" />
         </div>
+
+        <div>
+          <label className="block mb-1">Description</label>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} required className="w-full p-2 border rounded" />
+        </div>
+
+        <div>
+          <label className="block mb-1">Plan</label>
+          <select value={plan} onChange={handlePlanChange} required className="w-full p-2 border rounded">
+            <option value="">-- Select Plan --</option>
+            {plans.map(p => (
+              <option key={p.name} value={p.name}>{p.name} - ₱{p.price}</option>
+            ))}
+          </select>
+        </div>
+
+        {price !== null && (
+          <div>
+            <label className="block mb-1">Price</label>
+            <input type="text" value={`₱${price}`} readOnly className="w-full p-2 border bg-gray-100 rounded" />
+          </div>
+        )}
+
+        <div>
+          <label className="block mb-1">Start Date</label>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required className="w-full p-2 border rounded" />
+        </div>
+
+        <div>
+          <label className="block mb-1">End Date</label>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required className="w-full p-2 border rounded" />
+        </div>
+
+        <div>
+          <label className="block mb-1">QR URL (optional)</label>
+          <input type="url" value={qrUrl} onChange={(e) => setQrUrl(e.target.value)} className="w-full p-2 border rounded" />
+        </div>
+
+        <div>
+          <label className="block mb-1">Ad File Upload</label>
+          <input type="file" accept={category === 'digital' ? 'image/*,video/*' : 'image/*,application/pdf'} onChange={handleFileChange} required className="w-full" />
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+          <label>I agree to the terms and conditions.</label>
+        </div>
+
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          Submit Advertisement
+        </button>
       </form>
     </div>
   );
