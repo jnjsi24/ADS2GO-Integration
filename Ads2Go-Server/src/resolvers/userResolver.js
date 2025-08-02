@@ -6,7 +6,7 @@ const { validateUserInput, checkPasswordStrength } = require('../utils/validatio
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 
-const MAX_LOGIN_ATTEMPTS = 5;
+const MAX_LOGIN_ATTEMPTS = 100;
 const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
 
 const checkAuth = (user) => {
@@ -195,7 +195,7 @@ const resolvers = {
 
 
    login: async (_, { email, password }) => {
-  const user = await User.findOne({ email });
+const user = await User.findOne({ email: email.toLowerCase().trim() });
   if (!user) throw new Error('No user found with this email');
   if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 

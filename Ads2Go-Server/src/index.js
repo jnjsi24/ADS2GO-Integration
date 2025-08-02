@@ -16,9 +16,22 @@ const userResolvers = require('./resolvers/userResolver');
 const driverTypeDefs = require('./schema/driverSchema');
 const driverResolvers = require('./resolvers/driverResolver');
 
-// Merge them into one schema and one resolver object
-const typeDefs = mergeTypeDefs([userTypeDefs, driverTypeDefs]);
-const resolvers = mergeResolvers([userResolvers, driverResolvers]);
+// Load AdsPlan schema and resolvers
+const adsPlanTypeDefs = require('./schema/adsPlanSchema');
+const adsPlanResolvers = require('./resolvers/adsPlanResolver');
+
+// Merge all schemas and resolvers
+const typeDefs = mergeTypeDefs([
+  userTypeDefs,
+  driverTypeDefs,
+  adsPlanTypeDefs,
+]);
+
+const resolvers = mergeResolvers([
+  userResolvers,
+  driverResolvers,
+  adsPlanResolvers,
+]);
 
 const { authMiddleware } = require('./middleware/auth');
 
