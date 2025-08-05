@@ -1,20 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useMutation } from '@apollo/client';
+import { CREATE_AD } from '../../graphql/mutations/createAd';
 
 const CreateAdvertisement: React.FC = () => {
+  const navigate = useNavigate();
+  const [createAd] = useMutation(CREATE_AD);
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     vehicleType: '',
     materialsUsed: '',
-    adFormat: '',
-    plan: '',
+    adFormat: 'JPG',
+    plan: 'Weekly',
     media: null as File | null,
     status: 'PENDING',
   });
 
   const [materialsOptions, setMaterialsOptions] = useState<string[]>([]);
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const vehicleOptions = ['Car', 'Motorcycle', 'Electric Tricycle'];
   const planOptions = ['Weekly', 'Monthly'];
@@ -41,7 +48,7 @@ const CreateAdvertisement: React.FC = () => {
 
   useEffect(() => {
     if (formData.vehicleType) {
-      setMaterialsOptions(materialOptionsMap[formData.vehicleType]);
+      setMaterialsOptions(materialOptionsMap[formData.vehicleType] || []);
       setFormData((prev) => ({ ...prev, materialsUsed: '' }));
     }
   }, [formData.vehicleType]);
@@ -56,24 +63,75 @@ const CreateAdvertisement: React.FC = () => {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value, files } = e.target as HTMLInputElement;
+
     if (name === 'media' && files) {
-      setFormData((prev) => ({ ...prev, media: files[0] }));
+      const file = files[0];
+      const isValid = file.type.startsWith('image/') || file.type.startsWith('video/');
+      if (!isValid) {
+        setError('Only image or video files are allowed.');
+        return;
+      }
+      setFormData((prev) => ({ ...prev, media: file }));
+      setError(null);
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Advertisement created (mocked)!');
-    console.log('Form Data:', formData);
-    console.log('Total Price:', estimatedPrice);
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      if (!formData.media) {
+        setError('Please select a media file.');
+        return;
+      }
+
+      const uploadData = new FormData();
+      uploadData.append('file', formData.media);
+
+      const uploadRes = await fetch('http://localhost:5000/upload', {
+        method: 'POST',
+        body: uploadData,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload media file.');
+      }
+
+      const uploadResult = await uploadRes.json();
+      if (!uploadResult.filename) {
+        throw new Error('Upload succeeded but no filename returned.');
+      }
+
+      const mediaFilename = uploadResult.filename;
+
+      await createAd({
+        variables: {
+          input: {
+            ...formData,
+            mediaFile: mediaFilename,
+            price: estimatedPrice,
+          },
+        },
+      });
+
+      navigate('/advertisements');
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during submission.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
-      <h1 className="text-3xl font-bold text-center mb-14">Create Advertisement</h1>
+      <h1 className="text-3xl font-bold text-center mb-10">Create Advertisement</h1>
+      {error && <div className="text-red-600 mb-4">{error}</div>}
       <form onSubmit={handleSubmit} className="space-y-4">
+
         <input
           type="text"
           name="title"
@@ -101,8 +159,8 @@ const CreateAdvertisement: React.FC = () => {
           required
         >
           <option value="">Select Vehicle Type</option>
-          {vehicleOptions.map((vehicle) => (
-            <option key={vehicle} value={vehicle}>{vehicle}</option>
+          {vehicleOptions.map((v) => (
+            <option key={v} value={v}>{v}</option>
           ))}
         </select>
 
@@ -115,8 +173,8 @@ const CreateAdvertisement: React.FC = () => {
           disabled={!formData.vehicleType}
         >
           <option value="">Select Material</option>
-          {materialsOptions.map((material) => (
-            <option key={material} value={material}>{material}</option>
+          {materialsOptions.map((m) => (
+            <option key={m} value={m}>{m}</option>
           ))}
         </select>
 
@@ -128,8 +186,8 @@ const CreateAdvertisement: React.FC = () => {
           required
         >
           <option value="">Select Plan</option>
-          {planOptions.map((plan) => (
-            <option key={plan} value={plan}>{plan}</option>
+          {planOptions.map((p) => (
+            <option key={p} value={p}>{p}</option>
           ))}
         </select>
 
@@ -148,7 +206,6 @@ const CreateAdvertisement: React.FC = () => {
           className="w-full border border-gray-300 rounded-lg p-2"
           required
         >
-          <option value="">Select Format</option>
           <option value="JPG">JPG</option>
           <option value="PNG">PNG</option>
           <option value="SVG">SVG</option>
@@ -175,9 +232,10 @@ const CreateAdvertisement: React.FC = () => {
           </Link>
           <button
             type="submit"
-            className="px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow"
+            disabled={isSubmitting}
+            className="px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow disabled:opacity-50"
           >
-            Create
+            {isSubmitting ? 'Creating...' : 'Create'}
           </button>
         </div>
       </form>

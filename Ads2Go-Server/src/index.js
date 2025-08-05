@@ -3,101 +3,98 @@ const mongoose = require('mongoose');
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 // 🔹 Import GraphQL typeDefs and resolvers
 const { mergeTypeDefs } = require('@graphql-tools/merge');
 const { mergeResolvers } = require('@graphql-tools/merge');
 
-// 👇 Import each schema and resolver
+// 👇 Schemas
 const userTypeDefs = require('./schema/userSchema');
-const adTypeDefs = require('./schema/adSchema'); // ✅ Move to /schema for consistency
-const driverTypeDefs = require('./schema/driverSchema');    // ✅ NEW
-const paymentTypeDefs = require('./schema/paymentSchema');  // ✅ NEW
+const adTypeDefs = require('./schema/adSchema');
+const driverTypeDefs = require('./schema/driverSchema');
+const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 
-
-
-
+// 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
 const adResolvers = require('./resolvers/adResolver');
-const driverResolvers = require('./resolvers/driverResolver');   // ✅ ADD THIS
-const paymentResolvers = require('./resolvers/paymentResolver'); // ✅ ADD THIS
+const driverResolvers = require('./resolvers/driverResolver');
+const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
-
-
-
 
 const { authMiddleware } = require('./middleware/auth');
 
-// ✅ MERGE ALL TYPEDEFS HERE
-const typeDefs = mergeTypeDefs([
-  userTypeDefs,
-  adTypeDefs,
-  driverTypeDefs,    // ✅ NEW
-  paymentTypeDefs,   // ✅ NEW
-  materialTypeDefs, // ✅ ADD THIS
-
-
-  // 🔽 Add additional schema here as needed
-  // require('./schema/riderSchema'),
-  // require('./schema/materialSchema'),
-]);
-
-// ✅ MERGE ALL RESOLVERS HERE
-const resolvers = mergeResolvers([
-  userResolvers,
-  adResolvers,
-  driverResolvers,   // ✅ NEW
-  paymentResolvers,  // ✅ NEW
-  materialResolver, // ✅ ADD THIS
-
-  // 🔽 Add additional resolvers here as needed
-  // require('./resolvers/riderResolver'),
-  // require('./resolvers/materialResolver'),
-]);
-
-// 🔗 MongoDB connection
+// ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
-  console.error('MONGODB_URI is not defined in the .env file');
+  console.error('\n❌ MONGODB_URI is not defined in the .env file');
   process.exit(1);
 }
-
-const app = express();
 
 mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 10000,
   socketTimeoutMS: 45000,
 })
-  .then(() => console.log('\n💾 Database: CONNECTED to MongoDB Atlas'))
+  .then(() => console.log('\n💾 MongoDB: Connected to Atlas'))
   .catch(err => {
-    console.error('\n❌ MongoDB Connection Error:', err);
+    console.error('\n❌ MongoDB connection error:', err);
     process.exit(1);
   });
 
-// 🔥 Apollo Server setup
+// ✅ Apollo Server setup
 const server = new ApolloServer({
-  typeDefs,
-  resolvers,
+  typeDefs: mergeTypeDefs([
+    userTypeDefs,
+    adTypeDefs,
+    driverTypeDefs,
+    paymentTypeDefs,
+    materialTypeDefs,
+  ]),
+  resolvers: mergeResolvers([
+    userResolvers,
+    adResolvers,
+    driverResolvers,
+    paymentResolvers,
+    materialResolver,
+  ])
 });
+
+const app = express();
 
 async function startServer() {
   await server.start();
 
+  // ✅ Global CORS
+  app.use(cors({
+    origin: [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://localhost',
+      'http://127.0.0.1',
+      'http://192.168.1.5:3000',
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+  }));
+
   app.use(express.json());
 
+  // ✅ Serve uploaded media statically
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+  // ✅ Use upload route from /src/routes/upload.js
+  const uploadRoute = require('./routes/upload');
+  app.use('/upload', uploadRoute);
+
+  // ✅ GraphQL endpoint
   app.use(
     '/graphql',
-    cors({
-      origin: ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost', 'http://127.0.0.1', 'http://192.168.1.5:3000'],
-      credentials: true,
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
-    }),
     expressMiddleware(server, { context: authMiddleware })
   );
 
-  // 🛑 Fallback error handler
+  // ✅ Global error handler
   app.use((err, req, res, next) => {
     console.error('Unhandled Error:', err);
     res.status(500).json({
@@ -108,17 +105,16 @@ async function startServer() {
   });
 
   const PORT = process.env.PORT || 5000;
-
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Server ready at http://localhost:${PORT}/graphql`);
   });
 
   httpServer.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-      console.error(`Port ${PORT} is already in use. Please kill the process using this port.`);
+      console.error(`\n❌ Port ${PORT} is already in use. Please kill the process using this port.`);
       process.exit(1);
     } else {
-      console.error('Server startup error:', error);
+      console.error('\n❌ Server startup error:', error);
     }
   });
 }

@@ -110,6 +110,9 @@ const typeDefs = gql`
     getUserById(id: ID!): User
     getUserSessions(userId: ID!): [Session!]!
     
+   getAllAdmins: [User!]!
+
+    
     # User queries
     getOwnUserDetails: User
     checkPasswordStrength(password: String!): PasswordStrength!
