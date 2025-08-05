@@ -9,50 +9,53 @@ const adTypeDefs = gql`
     ENDED
   }
 
+  enum AdType {
+    DIGITAL
+    NON_DIGITAL
+  }
+
   type Ad {
     id: ID!
     userId: ID!
     riderId: ID
-    materialsId: ID
+    materialId: ID!
+    planId: ID!
     title: String!
     description: String
-    vehicleType: String!
-    materialsUsed: String!
     adFormat: String!
     mediaFile: String!
-    plan: String!
     price: Float!
     status: AdStatus!
     startTime: String!
+    adType: AdType!
     createdAt: String!
     updatedAt: String!
   }
 
   input CreateAdInput {
     riderId: ID
-    materialsId: ID
+    materialId: ID!
+    planId: ID!
     title: String!
     description: String
-    vehicleType: String!
-    materialsUsed: String!
     adFormat: String!
     mediaFile: String!
-    plan: String!
     price: Float!
     startTime: String!
+    adType: AdType!
   }
 
   input UpdateAdInput {
     title: String
     description: String
-    vehicleType: String
-    materialsUsed: String
     adFormat: String
     mediaFile: String
-    plan: String
+    materialId: ID
+    planId: ID
     price: Float
     status: AdStatus
     startTime: String
+    adType: AdType
   }
 
   type Query {

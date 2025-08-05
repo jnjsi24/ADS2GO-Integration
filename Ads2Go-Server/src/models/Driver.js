@@ -65,6 +65,7 @@ const DriverSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Vehicle type is required'],
       trim: true,
+      enum: ['Car', 'Motorcycle', 'Van', 'Bus', 'Truck', 'Bicycle', 'Tricycle'], // ✅ add new vehicle types
     },
     vehicleModel: {
       type: String,
@@ -170,7 +171,7 @@ const DriverSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    
+
     // ✅ NEW: For Rider Update Request System
     editRequestStatus: {
       type: String,
@@ -222,5 +223,4 @@ DriverSchema.index({ email: 1 }, { unique: true });
 DriverSchema.index({ driverId: 1 }, { unique: true });
 
 const Driver = mongoose.model('Driver', DriverSchema);
-
 module.exports = Driver;

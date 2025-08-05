@@ -11,10 +11,15 @@ const AdSchema = new mongoose.Schema({
     ref: 'Rider',
     default: null
   },
-  materialsId: {
+  materialId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Material',
-    default: null
+    required: true
+  },
+  planId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AdsPlan',
+    required: true
   },
   title: {
     type: String,
@@ -25,12 +30,9 @@ const AdSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  vehicleType: {
+  adType: {
     type: String,
-    required: true
-  },
-  materialsUsed: {
-    type: String,
+    enum: ['DIGITAL', 'NON_DIGITAL'],
     required: true
   },
   adFormat: {
@@ -39,11 +41,6 @@ const AdSchema = new mongoose.Schema({
   },
   mediaFile: {
     type: String,
-    required: true
-  },
-  plan: {
-    type: String,
-    enum: ['Monthly', 'Weekly'],
     required: true
   },
   price: {

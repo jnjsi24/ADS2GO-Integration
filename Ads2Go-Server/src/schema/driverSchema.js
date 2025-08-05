@@ -21,6 +21,16 @@ const typeDefs = gql`
     REJECTED
   }
 
+  enum VehicleType {
+    Car
+    Motorcycle
+    Van
+    Bus
+    Truck
+    Bicycle
+    Tricycle
+  }
+
   type Driver {
     id: ID!
     driverId: String!
@@ -32,7 +42,7 @@ const typeDefs = gql`
     licenseNumber: String!
     licensePictureURL: String!
     vehiclePlateNumber: String!
-    vehicleType: String!
+    vehicleType: VehicleType!
     vehicleModel: String!
     vehicleYear: Int!
     vehiclePhotoURL: String!
@@ -75,7 +85,7 @@ const typeDefs = gql`
     licenseNumber: String
     licensePictureURL: String
     vehiclePlateNumber: String
-    vehicleType: String
+    vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
@@ -93,7 +103,7 @@ const typeDefs = gql`
     licenseNumber: String!
     licensePictureURL: String!
     vehiclePlateNumber: String!
-    vehicleType: String!
+    vehicleType: VehicleType!
     vehicleModel: String!
     vehicleYear: Int!
     vehiclePhotoURL: String!
@@ -111,7 +121,7 @@ const typeDefs = gql`
     licenseNumber: String
     licensePictureURL: String
     vehiclePlateNumber: String
-    vehicleType: String
+    vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
@@ -130,7 +140,7 @@ const typeDefs = gql`
     licenseNumber: String
     licensePictureURL: String
     vehiclePlateNumber: String
-    vehicleType: String
+    vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
@@ -141,9 +151,10 @@ const typeDefs = gql`
     getAllDrivers: [Driver!]!
     getDriverById(id: ID!): Driver
     getDriversWithPendingEdits: [Driver!]!
-
-    # NEW: Get the logged-in driver's own info
     getOwnDriver: Driver
+
+    # ✅ Added this to match your resolver
+    getAvailableVehicleTypes: [VehicleType!]!
   }
 
   type Mutation {

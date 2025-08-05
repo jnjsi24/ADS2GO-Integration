@@ -43,77 +43,78 @@ const resolvers = {
       return await Driver.find({ editRequestStatus: 'PENDING' });
     },
     getOwnDriver: async (_, __, { user }) => {
-  checkAuth(user);
-  // user.id should come from your JWT context setup
-  const driver = await Driver.findById(user.id);
-  if (!driver) throw new Error('Driver not found');
-  return driver;
-},
+      checkAuth(user);
+      const driver = await Driver.findById(user.id);
+      if (!driver) throw new Error('Driver not found');
+      return driver;
+    },
 
+    // ✅ NEW query to get available vehicle types
+    getAvailableVehicleTypes: async () => {
+      const types = await Driver.distinct('vehicleType');
+      return types.sort();
+    },
   },
 
   Mutation: {
-  createDriver: async (_, { input }) => {
-  const {
-    firstName, lastName, contactNumber, email, password, address,
-    licenseNumber, licensePictureURL, vehiclePlateNumber,
-    vehicleType, vehicleModel, vehicleYear, vehiclePhotoURL,
-    orCrPictureURL, qrCodeIdentifier, installedMaterialType,
-  } = input;
+    createDriver: async (_, { input }) => {
+      const {
+        firstName, lastName, contactNumber, email, password, address,
+        licenseNumber, licensePictureURL, vehiclePlateNumber,
+        vehicleType, vehicleModel, vehicleYear, vehiclePhotoURL,
+        orCrPictureURL, qrCodeIdentifier, installedMaterialType,
+      } = input;
 
-  if (!validator.isEmail(email)) throw new Error('Invalid email');
-  if (await Driver.findOne({ email })) throw new Error('Email already exists');
-  if (!password || password.length < 6) throw new Error('Weak password');
+      if (!validator.isEmail(email)) throw new Error('Invalid email');
+      if (await Driver.findOne({ email })) throw new Error('Email already exists');
+      if (!password || password.length < 6) throw new Error('Weak password');
 
-  let normalized = contactNumber.replace(/\s/g, '');
-  if (!/^(\+63|0)?\d{10}$/.test(normalized))
-    throw new Error('Invalid PH number');
-  if (!normalized.startsWith('+63')) {
-    normalized = normalized.startsWith('0')
-      ? '+63' + normalized.slice(1)
-      : '+63' + normalized;
-  }
+      let normalized = contactNumber.replace(/\s/g, '');
+      if (!/^(\+63|0)?\d{10}$/.test(normalized))
+        throw new Error('Invalid PH number');
+      if (!normalized.startsWith('+63')) {
+        normalized = normalized.startsWith('0')
+          ? '+63' + normalized.slice(1)
+          : '+63' + normalized;
+      }
 
-  const verificationCode = EmailService.generateVerificationCode();
-  const driverId = await generateDriverId();
+      const verificationCode = EmailService.generateVerificationCode();
+      const driverId = await generateDriverId();
 
-  const newDriver = new Driver({
-    driverId,
-    firstName, lastName, contactNumber: normalized,
-    email: email.toLowerCase().trim(),
-    password: password.trim(),
-    address, licenseNumber, licensePictureURL,
-    vehiclePlateNumber, vehicleType, vehicleModel,
-    vehicleYear, vehiclePhotoURL, orCrPictureURL,
-    qrCodeIdentifier, installedMaterialType,
-    accountStatus: 'PENDING',
-    deviceStatus: 'OFFLINE',
-    isEmailVerified: false,
-    emailVerificationCode: verificationCode,
-    emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
-    tokenVersion: 0,
-  });
+      const newDriver = new Driver({
+        driverId,
+        firstName, lastName, contactNumber: normalized,
+        email: email.toLowerCase().trim(),
+        password: password.trim(),
+        address, licenseNumber, licensePictureURL,
+        vehiclePlateNumber, vehicleType, vehicleModel,
+        vehicleYear, vehiclePhotoURL, orCrPictureURL,
+        qrCodeIdentifier, installedMaterialType,
+        accountStatus: 'PENDING',
+        deviceStatus: 'OFFLINE',
+        isEmailVerified: false,
+        emailVerificationCode: verificationCode,
+        emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
+        tokenVersion: 0,
+      });
 
-  try {
-    await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
-    console.log(`✅ Verification email sent to ${newDriver.email}`);
-  } catch (error) {
-    console.error(`❌ Error sending verification email: ${error.message}`);
-  }
+      try {
+        await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
+        console.log(`✅ Verification email sent to ${newDriver.email}`);
+      } catch (error) {
+        console.error(`❌ Error sending verification email: ${error.message}`);
+      }
 
-  // ✅ Always log the verification code for dev
-  console.log(`[DEV] Verification code: ${verificationCode}`);
+      console.log(`[DEV] Verification code: ${verificationCode}`);
 
-  await newDriver.save();
+      await newDriver.save();
 
-  return {
-    success: true,
-    message: 'Driver created successfully. Please verify your email.',
-    driver: { id: newDriver._id, email: newDriver.email },
-  };
-},
-
-
+      return {
+        success: true,
+        message: 'Driver created successfully. Please verify your email.',
+        driver: { id: newDriver._id, email: newDriver.email },
+      };
+    },
 
     loginDriver: async (_, { email, password }) => {
       const driver = await Driver.findOne({ email });
@@ -178,28 +179,26 @@ const resolvers = {
     },
 
     resendDriverVerificationCode: async (_, { email }) => {
-  const driver = await Driver.findOne({ email });
-  if (!driver) throw new Error('Driver not found');
+      const driver = await Driver.findOne({ email });
+      if (!driver) throw new Error('Driver not found');
 
-  const newCode = EmailService.generateVerificationCode();
-  driver.emailVerificationCode = newCode;
-  driver.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
+      const newCode = EmailService.generateVerificationCode();
+      driver.emailVerificationCode = newCode;
+      driver.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
 
-  try {
-    await EmailService.sendVerificationEmail(driver.email, newCode);
-    console.log(`✅ Verification email sent to ${driver.email}`);
-  } catch (error) {
-    console.error(`❌ Error sending verification email: ${error.message}`);
-  }
+      try {
+        await EmailService.sendVerificationEmail(driver.email, newCode);
+        console.log(`✅ Verification email sent to ${driver.email}`);
+      } catch (error) {
+        console.error(`❌ Error sending verification email: ${error.message}`);
+      }
 
-  // ✅ Always log the code for dev
-  console.log(`[DEV] Resent verification code: ${newCode}`);
+      console.log(`[DEV] Resent verification code: ${newCode}`);
 
-  await driver.save();
+      await driver.save();
 
-  return { success: true, message: 'Code resent' };
-},
-
+      return { success: true, message: 'Code resent' };
+    },
 
     updateDriver: async (_, { id, input }, { user }) => {
       checkAdmin(user);

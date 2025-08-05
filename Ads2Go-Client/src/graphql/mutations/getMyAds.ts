@@ -6,14 +6,14 @@ export const GET_MY_ADS = gql`
       id
       title
       description
-      vehicleType
-      materialsUsed
       adFormat
       mediaFile
-      plan
-      price
+      adType
       status
       createdAt
+      price
+      planId       # ✅ no subfields
+      materialId   # ✅ no subfields
     }
   }
 `;

@@ -9,14 +9,22 @@ type Ad = {
   id: string;
   title: string;
   description: string;
-  vehicleType: string;
-  materialsUsed: string;
   adFormat: string;
   mediaFile?: string;
-  plan: string;
   price: number;
   status: string;
   createdAt: string;
+  adType: 'DIGITAL' | 'NON_DIGITAL';
+  planId: {
+    _id: string;
+    name: string;
+    durationDays: number;
+    price: number;
+  };
+  materialId: {
+    _id: string;
+    name: string;
+  };
 };
 
 const Advertisements: React.FC = () => {
@@ -27,15 +35,19 @@ const Advertisements: React.FC = () => {
   const [planFilter, setPlanFilter] = useState('All Plans');
 
   const { data, loading, error } = useQuery(GET_MY_ADS);
-
   const ads: Ad[] = data?.getMyAds || [];
 
   const filteredAds = ads.filter((ad) => {
     const matchesSearch =
       ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ad.id.toString().includes(searchTerm);
-    const matchesStatus = statusFilter === 'All Status' || ad.status === statusFilter;
-    const matchesPlan = planFilter === 'All Plans' || ad.plan === planFilter;
+
+    const matchesStatus =
+      statusFilter === 'All Status' || ad.status === statusFilter;
+
+    const matchesPlan =
+      planFilter === 'All Plans' || ad.planId?.name === planFilter;
+
     return matchesSearch && matchesStatus && matchesPlan;
   });
 
@@ -67,8 +79,10 @@ const Advertisements: React.FC = () => {
           >
             <option value="All Status">All Status</option>
             <option value="PENDING">Pending</option>
-            <option value="DISPATCH">Dispatch</option>
-            <option value="COMPLETED">Completed</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="RUNNING">Running</option>
+            <option value="ENDED">Ended</option>
           </select>
           <select
             value={planFilter}
@@ -117,17 +131,33 @@ const Advertisements: React.FC = () => {
               <div className="p-4 bg-gray-100 flex-grow flex flex-col">
                 <h3 className="text-xl font-semibold">{ad.title}</h3>
                 <p className="text-gray-600 text-sm">{ad.description}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Material: {ad.materialId?.name || 'N/A'}
+                </p>
                 <div className="mt-auto pt-4">
-                  <p className="text-sm text-gray-500">Plan: {ad.plan}</p>
-                  <p className="text-sm text-gray-500">₱{ad.price.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">
+                    Plan: {ad.planId?.name || 'N/A'} ({ad.planId?.durationDays} days)
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    ₱{ad.price.toLocaleString()}
+                  </p>
                 </div>
               </div>
-              <span className={`absolute top-2 left-2 px-2 py-1 text-xs font-bold rounded ${ad.status === 'PENDING'
-                ? 'bg-yellow-200 text-yellow-800'
-                : ad.status === 'DISPATCH'
-                ? 'bg-green-200 text-green-800'
-                : 'bg-gray-200 text-gray-800'
-              }`}>
+              <span
+                className={`absolute top-2 left-2 px-2 py-1 text-xs font-bold rounded ${
+                  ad.status === 'PENDING'
+                    ? 'bg-yellow-200 text-yellow-800'
+                    : ad.status === 'APPROVED'
+                    ? 'bg-blue-200 text-blue-800'
+                    : ad.status === 'REJECTED'
+                    ? 'bg-red-200 text-red-800'
+                    : ad.status === 'RUNNING'
+                    ? 'bg-green-200 text-green-800'
+                    : ad.status === 'ENDED'
+                    ? 'bg-gray-400 text-white'
+                    : 'bg-gray-200 text-gray-800'
+                }`}
+              >
                 {ad.status}
               </span>
             </div>
