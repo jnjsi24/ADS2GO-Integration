@@ -1,14 +1,15 @@
+// ... existing imports
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const Ad = require('../models/Ad'); // ✅ Import Ad model
+const Ad = require('../models/Ad');
 const { JWT_SECRET } = require('../middleware/auth');
 const { validateUserInput, checkPasswordStrength } = require('../utils/validations');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 10 * 60 * 1000; // 10 minutes in milliseconds
+const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
 
 const checkAuth = (user) => {
   if (!user) throw new Error('Not authenticated');
@@ -21,7 +22,6 @@ const checkAdmin = (user) => {
   return user;
 };
 
-// ALL GET REQUESTS
 const resolvers = {
   Query: {
     getAllUsers: async (_, __, { user }) => {
@@ -34,12 +34,6 @@ const resolvers = {
       return await User.findById(id);
     },
 
-
-getAllAdmins: async () => {
-  return await User.find({ role: 'ADMIN' });
-},
-
-
     getOwnUserDetails: async (_, __, { user }) => {
       checkAuth(user);
       const userRecord = await User.findById(user.id);
@@ -50,7 +44,6 @@ getAllAdmins: async () => {
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
   },
 
-  // ALL POST REQUESTS
   Mutation: {
     createAdminUser: async (_, { input }, { user }) => {
       checkAuth(user);
@@ -153,39 +146,39 @@ getAllAdmins: async () => {
     },
 
     login: async (_, { email, password, deviceInfo }) => {
-    console.log(`Login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`); // Optional debug
+      console.log(`Login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
-  const user = await User.findOne({ email });
-  if (!user) throw new Error('No user found with this email');
-  if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+      const user = await User.findOne({ email });
+      if (!user) throw new Error('No user found with this email');
+      if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) {
-    user.loginAttempts += 1;
-    if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
-      user.accountLocked = true;
-      user.lockUntil = new Date(Date.now() + LOCK_TIME);
-    }
-    await user.save();
-    throw new Error('Invalid password');
-  }
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        user.loginAttempts += 1;
+        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+          user.accountLocked = true;
+          user.lockUntil = new Date(Date.now() + LOCK_TIME);
+        }
+        await user.save();
+        throw new Error('Invalid password');
+      }
 
-  user.loginAttempts = 0;
-  user.accountLocked = false;
-  user.lockUntil = null;
-  user.lastLogin = new Date();
-  await user.save();
+      user.loginAttempts = 0;
+      user.accountLocked = false;
+      user.lockUntil = null;
+      user.lastLogin = new Date();
+      await user.save();
 
-  const token = jwt.sign({
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-    isEmailVerified: user.isEmailVerified,
-    tokenVersion: user.tokenVersion,
-  }, JWT_SECRET, { expiresIn: '1d' });
+      const token = jwt.sign({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        tokenVersion: user.tokenVersion,
+      }, JWT_SECRET, { expiresIn: '1d' });
 
-  return { token, user };
-},
+      return { token, user };
+    },
 
     verifyEmail: async (_, { code }) => {
       const userToVerify = await User.findOne({ emailVerificationCode: code.trim() });
@@ -311,9 +304,43 @@ getAllAdmins: async () => {
       await User.findByIdAndUpdate(user.id, { $inc: { tokenVersion: 1 } });
       return true;
     },
+
+    // ✅ Add this resetPassword mutation
+    requestPasswordReset: async (_, { email }) => {
+      const user = await User.findOne({ email: email.toLowerCase().trim() });
+      if (!user) throw new Error("No user found with this email");
+  
+      const resetCode = EmailService.generateVerificationCode();
+      user.emailVerificationCode = resetCode;
+      user.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+  
+      await user.save();
+      await EmailService.sendVerificationEmail(user.email, resetCode); // You can customize the email content here
+  
+      return true;
+    },
+  
+    // ✅ Reset password using token
+    resetPassword: async (_, { token, newPassword }) => {
+      const user = await User.findOne({
+        emailVerificationCode: token.trim(),
+        emailVerificationCodeExpires: { $gt: new Date() }
+      });
+  
+      if (!user) throw new Error('Invalid or expired reset token');
+  
+      const strength = checkPasswordStrength(newPassword);
+      if (!strength.strong) throw new Error('Password too weak');
+  
+      user.password = await bcrypt.hash(newPassword, 12);
+      user.emailVerificationCode = null;
+      user.emailVerificationCodeExpires = null;
+  
+      await user.save();
+      return true;
+    },
   },
 
-  // ✅ Add User.ads resolver
   User: {
     ads: async (parent) => {
       return await Ad.find({ userId: parent.id });
@@ -322,3 +349,4 @@ getAllAdmins: async () => {
 };
 
 module.exports = resolvers;
+

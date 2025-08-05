@@ -2,6 +2,28 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { gql, useMutation } from "@apollo/client"; // ✅ Added
+
+// ✅ GraphQL Mutation
+const UPDATE_USER = gql`
+  mutation UpdateUser($input: UpdateUserInput!) {
+    updateUser(input: $input) {
+      success
+      message
+      user {
+        id
+        firstName
+        middleName
+        lastName
+        companyName
+        companyAddress
+        contactNumber
+        email
+        houseAddress
+      }
+    }
+  }
+`;
 
 interface FormData {
   firstName: string;
@@ -32,7 +54,9 @@ const Account: React.FC = () => {
     cityState: "",
   });
 
-  // Populate form with user data
+  // ✅ Apollo Mutation
+  const [updateUser] = useMutation(UPDATE_USER);
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -44,7 +68,7 @@ const Account: React.FC = () => {
         contactNumber: user.contactNumber || "",
         email: user.email || "",
         profilePicture: user.profilePicture || "",
-        cityState: user.houseAddress || "", // ✅ Fix: was user.address before
+        cityState: user.houseAddress || "",
       });
     }
   }, [user]);
@@ -67,11 +91,38 @@ const Account: React.FC = () => {
     }
   };
 
-  const toggleEdit = () => {
+  // ✅ Send to backend when Save is clicked
+  const toggleEdit = async () => {
     if (isEditing) {
-      console.log("Saving profile data:", formData);
-      // You can send formData to backend here
+      try {
+        const { data } = await updateUser({
+          variables: {
+            input: {
+              firstName: formData.firstName,
+              middleName: formData.middleName,
+              lastName: formData.lastName,
+              companyName: formData.companyName,
+              companyAddress: formData.companyAddress,
+              contactNumber: formData.contactNumber,
+              email: formData.email,
+              houseAddress: formData.cityState,
+            },
+          },
+        });
+
+        if (data.updateUser.success) {
+          console.log("Updated successfully:", data.updateUser.user);
+          alert("Profile updated successfully!");
+        } else {
+          console.error("Update failed:", data.updateUser.message);
+          alert("Update failed: " + data.updateUser.message);
+        }
+      } catch (error: any) {
+        console.error("Error updating profile:", error.message);
+        alert("Something went wrong: " + error.message);
+      }
     }
+
     setIsEditing((prev) => !prev);
   };
 
@@ -94,7 +145,7 @@ const Account: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white text-gray-700 p-8 flex pl-60 justify-center">
-      <main className="w-full max-w-4xl">
+      <main className="w-full max-w-4xl"> 
         {/* Profile Header */}
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center space-x-4">
