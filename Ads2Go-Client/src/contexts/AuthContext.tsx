@@ -67,13 +67,13 @@ export const AuthProvider: React.FC<{
   const apolloClient = useApolloClient();
   const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
 
-  const publicPages = ['/login', '/register', '/forgot-password'];
+  // ✅ Added /superadmin-login
+  const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
 
   const navigateToRegister = useCallback(() => {
     navigate('/register');
   }, [navigate]);
 
-  // ✅ Initialize auth state from localStorage
   useEffect(() => {
     const initializeAuth = async () => {
       setIsLoading(true);
@@ -125,18 +125,28 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-          if (!freshUser.isEmailVerified) {
-            hasRedirectedRef.current = true;
-            navigate('/verify-email');
-          } else if (
-            publicPages.includes(window.location.pathname) ||
-            window.location.pathname === '/verify-email'
-          ) {
-            hasRedirectedRef.current = true;
-            const redirectPath = freshUser.role === 'ADMIN' ? '/admin' : '/home';
-            navigate(redirectPath);
-          }
-        }
+  if (!freshUser.isEmailVerified) {
+    hasRedirectedRef.current = true;
+    navigate('/verify-email');
+  } else if (
+    publicPages.includes(window.location.pathname) ||
+    window.location.pathname === '/verify-email'
+  ) {
+    // ✅ Updated role-based redirection with check to avoid redundant redirects
+    let redirectPath = '/home';
+    if (freshUser.role === 'ADMIN') {
+      redirectPath = '/admin';
+    } else if (freshUser.role === 'SUPERADMIN') {
+      redirectPath = '/sadmin-dashboard';
+    }
+
+    if (window.location.pathname !== redirectPath) {
+      hasRedirectedRef.current = true;
+      navigate(redirectPath);
+    }
+  }
+}
+
       } catch (err) {
         console.error('Error restoring auth:', err);
         localStorage.removeItem('token');

@@ -34,6 +34,7 @@ import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 
 // Super Admin pages
+import SuperAdminLogin from './pages/AUTH/SuperAdminLogin'; // ✅ import it here
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 
 const AppContent: React.FC = () => {
@@ -42,6 +43,7 @@ const AppContent: React.FC = () => {
 
   const publicPages = [
     '/admin-login',
+    '/superadmin-login',
     '/login',
     '/register',
     '/forgot-password',
@@ -55,6 +57,7 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} /> {/* ✅ added */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPass />} />

@@ -2,11 +2,11 @@ require('dotenv').config({ path: './.env' });
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('./src/models/User'); // Adjust if needed
+const User = require('./src/models/User'); // Adjust path if needed
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
-    const email = 'ads2go.superadmin@example.com';
+    const email = 'ads2go.superadmin2@example.com'; // 👈 NEW email to avoid conflict
 
     const existing = await User.findOne({ email });
     if (existing) {
@@ -14,30 +14,30 @@ mongoose.connect(process.env.MONGODB_URI)
       return mongoose.disconnect();
     }
 
-    const hashedPassword = await bcrypt.hash('Ads2gosuperadmin_123', 10);
+    const hashedPassword = await bcrypt.hash('Ads2gosuperadmin2_123', 10);
 
     await User.create({
-      firstName: 'Mr',
-      middleName: 'Super',
-      lastName: 'Admin',
-      email: 'ads2go.superadmin@example.com',
+      firstName: 'Ms',
+      middleName: 'Ultra',
+      lastName: 'AdminTwo',
+      email,
       password: hashedPassword,
       role: 'SUPERADMIN',
       isEmailVerified: true,
-      companyName: 'ADS TO GO',
-      companyAddress: '1216 A. Bonifacio Ave, Quezon City',
-      houseAddress: '4561 Admin Ave',
-      contactNumber: '+639113451789',
+      companyName: 'ADS TO GO PH',
+      companyAddress: '999 Kalayaan Ave, QC',
+      houseAddress: '789 Super St',
+      contactNumber: '+639228889999',
       lastLogin: new Date(),
       loginAttempts: 0,
       accountLocked: false,
       lockUntil: null
     });
 
-    console.log('✅ Superadmin created successfully.');
+    console.log('✅ Superadmin 2 created successfully.');
     mongoose.disconnect();
   })
   .catch((err) => {
-    console.error('❌ Error creating superadmin:', err);
+    console.error('❌ Error creating superadmin 2:', err);
     mongoose.disconnect();
   });
