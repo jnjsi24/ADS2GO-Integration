@@ -25,9 +25,13 @@ const typeDefs = gql`
     updatedAt: String!
     ads: [Ad!]
   }
-    type Query {
+
+  type Query {
     getAllUsers: [User!]!
-    }
+    getUserById(id: ID!): User
+    getOwnUserDetails: User
+    checkPasswordStrength(password: String!): PasswordStrength
+  }
 
   type UserUpdateResponse {
     success: Boolean!
@@ -64,7 +68,7 @@ const typeDefs = gql`
   }
 
   input UpdateUserInput {
-    id: ID! # <--- ADD THIS LINE
+    id: ID!
     firstName: String
     middleName: String
     lastName: String
@@ -126,13 +130,6 @@ const typeDefs = gql`
   type AuthPayload {
     token: String
     user: User
-  }
-
-  type Query {
-    getAllUsers: [User!]!
-    getUserById(id: ID!): User
-    getOwnUserDetails: User
-    checkPasswordStrength(password: String!): PasswordStrength
   }
 
   type Mutation {

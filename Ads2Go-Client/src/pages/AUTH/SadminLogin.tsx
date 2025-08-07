@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LOGIN_MUTATION } from '../../graphql/mutations/Login'; // Assuming the same mutation
+import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
 
 const SadminLogin: React.FC = () => {
   const { setUser } = useAuth();
@@ -17,7 +17,7 @@ const SadminLogin: React.FC = () => {
     onCompleted(data) {
       const { token, user } = data.login;
 
-      // Explicitly check if user is SUPERADMIN
+      // Ensure the user is a SUPERADMIN
       if (!user || user.role?.toUpperCase() !== 'SUPERADMIN') {
         setError('You are not authorized to access the SuperAdmin panel.');
         localStorage.removeItem('token');
@@ -27,7 +27,7 @@ const SadminLogin: React.FC = () => {
 
       localStorage.setItem('token', token);
       setUser(user);
-      navigate('/sadmin-dashboard'); // Navigate to superadmin dashboard
+      navigate('/sadmin-dashboard');
     },
     onError(err) {
       console.error('SuperAdmin login error:', err);
@@ -40,39 +40,45 @@ const SadminLogin: React.FC = () => {
     setError('');
 
     const deviceInfo = {
-      deviceId: 'superadmin-web-client',
-      deviceType: 'web',
-      deviceName: navigator.userAgent,
+      userAgent: navigator.userAgent,
+      ip: '127.0.0.1', // You can replace this with a real IP from backend if needed
+      platform: navigator.platform || 'unknown',
     };
 
-    login({ variables: { email, password, deviceInfo } });
+    try {
+      await login({
+        variables: {
+          input: {
+            email,
+            password,
+            deviceInfo,
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+    }
   };
 
   return (
-    // Main container for the login page
     <div className="min-h-screen flex items-center relative overflow-hidden">
-      {/* Background Video */}
       <video
         autoPlay
         loop
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover z-0"
-        src="/image/video.mp4" // Path to your background video
+        src="/image/video.mp4"
       >
         Your browser does not support the video tag.
       </video>
 
-      {/* Overlay to make content more readable on top of video */}
       <div className="absolute inset-0 bg-black opacity-0 z-10"></div>
 
-      {/* "Ads 2 Go" text in the upper right corner */}
-      <div className="absolute top-14 right-20 z-30"> {/* Positioned at top-right */}
+      <div className="absolute top-14 right-20 z-30">
         <span className="text-[#3674B5] text-4xl font-bold">Ads 2 Go</span>
       </div>
 
-      {/* Login Form Container */}
-      {/* This div is absolutely positioned to the right side, vertically centered */}
       <div className="absolute right-20 top-1/2 transform -translate-y-1/2 bg-white rounded-3xl shadow-xl p-6 h-3/5 w-full max-w-lg z-20">
         <div className="text-left mb-8">
           <div className="flex justify-between items-center mb-2">
@@ -86,7 +92,9 @@ const SadminLogin: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">Username or email address</label>
+            <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-2">
+              Username or email address
+            </label>
             <input
               id="email"
               type="email"
@@ -101,8 +109,12 @@ const SadminLogin: React.FC = () => {
 
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label htmlFor="password" className="block text-gray-700 text-sm font-medium">Password</label>
-              <button type="button" className="text-blue-600 text-xs font-medium hover:underline">Forgot password?</button>
+              <label htmlFor="password" className="block text-gray-700 text-sm font-medium">
+                Password
+              </label>
+              <button type="button" className="text-blue-600 text-xs font-medium hover:underline">
+                Forgot password?
+              </button>
             </div>
             <div className="relative">
               <input
@@ -120,11 +132,7 @@ const SadminLogin: React.FC = () => {
                 className="absolute inset-y-0 right-4 flex items-center text-gray-500 hover:text-gray-700"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5" />
-                ) : (
-                  <EyeIcon className="h-5 w-5" />
-                )}
+                {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
               </button>
             </div>
           </div>
@@ -150,7 +158,9 @@ const SadminLogin: React.FC = () => {
         <div className="text-center mt-8">
           <p className="text-gray-500 text-sm">
             Don't have account?{' '}
-            <a href="#" className="text-blue-600 font-medium hover:underline">Sign up</a>
+            <a href="#" className="text-blue-600 font-medium hover:underline">
+              Sign up
+            </a>
           </p>
         </div>
       </div>
