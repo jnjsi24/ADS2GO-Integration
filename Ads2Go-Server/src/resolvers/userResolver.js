@@ -1,4 +1,3 @@
-// ... existing imports
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -145,11 +144,49 @@ const resolvers = {
       }
     },
 
-    login: async (_, { email, password, deviceInfo }) => {
-      console.log(`Login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
+    loginUser: async (_, { email, password, deviceInfo }) => {
+      console.log(`User login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
       const user = await User.findOne({ email });
-      if (!user) throw new Error('No user found with this email');
+      if (!user || user.role !== 'USER') throw new Error('No user found with this email');
+
+      if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        user.loginAttempts += 1;
+        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+          user.accountLocked = true;
+          user.lockUntil = new Date(Date.now() + LOCK_TIME);
+        }
+        await user.save();
+        throw new Error('Invalid password');
+      }
+
+      user.loginAttempts = 0;
+      user.accountLocked = false;
+      user.lockUntil = null;
+      user.lastLogin = new Date();
+      await user.save();
+
+      const token = jwt.sign({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        tokenVersion: user.tokenVersion,
+      }, JWT_SECRET, { expiresIn: '1d' });
+
+      return { token, user };
+    },
+
+    loginAdmin: async (_, { email, password, deviceInfo }) => {
+      console.log(`Admin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
+
+      const user = await User.findOne({ email });
+      if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN'))
+        throw new Error('No admin found with this email');
+
       if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
       const valid = await bcrypt.compare(password, user.password);
@@ -305,37 +342,35 @@ const resolvers = {
       return true;
     },
 
-    // ✅ Add this resetPassword mutation
     requestPasswordReset: async (_, { email }) => {
       const user = await User.findOne({ email: email.toLowerCase().trim() });
       if (!user) throw new Error("No user found with this email");
-  
+
       const resetCode = EmailService.generateVerificationCode();
       user.emailVerificationCode = resetCode;
       user.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-  
+
       await user.save();
-      await EmailService.sendVerificationEmail(user.email, resetCode); // You can customize the email content here
-  
+      await EmailService.sendVerificationEmail(user.email, resetCode);
+
       return true;
     },
-  
-    // ✅ Reset password using token
+
     resetPassword: async (_, { token, newPassword }) => {
       const user = await User.findOne({
         emailVerificationCode: token.trim(),
         emailVerificationCodeExpires: { $gt: new Date() }
       });
-  
+
       if (!user) throw new Error('Invalid or expired reset token');
-  
+
       const strength = checkPasswordStrength(newPassword);
       if (!strength.strong) throw new Error('Password too weak');
-  
+
       user.password = await bcrypt.hash(newPassword, 12);
       user.emailVerificationCode = null;
       user.emailVerificationCodeExpires = null;
-  
+
       await user.save();
       return true;
     },
@@ -349,4 +384,3 @@ const resolvers = {
 };
 
 module.exports = resolvers;
-

@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
+import { LOGIN_ADMIN_MUTATION } from '../../graphql/mutations/LoginAdmin'; // ✅ UPDATED
 
 const AdminLogin: React.FC = () => {
   const { setUser } = useAuth();
@@ -13,9 +13,9 @@ const AdminLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const [login, { loading }] = useMutation(LOGIN_MUTATION, {
+  const [loginAdmin, { loading }] = useMutation(LOGIN_ADMIN_MUTATION, {
     onCompleted(data) {
-      const { token, user } = data.login;
+      const { token, user } = data.loginAdmin;
 
       if (!user || (user.role?.toUpperCase() !== 'ADMIN' && user.role?.toUpperCase() !== 'SUPERADMIN')) {
         setError('You are not authorized to access the admin panel.');
@@ -42,7 +42,7 @@ const AdminLogin: React.FC = () => {
       deviceName: navigator.userAgent,
     };
 
-    login({ variables: { email, password, deviceInfo } });
+    loginAdmin({ variables: { email, password, deviceInfo } });
   };
 
   return (

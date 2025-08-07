@@ -1,9 +1,8 @@
-// src/graphql/mutations/Login.ts
 import { gql } from '@apollo/client';
 
-export const LOGIN_MUTATION = gql`
-  mutation LoginUser($email: String!, $password: String!, $deviceInfo: DeviceInfoInput!) {
-    loginUser(email: $email, password: $password, deviceInfo: $deviceInfo) {
+export const LOGIN_ADMIN_MUTATION = gql`
+  mutation LoginAdmin($email: String!, $password: String!, $deviceInfo: DeviceInfoInput!) {
+    loginAdmin(email: $email, password: $password, deviceInfo: $deviceInfo) {
       token
       user {
         id
