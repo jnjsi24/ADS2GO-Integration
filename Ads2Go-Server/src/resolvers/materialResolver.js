@@ -1,6 +1,14 @@
 const Material = require('../models/Material');
 const { checkAdmin } = require('../middleware/auth');
 
+const allowedMaterialsByVehicle = {
+  CAR: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+  BUS: ['STICKER', 'LCD_HEADDRESS'],
+  JEEP: ['POSTER', 'STICKER'],
+  MOTOR: ['LCD', 'BANNER'],
+  E_TRIKE: ['BANNER', 'LCD'],
+};
+
 module.exports = {
   Query: {
     getAllMaterials: async (_, __, context) => {
@@ -9,11 +17,10 @@ module.exports = {
       return await Material.find().sort({ createdAt: -1 });
     },
 
-    getMaterialsByCategory: async (_, { category }, context) => {
+    getMaterialsByCategory: async (_, { category }) => {
       if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
         throw new Error('Invalid material category');
       }
-
       return await Material.find({ category }).sort({ createdAt: -1 });
     },
 
@@ -31,12 +38,20 @@ module.exports = {
       const { user } = context;
       checkAdmin(user);
 
-      // Manual validation
-      if (input.price < 0) throw new Error('Price must be non-negative');
-      if (!input.name || input.name.trim().length < 3)
-        throw new Error('Name must be at least 3 characters long');
+      const { vehicleType, materialType } = input;
+      const allowed = allowedMaterialsByVehicle[vehicleType];
+      if (!allowed.includes(materialType)) {
+        throw new Error(
+          `${materialType} is not allowed for vehicle type ${vehicleType}`
+        );
+      }
 
-      const material = new Material(input);
+      const material = new Material({
+        ...input,
+        // planId removed here
+        driverId: user.id,
+      });
+
       await material.save();
       return material;
     },
@@ -45,18 +60,20 @@ module.exports = {
       const { user } = context;
       checkAdmin(user);
 
-      if (input.name && input.name.trim().length < 3) {
-        throw new Error('Name must be at least 3 characters long');
-      }
-
-      if (input.price !== undefined && input.price < 0) {
-        throw new Error('Price must be a non-negative number');
+      if (input.vehicleType && input.materialType) {
+        const allowed = allowedMaterialsByVehicle[input.vehicleType];
+        if (!allowed.includes(input.materialType)) {
+          throw new Error(
+            `${input.materialType} is not allowed for vehicle type ${input.vehicleType}`
+          );
+        }
       }
 
       const updated = await Material.findByIdAndUpdate(id, input, {
         new: true,
         runValidators: true,
       });
+
       if (!updated) throw new Error('Material not found');
       return updated;
     },
@@ -71,7 +88,6 @@ module.exports = {
     },
   },
 
-  // ✅ This maps MongoDB _id to GraphQL id field
   Material: {
     id: (parent) => parent._id.toString(),
   },

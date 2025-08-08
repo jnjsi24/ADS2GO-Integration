@@ -6,31 +6,54 @@ module.exports = gql`
     NON_DIGITAL
   }
 
+  enum VehicleType {
+    CAR
+    MOTOR
+    BUS
+    JEEP
+    E_TRIKE
+  }
+
+  enum MaterialType {
+    POSTER
+    LCD
+    STICKER
+    LCD_HEADDRESS
+    BANNER
+  }
+
   type Material {
     id: ID!
-    name: String!
+    vehicleType: VehicleType!
+    materialType: MaterialType!
     description: String
     requirements: String
     category: MaterialCategory!
-    price: Float!
+    # planId removed here
+    driverId: ID!
+    mountedAt: String
+    dismountedAt: String
     createdAt: String
     updatedAt: String
   }
 
   input CreateMaterialInput {
-    name: String!
+    vehicleType: VehicleType!
+    materialType: MaterialType!
     description: String
     requirements: String
     category: MaterialCategory!
-    price: Float!
+    # planId removed here
   }
 
   input UpdateMaterialInput {
-    name: String
+    vehicleType: VehicleType
+    materialType: MaterialType
     description: String
     requirements: String
     category: MaterialCategory
-    price: Float
+    mountedAt: String
+    dismountedAt: String
   }
 
   extend type Query {

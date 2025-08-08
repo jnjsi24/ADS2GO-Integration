@@ -1,29 +1,42 @@
 const mongoose = require('mongoose');
 
 const MaterialSchema = new mongoose.Schema({
-  name: {
+  vehicleType: {
     type: String,
-    required: [true, 'Material name is required'],
-    trim: true,
-    minlength: [3, 'Name must be at least 3 characters long']
+    enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'],
+    required: [true, 'Vehicle type is required'],
+  },
+  materialType: {
+    type: String,
+    enum: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+    required: [true, 'Material type is required'],
   },
   description: {
     type: String,
-    trim: true
+    trim: true,
   },
   requirements: {
     type: String,
-    trim: true
+    trim: true,
   },
   category: {
     type: String,
     enum: ['DIGITAL', 'NON_DIGITAL'],
-    required: [true, 'Category is required']
+    required: [true, 'Category is required'],
   },
-  price: {
-    type: Number,
-    required: [true, 'Price is required'],
-    min: [0, 'Price must be a non-negative number']
+  // planId removed
+  driverId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Driver',
+    required: true,
+  },
+  mountedAt: {
+    type: Date,
+    default: null,
+  },
+  dismountedAt: {
+    type: Date,
+    default: null,
   },
 }, { timestamps: true });
 
