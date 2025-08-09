@@ -1,8 +1,7 @@
 import { gql } from '@apollo/client';
 
-// GraphQL Mutations (unchanged)
 export const CREATE_ADMIN_USER = gql`
-  mutation CreateAdminUser($input: CreateUserInput!) {
+  mutation CreateAdminUser($input: CreateAdminInput!) {
     createAdminUser(input: $input) {
       success
       message

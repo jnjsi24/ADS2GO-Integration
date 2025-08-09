@@ -1,15 +1,11 @@
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Pencil, UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
-import { useQuery, useMutation, gql } from '@apollo/client';
-// Add these imports at the top, pointing to correct folders
+import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_ADMINS } from '../../graphql/queries/getAllAdmins';
 import { CREATE_ADMIN_USER } from '../../graphql/mutations/createAdminUser';
 import { DELETE_USER } from '../../graphql/mutations/deleteUser';
 import { UPDATE_USER } from '../../graphql/mutations/updateUser';
 
-
-
-// Define the type for an Admin, aligning with the User schema
 interface Admin {
   id: string;
   firstName: string;
@@ -25,8 +21,6 @@ interface Admin {
   createdAt: string | number;
 }
 
-
-
 type Toast = {
   id: number;
   message: string;
@@ -41,6 +35,7 @@ const SadminDashboard: React.FC = () => {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [adminToDelete, setAdminToDelete] = useState<Admin | null>(null);
   const [adminToEdit, setAdminToEdit] = useState<Admin | null>(null);
+
   const [newAdminFormData, setNewAdminFormData] = useState({
     firstName: '',
     lastName: '',
@@ -50,6 +45,7 @@ const SadminDashboard: React.FC = () => {
     companyAddress: '',
     contactNumber: '+63 ',
   });
+
   const [editAdminFormData, setEditAdminFormData] = useState({
     id: '',
     firstName: '',
@@ -59,6 +55,7 @@ const SadminDashboard: React.FC = () => {
     companyName: '',
     companyAddress: '',
   });
+
   const [editErrors, setEditErrors] = useState<{ [key: string]: string }>({
     firstName: '',
     lastName: '',
@@ -67,6 +64,7 @@ const SadminDashboard: React.FC = () => {
     companyName: '',
     companyAddress: '',
   });
+
   const [newAdminErrors, setNewAdminErrors] = useState<{ [key: string]: string }>({
     firstName: '',
     lastName: '',
@@ -77,151 +75,113 @@ const SadminDashboard: React.FC = () => {
     contactNumber: '',
   });
 
+  const { loading, error, data, refetch } = useQuery(GET_ALL_ADMINS);
 
-
-const { loading, error, data, refetch } = useQuery(GET_ALL_ADMINS);
-
-
-  const [createAdminMutation] = useMutation(CREATE_ADMIN_USER, {
-    onCompleted: (data) => {
-      if (data.createAdminUser.success) {
-        addToast(data.createAdminUser.message, 'success');
-        refetch();
-        setShowCreateAdminPopup(false);
-        setNewAdminFormData({
-          firstName: '',
-          lastName: '',
-          email: '',
-          password: '',
-          companyName: '',
-          companyAddress: '',
-          contactNumber: '+63 ',
-        });
-        setNewAdminErrors({
-          firstName: '',
-          lastName: '',
-          email: '',
-          password: '',
-          companyName: '',
-          companyAddress: '',
-          contactNumber: '',
-        });
-      } else {
-        addToast(data.createAdminUser.message, 'error');
-      }
+  // Mutations with success and error handlers
+  const [createAdminUser, { loading: creatingAdmin }] = useMutation(CREATE_ADMIN_USER, {
+    onCompleted: () => {
+      addToast('Admin user created successfully!', 'success');
+      setShowCreateAdminPopup(false);
+      resetNewAdminForm();
+      refetch();
     },
-    onError: (err) => {
-      addToast(`Error creating admin: ${err.message}`, 'error');
-    },
-  });
-
-  const [updateUserMutation] = useMutation(UPDATE_USER, {
-    onCompleted: (data) => {
-      if (data.updateUser.success) {
-        addToast(data.updateUser.message, 'success');
-        refetch();
-        setAdminToEdit(null);
-      } else {
-        addToast(data.updateUser.message, 'error');
-      }
-    },
-    onError: (err) => {
-      addToast(`Error updating admin: ${err.message}`, 'error');
-    },
-  });
-
-  const [deleteUserMutation] = useMutation(DELETE_USER, {
-    onCompleted: (data) => {
-      if (data.deleteUser.success) {
-        addToast(data.deleteUser.message, 'success');
-        refetch();
-        setAdminToDelete(null);
-      } else {
-        addToast(data.deleteUser.message, 'error');
-      }
-    },
-    onError: (err) => {
-      addToast(`Error deleting admin: ${err.message}`, 'error');
-    },
-  });
-
-  // Log fetched data for debugging
-  useEffect(() => {
-    if (data && data.getAllUsers) {
-      console.log('Fetched getAllUsers data:', data.getAllUsers);
-      const adminUsers = data.getAllUsers.filter((user: Admin) => user.role === 'ADMIN');
-      console.log('Filtered admin users:', adminUsers);
-      setAdmins(adminUsers);
+    onError: (error) => {
+      addToast(`Error creating admin: ${error.message}`, 'error');
     }
-  }, [data]);
+  });
 
-const formatDate = (dateInput: any): string => {
-  console.log('formatDate: Raw input:', JSON.stringify(dateInput), 'Type:', typeof dateInput);
+  const [updateUserMutation, { loading: updatingUser }] = useMutation(UPDATE_USER, {
+    onCompleted: () => {
+      addToast('Admin user updated successfully!', 'success');
+      setAdminToEdit(null);
+      refetch();
+    },
+    onError: (error) => {
+      addToast(`Error updating admin: ${error.message}`, 'error');
+    }
+  });
 
-  // Test with a hardcoded date to verify formatting
-  const testDate = new Date('2025-07-28T00:00:00.000Z');
-  console.log('formatDate: Test date:', testDate, '->', testDate.toISOString().split('T')[0]);
+  const [deleteUserMutation, { loading: deletingUser }] = useMutation(DELETE_USER, {
+    onCompleted: () => {
+      addToast('Admin user deleted successfully!', 'success');
+      setAdminToDelete(null);
+      refetch();
+    },
+    onError: (error) => {
+      addToast(`Error deleting admin: ${error.message}`, 'error');
+    }
+  });
 
-  // Handle null or undefined
-  if (!dateInput) {
-    console.log('formatDate: No date input provided');
-    return 'N/A';
+// Set admins filtered by role ADMIN whenever data changes
+useEffect(() => {
+  if (data && data.getAllAdmins) {
+    const adminUsers = data.getAllAdmins.filter((user: Admin) => user.role === 'ADMIN');
+    setAdmins(adminUsers);
   }
+}, [data]);
 
-  try {
-    let date: Date;
 
-    // Handle MongoDB Date object (e.g., { $date: "2025-05-01T08:36:56.546Z" })
-    if (typeof dateInput === 'object' && dateInput?.$date) {
-      console.log('formatDate: Detected MongoDB Date object:', dateInput.$date);
-      date = new Date(dateInput.$date);
-    }
-    // Handle ISO string or timestamp
-    else if (typeof dateInput === 'string' || typeof dateInput === 'number') {
-      date = new Date(dateInput);
-      console.log(
-        'formatDate: Parsed input:',
-        dateInput,
-        '->',
-        date,
-        'Type:',
-        typeof dateInput
-      );
-    }
-    // Handle unexpected types
-    else {
-      console.log('formatDate: Invalid input type:', typeof dateInput);
+  // Helper to reset new admin form and errors
+  const resetNewAdminForm = () => {
+    setNewAdminFormData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      companyName: '',
+      companyAddress: '',
+      contactNumber: '+63 ',
+    });
+    setNewAdminErrors({
+      firstName: '',
+      lastName: '',
+      email: '',
+      password: '',
+      companyName: '',
+      companyAddress: '',
+      contactNumber: '',
+    });
+  };
+
+  // Toast helper
+  const addToast = (message: string, type: 'error' | 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, 3000);
+  };
+
+  // Date formatting helper
+  const formatDate = (dateInput: any): string => {
+    if (!dateInput) return 'N/A';
+    try {
+      let date: Date;
+      if (typeof dateInput === 'object' && dateInput?.$date) {
+        date = new Date(dateInput.$date);
+      } else {
+        date = new Date(dateInput);
+      }
+      if (isNaN(date.getTime())) return 'N/A';
+      return date.toISOString().split('T')[0];
+    } catch {
       return 'N/A';
     }
+  };
 
-    // Validate parsed date
-    if (isNaN(date.getTime())) {
-      console.log('formatDate: Invalid date after parsing:', dateInput);
-      return 'N/A';
-    }
-
-    const formattedDate = date.toISOString().split('T')[0];
-    console.log('formatDate: Formatted output:', formattedDate);
-    return formattedDate; // Returns YYYY-MM-DD
-  } catch (error: any) {
-    console.log('formatDate: Error parsing date:', error.message, 'Input:', JSON.stringify(dateInput));
-    return 'N/A';
-  }
-};
- 
-
+  // Filter and sort admins
   const filteredAndSortedAdmins = admins
     .filter((admin) => {
-      const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      const createdAtString = admin.createdAt ? String(admin.createdAt) : '';
+      const lowerSearch = searchTerm.toLowerCase();
+      const createdAtStr = admin.createdAt ? String(admin.createdAt) : '';
       return (
-        admin.firstName.toLowerCase().includes(lowerCaseSearchTerm) ||
-        admin.lastName.toLowerCase().includes(lowerCaseSearchTerm) ||
-        admin.email.toLowerCase().includes(lowerCaseSearchTerm) ||
-        (admin.companyName && admin.companyName.toLowerCase().includes(lowerCaseSearchTerm)) ||
-        (admin.companyAddress && admin.companyAddress.toLowerCase().includes(lowerCaseSearchTerm)) ||
-        (admin.contactNumber && admin.contactNumber.toLowerCase().includes(lowerCaseSearchTerm)) ||
-        createdAtString.toLowerCase().includes(lowerCaseSearchTerm)
+        admin.firstName.toLowerCase().includes(lowerSearch) ||
+        admin.lastName.toLowerCase().includes(lowerSearch) ||
+        admin.email.toLowerCase().includes(lowerSearch) ||
+        (admin.companyName?.toLowerCase().includes(lowerSearch) ?? false) ||
+        (admin.companyAddress?.toLowerCase().includes(lowerSearch) ?? false) ||
+        (admin.contactNumber?.toLowerCase().includes(lowerSearch) ?? false) ||
+        createdAtStr.toLowerCase().includes(lowerSearch)
       );
     })
     .sort((a, b) => {
@@ -235,15 +195,7 @@ const formatDate = (dateInput: any): string => {
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
 
-  const addToast = (message: string, type: 'error' | 'success') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3000);
-  };
-
-  // Validation and form handling functions (unchanged)
+  // Validation helpers and handlers for new admin
   const validateNewAdminForm = (): boolean => {
     let isValid = true;
     const errors: { [key: string]: string } = {
@@ -255,7 +207,6 @@ const formatDate = (dateInput: any): string => {
       companyAddress: '',
       contactNumber: '',
     };
-
     const nameRegex = /^[A-Za-z\s]+$/;
     if (!newAdminFormData.firstName.trim() || !nameRegex.test(newAdminFormData.firstName)) {
       errors.firstName = 'First Name should not contain numbers or symbols and cannot be empty.';
@@ -265,24 +216,20 @@ const formatDate = (dateInput: any): string => {
       errors.lastName = 'Last Name should not contain numbers or symbols and cannot be empty.';
       isValid = false;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!newAdminFormData.email.trim() || !emailRegex.test(newAdminFormData.email)) {
       errors.email = 'Please enter a valid email address.';
       isValid = false;
     }
-
     if (!newAdminFormData.password.trim()) {
       errors.password = 'Password is required.';
       isValid = false;
     }
-
     const phoneRegex = /^\+63\s?\d{10}$/;
     if (!phoneRegex.test(newAdminFormData.contactNumber)) {
       errors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
       isValid = false;
     }
-
     if (!newAdminFormData.companyName.trim()) {
       errors.companyName = 'Company Name is required.';
       isValid = false;
@@ -291,7 +238,6 @@ const formatDate = (dateInput: any): string => {
       errors.companyAddress = 'Company Address is required.';
       isValid = false;
     }
-
     setNewAdminErrors(errors);
     return isValid;
   };
@@ -299,13 +245,11 @@ const formatDate = (dateInput: any): string => {
   const handleNewAdminChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     let updatedValue = value;
-
     if (name === 'contactNumber') {
       const digitsOnly = value.replace(/\D/g, '');
       const limitedDigits = digitsOnly.slice(0, 10);
       updatedValue = `+63 ${limitedDigits}`;
     }
-
     setNewAdminFormData((prev) => ({ ...prev, [name]: updatedValue }));
     if (newAdminErrors[name]) {
       setNewAdminErrors((prev) => ({ ...prev, [name]: '' }));
@@ -314,12 +258,9 @@ const formatDate = (dateInput: any): string => {
 
   const handleNewAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validateNewAdminForm()) {
-      return;
-    }
-
+    if (!validateNewAdminForm()) return;
     try {
-      await createAdminMutation({
+      await createAdminUser({
         variables: {
           input: {
             firstName: newAdminFormData.firstName,
@@ -332,25 +273,26 @@ const formatDate = (dateInput: any): string => {
           },
         },
       });
-    } catch (err) {
-      // Error handled by onError in useMutation
+    } catch {
+      // Handled by onError
     }
   };
 
+  // Delete admin
   const confirmDeleteAdmin = (admin: Admin) => {
     setAdminToDelete(admin);
   };
 
   const executeDeleteAdmin = async () => {
-    if (adminToDelete) {
-      try {
-        await deleteUserMutation({ variables: { id: adminToDelete.id } });
-      } catch (err) {
-        // Error handled by onError in useMutation
-      }
+    if (!adminToDelete) return;
+    try {
+      await deleteUserMutation({ variables: { id: adminToDelete.id } });
+    } catch {
+      // Handled by onError
     }
   };
 
+  // Edit admin handlers
   const handleEditAdmin = (admin: Admin) => {
     setAdminToEdit(admin);
     const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith('+63 ')
@@ -380,13 +322,11 @@ const formatDate = (dateInput: any): string => {
   const handleEditAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     let updatedValue = value;
-
     if (name === 'contactNumber') {
       const digitsOnly = value.replace(/\D/g, '');
       const limitedDigits = digitsOnly.slice(0, 10);
       updatedValue = `+63 ${limitedDigits}`;
     }
-
     setEditAdminFormData((prev) => ({ ...prev, [name]: updatedValue }));
     if (editErrors[name]) {
       setEditErrors((prev) => ({ ...prev, [name]: '' }));
@@ -403,7 +343,6 @@ const formatDate = (dateInput: any): string => {
       companyName: '',
       companyAddress: '',
     };
-
     const nameRegex = /^[A-Za-z\s]+$/;
     if (!editAdminFormData.firstName.trim() || !nameRegex.test(editAdminFormData.firstName)) {
       newErrors.firstName = 'First Name should not contain numbers or symbols and cannot be empty.';
@@ -413,19 +352,16 @@ const formatDate = (dateInput: any): string => {
       newErrors.lastName = 'Last Name should not contain numbers or symbols and cannot be empty.';
       isValid = false;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!editAdminFormData.email.trim() || !emailRegex.test(editAdminFormData.email)) {
       newErrors.email = 'Please enter a valid email address.';
       isValid = false;
     }
-
     const phoneRegex = /^\+63\s?\d{10}$/;
     if (!phoneRegex.test(editAdminFormData.contactNumber)) {
       newErrors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
       isValid = false;
     }
-
     if (!editAdminFormData.companyName.trim()) {
       newErrors.companyName = 'Company Name is required.';
       isValid = false;
@@ -434,35 +370,30 @@ const formatDate = (dateInput: any): string => {
       newErrors.companyAddress = 'Company Address is required.';
       isValid = false;
     }
-
     setEditErrors(newErrors);
     return isValid;
   };
 
   const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminToEdit) {
-      if (!validateEditForm()) {
-        return;
-      }
-
-      try {
-        await updateUserMutation({
-          variables: {
-            input: {
-              id: editAdminFormData.id,
-              firstName: editAdminFormData.firstName,
-              lastName: editAdminFormData.lastName,
-              email: editAdminFormData.email,
-              contactNumber: editAdminFormData.contactNumber,
-              companyName: editAdminFormData.companyName,
-              companyAddress: editAdminFormData.companyAddress,
-            },
+    if (!adminToEdit) return;
+    if (!validateEditForm()) return;
+    try {
+      await updateUserMutation({
+        variables: {
+          input: {
+            id: editAdminFormData.id,
+            firstName: editAdminFormData.firstName,
+            lastName: editAdminFormData.lastName,
+            email: editAdminFormData.email,
+            contactNumber: editAdminFormData.contactNumber,
+            companyName: editAdminFormData.companyName,
+            companyAddress: editAdminFormData.companyAddress,
           },
-        });
-      } catch (err) {
-        // Error handled by onError in useMutation
-      }
+        },
+      });
+    } catch {
+      // Handled by onError
     }
   };
 
@@ -480,24 +411,7 @@ const formatDate = (dateInput: any): string => {
 
   const handleCancelCreateAdmin = () => {
     setShowCreateAdminPopup(false);
-    setNewAdminFormData({
-      firstName: '',
-      lastName: '',
-      email: '',
-      password: '',
-      companyName: '',
-      companyAddress: '',
-      contactNumber: '+63 ',
-    });
-    setNewAdminErrors({
-      firstName: '',
-      lastName: '',
-      email: '',
-      password: '',
-      companyName: '',
-      companyAddress: '',
-      contactNumber: '',
-    });
+    resetNewAdminForm();
   };
 
   if (loading) return <p className="ml-64 p-8">Loading admins...</p>;
