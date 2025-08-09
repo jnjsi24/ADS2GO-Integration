@@ -100,6 +100,17 @@ const typeDefs = gql`
     password: String
   }
 
+  input UpdateAdminDetailsInput {
+    firstName: String
+    middleName: String
+    lastName: String
+    companyName: String
+    companyAddress: String
+    contactNumber: String
+    email: String
+    password: String
+  }
+
   input DeviceInfoInput {
     deviceId: String!
     deviceType: String!
@@ -135,6 +146,7 @@ const typeDefs = gql`
 
     # Admin management
     createAdminUser(input: CreateAdminInput!): UserUpdateResponse!
+    updateAdminDetails(adminId: ID!, input: UpdateAdminDetailsInput!): UserUpdateResponse!
 
     # Email verification
     verifyEmail(code: String!): VerificationResponse

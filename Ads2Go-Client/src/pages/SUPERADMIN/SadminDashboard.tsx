@@ -3,12 +3,14 @@ import { Search, Trash2, Pencil, UserPlus, ArrowUp, ArrowDown } from 'lucide-rea
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_ADMINS } from '../../graphql/queries/getAllAdmins';
 import { CREATE_ADMIN_USER } from '../../graphql/mutations/createAdminUser';
+import { UPDATE_ADMIN_USER } from "../../graphql/mutations/updateAdminUser";
 import { DELETE_USER } from '../../graphql/mutations/deleteUser';
-import { UPDATE_USER } from '../../graphql/mutations/updateUser';
+
 
 interface Admin {
   id: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   email: string;
   role: 'USER' | 'ADMIN' | 'SUPERADMIN';
@@ -49,11 +51,13 @@ const SadminDashboard: React.FC = () => {
   const [editAdminFormData, setEditAdminFormData] = useState({
     id: '',
     firstName: '',
+    middleName: '',
     lastName: '',
     email: '',
     contactNumber: '',
     companyName: '',
     companyAddress: '',
+    password: '',
   });
 
   const [editErrors, setEditErrors] = useState<{ [key: string]: string }>({
@@ -90,7 +94,7 @@ const SadminDashboard: React.FC = () => {
     }
   });
 
-  const [updateUserMutation, { loading: updatingUser }] = useMutation(UPDATE_USER, {
+  const [updateAdminUser] = useMutation(UPDATE_ADMIN_USER, {
     onCompleted: () => {
       addToast('Admin user updated successfully!', 'success');
       setAdminToEdit(null);
@@ -295,19 +299,23 @@ useEffect(() => {
   // Edit admin handlers
   const handleEditAdmin = (admin: Admin) => {
     setAdminToEdit(admin);
-    const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith('+63 ')
-      ? admin.contactNumber
-      : admin.contactNumber
-      ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}`
-      : '+63 ';
+    // Set initialContactNumber to empty string if no contact number exists
+    const initialContactNumber = admin.contactNumber
+      ? admin.contactNumber.startsWith('+63 ')
+        ? admin.contactNumber
+        : `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}`
+      : '';
+
     setEditAdminFormData({
       id: admin.id,
       firstName: admin.firstName,
+      middleName: admin.middleName || '',
       lastName: admin.lastName,
       email: admin.email,
       contactNumber: initialContactNumber,
       companyName: admin.companyName || '',
       companyAddress: admin.companyAddress || '',
+      password: '',
     });
     setEditErrors({
       firstName: '',
@@ -357,45 +365,59 @@ useEffect(() => {
       newErrors.email = 'Please enter a valid email address.';
       isValid = false;
     }
-    const phoneRegex = /^\+63\s?\d{10}$/;
-    if (!phoneRegex.test(editAdminFormData.contactNumber)) {
-      newErrors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
+    
+    // Make phone number validation optional - only validate if there's a value
+    if (editAdminFormData.contactNumber) {
+      const phoneRegex = /^\+63\s?\d{10}$/;
+      if (!phoneRegex.test(editAdminFormData.contactNumber)) {
+        newErrors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
+        isValid = false;
+      }
+    }
+    
+    // Make company name and address optional
+    // Only validate format if there's a value
+    if (editAdminFormData.companyName && !editAdminFormData.companyName.trim()) {
+      newErrors.companyName = 'Company Name cannot be empty if provided.';
       isValid = false;
     }
-    if (!editAdminFormData.companyName.trim()) {
-      newErrors.companyName = 'Company Name is required.';
+    
+    if (editAdminFormData.companyAddress && !editAdminFormData.companyAddress.trim()) {
+      newErrors.companyAddress = 'Company Address cannot be empty if provided.';
       isValid = false;
     }
-    if (!editAdminFormData.companyAddress.trim()) {
-      newErrors.companyAddress = 'Company Address is required.';
-      isValid = false;
-    }
+    
     setEditErrors(newErrors);
     return isValid;
   };
 
-  const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminToEdit) return;
-    if (!validateEditForm()) return;
-    try {
-      await updateUserMutation({
-        variables: {
-          input: {
-            id: editAdminFormData.id,
-            firstName: editAdminFormData.firstName,
-            lastName: editAdminFormData.lastName,
-            email: editAdminFormData.email,
-            contactNumber: editAdminFormData.contactNumber,
-            companyName: editAdminFormData.companyName,
-            companyAddress: editAdminFormData.companyAddress,
-          },
+const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!adminToEdit) return;
+  if (!validateEditForm()) return;
+
+  try {
+    await updateAdminUser({
+      variables: {
+        adminId: editAdminFormData.id,
+        input: {
+          firstName: editAdminFormData.firstName,
+          middleName: editAdminFormData.middleName || null,
+          lastName: editAdminFormData.lastName,
+          email: editAdminFormData.email,
+          contactNumber: editAdminFormData.contactNumber || undefined,
+          companyName: editAdminFormData.companyName,
+          companyAddress: editAdminFormData.companyAddress,
+          password: editAdminFormData.password || undefined,
         },
-      });
-    } catch {
-      // Handled by onError
-    }
-  };
+      },
+    });
+  } catch {
+    // Error handled globally by onError
+  }
+};
+
+
 
   const handleCancelEdit = () => {
     setAdminToEdit(null);
@@ -686,129 +708,151 @@ useEffect(() => {
                 <button onClick={handleCancelEdit} className="text-gray-500 hover:text-gray-700"></button>
               </div>
               <form onSubmit={handleUpdateAdminSubmit} className="space-y-4 mt-9">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                  <div>
-                    <label htmlFor="editFirstName" className="block text-sm font-medium text-gray-500 mb-1">
-                      First Name
-                    </label>
-                    <input
-                      id="editFirstName"
-                      name="firstName"
-                      type="text"
-                      value={editAdminFormData.firstName}
-                      onChange={handleEditAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {editErrors.firstName && (
-                      <p className="text-red-500 text-xs mt-1">{editErrors.firstName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="editLastName" className="block text-sm font-medium text-gray-500 mb-1">
-                      Last Name
-                    </label>
-                    <input
-                      id="editLastName"
-                      name="lastName"
-                      type="text"
-                      value={editAdminFormData.lastName}
-                      onChange={handleEditAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {editErrors.lastName && (
-                      <p className="text-red-500 text-xs mt-1">{editErrors.lastName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="editEmail" className="block text-sm font-medium text-gray-500 mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      id="editEmail"
-                      name="email"
-                      type="email"
-                      value={editAdminFormData.email}
-                      onChange={handleEditAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {editErrors.email && <p className="text-red-500 text-xs mt-1">{editErrors.email}</p>}
-                  </div>
-                  <div>
-                    <label htmlFor="editContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
-                      Phone Number
-                    </label>
-                    <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
-                      <span className="text-gray-700 select-none pr-1">+63</span>
-                      <input
-                        id="editContactNumber"
-                        name="contactNumber"
-                        type="tel"
-                        value={editAdminFormData.contactNumber.replace('+63 ', '')}
-                        onChange={handleEditAdminChange}
-                        maxLength={10}
-                        className="flex-grow focus:outline-none bg-transparent"
-                        required
-                      />
-                    </div>
-                    {editErrors.contactNumber && (
-                      <p className="text-red-500 text-xs mt-1">{editErrors.contactNumber}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="editCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
-                      Company Name
-                    </label>
-                    <input
-                      id="editCompanyName"
-                      name="companyName"
-                      type="text"
-                      value={editAdminFormData.companyName}
-                      onChange={handleEditAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {editErrors.companyName && (
-                      <p className="text-red-500 text-xs mt-1">{editErrors.companyName}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="editCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
-                      Company Address
-                    </label>
-                    <input
-                      id="editCompanyAddress"
-                      name="companyAddress"
-                      type="text"
-                      value={editAdminFormData.companyAddress}
-                      onChange={handleEditAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {editErrors.companyAddress && (
-                      <p className="text-red-500 text-xs mt-1">{editErrors.companyAddress}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-between pt-4">
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={Object.values(editErrors).some((error) => error !== '')}
-                    className="bg-[#3674B5] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    Update Admin
-                  </button>
-                </div>
-              </form>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+    <div>
+      <label htmlFor="editFirstName" className="block text-sm font-medium text-gray-500 mb-1">
+        First Name
+      </label>
+      <input
+        id="editFirstName"
+        name="firstName"
+        type="text"
+        value={editAdminFormData.firstName}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+        required
+      />
+      {editErrors.firstName && <p className="text-red-500 text-xs mt-1">{editErrors.firstName}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editMiddleName" className="block text-sm font-medium text-gray-500 mb-1">
+        Middle Name
+      </label>
+      <input
+        id="editMiddleName"
+        name="middleName"
+        type="text"
+        value={editAdminFormData.middleName || ''}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+      />
+    </div>
+
+    <div>
+      <label htmlFor="editLastName" className="block text-sm font-medium text-gray-500 mb-1">
+        Last Name
+      </label>
+      <input
+        id="editLastName"
+        name="lastName"
+        type="text"
+        value={editAdminFormData.lastName}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+        required
+      />
+      {editErrors.lastName && <p className="text-red-500 text-xs mt-1">{editErrors.lastName}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editEmail" className="block text-sm font-medium text-gray-500 mb-1">
+        Email Address
+      </label>
+      <input
+        id="editEmail"
+        name="email"
+        type="email"
+        value={editAdminFormData.email}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+        required
+      />
+      {editErrors.email && <p className="text-red-500 text-xs mt-1">{editErrors.email}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
+        Phone Number
+      </label>
+      <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
+        <span className="text-gray-700 select-none pr-1">+63</span>
+        <input
+          id="editContactNumber"
+          name="contactNumber"
+          type="tel"
+          value={editAdminFormData.contactNumber.replace('+63 ', '')}
+          onChange={handleEditAdminChange}
+          maxLength={10}
+          className="flex-grow focus:outline-none bg-transparent"
+        />
+      </div>
+      {editErrors.contactNumber && <p className="text-red-500 text-xs mt-1">{editErrors.contactNumber}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
+        Company Name
+      </label>
+      <input
+        id="editCompanyName"
+        name="companyName"
+        type="text"
+        value={editAdminFormData.companyName}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+      />
+      {editErrors.companyName && <p className="text-red-500 text-xs mt-1">{editErrors.companyName}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
+        Company Address
+      </label>
+      <input
+        id="editCompanyAddress"
+        name="companyAddress"
+        type="text"
+        value={editAdminFormData.companyAddress}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+      />
+      {editErrors.companyAddress && <p className="text-red-500 text-xs mt-1">{editErrors.companyAddress}</p>}
+    </div>
+
+    <div>
+      <label htmlFor="editPassword" className="block text-sm font-medium text-gray-500 mb-1">
+        New Password <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
+      </label>
+      <input
+        id="editPassword"
+        name="password"
+        type="password"
+        value={editAdminFormData.password || ''}
+        onChange={handleEditAdminChange}
+        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+      />
+    </div>
+  </div>
+
+  <div className="flex justify-between pt-4">
+    <button
+      type="button"
+      onClick={handleCancelEdit}
+      className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
+    >
+      Cancel
+    </button>
+    <button
+      type="submit"
+      disabled={Object.values(editErrors).some((error) => error !== '')}
+      className="bg-[#3674B5] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+    >
+      Update Admin
+    </button>
+  </div>
+</form>
+
             </div>
           </div>
         </div>

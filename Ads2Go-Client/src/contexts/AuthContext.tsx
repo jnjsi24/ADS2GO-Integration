@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{
         }
 
         const freshUser: User = {
-          userId: freshUserRaw._id || freshUserRaw.userId,
+          userId: freshUserRaw.id,
           email: freshUserRaw.email,
           role: freshUserRaw.role,
           isEmailVerified: freshUserRaw.isEmailVerified,
@@ -125,28 +125,27 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-  if (!freshUser.isEmailVerified) {
-    hasRedirectedRef.current = true;
-    navigate('/verify-email');
-  } else if (
-    publicPages.includes(window.location.pathname) ||
-    window.location.pathname === '/verify-email'
-  ) {
-    // ✅ Updated role-based redirection with check to avoid redundant redirects
-    let redirectPath = '/home';
-    if (freshUser.role === 'ADMIN') {
-      redirectPath = '/admin';
-    } else if (freshUser.role === 'SUPERADMIN') {
-      redirectPath = '/sadmin-dashboard';
-    }
+          if (!freshUser.isEmailVerified) {
+            hasRedirectedRef.current = true;
+            navigate('/verify-email');
+          } else if (
+            publicPages.includes(window.location.pathname) ||
+            window.location.pathname === '/verify-email'
+          ) {
+            // ✅ Updated role-based redirection with check to avoid redundant redirects
+            let redirectPath = '/home';
+            if (freshUser.role === 'ADMIN') {
+              redirectPath = '/admin';
+            } else if (freshUser.role === 'SUPERADMIN') {
+              redirectPath = '/sadmin-dashboard';
+            }
 
-    if (window.location.pathname !== redirectPath) {
-      hasRedirectedRef.current = true;
-      navigate(redirectPath);
-    }
-  }
-}
-
+            if (window.location.pathname !== redirectPath) {
+              hasRedirectedRef.current = true;
+              navigate(redirectPath);
+            }
+          }
+        }
       } catch (err) {
         console.error('Error restoring auth:', err);
         localStorage.removeItem('token');

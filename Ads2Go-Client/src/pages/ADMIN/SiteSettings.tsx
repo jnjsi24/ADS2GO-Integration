@@ -1,6 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useMutation } from '@apollo/client';
+import { toast } from 'sonner';
+import { UPDATE_ADMIN_USER } from '../../graphql/mutations/updateAdminUser';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -20,8 +23,23 @@ type Toast = {
   type: 'error' | 'success';
 };
 
+interface AccountFormState {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  title: string;
+  practice: string;
+  branch: string;
+  email: string;
+  contactNumber?: string;
+  loginId: string;
+  statusHistory: string;
+  companyName?: string;
+  houseAddress?: string;
+}
+
 const SiteSettings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Account Settings');
@@ -40,19 +58,20 @@ const SiteSettings: React.FC = () => {
     disableNotificationSounds: true,
   });
   // State for Account Settings form
-  const [accountForm, setAccountForm] = useState({
-  name: user
-    ? `${user.firstName} ${user.middleName ? user.middleName + ' ' : ''}${user.lastName}`.trim()
-    : 'formique Charpentier',
-  title: 'CEO',
-  practice: 'Finance',
-  branch: 'Quezon City',
-  email: 'ceo@yes.com',
-  phoneNumber: '',
-  loginId: 'id/ceo',
-  statusHistory: 'Activated 13/05/2009',
-});
-
+  const [accountForm, setAccountForm] = useState<AccountFormState>({
+    firstName: user?.firstName || '',
+    middleName: user?.middleName,
+    lastName: user?.lastName || '',
+    title: 'CEO',
+    practice: 'Finance',
+    branch: 'Quezon City',
+    email: user?.email || 'ceo@yes.com',
+    contactNumber: user?.contactNumber,
+    loginId: `id/${user?.email?.split('@')[0] || 'ceo'}`,
+    statusHistory: 'Active',
+    companyName: user?.companyName,
+    houseAddress: user?.houseAddress,
+  });
 
   const initialAccountFormRef = useRef(accountForm);
 
@@ -63,6 +82,56 @@ const SiteSettings: React.FC = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
   // State to toggle form editability
   const [isFormEditable, setIsFormEditable] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Mutation for updating admin details - using existing UPDATE_ADMIN_USER
+  const [updateAdminDetails] = useMutation(UPDATE_ADMIN_USER, {
+    onCompleted: (data) => {
+      console.log('Mutation response:', data);
+      if (data?.updateAdminDetails?.success) {
+        console.log('Update successful, new user data:', data.updateAdminDetails.user);
+        // Update the user context with the new data
+        setUser({
+          ...(user || {}),
+          ...data.updateAdminDetails.user,
+          name: `${data.updateAdminDetails.user.firstName || user?.firstName || ''} ${data.updateAdminDetails.user.middleName || user?.middleName || ''} ${data.updateAdminDetails.user.lastName || user?.lastName || ''}`.replace(/\s+/g, ' ').trim()
+        });
+        toast.success('Profile updated successfully!');
+        setIsFormEditable(false);
+      } else {
+        console.error('Update failed:', data?.updateAdminDetails?.message);
+        toast.error(data?.updateAdminDetails?.message || 'Failed to update profile');
+      }
+      setIsSubmitting(false);
+    },
+    onError: (error) => {
+      console.error('Mutation error:', error);
+      toast.error('Failed to update profile. Please try again.');
+      setIsSubmitting(false);
+    },
+  });
+
+  // Update form when user data changes
+  useEffect(() => {
+    if (user) {
+      const newFormData: AccountFormState = {
+        firstName: user.firstName || '',
+        middleName: user.middleName,
+        lastName: user.lastName || '',
+        title: 'CEO',
+        practice: 'Finance',
+        branch: 'Quezon City',
+        email: user.email || '',
+        contactNumber: user.contactNumber,
+        loginId: `id/${user.email?.split('@')[0] || 'user'}`,
+        statusHistory: 'Active',
+        companyName: user.companyName,
+        houseAddress: user.houseAddress,
+      };
+      setAccountForm(newFormData);
+      initialAccountFormRef.current = newFormData;
+    }
+  }, [user]);
 
   // Dropdown options for Field
   const fieldOptions = [
@@ -148,16 +217,11 @@ const SiteSettings: React.FC = () => {
 
   // Handle form input changes for Security, Notification, and Account Settings
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-      const checked = (e.target as HTMLInputElement).checked;
-      setNotificationForm((prev) => ({ ...prev, [name]: checked }));
-    } else {
-      setNotificationForm((prev) => ({ ...prev, [name]: value }));
-      setSecurityForm((prev) => ({ ...prev, [name]: value }));
-      setAccountForm((prev) => ({ ...prev, [name]: value }));
-      // setPlaceholders((prev) => ({ ...prev, [name]: value })); // This line should likely be removed or handled differently
-    }
+    const { name, value } = e.target;
+    setAccountForm(prev => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   // Handle toggle button change for notifications
@@ -202,63 +266,126 @@ const SiteSettings: React.FC = () => {
   };
 
   // Validate Account Settings form
-  const validateAccountForm = () => {
+  const validateAccountForm = (): boolean => {
     let isValid = true;
-
-    // Name: No numbers allowed
-    if (!/^[A-Za-z\s]+$/.test(accountForm.name)) {
-      addToast('Name cannot contain numbers.', 'error');
+    
+    // Name validation
+    if (!/^[A-Za-z\s]+$/.test(accountForm.firstName) || !/^[A-Za-z\s]*$/.test(accountForm.middleName || '') || !/^[A-Za-z\s]+$/.test(accountForm.lastName)) {
+      addToast('Name fields can only contain letters and spaces.', 'error');
       isValid = false;
     }
-
-    // Field: Must be one of the dropdown options
-    if (!fieldOptions.includes(accountForm.practice)) {
-      addToast('Please select a valid field.', 'error');
-      isValid = false;
-    }
-
-    // Branch: Must be one of the dropdown options
-    if (!branchOptions.includes(accountForm.branch)) {
-      addToast('Please select a valid branch.', 'error');
-      isValid = false;
-    }
-
-    // Email: Must be a valid email address
+    
+    // Email validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountForm.email)) {
       addToast('Please enter a valid email address.', 'error');
       isValid = false;
     }
-
-    // Phone Number: Must be 11 digits, start with "09" (optional)
-    if (accountForm.phoneNumber && !/^09\d{9}$/.test(accountForm.phoneNumber)) {
-      addToast('Phone number must be 11 digits and start with "09".', 'error');
+    
+    // Phone number validation (if provided)
+    if (accountForm.contactNumber && !/^[0-9+\-\s()]*$/.test(accountForm.contactNumber)) {
+      addToast('Please enter a valid phone number.', 'error');
       isValid = false;
     }
-
+    
     return isValid;
   };
-
-  // const [placeholders, setPlaceholders] = useState(accountForm); // This state seems unused or incorrectly used
 
   // Handle Account Settings form submission
   const handleAccountSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
-
+    
     if (!validateAccountForm()) {
+      console.log('Form validation failed');
+      return;
+    }
+
+    const userId = (user as any)?._id || (user as any)?.id || (user as any)?.userId;
+    if (!userId) {
+      console.error('User ID is missing');
+      toast.error('User ID is missing. Please try again.');
       return;
     }
 
     try {
-      // Simulate an API call to save account settings
-      console.log('Saving account settings:', accountForm);
-      // Update initialAccountFormRef with the saved values
-      initialAccountFormRef.current = accountForm;
-      // Optionally save profile image to backend here
-      addToast('Account settings saved successfully!', 'success');
-      setIsFormEditable(false); // Disable editing after saving
-    } catch (err) {
-      addToast('Failed to save account settings. Please try again.', 'error');
+      setIsSubmitting(true);
+      
+      // Prepare the input object with only the fields that have values
+      const input: any = {};
+      
+      // Only include fields that have values and are different from initial
+      if (accountForm.firstName !== initialAccountFormRef.current.firstName) {
+        input.firstName = accountForm.firstName;
+      }
+      if (accountForm.middleName !== initialAccountFormRef.current.middleName) {
+        input.middleName = accountForm.middleName || ''; // Allow empty string for middle name
+      }
+      if (accountForm.lastName !== initialAccountFormRef.current.lastName) {
+        input.lastName = accountForm.lastName;
+      }
+      if (accountForm.email !== initialAccountFormRef.current.email) {
+        input.email = accountForm.email;
+      }
+      if (accountForm.contactNumber !== initialAccountFormRef.current.contactNumber) {
+        input.contactNumber = accountForm.contactNumber;
+      }
+      if (accountForm.companyName !== initialAccountFormRef.current.companyName) {
+        input.companyName = accountForm.companyName;
+      }
+      if (accountForm.houseAddress !== initialAccountFormRef.current.houseAddress) {
+        input.houseAddress = accountForm.houseAddress;
+      }
+
+      // Only proceed if there are changes
+      if (Object.keys(input).length === 0) {
+        console.log('No changes detected, skipping update');
+        toast.info('No changes detected.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      console.log('Calling updateAdminDetails with:', {
+        adminId: userId,
+        input
+      });
+
+      // Call the mutation
+      const result = await updateAdminDetails({
+        variables: {
+          adminId: userId,
+          input,
+        },
+      });
+
+      console.log('Mutation result:', result);
+      
+      if (result.data?.updateAdminDetails?.success) {
+        console.log('Update successful, updating initial form ref and user context');
+        
+        // Update the local form reference
+        initialAccountFormRef.current = { ...accountForm };
+        
+        // Update the user context with the new data
+        if (setUser) {
+          console.log('Updating user context with new data');
+          setUser({
+            ...(user || {}),
+            ...input,
+            name: `${input.firstName || user?.firstName || ''} ${input.middleName || user?.middleName || ''} ${input.lastName || user?.lastName || ''}`.replace(/\s+/g, ' ').trim()
+          });
+        }
+        
+        toast.success('Profile updated successfully!');
+        setIsFormEditable(false);
+      } else {
+        const errorMessage = result.data?.updateAdminDetails?.message || 'Unknown error';
+        console.error('Update failed:', errorMessage);
+        toast.error(`Failed to update profile: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error('Error in handleAccountSubmit:', error);
+      toast.error('Failed to update profile. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -325,13 +452,37 @@ const SiteSettings: React.FC = () => {
             <form className="space-y-4" onSubmit={handleAccountSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <label className="block text-sm font-medium text-gray-700">First Name</label>
                   <input
                     type="text"
-                    name="name"
-                    value={accountForm.name}
+                    name="firstName"
+                    value={accountForm.firstName}
                     onChange={handleInputChange}
-                    placeholder={isFormEditable ? "Enter name" : ""}
+                    placeholder={isFormEditable ? "Enter first name" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Middle Name</label>
+                  <input
+                    type="text"
+                    name="middleName"
+                    value={accountForm.middleName || ''}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter middle name" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={accountForm.lastName}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter last name" : ""}
                     className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
                     disabled={!isFormEditable}
                   />
@@ -398,18 +549,19 @@ const SiteSettings: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700">Phone Number</label>
                   <input
                     type="tel"
-                    name="phoneNumber"
-                    value={accountForm.phoneNumber}
+                    name="contactNumber"
+                    value={accountForm.contactNumber || ''}
                     onChange={handleInputChange}
                     onKeyDown={(e) => {
-                      if (accountForm.phoneNumber.length >= 11 && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
+                      const contactNumberLength = accountForm.contactNumber?.length ?? 0;
+                      if (contactNumberLength >= 11 && e.key !== 'Backspace' && e.key !== 'Delete' && e.key !== 'Tab') {
                         e.preventDefault();
                       }
                     }}
                     placeholder={isFormEditable ? "Enter phone number" : ""}
                     inputMode="numeric"
-                    pattern="[0-9]{11}"
-                    maxLength={11}
+                    pattern="[0-9\s\+\-\(\)]*"
+                    maxLength={20}
                     className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
                     disabled={!isFormEditable}
                   />
@@ -433,6 +585,30 @@ const SiteSettings: React.FC = () => {
                     value={accountForm.statusHistory}
                     className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'bg-white' : 'border-gray-300 bg-white'}`}
                     disabled
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Company Name</label>
+                  <input
+                    type="text"
+                    name="companyName"
+                    value={accountForm.companyName || ''}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter company name" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">House Address</label>
+                  <input
+                    type="text"
+                    name="houseAddress"
+                    value={accountForm.houseAddress || ''}
+                    onChange={handleInputChange}
+                    placeholder={isFormEditable ? "Enter house address" : ""}
+                    className={`mt-1 block w-80 h-10 pl-2 rounded-md ${isFormEditable ? 'border border-black placeholder-gray-500 bg-white' : 'border-gray-300 bg-white'}`}
+                    disabled={!isFormEditable}
                   />
                 </div>
               </div>
@@ -470,7 +646,7 @@ const SiteSettings: React.FC = () => {
             >
               {!profileImage && (
                 <span className="text-white text-4xl font-bold">
-{getInitials(`${user?.firstName ?? ''} ${user?.middleName ?? ''} ${user?.lastName ?? ''}`.trim())}
+                  {getInitials(`${user?.firstName ?? ''} ${user?.middleName ?? ''} ${user?.lastName ?? ''}`.trim())}
                 </span>
               )}
             </div>
@@ -492,13 +668,13 @@ const SiteSettings: React.FC = () => {
                 </button>
               </div>
             )}
-            <h3 className="text-lg font-semibold">{accountForm.name}</h3>
+            <h3 className="text-lg font-semibold">{accountForm.firstName} {accountForm.middleName} {accountForm.lastName}</h3>
             <div className="text-sm text-gray-500 mb-4">{accountForm.title}</div>
             <div className="space-y-2 text-sm text-teal-600 w-full">
               <div className="flex">
                 <span className="mr-2">📧</span> <a href={`mailto:${accountForm.email}`}>{accountForm.email}</a>
                 <div className="flex">
-                  <span className="mr-2 pl-4">📞</span> <a href={`tel:${accountForm.phoneNumber}`}>{accountForm.phoneNumber}</a>
+                  <span className="mr-2 pl-4">📞</span> <a href={`tel:${accountForm.contactNumber}`}>{accountForm.contactNumber}</a>
                   <span className="ml-2 pl-4 cursor-pointer">⋮</span>
                 </div>
               </div>
@@ -563,7 +739,7 @@ const SiteSettings: React.FC = () => {
                     <input
                       type="email"
                       name="email"
-                      value="placeholder" // This value is hardcoded, it should probably be `securityForm.recoveryEmail`
+                      value={securityForm.recoveryEmail}
                       onChange={handleInputChange}
                       placeholder="example@gmail.com"
                       className="mt-1 p-2 block w-full bg-gray-100 border-gray-300 rounded-md"
