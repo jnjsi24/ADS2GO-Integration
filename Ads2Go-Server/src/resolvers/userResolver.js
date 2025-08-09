@@ -33,6 +33,18 @@ const resolvers = {
       return await User.findById(id);
     },
 
+    getAllAdmins: async (_, __, { user }) => {
+      // ✅ Only SUPERADMIN can access
+      if (!user || user.role !== 'SUPERADMIN') {
+        throw new Error('Not authorized');
+      }
+
+      // ✅ Case-insensitive role check
+      return await User.find({ role: { $regex: /^ADMIN$/i } });
+    },
+
+
+
     getOwnUserDetails: async (_, __, { user }) => {
       checkAuth(user);
       const userRecord = await User.findById(user.id);

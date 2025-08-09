@@ -111,6 +111,7 @@ const typeDefs = gql`
     # Admin queries
     getAllUsers: [User!]!
     getUserById(id: ID!): User
+    getAllAdmins: [Admin!]!
 
     # User queries
     getOwnUserDetails: User
