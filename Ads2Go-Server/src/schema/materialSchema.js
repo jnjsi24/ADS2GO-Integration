@@ -59,7 +59,7 @@ module.exports = gql`
   extend type Query {
     getAllMaterials: [Material!]!
     getMaterialById(id: ID!): Material
-    getMaterialsByCategory(category: String!): [Material!]!
+    getMaterialsByCategory(category: MaterialCategory!): [Material!]!
   }
 
   type Mutation {
