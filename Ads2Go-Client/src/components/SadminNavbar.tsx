@@ -82,7 +82,7 @@ const SadminNavbar: React.FC = () => {
 
         {/* Logout Button */}
         <button
-          onClick={handleLogout}
+          onClick={() => navigate('/superadmin-login')}
           className="w-full text-left bg-red-700 text-white hover:bg-red-800 px-3 py-2 rounded-xl flex items-center gap-3 transition"
         >
           <LogOut size={18} />
