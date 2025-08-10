@@ -1,45 +1,70 @@
-const { gql } = require('graphql-tag'); 
+const { gql } = require('graphql-tag');
 
 module.exports = gql`
-  type AdvertisementAssignment {
-    advertisementId: ID!
-    assignedAt: String
-    removedAt: String
+  enum MaterialCategory {
+    DIGITAL
+    NON_DIGITAL
+  }
+
+  enum VehicleType {
+    CAR
+    MOTOR
+    BUS
+    JEEP
+    E_TRIKE
+  }
+
+  enum MaterialType {
+    POSTER
+    LCD
+    STICKER
+    LCD_HEADDRESS
+    BANNER
   }
 
   type Material {
-    _id: ID!
-    name: String!
-    category: String!
-    status: String!
-    riderId: ID!
-    advertisements: [AdvertisementAssignment]
+    id: ID!
+    vehicleType: VehicleType!
+    materialType: MaterialType!
+    description: String
+    requirements: String
+    category: MaterialCategory!
+    driverId: ID
+    mountedAt: String
+    dismountedAt: String
     createdAt: String
     updatedAt: String
   }
 
-  input AdvertisementInput {
-    advertisementId: ID!
-    assignedAt: String
-    removedAt: String
-  }
-
   input CreateMaterialInput {
-    name: String!
-    category: String!
-    status: String
-    riderId: ID!
-    advertisements: [AdvertisementInput]
+    vehicleType: VehicleType!
+    materialType: MaterialType!
+    description: String
+    requirements: String
+    category: MaterialCategory!
   }
 
-  type Query {
-    getAllMaterials: [Material]
+  input UpdateMaterialInput {
+    vehicleType: VehicleType
+    materialType: MaterialType
+    description: String
+    requirements: String
+    category: MaterialCategory
+    mountedAt: String
+    dismountedAt: String
+  }
+
+  extend type Query {
+    getAllMaterials: [Material!]!
     getMaterialById(id: ID!): Material
+    getMaterialsByCategory(category: MaterialCategory!): [Material!]!
   }
 
   type Mutation {
     createMaterial(input: CreateMaterialInput!): Material
-    addAdvertisementToMaterial(materialId: ID!, ad: AdvertisementInput!): Material
+    updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
+
+    assignMaterialToDriver(driverId: ID!): Material
   }
 `;

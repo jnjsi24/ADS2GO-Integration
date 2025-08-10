@@ -13,83 +13,115 @@ const DriverSchema = new mongoose.Schema(
       type: String,
       required: [true, 'First name is required'],
       trim: true,
-      minlength: [2, 'First name must be at least 2 characters'],
-      maxlength: [50, 'First name cannot exceed 50 characters'],
+      minlength: 2,
+      maxlength: 50,
     },
     lastName: {
       type: String,
       required: [true, 'Last name is required'],
       trim: true,
-      minlength: [2, 'Last name must be at least 2 characters'],
-      maxlength: [50, 'Last name cannot exceed 50 characters'],
+      minlength: 2,
+      maxlength: 50,
     },
     contactNumber: {
       type: String,
-      required: [true, 'Contact number is required'],
+      required: true,
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Email is required'],
+      required: true,
       unique: true,
       lowercase: true,
       trim: true,
     },
     password: {
       type: String,
-      required: [true, 'Password is required'],
-      minlength: [6, 'Password must be at least 6 characters'],
+      required: true,
+      minlength: 6,
     },
     address: {
       type: String,
-      required: [true, 'Address is required'],
+      required: true,
       trim: true,
-      minlength: [10, 'Address must be at least 10 characters'],
+      minlength: 10,
     },
     licenseNumber: {
       type: String,
-      required: [true, 'License number is required'],
+      required: true,
       trim: true,
     },
     licensePictureURL: {
       type: String,
-      required: [true, 'License picture URL is required'],
+      required: true,
       trim: true,
     },
     vehiclePlateNumber: {
       type: String,
-      required: [true, 'Vehicle plate number is required'],
+      required: true,
       trim: true,
     },
     vehicleType: {
       type: String,
-      required: [true, 'Vehicle type is required'],
+      required: true,
       trim: true,
     },
     vehicleModel: {
       type: String,
-      required: [true, 'Vehicle model is required'],
+      required: true,
       trim: true,
     },
     vehicleYear: {
       type: Number,
-      required: [true, 'Vehicle year is required'],
-      min: [1900, 'Vehicle year must be after 1900'],
+      required: true,
+      min: 1900,
     },
     vehiclePhotoURL: {
       type: String,
-      required: [true, 'Vehicle photo URL is required'],
+      required: true,
       trim: true,
     },
     orCrPictureURL: {
       type: String,
-      required: [true, 'OR/CR picture URL is required'],
+      required: true,
       trim: true,
+    },
+    preferredMaterialType: {
+  type: [String],
+  enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
+  required: [true, 'Preferred material type is required'],
+},
+    adminOverrideMaterialType: {
+      type: String,
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
+      default: null,
+    },
+    installedMaterialType: {
+      type: String,
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
+      default: null,
     },
     accountStatus: {
       type: String,
       enum: ['PENDING', 'ACTIVE', 'SUSPENDED'],
       default: 'PENDING',
+    },
+    reviewStatus: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'REJECTED', 'RESUBMITTED'],
+      default: 'PENDING',
+    },
+    approvalDate: {
+      type: Date,
+      default: null,
+    },
+    rejectedReason: {
+      type: String,
+      default: null,
+    },
+    resubmissionFiles: {
+      type: [String],
+      default: [],
     },
     dateJoined: {
       type: Date,
@@ -115,11 +147,6 @@ const DriverSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    installedMaterialType: {
-      type: String,
-      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
-      default: null,
-    },
     deviceStatus: {
       type: String,
       enum: ['ONLINE', 'OFFLINE', 'ERROR'],
@@ -127,7 +154,7 @@ const DriverSchema = new mongoose.Schema(
     },
     qrCodeIdentifier: {
       type: String,
-      required: [true, 'QR code identifier is required'],
+      required: true,
       trim: true,
     },
     isEmailVerified: {
@@ -175,24 +202,12 @@ const DriverSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
-// Pre-save hook to hash password
-DriverSchema.pre('save', async function (next) {
-  this.updatedAt = Date.now();
 
-  if (this.isModified('password')) {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-  }
+ 
 
-  next();
-});
-
-// Custom instance methods
 DriverSchema.methods.isLocked = function () {
   return this.accountLocked && this.lockUntil && this.lockUntil > new Date();
 };
@@ -205,10 +220,8 @@ DriverSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Indexes
 DriverSchema.index({ email: 1 }, { unique: true });
 DriverSchema.index({ driverId: 1 }, { unique: true });
 
 const Driver = mongoose.model('Driver', DriverSchema);
-
 module.exports = Driver;

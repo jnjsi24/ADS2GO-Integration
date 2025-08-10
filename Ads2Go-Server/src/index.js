@@ -20,18 +20,9 @@ const driverResolvers = require('./resolvers/driverResolver');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 
-// Merge all schemas and resolvers
-const typeDefs = mergeTypeDefs([
-  userTypeDefs,
-  driverTypeDefs,
-  adsPlanTypeDefs,
-]);
-
-const resolvers = mergeResolvers([
-  userResolvers,
-  driverResolvers,
-  adsPlanResolvers,
-]);
+// Load Material schema and resolvers — **add these!**
+const materialTypeDefs = require('./schema/materialSchema');
+const materialResolvers = require('./resolvers/materialResolver');
 
 const { authMiddleware } = require('./middleware/auth');
 
@@ -39,6 +30,21 @@ if (!process.env.MONGODB_URI) {
   console.error('MONGODB_URI is not defined in the .env file');
   process.exit(1);
 }
+
+// Merge all schemas and resolvers including material
+const typeDefs = mergeTypeDefs([
+  userTypeDefs,
+  driverTypeDefs,
+  adsPlanTypeDefs,
+  materialTypeDefs,        // Added material schema
+]);
+
+const resolvers = mergeResolvers([
+  userResolvers,
+  driverResolvers,
+  adsPlanResolvers,
+  materialResolvers,       // Added material resolvers
+]);
 
 // Create Express app
 const app = express();

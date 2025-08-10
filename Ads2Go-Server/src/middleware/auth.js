@@ -22,7 +22,7 @@ const getUser = async (token) => {
       email: user.email,
       role: user.role,
       isEmailVerified: user.isEmailVerified,
-      tokenVersion: user.tokenVersion // ✅ This was missing
+      tokenVersion: user.tokenVersion
     };
   } catch (error) {
     console.error('Authentication error:', error.message);
@@ -52,7 +52,14 @@ const authMiddleware = async ({ req }) => {
   }
 };
 
-// 🔹 Middleware to check admin access
+// Synchronous function to check if user is admin, throws error if not
+function checkAdmin(user) {
+  if (!user || user.role !== 'ADMIN') {
+    throw new Error('Access denied! Admins only.');
+  }
+}
+
+// Optional admin middleware for express routes, if needed
 const adminMiddleware = async ({ req }) => {
   const { user } = await authMiddleware({ req });
 
@@ -63,4 +70,9 @@ const adminMiddleware = async ({ req }) => {
   return { user };
 };
 
-module.exports = { authMiddleware, adminMiddleware, JWT_SECRET };
+module.exports = {
+  authMiddleware,
+  adminMiddleware,
+  checkAdmin,
+  JWT_SECRET,
+};

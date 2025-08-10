@@ -1,101 +1,119 @@
-const mongoose = require('mongoose');
 const Material = require('../models/Material');
+const Driver = require('../models/Driver');
+const { checkAdmin } = require('../middleware/auth');
 
-module.exports = {
+const allowedMaterialsByVehicle = {
+  CAR: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+  BUS: ['STICKER', 'LCD_HEADDRESS'],
+  JEEP: ['POSTER', 'STICKER'],
+  MOTOR: ['LCD', 'BANNER'],
+  E_TRIKE: ['BANNER', 'LCD'],
+};
+
+const materialResolvers = {
   Query: {
-    getAllMaterials: async () => {
-      return await Material.find()
-        .populate('riderId')
-        .populate('advertisements.advertisementId');
+    getAllMaterials: async (_, __, context) => {
+      checkAdmin(context.user);
+      return await Material.find().sort({ createdAt: -1 });
     },
 
-    getMaterialById: async (_, { id }) => {
-      return await Material.findById(id)
-        .populate('riderId')
-        .populate('advertisements.advertisementId');
-    }
+    getMaterialsByCategory: async (_, { category }) => {
+      if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
+        throw new Error('Invalid material category');
+      }
+      return await Material.find({ category }).sort({ createdAt: -1 });
+    },
+
+    getMaterialById: async (_, { id }, context) => {
+      checkAdmin(context.user);
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+      return material;
+    },
   },
 
   Mutation: {
-    createMaterial: async (_, { input }) => {
-      try {
-        const riderId = input.riderId?.trim();
-        let castedRiderId;
+    createMaterial: async (_, { input }, context) => {
+      checkAdmin(context.user);
 
-        try {
-          castedRiderId = new mongoose.Types.ObjectId(riderId);
-        } catch (err) {
-          throw new Error('Invalid riderId');
-        }
-
-        const ads = (input.advertisements || []).map((ad, index) => {
-          const rawId = ad.advertisementId;
-          const trimmedId = rawId?.trim();
-        
-          let castedAdId;
-          try {
-            castedAdId = new mongoose.Types.ObjectId(trimmedId);
-          } catch (err) {
-            throw new Error(`Invalid advertisementId at index ${index}: ${rawId}`);
-          }
-        
-          return {
-            advertisementId: castedAdId,
-            assignedAt: ad.assignedAt,
-            removedAt: ad.removedAt
-          };
-        });
-        
-
-        const material = new Material({
-          ...input,
-          riderId: castedRiderId,
-          advertisements: ads
-        });
-
-        await material.save();
-        return material;
-      } catch (error) {
-        console.error('Error in createMaterial:', error.message);
-        throw new Error('Failed to create material. ' + error.message);
+      const { vehicleType, materialType } = input;
+      const allowed = allowedMaterialsByVehicle[vehicleType];
+      if (!allowed.includes(materialType)) {
+        throw new Error(
+          `${materialType} is not allowed for vehicle type ${vehicleType}`
+        );
       }
+
+      const material = new Material({
+        ...input,
+        driverId: null, // unassigned on creation
+      });
+
+      await material.save();
+      return material;
     },
 
-    addAdvertisementToMaterial: async (_, { materialId, ad }) => {
-      try {
-        const material = await Material.findById(materialId);
-        if (!material) throw new Error('Material not found');
+    updateMaterial: async (_, { id, input }, context) => {
+      checkAdmin(context.user);
 
-        const trimmedAdId = ad.advertisementId?.trim();
-        let castedAdId;
-        try {
-          castedAdId = new mongoose.Types.ObjectId(trimmedAdId);
-        } catch (err) {
-          throw new Error('Invalid advertisementId');
+      if (input.vehicleType && input.materialType) {
+        const allowed = allowedMaterialsByVehicle[input.vehicleType];
+        if (!allowed.includes(input.materialType)) {
+          throw new Error(
+            `${input.materialType} is not allowed for vehicle type ${input.vehicleType}`
+          );
         }
-
-        material.advertisements.push({
-          advertisementId: castedAdId,
-          assignedAt: ad.assignedAt,
-          removedAt: ad.removedAt
-        });
-
-        await material.save();
-        return material;
-      } catch (error) {
-        console.error('Error in addAdvertisementToMaterial:', error.message);
-        throw new Error('Failed to add advertisement. ' + error.message);
       }
+
+      const updated = await Material.findByIdAndUpdate(id, input, {
+        new: true,
+        runValidators: true,
+      });
+
+      if (!updated) throw new Error('Material not found');
+      return updated;
     },
 
-    deleteMaterial: async (_, { id }) => {
-      try {
-        await Material.findByIdAndDelete(id);
-        return "Material deleted successfully.";
-      } catch (error) {
-        console.error('Error in deleteMaterial:', error.message);
-        throw new Error('Failed to delete material.');
+    deleteMaterial: async (_, { id }, context) => {
+      checkAdmin(context.user);
+
+      const deleted = await Material.findByIdAndDelete(id);
+      if (!deleted) throw new Error('Material not found or already deleted');
+      return 'Material deleted successfully.';
+    },
+
+    assignMaterialToDriver: async (_, { driverId }, context) => {
+      checkAdmin(context.user);
+
+      const driver = await Driver.findById(driverId);
+      if (!driver) throw new Error('Driver not found');
+
+      const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType];
+      if (!allowedTypes) {
+        throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
       }
+
+      const availableMaterials = await Material.find({
+        vehicleType: driver.vehicleType,
+        materialType: { $in: allowedTypes },
+        driverId: null,
+      });
+
+      if (!availableMaterials.length) {
+        throw new Error('No available materials to assign');
+      }
+
+      const assignedMaterial = availableMaterials[0];
+      assignedMaterial.driverId = driver._id;
+      await assignedMaterial.save();
+
+      return assignedMaterial;
     }
-  }
+  },
+
+  Material: {
+    id: (parent) => parent._id.toString(),
+  },
 };
+
+module.exports = materialResolvers;

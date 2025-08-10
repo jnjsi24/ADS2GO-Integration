@@ -5,6 +5,9 @@ const typeDefs = gql`
     PENDING
     ACTIVE
     SUSPENDED
+    APPROVED
+    REJECTED
+    RESUBMITTED
   }
 
   enum DeviceStatus {
@@ -23,10 +26,12 @@ const typeDefs = gql`
   type Driver {
     id: ID!
     driverId: String!
+    reviewStatus: String
     firstName: String!
     lastName: String!
     contactNumber: String!
     email: String!
+    verified: Boolean!   # <-- Add this
     address: String!
     licenseNumber: String!
     licensePictureURL: String!
@@ -50,17 +55,24 @@ const typeDefs = gql`
     emailVerificationCode: String
     emailVerificationCodeExpires: String
     lastLogin: String
+    preferredMaterialType: [InstalledMaterialType!]
+    adminOverride: Boolean
+    approvalDate: String
+    rejectedReason: String
   }
+
+  type AuthPayload {
+  success: Boolean!
+  message: String
+  token: String
+  driver: Driver
+}
 
   type DriverResponse {
     success: Boolean!
     message: String!
+    token: String
     driver: Driver
-  }
-
-  type AuthPayload {
-    token: String!
-    driver: Driver!
   }
 
   input CreateDriverInput {
@@ -78,8 +90,8 @@ const typeDefs = gql`
     vehicleYear: Int!
     vehiclePhotoURL: String!
     orCrPictureURL: String!
-    qrCodeIdentifier: String!
     installedMaterialType: InstalledMaterialType
+    preferredMaterialType: [InstalledMaterialType!]
   }
 
   input UpdateDriverInput {
@@ -100,20 +112,42 @@ const typeDefs = gql`
     accountStatus: DriverAccountStatus
     deviceStatus: DeviceStatus
     installedMaterialType: InstalledMaterialType
+    preferredMaterialType: [InstalledMaterialType!]
+  }
+
+  input ResubmitDriverInput {
+    firstName: String
+    lastName: String
+    contactNumber: String
+    email: String
+    password: String
+    address: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: String
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+    preferredMaterialType: [InstalledMaterialType!]
   }
 
   type Query {
     getAllDrivers: [Driver!]!
-    getDriverById(id: ID!): Driver
+    getDriverById(driverId: ID!): Driver
   }
 
   type Mutation {
     createDriver(input: CreateDriverInput!): DriverResponse!
-    updateDriver(id: ID!, input: UpdateDriverInput!): DriverResponse!
-    deleteDriver(id: ID!): DriverResponse!
-    loginDriver(email: String!, password: String!): AuthPayload!
+    updateDriver(driverId: ID!, input: UpdateDriverInput!): DriverResponse!
+    deleteDriver(driverId: ID!): DriverResponse!
+    loginDriver(email: String!, password: String!): DriverResponse!
     verifyDriverEmail(code: String!): DriverResponse!
     resendDriverVerificationCode(email: String!): DriverResponse!
+    approveDriver(driverId: ID!, materialTypeOverride: [InstalledMaterialType]): DriverResponse!
+    rejectDriver(driverId: ID!, reason: String!): DriverResponse!
+    resubmitDriver(driverId: ID!, input: ResubmitDriverInput!): DriverResponse!
   }
 `;
 
