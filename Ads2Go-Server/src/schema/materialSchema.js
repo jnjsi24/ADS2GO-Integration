@@ -24,6 +24,7 @@ module.exports = gql`
 
   type Material {
     id: ID!
+    materialId: String!          # Always generated automatically (e.g., DGL-0001 or NDGL-0001)
     vehicleType: VehicleType!
     materialType: MaterialType!
     description: String
@@ -41,7 +42,7 @@ module.exports = gql`
     materialType: MaterialType!
     description: String
     requirements: String
-    category: MaterialCategory!
+    category: MaterialCategory!   # Determines prefix: DGL for DIGITAL, NDGL for NON_DIGITAL
   }
 
   input UpdateMaterialInput {

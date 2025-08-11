@@ -49,6 +49,7 @@ const materialResolvers = {
         driverId: null, // unassigned on creation
       });
 
+      // Ensure pre-save hook triggers
       await material.save();
       return material;
     },
@@ -65,13 +66,24 @@ const materialResolvers = {
         }
       }
 
-      const updated = await Material.findByIdAndUpdate(id, input, {
-        new: true,
-        runValidators: true,
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+
+      const categoryChanged = input.category !== undefined && input.category !== material.category;
+      const materialTypeChanged = input.materialType !== undefined && input.materialType !== material.materialType;
+      const vehicleTypeChanged = input.vehicleType !== undefined && input.vehicleType !== material.vehicleType;
+
+      Object.keys(input).forEach((key) => {
+        material[key] = input[key];
       });
 
-      if (!updated) throw new Error('Material not found');
-      return updated;
+      // Force re-generation of materialId if needed
+      if (categoryChanged || materialTypeChanged || vehicleTypeChanged) {
+        material.materialId = undefined;
+      }
+
+      await material.save();
+      return material;
     },
 
     deleteMaterial: async (_, { id }, context) => {
@@ -113,6 +125,7 @@ const materialResolvers = {
 
   Material: {
     id: (parent) => parent._id.toString(),
+    materialId: (parent) => parent.materialId, // explicitly return the generated materialId
   },
 };
 
