@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const Driver = require('../models/Driver');
-const Material = require('../models/Material'); // <-- Added Material model here
-const { JWT_SECRET } = require('../middleware/auth'); // Make sure this exists and is correct
+const Material = require('../models/Material'); 
+const { JWT_SECRET } = require('../middleware/auth');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 
@@ -61,7 +61,6 @@ async function assignMaterialToDriver(driver) {
   materialToAssign.driverId = driver._id;
   await materialToAssign.save();
 
-  // Update driver's installedMaterialType if not set yet
   if (!driver.installedMaterialType) {
     driver.installedMaterialType = materialToAssign.materialType;
     await driver.save();
@@ -84,93 +83,91 @@ const resolvers = {
 
   Mutation: {
     createDriver: async (_, { input }) => {
-  const {
-    firstName,
-    lastName,
-    contactNumber,
-    email,
-    password,
-    address,
-    licenseNumber,
-    licensePictureURL,
-    vehiclePlateNumber,
-    vehicleType,
-    vehicleModel,
-    vehicleYear,
-    vehiclePhotoURL,
-    orCrPictureURL,
-    preferredMaterialType // keep preferredMaterialType
-    // removed installedMaterialType here
-  } = input;
+      const {
+        firstName,
+        lastName,
+        contactNumber,
+        email,
+        password,
+        address,
+        licenseNumber,
+        licensePictureURL,
+        vehiclePlateNumber,
+        vehicleType,
+        vehicleModel,
+        vehicleYear,
+        vehiclePhotoURL,
+        orCrPictureURL,
+        preferredMaterialType 
+      } = input;
 
-  if (!validator.isEmail(email)) throw new Error('Invalid email address');
-  if (await Driver.findOne({ email: email.toLowerCase().trim() })) throw new Error('Driver with this email already exists');
-  if (!password || password.length < 6) throw new Error('Password must be at least 6 characters');
+      if (!validator.isEmail(email)) throw new Error('Invalid email address');
+      if (await Driver.findOne({ email: email.toLowerCase().trim() })) throw new Error('Driver with this email already exists');
+      if (!password || password.length < 6) throw new Error('Password must be at least 6 characters');
 
-  let normalizedNumber = contactNumber.replace(/\s/g, '');
-  const phoneRegex = /^(\+63|0)?\d{10}$/;
-  if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
-  if (!normalizedNumber.startsWith('+63')) {
-    normalizedNumber = normalizedNumber.startsWith('0')
-      ? '+63' + normalizedNumber.substring(1)
-      : '+63' + normalizedNumber;
-  }
+      let normalizedNumber = contactNumber.replace(/\s/g, '');
+      const phoneRegex = /^(\+63|0)?\d{10}$/;
+      if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      if (!normalizedNumber.startsWith('+63')) {
+        normalizedNumber = normalizedNumber.startsWith('0')
+          ? '+63' + normalizedNumber.substring(1)
+          : '+63' + normalizedNumber;
+      }
 
-  if (!ALLOWED_VEHICLE_TYPES.includes(vehicleType)) {
-    throw new Error(`Invalid vehicle type. Allowed types: ${ALLOWED_VEHICLE_TYPES.join(', ')}`);
-  }
+      if (!ALLOWED_VEHICLE_TYPES.includes(vehicleType)) {
+        throw new Error(`Invalid vehicle type. Allowed types: ${ALLOWED_VEHICLE_TYPES.join(', ')}`);
+      }
 
-  if (
-    preferredMaterialType &&
-    !preferredMaterialType.every((m) => VEHICLE_MATERIAL_MAP[vehicleType]?.includes(m))
-  ) {
-    throw new Error(
-      `One or more preferred materials are invalid for vehicle type "${vehicleType}". Allowed: ${VEHICLE_MATERIAL_MAP[vehicleType].join(', ')}`
-    );
-  }
+      if (
+        preferredMaterialType &&
+        !preferredMaterialType.every((m) => VEHICLE_MATERIAL_MAP[vehicleType]?.includes(m))
+      ) {
+        throw new Error(
+          `One or more preferred materials are invalid for vehicle type "${vehicleType}". Allowed: ${VEHICLE_MATERIAL_MAP[vehicleType].join(', ')}`
+        );
+      }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const verificationCode = EmailService.generateVerificationCode();
-  const driverId = await generateDriverId();
-  const qrCodeIdentifier = `QR-${Date.now()}`;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const verificationCode = EmailService.generateVerificationCode();
+      const driverId = await generateDriverId();
+      const qrCodeIdentifier = `QR-${Date.now()}`;
 
-  const newDriver = new Driver({
-    driverId,
-    firstName: firstName.trim(),
-    lastName: lastName.trim(),
-    contactNumber: normalizedNumber,
-    email: email.toLowerCase().trim(),
-    password: hashedPassword,
-    address: address.trim(),
-    licenseNumber: licenseNumber.trim(),
-    licensePictureURL: licensePictureURL.trim(),
-    vehiclePlateNumber: vehiclePlateNumber.trim(),
-    vehicleType: vehicleType.trim(),
-    vehicleModel: vehicleModel.trim(),
-    vehicleYear,
-    vehiclePhotoURL: vehiclePhotoURL.trim(),
-    orCrPictureURL: orCrPictureURL.trim(),
-    qrCodeIdentifier,
-    installedMaterialType: null, // explicitly set null here
-    preferredMaterialType: preferredMaterialType || null,
-    accountStatus: 'PENDING',
-    deviceStatus: 'OFFLINE',
-    isEmailVerified: false,
-    emailVerificationCode: verificationCode,
-    emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
-    tokenVersion: 0,
-  });
+      const newDriver = new Driver({
+        driverId,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        contactNumber: normalizedNumber,
+        email: email.toLowerCase().trim(),
+        password: hashedPassword,
+        address: address.trim(),
+        licenseNumber: licenseNumber.trim(),
+        licensePictureURL: licensePictureURL.trim(),
+        vehiclePlateNumber: vehiclePlateNumber.trim(),
+        vehicleType: vehicleType.trim(),
+        vehicleModel: vehicleModel.trim(),
+        vehicleYear,
+        vehiclePhotoURL: vehiclePhotoURL.trim(),
+        orCrPictureURL: orCrPictureURL.trim(),
+        qrCodeIdentifier,
+        installedMaterialType: null,
+        preferredMaterialType: preferredMaterialType || null,
+        accountStatus: 'PENDING',
+        isEmailVerified: false,
+        emailVerificationCode: verificationCode,
+        emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
+        tokenVersion: 0,
+      });
 
-  await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
-  await newDriver.save();
+      await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
+      await newDriver.save();
 
-  return {
-    success: true,
-    message: 'Driver created successfully. Please verify your email.',
-    token: null,
-    driver: newDriver,
-  };
-},
+      return {
+        success: true,
+        message: 'Driver created successfully. Please verify your email.',
+        token: null,
+        driver: newDriver,
+      };
+    },
 
     verifyDriverEmail: async (_, { code }) => {
       const driver = await Driver.findOne({ emailVerificationCode: code });
@@ -194,7 +191,7 @@ const resolvers = {
       }
 
       driver.isEmailVerified = true;
-      driver.accountStatus = 'PENDING'; // or 'ACTIVE' depending on your flow
+      driver.accountStatus = 'PENDING';
       driver.emailVerificationCode = null;
       driver.emailVerificationCodeExpires = null;
       await driver.save();
@@ -229,7 +226,6 @@ const resolvers = {
 
       await driver.save();
 
-      // Automatically assign material after approval
       await assignMaterialToDriver(driver);
 
       return { success: true, message: 'Driver approved.', token: null, driver };
@@ -263,35 +259,28 @@ const resolvers = {
     },
 
     loginDriver: async (_, { email, password }) => {
-      // Normalize email
       const normalizedEmail = email.toLowerCase().trim();
 
-      // Find driver by email
       const driver = await Driver.findOne({ email: normalizedEmail });
       if (!driver) {
         return { success: false, message: "Invalid email or password", token: null, driver: null };
       }
 
-      // Compare password using bcrypt method in model or directly here
       const isMatch = await bcrypt.compare(password, driver.password);
       if (!isMatch) {
         return { success: false, message: "Invalid email or password", token: null, driver: null };
       }
 
-      // Check if account is pending validation
       if (driver.accountStatus === "PENDING") {
         return { success: false, message: "Please wait for your requirements validation", token: null, driver: null };
       }
 
-      // Check account status other than active (e.g. suspended)
       if (driver.accountStatus !== "ACTIVE") {
         return { success: false, message: "Account not active. Please verify email", token: null, driver: null };
       }
 
-      // Generate JWT token using JWT_SECRET from auth middleware
       const token = jwt.sign({ id: driver.id }, JWT_SECRET, { expiresIn: "7d" });
 
-      // Optionally update last login date here
       driver.lastLogin = new Date();
       await driver.save();
 

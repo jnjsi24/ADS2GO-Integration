@@ -10,12 +10,6 @@ const typeDefs = gql`
     RESUBMITTED
   }
 
-  enum DeviceStatus {
-    ONLINE
-    OFFLINE
-    ERROR
-  }
-
   enum InstalledMaterialType {
     LCD
     BANNER
@@ -31,7 +25,7 @@ const typeDefs = gql`
     lastName: String!
     contactNumber: String!
     email: String!
-    verified: Boolean!   # <-- Add this
+    verified: Boolean!
     address: String!
     licenseNumber: String!
     licensePictureURL: String!
@@ -45,11 +39,8 @@ const typeDefs = gql`
     dateJoined: String!
     currentBalance: Float!
     totalEarnings: Float!
-    totalDistanceTraveled: Float!
-    totalAdImpressions: Int!
     installedDeviceId: String
     installedMaterialType: InstalledMaterialType
-    deviceStatus: DeviceStatus!
     qrCodeIdentifier: String!
     isEmailVerified: Boolean!
     emailVerificationCode: String
@@ -62,11 +53,11 @@ const typeDefs = gql`
   }
 
   type AuthPayload {
-  success: Boolean!
-  message: String
-  token: String
-  driver: Driver
-}
+    success: Boolean!
+    message: String
+    token: String
+    driver: Driver
+  }
 
   type DriverResponse {
     success: Boolean!
@@ -110,7 +101,6 @@ const typeDefs = gql`
     vehiclePhotoURL: String
     orCrPictureURL: String
     accountStatus: DriverAccountStatus
-    deviceStatus: DeviceStatus
     installedMaterialType: InstalledMaterialType
     preferredMaterialType: [InstalledMaterialType!]
   }

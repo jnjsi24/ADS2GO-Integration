@@ -87,10 +87,10 @@ const DriverSchema = new mongoose.Schema(
       trim: true,
     },
     preferredMaterialType: {
-  type: [String],
-  enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
-  required: [true, 'Preferred material type is required'],
-},
+      type: [String],
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
+      required: [true, 'Preferred material type is required'],
+    },
     adminOverrideMaterialType: {
       type: String,
       enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'],
@@ -135,22 +135,9 @@ const DriverSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    totalDistanceTraveled: {
-      type: Number,
-      default: 0,
-    },
-    totalAdImpressions: {
-      type: Number,
-      default: 0,
-    },
     installedDeviceId: {
       type: String,
       default: null,
-    },
-    deviceStatus: {
-      type: String,
-      enum: ['ONLINE', 'OFFLINE', 'ERROR'],
-      default: 'OFFLINE',
     },
     qrCodeIdentifier: {
       type: String,
@@ -204,9 +191,6 @@ const DriverSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
-
- 
 
 DriverSchema.methods.isLocked = function () {
   return this.accountLocked && this.lockUntil && this.lockUntil > new Date();
