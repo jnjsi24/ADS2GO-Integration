@@ -1,3 +1,6 @@
+// paymentSchema.js
+
+
 const { gql } = require('graphql-tag');
 
 const paymentTypeDefs = gql`

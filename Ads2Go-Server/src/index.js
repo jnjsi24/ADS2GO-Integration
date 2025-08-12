@@ -17,6 +17,7 @@ const driverTypeDefs = require('./schema/driverSchema');
 const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
+const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -25,6 +26,7 @@ const driverResolvers = require('./resolvers/driverResolver');
 const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
+const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
 
 const { authMiddleware } = require('./middleware/auth');
 
@@ -61,7 +63,28 @@ const server = new ApolloServer({
     paymentResolvers,
     materialResolver,
     adsPlanResolvers,
+  ]),
+
+  typeDefs: mergeTypeDefs([
+    userTypeDefs,
+    adTypeDefs,
+    driverTypeDefs,
+    paymentTypeDefs,
+    materialTypeDefs,
+    adsPlanTypeDefs,
+    adsDeploymentTypeDefs, // ✅ Added
+  ]),
+
+  resolvers: mergeResolvers([
+    userResolvers,
+    adResolvers,
+    driverResolvers,
+    paymentResolvers,
+    materialResolver,
+    adsPlanResolvers,
+    adsDeploymentResolvers, // ✅ Added
   ])
+  
 });
 
 const app = express();

@@ -1,6 +1,9 @@
+//adResolver.js
+
 const Ad = require('../models/Ad');
 const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
+const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const adResolvers = {
@@ -9,7 +12,7 @@ const adResolvers = {
       checkAdmin(user);
       return await Ad.find({})
         .populate('userId')
-        .populate('riderId')
+        .populate('driverId')
         .populate('materialId')
         .populate('planId');
     },
@@ -24,6 +27,26 @@ const adResolvers = {
     getMyAds: async (_, __, { user }) => {
       checkAuth(user);
       return await Ad.find({ userId: user.id })
+        .populate('materialId')
+        .populate('planId');
+    },
+
+    getPaidAds: async (_, __, { user }) => {
+      checkAdmin(user);
+      return await Ad.find({ status: 'PAID' })
+        .populate('userId')
+        .populate('materialId')
+        .populate('planId');
+    },
+
+    getDeployableAds: async (_, __, { user }) => {
+      checkAdmin(user);
+      // Ads that are paid but not yet deployed
+      return await Ad.find({ 
+        status: 'PAID',
+        deployedTime: null 
+      })
+        .populate('userId')
         .populate('materialId')
         .populate('planId');
     },
@@ -79,6 +102,8 @@ const adResolvers = {
         reasonForReject: null,
         approveTime: null,
         rejectTime: null,
+        paidTime: null,
+        deployedTime: null,
       });
 
       return await ad.save();
@@ -108,6 +133,10 @@ const adResolvers = {
             } else {
               ad.reasonForReject = null;
             }
+          } else if (input.status === 'PAID') {
+            ad.paidTime = new Date();
+          } else if (input.status === 'DEPLOYED') {
+            ad.deployedTime = new Date();
           } else {
             // For other statuses, clear approve/reject times & reason
             ad.approveTime = null;
@@ -151,6 +180,11 @@ const adResolvers = {
       else {
         if (ad.userId.toString() !== user.id) {
           throw new Error('Not authorized to update this ad');
+        }
+
+        // Users cannot update paid or deployed ads
+        if (['PAID', 'DEPLOYED', 'RUNNING'].includes(ad.status)) {
+          throw new Error('Cannot update ads that are paid, deployed, or running');
         }
 
         if (input.status && input.status !== ad.status) {
@@ -197,8 +231,55 @@ const adResolvers = {
       return ad;
     },
 
+    markAdAsPaid: async (_, { adId }, { user }) => {
+      checkAdmin(user); // Only admin can mark as paid
+      
+      const ad = await Ad.findById(adId);
+      if (!ad) throw new Error('Ad not found');
+      
+      if (ad.status !== 'APPROVED') {
+        throw new Error('Ad must be approved before marking as paid');
+      }
+
+      // Verify payment exists and is paid
+      const payment = await Payment.findOne({ adsId: adId, paymentStatus: 'PAID' });
+      if (!payment) throw new Error('No valid payment found for this ad');
+
+      ad.status = 'PAID';
+      ad.paidTime = new Date();
+      
+      await ad.save();
+      return ad;
+    },
+
+    markAdAsDeployed: async (_, { adId }, { user }) => {
+      checkAdmin(user); // Only admin can mark as deployed
+      
+      const ad = await Ad.findById(adId);
+      if (!ad) throw new Error('Ad not found');
+      
+      if (ad.status !== 'PAID') {
+        throw new Error('Ad must be paid before marking as deployed');
+      }
+
+      ad.status = 'DEPLOYED';
+      ad.deployedTime = new Date();
+      
+      await ad.save();
+      return ad;
+    },
+
     deleteAd: async (_, { id }, { user }) => {
       checkAdmin(user);
+      
+      const ad = await Ad.findById(id);
+      if (!ad) throw new Error('Ad not found');
+      
+      // Don't allow deletion of paid or deployed ads
+      if (['PAID', 'DEPLOYED', 'RUNNING'].includes(ad.status)) {
+        throw new Error('Cannot delete ads that are paid, deployed, or running');
+      }
+      
       const result = await Ad.findByIdAndDelete(id);
       return !!result;
     }

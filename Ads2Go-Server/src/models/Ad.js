@@ -1,3 +1,5 @@
+//Ad.js
+
 const mongoose = require('mongoose');
 
 const AdSchema = new mongoose.Schema({
@@ -6,9 +8,9 @@ const AdSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  riderId: {
+  driverId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Rider',
+    ref: 'Driver',
     default: null
   },
   materialId: {
@@ -49,7 +51,7 @@ const AdSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED', 'PAID', 'DEPLOYED'],
     default: 'PENDING',
     required: true
   },
@@ -72,7 +74,20 @@ const AdSchema = new mongoose.Schema({
   rejectTime: {
     type: Date,
     default: null
+  },
+  paidTime: {
+    type: Date,
+    default: null
+  },
+  deployedTime: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
+
+// Index for efficient queries
+AdSchema.index({ userId: 1 });
+AdSchema.index({ status: 1 });
+AdSchema.index({ startTime: 1, endTime: 1 });
 
 module.exports = mongoose.model('Ad', AdSchema);

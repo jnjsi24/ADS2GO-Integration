@@ -7,6 +7,8 @@ const adTypeDefs = gql`
     REJECTED
     RUNNING
     ENDED
+    PAID
+    DEPLOYED
   }
 
   enum AdType {
@@ -17,7 +19,7 @@ const adTypeDefs = gql`
   type Ad {
     id: ID!
     userId: ID!
-    riderId: ID
+    driverId: ID
     materialId: ID!
     planId: ID!
     title: String!
@@ -32,12 +34,20 @@ const adTypeDefs = gql`
     reasonForReject: String
     approveTime: String
     rejectTime: String
+    paidTime: String
+    deployedTime: String
     createdAt: String!
     updatedAt: String!
+    
+    # Populated fields
+    user: User
+    driver: Driver
+    material: Material
+    plan: AdsPlan
   }
 
   input CreateAdInput {
-    riderId: ID
+    driverId: ID
     materialId: ID!
     planId: ID!
     title: String!
@@ -66,12 +76,16 @@ const adTypeDefs = gql`
     getAdById(id: ID!): Ad
     getAdsByUser(userId: ID!): [Ad!]!
     getMyAds: [Ad!]!
+    getPaidAds: [Ad!]! # New query for paid ads ready for deployment
+    getDeployableAds: [Ad!]! # New query for ads that can be deployed
   }
 
   type Mutation {
     createAd(input: CreateAdInput!): Ad!
     updateAd(id: ID!, input: UpdateAdInput!): Ad!
     deleteAd(id: ID!): Boolean!
+    markAdAsPaid(adId: ID!): Ad! # New mutation to mark ad as paid
+    markAdAsDeployed(adId: ID!): Ad! # New mutation to mark ad as deployed
   }
 `;
 

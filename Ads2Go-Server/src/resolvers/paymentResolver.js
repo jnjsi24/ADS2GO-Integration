@@ -1,3 +1,6 @@
+// paymentResolver.js
+
+
 const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
