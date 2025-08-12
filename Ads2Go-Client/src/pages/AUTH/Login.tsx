@@ -6,44 +6,37 @@ import { useNavigate, Link } from 'react-router-dom';
 import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
 
 const Login: React.FC = () => {
-  const { navigateToRegister, setUser } = useAuth(); // <-- added setUser
+  const { navigateToRegister, setUser } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);  
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const [login, { loading }] = useMutation(LOGIN_MUTATION, {
+  const [loginUser, { loading }] = useMutation(LOGIN_MUTATION, {
     onCompleted(data) {
       console.log('Login successful:', data);
-      
-      // Store the token
-      localStorage.setItem('token', data.login.token);
-      
-      // Update user in context immediately
-      setUser(data.login.user);
-      
-      // Check user role and handle admin users
-      const user = data.login.user;
+
+      const { token, user } = data.loginUser;
+
+      localStorage.setItem('token', token);
+      setUser(user);
+
       if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {
         setError('Admin users must use the dedicated admin login page.');
         return;
       }
 
-      // Check if email is verified - if not, redirect to verify email
       if (!user.isEmailVerified) {
-        console.log('Email not verified, redirecting to verify-email');
         navigate('/verify-email');
         return;
       }
 
-      // For regular users with verified email, navigate to dashboard
-      console.log('Navigating to dashboard...');
-      navigate('/dashboard'); // lowercase path here
+      navigate('/dashboard');
     },
     onError(error) {
       console.error('Login error:', error);
-      setError(error.message);
+      setError(error.message.replace('GraphQL error: ', ''));
     },
   });
 
@@ -51,7 +44,7 @@ const Login: React.FC = () => {
     navigateToRegister();
   }, [navigateToRegister]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -61,12 +54,11 @@ const Login: React.FC = () => {
       deviceName: navigator.userAgent,
     };
 
-    login({ variables: { email, password, deviceInfo } });
+    loginUser({ variables: { email, password, deviceInfo } });
   };
 
   return (
     <div className="flex min-h-screen bg-white">
-      {/* Left Side - Login Form */}
       <div className="w-full md:w-1/2 flex flex-col justify-center px-10">
         <div className="mb-10">
           <h1 className="text-2xl font-bold text-gray-900">
@@ -155,7 +147,6 @@ const Login: React.FC = () => {
         </p>
       </div>
 
-      {/* Right Side - Image and Navbar */}
       <div className="hidden md:flex w-1/2 flex-col relative bg-[#0e2a47]">
         <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center text-white">
           <div className="text-xl font-bold">Ads2Go</div>

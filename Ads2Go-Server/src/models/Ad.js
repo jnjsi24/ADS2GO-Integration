@@ -18,7 +18,7 @@ const AdSchema = new mongoose.Schema({
   },
   planId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'AdsPlan',
+    ref: 'AdsPlan', // Ensure this matches your Plan model name
     required: true
   },
   title: {
@@ -56,6 +56,22 @@ const AdSchema = new mongoose.Schema({
   startTime: {
     type: Date,
     required: true
+  },
+  endTime: {
+    type: Date,
+    required: true
+  },
+  reasonForReject: {
+    type: String,
+    default: null
+  },
+  approveTime: {
+    type: Date,
+    default: null
+  },
+  rejectTime: {
+    type: Date,
+    default: null
   }
 }, { timestamps: true });
 

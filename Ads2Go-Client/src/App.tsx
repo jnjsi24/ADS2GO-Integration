@@ -34,7 +34,10 @@ import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 
 // Super Admin pages
+import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
+import SadminSettings from './pages/SUPERADMIN/SadminSettings';
+import SadminAccount from './pages/SUPERADMIN/SadminAccount'; // Added import for sadminAccount
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -42,6 +45,7 @@ const AppContent: React.FC = () => {
 
   const publicPages = [
     '/admin-login',
+    '/superadmin-login',
     '/login',
     '/register',
     '/forgot-password',
@@ -55,6 +59,7 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
@@ -76,6 +81,7 @@ const AppContent: React.FC = () => {
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 
@@ -203,12 +209,29 @@ const AppContent: React.FC = () => {
           }
         />
 
-        {/* Protected SuperAdmin Route */}
+        {/* Protected SuperAdmin Routes */}
         <Route
           path="/sadmin-dashboard"
           element={
             <ProtectedRoute>
               <SadminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sadmin-settings"
+          element={
+            <ProtectedRoute>
+              <SadminSettings />
+            </ProtectedRoute>
+          }
+        />
+        {/* NEW: Sadmin Account Page */}
+        <Route
+          path="/sadmin-account"
+          element={
+            <ProtectedRoute>
+              <SadminAccount />
             </ProtectedRoute>
           }
         />

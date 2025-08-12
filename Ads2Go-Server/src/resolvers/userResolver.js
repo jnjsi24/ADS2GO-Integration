@@ -1,4 +1,3 @@
-// ... existing imports
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -33,6 +32,18 @@ const resolvers = {
       checkAdmin(user);
       return await User.findById(id);
     },
+
+    getAllAdmins: async (_, __, { user }) => {
+      // ✅ Only SUPERADMIN can access
+      if (!user || user.role !== 'SUPERADMIN') {
+        throw new Error('Not authorized');
+      }
+
+      // ✅ Case-insensitive role check
+      return await User.find({ role: { $regex: /^ADMIN$/i } });
+    },
+
+
 
     getOwnUserDetails: async (_, __, { user }) => {
       checkAuth(user);
@@ -145,11 +156,49 @@ const resolvers = {
       }
     },
 
-    login: async (_, { email, password, deviceInfo }) => {
-      console.log(`Login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
+    loginUser: async (_, { email, password, deviceInfo }) => {
+      console.log(`User login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
       const user = await User.findOne({ email });
-      if (!user) throw new Error('No user found with this email');
+      if (!user || user.role !== 'USER') throw new Error('No user found with this email');
+
+      if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
+
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        user.loginAttempts += 1;
+        if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+          user.accountLocked = true;
+          user.lockUntil = new Date(Date.now() + LOCK_TIME);
+        }
+        await user.save();
+        throw new Error('Invalid password');
+      }
+
+      user.loginAttempts = 0;
+      user.accountLocked = false;
+      user.lockUntil = null;
+      user.lastLogin = new Date();
+      await user.save();
+
+      const token = jwt.sign({
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        tokenVersion: user.tokenVersion,
+      }, JWT_SECRET, { expiresIn: '1d' });
+
+      return { token, user };
+    },
+
+    loginAdmin: async (_, { email, password, deviceInfo }) => {
+      console.log(`Admin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
+
+      const user = await User.findOne({ email });
+      if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN'))
+        throw new Error('No admin found with this email');
+
       if (user.isLocked()) throw new Error('Account is temporarily locked. Please try again later');
 
       const valid = await bcrypt.compare(password, user.password);
@@ -285,6 +334,82 @@ const resolvers = {
       };
     },
 
+    updateAdminDetails: async (_, { adminId, input }, { user }) => {
+  checkAuth(user); // must be logged in
+
+  const isSuperAdmin = user.role === 'SUPERADMIN';
+  const isAdmin = user.role === 'ADMIN';
+
+  if (!isAdmin && !isSuperAdmin) {
+    throw new Error('Not authorized. Admin access required.');
+  }
+
+  // If Admin, they can only update their own account
+  if (isAdmin && user.id !== adminId) {
+    throw new Error('You can only update your own details');
+  }
+
+  // If SUPERADMIN, they can edit any ADMIN (or even SUPERADMIN if you allow it)
+  let adminToUpdate = await User.findById(adminId);
+  if (!adminToUpdate) throw new Error('Admin not found');
+  if (isSuperAdmin && adminToUpdate.role !== 'ADMIN' && adminToUpdate.role !== 'SUPERADMIN') {
+    throw new Error('Target user is not an admin');
+  }
+  if (isAdmin && adminToUpdate.role !== 'ADMIN') {
+    throw new Error('You are not allowed to update this user');
+  }
+
+  const {
+    firstName, middleName, lastName,
+    companyName, companyAddress,
+    contactNumber, email, password
+  } = input;
+
+  // Validate contact number if provided
+  let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
+  if (normalizedNumber) {
+    const phoneRegex = /^(\+63|0)?\d{10}$/;
+    if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+    if (!normalizedNumber.startsWith('+63')) {
+      normalizedNumber = normalizedNumber.startsWith('0')
+        ? '+63' + normalizedNumber.substring(1)
+        : '+63' + normalizedNumber;
+    }
+  }
+
+  // Validate email if provided and changed
+  if (email && email !== adminToUpdate.email) {
+    if (!validator.isEmail(email)) throw new Error('Invalid email address');
+    const existingUser = await User.findOne({ email });
+    if (existingUser) throw new Error('Email already in use');
+    adminToUpdate.email = email.toLowerCase();
+  }
+
+  // Update fields
+  if (firstName) adminToUpdate.firstName = firstName.trim();
+  if (middleName !== undefined) adminToUpdate.middleName = middleName ? middleName.trim() : null;
+  if (lastName) adminToUpdate.lastName = lastName.trim();
+  if (companyName) adminToUpdate.companyName = companyName.trim();
+  if (companyAddress) adminToUpdate.companyAddress = companyAddress.trim();
+  if (normalizedNumber) adminToUpdate.contactNumber = normalizedNumber;
+
+  // Update password if provided
+  if (password) {
+    const strength = checkPasswordStrength(password);
+    if (!strength.strong) throw new Error('Password too weak');
+    adminToUpdate.password = await bcrypt.hash(password, 10);
+  }
+
+  await adminToUpdate.save();
+
+  return {
+    success: true,
+    message: 'Admin details updated successfully',
+    user: adminToUpdate
+  };
+},
+
+
     deleteUser: async (_, { id }, { user }) => {
       checkAdmin(user);
       const userToDelete = await User.findById(id);
@@ -305,37 +430,35 @@ const resolvers = {
       return true;
     },
 
-    // ✅ Add this resetPassword mutation
     requestPasswordReset: async (_, { email }) => {
       const user = await User.findOne({ email: email.toLowerCase().trim() });
       if (!user) throw new Error("No user found with this email");
-  
+
       const resetCode = EmailService.generateVerificationCode();
       user.emailVerificationCode = resetCode;
       user.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-  
+
       await user.save();
-      await EmailService.sendVerificationEmail(user.email, resetCode); // You can customize the email content here
-  
+      await EmailService.sendVerificationEmail(user.email, resetCode);
+
       return true;
     },
-  
-    // ✅ Reset password using token
+
     resetPassword: async (_, { token, newPassword }) => {
       const user = await User.findOne({
         emailVerificationCode: token.trim(),
         emailVerificationCodeExpires: { $gt: new Date() }
       });
-  
+
       if (!user) throw new Error('Invalid or expired reset token');
-  
+
       const strength = checkPasswordStrength(newPassword);
       if (!strength.strong) throw new Error('Password too weak');
-  
+
       user.password = await bcrypt.hash(newPassword, 12);
       user.emailVerificationCode = null;
       user.emailVerificationCodeExpires = null;
-  
+
       await user.save();
       return true;
     },
@@ -349,4 +472,3 @@ const resolvers = {
 };
 
 module.exports = resolvers;
-

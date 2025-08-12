@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { GET_MY_ADS } from '../../graphql/mutations/getMyAds';
+import { GET_MY_ADS } from '../../graphql/queries/getMyAds';
 import { Search } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

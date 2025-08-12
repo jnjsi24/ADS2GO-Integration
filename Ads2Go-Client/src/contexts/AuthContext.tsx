@@ -67,13 +67,13 @@ export const AuthProvider: React.FC<{
   const apolloClient = useApolloClient();
   const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
 
-  const publicPages = ['/login', '/register', '/forgot-password'];
+  // ✅ Added /superadmin-login to publicPages
+  const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
 
   const navigateToRegister = useCallback(() => {
     navigate('/register');
   }, [navigate]);
 
-  // ✅ Initialize auth state from localStorage
   useEffect(() => {
     const initializeAuth = async () => {
       setIsLoading(true);
@@ -105,7 +105,7 @@ export const AuthProvider: React.FC<{
         }
 
         const freshUser: User = {
-          userId: freshUserRaw._id || freshUserRaw.userId,
+          userId: freshUserRaw.id,
           email: freshUserRaw.email,
           role: freshUserRaw.role,
           isEmailVerified: freshUserRaw.isEmailVerified,
@@ -125,6 +125,11 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
+          // Skip redirection if we're on the superadmin login page
+          if (window.location.pathname === '/superadmin-login') {
+            return;
+          }
+          
           if (!freshUser.isEmailVerified) {
             hasRedirectedRef.current = true;
             navigate('/verify-email');
@@ -132,9 +137,18 @@ export const AuthProvider: React.FC<{
             publicPages.includes(window.location.pathname) ||
             window.location.pathname === '/verify-email'
           ) {
-            hasRedirectedRef.current = true;
-            const redirectPath = freshUser.role === 'ADMIN' ? '/admin' : '/home';
-            navigate(redirectPath);
+            // ✅ Updated role-based redirection with check to avoid redundant redirects
+            let redirectPath = '/home';
+            if (freshUser.role === 'ADMIN') {
+              redirectPath = '/admin';
+            } else if (freshUser.role === 'SUPERADMIN') {
+              redirectPath = '/sadmin-dashboard';
+            }
+
+            if (window.location.pathname !== redirectPath) {
+              hasRedirectedRef.current = true;
+              navigate(redirectPath);
+            }
           }
         }
       } catch (err) {

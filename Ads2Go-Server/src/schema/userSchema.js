@@ -1,35 +1,42 @@
 const gql = require('graphql-tag');
 
 const typeDefs = gql`
+  # Enums
   enum UserRole {
-    USER
     ADMIN
     SUPERADMIN
+    USER
   }
 
+  # Types
   type User {
     id: ID!
     firstName: String!
-    middleName: String 
+    middleName: String
     lastName: String!
     email: String!
     companyName: String!
     companyAddress: String!
     houseAddress: String
     contactNumber: String!
+    profilePicture: String
     role: UserRole!
     isEmailVerified: Boolean!
-    profilePicture: String          # ✅ Added this line
     lastLogin: String
     createdAt: String!
     updatedAt: String!
     ads: [Ad!]
   }
 
-  type UserUpdateResponse {
-    success: Boolean!
-    message: String!
+  type AuthPayload {
+    token: String!
     user: User!
+  }
+
+  type VerificationResponse {
+    success: Boolean!
+    message: String
+    token: String
   }
 
   type ResponseMessage {
@@ -37,17 +44,10 @@ const typeDefs = gql`
     message: String!
   }
 
-  type Session {
-    sessionId: String!
-    deviceInfo: DeviceInfo!
-    createdAt: String!
-    lastActivity: String!
-  }
-
-  type DeviceInfo {
-    userAgent: String!
-    ip: String!
-    platform: String!
+  type UserUpdateResponse {
+    success: Boolean!
+    message: String!
+    user: User!
   }
 
   type PasswordStrength {
@@ -64,16 +64,28 @@ const typeDefs = gql`
     hasSpecialChar: String
   }
 
+  # Inputs
   input CreateUserInput {
     firstName: String!
-    middleName: String 
+    middleName: String
     lastName: String!
     companyName: String!
     companyAddress: String!
     contactNumber: String!
     email: String!
     password: String!
-    houseAddress: String!   
+    houseAddress: String!
+  }
+
+  input CreateAdminInput {
+    firstName: String!
+    middleName: String
+    lastName: String!
+    companyName: String!
+    companyAddress: String!
+    contactNumber: String!
+    email: String!
+    password: String!
   }
 
   input UpdateUserInput {
@@ -85,6 +97,18 @@ const typeDefs = gql`
     contactNumber: String
     email: String
     houseAddress: String
+    password: String
+  }
+
+  input UpdateAdminDetailsInput {
+    firstName: String
+    middleName: String
+    lastName: String
+    companyName: String
+    companyAddress: String
+    contactNumber: String
+    email: String
+    password: String
   }
 
   input DeviceInfoInput {
@@ -93,43 +117,36 @@ const typeDefs = gql`
     deviceName: String!
   }
 
-  type AuthPayload {
-    token: String!
-    user: User!
-  }
-
-  type VerificationResponse {
-    success: Boolean!
-    message: String
-    token: String
-  }
-
+  # Queries
   type Query {
     # Admin queries
     getAllUsers: [User!]!
     getUserById(id: ID!): User
-    getUserSessions(userId: ID!): [Session!]!
-    
-   getAllAdmins: [User!]!
+    getAllAdmins: [User!]!
 
-    
     # User queries
     getOwnUserDetails: User
     checkPasswordStrength(password: String!): PasswordStrength!
-    getMyActiveSessions: [Session!]!
   }
 
+  # Mutations
   type Mutation {
-    # User mutations
+    # User authentication
     createUser(input: CreateUserInput!): AuthPayload!
-    updateUser(input: UpdateUserInput!): UserUpdateResponse!
-    deleteUser(id: ID!): ResponseMessage!
-    login(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
+    loginUser(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
     logout: Boolean!
     logoutAllSessions: Boolean!
 
+    # Admin authentication
+    loginAdmin(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
+
+    # User management
+    updateUser(input: UpdateUserInput!): UserUpdateResponse!
+    deleteUser(id: ID!): ResponseMessage!
+
     # Admin management
-    createAdminUser(input: CreateUserInput!): UserUpdateResponse!
+    createAdminUser(input: CreateAdminInput!): UserUpdateResponse!
+    updateAdminDetails(adminId: ID!, input: UpdateAdminDetailsInput!): UserUpdateResponse!
 
     # Email verification
     verifyEmail(code: String!): VerificationResponse

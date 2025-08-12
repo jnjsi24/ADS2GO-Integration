@@ -1,3 +1,4 @@
+
 const { gql } = require('graphql-tag');
 
 module.exports = gql`
@@ -6,42 +7,71 @@ module.exports = gql`
     NON_DIGITAL
   }
 
+  enum VehicleType {
+    CAR
+    MOTOR
+    BUS
+    JEEP
+    E_TRIKE
+  }
+
+  enum MaterialType {
+    POSTER
+    LCD
+    STICKER
+    LCD_HEADDRESS
+    BANNER
+  }
+
   type Material {
     id: ID!
-    name: String!
+    materialId: String!          # Always generated automatically (e.g., DGL-0001 or NDGL-0001)
+    vehicleType: VehicleType!
+    materialType: MaterialType!
     description: String
     requirements: String
     category: MaterialCategory!
-    price: Float!
+    driverId: ID
+    mountedAt: String
+    dismountedAt: String
     createdAt: String
     updatedAt: String
   }
 
   input CreateMaterialInput {
-    name: String!
+    vehicleType: VehicleType!
+    materialType: MaterialType!
     description: String
     requirements: String
-    category: MaterialCategory!
-    price: Float!
+    category: MaterialCategory!   # Determines prefix: DGL for DIGITAL, NDGL for NON_DIGITAL
   }
 
   input UpdateMaterialInput {
-    name: String
+    vehicleType: VehicleType
+    materialType: MaterialType
     description: String
     requirements: String
     category: MaterialCategory
-    price: Float
+    mountedAt: String
+    dismountedAt: String
   }
 
   extend type Query {
     getAllMaterials: [Material!]!
     getMaterialById(id: ID!): Material
-    getMaterialsByCategory(category: String!): [Material!]!
+    getMaterialsByCategory(category: MaterialCategory!): [Material!]!
   }
 
   type Mutation {
     createMaterial(input: CreateMaterialInput!): Material
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
+
+    assignMaterialToDriver(driverId: ID!): Material
   }
 `;
+
+
+
+
+
