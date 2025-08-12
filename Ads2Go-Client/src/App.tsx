@@ -81,6 +81,7 @@ const AppContent: React.FC = () => {
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
 

@@ -27,7 +27,11 @@ const adTypeDefs = gql`
     price: Float!
     status: AdStatus!
     startTime: String!
+    endTime: String!
     adType: AdType!
+    reasonForReject: String
+    approveTime: String
+    rejectTime: String
     createdAt: String!
     updatedAt: String!
   }
@@ -40,7 +44,6 @@ const adTypeDefs = gql`
     description: String
     adFormat: String!
     mediaFile: String!
-    price: Float!
     startTime: String!
     adType: AdType!
   }
@@ -52,10 +55,10 @@ const adTypeDefs = gql`
     mediaFile: String
     materialId: ID
     planId: ID
-    price: Float
     status: AdStatus
     startTime: String
     adType: AdType
+    reasonForReject: String
   }
 
   type Query {

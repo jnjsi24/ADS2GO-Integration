@@ -1,4 +1,6 @@
 const Ad = require('../models/Ad');
+const User = require('../models/User');
+const Plan = require('../models/AdsPlan');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const adResolvers = {
@@ -33,6 +35,7 @@ const adResolvers = {
         .populate('planId');
 
       if (!ad) throw new Error('Ad not found');
+
       if (
         ad.userId.toString() !== user.id &&
         user.role !== 'ADMIN' &&
@@ -40,6 +43,7 @@ const adResolvers = {
       ) {
         throw new Error('Not authorized to view this ad');
       }
+
       return ad;
     },
   },
@@ -48,15 +52,35 @@ const adResolvers = {
     createAd: async (_, { input }, { user }) => {
       checkAuth(user);
 
-      if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
-        throw new Error('Invalid adType. Must be either DIGITAL or NON_DIGITAL.');
+      const dbUser = await User.findById(user.id);
+      if (!dbUser) throw new Error('User not found');
+
+      if (!dbUser.isEmailVerified && user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') {
+        throw new Error('Please verify your email before creating an advertisement');
       }
+
+      const plan = await Plan.findById(input.planId);
+      if (!plan) throw new Error('Invalid plan selected');
+
+      if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
+        throw new Error('Invalid adType');
+      }
+
+      const startTime = new Date(input.startTime);
+      const endTime = new Date(startTime);
+      endTime.setDate(startTime.getDate() + plan.durationDays);
 
       const ad = new Ad({
         ...input,
-        userId: user.id, // override userId for security
-        status: 'PENDING'
+        userId: user.id,
+        price: plan.price,
+        endTime,
+        status: 'PENDING',
+        reasonForReject: null,
+        approveTime: null,
+        rejectTime: null,
       });
+
       return await ad.save();
     },
 
@@ -65,19 +89,66 @@ const adResolvers = {
       const ad = await Ad.findById(id);
       if (!ad) throw new Error('Ad not found');
 
-      // Admin or Superadmin privileges
+      // Admin & Superadmin have full privileges
       if (user.role === 'ADMIN' || user.role === 'SUPERADMIN') {
-        if (input.status) ad.status = input.status;
-        if (input.price !== undefined) ad.price = input.price;
-        if (input.startTime !== undefined) ad.startTime = input.startTime;
+        // Handle status changes and set approve/reject times accordingly
+        if (input.status && input.status !== ad.status) {
+          ad.status = input.status;
+
+          if (input.status === 'APPROVED') {
+            ad.approveTime = new Date();
+            ad.rejectTime = null;
+            ad.reasonForReject = null;
+          } else if (input.status === 'REJECTED') {
+            ad.rejectTime = new Date();
+            ad.approveTime = null;
+            // Optional: allow reasonForReject only if status is REJECTED
+            if (input.reasonForReject) {
+              ad.reasonForReject = input.reasonForReject;
+            } else {
+              ad.reasonForReject = null;
+            }
+          } else {
+            // For other statuses, clear approve/reject times & reason
+            ad.approveTime = null;
+            ad.rejectTime = null;
+            ad.reasonForReject = null;
+          }
+        }
+
+        if (input.planId) {
+          const plan = await Plan.findById(input.planId);
+          if (!plan) throw new Error('Invalid plan selected');
+          ad.planId = plan._id;
+          ad.price = plan.price;
+          if (ad.startTime) {
+            const endTime = new Date(ad.startTime);
+            endTime.setDate(endTime.getDate() + plan.durationDays);
+            ad.endTime = endTime;
+          }
+        }
+
+        if (input.startTime !== undefined) {
+          ad.startTime = input.startTime;
+          if (ad.planId) {
+            const plan = await Plan.findById(ad.planId);
+            if (plan) {
+              const endTime = new Date(input.startTime);
+              endTime.setDate(endTime.getDate() + plan.durationDays);
+              ad.endTime = endTime;
+            }
+          }
+        }
+
         if (input.adType !== undefined) {
           if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
             throw new Error('Invalid adType');
           }
           ad.adType = input.adType;
         }
-      } else {
-        // Regular users can only update their own ad's non-status fields
+      } 
+      // Regular user
+      else {
         if (ad.userId.toString() !== user.id) {
           throw new Error('Not authorized to update this ad');
         }
@@ -86,14 +157,34 @@ const adResolvers = {
           throw new Error('You are not authorized to update the status');
         }
 
+        if (input.planId) {
+          const plan = await Plan.findById(input.planId);
+          if (!plan) throw new Error('Invalid plan selected');
+          ad.planId = plan._id;
+          ad.price = plan.price;
+          if (ad.startTime) {
+            const endTime = new Date(ad.startTime);
+            endTime.setDate(endTime.getDate() + plan.durationDays);
+            ad.endTime = endTime;
+          }
+        }
+
         if (input.title !== undefined) ad.title = input.title;
         if (input.description !== undefined) ad.description = input.description;
         if (input.adFormat !== undefined) ad.adFormat = input.adFormat;
         if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
         if (input.materialId !== undefined) ad.materialId = input.materialId;
-        if (input.planId !== undefined) ad.planId = input.planId;
-        if (input.price !== undefined) ad.price = input.price;
-        if (input.startTime !== undefined) ad.startTime = input.startTime;
+        if (input.startTime !== undefined) {
+          ad.startTime = input.startTime;
+          if (ad.planId) {
+            const plan = await Plan.findById(ad.planId);
+            if (plan) {
+              const endTime = new Date(input.startTime);
+              endTime.setDate(endTime.getDate() + plan.durationDays);
+              ad.endTime = endTime;
+            }
+          }
+        }
         if (input.adType !== undefined) {
           if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
             throw new Error('Invalid adType');

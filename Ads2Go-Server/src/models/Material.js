@@ -25,6 +25,16 @@ const MaterialSchema = new mongoose.Schema({
     required: [true, 'Price is required'],
     min: [0, 'Price must be a non-negative number']
   },
+  materialType: {
+    type: String,
+    required: [true, 'Material type is required'],
+    trim: true,
+  },
+  vehicleType: {
+    type: String,
+    required: [true, 'Vehicle type is required'],
+    trim: true,
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Material', MaterialSchema);

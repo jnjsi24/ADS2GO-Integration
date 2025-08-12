@@ -67,7 +67,7 @@ export const AuthProvider: React.FC<{
   const apolloClient = useApolloClient();
   const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
 
-  // ✅ Added /superadmin-login
+  // ✅ Added /superadmin-login to publicPages
   const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
 
   const navigateToRegister = useCallback(() => {
@@ -125,6 +125,11 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
+          // Skip redirection if we're on the superadmin login page
+          if (window.location.pathname === '/superadmin-login') {
+            return;
+          }
+          
           if (!freshUser.isEmailVerified) {
             hasRedirectedRef.current = true;
             navigate('/verify-email');

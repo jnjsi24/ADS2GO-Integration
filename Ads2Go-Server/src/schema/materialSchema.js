@@ -13,6 +13,8 @@ module.exports = gql`
     requirements: String
     category: MaterialCategory!
     price: Float!
+    materialType: String!          # Added field
+    vehicleType: String!           # Added field
     createdAt: String
     updatedAt: String
   }
@@ -23,6 +25,8 @@ module.exports = gql`
     requirements: String
     category: MaterialCategory!
     price: Float!
+    materialType: String!          # Added field
+    vehicleType: String!           # Added field
   }
 
   input UpdateMaterialInput {
@@ -31,6 +35,8 @@ module.exports = gql`
     requirements: String
     category: MaterialCategory
     price: Float
+    materialType: String           # Added field
+    vehicleType: String            # Added field
   }
 
   extend type Query {
