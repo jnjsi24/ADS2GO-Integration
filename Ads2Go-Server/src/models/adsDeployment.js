@@ -34,7 +34,7 @@ const AdsDeploymentSchema = new mongoose.Schema({
   },
   currentStatus: {
     type: String,
-    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED'],
+    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
     default: 'SCHEDULED',
     required: true
   },
@@ -49,6 +49,25 @@ const AdsDeploymentSchema = new mongoose.Schema({
   completedAt: {
     type: Date,
     default: null // When the deployment was completed
+  },
+  removedAt: {
+    type: Date,
+    default: null // When the deployment was removed by admin override
+  },
+  removedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null // Admin who removed this deployment
+  },
+  removalReason: {
+    type: String,
+    default: null // Reason for removal
+  },
+  displaySlot: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: null // For LCD materials, which slot (1-5) this ad occupies
   }
 }, { timestamps: true });
 
@@ -58,6 +77,8 @@ AdsDeploymentSchema.index({ driverId: 1 });
 AdsDeploymentSchema.index({ materialId: 1 });
 AdsDeploymentSchema.index({ currentStatus: 1 });
 AdsDeploymentSchema.index({ startTime: 1, endTime: 1 });
+AdsDeploymentSchema.index({ materialId: 1, currentStatus: 1 });
+AdsDeploymentSchema.index({ materialId: 1, displaySlot: 1 });
 
 // Generate unique deployment ID before saving
 AdsDeploymentSchema.pre('save', function(next) {
@@ -67,21 +88,35 @@ AdsDeploymentSchema.pre('save', function(next) {
   next();
 });
 
+// Static method to get LCD deployments with slot management
+AdsDeploymentSchema.statics.getLCDDeployments = async function(materialId) {
+  return await this.find({ 
+    materialId,
+    currentStatus: { $in: ['SCHEDULED', 'RUNNING'] },
+    displaySlot: { $ne: null }
+  })
+  .populate('adId')
+  .populate('driverId')
+  .sort({ displaySlot: 1 });
+};
+
+// Static method to get next available slot for LCD
+AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId) {
+  const activeDeployments = await this.find({
+    materialId,
+    currentStatus: { $in: ['SCHEDULED', 'RUNNING'] },
+    displaySlot: { $ne: null }
+  }).select('displaySlot');
+
+  const occupiedSlots = activeDeployments.map(d => d.displaySlot);
+  
+  for (let slot = 1; slot <= 5; slot++) {
+    if (!occupiedSlots.includes(slot)) {
+      return slot;
+    }
+  }
+  
+  return null; // All slots occupied
+};
+
 module.exports = mongoose.model('AdsDeployment', AdsDeploymentSchema);
-
-
-
-
-
-
-
-// {
-//   adDeploymentId: String,
-//   materialId: ObjectId,   // link to Material
-//   driverId: ObjectId,     // link to Driver
-//   adId: ObjectId,         // link to Ad asset
-//   startTime: Date,        // when it started showing
-//   endTime: Date,          // when it should stop showing
-//   currentStatus: String,  // RUNNING, SCHEDULED, COMPLETED
-//   lastFrameUpdate: Date,  // for LCD only (real-time refresh timestamp)
-// }

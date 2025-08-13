@@ -9,6 +9,7 @@ const adsDeploymentTypeDefs = gql`
     COMPLETED
     PAUSED
     CANCELLED
+    REMOVED
   }
 
   type AdsDeployment {
@@ -23,6 +24,10 @@ const adsDeploymentTypeDefs = gql`
     lastFrameUpdate: String
     deployedAt: String
     completedAt: String
+    removedAt: String
+    removedBy: ID
+    removalReason: String
+    displaySlot: Int
     createdAt: String!
     updatedAt: String!
     
@@ -30,6 +35,7 @@ const adsDeploymentTypeDefs = gql`
     ad: Ad
     material: Material
     driver: Driver
+    removedByUser: User
   }
 
   # For reference - these types should be defined in their respective schema files
@@ -43,6 +49,31 @@ const adsDeploymentTypeDefs = gql`
     id: ID!
     name: String!
     email: String!
+  }
+
+  type User {
+    id: ID!
+    name: String!
+    email: String!
+  }
+
+  type LCDRemovalResponse {
+    success: Boolean!
+    message: String!
+    removedDeployments: [AdsDeployment!]!
+    availableSlots: [Int!]!
+  }
+
+  type SlotReassignmentUpdate {
+    deploymentId: ID!
+    oldSlot: Int
+    newSlot: Int!
+  }
+
+  type SlotReassignmentResponse {
+    success: Boolean!
+    message: String!
+    updates: [SlotReassignmentUpdate!]!
   }
 
   input CreateDeploymentInput {
@@ -60,6 +91,7 @@ const adsDeploymentTypeDefs = gql`
     getMyAdDeployments: [AdsDeployment!]!
     getActiveDeployments: [AdsDeployment!]!
     getDeploymentById(id: ID!): AdsDeployment
+    getLCDDeployments(materialId: ID!): [AdsDeployment!]!
   }
 
   type Mutation {
@@ -67,6 +99,16 @@ const adsDeploymentTypeDefs = gql`
     updateDeploymentStatus(id: ID!, status: DeploymentStatus!): AdsDeployment!
     updateFrameTimestamp(id: ID!): AdsDeployment!
     deleteDeployment(id: ID!): Boolean!
+    updateDisplaySlot(deploymentId: ID!, slot: Int!): AdsDeployment!
+    
+    # LCD Override Functions
+    removeAdsFromLCD(
+      materialId: ID!
+      deploymentIds: [ID!]!
+      reason: String
+    ): LCDRemovalResponse!
+    
+    reassignLCDSlots(materialId: ID!): SlotReassignmentResponse!
   }
 `;
 
