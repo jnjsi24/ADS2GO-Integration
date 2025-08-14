@@ -19,7 +19,7 @@ module.exports = gql`
     POSTER
     LCD
     STICKER
-    LCD_HEADDRESS
+    HEADDRESS
     BANNER
   }
 

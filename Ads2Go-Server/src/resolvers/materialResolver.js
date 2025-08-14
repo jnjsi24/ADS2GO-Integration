@@ -4,7 +4,7 @@ const Tablet = require('../models/Tablet'); // new model for tablets
 const { checkAdmin } = require('../middleware/auth');
 
 const allowedMaterialsByVehicle = {
-  CAR: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+  CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
   BUS: ['STICKER', 'LCD_HEADDRESS'],
   JEEP: ['POSTER', 'STICKER'],
   MOTOR: ['LCD', 'BANNER'],
@@ -53,7 +53,7 @@ const materialResolvers = {
       await material.save();
 
       // 🚀 Auto-create two tablets for CAR with LCD_HEADDRESS
-      if (vehicleType === 'CAR' && materialType === 'LCD_HEADDRESS') {
+      if (vehicleType === 'CAR' && materialType === 'HEADDRESS') {
         const tabletsToCreate = [
           { carGroupId: material._id.toString(), tabletNumber: 1, status: 'OFFLINE', lastSeen: null },
           { carGroupId: material._id.toString(), tabletNumber: 2, status: 'OFFLINE', lastSeen: null }
