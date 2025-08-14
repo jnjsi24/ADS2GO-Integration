@@ -31,14 +31,36 @@ module.exports = {
       if (gps) tablet.gps = gps;
       if (typeof isOnline === 'boolean') {
         tablet.isOnline = isOnline;
-        if (isOnline) {
-          tablet.lastOnlineAt = new Date();
-        }
+        if (isOnline) tablet.lastOnlineAt = new Date();
       }
       tablet.lastReportedAt = new Date();
 
       await tablet.save();
       return tablet;
+    },
+
+    reportTabletData: async (_, { input }) => {
+      const { deviceId, gps, qrScan, impression } = input;
+      const tablet = await Tablet.findOne({ deviceId });
+      if (!tablet) throw new Error('Tablet not found');
+
+      if (gps) tablet.gps = gps;
+      tablet.lastReportedAt = new Date();
+
+      // Append QR scan if provided
+      if (qrScan) {
+        if (!tablet.qrScans) tablet.qrScans = [];
+        tablet.qrScans.push(qrScan);
+      }
+
+      // Append impression if provided
+      if (impression) {
+        if (!tablet.impressions) tablet.impressions = [];
+        tablet.impressions.push(impression);
+      }
+
+      await tablet.save();
+      return { success: true, message: 'Tablet data reported successfully' };
     }
   }
 };

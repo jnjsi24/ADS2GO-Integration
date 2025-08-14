@@ -18,6 +18,7 @@ const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
+const tabletTypeDefs = require('./schema/tabletSchema'); // <-- Added tablet schema
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -27,6 +28,7 @@ const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
+const tabletResolvers = require('./resolvers/tabletResolver'); // <-- Added tablet resolver
 
 const { authMiddleware } = require('./middleware/auth');
 
@@ -56,6 +58,7 @@ const server = new ApolloServer({
     materialTypeDefs,
     adsPlanTypeDefs,
     materialTrackingTypeDefs,
+    tabletTypeDefs, // <-- included
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -65,6 +68,7 @@ const server = new ApolloServer({
     materialResolver,
     adsPlanResolvers,
     materialTrackingResolvers,
+    tabletResolvers, // <-- included
   ])
 });
 

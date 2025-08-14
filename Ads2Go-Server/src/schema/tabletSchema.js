@@ -19,6 +19,17 @@ module.exports = gql`
     lng: Float
   }
 
+  type QRScan {
+    qrCode: String!
+    scannedAt: String!
+  }
+
+  type Impression {
+    materialId: String!
+    videoId: String!
+    viewedAt: String!
+  }
+
   input RegisterTabletInput {
     deviceId: String!
     materialId: String!
@@ -31,9 +42,32 @@ module.exports = gql`
     isOnline: Boolean
   }
 
+  input TabletReportInput {
+    deviceId: String!
+    gps: GPSInput
+    qrScan: QRScanInput
+    impression: ImpressionInput
+  }
+
   input GPSInput {
     lat: Float
     lng: Float
+  }
+
+  input QRScanInput {
+    qrCode: String!
+    scannedAt: String!
+  }
+
+  input ImpressionInput {
+    materialId: String!
+    videoId: String!
+    viewedAt: String!
+  }
+
+  type TabletReportResponse {
+    success: Boolean!
+    message: String!
   }
 
   extend type Query {
@@ -45,5 +79,6 @@ module.exports = gql`
   extend type Mutation {
     registerTablet(input: RegisterTabletInput!): Tablet
     updateTabletStatus(input: UpdateTabletStatusInput!): Tablet
+    reportTabletData(input: TabletReportInput!): TabletReportResponse!
   }
 `;

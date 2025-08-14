@@ -1,12 +1,8 @@
-// src/resolvers/materialTrackingResolver.js
 const jwt = require('jsonwebtoken');
-const MaterialTracking = require('../models/MaterialTracking'); // fixed filename case
+const MaterialTracking = require('../models/MaterialTracking');
+const Tablet = require('../models/Tablet');
 const { JWT_SECRET } = process.env;
 
-/**
- * Middleware-like function to ensure the requester is an authenticated ADMIN.
- * Reads token from context and verifies role.
- */
 function checkAdmin(context = {}) {
   const authHeader =
     context?.req?.headers?.authorization ||
@@ -14,9 +10,7 @@ function checkAdmin(context = {}) {
     context?.authorization ||
     '';
 
-  if (!authHeader) {
-    throw new Error('Unauthorized: No token provided');
-  }
+  if (!authHeader) throw new Error('Unauthorized: No token provided');
 
   const token = authHeader.startsWith('Bearer ')
     ? authHeader.slice(7)
@@ -24,12 +18,8 @@ function checkAdmin(context = {}) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-
-    if (decoded.role !== 'ADMIN') {
-      throw new Error('Unauthorized: Admin role required');
-    }
-
-    return decoded; // return payload for later use if needed
+    if (decoded.role !== 'ADMIN') throw new Error('Unauthorized: Admin role required');
+    return decoded;
   } catch (err) {
     throw new Error('Unauthorized: Invalid or expired token');
   }
@@ -53,14 +43,53 @@ const resolvers = {
       const newTracking = new MaterialTracking(input);
       return await newTracking.save();
     },
+
     updateMaterialTracking: async (_, { id, input }, context) => {
       checkAdmin(context);
       return await MaterialTracking.findByIdAndUpdate(id, input, { new: true });
     },
+
     deleteMaterialTracking: async (_, { id }, context) => {
       checkAdmin(context);
       await MaterialTracking.findByIdAndDelete(id);
       return 'Material tracking record deleted successfully';
+    },
+
+    // 🔹 Unified Tablet Reporting
+    reportTabletData: async (_, { input }) => {
+      const { deviceId, gps, isOnline, qrCodeScans, totalAdImpressions, totalDistanceTraveled } = input;
+
+      // 1️⃣ Find tablet
+      const tablet = await Tablet.findOne({ deviceId });
+      if (!tablet) throw new Error('Tablet not registered');
+
+      // 2️⃣ Update tablet status
+      if (gps) tablet.gps = gps;
+      if (typeof isOnline === 'boolean') {
+        tablet.isOnline = isOnline;
+        if (isOnline) tablet.lastOnlineAt = new Date();
+      }
+      tablet.lastReportedAt = new Date();
+      await tablet.save();
+
+      // 3️⃣ Update corresponding material tracking
+      const tracking = await MaterialTracking.findOne({ materialId: tablet.materialId });
+      if (!tracking) throw new Error('MaterialTracking record not found');
+
+      if (gps) {
+        tracking.gps = gps;
+        tracking.lastKnownLocationTime = new Date();
+      }
+      if (typeof qrCodeScans === 'number') tracking.qrCodeScans = qrCodeScans;
+      if (typeof totalAdImpressions === 'number') tracking.totalAdImpressions = totalAdImpressions;
+      if (typeof totalDistanceTraveled === 'number') tracking.totalDistanceTraveled = totalDistanceTraveled;
+
+      tracking.deviceStatus = isOnline ? 'ONLINE' : 'OFFLINE';
+      tracking.lastHeartbeat = new Date();
+
+      await tracking.save();
+
+      return { tablet, materialTracking: tracking };
     }
   }
 };

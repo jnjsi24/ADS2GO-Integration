@@ -1,34 +1,21 @@
-// src/schemas/MaterialTrackingSchema.js
 const gql = require('graphql-tag');
 
 const typeDefs = gql`
-  """
-  Geographic coordinates of the tracked material.
-  """
   type GPS {
     lat: Float
     lng: Float
   }
 
-  """
-  Error logs for device or tracking issues.
-  """
   type ErrorLog {
     timestamp: String
     message: String
   }
 
-  """
-  Possible status values for the tracking device.
-  """
   enum DeviceStatus {
     ONLINE
     OFFLINE
   }
 
-  """
-  Possible conditions for non-digital materials.
-  """
   enum MaterialCondition {
     GOOD
     FADED
@@ -36,9 +23,6 @@ const typeDefs = gql`
     REMOVED
   }
 
-  """
-  Main tracking data for a material.
-  """
   type MaterialTracking {
     id: ID!
     materialId: ID!
@@ -68,25 +52,51 @@ const typeDefs = gql`
     updatedAt: String
   }
 
-  """
-  Input type for GPS coordinates.
-  """
+  type Tablet {
+    id: ID!
+    deviceId: String!
+    materialId: String!
+    role: String!
+    gps: GPS
+    isOnline: Boolean
+    lastOnlineAt: String
+    lastReportedAt: String
+    createdAt: String
+    updatedAt: String
+  }
+
+  type TabletReportResponse {
+    tablet: Tablet!
+    materialTracking: MaterialTracking!
+  }
+
   input GPSInput {
     lat: Float
     lng: Float
   }
 
-  """
-  Input type for error log entries.
-  """
-  input ErrorLogInput {
-    timestamp: String
-    message: String
+  input TabletReportInput {
+    deviceId: String!
+    gps: GPSInput
+    isOnline: Boolean
+    qrCodeScans: Int
+    totalAdImpressions: Int
+    totalDistanceTraveled: Float
   }
 
-  """
-  Input type for creating/updating material tracking records.
-  """
+  type Query {
+    getMaterialTrackings: [MaterialTracking]
+    getMaterialTrackingById(id: ID!): MaterialTracking
+  }
+
+  type Mutation {
+    createMaterialTracking(input: MaterialTrackingInput!): MaterialTracking
+    updateMaterialTracking(id: ID!, input: MaterialTrackingInput!): MaterialTracking
+    deleteMaterialTracking(id: ID!): String
+
+    reportTabletData(input: TabletReportInput!): TabletReportResponse
+  }
+
   input MaterialTrackingInput {
     materialId: ID!
     driverId: ID
@@ -113,33 +123,9 @@ const typeDefs = gql`
     lastInspectionDate: String
   }
 
-  type Query {
-    """
-    Get a list of all material tracking records (Admin only).
-    """
-    getMaterialTrackings: [MaterialTracking]
-
-    """
-    Get a specific material tracking record by ID (Admin only).
-    """
-    getMaterialTrackingById(id: ID!): MaterialTracking
-  }
-
-  type Mutation {
-    """
-    Create a new material tracking record (Admin only).
-    """
-    createMaterialTracking(input: MaterialTrackingInput!): MaterialTracking
-
-    """
-    Update an existing material tracking record (Admin only).
-    """
-    updateMaterialTracking(id: ID!, input: MaterialTrackingInput!): MaterialTracking
-
-    """
-    Delete a material tracking record by ID (Admin only).
-    """
-    deleteMaterialTracking(id: ID!): String
+  input ErrorLogInput {
+    timestamp: String
+    message: String
   }
 `;
 
