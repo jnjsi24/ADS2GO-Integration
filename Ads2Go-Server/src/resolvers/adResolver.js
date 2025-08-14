@@ -1,6 +1,7 @@
 const Ad = require('../models/Ad');
 const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
+const Material = require('../models/Material'); // <-- added Material model
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const DAYS_MAP = {
@@ -60,9 +61,14 @@ const adResolvers = {
 
       const plan = await Plan.findById(input.planId);
       if (!plan) throw new Error('Invalid plan selected');
+
       if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
         throw new Error('Invalid adType');
       }
+
+      // Validate material exists
+      const materialExists = await Material.exists({ _id: input.materialId });
+      if (!materialExists) throw new Error('Material not found');
 
       // Determine number of days based on durationType
       const days = DAYS_MAP[input.durationType] || plan.durationDays || 7;
@@ -123,6 +129,11 @@ const adResolvers = {
           ad.endTime = endTime;
         }
       };
+
+      if (input.materialId) {
+        const materialExists = await Material.exists({ _id: input.materialId });
+        if (!materialExists) throw new Error('Material not found');
+      }
 
       if (isAdmin) {
         if (input.status && input.status !== ad.status) {
