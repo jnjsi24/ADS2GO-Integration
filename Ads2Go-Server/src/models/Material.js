@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 
 const MaterialSchema = new mongoose.Schema({
@@ -8,7 +9,7 @@ const MaterialSchema = new mongoose.Schema({
   },
   materialType: {
     type: String,
-    enum: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+    enum: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
     required: [true, 'Material type is required'],
   },
   description: {
@@ -67,3 +68,4 @@ MaterialSchema.pre('save', async function () {
 });
 
 module.exports = mongoose.model('Material', MaterialSchema);
+

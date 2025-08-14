@@ -19,7 +19,7 @@ module.exports = gql`
     POSTER
     LCD
     STICKER
-    LCD_HEADDRESS
+    HEADDRESS
     BANNER
   }
 
@@ -70,6 +70,9 @@ module.exports = gql`
     assignMaterialToDriver(driverId: ID!): Material
   }
 `;
+
+
+
 
 
 
