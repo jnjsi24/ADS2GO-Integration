@@ -10,6 +10,7 @@ const adsDeploymentTypeDefs = gql`
     PAUSED
     CANCELLED
     REMOVED
+    PAID
   }
 
   type AdsDeployment {

@@ -188,7 +188,7 @@ const adsDeploymentResolvers = {
       const deployment = await AdsDeployment.findById(id);
       if (!deployment) throw new Error('Deployment not found');
 
-      const validStatuses = ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'];
+      const validStatuses = ['SCHEDULED', 'RUNNING', 'PAID','COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'];
       if (!validStatuses.includes(status)) {
         throw new Error('Invalid status');
       }

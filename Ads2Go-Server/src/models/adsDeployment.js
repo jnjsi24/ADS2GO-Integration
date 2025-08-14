@@ -34,7 +34,7 @@ const AdsDeploymentSchema = new mongoose.Schema({
   },
   currentStatus: {
     type: String,
-    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
+    enum: ['SCHEDULED', 'RUNNING','PAID', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
     default: 'SCHEDULED',
     required: true
   },
