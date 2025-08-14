@@ -1,5 +1,6 @@
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
+const Tablet = require('../models/Tablet'); // new model for tablets
 const { checkAdmin } = require('../middleware/auth');
 
 const allowedMaterialsByVehicle = {
@@ -49,8 +50,24 @@ const materialResolvers = {
         driverId: null, // unassigned on creation
       });
 
-      // Ensure pre-save hook triggers
       await material.save();
+
+      // 🚀 Auto-create two tablets for CAR with LCD_HEADDRESS
+      if (vehicleType === 'CAR' && materialType === 'LCD_HEADDRESS') {
+        const tabletsToCreate = [
+          { carGroupId: material._id.toString(), tabletNumber: 1, status: 'OFFLINE', lastSeen: null },
+          { carGroupId: material._id.toString(), tabletNumber: 2, status: 'OFFLINE', lastSeen: null }
+        ];
+
+        await Tablet.insertMany(
+          tabletsToCreate.map(t => ({
+            ...t,
+            materialId: material._id,
+            gps: { lat: null, lng: null }
+          }))
+        );
+      }
+
       return material;
     },
 
@@ -77,7 +94,6 @@ const materialResolvers = {
         material[key] = input[key];
       });
 
-      // Force re-generation of materialId if needed
       if (categoryChanged || materialTypeChanged || vehicleTypeChanged) {
         material.materialId = undefined;
       }
@@ -91,6 +107,10 @@ const materialResolvers = {
 
       const deleted = await Material.findByIdAndDelete(id);
       if (!deleted) throw new Error('Material not found or already deleted');
+
+      // Also remove tablets linked to this material
+      await Tablet.deleteMany({ materialId: id });
+
       return 'Material deleted successfully.';
     },
 
@@ -125,7 +145,7 @@ const materialResolvers = {
 
   Material: {
     id: (parent) => parent._id.toString(),
-    materialId: (parent) => parent.materialId, // explicitly return the generated materialId
+    materialId: (parent) => parent.materialId,
   },
 };
 
