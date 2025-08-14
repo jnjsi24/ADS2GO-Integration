@@ -12,10 +12,19 @@ const PaymentSchema = new mongoose.Schema(
       required: true,
       ref: 'Ad',
     },
+    planID: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: 'Ad',
+    },
     paymentType: {
       type: String,
       required: true,
       enum: ['CREDIT_CARD', 'DEBIT_CARD', 'GCASH', 'PAYPAL', 'BANK_TRANSFER'],
+    },
+    paymentDate: {
+      type: Date,
+      required: true,
     },
     amount: {
       type: Number,

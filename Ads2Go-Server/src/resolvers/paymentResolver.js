@@ -17,12 +17,28 @@ const paymentResolvers = {
         .sort({ createdAt: -1 })
         .populate('adsId'); // Populate ad data
     },
+
+    getPaymentById: async (_, { id }, { user }) => {
+      checkAuth(user);
+      const payment = await Payment.findById(id).populate('adsId');
+      if (!payment) {
+        throw new Error('Payment not found');
+      }
+      if (
+        payment.userId.toString() !== user.id &&
+        user.role !== 'ADMIN' &&
+        user.role !== 'SUPERADMIN'
+      ) {
+        throw new Error('Not authorized to view this payment');
+      }
+      return payment;
+    }
   },
 
   Mutation: {
     createPayment: async (_, { input }, { user }) => {
       checkAuth(user);
-      const { adsId, paymentType, amount, receiptId } = input;
+      const { adsId, planID, paymentDate, paymentType, amount, receiptId } = input;
 
       if (amount <= 0) throw new Error('Amount must be positive');
       if (!receiptId.trim()) throw new Error('Receipt ID is required');
@@ -33,23 +49,27 @@ const paymentResolvers = {
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
       if (ad.status !== 'APPROVED') throw new Error('Ad must be approved before making a payment');
-      if (ad.userId.toString() !== user.id) throw new Error('You are not authorized to pay for this ad');
-      if (amount !== ad.price) throw new Error(`Amount must match ad price: ₱${ad.price}`);
 
-      const existingPaid = await Payment.findOne({ adsId, paymentStatus: 'PAID' });
-      if (existingPaid) throw new Error('This ad is already paid');
+      // ✅ UPDATED SECURITY CHECK:
+      // This is the key change. It now allows an admin or superadmin to create a payment.
+      if (
+        ad.userId.toString() !== user.id &&
+        user.role !== 'ADMIN' &&
+        user.role !== 'SUPERADMIN'
+      ) {
+        throw new Error('Not authorized to create a payment for this ad');
+      }
 
-      const newPayment = new Payment({
-        userId: user.id,
+      const newPayment = await Payment.create({
+        userId: ad.userId, // Use the ad's owner as the payment's userId
         adsId,
+        planID,
+        paymentDate: new Date(paymentDate),
         paymentType,
         amount,
         receiptId,
-        paymentStatus: 'PENDING',
+        paymentStatus: 'PAID', // The status is set to PAID since an admin is creating it
       });
-
-      await newPayment.save();
-      await newPayment.populate('adsId');
 
       return {
         success: true,
@@ -101,8 +121,8 @@ const paymentResolvers = {
     },
   },
 
-  // ✅ Custom nested resolver
   Payment: {
+    // ✅ Custom nested resolver
     ad: async (parent) => {
       return await Ad.findById(parent.adsId);
     },
