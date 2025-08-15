@@ -30,9 +30,9 @@ const paymentTypeDefs = gql`
   type Payment {
     id: ID!
     userId: ID!
-    adsId: ID # Change this line: removed the '!'
+    adsId: ID!
     ad: Ad
-    planID: ID
+    planID: ID!
     plan: Ad
     paymentDate: String!
     paymentType: PaymentType!
@@ -45,10 +45,8 @@ const paymentTypeDefs = gql`
 
   input CreatePaymentInput {
     adsId: ID!
-    planID: ID!
     paymentDate: String!
     paymentType: PaymentType!
-    amount: Float!
     receiptId: String!
   }
 
@@ -64,8 +62,8 @@ const paymentTypeDefs = gql`
 
   type Query {
     getPaymentsByUser: [Payment!]!
-    getAllPayments: [Payment!]! # Admin only
-    getPaymentById(id: ID!): Payment!
+    getAllPayments: [Payment!]!
+    getPaymentById(id: ID!): Payment
   }
 
   type Mutation {
