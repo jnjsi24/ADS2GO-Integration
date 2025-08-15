@@ -1,3 +1,5 @@
+//adSchema.js
+
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`

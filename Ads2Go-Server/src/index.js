@@ -1,3 +1,4 @@
+
 const express = require('express');
 const mongoose = require('mongoose');
 const { ApolloServer } = require('@apollo/server');
@@ -18,6 +19,7 @@ const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
+const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema'); // ✅ Added
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -27,6 +29,7 @@ const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
+const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver'); // ✅ Added
 
 const { authMiddleware } = require('./middleware/auth');
 
@@ -47,6 +50,8 @@ mongoose.connect(process.env.MONGODB_URI, {
   });
 
 // ✅ Apollo Server setup
+
+
 const server = new ApolloServer({
   typeDefs: mergeTypeDefs([
     userTypeDefs,
@@ -56,6 +61,7 @@ const server = new ApolloServer({
     materialTypeDefs,
     adsPlanTypeDefs,
     materialTrackingTypeDefs,
+    adsDeploymentTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -65,6 +71,7 @@ const server = new ApolloServer({
     materialResolver,
     adsPlanResolvers,
     materialTrackingResolvers,
+    adsDeploymentResolvers,
   ])
 });
 
