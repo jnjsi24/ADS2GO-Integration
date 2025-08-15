@@ -14,6 +14,7 @@ const LCDSlotSchema = new mongoose.Schema({
     min: 1,
     max: 5,
     required: true
+    // Duplicate slot validator removed to allow reuse of slot numbers
   },
   status: {
     type: String,
@@ -64,15 +65,7 @@ const AdsDeploymentSchema = new mongoose.Schema({
   // For LCD materials - store as array
   lcdSlots: {
     type: [LCDSlotSchema],
-    default: [],
-    validate: {
-      validator: function(slots) {
-        // Ensure no duplicate slot numbers
-        const slotNumbers = slots.map(slot => slot.slotNumber);
-        return slotNumbers.length === new Set(slotNumbers).size;
-      },
-      message: 'Duplicate slot numbers are not allowed'
-    }
+    default: []
   },
   
   // For non-LCD materials - single ad deployment
@@ -307,4 +300,5 @@ AdsDeploymentSchema.statics.reassignLCDSlots = async function(materialId) {
   };
 };
 
-module.exports = mongoose.model('AdsDeployment', AdsDeploymentSchema);
+// Safe export to prevent OverwriteModelError in nodemon
+module.exports = mongoose.models.AdsDeployment || mongoose.model('AdsDeployment', AdsDeploymentSchema);
