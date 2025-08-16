@@ -17,7 +17,7 @@ const adResolvers = {
       checkAdmin(user);
       return await Ad.find({})
         .populate('userId')
-        .populate('riderId')
+        .populate('driverId')
         .populate('materialId')
         .populate('planId');
     },

@@ -1,6 +1,4 @@
 const mongoose = require('mongoose');
-const AdsDeployment = require('./adsDeployment'); // import deployment model
-const Ad = require('./Ad'); // in case we need ad info
 
 const PaymentSchema = new mongoose.Schema(
   {
@@ -44,24 +42,43 @@ const PaymentSchema = new mongoose.Schema(
 PaymentSchema.post('save', async function (doc) {
   if (doc.paymentStatus === 'PAID') {
     try {
-      // Get Ad details
-      const ad = await mongoose.model('Ad').findById(doc.adsId).populate('materialId driverId planId');
+      const Material = require('./Material');
+      const AdsDeployment = require('./adsDeployment');
+      const Ad = require('./Ad');
+
+      // 🔍 Find the Ad linked to this Payment
+      const ad = await Ad.findById(doc.adsId);
       if (!ad) {
-        console.error('❌ Ad not found for deployment:', doc.adsId);
+        console.error(`❌ Payment ${doc._id} linked to invalid adsId`);
         return;
       }
 
-      // Deployment scheduling (example: immediate run, for 30 days based on plan)
-      const startTime = new Date();
-      const endTime = new Date();
-      endTime.setDate(startTime.getDate() + (ad.planId?.durationDays || 30));
+      // 🔍 Find the Material for that Ad
+      const material = await Material.findById(ad.materialId);
+      if (!material) {
+        console.error(`❌ Cannot deploy Ad ${ad._id}: material not found`);
+        return;
+      }
 
-      // Deploy ad to LCD automatically
-      await AdsDeployment.addToLCD(ad.materialId, ad.driverId, ad._id, startTime, endTime);
+      if (!material.driverId) {
+        console.error(`❌ Cannot deploy Material ${material.materialId}: no driver assigned`);
+        return;
+      }
 
-      console.log(`✅ AdsDeployment created automatically for Ad: ${ad._id}`);
-    } catch (err) {
-      console.error('❌ Error auto-deploying ad after payment:', err);
+      // ✅ Create AdsDeployment with startTime + endTime
+      await AdsDeployment.create({
+        adId: ad._id,
+        materialId: material._id,
+        driverId: material.driverId,
+        deployedAt: new Date(),
+        status: 'DEPLOYED',
+        startTime: ad.startTime,   // <-- from Ad
+        endTime: ad.endTime        // <-- from Ad
+      });
+
+      console.log(`✅ Ad ${ad._id} deployed successfully to driver ${material.driverId}`);
+    } catch (error) {
+      console.error(`❌ Error auto-deploying ad after payment:`, error);
     }
   }
 });

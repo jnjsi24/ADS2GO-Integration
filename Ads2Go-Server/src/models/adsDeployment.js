@@ -57,9 +57,8 @@ const AdsDeploymentSchema = new mongoose.Schema({
     required: true
   },
   driverId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Driver',
-    required: true
+  type: String,   // e.g. "DRV-009"
+  required: true
   },
   
   // For LCD materials - store as array

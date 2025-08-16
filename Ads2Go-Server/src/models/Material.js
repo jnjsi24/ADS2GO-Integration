@@ -30,10 +30,10 @@ const MaterialSchema = new mongoose.Schema({
     index: true,
   },
   driverId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Driver',
-    default: null, // assigned on approval
-  },
+  type: String,   // store custom driverId like "DRV-009"
+  trim: true,
+  default: null,  // assigned on approval
+},
   mountedAt: {
     type: Date,
     default: null,

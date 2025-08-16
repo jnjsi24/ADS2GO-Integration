@@ -8,9 +8,9 @@ const AdSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  riderId: {
+  driverId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Rider',
+    ref: 'Driver',
     default: null
   },
   materialId: {
