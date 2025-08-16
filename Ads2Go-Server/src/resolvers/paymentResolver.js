@@ -1,55 +1,78 @@
 const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
+const AdsPlan = require('../models/AdsPlan');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const paymentResolvers = {
   Query: {
-    getPaymentsByUser: async (_, __, { user }) => {
-      checkAuth(user);
-      return await Payment.find({ userId: user.id })
-        .sort({ createdAt: -1 })
-        .populate('adsId'); // Populate ad data
-    },
-
+    // Queries remain the same
     getAllPayments: async (_, __, { user }) => {
       checkAdmin(user);
       return await Payment.find()
         .sort({ createdAt: -1 })
-        .populate('adsId'); // Populate ad data
+        .populate('adsId');
     },
+
+    getPaymentsByUser: async (_, __, { user }) => {
+      checkAuth(user);
+      return await Payment.find({ userId: user.id })
+        .sort({ createdAt: -1 })
+        .populate('adsId');
+    },
+
+    getPaymentById: async (_, { id }, { user }) => {
+      checkAuth(user);
+      const payment = await Payment.findById(id).populate('adsId');
+      if (!payment) {
+        throw new Error('Payment not found');
+      }
+      if (
+        payment.userId.toString() !== user.id &&
+        user.role !== 'ADMIN' &&
+        user.role !== 'SUPERADMIN'
+      ) {
+        throw new Error('Not authorized to view this payment');
+      }
+      return payment;
+    }
   },
 
   Mutation: {
     createPayment: async (_, { input }, { user }) => {
-      checkAuth(user);
-      const { adsId, paymentType, amount, receiptId } = input;
+      checkAuth(user); // Ensure the user is logged in
 
-      if (amount <= 0) throw new Error('Amount must be positive');
-      if (!receiptId.trim()) throw new Error('Receipt ID is required');
+      const ad = await Ad.findById(input.adsId);
+      if (!ad) {
+        throw new Error('Ad not found');
+      }
 
-      const existing = await Payment.findOne({ receiptId });
-      if (existing) throw new Error('Duplicate receipt ID');
+      // Check if the authenticated user is the ad owner OR an admin
+      const isOwner = ad.userId.toString() === user.id;
+      const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
 
-      const ad = await Ad.findById(adsId);
-      if (!ad) throw new Error('Ad not found');
-      if (ad.status !== 'APPROVED') throw new Error('Ad must be approved before making a payment');
-      if (ad.userId.toString() !== user.id) throw new Error('You are not authorized to pay for this ad');
-      if (amount !== ad.price) throw new Error(`Amount must match ad price: ₱${ad.price}`);
+      if (!isOwner && !isAdmin) {
+        throw new Error('Not authorized to create payment for this ad');
+      }
 
-      const existingPaid = await Payment.findOne({ adsId, paymentStatus: 'PAID' });
-      if (existingPaid) throw new Error('This ad is already paid');
+      // Fetch the plan to get the totalPrice
+      const plan = await AdsPlan.findById(ad.planId);
+      if (!plan) {
+        throw new Error('Associated plan not found');
+      }
 
+      // The userId for the payment should always be the ad's owner, regardless of who created the payment (admin or user).
       const newPayment = new Payment({
-        userId: user.id,
-        adsId,
-        paymentType,
-        amount,
-        receiptId,
-        paymentStatus: 'PENDING',
+        userId: ad.userId,
+        adsId: ad._id,
+        planID: plan._id,
+        paymentDate: input.paymentDate,
+        paymentType: input.paymentType,
+        amount: plan.totalPrice, // Use the total price from the plan
+        receiptId: input.receiptId,
+        paymentStatus: isAdmin ? 'PAID' : 'PENDING' // Set status to PAID if created by an admin, otherwise PENDING
       });
 
       await newPayment.save();
-      await newPayment.populate('adsId');
 
       return {
         success: true,
@@ -101,12 +124,13 @@ const paymentResolvers = {
     },
   },
 
-  // ✅ Custom nested resolver
   Payment: {
-    ad: async (parent) => {
-      return await Ad.findById(parent.adsId);
-    },
+    // Resolve the `plan` field using the `planID`
+    plan: async (parent) => {
+      return await AdsPlan.findById(parent.planID);
+    }
   },
 };
 
 module.exports = paymentResolvers;
+

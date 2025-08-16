@@ -19,6 +19,12 @@ const paymentTypeDefs = gql`
     id: ID!
     title: String!
     price: Float!
+    name: String!
+    durationDays: Int!
+    category: String!
+    materialType: String!
+    vehicleType: String!
+    description: String
   }
 
   type Payment {
@@ -26,6 +32,9 @@ const paymentTypeDefs = gql`
     userId: ID!
     adsId: ID!
     ad: Ad
+    planID: ID!
+    plan: Ad
+    paymentDate: String!
     paymentType: PaymentType!
     amount: Float!
     receiptId: String!
@@ -36,8 +45,8 @@ const paymentTypeDefs = gql`
 
   input CreatePaymentInput {
     adsId: ID!
+    paymentDate: String!
     paymentType: PaymentType!
-    amount: Float!
     receiptId: String!
   }
 
@@ -53,12 +62,13 @@ const paymentTypeDefs = gql`
 
   type Query {
     getPaymentsByUser: [Payment!]!
-    getAllPayments: [Payment!]! # Admin only
+    getAllPayments: [Payment!]!
+    getPaymentById(id: ID!): Payment
   }
 
   type Mutation {
     createPayment(input: CreatePaymentInput!): PaymentResponse!
-    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse! # Admin only
+    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse!
     deletePayment(id: ID!): PaymentResponse!
   }
 `;
