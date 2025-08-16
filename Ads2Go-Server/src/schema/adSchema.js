@@ -1,3 +1,5 @@
+//adSchema.js
+
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`
@@ -14,6 +16,12 @@ const adTypeDefs = gql`
     NON_DIGITAL
   }
 
+  enum AdDurationType {
+    WEEKLY
+    MONTHLY
+    YEARLY
+  }
+
   type Ad {
     id: ID!
     userId: ID!
@@ -24,11 +32,21 @@ const adTypeDefs = gql`
     description: String
     adFormat: String!
     mediaFile: String!
-    price: Float!
+    price: Float! # ✅ Calculated from plan and duration
+
+    # Plan-related fields
+    numberOfDevices: Int!
+    adLengthMinutes: Int!
+    playsPerDayPerDevice: Int!
+    totalPlaysPerDay: Int!
+    pricePerPlay: Float!
+    totalPrice: Float! # ✅ Calculated as totalPlaysPerDay * pricePerPlay * duration in days
+
     status: AdStatus!
     startTime: String!
     endTime: String!
     adType: AdType!
+    durationType: AdDurationType! # ✅ Duration of ad (weekly, monthly, yearly)
     reasonForReject: String
     approveTime: String
     rejectTime: String
@@ -46,6 +64,7 @@ const adTypeDefs = gql`
     mediaFile: String!
     startTime: String!
     adType: AdType!
+    durationType: AdDurationType! # ✅ Must pass duration to calculate price and endTime
   }
 
   input UpdateAdInput {
@@ -58,6 +77,7 @@ const adTypeDefs = gql`
     status: AdStatus
     startTime: String
     adType: AdType
+    durationType: AdDurationType # ✅ Optional update to recalc price/endTime
     reasonForReject: String
   }
 
