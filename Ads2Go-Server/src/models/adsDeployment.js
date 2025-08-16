@@ -180,10 +180,10 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
   // Check if payment exists and is paid
   const Payment = mongoose.model('Payment');
   // REMOVE or COMMENT OUT this payment check
-  // const payment = await Payment.findOne({ adsId: adId, paymentStatus: 'PAID' });
-  // if (!payment) {
-  //     throw new Error('Payment required before deployment. Ad must be paid first.');
-  // }
+  const payment = await Payment.findOne({ adsId: adId, paymentStatus: 'PAID' });
+  if (!payment) {
+   throw new Error('Payment required before deployment. Ad must be paid first.');
+   }
 
   // Get next available slot
   const nextSlot = await this.getNextAvailableSlot(materialId);

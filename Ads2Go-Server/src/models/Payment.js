@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const AdsDeployment = require('./adsDeployment'); // import deployment model
+const Ad = require('./Ad'); // in case we need ad info
 
 const PaymentSchema = new mongoose.Schema(
   {
@@ -38,6 +40,31 @@ const PaymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Payment = mongoose.model('Payment', PaymentSchema);
+// 🔹 Auto-create AdsDeployment after payment success
+PaymentSchema.post('save', async function (doc) {
+  if (doc.paymentStatus === 'PAID') {
+    try {
+      // Get Ad details
+      const ad = await mongoose.model('Ad').findById(doc.adsId).populate('materialId driverId planId');
+      if (!ad) {
+        console.error('❌ Ad not found for deployment:', doc.adsId);
+        return;
+      }
 
+      // Deployment scheduling (example: immediate run, for 30 days based on plan)
+      const startTime = new Date();
+      const endTime = new Date();
+      endTime.setDate(startTime.getDate() + (ad.planId?.durationDays || 30));
+
+      // Deploy ad to LCD automatically
+      await AdsDeployment.addToLCD(ad.materialId, ad.driverId, ad._id, startTime, endTime);
+
+      console.log(`✅ AdsDeployment created automatically for Ad: ${ad._id}`);
+    } catch (err) {
+      console.error('❌ Error auto-deploying ad after payment:', err);
+    }
+  }
+});
+
+const Payment = mongoose.model('Payment', PaymentSchema);
 module.exports = Payment;
