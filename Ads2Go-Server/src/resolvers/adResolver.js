@@ -1,3 +1,10 @@
+
+
+////////////////////////?
+
+
+
+//adResolver.js
 const Ad = require('../models/Ad');
 const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
@@ -16,7 +23,7 @@ const adResolvers = {
       checkAdmin(user);
       return await Ad.find({})
         .populate('userId')
-        .populate('riderId')
+        .populate('driverId')
         .populate('materialId')
         .populate('planId');
     },
@@ -196,3 +203,5 @@ const adResolvers = {
 };
 
 module.exports = adResolvers;
+
+

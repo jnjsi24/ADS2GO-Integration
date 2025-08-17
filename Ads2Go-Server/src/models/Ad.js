@@ -1,3 +1,5 @@
+// Ad.js
+
 const mongoose = require('mongoose');
 
 const AdSchema = new mongoose.Schema({
@@ -6,9 +8,9 @@ const AdSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  riderId: {
+  driverId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Rider',
+    ref: 'Driver',
     default: null
   },
   materialId: {
@@ -51,7 +53,7 @@ const AdSchema = new mongoose.Schema({
   totalPlaysPerDay: { type: Number, required: true },
   pricePerPlay: { type: Number, required: true },
   totalPrice: { type: Number, required: true },
-  price: { type: Number, required: true }, // GraphQL non-nullable field
+  price: { type: Number, required: true },
   durationType: {
     type: String,
     enum: ['WEEKLY', 'MONTHLY', 'YEARLY'],
@@ -65,6 +67,19 @@ const AdSchema = new mongoose.Schema({
     default: 'PENDING',
     required: true
   },
+
+  // ✅ New fields
+  paymentStatus: {
+    type: String,
+    enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
+    default: 'PENDING'
+  },
+  adStatus: {
+    type: String,
+    enum: ['INACTIVE', 'ACTIVE', 'FINISHED'],
+    default: 'INACTIVE'
+  },
+
   impressions: { type: Number, default: 0 },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true },
@@ -91,4 +106,48 @@ AdSchema.pre('save', async function(next) {
   next();
 });
 
+// ✅ Auto-deploy hook when ad becomes ACTIVE
+AdSchema.post('save', async function (doc) {
+  if (doc.adStatus === 'ACTIVE') {
+    const Material = require('./Material');
+    const AdsDeployment = require('./adsDeployment');
+
+    const material = await Material.findById(doc.materialId);
+    if (!material || !material.driverId) {
+      console.error(`❌ Cannot deploy Ad ${doc._id}: no driver assigned to material`);
+      return;
+    }
+
+    // If material is NON-LCD, keep old flow
+    if (!material.isLCD) {
+      await AdsDeployment.create({
+        adId: doc._id,
+        materialId: material._id,
+        driverId: material.driverId,
+        startTime: doc.startTime,
+        endTime: doc.endTime,
+        deployedAt: new Date(),
+        currentStatus: 'DEPLOYED'
+      });
+      console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+      return;
+    }
+
+    // ✅ For LCD, use addToLCD to ensure a single deployment document
+    try {
+      const deployment = await AdsDeployment.addToLCD(
+        material._id,
+        material.driverId,
+        doc._id,
+        doc.startTime,
+        doc.endTime
+      );
+      console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId}`);
+    } catch (err) {
+      console.error(`❌ Failed to deploy LCD Ad ${doc._id}: ${err.message}`);
+    }
+  }
+});
+
 module.exports = mongoose.model('Ad', AdSchema);
+

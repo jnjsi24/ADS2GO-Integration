@@ -1,3 +1,6 @@
+
+//adSchema.js
+
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`
@@ -23,7 +26,7 @@ const adTypeDefs = gql`
   type Ad {
     id: ID!
     userId: ID!
-    riderId: ID
+    driverId: ID
     materialId: ID!
     planId: ID!
     title: String!
@@ -53,7 +56,7 @@ const adTypeDefs = gql`
   }
 
   input CreateAdInput {
-    riderId: ID
+    driverId: ID
     materialId: ID!
     planId: ID!
     title: String!
@@ -94,3 +97,4 @@ const adTypeDefs = gql`
 `;
 
 module.exports = adTypeDefs;
+
