@@ -9,7 +9,7 @@ module.exports = gql`
 
   enum VehicleType {
     CAR
-    MOTOR
+    MOTORCYCLE
     BUS
     JEEP
     E_TRIKE
@@ -31,7 +31,7 @@ module.exports = gql`
     description: String
     requirements: String
     category: MaterialCategory!
-    driverId: ID
+    driverId: String             # ✅ Make this String since you’re using "DRV-009"
     mountedAt: String
     dismountedAt: String
     createdAt: String
@@ -54,6 +54,7 @@ module.exports = gql`
     category: MaterialCategory
     mountedAt: String
     dismountedAt: String
+    driverId: String              # ✅ allow updating driver assignment here too
   }
 
   extend type Query {
@@ -67,13 +68,9 @@ module.exports = gql`
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
 
-    assignMaterialToDriver(driverId: ID!): Material
+    assignMaterialToDriver(materialId: ID!, driverId: String!): Material  # ✅ FIXED
   }
 `;
-
-
-
-
 
 
 

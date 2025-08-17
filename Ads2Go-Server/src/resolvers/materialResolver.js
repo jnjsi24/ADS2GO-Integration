@@ -1,4 +1,3 @@
-
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet'); // new model for tablets
@@ -8,7 +7,7 @@ const allowedMaterialsByVehicle = {
   CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
   BUS: ['STICKER', 'LCD_HEADDRESS'],
   JEEP: ['POSTER', 'STICKER'],
-  MOTOR: ['LCD', 'BANNER'],
+  MOTORCYCLE: ['LCD', 'BANNER'],
   E_TRIKE: ['BANNER', 'LCD'],
 };
 
@@ -151,4 +150,3 @@ const materialResolvers = {
 };
 
 module.exports = materialResolvers;
-
