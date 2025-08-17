@@ -1,4 +1,3 @@
-
 const gql = require('graphql-tag');
 
 const typeDefs = gql`
@@ -16,6 +15,13 @@ const typeDefs = gql`
     BANNER
     HEADDRESS
     STICKER
+  }
+
+  type EditRequestData {
+    firstName: String
+    lastName: String
+    contactNumber: String
+    address: String
   }
 
   type Driver {
@@ -43,14 +49,24 @@ const typeDefs = gql`
     installedDeviceId: String
     installedMaterialType: InstalledMaterialType
     qrCodeIdentifier: String!
-    isEmailVerified: Boolean!
+    isEmailVerified: Boolean
     emailVerificationCode: String
     emailVerificationCodeExpires: String
     lastLogin: String
     preferredMaterialType: [InstalledMaterialType!]
+    adminOverrideMaterialType: InstalledMaterialType
     adminOverride: Boolean
     approvalDate: String
     rejectedReason: String
+    editRequestStatus: String
+    editRequestData: EditRequestData
+  }
+
+  type MaterialInfo {
+    id: ID!
+    materialType: InstalledMaterialType!
+    vehicleType: String!
+    newDriverId: String
   }
 
   type AuthPayload {
@@ -64,6 +80,20 @@ const typeDefs = gql`
     success: Boolean!
     message: String!
     token: String
+    driver: Driver
+  }
+
+  type DriverResponseWithMaterials {
+    success: Boolean!
+    message: String!
+    token: String
+    driver: Driver
+    reassignedMaterials: [MaterialInfo!]
+  }
+
+  type ApproveDriverEditResponse {
+    success: Boolean!
+    message: String!
     driver: Driver
   }
 
@@ -124,9 +154,17 @@ const typeDefs = gql`
     preferredMaterialType: [InstalledMaterialType!]
   }
 
+  input DriverEditRequestInput {
+    firstName: String
+    lastName: String
+    contactNumber: String
+    address: String
+  }
+
   type Query {
     getAllDrivers: [Driver!]!
     getDriverById(driverId: ID!): Driver
+    getDriversWithPendingEdits: [Driver!]!
   }
 
   type Mutation {
@@ -139,8 +177,11 @@ const typeDefs = gql`
     approveDriver(driverId: ID!, materialTypeOverride: [InstalledMaterialType]): DriverResponse!
     rejectDriver(driverId: ID!, reason: String!): DriverResponse!
     resubmitDriver(driverId: ID!, input: ResubmitDriverInput!): DriverResponse!
+    unassignAndReassignMaterials(driverId: ID!): DriverResponseWithMaterials!
+    approveDriverEditRequest(id: ID!): ApproveDriverEditResponse!
+    rejectDriverEditRequest(id: ID!, reason: String): ApproveDriverEditResponse!
+    requestDriverEdit(input: DriverEditRequestInput!): ApproveDriverEditResponse!
   }
 `;
 
 module.exports = typeDefs;
-
