@@ -1,4 +1,6 @@
 
+
+
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -210,3 +212,5 @@ DriverSchema.index({ driverId: 1 }, { unique: true });
 
 const Driver = mongoose.model('Driver', DriverSchema);
 module.exports = Driver;
+
+
