@@ -1,3 +1,4 @@
+
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema(
@@ -12,19 +13,10 @@ const PaymentSchema = new mongoose.Schema(
       required: true,
       ref: 'Ad',
     },
-    planID: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      ref: 'Ad',
-    },
     paymentType: {
       type: String,
       required: true,
       enum: ['CREDIT_CARD', 'DEBIT_CARD', 'GCASH', 'PAYPAL', 'BANK_TRANSFER'],
-    },
-    paymentDate: {
-      type: Date,
-      required: true,
     },
     amount: {
       type: Number,
@@ -47,6 +39,30 @@ const PaymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Payment = mongoose.model('Payment', PaymentSchema);
+// 🔹 Auto-activate Ad after payment is PAID
+PaymentSchema.post('save', async function (doc) {
+  if (doc.paymentStatus === 'PAID') {
+    try {
+      const Ad = require('./Ad');
+      const ad = await Ad.findById(doc.adsId);
+      if (!ad) {
+        console.error(`❌ Payment ${doc._id} linked to invalid adsId`);
+        return;
+      }
 
+      ad.adStatus = 'ACTIVE';
+      ad.paymentStatus = 'PAID';
+      await ad.save(); // triggers Ad post('save') hook for auto deployment
+
+      console.log(`✅ Ad ${doc.adsId} activated after payment and deployment triggered`);
+    } catch (error) {
+      console.error(`❌ Error activating Ad after payment:`, error);
+    }
+  }
+});
+
+const Payment = mongoose.model('Payment', PaymentSchema);
 module.exports = Payment;
+
+
+
