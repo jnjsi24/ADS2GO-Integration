@@ -15,11 +15,11 @@ const LCDSlotSchema = new mongoose.Schema({
     max: 5,
     required: true
   },
-  startTime: { // ✅ startTime per slot
+  startTime: {
     type: Date,
     required: true
   },
-  endTime: { // ✅ endTime per slot
+  endTime: {
     type: Date,
     required: true
   },
@@ -45,6 +45,10 @@ const LCDSlotSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+  lastFrameUpdate: {
+    type: Date,
+    default: null
+  },
   removalReason: {
     type: String,
     default: null
@@ -64,73 +68,30 @@ const AdsDeploymentSchema = new mongoose.Schema({
     required: true
   },
   driverId: {
-    type: String,   // e.g. "DRV-009"
+    type: String,
     required: true
   },
-  
+
   // For LCD materials - store as array
   lcdSlots: {
     type: [LCDSlotSchema],
     default: []
   },
-  
+
   // For non-LCD materials - single ad deployment
   adId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Ad',
     required: function() {
-      return this.lcdSlots.length === 0; // Required only if no LCD slots
+      return this.lcdSlots.length === 0;
     }
   },
-  
-  startTime: {
-    type: Date,
-    required: true
-  },
-  endTime: {
-    type: Date,
-    required: true
-  },
-  currentStatus: {
-    type: String,
-    enum: ['SCHEDULED', 'RUNNING', 'PAID', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
-    default: 'SCHEDULED',
-    required: true
-  },
-  lastFrameUpdate: {
-    type: Date,
-    default: null
-  },
-  deployedAt: {
-    type: Date,
-    default: null
-  },
-  completedAt: {
-    type: Date,
-    default: null
-  },
-  removedAt: {
-    type: Date,
-    default: null
-  },
-  removedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
-  },
-  removalReason: {
-    type: String,
-    default: null
-  }
 }, { timestamps: true });
 
 // Indexes for efficient queries
 AdsDeploymentSchema.index({ adId: 1 });
 AdsDeploymentSchema.index({ driverId: 1 });
 AdsDeploymentSchema.index({ materialId: 1 });
-AdsDeploymentSchema.index({ currentStatus: 1 });
-AdsDeploymentSchema.index({ startTime: 1, endTime: 1 });
-AdsDeploymentSchema.index({ materialId: 1, currentStatus: 1 });
 AdsDeploymentSchema.index({ 'lcdSlots.slotNumber': 1, materialId: 1 });
 
 // Generate unique deployment ID before saving
@@ -166,7 +127,7 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, dr
     driverId
   });
 
-  if (!deployment || !deployment.lcdSlots.length) return 1; // First slot if no deployment exists
+  if (!deployment || !deployment.lcdSlots.length) return 1;
 
   const activeSlots = deployment.lcdSlots
     .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
@@ -178,7 +139,7 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, dr
     }
   }
   
-  return null; // All slots occupied
+  return null;
 };
 
 // Static method to add ad to LCD material (single deployment per LCD)
@@ -191,11 +152,14 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     deployment = new this({
       materialId,
       driverId,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      currentStatus: 'SCHEDULED',
       lcdSlots: []
     });
+  }
+
+  // Check if the adId already exists in the current deployment
+  const isAdAlreadyDeployed = deployment.lcdSlots.some(slot => slot.adId.toString() === adId);
+  if (isAdAlreadyDeployed) {
+    throw new Error('This ad is already deployed on this LCD material.');
   }
 
   // Check next available slot
@@ -223,11 +187,6 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
   };
   
   deployment.lcdSlots.push(newSlot);
-
-  // Update overall deployment status
-  if (deployment.lcdSlots.some(slot => slot.status === 'RUNNING')) {
-    deployment.currentStatus = 'RUNNING';
-  }
 
   await deployment.save();
   return deployment;

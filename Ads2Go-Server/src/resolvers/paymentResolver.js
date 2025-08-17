@@ -1,5 +1,3 @@
-
-
 const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
 const AdsPlan = require('../models/AdsPlan');
@@ -47,6 +45,13 @@ const paymentResolvers = {
       if (!ad) {
         throw new Error('Ad not found');
       }
+
+      // ❌ ADDED: Check for existing payment for this ad
+      const existingPayment = await Payment.findOne({ adsId: input.adsId });
+      if (existingPayment) {
+        throw new Error('A payment for this ad already exists.');
+      }
+      // ❌ END ADDED
 
       // Check if the authenticated user is the ad owner OR an admin
       const isOwner = ad.userId.toString() === user.id;

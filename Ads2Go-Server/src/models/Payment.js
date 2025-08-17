@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema(
@@ -12,6 +11,12 @@ const PaymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       required: true,
       ref: 'Ad',
+    },
+    // ❌ ADDED: The planID field
+    planID: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: 'AdsPlan',
     },
     paymentType: {
       type: String,
@@ -63,6 +68,3 @@ PaymentSchema.post('save', async function (doc) {
 
 const Payment = mongoose.model('Payment', PaymentSchema);
 module.exports = Payment;
-
-
-
