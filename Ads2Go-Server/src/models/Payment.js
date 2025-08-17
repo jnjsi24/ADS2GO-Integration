@@ -38,47 +38,24 @@ const PaymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// 🔹 Auto-create AdsDeployment after payment success
+// 🔹 Auto-activate Ad after payment is PAID
 PaymentSchema.post('save', async function (doc) {
   if (doc.paymentStatus === 'PAID') {
     try {
-      const Material = require('./Material');
-      const AdsDeployment = require('./adsDeployment');
       const Ad = require('./Ad');
-
-      // 🔍 Find the Ad linked to this Payment
       const ad = await Ad.findById(doc.adsId);
       if (!ad) {
         console.error(`❌ Payment ${doc._id} linked to invalid adsId`);
         return;
       }
 
-      // 🔍 Find the Material for that Ad
-      const material = await Material.findById(ad.materialId);
-      if (!material) {
-        console.error(`❌ Cannot deploy Ad ${ad._id}: material not found`);
-        return;
-      }
+      ad.adStatus = 'ACTIVE';
+      ad.paymentStatus = 'PAID';
+      await ad.save(); // triggers Ad post('save') hook for auto deployment
 
-      if (!material.driverId) {
-        console.error(`❌ Cannot deploy Material ${material.materialId}: no driver assigned`);
-        return;
-      }
-
-      // ✅ Create AdsDeployment with startTime + endTime
-      await AdsDeployment.create({
-        adId: ad._id,
-        materialId: material._id,
-        driverId: material.driverId,
-        deployedAt: new Date(),
-        status: 'DEPLOYED',
-        startTime: ad.startTime,   // <-- from Ad
-        endTime: ad.endTime        // <-- from Ad
-      });
-
-      console.log(`✅ Ad ${ad._id} deployed successfully to driver ${material.driverId}`);
+      console.log(`✅ Ad ${doc.adsId} activated after payment and deployment triggered`);
     } catch (error) {
-      console.error(`❌ Error auto-deploying ad after payment:`, error);
+      console.error(`❌ Error activating Ad after payment:`, error);
     }
   }
 });

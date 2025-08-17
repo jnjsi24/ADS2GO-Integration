@@ -14,7 +14,14 @@ const LCDSlotSchema = new mongoose.Schema({
     min: 1,
     max: 5,
     required: true
-    // Duplicate slot validator removed to allow reuse of slot numbers
+  },
+  startTime: { // ✅ startTime per slot
+    type: Date,
+    required: true
+  },
+  endTime: { // ✅ endTime per slot
+    type: Date,
+    required: true
   },
   status: {
     type: String,
@@ -47,7 +54,7 @@ const LCDSlotSchema = new mongoose.Schema({
 const AdsDeploymentSchema = new mongoose.Schema({
   adDeploymentId: {
     type: String,
-    required: false, // <-- changed from true to false
+    required: false,
     unique: true,
     trim: true
   },
@@ -57,8 +64,8 @@ const AdsDeploymentSchema = new mongoose.Schema({
     required: true
   },
   driverId: {
-  type: String,   // e.g. "DRV-009"
-  required: true
+    type: String,   // e.g. "DRV-009"
+    required: true
   },
   
   // For LCD materials - store as array
@@ -153,13 +160,13 @@ AdsDeploymentSchema.statics.getLCDDeployments = async function(materialId) {
 };
 
 // Static method to get next available slot for LCD
-AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId) {
+AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, driverId) {
   const deployment = await this.findOne({
     materialId,
-    lcdSlots: { $exists: true, $ne: [] }
+    driverId
   });
 
-  if (!deployment) return 1; // First slot if no deployment exists
+  if (!deployment || !deployment.lcdSlots.length) return 1; // First slot if no deployment exists
 
   const activeSlots = deployment.lcdSlots
     .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
@@ -174,25 +181,12 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId) {
   return null; // All slots occupied
 };
 
-// Static method to add ad to LCD material
+// Static method to add ad to LCD material (single deployment per LCD)
 AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId, startTime, endTime) {
-  // Check if payment exists and is paid
-  const Payment = mongoose.model('Payment');
-  // REMOVE or COMMENT OUT this payment check
-  const payment = await Payment.findOne({ adsId: adId, paymentStatus: 'PAID' });
-  if (!payment) {
-   throw new Error('Payment required before deployment. Ad must be paid first.');
-   }
-
-  // Get next available slot
-  const nextSlot = await this.getNextAvailableSlot(materialId);
-  if (!nextSlot) {
-    throw new Error('All LCD slots (1-5) are occupied. Use override function to remove ads first.');
-  }
-
-  // Find or create deployment for this material-driver combination
+  // Find existing deployment for this material-driver
   let deployment = await this.findOne({ materialId, driverId });
   
+  // If no deployment exists, create a new one
   if (!deployment) {
     deployment = new this({
       materialId,
@@ -204,16 +198,32 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     });
   }
 
-  // Add new slot
+  // Check next available slot
+  const activeSlots = deployment.lcdSlots
+    .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
+    .map(slot => slot.slotNumber);
+
+  let nextSlot = null;
+  for (let i = 1; i <= 5; i++) {
+    if (!activeSlots.includes(i)) {
+      nextSlot = i;
+      break;
+    }
+  }
+  if (!nextSlot) throw new Error('All LCD slots (1-5) are occupied.');
+
+  // Add new ad slot
   const newSlot = {
     adId,
     slotNumber: nextSlot,
+    startTime: new Date(startTime),
+    endTime: new Date(endTime),
     status: new Date(startTime) <= new Date() ? 'RUNNING' : 'SCHEDULED',
     deployedAt: new Date(startTime) <= new Date() ? new Date() : null
   };
-
-  deployment.lcdSlots.push(newSlot);
   
+  deployment.lcdSlots.push(newSlot);
+
   // Update overall deployment status
   if (deployment.lcdSlots.some(slot => slot.status === 'RUNNING')) {
     deployment.currentStatus = 'RUNNING';

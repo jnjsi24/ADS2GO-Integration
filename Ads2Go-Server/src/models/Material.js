@@ -30,10 +30,10 @@ const MaterialSchema = new mongoose.Schema({
     index: true,
   },
   driverId: {
-  type: String,   // store custom driverId like "DRV-009"
-  trim: true,
-  default: null,  // assigned on approval
-},
+    type: String,   // store custom driverId like "DRV-009"
+    trim: true,
+    default: null,  // assigned on approval
+  },
   mountedAt: {
     type: Date,
     default: null,
@@ -42,6 +42,15 @@ const MaterialSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+
+  // ✅ Add flag to identify LCD materials
+  isLCD: {
+    type: Boolean,
+    default: function() {
+      return this.materialType === 'LCD';
+    }
+  },
+
 }, { timestamps: true });
 
 // Pre-save hook to auto-generate materialId
