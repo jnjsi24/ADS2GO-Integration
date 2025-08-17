@@ -110,7 +110,7 @@ AdSchema.pre('save', async function(next) {
 AdSchema.post('save', async function (doc) {
   if (doc.adStatus === 'ACTIVE') {
     const Material = require('./Material');
-    const AdsDeployment = require('./AdsDeployment');
+    const AdsDeployment = require('./adsDeployment');
 
     const material = await Material.findById(doc.materialId);
     if (!material || !material.driverId) {
