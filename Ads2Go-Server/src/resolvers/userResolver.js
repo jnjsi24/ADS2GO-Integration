@@ -123,6 +123,8 @@ const resolvers = {
         const hashedPassword = await bcrypt.hash(password, 10);
         const verificationCode = EmailService.generateVerificationCode();
 
+        console.log(`📩 Verification code for ${email}: ${verificationCode}`);
+
         const newUser = new User({
           firstName: firstName.trim(),
           middleName: middleName?.trim() || null,
@@ -445,23 +447,26 @@ const resolvers = {
     },
 
     resetPassword: async (_, { token, newPassword }) => {
-      const user = await User.findOne({
-        emailVerificationCode: token.trim(),
-        emailVerificationCodeExpires: { $gt: new Date() }
-      });
+  const user = await User.findOne({
+    emailVerificationCode: token.trim(),
+    emailVerificationCodeExpires: { $gt: new Date() }
+  });
 
-      if (!user) throw new Error('Invalid or expired reset token');
+  if (!user) throw new Error('Invalid or expired reset token');
 
-      const strength = checkPasswordStrength(newPassword);
-      if (!strength.strong) throw new Error('Password too weak');
+  // 🔽 Log the verification code and email here
+  console.log(`📩 Verification code for ${user.email}: ${token.trim()}`);
 
-      user.password = await bcrypt.hash(newPassword, 12);
-      user.emailVerificationCode = null;
-      user.emailVerificationCodeExpires = null;
+  const strength = checkPasswordStrength(newPassword);
+  if (!strength.strong) throw new Error('Password too weak');
 
-      await user.save();
-      return true;
-    },
+  user.password = await bcrypt.hash(newPassword, 12);
+  user.emailVerificationCode = null;
+  user.emailVerificationCodeExpires = null;
+
+  await user.save();
+  return true;
+},
   },
 
   User: {

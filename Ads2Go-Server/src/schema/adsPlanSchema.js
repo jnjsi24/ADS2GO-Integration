@@ -2,7 +2,7 @@ const { gql } = require('apollo-server-express');
 
 module.exports = gql`
   type AdsPlan {
-    _id: ID!
+    id: ID!
     name: String!
     durationDays: Int!
     category: String!
@@ -16,7 +16,6 @@ module.exports = gql`
     dailyRevenue: Float!
     totalPrice: Float!
     status: String!
-    impressions: Int!
     startDate: String
     endDate: String
     description: String!
@@ -56,6 +55,5 @@ module.exports = gql`
     deleteAdsPlan(id: ID!): String
     startAdsPlan(id: ID!): AdsPlan
     endAdsPlan(id: ID!): AdsPlan
-    incrementImpressions(id: ID!): AdsPlan
   }
 `;

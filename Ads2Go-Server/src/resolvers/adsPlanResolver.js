@@ -2,36 +2,31 @@ const AdsPlan = require('../models/AdsPlan');
 
 module.exports = {
   Query: {
-    // Get all plans (latest first)
     getAllAdsPlans: async () => {
       return await AdsPlan.find().sort({ createdAt: -1 });
     },
 
-    // Get a plan by its ID
     getAdsPlanById: async (_, { id }) => {
       return await AdsPlan.findById(id);
     },
 
-    // Filter plans based on optional criteria
     getAdsPlansByFilter: async (_, { category, materialType, vehicleType, numberOfDevices, status }) => {
       const filter = {};
-      if (category) filter.category = category;
-      if (materialType) filter.materialType = materialType;
-      if (vehicleType) filter.vehicleType = vehicleType;
+      if (category) filter.category = category.toUpperCase();
+      if (materialType) filter.materialType = materialType.toUpperCase();
+      if (vehicleType) filter.vehicleType = vehicleType.toUpperCase();
       if (numberOfDevices) filter.numberOfDevices = numberOfDevices;
-      if (status) filter.status = status;
+      if (status) filter.status = status.toUpperCase();
       return await AdsPlan.find(filter);
     },
   },
 
   Mutation: {
-    // Create a new Ads Plan
     createAdsPlan: async (_, { input }, { user }) => {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can create ads plans');
       }
 
-      // Auto-calculate based on input
       const totalPlaysPerDay = input.playsPerDayPerDevice * input.numberOfDevices;
       const dailyRevenue = totalPlaysPerDay * input.pricePerPlay;
       const totalPrice = dailyRevenue * input.durationDays;
@@ -41,7 +36,6 @@ module.exports = {
         totalPlaysPerDay,
         dailyRevenue,
         totalPrice,
-        impressions: 0,
         status: 'PENDING',
         startDate: null,
         endDate: null
@@ -50,13 +44,12 @@ module.exports = {
       return await newPlan.save();
     },
 
-    // Update an Ads Plan
     updateAdsPlan: async (_, { id, input }, { user }) => {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can update ads plans');
       }
 
-      // Recalculate if key fields change
+      // Recalculate totals if key fields change
       if (input.numberOfDevices || input.playsPerDayPerDevice || input.pricePerPlay || input.durationDays) {
         const existingPlan = await AdsPlan.findById(id);
         const playsPerDayPerDevice = input.playsPerDayPerDevice ?? existingPlan.playsPerDayPerDevice;
@@ -72,7 +65,6 @@ module.exports = {
       return await AdsPlan.findByIdAndUpdate(id, input, { new: true });
     },
 
-    // Delete an Ads Plan
     deleteAdsPlan: async (_, { id }, { user }) => {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can delete ads plans');
@@ -81,19 +73,17 @@ module.exports = {
       return "Ads plan deleted successfully.";
     },
 
-    // Start an ad plan
     startAdsPlan: async (_, { id }, { user }) => {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can start ads plans');
       }
       return await AdsPlan.findByIdAndUpdate(
         id,
-        { status: 'RUNNING', startDate: new Date(), endDate: null },
+        { status: 'RUNNING', startDate: new Date() },
         { new: true }
       );
     },
 
-    // End an ad plan
     endAdsPlan: async (_, { id }, { user }) => {
       if (!user || user.role !== 'SUPERADMIN') {
         throw new Error('Unauthorized: Only SUPERADMIN can end ads plans');
@@ -104,15 +94,5 @@ module.exports = {
         { new: true }
       );
     },
-
-    // Increment impressions when ad is displayed
-    incrementImpressions: async (_, { id }) => {
-      const plan = await AdsPlan.findById(id);
-      if (!plan) throw new Error('Ad plan not found');
-
-      plan.impressions += 1;
-      await plan.save();
-      return plan;
-    }
   }
 };

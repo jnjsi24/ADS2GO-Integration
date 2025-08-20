@@ -1,6 +1,4 @@
-
-//adSchema.js
-
+// adSchema.js
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`
@@ -24,16 +22,17 @@ const adTypeDefs = gql`
   }
 
   type Ad {
-    id: ID!
-    userId: ID!
+    id: ID!                # ✅ alias for Mongo _id
+    userId: User!          # ✅ relationship
     driverId: ID
-    materialId: ID!
-    planId: ID!
+    materialId: Material   # ✅ relationship
+    planId: AdsPlan!       # ✅ relationship
     title: String!
     description: String
     adFormat: String!
     mediaFile: String!
-    price: Float! # ✅ Calculated from plan and duration
+    price: Float!          # ✅ Calculated from plan and duration
+    rejectReason: String
 
     # Plan-related fields
     numberOfDevices: Int!
@@ -41,13 +40,13 @@ const adTypeDefs = gql`
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     pricePerPlay: Float!
-    totalPrice: Float! # ✅ Calculated as totalPlaysPerDay * pricePerPlay * duration in days
+    totalPrice: Float!     # ✅ Calculated: totalPlaysPerDay * pricePerPlay * duration in days
 
     status: AdStatus!
     startTime: String!
     endTime: String!
     adType: AdType!
-    durationType: AdDurationType! # ✅ Duration of ad (weekly, monthly, yearly)
+    durationType: AdDurationType!
     reasonForReject: String
     approveTime: String
     rejectTime: String
@@ -65,7 +64,7 @@ const adTypeDefs = gql`
     mediaFile: String!
     startTime: String!
     adType: AdType!
-    durationType: AdDurationType! # ✅ Must pass duration to calculate price and endTime
+    durationType: AdDurationType! # ✅ used for price & endTime calculation
   }
 
   input UpdateAdInput {
@@ -78,8 +77,8 @@ const adTypeDefs = gql`
     status: AdStatus
     startTime: String
     adType: AdType
-    durationType: AdDurationType # ✅ Optional update to recalc price/endTime
-    reasonForReject: String
+    durationType: AdDurationType
+    rejectReason: String
   }
 
   type Query {
@@ -97,4 +96,3 @@ const adTypeDefs = gql`
 `;
 
 module.exports = adTypeDefs;
-

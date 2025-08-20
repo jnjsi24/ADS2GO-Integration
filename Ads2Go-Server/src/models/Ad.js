@@ -1,5 +1,4 @@
-// Ad.js
-
+// models/Ad.js
 const mongoose = require('mongoose');
 
 const AdSchema = new mongoose.Schema({
@@ -23,6 +22,8 @@ const AdSchema = new mongoose.Schema({
     ref: 'AdsPlan',
     required: true
   },
+
+  // Ad details
   title: {
     type: String,
     required: true,
@@ -60,15 +61,13 @@ const AdSchema = new mongoose.Schema({
     required: true
   },
 
-  // Tracking fields
+  // Approval & tracking
   status: {
     type: String,
     enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
     default: 'PENDING',
     required: true
   },
-
-  // ✅ New fields
   paymentStatus: {
     type: String,
     enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
@@ -88,53 +87,62 @@ const AdSchema = new mongoose.Schema({
   rejectTime: { type: Date, default: null }
 }, { timestamps: true });
 
-// Optional: pre-save hook to validate existence of referenced documents
-AdSchema.pre('save', async function(next) {
-  const Material = mongoose.model('Material');
-  const Plan = mongoose.model('AdsPlan');
-  const User = mongoose.model('User');
+/**
+ * ✅ Pre-save validation: ensure referenced docs exist
+ */
+AdSchema.pre('save', async function (next) {
+  try {
+    const Material = mongoose.model('Material');
+    const Plan = mongoose.model('AdsPlan');
+    const User = mongoose.model('User');
 
-  const materialExists = await Material.exists({ _id: this.materialId });
-  if (!materialExists) throw new Error('Material not found');
+    const [materialExists, planExists, userExists] = await Promise.all([
+      Material.exists({ _id: this.materialId }),
+      Plan.exists({ _id: this.planId }),
+      User.exists({ _id: this.userId })
+    ]);
 
-  const planExists = await Plan.exists({ _id: this.planId });
-  if (!planExists) throw new Error('Plan not found');
+    if (!materialExists) throw new Error('Material not found');
+    if (!planExists) throw new Error('Plan not found');
+    if (!userExists) throw new Error('User not found');
 
-  const userExists = await User.exists({ _id: this.userId });
-  if (!userExists) throw new Error('User not found');
-
-  next();
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
-// ✅ Auto-deploy hook when ad becomes ACTIVE
+/**
+ * ✅ Post-save auto-deployment logic
+ */
 AdSchema.post('save', async function (doc) {
   if (doc.adStatus === 'ACTIVE') {
     const Material = require('./Material');
     const AdsDeployment = require('./adsDeployment');
 
-    const material = await Material.findById(doc.materialId);
-    if (!material || !material.driverId) {
-      console.error(`❌ Cannot deploy Ad ${doc._id}: no driver assigned to material`);
-      return;
-    }
-
-    // If material is NON-LCD, keep old flow
-    if (!material.isLCD) {
-      await AdsDeployment.create({
-        adId: doc._id,
-        materialId: material._id,
-        driverId: material.driverId,
-        startTime: doc.startTime,
-        endTime: doc.endTime,
-        deployedAt: new Date(),
-        currentStatus: 'DEPLOYED'
-      });
-      console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
-      return;
-    }
-
-    // ✅ For LCD, use addToLCD to ensure a single deployment document
     try {
+      const material = await Material.findById(doc.materialId);
+      if (!material || !material.driverId) {
+        console.error(`❌ Cannot deploy Ad ${doc._id}: no driver assigned to material`);
+        return;
+      }
+
+      // Non-LCD ads → create new deployment directly
+      if (!material.isLCD) {
+        await AdsDeployment.create({
+          adId: doc._id,
+          materialId: material._id,
+          driverId: material.driverId,
+          startTime: doc.startTime,
+          endTime: doc.endTime,
+          deployedAt: new Date(),
+          currentStatus: 'DEPLOYED'
+        });
+        console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+        return;
+      }
+
+      // LCD ads → use addToLCD method for single deployment doc
       const deployment = await AdsDeployment.addToLCD(
         material._id,
         material.driverId,
@@ -143,11 +151,11 @@ AdSchema.post('save', async function (doc) {
         doc.endTime
       );
       console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId}`);
+
     } catch (err) {
-      console.error(`❌ Failed to deploy LCD Ad ${doc._id}: ${err.message}`);
+      console.error(`❌ Failed to deploy Ad ${doc._id}: ${err.message}`);
     }
   }
 });
 
 module.exports = mongoose.model('Ad', AdSchema);
-
