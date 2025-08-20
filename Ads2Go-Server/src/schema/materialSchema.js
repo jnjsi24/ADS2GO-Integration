@@ -1,4 +1,5 @@
 
+
 const { gql } = require('graphql-tag');
 
 module.exports = gql`
@@ -9,7 +10,7 @@ module.exports = gql`
 
   enum VehicleType {
     CAR
-    MOTORCYCLE
+    MOTOR
     BUS
     JEEP
     E_TRIKE
@@ -25,13 +26,13 @@ module.exports = gql`
 
   type Material {
     id: ID!
-    materialId: String!          # Always generated automatically (e.g., DGL-0001 or NDGL-0001)
+    materialId: String!          # e.g., DGL-0001 or NDGL-0001
     vehicleType: VehicleType!
     materialType: MaterialType!
     description: String
     requirements: String
     category: MaterialCategory!
-    driverId: String             # ✅ Make this String since you’re using "DRV-009"
+    driverId: String             # ✅ FIX: use String, not ID
     mountedAt: String
     dismountedAt: String
     createdAt: String
@@ -43,7 +44,7 @@ module.exports = gql`
     materialType: MaterialType!
     description: String
     requirements: String
-    category: MaterialCategory!   # Determines prefix: DGL for DIGITAL, NDGL for NON_DIGITAL
+    category: MaterialCategory!
   }
 
   input UpdateMaterialInput {
@@ -54,7 +55,6 @@ module.exports = gql`
     category: MaterialCategory
     mountedAt: String
     dismountedAt: String
-    driverId: String              # ✅ allow updating driver assignment here too
   }
 
   extend type Query {
@@ -68,9 +68,11 @@ module.exports = gql`
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
 
-    assignMaterialToDriver(materialId: ID!, driverId: String!): Material  # ✅ FIXED
+    assignMaterialToDriver(driverId: String!): Material  # ✅ FIX: accept driverId as String
   }
 `;
+
+
 
 
 

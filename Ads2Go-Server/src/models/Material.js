@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const MaterialSchema = new mongoose.Schema({
   vehicleType: {
     type: String,
-    enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'],
+    enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'],
     required: [true, 'Vehicle type is required'],
   },
   materialType: {
@@ -30,10 +30,9 @@ const MaterialSchema = new mongoose.Schema({
     index: true,
   },
   driverId: {
-    type: String,   // store custom driverId like "DRV-009"
-    trim: true,
-    default: null,  // assigned on approval
-  },
+  type: String,   // <-- store DRV-001 instead of ObjectId
+  default: null,
+},
   mountedAt: {
     type: Date,
     default: null,
@@ -42,15 +41,6 @@ const MaterialSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
-
-  // ✅ Add flag to identify LCD materials
-  isLCD: {
-    type: Boolean,
-    default: function() {
-      return this.materialType === 'LCD';
-    }
-  },
-
 }, { timestamps: true });
 
 // Pre-save hook to auto-generate materialId
@@ -76,3 +66,5 @@ MaterialSchema.pre('save', async function () {
 });
 
 module.exports = mongoose.model('Material', MaterialSchema);
+
+

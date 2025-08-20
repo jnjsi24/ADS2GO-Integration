@@ -1,13 +1,15 @@
+
+
+
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
-const Tablet = require('../models/Tablet'); // new model for tablets
 const { checkAdmin } = require('../middleware/auth');
 
 const allowedMaterialsByVehicle = {
   CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
-  BUS: ['STICKER', 'LCD_HEADDRESS'],
+  BUS: ['STICKER', 'HEADDRESS'],
   JEEP: ['POSTER', 'STICKER'],
-  MOTORCYCLE: ['LCD', 'BANNER'],
+  MOTOR: ['LCD', 'BANNER'],
   E_TRIKE: ['BANNER', 'LCD'],
 };
 
@@ -50,24 +52,8 @@ const materialResolvers = {
         driverId: null, // unassigned on creation
       });
 
+      // Ensure pre-save hook triggers
       await material.save();
-
-      // 🚀 Auto-create two tablets for CAR with LCD_HEADDRESS
-      if (vehicleType === 'CAR' && materialType === 'HEADDRESS') {
-        const tabletsToCreate = [
-          { carGroupId: material._id.toString(), tabletNumber: 1, status: 'OFFLINE', lastSeen: null },
-          { carGroupId: material._id.toString(), tabletNumber: 2, status: 'OFFLINE', lastSeen: null }
-        ];
-
-        await Tablet.insertMany(
-          tabletsToCreate.map(t => ({
-            ...t,
-            materialId: material._id,
-            gps: { lat: null, lng: null }
-          }))
-        );
-      }
-
       return material;
     },
 
@@ -86,14 +72,18 @@ const materialResolvers = {
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
 
-      const categoryChanged = input.category !== undefined && input.category !== material.category;
-      const materialTypeChanged = input.materialType !== undefined && input.materialType !== material.materialType;
-      const vehicleTypeChanged = input.vehicleType !== undefined && input.vehicleType !== material.vehicleType;
+      const categoryChanged =
+        input.category !== undefined && input.category !== material.category;
+      const materialTypeChanged =
+        input.materialType !== undefined && input.materialType !== material.materialType;
+      const vehicleTypeChanged =
+        input.vehicleType !== undefined && input.vehicleType !== material.vehicleType;
 
       Object.keys(input).forEach((key) => {
         material[key] = input[key];
       });
 
+      // Force re-generation of materialId if needed
       if (categoryChanged || materialTypeChanged || vehicleTypeChanged) {
         material.materialId = undefined;
       }
@@ -107,46 +97,47 @@ const materialResolvers = {
 
       const deleted = await Material.findByIdAndDelete(id);
       if (!deleted) throw new Error('Material not found or already deleted');
-
-      // Also remove tablets linked to this material
-      await Tablet.deleteMany({ materialId: id });
-
       return 'Material deleted successfully.';
     },
 
     assignMaterialToDriver: async (_, { driverId }, context) => {
-      checkAdmin(context.user);
+  checkAdmin(context.user);
 
-      const driver = await Driver.findById(driverId);
-      if (!driver) throw new Error('Driver not found');
+  // Find driver by driverId (custom string like DRV-001)
+  const driver = await Driver.findOne({ driverId });
+  if (!driver) throw new Error('Driver not found');
 
-      const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType];
-      if (!allowedTypes) {
-        throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
-      }
+  const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType];
+  if (!allowedTypes) {
+    throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
+  }
 
-      const availableMaterials = await Material.find({
-        vehicleType: driver.vehicleType,
-        materialType: { $in: allowedTypes },
-        driverId: null,
-      });
+  const availableMaterials = await Material.find({
+    vehicleType: driver.vehicleType,
+    materialType: { $in: allowedTypes },
+    driverId: null, // only unassigned
+  });
 
-      if (!availableMaterials.length) {
-        throw new Error('No available materials to assign');
-      }
+  if (!availableMaterials.length) {
+    throw new Error('No available materials to assign');
+  }
 
-      const assignedMaterial = availableMaterials[0];
-      assignedMaterial.driverId = driver._id;
-      await assignedMaterial.save();
+  const assignedMaterial = availableMaterials[0];
 
-      return assignedMaterial;
-    }
+  // ✅ Assign using the string driverId, not ObjectId
+  assignedMaterial.driverId = driver.driverId;
+  await assignedMaterial.save();
+
+  return assignedMaterial;
+},
   },
 
   Material: {
     id: (parent) => parent._id.toString(),
-    materialId: (parent) => parent.materialId,
+    materialId: (parent) => parent.materialId, // explicitly return the generated materialId
+    driverId: (parent) => parent.driverId,     // always return driverId as string
   },
 };
 
 module.exports = materialResolvers;
+
