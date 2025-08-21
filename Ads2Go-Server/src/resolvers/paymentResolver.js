@@ -5,7 +5,6 @@ const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const paymentResolvers = {
   Query: {
-    // Queries remain the same
     getAllPayments: async (_, __, { user }) => {
       checkAdmin(user);
       return await Payment.find()
@@ -46,12 +45,16 @@ const paymentResolvers = {
         throw new Error('Ad not found');
       }
 
-      // ❌ ADDED: Check for existing payment for this ad
+      // ✅ Validation: Only allow payment if ad is approved
+      if (ad.status !== 'APPROVED') {
+        throw new Error('Payment cannot be created. The ad is not yet approved.');
+      }
+
+      // Check if a payment already exists for this ad
       const existingPayment = await Payment.findOne({ adsId: input.adsId });
       if (existingPayment) {
         throw new Error('A payment for this ad already exists.');
       }
-      // ❌ END ADDED
 
       // Check if the authenticated user is the ad owner OR an admin
       const isOwner = ad.userId.toString() === user.id;
@@ -67,19 +70,26 @@ const paymentResolvers = {
         throw new Error('Associated plan not found');
       }
 
-      // The userId for the payment should always be the ad's owner, regardless of who created the payment (admin or user).
+      // Always assign payment to the ad's owner
       const newPayment = new Payment({
         userId: ad.userId,
         adsId: ad._id,
         planID: plan._id,
         paymentDate: input.paymentDate,
         paymentType: input.paymentType,
-        amount: plan.totalPrice, // Use the total price from the plan
+        amount: plan.totalPrice,
         receiptId: input.receiptId,
-        paymentStatus: isAdmin ? 'PAID' : 'PENDING' // Set status to PAID if created by an admin, otherwise PENDING
+        paymentStatus: isAdmin ? 'PAID' : 'PENDING'
       });
 
       await newPayment.save();
+
+      // ✅ If admin sets payment directly to PAID, activate ad immediately
+      if (newPayment.paymentStatus === 'PAID') {
+        ad.adStatus = 'ACTIVE';
+        ad.paymentStatus = 'PAID';
+        await ad.save();
+      }
 
       return {
         success: true,
@@ -101,6 +111,16 @@ const paymentResolvers = {
 
       payment.paymentStatus = paymentStatus;
       await payment.save();
+
+      // ✅ If payment is now marked PAID, activate the ad
+      if (payment.paymentStatus === 'PAID') {
+        const ad = await Ad.findById(payment.adsId);
+        if (ad) {
+          ad.adStatus = 'ACTIVE';
+          ad.paymentStatus = 'PAID';
+          await ad.save();
+        }
+      }
 
       return {
         success: true,
@@ -132,7 +152,6 @@ const paymentResolvers = {
   },
 
   Payment: {
-    // Resolve the `plan` field using the `planID`
     plan: async (parent) => {
       return await AdsPlan.findById(parent.planID);
     }
