@@ -36,7 +36,7 @@ const adTypeDefs = gql`
 
     # Plan-related fields
     numberOfDevices: Int!
-    adLengthMinutes: Int!
+    adLengthSeconds: Int!
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     pricePerPlay: Float!

@@ -49,7 +49,7 @@ const AdSchema = new mongoose.Schema({
 
   // Plan-related fields
   numberOfDevices: { type: Number, required: true },
-  adLengthMinutes: { type: Number, required: true },
+  adLengthSeconds: { type: Number, required: true },
   playsPerDayPerDevice: { type: Number, required: true },
   totalPlaysPerDay: { type: Number, required: true },
   pricePerPlay: { type: Number, required: true },

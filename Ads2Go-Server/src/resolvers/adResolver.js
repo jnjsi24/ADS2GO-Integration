@@ -87,7 +87,7 @@ getAdById: async (_, { id }, { user }) => {
         ...input,
         userId: user.id,
         numberOfDevices: plan.numberOfDevices,
-        adLengthMinutes: plan.adLengthMinutes,
+        adLengthSeconds: plan.adLengthSeconds,
         playsPerDayPerDevice: plan.playsPerDayPerDevice,
         totalPlaysPerDay,
         pricePerPlay: plan.pricePerPlay,
@@ -117,7 +117,7 @@ getAdById: async (_, { id }, { user }) => {
 
         ad.planId = plan._id;
         ad.numberOfDevices = plan.numberOfDevices;
-        ad.adLengthMinutes = plan.adLengthMinutes;
+        ad.adLengthSeconds = plan.adLengthSeconds;
         ad.playsPerDayPerDevice = plan.playsPerDayPerDevice;
         ad.totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
         ad.pricePerPlay = plan.pricePerPlay;
