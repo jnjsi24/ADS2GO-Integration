@@ -1,231 +1,163 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
-import { CREATE_AD } from '../../graphql/mutations/createAd';
-import { GET_AVAILABLE_VEHICLE_TYPES } from '../../graphql/queries/getVehicleTypes';
-import { GET_FILTERED_ADS_PLANS } from '../../graphql/queries/getFilteredPlans';
+  mediaFile?: string;
+  price: number;
+  status: string;
+  createdAt: string;
+  adType: 'DIGITAL' | 'NON_DIGITAL';
+  planId: {
+    _id: string;
+    name: string;
+    durationDays: number;
+    price: number;
+  };
+  materialId: {
+    _id: string;
+    name: string;
+  };
+};
 
-const CreateAdvertisement: React.FC = () => {
+const Advertisements: React.FC = () => {
   const navigate = useNavigate();
-  const [createAd] = useMutation(CREATE_AD);
-  const { data: vehicleData, error: vehicleError } = useQuery(GET_AVAILABLE_VEHICLE_TYPES);
-  const [getPlans, { data: plansData }] = useLazyQuery(GET_FILTERED_ADS_PLANS);
+  const { user } = useAuth();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [planFilter, setPlanFilter] = useState('All Plans');
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    adType: '',
-    vehicleType: '',
-    materialId: '',
-    planId: '',
-    adFormat: 'JPG',
-    media: null as File | null,
-    startTime: '',
+  const { data, loading, error } = useQuery(GET_MY_ADS);
+  const ads: Ad[] = data?.getMyAds || [];
+
+  const filteredAds = ads.filter((ad) => {
+    const matchesSearch =
+      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ad.id.toString().includes(searchTerm);
+
+    const matchesStatus =
+      statusFilter === 'All Status' || ad.status === statusFilter;
+
+    const matchesPlan =
+      planFilter === 'All Plans' || ad.planId?.name === planFilter;
+
+    return matchesSearch && matchesStatus && matchesPlan;
   });
 
-  const [materialsOptions, setMaterialsOptions] = useState<{ name: string; id: string }[]>([]);
-  const [filteredVehicles, setFilteredVehicles] = useState<string[]>([]);
-  const [planOptions, setPlanOptions] = useState<any[]>([]);
-  const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const adTypeOptions = ['Digital', 'Non-Digital'];
-
-  const materialOptionsMap: Record<string, { name: string; id: string }[]> = {
-    Car: [ { name: 'LCD Screen', id: 'lcd1' }, { name: 'Stickers', id: 'stick1' } ],
-    Motorcycle: [ { name: 'Posters', id: 'post1' } ],
-    Bus: [ { name: 'LCD Screen', id: 'lcd2' } ],
-    Tricycle: [ { name: 'Posters', id: 'post2' } ],
-    Van: [ { name: 'Stickers', id: 'stick2' } ],
-    Truck: [ { name: 'Stickers', id: 'stick3' } ],
-    Bicycle: [ { name: 'Posters', id: 'post3' } ],
-  };
-
-  const adTypeVehicleMap: Record<string, string[]> = {
-    DIGITAL: ['Car', 'Bus'],
-    NON_DIGITAL: ['Motorcycle', 'Tricycle', 'Van', 'Truck', 'Bicycle'],
-  };
-
-  const allVehicleTypes: string[] = (vehicleData?.getAvailableVehicleTypes || []).map(
-    (v: string) => v.charAt(0).toUpperCase() + v.slice(1)
-  );
-
-  useEffect(() => {
-    if (formData.adType) {
-      const type = formData.adType.toUpperCase().replace('-', '_');
-      const allowed = adTypeVehicleMap[type] || [];
-      const filtered = allVehicleTypes.filter((v) => allowed.includes(v));
-
-      setFilteredVehicles((prev) => {
-        const isSame = prev.length === filtered.length && prev.every((v) => filtered.includes(v));
-        return isSame ? prev : filtered;
-      });
-
-      if (formData.vehicleType || formData.materialId || formData.planId) {
-        setFormData((prev) => ({ ...prev, vehicleType: '', materialId: '', planId: '' }));
-      }
-
-      setMaterialsOptions([]);
-      setPlanOptions([]);
-    }
-  }, [formData.adType, allVehicleTypes]);
-
-  useEffect(() => {
-    if (formData.vehicleType) {
-      const options = materialOptionsMap[formData.vehicleType] || [];
-      setMaterialsOptions(options);
-
-      if (formData.materialId || formData.planId) {
-        setFormData((prev) => ({ ...prev, materialId: '', planId: '' }));
-      }
-    }
-  }, [formData.vehicleType]);
-
-  useEffect(() => {
-    if (formData.vehicleType && formData.adType && formData.materialId) {
-      const vehicleType = formData.vehicleType;
-      const adType = formData.adType.toUpperCase().replace('-', '_');
-      const materialType = materialsOptions.find((m) => m.id === formData.materialId)?.name;
-
-      if (materialType) {
-        getPlans({ variables: { category: adType, materialType, vehicleType } });
-      }
-    }
-  }, [formData.vehicleType, formData.adType, formData.materialId]);
-
-  useEffect(() => {
-    if (plansData?.getAdsPlansByFilter) {
-      setPlanOptions(plansData.getAdsPlansByFilter);
-    }
-  }, [plansData]);
-
-  useEffect(() => {
-    const selectedPlan = planOptions.find((p) => p._id === formData.planId);
-    setEstimatedPrice(selectedPlan?.price || null);
-  }, [formData.planId, planOptions]);
-
-  const handleChange = (e: React.ChangeEvent<any>) => {
-    const { name, value, files } = e.target;
-    if (name === 'media' && files) {
-      const file = files[0];
-      const isValid = file.type.startsWith('image/') || file.type.startsWith('video/');
-      if (!isValid) {
-        setError('Only image or video files are allowed.');
-        return;
-      }
-      setFormData((prev) => ({ ...prev, media: file }));
-      setError(null);
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      if (!formData.media) throw new Error('Please select a media file.');
-      if (!formData.startTime) throw new Error('Please select a start date.');
-
-      const uploadData = new FormData();
-      uploadData.append('file', formData.media);
-
-      const res = await fetch('http://localhost:5000/upload', {
-        method: 'POST',
-        body: uploadData,
-      });
-
-      if (!res.ok) throw new Error('Failed to upload media.');
-      const { filename } = await res.json();
-
-      await createAd({
-        variables: {
-          input: {
-            title: formData.title,
-            description: formData.description,
-            adType: formData.adType.toUpperCase().replace('-', '_'),
-            adFormat: formData.adFormat,
-            mediaFile: filename,
-            materialId: formData.materialId,
-            planId: formData.planId,
-            price: estimatedPrice,
-            startTime: formData.startTime,
-          },
-        },
-      });
-
-      navigate('/advertisements');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  if (loading) return <div className="pl-60 pt-10">Loading ads...</div>;
+  if (error) return <div className="pl-60 pt-10 text-red-600">Error: {error.message}</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
-      <h1 className="text-3xl font-bold text-center mb-10">Create Advertisement</h1>
-      {error && <div className="text-red-600 mb-4">{error}</div>}
-      {vehicleError && <div className="text-red-600 mb-4">{vehicleError.message}</div>}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input type="text" name="title" value={formData.title} onChange={handleChange} placeholder="Title" className="w-full border p-2 rounded-lg" required />
-        <textarea name="description" value={formData.description} onChange={handleChange} placeholder="Description" className="w-full border p-2 rounded-lg" required />
+    <div className="flex-1 pl-60 pb-6 bg-white">
+      <div className="bg-white p-6 shadow flex justify-between items-center">
+        <div className="relative w-96">
+          <input
+            type="text"
+            placeholder="Search Ads"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="border border-gray-500 w-full rounded-md p-2 pl-10 focus:outline-none"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+        </div>
+      </div>
 
-        <select name="adType" value={formData.adType} onChange={handleChange} className="w-full border p-2 rounded-lg" required>
-          <option value="">Select Ad Type</option>
-          {adTypeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-
-        <select name="vehicleType" value={formData.vehicleType} onChange={handleChange} className="w-full border p-2 rounded-lg" required>
-          <option value="">Select Vehicle Type</option>
-          {filteredVehicles.map((v) => <option key={v} value={v}>{v}</option>)}
-        </select>
-
-        <select name="materialId" value={formData.materialId} onChange={handleChange} className="w-full border p-2 rounded-lg" required>
-          <option value="">Select Material</option>
-          {materialsOptions.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-
-        <select name="planId" value={formData.planId} onChange={handleChange} className="w-full border p-2 rounded-lg" required>
-          <option value="">Select Plan</option>
-          {planOptions.map((p) => (
-            <option key={p._id} value={p._id}>
-              {p.name} - ₱{p.price.toLocaleString()} for {p.durationDays} day(s)
-            </option>
-          ))}
-        </select>
-
-        {estimatedPrice && (
-          <div className="text-green-700 font-semibold">
-            Estimated Price: ₱{estimatedPrice.toLocaleString()}
-          </div>
-        )}
-
-        <input type="date" name="startTime" value={formData.startTime} onChange={handleChange} className="w-full border p-2 rounded-lg" required />
-
-        <select name="adFormat" value={formData.adFormat} onChange={handleChange} className="w-full border p-2 rounded-lg" required>
-          <option value="JPG">JPG</option>
-          <option value="PNG">PNG</option>
-          <option value="SVG">SVG</option>
-          <option value="MP4">MP4</option>
-        </select>
-
-        <input type="file" name="media" accept="image/*,video/*" onChange={handleChange} className="w-full border p-2 rounded-lg" required />
-
-        <div className="flex justify-between pt-4">
-          <Link to="/advertisements">
-            <button type="button" className="text-black px-4 py-2 rounded hover:bg-gray-100">Back</button>
-          </Link>
-          <button type="submit" disabled={isSubmitting} className="px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold shadow disabled:opacity-50">
-            {isSubmitting ? 'Creating...' : 'Create'}
+      <div className="bg-white p-6 flex justify-between items-center">
+        <h1 className="text-3xl font-semibold">My Advertisements</h1>
+        <div className="space-x-4 flex items-center">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded-md p-2 focus:outline-none"
+          >
+            <option value="All Status">All Status</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="RUNNING">Running</option>
+            <option value="ENDED">Ended</option>
+          </select>
+          <select
+            value={planFilter}
+            onChange={(e) => setPlanFilter(e.target.value)}
+            className="bg-white border border-gray-300 rounded-md p-2 focus:outline-none"
+          >
+            <option value="All Plans">All Plans</option>
+            <option value="Monthly">Monthly</option>
+            <option value="Weekly">Weekly</option>
+          </select>
+          <button
+            onClick={() => navigate('/create-advertisement')}
+            className="bg-[#251f70] text-white px-4 py-2 rounded hover:bg-[#1b1853] transition-all"
+          >
+            + Create Ad
           </button>
         </div>
-      </form>
+      </div>
+
+      <div className="bg-white p-6 grid grid-cols-4 gap-6">
+        {filteredAds.length > 0 ? (
+          filteredAds.map((ad) => (
+            <div
+              key={ad.id}
+              className="rounded-xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+            >
+              <div className="w-full h-48 flex-shrink-0 relative">
+                {ad.adFormat === 'MP4' && ad.mediaFile ? (
+                  <video
+                    src={`/uploads/${ad.mediaFile}`}
+                    className="w-full h-full object-cover"
+                    controls
+                  />
+                ) : ad.mediaFile ? (
+                  <img
+                    src={`/uploads/${ad.mediaFile}`}
+                    alt={ad.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
+                    No Media
+                  </div>
+                )}
+              </div>
+              <div className="p-4 bg-gray-100 flex-grow flex flex-col">
+                <h3 className="text-xl font-semibold">{ad.title}</h3>
+                <p className="text-gray-600 text-sm">{ad.description}</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Material: {ad.materialId?.name || 'N/A'}
+                </p>
+                <div className="mt-auto pt-4">
+                  <p className="text-sm text-gray-500">
+                    Plan: {ad.planId?.name || 'N/A'} ({ad.planId?.durationDays} days)
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    ₱{ad.price.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`absolute top-2 left-2 px-2 py-1 text-xs font-bold rounded ${
+                  ad.status === 'PENDING'
+                    ? 'bg-yellow-200 text-yellow-800'
+                    : ad.status === 'APPROVED'
+                    ? 'bg-blue-200 text-blue-800'
+                    : ad.status === 'REJECTED'
+                    ? 'bg-red-200 text-red-800'
+                    : ad.status === 'RUNNING'
+                    ? 'bg-green-200 text-green-800'
+                    : ad.status === 'ENDED'
+                    ? 'bg-gray-400 text-white'
+                    : 'bg-gray-200 text-gray-800'
+                }`}
+              >
+                {ad.status}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="col-span-4 text-center text-gray-500">
+            No advertisements found.
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-export default CreateAdvertisement;
+export default Advertisements;

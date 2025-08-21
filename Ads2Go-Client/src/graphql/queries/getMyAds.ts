@@ -12,8 +12,28 @@ export const GET_MY_ADS = gql`
       status
       createdAt
       price
-      planId       # ✅ no subfields
-      materialId   # ✅ no subfields
+
+      planId {       # populated AdsPlan object
+        id
+        name
+        durationDays
+        playsPerDayPerDevice
+        numberOfDevices
+        adLengthMinutes
+        pricePerPlay
+        totalPrice
+      }
+
+      materialId {   # populated Material object
+        id
+        materialType
+        category
+        description
+        mountedAt
+        dismountedAt
+      }
+
+      
     }
   }
 `;
