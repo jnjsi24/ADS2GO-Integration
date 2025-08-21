@@ -9,7 +9,7 @@ module.exports = gql`
     materialType: String!
     vehicleType: String!
     numberOfDevices: Int!
-    adLengthMinutes: Int!
+    adLengthSeconds: Int!
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     pricePerPlay: Float!
@@ -26,15 +26,35 @@ module.exports = gql`
 
   input AdsPlanInput {
     name: String!
+    description: String!
     durationDays: Int!
     category: String!
     materialType: String!
     vehicleType: String!
     numberOfDevices: Int!
-    adLengthMinutes: Int!
-    playsPerDayPerDevice: Int!
-    pricePerPlay: Float!
-    description: String!
+    adLengthSeconds: Int!
+    playsPerDayPerDevice: Int
+    pricePerPlay: Float
+    deviceCostOverride: Int
+    durationCostOverride: Int
+    adLengthCostOverride: Int
+  }
+
+  # 👇 New: Update input with all optional fields
+  input AdsPlanUpdateInput {
+    name: String
+    description: String
+    durationDays: Int
+    category: String
+    materialType: String
+    vehicleType: String
+    numberOfDevices: Int
+    adLengthSeconds: Int
+    playsPerDayPerDevice: Int
+    pricePerPlay: Float
+    deviceCostOverride: Int
+    durationCostOverride: Int
+    adLengthCostOverride: Int
   }
 
   type Query {
@@ -51,7 +71,7 @@ module.exports = gql`
 
   type Mutation {
     createAdsPlan(input: AdsPlanInput!): AdsPlan
-    updateAdsPlan(id: ID!, input: AdsPlanInput!): AdsPlan
+    updateAdsPlan(id: ID!, input: AdsPlanUpdateInput!): AdsPlan
     deleteAdsPlan(id: ID!): String
     startAdsPlan(id: ID!): AdsPlan
     endAdsPlan(id: ID!): AdsPlan

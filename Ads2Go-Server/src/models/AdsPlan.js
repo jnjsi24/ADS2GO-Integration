@@ -1,9 +1,12 @@
+//adsPlan.js
+
+
 const mongoose = require('mongoose');
 
 const toUpper = v => (typeof v === 'string' ? v.toUpperCase() : v);
 
 const adsPlanSchema = new mongoose.Schema({
-  name: { type: String, required: true }, // Plan name (e.g., "City Dominator")
+  name: { type: String, required: true }, // Plan name (e.g., "Motorcycle • LCD • 1 device • 20 sec • 1-month")
   
   durationDays: { type: Number, required: true }, // Plan length in days
   
@@ -17,23 +20,23 @@ const adsPlanSchema = new mongoose.Schema({
   materialType: { 
     type: String, 
     required: true, 
-    set: toUpper   // e.g. "lcd" -> "LCD"
+    set: toUpper   // e.g. "lcd" -> "LCD", "headdress" -> "HEADDRESS"
   }, 
   
   vehicleType: { 
     type: String, 
     required: true, 
-    set: toUpper   // e.g. "car" -> "CAR"
+    set: toUpper   // e.g. "motorcycle" -> "MOTORCYCLE", "car" -> "CAR"
   }, 
   
   numberOfDevices: { type: Number, required: true }, 
-  adLengthMinutes: { type: Number, required: true }, 
-  playsPerDayPerDevice: { type: Number, required: true }, 
+  adLengthSeconds: { type: Number, required: true }, 
+  playsPerDayPerDevice: { type: Number, required: true, default: 160 }, // Fixed at 160 plays per device per day
   
   totalPlaysPerDay: { type: Number, required: true }, 
-  pricePerPlay: { type: Number, required: true }, 
+  pricePerPlay: { type: Number, required: true, default: 1 }, // ₱1 per play
   dailyRevenue: { type: Number, required: true }, 
-  totalPrice: { type: Number, required: true }, 
+  totalPrice: { type: Number, required: true }, // Total price in Philippine Pesos
   
   description: { type: String, required: true }, 
 
