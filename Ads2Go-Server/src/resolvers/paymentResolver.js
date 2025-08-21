@@ -14,9 +14,18 @@ const paymentResolvers = {
 
     getPaymentsByUser: async (_, __, { user }) => {
       checkAuth(user);
-      return await Payment.find({ userId: user.id })
+
+      // ✅ Debug log to check userId
+      console.log("Fetching payments for userId:", user.id);
+
+      // ✅ Fetch all payments for this user
+      const payments = await Payment.find({ userId: user.id })
         .sort({ createdAt: -1 })
         .populate('adsId');
+
+      console.log(`Found ${payments.length} payments for user ${user.id}`);
+
+      return payments;
     },
 
     getPaymentById: async (_, { id }, { user }) => {
@@ -38,25 +47,22 @@ const paymentResolvers = {
 
   Mutation: {
     createPayment: async (_, { input }, { user }) => {
-      checkAuth(user); // Ensure the user is logged in
+      checkAuth(user);
 
       const ad = await Ad.findById(input.adsId);
       if (!ad) {
         throw new Error('Ad not found');
       }
 
-      // ✅ Validation: Only allow payment if ad is approved
       if (ad.status !== 'APPROVED') {
         throw new Error('Payment cannot be created. The ad is not yet approved.');
       }
 
-      // Check if a payment already exists for this ad
       const existingPayment = await Payment.findOne({ adsId: input.adsId });
       if (existingPayment) {
         throw new Error('A payment for this ad already exists.');
       }
 
-      // Check if the authenticated user is the ad owner OR an admin
       const isOwner = ad.userId.toString() === user.id;
       const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
 
@@ -64,13 +70,11 @@ const paymentResolvers = {
         throw new Error('Not authorized to create payment for this ad');
       }
 
-      // Fetch the plan to get the totalPrice
       const plan = await AdsPlan.findById(ad.planId);
       if (!plan) {
         throw new Error('Associated plan not found');
       }
 
-      // Always assign payment to the ad's owner
       const newPayment = new Payment({
         userId: ad.userId,
         adsId: ad._id,
@@ -84,7 +88,6 @@ const paymentResolvers = {
 
       await newPayment.save();
 
-      // ✅ If admin sets payment directly to PAID, activate ad immediately
       if (newPayment.paymentStatus === 'PAID') {
         ad.adStatus = 'ACTIVE';
         ad.paymentStatus = 'PAID';
@@ -112,7 +115,6 @@ const paymentResolvers = {
       payment.paymentStatus = paymentStatus;
       await payment.save();
 
-      // ✅ If payment is now marked PAID, activate the ad
       if (payment.paymentStatus === 'PAID') {
         const ad = await Ad.findById(payment.adsId);
         if (ad) {
@@ -154,6 +156,9 @@ const paymentResolvers = {
   Payment: {
     plan: async (parent) => {
       return await AdsPlan.findById(parent.planID);
+    },
+    ad: async (parent) => {
+      return await Ad.findById(parent.adsId);
     }
   },
 };
