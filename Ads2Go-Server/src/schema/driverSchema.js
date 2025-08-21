@@ -1,13 +1,13 @@
-
-
 const gql = require('graphql-tag');
 
 const typeDefs = gql`
+  """
+  ENUMS
+  """
   enum DriverAccountStatus {
     PENDING
     ACTIVE
     SUSPENDED
-    APPROVED
     REJECTED
     RESUBMITTED
   }
@@ -19,31 +19,82 @@ const typeDefs = gql`
     STICKER
   }
 
+  enum MaterialTypeEnum {
+    LCD
+    BANNER
+    STICKER
+    HEADDRESS
+    POSTER
+  }
+
+  enum MaterialCategory {
+    DIGITAL
+    NON_DIGITAL
+  }
+
+  enum VehicleType {
+    CAR
+    MOTOR
+    BUS
+    JEEP
+    E_TRIKE
+  }
+
+  """
+  TYPES
+  """
+  type MaterialInfo {
+    id: ID!
+    materialId: String!
+    materialType: MaterialTypeEnum!
+    category: MaterialCategory!
+    description: String
+    requirements: String
+    vehicleType: VehicleType!
+    mountedAt: String
+    dismountedAt: String
+  }
+
   type EditRequestData {
     firstName: String
+    middleName: String
     lastName: String
     contactNumber: String
+    email: String
     address: String
+    profilePicture: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: VehicleType
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+    preferredMaterialType: [MaterialTypeEnum!]
+    reason: String
   }
 
   type Driver {
     id: ID!
     driverId: String!
+    materialId: String
     reviewStatus: String
     firstName: String!
+    middleName: String
     lastName: String!
+    fullName: String!
     contactNumber: String!
     email: String!
-    verified: Boolean!
-    address: String!
-    licenseNumber: String!
-    licensePictureURL: String!
-    vehiclePlateNumber: String!
-    vehicleType: String!
-    vehicleModel: String!
-    vehicleYear: Int!
-    vehiclePhotoURL: String!
-    orCrPictureURL: String!
+    address: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: VehicleType!
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
     accountStatus: DriverAccountStatus!
     dateJoined: String!
     currentBalance: Float!
@@ -55,20 +106,22 @@ const typeDefs = gql`
     emailVerificationCode: String
     emailVerificationCodeExpires: String
     lastLogin: String
-    preferredMaterialType: [InstalledMaterialType!]
+    preferredMaterialType: [MaterialTypeEnum!]!
     adminOverrideMaterialType: InstalledMaterialType
     adminOverride: Boolean
     approvalDate: String
     rejectedReason: String
     editRequestStatus: String
     editRequestData: EditRequestData
+    profilePicture: String
+    material: MaterialInfo   # Reference to assigned material
+    createdAt: String
+    updatedAt: String
   }
 
-  type MaterialInfo {
-    id: ID!
-    materialType: InstalledMaterialType!
-    vehicleType: String!
-    newDriverId: String
+  type DriverWithMaterial {
+    driver: Driver!
+    assignedMaterial: MaterialInfo
   }
 
   type AuthPayload {
@@ -99,27 +152,76 @@ const typeDefs = gql`
     driver: Driver
   }
 
-  input CreateDriverInput {
+  type LoginDriverPayload {
+    success: Boolean!
+    message: String!
+    token: String
+    driver: Driver
+  }
+
+  type Response {
+    success: Boolean!
+    message: String!
+  }
+
+  type DriverMutationResponse {
+    success: Boolean!
+    message: String!
+    driver: Driver
+  }
+
+  """
+  INPUTS
+  """
+  input DeviceInfoInput {
+    deviceId: String!
+    deviceType: String!
+    deviceName: String!
+  }
+
+  input DriverInput {
     firstName: String!
+    middleName: String
     lastName: String!
     contactNumber: String!
     email: String!
     password: String!
-    address: String!
-    licenseNumber: String!
-    licensePictureURL: String!
-    vehiclePlateNumber: String!
-    vehicleType: String!
-    vehicleModel: String!
+    address: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: VehicleType!
+    vehicleModel: String
     vehicleYear: Int!
-    vehiclePhotoURL: String!
-    orCrPictureURL: String!
-    installedMaterialType: InstalledMaterialType
-    preferredMaterialType: [InstalledMaterialType!]
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+    preferredMaterialType: [MaterialTypeEnum!]
+    profilePicture: String
+  }
+
+  input DriverEditInput {
+    firstName: String
+    middleName: String
+    lastName: String
+    contactNumber: String
+    email: String
+    address: String
+    profilePicture: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: VehicleType
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+    preferredMaterialType: [MaterialTypeEnum!]
+    reason: String!
   }
 
   input UpdateDriverInput {
     firstName: String
+    middleName: String
     lastName: String
     contactNumber: String
     email: String
@@ -128,18 +230,20 @@ const typeDefs = gql`
     licenseNumber: String
     licensePictureURL: String
     vehiclePlateNumber: String
-    vehicleType: String
+    vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
     orCrPictureURL: String
     accountStatus: DriverAccountStatus
     installedMaterialType: InstalledMaterialType
-    preferredMaterialType: [InstalledMaterialType!]
+    preferredMaterialType: [MaterialTypeEnum!]
+    profilePicture: String
   }
 
   input ResubmitDriverInput {
     firstName: String
+    middleName: String
     lastName: String
     contactNumber: String
     email: String
@@ -148,38 +252,75 @@ const typeDefs = gql`
     licenseNumber: String
     licensePictureURL: String
     vehiclePlateNumber: String
-    vehicleType: String
+    vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
     vehiclePhotoURL: String
     orCrPictureURL: String
-    preferredMaterialType: [InstalledMaterialType!]
+    preferredMaterialType: [MaterialTypeEnum!]
+    profilePicture: String
   }
 
   input DriverEditRequestInput {
     firstName: String
+    middleName: String
     lastName: String
     contactNumber: String
+    email: String
     address: String
+    profilePicture: String
+    licenseNumber: String
+    licensePictureURL: String
+    vehiclePlateNumber: String
+    vehicleType: VehicleType
+    vehicleModel: String
+    vehicleYear: Int
+    vehiclePhotoURL: String
+    orCrPictureURL: String
+    preferredMaterialType: [MaterialTypeEnum!]
+    reason: String!
   }
 
+  """
+  QUERIES
+  """
   type Query {
     getAllDrivers: [Driver!]!
     getDriverById(driverId: ID!): Driver
+    getPendingDrivers: [Driver!]!
     getDriversWithPendingEdits: [Driver!]!
+    getDriverWithMaterial(driverId: ID!): DriverWithMaterial
   }
 
+  """
+  MUTATIONS
+  """
   type Mutation {
-    createDriver(input: CreateDriverInput!): DriverResponse!
+    createDriver(input: DriverInput!): DriverResponse!
     updateDriver(driverId: ID!, input: UpdateDriverInput!): DriverResponse!
     deleteDriver(driverId: ID!): DriverResponse!
-    loginDriver(email: String!, password: String!): DriverResponse!
+
+    loginDriver(email: String!, password: String!, deviceInfo: DeviceInfoInput!): LoginDriverPayload!
     verifyDriverEmail(code: String!): DriverResponse!
-    resendDriverVerificationCode(email: String!): DriverResponse!
-    approveDriver(driverId: ID!, materialTypeOverride: [InstalledMaterialType]): DriverResponse!
+    resendDriverVerificationCode(email: String!): Response!
+    resetDriverPassword(email: String!, newPassword: String!): Response!
+
+    """
+    Approve a driver's account and optionally assign a material type
+    """
+    approveDriver(
+      "The ID of the driver to approve"
+      driverId: ID!
+      
+      "Optional: Override the driver's preferred material types"
+      materialTypeOverride: [MaterialTypeEnum!]
+    ): DriverMutationResponse!
+
     rejectDriver(driverId: ID!, reason: String!): DriverResponse!
     resubmitDriver(driverId: ID!, input: ResubmitDriverInput!): DriverResponse!
+
     unassignAndReassignMaterials(driverId: ID!): DriverResponseWithMaterials!
+
     approveDriverEditRequest(id: ID!): ApproveDriverEditResponse!
     rejectDriverEditRequest(id: ID!, reason: String): ApproveDriverEditResponse!
     requestDriverEdit(input: DriverEditRequestInput!): ApproveDriverEditResponse!
@@ -187,6 +328,3 @@ const typeDefs = gql`
 `;
 
 module.exports = typeDefs;
-
-
-

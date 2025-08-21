@@ -1,5 +1,3 @@
-
-
 const { gql } = require('graphql-tag');
 
 module.exports = gql`
@@ -24,6 +22,14 @@ module.exports = gql`
     BANNER
   }
 
+  type DriverInfo {
+    driverId: String!
+    fullName: String!
+    email: String!
+    contactNumber: String!
+    vehiclePlateNumber: String!
+  }
+
   type Material {
     id: ID!
     materialId: String!          # e.g., DGL-0001 or NDGL-0001
@@ -32,18 +38,24 @@ module.exports = gql`
     description: String
     requirements: String
     category: MaterialCategory!
-    driverId: String             # ✅ FIX: use String, not ID
+    driverId: String             # stored as system driverId (e.g. DRV-001), not ObjectId
+    driver: DriverInfo           # Driver details if assigned
     mountedAt: String
     dismountedAt: String
     createdAt: String
     updatedAt: String
   }
 
+  type MaterialWithDriver {
+    material: Material!
+    assignedDriver: DriverInfo
+  }
+
   input CreateMaterialInput {
     vehicleType: VehicleType!
     materialType: MaterialType!
     description: String
-    requirements: String
+    requirements: String!
     category: MaterialCategory!
   }
 
@@ -53,27 +65,35 @@ module.exports = gql`
     description: String
     requirements: String
     category: MaterialCategory
+    driverId: ID
     mountedAt: String
     dismountedAt: String
   }
 
+  type MaterialAssignmentResult {
+    success: Boolean!
+    message: String!
+    material: Material
+    driver: DriverInfo
+  }
+
   extend type Query {
+    # Available to Admin, User, Driver (read-only)
     getAllMaterials: [Material!]!
     getMaterialById(id: ID!): Material
     getMaterialsByCategory(category: MaterialCategory!): [Material!]!
+    getMaterialsByVehicleType(vehicleType: VehicleType!): [Material!]!
+    getMaterialWithDriver(materialId: ID!): MaterialWithDriver
   }
 
   type Mutation {
+    # Admin-only
     createMaterial(input: CreateMaterialInput!): Material
     updateMaterial(id: ID!, input: UpdateMaterialInput!): Material
     deleteMaterial(id: ID!): String
 
-    assignMaterialToDriver(driverId: String!): Material  # ✅ FIX: accept driverId as String
+    # Material Assignment (Admin-only)
+    assignMaterialToDriver(driverId: String!): MaterialAssignmentResult
+    unassignMaterialFromDriver(materialId: ID!): MaterialAssignmentResult
   }
 `;
-
-
-
-
-
-

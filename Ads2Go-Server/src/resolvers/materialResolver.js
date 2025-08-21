@@ -1,6 +1,3 @@
-
-
-
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const { checkAdmin } = require('../middleware/auth');
@@ -15,29 +12,65 @@ const allowedMaterialsByVehicle = {
 
 const materialResolvers = {
   Query: {
-    getAllMaterials: async (_, __, context) => {
-      checkAdmin(context.user);
+    getAllMaterials: async (_, __, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      // If driver is logged in → only return materials for their vehicle type
+      if (driver) {
+        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
+      }
+
+      // Admin/User can see all
       return await Material.find().sort({ createdAt: -1 });
     },
 
-    getMaterialsByCategory: async (_, { category }) => {
+    getMaterialsByVehicleType: async (_, { vehicleType }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      // If driver, override the requested vehicleType with their own
+      if (driver) {
+        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
+      }
+
+      return await Material.find({ vehicleType }).sort({ createdAt: -1 });
+    },
+
+    getMaterialsByCategory: async (_, { category }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
       if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
         throw new Error('Invalid material category');
       }
+
+      // If driver, restrict to both category and their vehicleType
+      if (driver) {
+        return await Material.find({
+          category,
+          vehicleType: driver.vehicleType,
+        }).sort({ createdAt: -1 });
+      }
+
       return await Material.find({ category }).sort({ createdAt: -1 });
     },
 
-    getMaterialById: async (_, { id }, context) => {
-      checkAdmin(context.user);
+    getMaterialById: async (_, { id }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
+
+      // If driver, ensure the material matches their vehicleType
+      if (driver && material.vehicleType !== driver.vehicleType) {
+        throw new Error("You are not authorized to view this material");
+      }
+
       return material;
     },
   },
 
   Mutation: {
-    createMaterial: async (_, { input }, context) => {
-      checkAdmin(context.user);
+    createMaterial: async (_, { input }, { user }) => {
+      checkAdmin(user);
 
       const { vehicleType, materialType } = input;
       const allowed = allowedMaterialsByVehicle[vehicleType];
@@ -52,92 +85,123 @@ const materialResolvers = {
         driverId: null, // unassigned on creation
       });
 
-      // Ensure pre-save hook triggers
       await material.save();
       return material;
     },
 
-    updateMaterial: async (_, { id, input }, context) => {
-      checkAdmin(context.user);
+    updateMaterial: async (_, { id, input }, { user }) => {
+      checkAdmin(user);
 
-      if (input.vehicleType && input.materialType) {
-        const allowed = allowedMaterialsByVehicle[input.vehicleType];
-        if (!allowed.includes(input.materialType)) {
-          throw new Error(
-            `${input.materialType} is not allowed for vehicle type ${input.vehicleType}`
-          );
-        }
+      // Only allow updating driverId to null (unlinking driver)
+      const updateFields = {};
+      if (input.driverId === null) {
+        updateFields.driverId = null;
+        updateFields.dismountedAt = new Date();
+      } else if (input.driverId !== undefined) {
+        throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
       }
 
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
 
-      const categoryChanged =
-        input.category !== undefined && input.category !== material.category;
-      const materialTypeChanged =
-        input.materialType !== undefined && input.materialType !== material.materialType;
-      const vehicleTypeChanged =
-        input.vehicleType !== undefined && input.vehicleType !== material.vehicleType;
-
-      Object.keys(input).forEach((key) => {
-        material[key] = input[key];
-      });
-
-      // Force re-generation of materialId if needed
-      if (categoryChanged || materialTypeChanged || vehicleTypeChanged) {
-        material.materialId = undefined;
-      }
-
+      // Only update the allowed fields
+      Object.assign(material, updateFields);
+      
       await material.save();
       return material;
     },
 
-    deleteMaterial: async (_, { id }, context) => {
-      checkAdmin(context.user);
+    deleteMaterial: async (_, { id }, { user }) => {
+      checkAdmin(user);
 
       const deleted = await Material.findByIdAndDelete(id);
       if (!deleted) throw new Error('Material not found or already deleted');
       return 'Material deleted successfully.';
     },
 
-    assignMaterialToDriver: async (_, { driverId }, context) => {
-  checkAdmin(context.user);
+    assignMaterialToDriver: async (_, { driverId }, { user }) => {
+      checkAdmin(user);
 
-  // Find driver by driverId (custom string like DRV-001)
-  const driver = await Driver.findOne({ driverId });
-  if (!driver) throw new Error('Driver not found');
+      // Find the driver
+      const driver = await Driver.findOne({ driverId });
+      if (!driver) throw new Error('Driver not found');
 
-  const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType];
-  if (!allowedTypes) {
-    throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
-  }
+      const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType] || [];
+      if (allowedTypes.length === 0) {
+        throw new Error(`No allowed materials for vehicle type ${driver.vehicleType}`);
+      }
 
-  const availableMaterials = await Material.find({
-    vehicleType: driver.vehicleType,
-    materialType: { $in: allowedTypes },
-    driverId: null, // only unassigned
-  });
+      // Check if this driver already has a material assigned
+      const alreadyAssigned = await Material.findOne({ 
+        driverId: driver.driverId,
+        dismountedAt: { $exists: false } // Only consider active assignments
+      });
+      
+      if (alreadyAssigned) {
+        return { 
+          success: true, 
+          message: 'Driver already has a material assigned',
+          material: alreadyAssigned,
+          driver: {
+            driverId: driver.driverId,
+            fullName: `${driver.firstName} ${driver.lastName}`,
+            email: driver.email,
+            contactNumber: driver.contactNumber,
+            vehiclePlateNumber: driver.vehiclePlateNumber
+          }
+        };
+      }
 
-  if (!availableMaterials.length) {
-    throw new Error('No available materials to assign');
-  }
+      // Find an unassigned material of allowed type
+      // First try to find a material that matches the driver's preferred material type
+      const preferredTypes = driver.preferredMaterialType?.length > 0 
+        ? driver.preferredMaterialType 
+        : allowedTypes;
 
-  const assignedMaterial = availableMaterials[0];
+      const availableMaterial = await Material.findOne({
+        vehicleType: driver.vehicleType,
+        materialType: { $in: preferredTypes },
+        $or: [
+          { driverId: null },
+          { driverId: { $exists: false } },
+          { 
+            driverId: driver.driverId, 
+            dismountedAt: { $ne: null } // Allow reassigning previously used materials
+          }
+        ]
+      }).sort({ dismountedAt: 1 }); // Prefer materials that were dismounted most recently
 
-  // ✅ Assign using the string driverId, not ObjectId
-  assignedMaterial.driverId = driver.driverId;
-  await assignedMaterial.save();
+      if (!availableMaterial) {
+        throw new Error(`No available ${preferredTypes.join('/')} materials for ${driver.vehicleType} to assign`);
+      }
 
-  return assignedMaterial;
-},
+      // Assign driver
+      availableMaterial.driverId = driver.driverId;
+      availableMaterial.mountedAt = new Date();
+      availableMaterial.dismountedAt = null; // Clear dismountedAt when reassigning
+      await availableMaterial.save();
+
+      return {
+        success: true,
+        message: 'Material assigned successfully',
+        material: availableMaterial,
+        driver: {
+          driverId: driver.driverId,
+          fullName: `${driver.firstName} ${driver.lastName}`,
+          email: driver.email,
+          contactNumber: driver.contactNumber,
+          vehiclePlateNumber: driver.vehiclePlateNumber
+        }
+      };
+    },
   },
+
 
   Material: {
     id: (parent) => parent._id.toString(),
-    materialId: (parent) => parent.materialId, // explicitly return the generated materialId
-    driverId: (parent) => parent.driverId,     // always return driverId as string
+    materialId: (parent) => parent.materialId,
+    driverId: (parent) => parent.driverId,
   },
 };
 
 module.exports = materialResolvers;
-

@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const Driver = require('../models/Driver');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -9,33 +8,18 @@ const getUser = async (token) => {
     if (!token) return null;
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    if (decoded.driverId) {
-      const driver = await Driver.findById(decoded.driverId).select('id email isEmailVerified tokenVersion');
-      if (!driver || driver.tokenVersion !== decoded.tokenVersion) return null;
+    if (!decoded.userId) return null;
 
-      return {
-        id: driver.id,
-        email: driver.email,
-        role: 'DRIVER',
-        isEmailVerified: driver.isEmailVerified,
-        tokenVersion: driver.tokenVersion,
-      };
-    }
+    const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
+    if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
 
-    if (decoded.userId) {
-      const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
-      if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
-
-      return {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        isEmailVerified: user.isEmailVerified,
-        tokenVersion: user.tokenVersion,
-      };
-    }
-
-    return null;
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      tokenVersion: user.tokenVersion,
+    };
   } catch (error) {
     console.error('Authentication error:', error.message);
     return null;

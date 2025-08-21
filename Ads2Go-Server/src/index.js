@@ -28,7 +28,9 @@ const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 
-const { authMiddleware } = require('./middleware/auth');
+// 👇 Middleware
+const { authMiddleware } = require('./middleware/auth'); // admin/user auth
+const { driverMiddleware } = require('./middleware/driverAuth'); // driver auth
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -92,14 +94,25 @@ async function startServer() {
   // ✅ Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-  // ✅ Use upload route from /src/routes/upload.js
+  // ✅ Upload route
   const uploadRoute = require('./routes/upload');
   app.use('/upload', uploadRoute);
 
-  // ✅ GraphQL endpoint
+  // ✅ GraphQL endpoint with combined context
   app.use(
     '/graphql',
-    expressMiddleware(server, { context: authMiddleware })
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        // driver auth
+        const { driver } = await driverMiddleware({ req });
+
+        // admin/user auth
+        const { user } = await authMiddleware({ req });
+
+        // Return both in context
+        return { driver, user };
+      },
+    })
   );
 
   // ✅ Global error handler
