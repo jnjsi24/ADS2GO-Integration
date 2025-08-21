@@ -55,11 +55,9 @@ const AdSchema = new mongoose.Schema({
   pricePerPlay: { type: Number, required: true },
   totalPrice: { type: Number, required: true },
   price: { type: Number, required: true },
-  durationType: {
-    type: String,
-    enum: ['WEEKLY', 'MONTHLY', 'YEARLY'],
-    required: true
-  },
+
+  // ✅ Replaced durationType with durationDays (sourced from AdsPlan)
+  durationDays: { type: Number, required: true },
 
   // Approval & tracking
   status: {

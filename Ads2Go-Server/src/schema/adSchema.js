@@ -15,12 +15,6 @@ const adTypeDefs = gql`
     NON_DIGITAL
   }
 
-  enum AdDurationType {
-    WEEKLY
-    MONTHLY
-    YEARLY
-  }
-
   type Ad {
     id: ID!                # ✅ alias for Mongo _id
     userId: User!          # ✅ relationship
@@ -41,12 +35,12 @@ const adTypeDefs = gql`
     totalPlaysPerDay: Int!
     pricePerPlay: Float!
     totalPrice: Float!     # ✅ Calculated: totalPlaysPerDay * pricePerPlay * duration in days
+    durationDays: Int!     # ✅ Direct from AdsPlan, replaces durationType
 
     status: AdStatus!
     startTime: String!
     endTime: String!
     adType: AdType!
-    durationType: AdDurationType!
     reasonForReject: String
     approveTime: String
     rejectTime: String
@@ -64,7 +58,7 @@ const adTypeDefs = gql`
     mediaFile: String!
     startTime: String!
     adType: AdType!
-    durationType: AdDurationType! # ✅ used for price & endTime calculation
+    # ❌ Removed durationType (comes from AdsPlan.durationDays instead)
   }
 
   input UpdateAdInput {
@@ -77,8 +71,8 @@ const adTypeDefs = gql`
     status: AdStatus
     startTime: String
     adType: AdType
-    durationType: AdDurationType
     rejectReason: String
+    # ❌ Removed durationType (comes from AdsPlan.durationDays instead)
   }
 
   type Query {

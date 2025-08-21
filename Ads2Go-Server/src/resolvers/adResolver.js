@@ -4,12 +4,6 @@ const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
-const DAYS_MAP = {
-  WEEKLY: 7,
-  MONTHLY: 30,
-  YEARLY: 365
-};
-
 const adResolvers = {
   Query: {
     getAllAds: async (_, __, { user }) => {
@@ -35,74 +29,76 @@ const adResolvers = {
         .populate('planId');
     },
 
-getAdById: async (_, { id }, { user }) => {
-  checkAuth(user);
+    getAdById: async (_, { id }, { user }) => {
+      checkAuth(user);
 
-  // ✅ Only ADMIN or SUPERADMIN can access
-  if (!['ADMIN', 'SUPERADMIN'].includes(user.role)) {
-    throw new Error('Not authorized to view ads');
-  }
+      if (!['ADMIN', 'SUPERADMIN'].includes(user.role)) {
+        throw new Error('Not authorized to view ads');
+      }
 
-  const ad = await Ad.findById(id)
-    .populate('materialId')
-    .populate('planId')
-    .populate('userId'); // optional if you want to see the user details too
+      const ad = await Ad.findById(id)
+        .populate('materialId')
+        .populate('planId')
+        .populate('userId');
 
-  if (!ad) throw new Error('Ad not found');
+      if (!ad) throw new Error('Ad not found');
 
-  return ad;
-},
+      return ad;
+    },
   },
 
   Mutation: {
     createAd: async (_, { input }, { user }) => {
-      checkAuth(user);
+  checkAuth(user);
 
-      const dbUser = await User.findById(user.id);
-      if (!dbUser) throw new Error('User not found');
-      if (!dbUser.isEmailVerified && !['ADMIN', 'SUPERADMIN'].includes(user.role)) {
-        throw new Error('Please verify your email before creating an advertisement');
-      }
+  const dbUser = await User.findById(user.id);
+  if (!dbUser) throw new Error('User not found');
+  if (!dbUser.isEmailVerified && !['ADMIN', 'SUPERADMIN'].includes(user.role)) {
+    throw new Error('Please verify your email before creating an advertisement');
+  }
 
-      const plan = await Plan.findById(input.planId);
-      if (!plan) throw new Error('Invalid plan selected');
+  const plan = await Plan.findById(input.planId);
+  if (!plan) throw new Error('Invalid plan selected');
 
-      if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
-        throw new Error('Invalid adType');
-      }
+  if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
+    throw new Error('Invalid adType');
+  }
 
-      const materialExists = await Material.exists({ _id: input.materialId });
-      if (!materialExists) throw new Error('Material not found');
+  const materialExists = await Material.exists({ _id: input.materialId });
+  if (!materialExists) throw new Error('Material not found');
 
-      const days = DAYS_MAP[input.durationType] || plan.durationDays || 7;
+  // ✅ Always take durationDays from the plan
+  const days = plan.durationDays;
 
-      const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
-      const totalPrice = totalPlaysPerDay * plan.pricePerPlay * days;
+  const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
+  const totalPrice = totalPlaysPerDay * plan.pricePerPlay * days;
 
-      const startTime = new Date(input.startTime);
-      const endTime = new Date(startTime);
-      endTime.setDate(startTime.getDate() + days);
+  const startTime = new Date(input.startTime);
+  const endTime = new Date(startTime);
+  endTime.setDate(startTime.getDate() + days);
 
-      const ad = new Ad({
-        ...input,
-        userId: user.id,
-        numberOfDevices: plan.numberOfDevices,
-        adLengthSeconds: plan.adLengthSeconds,
-        playsPerDayPerDevice: plan.playsPerDayPerDevice,
-        totalPlaysPerDay,
-        pricePerPlay: plan.pricePerPlay,
-        totalPrice,
-        price: totalPrice,
-        endTime,
-        status: 'PENDING',
-        impressions: 0,
-        reasonForReject: null,
-        approveTime: null,
-        rejectTime: null
-      });
+  const ad = new Ad({
+    ...input,
+    userId: user.id,
+    durationDays: days, // ✅ Inject here
+    numberOfDevices: plan.numberOfDevices,
+    adLengthSeconds: plan.adLengthSeconds,
+    playsPerDayPerDevice: plan.playsPerDayPerDevice,
+    totalPlaysPerDay,
+    pricePerPlay: plan.pricePerPlay,
+    totalPrice,
+    price: totalPrice,
+    startTime,
+    endTime,
+    status: 'PENDING',
+    impressions: 0,
+    reasonForReject: null,
+    approveTime: null,
+    rejectTime: null
+  });
 
-      return await ad.save();
-    },
+  return await ad.save();
+},
 
     updateAd: async (_, { id, input }, { user }) => {
       checkAuth(user);
@@ -111,7 +107,7 @@ getAdById: async (_, { id }, { user }) => {
 
       const isAdmin = ['ADMIN', 'SUPERADMIN'].includes(user.role);
 
-      const applyPlanChanges = async (planId, startTime, durationType) => {
+      const applyPlanChanges = async (planId, startTime) => {
         const plan = await Plan.findById(planId);
         if (!plan) throw new Error('Invalid plan selected');
 
@@ -122,7 +118,8 @@ getAdById: async (_, { id }, { user }) => {
         ad.totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
         ad.pricePerPlay = plan.pricePerPlay;
 
-        const days = DAYS_MAP[durationType] || plan.durationDays || 7;
+        // ✅ Use durationDays from plan
+        const days = plan.durationDays;
         ad.totalPrice = ad.totalPlaysPerDay * plan.pricePerPlay * days;
         ad.price = ad.totalPrice;
 
@@ -139,67 +136,66 @@ getAdById: async (_, { id }, { user }) => {
       }
 
       if (isAdmin) {
-  if (input.status && input.status !== ad.status) {
-    ad.status = input.status;
+        if (input.status && input.status !== ad.status) {
+          ad.status = input.status;
 
-    if (input.status === "APPROVED") {
-      ad.approveTime = new Date();
-      ad.rejectTime = null;
-      ad.rejectReason = null;
-    } else if (input.status === "REJECTED") {
-      ad.rejectTime = new Date();
-      ad.approveTime = null;
-      ad.rejectReason = input.rejectReason || "No reason provided";
-    } else {
-      // Reset if moved back to pending/draft/etc.
-      ad.approveTime = null;
-      ad.rejectTime = null;
-      ad.rejectReason = null;
-    }
-  }
+          if (input.status === "APPROVED") {
+            ad.approveTime = new Date();
+            ad.rejectTime = null;
+            ad.rejectReason = null;
+          } else if (input.status === "REJECTED") {
+            ad.rejectTime = new Date();
+            ad.approveTime = null;
+            ad.rejectReason = input.rejectReason || "No reason provided";
+          } else {
+            ad.approveTime = null;
+            ad.rejectTime = null;
+            ad.rejectReason = null;
+          }
+        }
 
-  if (input.planId) {
-    await applyPlanChanges(input.planId, input.startTime || ad.startTime, input.durationType);
-  }
+        if (input.planId) {
+          await applyPlanChanges(input.planId, input.startTime || ad.startTime);
+        }
 
-  if (input.startTime) {
-    ad.startTime = new Date(input.startTime);
-    if (ad.planId) {
-      await applyPlanChanges(ad.planId, input.startTime, input.durationType);
-    }
-  }
+        if (input.startTime) {
+          ad.startTime = new Date(input.startTime);
+          if (ad.planId) {
+            await applyPlanChanges(ad.planId, input.startTime);
+          }
+        }
 
-  if (input.adType && ["DIGITAL", "NON_DIGITAL"].includes(input.adType)) ad.adType = input.adType;
-  if (input.title !== undefined) ad.title = input.title;
-  if (input.description !== undefined) ad.description = input.description;
-  if (input.adFormat !== undefined) ad.adFormat = input.adFormat;
-  if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
-  if (input.materialId !== undefined) ad.materialId = input.materialId;
-} else {
-  if (ad.userId.toString() !== user.id) throw new Error("Not authorized to update this ad");
-  if (input.status && input.status !== ad.status) throw new Error("You are not authorized to update the status");
+        if (input.adType && ["DIGITAL", "NON_DIGITAL"].includes(input.adType)) ad.adType = input.adType;
+        if (input.title !== undefined) ad.title = input.title;
+        if (input.description !== undefined) ad.description = input.description;
+        if (input.adFormat !== undefined) ad.adFormat = input.adFormat;
+        if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
+        if (input.materialId !== undefined) ad.materialId = input.materialId;
+      } else {
+        if (ad.userId.toString() !== user.id) throw new Error("Not authorized to update this ad");
+        if (input.status && input.status !== ad.status) throw new Error("You are not authorized to update the status");
 
-  if (input.planId) {
-    await applyPlanChanges(input.planId, input.startTime || ad.startTime, input.durationType);
-  }
+        if (input.planId) {
+          await applyPlanChanges(input.planId, input.startTime || ad.startTime);
+        }
 
-  if (input.startTime) {
-    ad.startTime = new Date(input.startTime);
-    if (ad.planId) {
-      await applyPlanChanges(ad.planId, input.startTime, input.durationType);
-    }
-  }
+        if (input.startTime) {
+          ad.startTime = new Date(input.startTime);
+          if (ad.planId) {
+            await applyPlanChanges(ad.planId, input.startTime);
+          }
+        }
 
-  if (input.adType && ["DIGITAL", "NON_DIGITAL"].includes(input.adType)) ad.adType = input.adType;
-  if (input.title !== undefined) ad.title = input.title;
-  if (input.description !== undefined) ad.description = input.description;
-  if (input.adFormat !== undefined) ad.adFormat = input.adFormat;
-  if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
-  if (input.materialId !== undefined) ad.materialId = input.materialId;
-}
+        if (input.adType && ["DIGITAL", "NON_DIGITAL"].includes(input.adType)) ad.adType = input.adType;
+        if (input.title !== undefined) ad.title = input.title;
+        if (input.description !== undefined) ad.description = input.description;
+        if (input.adFormat !== undefined) ad.adFormat = input.adFormat;
+        if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
+        if (input.materialId !== undefined) ad.materialId = input.materialId;
+      }
 
-await ad.save();
-return ad;
+      await ad.save();
+      return ad;
     },
 
     deleteAd: async (_, { id }, { user }) => {
@@ -209,7 +205,6 @@ return ad;
     }
   },
 
-  // ✅ Needed for Option 2 (_id → id)
   Ad: {
     id: (parent) => parent._id.toString(),
     userId: async (parent) => await User.findById(parent.userId),
