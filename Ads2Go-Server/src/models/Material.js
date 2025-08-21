@@ -26,13 +26,14 @@ const MaterialSchema = new mongoose.Schema({
   },
   materialId: {
     type: String,
-    unique: true,
     index: true,
   },
   driverId: {
-  type: String,   // <-- store DRV-001 instead of ObjectId
-  default: null,
-},
+    type: String,   // DRV-001, not ObjectId
+    default: null,
+    index: true,
+    sparse: true,
+  },
   mountedAt: {
     type: Date,
     default: null,
@@ -41,30 +42,71 @@ const MaterialSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
-}, { timestamps: true });
+}, { 
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-// Pre-save hook to auto-generate materialId
-MaterialSchema.pre('save', async function () {
-  if (
-    this.isModified('category') || 
-    this.isModified('materialType') || 
-    this.isModified('vehicleType') || 
-    !this.materialId
-  ) {
-    const categoryAbbrev = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
-    const baseId = `${categoryAbbrev}_${this.materialType}_${this.vehicleType}`;
-
-    // Count how many materials already have a similar ID
+// Pre-save hook to generate sequential materialId
+MaterialSchema.pre('save', async function() {
+  if (this.isNew) {
+    const prefix = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
+    const baseId = `${prefix}-${this.materialType}-${this.vehicleType}`;
+    
+    // Find the count of existing materials with the same type and vehicle
     const count = await this.constructor.countDocuments({
-      materialId: new RegExp(`^${baseId}`),
-      _id: { $ne: this._id }, // exclude current doc if updating
+      materialType: this.materialType,
+      vehicleType: this.vehicleType,
+      category: this.category
     });
-
-    // Assign materialId with increment if needed
-    this.materialId = count === 0 ? baseId : `${baseId}_${count + 1}`;
+    
+    // Generate the new ID with 3-digit padding
+    this.materialId = `${baseId}-${String(count + 1).padStart(3, '0')}`;
   }
 });
 
+// Virtual for driver details
+MaterialSchema.virtual('driver', {
+  ref: 'Driver',
+  localField: 'driverId',
+  foreignField: 'driverId',
+  justOne: true,
+  options: { select: 'driverId firstName lastName email contactNumber' }
+});
+
+// Method to assign to driver
+MaterialSchema.methods.assignToDriver = async function(driverId) {
+  if (this.driverId) {
+    throw new Error('Material is already assigned to a driver');
+  }
+  
+  this.driverId = driverId;
+  this.mountedAt = new Date();
+  await this.save();
+  return this;
+};
+
+// Method to unassign from driver
+MaterialSchema.methods.unassignFromDriver = async function() {
+  if (!this.driverId) {
+    throw new Error('Material is not assigned to any driver');
+  }
+  
+  this.driverId = null;
+  this.dismountedAt = new Date();
+  await this.save();
+  return this;
+};
+
+// Index to ensure one-to-one relationship between driver and material
+MaterialSchema.index(
+  { driverId: 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { driverId: { $exists: true } },
+    name: 'driverId_unique_when_set'
+  }
+);
+
 module.exports = mongoose.model('Material', MaterialSchema);
-
-
