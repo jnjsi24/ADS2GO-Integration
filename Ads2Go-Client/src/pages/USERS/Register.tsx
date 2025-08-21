@@ -46,9 +46,8 @@ const RiderCompanyRegister: React.FC = () => {
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-  return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
-}
-
+          return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
+        }
         return '';
       case 'email':
         if (!value.trim()) return 'Email is required';
@@ -119,11 +118,12 @@ const RiderCompanyRegister: React.FC = () => {
         // userType removed — backend does not expect this
       };
 
-      const success = await register(registrationData);
-      if (success) {
+      const result = await register(registrationData);
+      
+      if (result.success) {
         navigate('/verify-email');
       } else {
-        setRegistrationError('Registration failed. Please try again.');
+        setRegistrationError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
       setRegistrationError(
@@ -145,7 +145,7 @@ const RiderCompanyRegister: React.FC = () => {
         </div>
 
         {registrationError && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-md">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg
@@ -162,7 +162,10 @@ const RiderCompanyRegister: React.FC = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-700">{registrationError}</p>
+                <h3 className="text-sm font-medium text-red-800">
+                  Registration Error
+                </h3>
+                <p className="text-sm text-red-700 mt-1">{registrationError}</p>
               </div>
             </div>
           </div>
