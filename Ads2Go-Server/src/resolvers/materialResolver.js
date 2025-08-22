@@ -1,6 +1,8 @@
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
+const Tablet = require('../models/Tablet');
 const { checkAdmin } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
 const allowedMaterialsByVehicle = {
   CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
@@ -86,6 +88,34 @@ const materialResolvers = {
       });
 
       await material.save();
+
+      // Create tablet pair if the material type is HEADDRESS
+      if (materialType === 'HEADDRESS') {
+        const carGroupId = `GRP-${uuidv4().substring(0, 8).toUpperCase()}`;
+        
+        // Create a single document with both tablets
+        const tabletPair = new Tablet({
+          materialId: material._id,
+          carGroupId,
+          tablets: [
+            {
+              tabletNumber: 1,
+              status: 'OFFLINE',
+              gps: { lat: null, lng: null },
+              lastSeen: null
+            },
+            {
+              tabletNumber: 2,
+              status: 'OFFLINE',
+              gps: { lat: null, lng: null },
+              lastSeen: null
+            }
+          ]
+        });
+        
+        await tabletPair.save();
+      }
+
       return material;
     },
 
