@@ -20,25 +20,39 @@ const paymentResolvers = {
   
 
   getPaymentsByUser: async (_, { paymentStatus }, { user }) => {
-    checkAuth(user);
+      checkAuth(user);
 
-    // Ensure correct type for userId
-    let userIdFilter;
-    if (mongoose.Types.ObjectId.isValid(user.id)) {
-      userIdFilter = new mongoose.Types.ObjectId(user.id);
-    } else {
-      userIdFilter = user.id;
-    }
+      // Ensure correct type for userId
+      const userIdFilter = mongoose.Types.ObjectId.isValid(user.id)
+        ? new mongoose.Types.ObjectId(user.id)
+        : user.id;
 
-    const filter = { userId: userIdFilter };
+      const filter = { userId: userIdFilter };
 
-    // Add paymentStatus filter if provided
-    if (paymentStatus) {
-      filter.paymentStatus = paymentStatus;
-    }
+      // Add paymentStatus filter if provided
+      if (paymentStatus) {
+        filter.paymentStatus = paymentStatus;
+      }
 
-    return await Payment.find(filter).sort({ createdAt: -1 });
-  },
+      // Fetch payments
+      const payments = await Payment.find(filter).sort({ createdAt: -1 });
+
+      // Populate durationDays from adsId and planID
+      const results = await Promise.all(
+        payments.map(async (p) => {
+          const ad = await Ad.findById(p.adsId).select('id title durationDays');
+          const plan = await AdsPlan.findById(p.planID).select('id title durationDays');
+          return {
+            ...p.toObject(),
+            adsId: ad,
+            planID: plan,
+          };
+        })
+      );
+
+      return results;
+    },
+
 
     getPaymentById: async (_, { id }, { user }) => {
       checkAuth(user);

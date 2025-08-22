@@ -39,12 +39,11 @@ const paymentTypeDefs = gql`
     pricePerPlay: Float
   }
 
-
   type Payment {
     id: ID!
     userId: ID!
-    adsId: Ad        # returns the full Ad object
-    planID: AdsPlan  # returns the full Plan object
+    adsId: Ad
+    planID: AdsPlan
     paymentDate: String
     paymentType: PaymentType!
     amount: Float!
@@ -53,7 +52,6 @@ const paymentTypeDefs = gql`
     createdAt: String!
     updatedAt: String!
   }
-
 
   input CreatePaymentInput {
     adsId: ID!
@@ -78,7 +76,7 @@ const paymentTypeDefs = gql`
   }
 
   type Query {
-    getPaymentsByUser(paymentStatus: PaymentStatus): [Payment!]!
+    getPaymentsByUser(paymentStatus: PaymentStatus, durationDays: Int): [Payment!]!
     getAllPayments(paymentStatus: PaymentStatus): [Payment!]!
     getPaymentById(id: ID!): Payment
     getUserAdsWithPayments: [AdPaymentInfo!]!
