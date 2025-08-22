@@ -1,14 +1,26 @@
-// AdsPlanResolver.js
-
 const AdsPlan = require('../models/AdsPlan');
 
-// Helper function to calculate pricing in Philippine Pesos
+// Helper function to get pricePerPlay rules
+const getPricePerPlay = (vehicleType, materialType, override = null) => {
+  if (override !== null) return override; // allow SUPERADMIN override
+
+  if (vehicleType === 'CAR') {
+    if (materialType === 'LCD') return 3;
+    if (materialType === 'HEADDRESS') return 2;
+  }
+  if (vehicleType === 'MOTORCYCLE') {
+    if (materialType === 'LCD') return 1;
+  }
+  return 1; // default fallback
+};
+
+// Helper function to calculate pricing
 const calculatePricing = (
   numberOfDevices,
   adLengthSeconds,
   durationDays,
   playsPerDayPerDevice = 160,
-  pricePerPlay = 1,
+  pricePerPlay,
   vehicleType,
   materialType,
   deviceCostOverride = null,
@@ -21,7 +33,7 @@ const calculatePricing = (
   // --- Device Cost Rules (with override support) ---
   let deviceUnitCost = 0;
   if (deviceCostOverride !== null) {
-    deviceUnitCost = deviceCostOverride; // use override if provided
+    deviceUnitCost = deviceCostOverride;
   } else {
     if (vehicleType === 'CAR') {
       if (materialType === 'LCD') deviceUnitCost = 4000;
@@ -38,11 +50,11 @@ const calculatePricing = (
     adLengthCost = adLengthCostOverride;
   } else {
     adLengthCost = adLengthSeconds === 20 ? 500 :
-                   adLengthSeconds === 40 ? 1000 :
-                   adLengthSeconds === 60 ? 1500 : 0;
+                   adLengthSeconds === 40 ? 5000 :
+                   adLengthSeconds === 60 ? 10000 : 0;
   }
 
-  // --- Duration Cost Rules (with override support) ---
+  // --- Duration Cost Rules ---
   const durationMonths = Math.ceil(durationDays / 30);
   let durationCostPerMonth = 0;
   if (durationCostOverride !== null) {
@@ -99,22 +111,28 @@ module.exports = {
       }
 
       const playsPerDayPerDevice = input.playsPerDayPerDevice || 160;
-      const pricePerPlay = input.pricePerPlay || 1;
+      const vehicleType = input.vehicleType.toUpperCase();
+      const materialType = input.materialType.toUpperCase();
 
-      // Calculate pricing (with override support)
+      // ✅ Get pricePerPlay automatically (with override)
+      const pricePerPlay = getPricePerPlay(
+        vehicleType,
+        materialType,
+        input.pricePerPlay ?? null
+      );
+
+      // Calculate pricing
       const pricing = calculatePricing(
         input.numberOfDevices,
         input.adLengthSeconds,
         input.durationDays,
         playsPerDayPerDevice,
         pricePerPlay,
-        input.vehicleType.toUpperCase(),
-        input.materialType.toUpperCase(),
+        vehicleType,
+        materialType,
         input.deviceCostOverride ?? null,
         input.durationCostOverride ?? null,
-        input.adLengthCostOverride ?? null,
-
-        
+        input.adLengthCostOverride ?? null
       );
 
       const newPlan = new AdsPlan({
@@ -122,8 +140,8 @@ module.exports = {
         description: input.description,
         durationDays: input.durationDays,
         category: input.category,
-        materialType: input.materialType,
-        vehicleType: input.vehicleType,
+        materialType: materialType,
+        vehicleType: vehicleType,
         numberOfDevices: input.numberOfDevices,
         adLengthSeconds: input.adLengthSeconds,
         playsPerDayPerDevice: playsPerDayPerDevice,
@@ -149,49 +167,38 @@ module.exports = {
         throw new Error('Ads plan not found');
       }
 
-      const numberOfDevices =
-        input.numberOfDevices ?? existingPlan.numberOfDevices;
-      const adLengthSeconds =
-        input.adLengthSeconds ?? existingPlan.adLengthSeconds;
+      const numberOfDevices = input.numberOfDevices ?? existingPlan.numberOfDevices;
+      const adLengthSeconds = input.adLengthSeconds ?? existingPlan.adLengthSeconds;
       const durationDays = input.durationDays ?? existingPlan.durationDays;
-      const playsPerDayPerDevice =
-        input.playsPerDayPerDevice ?? existingPlan.playsPerDayPerDevice;
-      const pricePerPlay = input.pricePerPlay ?? existingPlan.pricePerPlay;
-      const vehicleType = (
-        input.vehicleType || existingPlan.vehicleType
-      ).toUpperCase();
-      const materialType = (
-        input.materialType || existingPlan.materialType
-      ).toUpperCase();
+      const playsPerDayPerDevice = input.playsPerDayPerDevice ?? existingPlan.playsPerDayPerDevice;
+      const vehicleType = (input.vehicleType || existingPlan.vehicleType).toUpperCase();
+      const materialType = (input.materialType || existingPlan.materialType).toUpperCase();
 
-      // Recalculate pricing if key fields change
-      if (
-        input.numberOfDevices ||
-        input.adLengthSeconds ||
-        input.durationDays ||
-        input.playsPerDayPerDevice ||
-        input.pricePerPlay ||
-        input.vehicleType ||
-        input.materialType ||
-        input.deviceCostOverride ||
-        input.durationCostOverride
-      ) {
-        const pricing = calculatePricing(
-          numberOfDevices,
-          adLengthSeconds,
-          durationDays,
-          playsPerDayPerDevice,
-          pricePerPlay,
-          vehicleType,
-          materialType,
-          input.deviceCostOverride ?? null,
-          input.durationCostOverride ?? null
-        );
+      // ✅ Recalculate pricePerPlay with new rule (unless overridden)
+      const pricePerPlay = getPricePerPlay(
+        vehicleType,
+        materialType,
+        input.pricePerPlay ?? existingPlan.pricePerPlay
+      );
 
-        input.totalPlaysPerDay = pricing.totalPlaysPerDay;
-        input.dailyRevenue = pricing.dailyRevenue;
-        input.totalPrice = pricing.totalPrice;
-      }
+      // Recalculate pricing
+      const pricing = calculatePricing(
+        numberOfDevices,
+        adLengthSeconds,
+        durationDays,
+        playsPerDayPerDevice,
+        pricePerPlay,
+        vehicleType,
+        materialType,
+        input.deviceCostOverride ?? null,
+        input.durationCostOverride ?? null,
+        input.adLengthCostOverride ?? null
+      );
+
+      input.pricePerPlay = pricePerPlay;
+      input.totalPlaysPerDay = pricing.totalPlaysPerDay;
+      input.dailyRevenue = pricing.dailyRevenue;
+      input.totalPrice = pricing.totalPrice;
 
       return await AdsPlan.findByIdAndUpdate(id, input, { new: true });
     },

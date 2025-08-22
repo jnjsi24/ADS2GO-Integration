@@ -38,6 +38,7 @@ import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount'; // Added import for sadminAccount
+import SadminPlans from './pages/SUPERADMIN/SadminPlans';
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
@@ -235,6 +236,15 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        {/* 👇 NEW */}
+        <Route
+          path="/sadmin-plans"
+          element={
+            <ProtectedRoute>
+              <SadminPlans />
+            </ProtectedRoute>
+  }
+/>
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/landing" replace />} />

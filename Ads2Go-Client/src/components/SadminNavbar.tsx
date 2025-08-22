@@ -29,8 +29,8 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> }, // Assuming /admin/settings is where superadmin manages general settings
-    // Add more SuperAdmin specific links if needed
+    { label: 'Plans', path: '/sadmin-plans', icon: <FileText size={20} /> }, // 👈 NEW
+    { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];
 
   return (

@@ -5,10 +5,12 @@
     "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\""
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "concurrently": "^9.1.2",
     "nodemon": "^3.1.10"
   },
   "dependencies": {
+    "jwt-decode": "^4.0.0",
     "multer": "^2.0.2"
   }
 }
