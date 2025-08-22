@@ -12,45 +12,61 @@ const allowedMaterialsByVehicle = {
 
 const materialResolvers = {
   Query: {
-  // Admin-only
-  getAllMaterials: async (_, __, { user }) => {
-    checkAdmin(user); // only admin can access
-    return await Material.find().sort({ createdAt: -1 });
+    getAllMaterials: async (_, __, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      // If driver is logged in → only return materials for their vehicle type
+      if (driver) {
+        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
+      }
+
+      // Admin/User can see all
+      return await Material.find().sort({ createdAt: -1 });
+    },
+
+    getMaterialsByVehicleType: async (_, { vehicleType }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      // If driver, override the requested vehicleType with their own
+      if (driver) {
+        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
+      }
+
+      return await Material.find({ vehicleType }).sort({ createdAt: -1 });
+    },
+
+    getMaterialsByCategory: async (_, { category }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
+        throw new Error('Invalid material category');
+      }
+
+      // If driver, restrict to both category and their vehicleType
+      if (driver) {
+        return await Material.find({
+          category,
+          vehicleType: driver.vehicleType,
+        }).sort({ createdAt: -1 });
+      }
+
+      return await Material.find({ category }).sort({ createdAt: -1 });
+    },
+
+    getMaterialById: async (_, { id }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+
+      const material = await Material.findById(id);
+      if (!material) throw new Error('Material not found');
+
+      // If driver, ensure the material matches their vehicleType
+      if (driver && material.vehicleType !== driver.vehicleType) {
+        throw new Error("You are not authorized to view this material");
+      }
+
+      return material;
+    },
   },
-
-  getMaterialsByVehicleType: async (_, { vehicleType }, { user }) => {
-    checkAdmin(user); // admin-only
-    return await Material.find({ vehicleType }).sort({ createdAt: -1 });
-  },
-
-  getMaterialsByCategory: async (_, { category }, { user }) => {
-    checkAdmin(user); // admin-only
-    if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
-      throw new Error('Invalid material category');
-    }
-    return await Material.find({ category }).sort({ createdAt: -1 });
-  },
-
-  // Accessible by User & Driver (login required)
-  getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType }, { user, driver }) => {
-    if (!user && !driver) throw new Error("Unauthorized");
-
-    if (driver) vehicleType = driver.vehicleType; // driver always sees their own vehicle type
-
-    if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
-      throw new Error('Invalid material category');
-    }
-
-    return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
-  },
-
-  getMaterialById: async (_, { id }, { user }) => {
-    checkAdmin(user); // admin-only
-    const material = await Material.findById(id);
-    if (!material) throw new Error('Material not found');
-    return material;
-  },
-},
 
   Mutation: {
     createMaterial: async (_, { input }, { user }) => {

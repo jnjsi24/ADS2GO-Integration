@@ -77,19 +77,14 @@ module.exports = gql`
     driver: DriverInfo
   }
 
-extend type Query {
-  # Admin-only
-  getAllMaterials: [Material!]!
-  getMaterialById(id: ID!): Material
-  
-  # Filtered queries (usable by user and driver)
-  getMaterialsByCategory(category: MaterialCategory!): [Material!]!
-  getMaterialsByVehicleType(vehicleType: VehicleType!): [Material!]!
-  getMaterialsByCategoryAndVehicle(category: MaterialCategory!, vehicleType: VehicleType!): [Material!]!
-
-  getMaterialWithDriver(materialId: ID!): MaterialWithDriver
-}
-
+  extend type Query {
+    # Available to Admin, User, Driver (read-only)
+    getAllMaterials: [Material!]!
+    getMaterialById(id: ID!): Material
+    getMaterialsByCategory(category: MaterialCategory!): [Material!]!
+    getMaterialsByVehicleType(vehicleType: VehicleType!): [Material!]!
+    getMaterialWithDriver(materialId: ID!): MaterialWithDriver
+  }
 
   type Mutation {
     # Admin-only
