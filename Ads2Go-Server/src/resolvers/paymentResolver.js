@@ -2,18 +2,43 @@ const Payment = require('../models/Payment');
 const Ad = require('../models/Ad');
 const AdsPlan = require('../models/AdsPlan');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
+const mongoose = require('mongoose');
 
 const paymentResolvers = {
   Query: {
-    getAllPayments: async (_, __, { user }) => {
-      checkAdmin(user);
-      return await Payment.find().sort({ createdAt: -1 });
-    },
+    getAllPayments: async (_, { paymentStatus }, { user }) => {
+    checkAdmin(user);
 
-    getPaymentsByUser: async (_, __, { user }) => {
-      checkAuth(user);
-      return await Payment.find({ userId: user.id }).sort({ createdAt: -1 });
-    },
+    const filter = {};
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus; // filter by status if provided
+    }
+
+    return await Payment.find(filter).sort({ createdAt: -1 });
+  },
+
+  
+
+  getPaymentsByUser: async (_, { paymentStatus }, { user }) => {
+    checkAuth(user);
+
+    // Ensure correct type for userId
+    let userIdFilter;
+    if (mongoose.Types.ObjectId.isValid(user.id)) {
+      userIdFilter = new mongoose.Types.ObjectId(user.id);
+    } else {
+      userIdFilter = user.id;
+    }
+
+    const filter = { userId: userIdFilter };
+
+    // Add paymentStatus filter if provided
+    if (paymentStatus) {
+      filter.paymentStatus = paymentStatus;
+    }
+
+    return await Payment.find(filter).sort({ createdAt: -1 });
+  },
 
     getPaymentById: async (_, { id }, { user }) => {
       checkAuth(user);

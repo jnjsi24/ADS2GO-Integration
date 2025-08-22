@@ -78,8 +78,8 @@ const paymentTypeDefs = gql`
   }
 
   type Query {
-    getPaymentsByUser: [Payment!]!
-    getAllPayments: [Payment!]!
+    getPaymentsByUser(paymentStatus: PaymentStatus): [Payment!]!
+    getAllPayments(paymentStatus: PaymentStatus): [Payment!]!
     getPaymentById(id: ID!): Payment
     getUserAdsWithPayments: [AdPaymentInfo!]!
   }
