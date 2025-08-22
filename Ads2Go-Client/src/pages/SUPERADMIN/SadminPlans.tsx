@@ -1,6 +1,8 @@
 //SadminPlans.tsx
 //Frontend - Updated with Backend Integration
 
+//(FIX) PUT THE MUTATIONS IN THE grahphql/queries & mutations FOLDER LATER//
+
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 
