@@ -291,230 +291,353 @@ const resolvers = {
 
     // ===== ADMIN MUTATIONS =====
     approveDriver: async (_, { driverId, materialTypeOverride }, { user }) => {
-      checkAdmin(user);
+      try {
+        checkAdmin(user);
 
-      const driver = await Driver.findOne({ driverId });
-      if (!driver) {
-        return { success: false, message: 'Driver not found', driver: null };
-      }
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { success: false, message: 'Driver not found', driver: null };
+        }
 
-      // Check if driver can be approved
-      if (!driver.isEmailVerified) {
-        return { 
-          success: false, 
-          message: 'Cannot approve driver. Email must be verified first.',
-          driver 
-        };
-      }
-
-      // Use override material types if provided, otherwise use driver's preferences
-      const materialTypesToUse = materialTypeOverride?.length > 0 
-        ? materialTypeOverride 
-        : driver.preferredMaterialType;
-
-      // Check if there are available materials for the selected types
-      const availableMaterials = await Material.find({
-        vehicleType: driver.vehicleType,
-        materialType: { $in: materialTypesToUse },
-        driverId: null
-      }).sort({ createdAt: 1 });
-
-      if (availableMaterials.length === 0) {
-        // If no materials available, check if driver already has a material assigned
-        if (driver.materialId) {
-          // Driver already has a material, proceed with approval
-          driver.accountStatus = 'ACTIVE';
-          driver.reviewStatus = 'APPROVED';
-          driver.approvalDate = new Date();
-          await driver.save();
-          
-          const updatedDriver = await Driver.findOne({ driverId })
-            .populate({
-              path: 'material',
-              select: 'materialId materialType vehicleType'
-            });
-          
+        // Check if driver can be approved
+        if (!driver.isEmailVerified) {
           return { 
-            success: true, 
-            message: 'Driver approved with existing material assignment',
-            driver: updatedDriver
+            success: false, 
+            message: 'Cannot approve driver. Email must be verified first.',
+            driver 
           };
         }
+
+        // Use override material types if provided, otherwise use driver's preferences
+        const materialTypesToUse = materialTypeOverride?.length > 0 
+          ? materialTypeOverride 
+          : driver.preferredMaterialType;
+
+        // Check if there are available materials for the selected types
+        const availableMaterials = await Material.find({
+          vehicleType: driver.vehicleType,
+          materialType: { $in: materialTypesToUse },
+          driverId: null
+        }).sort({ createdAt: 1 });
+
+        if (availableMaterials.length === 0) {
+          // If no materials available, check if driver already has a material assigned
+          if (driver.materialId) {
+            // Driver already has a material, proceed with approval
+            driver.accountStatus = 'ACTIVE';
+            driver.reviewStatus = 'APPROVED';
+            driver.approvalDate = new Date();
+            await driver.save();
+            
+            const updatedDriver = await Driver.findOne({ driverId })
+              .populate({
+                path: 'material',
+                select: 'materialId materialType vehicleType'
+              });
+            
+            return { 
+              success: true, 
+              message: 'Driver approved with existing material assignment',
+              driver: updatedDriver
+            };
+          }
+          
+          return { 
+            success: false, 
+            message: 'Cannot approve driver. No available materials for the selected vehicle and material types.',
+            driver 
+          };
+        }
+
+        // Update driver status
+        driver.accountStatus = 'ACTIVE';
+        driver.reviewStatus = 'APPROVED';
+        driver.approvalDate = new Date();
+        
+        // Assign the first available material
+        const materialToAssign = availableMaterials[0];
+        materialToAssign.driverId = driver.driverId;
+        await materialToAssign.save();
+
+        // Update driver's material reference
+        driver.materialId = materialToAssign.materialId;
+        driver.installedMaterialType = materialToAssign.materialType;
+        
+        // Handle admin override if needed
+        if (materialTypeOverride?.length > 0) {
+          driver.adminOverride = true;
+          driver.adminOverrideMaterialType = materialTypeOverride;
+        }
+        
+        await driver.save();
+        
+        // Get the updated driver with material details
+        const updatedDriver = await Driver.findOne({ driverId })
+          .populate({
+            path: 'material',
+            select: 'materialId materialType vehicleType'
+          });
+        
+        console.log(`Successfully approved driver ${driver.driverId} and assigned material ${materialToAssign.materialId}`);
         
         return { 
+          success: true, 
+          message: 'Driver approved and material assigned successfully',
+          driver: updatedDriver
+        };
+      } catch (error) {
+        console.error('approveDriver error:', error);
+        return { 
           success: false, 
-          message: 'Cannot approve driver. No available materials for the selected vehicle and material types.',
-          driver 
+          message: error.message || 'Failed to approve driver',
+          driver: null
         };
       }
-
-      // Update driver status
-      driver.accountStatus = 'ACTIVE';
-      driver.reviewStatus = 'APPROVED';
-      driver.approvalDate = new Date();
-      
-      // Assign the first available material
-      const materialToAssign = availableMaterials[0];
-      materialToAssign.driverId = driver.driverId;
-      await materialToAssign.save();
-
-      // Update driver's material reference
-      driver.materialId = materialToAssign.materialId;
-      driver.installedMaterialType = materialToAssign.materialType;
-      
-      // Handle admin override if needed
-      if (materialTypeOverride?.length > 0) {
-        driver.adminOverride = true;
-        driver.adminOverrideMaterialType = materialTypeOverride;
-      }
-      
-      await driver.save();
-      
-      // Get the updated driver with material details
-      const updatedDriver = await Driver.findOne({ driverId })
-        .populate({
-          path: 'material',
-          select: 'materialId materialType vehicleType'
-        });
-      
-      console.log(`Successfully approved driver ${driver.driverId} and assigned material ${materialToAssign.materialId}`);
-      
-      return { 
-        success: true, 
-        message: 'Driver approved and material assigned successfully',
-        driver: updatedDriver
-      };
     },
 
+    // ===== FIXED REJECT DRIVER MUTATION =====
+    rejectDriver: async (_, { driverId, reason }, { user }) => {
+      try {
+        checkAdmin(user);
+
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { 
+            success: false, 
+            message: 'Driver not found',
+            driver: null
+          };
+        }
+
+        // Update driver status to rejected
+        driver.accountStatus = 'REJECTED';
+        driver.reviewStatus = 'REJECTED';
+        driver.rejectedReason = reason;
+        
+        // If driver had any materials assigned, unassign them
+        if (driver.materialId) {
+          await Material.updateMany(
+            { driverId: driver.driverId },
+            { $set: { driverId: null } }
+          );
+          driver.materialId = null;
+          driver.installedMaterialType = null;
+        }
+
+        await driver.save();
+
+        console.log(`Driver ${driver.driverId} rejected. Reason: ${reason}`);
+
+        return {
+          success: true,
+          message: 'Driver rejected successfully',
+          driver
+        };
+      } catch (error) {
+        console.error('rejectDriver error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to reject driver',
+          driver: null
+        };
+      }
+    },
 
     updateDriver: async (_, { driverId, input }, { user }) => {
-      checkAdmin(user);
-      const driver = await Driver.findOne({ driverId });
-      if (!driver) return { success: false, message: "Driver not found", driver: null };
+      try {
+        checkAdmin(user);
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { 
+            success: false, 
+            message: "Driver not found", 
+            driver: null 
+          };
+        }
 
-      Object.assign(driver, input);
-      await driver.save();
+        Object.assign(driver, input);
+        await driver.save();
 
-      return { success: true, message: "Driver updated successfully", driver };
+        return { 
+          success: true, 
+          message: "Driver updated successfully", 
+          driver 
+        };
+      } catch (error) {
+        console.error('updateDriver error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to update driver',
+          driver: null
+        };
+      }
     },
 
     deleteDriver: async (_, { driverId }, { user }) => {
-      checkAdmin(user);
-      const driver = await Driver.findOne({ driverId });
-      if (!driver) return { success: false, message: "Driver not found" };
+      try {
+        checkAdmin(user);
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          return { 
+            success: false, 
+            message: "Driver not found" 
+          };
+        }
 
-      await Material.updateMany({ driverId: driver.driverId }, { $set: { driverId: null } });
-      await driver.deleteOne();
+        // Unassign any materials first
+        await Material.updateMany(
+          { driverId: driver.driverId }, 
+          { $set: { driverId: null } }
+        );
+        
+        await driver.deleteOne();
 
-      return { success: true, message: "Driver deleted successfully" };
+        return { 
+          success: true, 
+          message: "Driver deleted successfully" 
+        };
+      } catch (error) {
+        console.error('deleteDriver error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to delete driver'
+        };
+      }
     },
 
     unassignAndReassignMaterials: async (_, { driverId }, { user }) => {
-      checkAdmin(user);
-      const driver = await Driver.findOne({ driverId });
-      if (!driver) throw new Error('Driver not found');
+      try {
+        checkAdmin(user);
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) throw new Error('Driver not found');
 
-      let assignedMaterials = await Material.find({ driverId: driver.driverId });
+        let assignedMaterials = await Material.find({ driverId: driver.driverId });
 
-      if (!assignedMaterials.length && driver.installedMaterialType) {
-        assignedMaterials = [{ _id: null, materialType: driver.installedMaterialType, vehicleType: driver.vehicleType }];
-      }
-
-      if (!assignedMaterials.length) {
-        return { success: false, message: 'No materials assigned', driver, reassignedMaterials: [] };
-      }
-
-      for (let mat of assignedMaterials) {
-        if (mat._id) {
-          mat.driverId = null;
-          await mat.save();
+        if (!assignedMaterials.length && driver.installedMaterialType) {
+          assignedMaterials = [{ _id: null, materialType: driver.installedMaterialType, vehicleType: driver.vehicleType }];
         }
-      }
 
-      driver.installedMaterialType = null;
-      await driver.save();
+        if (!assignedMaterials.length) {
+          return { success: false, message: 'No materials assigned', driver, reassignedMaterials: [] };
+        }
 
-      const reassignedList = [];
-      for (let mat of assignedMaterials) {
-        const eligibleDriver = await Driver.findOne({
-          vehicleType: mat.vehicleType,
-          accountStatus: 'ACTIVE',
-          driverId: { $ne: driver.driverId },
-          $or: [
-            { preferredMaterialType: mat.materialType },
-            { adminOverrideMaterialType: mat.materialType }
-          ]
-        });
-
-        if (eligibleDriver) {
+        for (let mat of assignedMaterials) {
           if (mat._id) {
-            mat.driverId = eligibleDriver.driverId;
+            mat.driverId = null;
             await mat.save();
           }
-          if (!eligibleDriver.installedMaterialType) {
-            eligibleDriver.installedMaterialType = mat.materialType;
-            await eligibleDriver.save();
-          }
-          reassignedList.push({ id: mat._id, materialType: mat.materialType, vehicleType: mat.vehicleType, newDriverId: eligibleDriver.driverId });
-        } else {
-          reassignedList.push({ id: mat._id, materialType: mat.materialType, vehicleType: mat.vehicleType, newDriverId: null });
         }
-      }
 
-      return { success: true, message: 'Materials unassigned and reassigned', driver, reassignedMaterials: reassignedList };
+        driver.installedMaterialType = null;
+        await driver.save();
+
+        const reassignedList = [];
+        for (let mat of assignedMaterials) {
+          const eligibleDriver = await Driver.findOne({
+            vehicleType: mat.vehicleType,
+            accountStatus: 'ACTIVE',
+            driverId: { $ne: driver.driverId },
+            $or: [
+              { preferredMaterialType: mat.materialType },
+              { adminOverrideMaterialType: mat.materialType }
+            ]
+          });
+
+          if (eligibleDriver) {
+            if (mat._id) {
+              mat.driverId = eligibleDriver.driverId;
+              await mat.save();
+            }
+            if (!eligibleDriver.installedMaterialType) {
+              eligibleDriver.installedMaterialType = mat.materialType;
+              await eligibleDriver.save();
+            }
+            reassignedList.push({ id: mat._id, materialType: mat.materialType, vehicleType: mat.vehicleType, newDriverId: eligibleDriver.driverId });
+          } else {
+            reassignedList.push({ id: mat._id, materialType: mat.materialType, vehicleType: mat.vehicleType, newDriverId: null });
+          }
+        }
+
+        return { success: true, message: 'Materials unassigned and reassigned', driver, reassignedMaterials: reassignedList };
+      } catch (error) {
+        console.error('unassignAndReassignMaterials error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to unassign and reassign materials',
+          driver: null,
+          reassignedMaterials: []
+        };
+      }
     },
 
     approveDriverEditRequest: async (_, { id }, { user }) => {
-      checkAdmin(user);
+      try {
+        checkAdmin(user);
 
-      const driver = await Driver.findOne({ driverId: id });
-      if (!driver) return { success: false, message: "Driver not found" };
-      if (driver.editRequestStatus !== "PENDING") return { success: false, message: "No pending edit request" };
+        const driver = await Driver.findOne({ driverId: id });
+        if (!driver) return { success: false, message: "Driver not found" };
+        if (driver.editRequestStatus !== "PENDING") return { success: false, message: "No pending edit request" };
 
-      const editData = driver.editRequestData || {};
+        const editData = driver.editRequestData || {};
 
-      // Only overwrite fields if they exist in the edit request
-      driver.firstName = editData.firstName ?? driver.firstName;
-      driver.middleName = editData.middleName ?? driver.middleName;
-      driver.lastName = editData.lastName ?? driver.lastName;
-      driver.contactNumber = editData.contactNumber ?? driver.contactNumber;
-      driver.email = editData.email ?? driver.email;
-      driver.address = editData.address ?? driver.address;
-      driver.profilePicture = editData.profilePicture ?? driver.profilePicture;
-      driver.licenseNumber = editData.licenseNumber ?? driver.licenseNumber;
-      driver.licensePictureURL = editData.licensePictureURL ?? driver.licensePictureURL;
-      driver.vehiclePlateNumber = editData.vehiclePlateNumber ?? driver.vehiclePlateNumber;
-      driver.vehicleType = editData.vehicleType ?? driver.vehicleType;
-      driver.vehicleModel = editData.vehicleModel ?? driver.vehicleModel;
-      driver.vehicleYear = editData.vehicleYear ?? driver.vehicleYear;
-      driver.vehiclePhotoURL = editData.vehiclePhotoURL ?? driver.vehiclePhotoURL;
-      driver.orCrPictureURL = editData.orCrPictureURL ?? driver.orCrPictureURL;
-      driver.preferredMaterialType = editData.preferredMaterialType ?? driver.preferredMaterialType;
+        // Only overwrite fields if they exist in the edit request
+        driver.firstName = editData.firstName ?? driver.firstName;
+        driver.middleName = editData.middleName ?? driver.middleName;
+        driver.lastName = editData.lastName ?? driver.lastName;
+        driver.contactNumber = editData.contactNumber ?? driver.contactNumber;
+        driver.email = editData.email ?? driver.email;
+        driver.address = editData.address ?? driver.address;
+        driver.profilePicture = editData.profilePicture ?? driver.profilePicture;
+        driver.licenseNumber = editData.licenseNumber ?? driver.licenseNumber;
+        driver.licensePictureURL = editData.licensePictureURL ?? driver.licensePictureURL;
+        driver.vehiclePlateNumber = editData.vehiclePlateNumber ?? driver.vehiclePlateNumber;
+        driver.vehicleType = editData.vehicleType ?? driver.vehicleType;
+        driver.vehicleModel = editData.vehicleModel ?? driver.vehicleModel;
+        driver.vehicleYear = editData.vehicleYear ?? driver.vehicleYear;
+        driver.vehiclePhotoURL = editData.vehiclePhotoURL ?? driver.vehiclePhotoURL;
+        driver.orCrPictureURL = editData.orCrPictureURL ?? driver.orCrPictureURL;
+        driver.preferredMaterialType = editData.preferredMaterialType ?? driver.preferredMaterialType;
 
-      driver.editRequestData = null;
-      driver.editRequestStatus = "APPROVED";
+        driver.editRequestData = null;
+        driver.editRequestStatus = "APPROVED";
 
-      await driver.save();
+        await driver.save();
 
-      return { success: true, message: "Edit request approved", driver };
+        return { success: true, message: "Edit request approved", driver };
+      } catch (error) {
+        console.error('approveDriverEditRequest error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to approve edit request',
+          driver: null
+        };
+      }
     },
 
     rejectDriverEditRequest: async (_, { id, reason }, { user }) => {
-      checkAdmin(user);
+      try {
+        checkAdmin(user);
 
-      const driver = await Driver.findOne({ driverId: id });
-      if (!driver) return { success: false, message: "Driver not found" };
-      if (driver.editRequestStatus !== "PENDING") return { success: false, message: "No pending edit request" };
+        const driver = await Driver.findOne({ driverId: id });
+        if (!driver) return { success: false, message: "Driver not found" };
+        if (driver.editRequestStatus !== "PENDING") return { success: false, message: "No pending edit request" };
 
-      driver.editRequestStatus = "REJECTED";
-      driver.editRequestData = null;
-      if (reason) driver.rejectedReason = reason;
+        driver.editRequestStatus = "REJECTED";
+        driver.editRequestData = null;
+        if (reason) driver.rejectedReason = reason;
 
-      await driver.save();
+        await driver.save();
 
-      return { success: true, message: reason || "Edit request rejected", driver };
+        return { success: true, message: reason || "Edit request rejected", driver };
+      } catch (error) {
+        console.error('rejectDriverEditRequest error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to reject edit request',
+          driver: null
+        };
+      }
     },
-
 
     requestDriverEdit: async (_, { input }, { driver }) => {
       try {
@@ -542,9 +665,6 @@ const resolvers = {
         return { success: false, message: "Failed to submit edit request", driver: null };
       }
     },
-
-
-
 
     // TEMPORARY: Reset password for development
     resetDriverPassword: async (_, { email, newPassword }) => {

@@ -1,209 +1,323 @@
 import React, { useState } from 'react';
-import { ChevronDown, Mail, Phone, MapPin, Edit, X, MoreVertical, CheckSquare } from 'lucide-react';
+import { useQuery, useMutation, gql } from '@apollo/client';
+import { ChevronDown, Edit, X, Eye } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
 
-interface Riders {
-  id: string;
-  firstName: string;
-  middleName?: string;
-  lastName: string;
-  password: string;
-  contactNumber: string;
-  email: string;
-  licenseNumber: string;
-  licensePicture: string;
-  orcrPicture: string;
-  plateNumber: string;
-  vehicleType: string;
-  vehicleModel: string;
-  materialsSupported: string;
-  materialsID: string;
-  status: 'Active' | 'Applicant';
-  distanceTraveled: number;
-  assignedAds: string;
-  areaBase: string;
+// === GraphQL ===
+const GET_ALL_DRIVERS = gql`
+  query GetAllDrivers {
+    getAllDrivers {
+      id
+      driverId
+      firstName
+      middleName
+      lastName
+      email
+      contactNumber
+      vehicleType
+      vehicleModel
+      vehiclePlateNumber
+      accountStatus
+      reviewStatus
+      installedMaterialType
+      address
+      licenseNumber
+      licensePictureURL
+      orCrPictureURL
+      vehiclePhotoURL
+      dateJoined
+      approvalDate
+      rejectedReason
+      material {
+        materialId
+        materialType
+        category
+        description
+      }
+    }
+  }
+`;
+
+const APPROVE_DRIVER = gql`
+  mutation ApproveDriver($driverId: ID!, $materialTypeOverride: [MaterialTypeEnum!]) {
+    approveDriver(driverId: $driverId, materialTypeOverride: $materialTypeOverride) {
+      success
+      message
+      driver {
+        id
+        driverId
+        accountStatus
+        reviewStatus
+        installedMaterialType
+      }
+    }
+  }
+`;
+
+const REJECT_DRIVER = gql`
+  mutation RejectDriver($driverId: ID!, $reason: String!) {
+    rejectDriver(driverId: $driverId, reason: $reason) {
+      success
+      message
+      driver {
+        id
+        driverId
+        accountStatus
+        reviewStatus
+        rejectedReason
+      }
+    }
+  }
+`;
+
+const DELETE_DRIVER = gql`
+  mutation DeleteDriver($driverId: ID!) {
+    deleteDriver(driverId: $driverId) {
+      success
+      message
+    }
+  }
+`;
+
+// === Types ===
+interface Driver {
+  id: string;
+  driverId: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  email: string;
+  contactNumber: string;
+  vehicleType: string;
+  vehicleModel: string;
+  vehiclePlateNumber: string;
+  accountStatus: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'REJECTED' | 'RESUBMITTED';
+  reviewStatus: string;
+  installedMaterialType?: string;
+  address?: string;
+  licenseNumber?: string;
+  licensePictureURL?: string;
+  orCrPictureURL?: string;
+  vehiclePhotoURL?: string;
+  dateJoined: string;
+  approvalDate?: string;
+  rejectedReason?: string;
+  material?: {
+    materialId: string;
+    materialType: string;
+    category: string;
+    description?: string;
+  };
 }
 
-const mockRiders: Riders[] = [
-  {
-    id: 'R1',
-    firstName: 'Juan',
-    middleName: 'Santos',
-    lastName: 'Dela Cruz',
-    password: '••••••••',
-    contactNumber: '09171234567',
-    email: 'juan.delacruz@example.com',
-    licenseNumber: 'DLN-123456789',
-    licensePicture: 'license1.jpg',
-    orcrPicture: 'orcr1.jpg',
-    plateNumber: 'ABC-1234',
-    vehicleType: 'Car',
-    vehicleModel: 'Toyota Vios',
-    materialsSupported: 'LCD Screen, Stickers',
-    materialsID: 'M-001',
-    status: 'Active',
-    distanceTraveled: 1200,
-    assignedAds: 'Company A',
-    areaBase: 'Quezon City',
-  },
-  {
-    id: 'R2',
-    firstName: 'Maria',
-    middleName: '',
-    lastName: 'Reyes',
-    password: '••••••••',
-    contactNumber: '09981234567',
-    email: 'maria.reyes@example.com',
-    licenseNumber: 'DLN-987654321',
-    licensePicture: 'license2.jpg',
-    orcrPicture: 'orcr2.jpg',
-    plateNumber: 'XYZ-5678',
-    vehicleType: 'Motorcycle',
-    vehicleModel: 'Honda TMX 125',
-    materialsSupported: 'Posters, LCD Screen',
-    materialsID: 'M-002',
-    status: 'Applicant',
-    distanceTraveled: 500,
-    assignedAds: 'Company B',
-    areaBase: 'Makati City',
-  },
-  {
-    id: 'R3',
-    firstName: 'Carlos',
-    middleName: 'B.',
-    lastName: 'Gonzales',
-    password: '••••••••',
-    contactNumber: '09081234567',
-    email: 'carlos.g@example.com',
-    licenseNumber: 'DLN-1122334455',
-    licensePicture: 'license3.jpg',
-    orcrPicture: 'orcr3.jpg',
-    plateNumber: 'LMN-4567',
-    vehicleType: 'Electric Tricycle',
-    vehicleModel: 'E-Trike X',
-    materialsSupported: 'LCD Screen',
-    materialsID: 'M-003',
-    status: 'Active',
-    distanceTraveled: 800,
-    assignedAds: 'Company C',
-    areaBase: 'Taguig City',
-  },
-];
+// === Helper ===
+const getInitials = (firstName: string, lastName: string) =>
+  `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
 
 const ManageRiders: React.FC = () => {
-  const [riders, setRiders] = useState<Riders[]>(mockRiders);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Applicant'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'PENDING'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedDriverDetails, setSelectedDriverDetails] = useState<Driver | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [driverToReject, setDriverToReject] = useState<string | null>(null);
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this rider?')) {
-      setRiders((prev) => prev.filter((r) => r.id !== id));
-      if (expandedId === id) setExpandedId(null);
-    }
-  };
-  
-  const handleApprove = (id: string) => {
-    setRiders((prevRiders) =>
-      prevRiders.map((rider) =>
-        rider.id === id ? { ...rider, status: 'Active' } : rider
-      )
-    );
-  };
+  // Apollo hooks
+  const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
+    context: {
+      headers: {
+        authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    },
+  });
 
-  // Helper function to get initials for the rider avatar
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
-  };
+  const [approveDriver] = useMutation(APPROVE_DRIVER, {
+    context: {
+      headers: {
+        authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    },
+  });
 
-  const filteredRiders = riders.filter((rider) => {
-    const fullName = `${rider.firstName} ${rider.middleName} ${rider.lastName}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || rider.status === statusFilter;
+  const [rejectDriver] = useMutation(REJECT_DRIVER, {
+    context: {
+      headers: {
+        authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    },
+  });
+
+  const [deleteDriver] = useMutation(DELETE_DRIVER, {
+    context: {
+      headers: {
+        authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    },
+  });
+
+  const riders: Driver[] = data?.getAllDrivers || [];
+
+  // Filter
+  const filteredRiders = riders.filter((r: Driver) => {
+    const fullName = `${r.firstName} ${r.middleName || ''} ${r.lastName}`.toLowerCase();
+    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || 
+                         r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         r.contactNumber.includes(searchTerm) ||
+                         r.driverId.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || r.accountStatus === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const dataToDisplay = filteredRiders;
-
-  // Handle individual rider selection
-  const handleRiderSelect = (id: string) => {
-    setSelectedRiders(prevSelected =>
-      prevSelected.includes(id)
-        ? prevSelected.filter(riderId => riderId !== id)
-        : [...prevSelected, id]
-    );
-  };
-
-  // Handle select all riders
-  const handleSelectAll = () => {
-    const allRiderIds = dataToDisplay.map(rider => rider.id);
-    if (selectedRiders.length === allRiderIds.length) {
-      setSelectedRiders([]);
-    } else {
-      setSelectedRiders(allRiderIds);
+  // Actions
+  const handleApprove = async (driverId: string) => {
+    try {
+      const result = await approveDriver({
+        variables: { driverId, materialTypeOverride: null }
+      });
+      
+      if (result.data?.approveDriver?.success) {
+        alert(result.data.approveDriver.message);
+        refetch();
+      } else {
+        alert(result.data?.approveDriver?.message || 'Failed to approve driver');
+      }
+    } catch (error: any) {
+      console.error('Error approving driver:', error);
+      alert(error.message || 'Failed to approve driver');
     }
   };
 
-  const isAllSelected = selectedRiders.length === dataToDisplay.length && dataToDisplay.length > 0;
+  const handleReject = (driverId: string) => {
+    setDriverToReject(driverId);
+    setShowRejectModal(true);
+  };
+
+  const submitReject = async () => {
+    if (!driverToReject || !rejectReason.trim()) {
+      alert('Please provide a reason for rejection');
+      return;
+    }
+
+    try {
+      const result = await rejectDriver({
+        variables: { 
+          driverId: driverToReject, 
+          reason: rejectReason.trim() 
+        }
+      });
+
+      if (result.data?.rejectDriver?.success) {
+        alert(result.data.rejectDriver.message);
+        refetch();
+        setShowRejectModal(false);
+        setRejectReason('');
+        setDriverToReject(null);
+      } else {
+        alert(result.data?.rejectDriver?.message || 'Failed to reject driver');
+      }
+    } catch (error: any) {
+      console.error('Error rejecting driver:', error);
+      // More detailed error handling
+      if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+        alert(`GraphQL Error: ${error.graphQLErrors[0].message}`);
+      } else if (error.networkError) {
+        alert(`Network Error: ${error.networkError.message}`);
+      } else {
+        alert(error.message || 'Failed to reject driver');
+      }
+    }
+  };
+
+  const handleDelete = async (driverId: string) => {
+    if (!window.confirm('Are you sure you want to delete this driver? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const result = await deleteDriver({ 
+        variables: { driverId } 
+      });
+
+      if (result.data?.deleteDriver?.success) {
+        alert(result.data.deleteDriver.message);
+        refetch();
+      } else {
+        alert(result.data?.deleteDriver?.message || 'Failed to delete driver');
+      }
+    } catch (error: any) {
+      console.error('Error deleting driver:', error);
+      alert(error.message || 'Failed to delete driver');
+    }
+  };
+
+  const handleViewDetails = (driver: Driver) => {
+    setSelectedDriverDetails(driver);
+    setShowDetailsModal(true);
+  };
+
+  // Selection
+  const handleSelect = (id: string) => {
+    setSelectedRiders(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const allIds = filteredRiders.map((r: Driver) => r.driverId);
+    setSelectedRiders(prev => prev.length === allIds.length ? [] : allIds);
+  };
+
+  const isAllSelected =
+    selectedRiders.length === filteredRiders.length && filteredRiders.length > 0;
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <div className="bg-gray-100 w-full min-h-screen">
-        {/* Header with Title and Add New Button */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Riders List</h1>
-          <button
-            className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] hover:scale-105 transition-all duration-300"
-          >
-            Add New Rider
-          </button>
-        </div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Drivers List</h1>
+      </div>
 
-        {/* Search Bar and Filters */}
-        <div className="flex justify-between items-center mb-4">
-          <input
-            type="text"
-            className="text-xs text-black rounded-xl pl-5 py-3 w-60 shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
-            placeholder="Search by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="flex space-x-2">
-            <div className="relative w-40">
-              <select
-                className="text-sm text-black rounded-xl ml-8 pl-5 py-3 pr-8 w-32 shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Active' | 'Applicant')}
-              >
-                <option value="all">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Applicant">Applicant</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Search + Filter */}
+      <div className="flex justify-between items-center mb-4">
+        <input
+          type="text"
+          className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md border border-gray-400 focus:outline-none bg-white"
+          placeholder="Search by name, email, contact, or driver ID..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
+        <select
+          className="text-sm text-black rounded-xl pl-5 py-3 pr-8 w-48 shadow-md border border-gray-400 focus:outline-none bg-white"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as 'all' | 'ACTIVE' | 'PENDING')}
+        >
+          <option value="all">All Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="PENDING">Pending</option>
+        </select>
+      </div>
 
-        {/* Rider List */}
+      {/* Table */}
+      {loading ? (
+        <div className="text-center py-10 text-gray-500">Loading drivers...</div>
+      ) : error ? (
+        <div className="text-center py-10 text-red-500">Error: {error.message}</div>
+      ) : filteredRiders.length === 0 ? (
+        <div className="text-center py-10 text-gray-500">No drivers found</div>
+      ) : (
         <div className="rounded-md shadow-md mb-4 overflow-hidden">
-          {/* Table Header */}
           <div className="grid grid-cols-12 bg-[#3674B5] px-4 py-2 text-sm font-semibold text-white">
             <div className="flex items-center gap-10 col-span-3">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                onChange={(e) => {
-                  e.stopPropagation();
-                  handleSelectAll();
-                }}
-                checked={isAllSelected}
-              />
-              <span className="cursor-pointer" onClick={(e) => { e.stopPropagation(); handleSelectAll(); }}>Name</span>
+              <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} />
+              <span>Name</span>
             </div>
             <div className="col-span-3">Email</div>
             <div className="col-span-2">Contact</div>
@@ -212,181 +326,330 @@ const ManageRiders: React.FC = () => {
             <div className="col-span-1 text-center">Action</div>
           </div>
 
-          {/* Rider Cards */}
-          {dataToDisplay.map((rider) => (
-            <div
-              key={rider.id}
-              className={`
-                bg-white border-t border-gray-300 transition-all duration-500 ease-in-out transform origin-top
-                ${expandedId === rider.id ? 'z-10 relative scale-105 shadow-xl' : ''}
-              `}
-            >
-              {expandedId !== rider.id ? (
-                // Collapsed Rider Card
-                <div
-                  className="grid grid-cols-12 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                >
-                  <div className="col-span-3 gap-7 flex items-center" onClick={() => setExpandedId(rider.id)}>
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={selectedRiders.includes(rider.id)}
-                      onChange={(e) => {
-                          e.stopPropagation();
-                          handleRiderSelect(rider.id);
-                      }}
-                    />
-                    <div className="flex items-center">
-                      <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                        {getInitials(rider.firstName, rider.lastName)}
-                      </div>
-                      <span className="truncate">
-                        {`${rider.firstName} ${rider.middleName} ${rider.lastName}`}
-                      </span>
+          {filteredRiders.map((r: Driver) => (
+            <div key={r.driverId} className="bg-white border-t border-gray-300">
+              <div className="grid grid-cols-12 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors">
+                <div className="col-span-3 gap-7 flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedRiders.includes(r.driverId)}
+                    onChange={() => handleSelect(r.driverId)}
+                  />
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
+                      {getInitials(r.firstName, r.lastName)}
                     </div>
-                  </div>
-                  <div className="col-span-3 truncate" onClick={() => setExpandedId(rider.id)}>{rider.email}</div>
-                  <div className="col-span-2 truncate" onClick={() => setExpandedId(rider.id)}>{rider.contactNumber}</div>
-                  <div className="col-span-2 truncate" onClick={() => setExpandedId(rider.id)}>{rider.vehicleType}</div>
-                  <div className="col-span-1" onClick={() => setExpandedId(rider.id)}>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        rider.status === 'Active' ? 'bg-green-200 text-green-800' : 'bg-yellow-200 text-yellow-800'
-                      }`}
-                    >
-                      {rider.status}
+                    <span className="truncate">
+                      {`${r.firstName} ${r.middleName || ''} ${r.lastName}`}
                     </span>
                   </div>
-                  <div className="col-span-1 flex items-center justify-center gap-2">
-                    {rider.status === 'Applicant' ? (
-                      <>
-                        <button className="bg-green-500 text-white text-xs px-2 py-1 rounded" onClick={(e) => { e.stopPropagation(); handleApprove(rider.id); }}>Accept</button>
-                        <button className="bg-red-500 text-white text-xs px-2 py-1 rounded" onClick={(e) => { e.stopPropagation(); handleDelete(rider.id); }}>Decline</button>
-                      </>
-                    ) : (
-                      <button onClick={(e) => { e.stopPropagation(); setExpandedId(rider.id); }}>
-                        <ChevronDown size={16} className="inline-block text-gray-500" />
-                      </button>
-                    )}
-                  </div>
                 </div>
-              ) : (
-                // Expanded Rider Card
-                <div className="bg-white p-6 shadow-xl rounded-md flex flex-col lg:flex-row items-start justify-between">
-                  {/* Left Section: Avatar, Name, Personal Details */}
-                  <div className="flex items-start pl-6 gap-4 mb-6 lg:mb-0 lg:pr-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white bg-[#FF9D3D] shadow-md">
-                        {getInitials(rider.firstName, rider.lastName)}
-                      </div>
-                      <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${rider.status === 'Active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                <div className="col-span-3 truncate">{r.email}</div>
+                <div className="col-span-2 truncate">{r.contactNumber}</div>
+                <div className="col-span-2 truncate">{r.vehicleType}</div>
+                <div className="col-span-1">
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    r.accountStatus === 'ACTIVE'
+                      ? 'bg-green-200 text-green-800'
+                      : r.accountStatus === 'PENDING'
+                      ? 'bg-yellow-200 text-yellow-800'
+                      : r.accountStatus === 'REJECTED'
+                      ? 'bg-red-200 text-red-800'
+                      : 'bg-gray-200 text-gray-800'
+                  }`}>
+                    {r.accountStatus}
+                  </span>
+                </div>
+                <div className="col-span-1 flex items-center justify-center gap-1">
+                  <button
+                    className="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600"
+                    onClick={() => handleViewDetails(r)}
+                    title="View Details"
+                  >
+                    <Eye size={12} />
+                  </button>
+                  
+                  {r.accountStatus === 'PENDING' ? (
+                    <>
+                      <button
+                        className="bg-green-500 text-white text-xs px-2 py-1 rounded hover:bg-green-600"
+                        onClick={() => handleApprove(r.driverId)}
+                        title="Approve"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        className="bg-red-500 text-white text-xs px-2 py-1 rounded hover:bg-red-600"
+                        onClick={() => handleReject(r.driverId)}
+                        title="Reject"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setExpandedId(expandedId === r.driverId ? null : r.driverId)}
+                      className="text-gray-500 hover:text-gray-700"
+                      title="Toggle details"
+                    >
+                      <ChevronDown size={16} className={`transition-transform ${expandedId === r.driverId ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
+                  
+                  <button
+                    className="bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700"
+                    onClick={() => handleDelete(r.driverId)}
+                    title="Delete"
+                  >
+                    <TrashIcon className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {expandedId === r.driverId && (
+                <div className="bg-gray-50 p-6">
+                  <h3 className="text-lg font-bold mb-4">{r.firstName} {r.lastName}</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p><strong>Email:</strong> {r.email}</p>
+                      <p><strong>Contact:</strong> {r.contactNumber}</p>
+                      <p><strong>Address:</strong> {r.address || 'N/A'}</p>
+                      <p><strong>License Number:</strong> {r.licenseNumber || 'N/A'}</p>
+                      <p><strong>Date Joined:</strong> {formatDate(r.dateJoined)}</p>
+                      {r.approvalDate && <p><strong>Approval Date:</strong> {formatDate(r.approvalDate)}</p>}
                     </div>
-                    <div className="flex-grow">
-                      <h3 className="text-xl font-bold text-gray-800 mb-1">
-                        {`${rider.firstName} ${rider.lastName}`}
-                      </h3>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">ID:</span>
-                          <span className="text-gray-600">{rider.id}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Area Base:</span>
-                          <span className="text-gray-600">{rider.areaBase}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Vehicle:</span>
-                          <span className="text-gray-600">{rider.vehicleType} - {rider.vehicleModel}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Status:</span>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${rider.status === 'Active' ? 'bg-green-200 text-green-800' : 'bg-yellow-200 text-yellow-800'}`}>
-                            {rider.status}
-                          </span>
-                        </div>
-                      </div>
+                    <div>
+                      <p><strong>Vehicle:</strong> {r.vehicleType} {r.vehicleModel}</p>
+                      <p><strong>Plate Number:</strong> {r.vehiclePlateNumber}</p>
+                      <p><strong>Material Type:</strong> {r.installedMaterialType || 'N/A'}</p>
+                      {r.material && (
+                        <>
+                          <p><strong>Material ID:</strong> {r.material.materialId}</p>
+                          <p><strong>Material Category:</strong> {r.material.category}</p>
+                        </>
+                      )}
+                      {r.rejectedReason && <p><strong>Rejection Reason:</strong> {r.rejectedReason}</p>}
                     </div>
                   </div>
-
-                  {/* Middle Section: Work Details */}
-                  <div className="flex flex-col gap-4 mt-6 lg:mb-0 lg:px-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                    <div className="text-sm">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Plate Number:</span>
-                          <span className="text-gray-600">{rider.plateNumber}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">License #:</span>
-                          <span className="text-gray-600">{rider.licenseNumber}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Materials Supported:</span>
-                          <span className="text-gray-600">{rider.materialsSupported}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Assigned Ads:</span>
-                          <span className="text-gray-600">{rider.assignedAds}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Section: Contacts & Documents */}
-                  <div className="flex flex-col gap-4 w-full lg:w-1/3 pt-6 lg:pt-0 lg:pl-8">
-                    <div className="absolute top-4 right-4 pr-6 flex items-center gap-2">
-                      <button className="p-1 text-[#3674B5] rounded-full hover:bg-gray-100 transition-colors">
-                        <Edit size={16} />
-                      </button>
-                      <button className="p-1 text-red-500 rounded-full hover:bg-gray-100 transition-colors" onClick={() => handleDelete(rider.id)}>
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                      <button className="p-1 text-gray-500 rounded-full hover:bg-gray-100 transition-colors" onClick={() => setExpandedId(null)}>
-                        <X size={16} />
-                      </button>
-                    </div>
-                    <div className="text-sm mt-6 space-y-4">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <img src={`https://via.placeholder.com/40?text=${rider.firstName?.[0]}`} alt="Selfie" className="h-10 w-10 rounded-full object-cover border" />
-                        <div>
-                          <p className="font-semibold text-gray-700">Selfie</p>
-                          <span className="text-xs text-gray-500"></span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <img src={rider.licensePicture} alt="License" className="h-10 w-10 object-cover rounded" />
-                        <p className="font-semibold text-gray-700">License Picture</p>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <img src={rider.orcrPicture} alt="OR/CR" className="h-10 w-10 object-cover rounded" />
-                        <p className="font-semibold text-gray-700">OR/CR Picture</p>
-                      </div>
-                    </div>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      className="p-1 text-gray-500 rounded-full hover:bg-gray-200"
+                      onClick={() => setExpandedId(null)}
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
                 </div>
               )}
             </div>
           ))}
-          {dataToDisplay.length === 0 && (
-            <div className="p-4 text-center text-gray-500">No riders found.</div>
-          )}
         </div>
+      )}
 
-        {/* Footer with user count and pagination (simplified) */}
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-gray-600">Found: {dataToDisplay.length} rider(s) - Selected: {selectedRiders.length}</span>
-          <div className="flex space-x-2">
-            <button
-              className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={selectedRiders.length === 0}
-            >
-              Export {selectedRiders.length > 0 ? `${selectedRiders.length} Selected` : 'to Excel'}
-            </button>
+      {/* Details Modal */}
+      {showDetailsModal && selectedDriverDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold">Driver Details</h2>
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
+                <div className="space-y-2">
+                  <p><strong>Driver ID:</strong> {selectedDriverDetails.driverId}</p>
+                  <p><strong>Full Name:</strong> {`${selectedDriverDetails.firstName} ${selectedDriverDetails.middleName || ''} ${selectedDriverDetails.lastName}`}</p>
+                  <p><strong>Email:</strong> {selectedDriverDetails.email}</p>
+                  <p><strong>Contact:</strong> {selectedDriverDetails.contactNumber}</p>
+                  <p><strong>Address:</strong> {selectedDriverDetails.address || 'N/A'}</p>
+                  <p><strong>License Number:</strong> {selectedDriverDetails.licenseNumber || 'N/A'}</p>
+                  <p><strong>Account Status:</strong> 
+                    <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
+                      selectedDriverDetails.accountStatus === 'ACTIVE'
+                        ? 'bg-green-200 text-green-800'
+                        : selectedDriverDetails.accountStatus === 'PENDING'
+                        ? 'bg-yellow-200 text-yellow-800'
+                        : selectedDriverDetails.accountStatus === 'REJECTED'
+                        ? 'bg-red-200 text-red-800'
+                        : 'bg-gray-200 text-gray-800'
+                    }`}>
+                      {selectedDriverDetails.accountStatus}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Vehicle & Material Information</h3>
+                <div className="space-y-2">
+                  <p><strong>Vehicle Type:</strong> {selectedDriverDetails.vehicleType}</p>
+                  <p><strong>Vehicle Model:</strong> {selectedDriverDetails.vehicleModel}</p>
+                  <p><strong>Plate Number:</strong> {selectedDriverDetails.vehiclePlateNumber}</p>
+                  <p><strong>Material Type:</strong> {selectedDriverDetails.installedMaterialType || 'N/A'}</p>
+                  {selectedDriverDetails.material && (
+                    <>
+                      <p><strong>Material ID:</strong> {selectedDriverDetails.material.materialId}</p>
+                      <p><strong>Material Category:</strong> {selectedDriverDetails.material.category}</p>
+                      {selectedDriverDetails.material.description && (
+                        <p><strong>Material Description:</strong> {selectedDriverDetails.material.description}</p>
+                      )}
+                    </>
+                  )}
+                  <p><strong>Date Joined:</strong> {formatDate(selectedDriverDetails.dateJoined)}</p>
+                  {selectedDriverDetails.approvalDate && (
+                    <p><strong>Approval Date:</strong> {formatDate(selectedDriverDetails.approvalDate)}</p>
+                  )}
+                  {selectedDriverDetails.rejectedReason && (
+                    <p><strong>Rejection Reason:</strong> {selectedDriverDetails.rejectedReason}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Document Images */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-3">Documents</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {selectedDriverDetails.licensePictureURL && (
+                  <div>
+                    <p className="font-medium mb-2">License Picture</p>
+                    <img 
+                      src={selectedDriverDetails.licensePictureURL} 
+                      alt="License"
+                      className="w-full h-40 object-cover border rounded"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder-document.png';
+                      }}
+                    />
+                  </div>
+                )}
+                {selectedDriverDetails.orCrPictureURL && (
+                  <div>
+                    <p className="font-medium mb-2">OR/CR Picture</p>
+                    <img 
+                      src={selectedDriverDetails.orCrPictureURL} 
+                      alt="OR/CR"
+                      className="w-full h-40 object-cover border rounded"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder-document.png';
+                      }}
+                    />
+                  </div>
+                )}
+                {selectedDriverDetails.vehiclePhotoURL && (
+                  <div>
+                    <p className="font-medium mb-2">Vehicle Photo</p>
+                    <img 
+                      src={selectedDriverDetails.vehiclePhotoURL} 
+                      alt="Vehicle"
+                      className="w-full h-40 object-cover border rounded"
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder-vehicle.png';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action buttons for pending drivers */}
+            {selectedDriverDetails.accountStatus === 'PENDING' && (
+              <div className="flex gap-4 mt-6 pt-4 border-t">
+                <button
+                  className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
+                  onClick={() => {
+                    handleApprove(selectedDriverDetails.driverId);
+                    setShowDetailsModal(false);
+                  }}
+                >
+                  Approve Driver
+                </button>
+                <button
+                  className="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleReject(selectedDriverDetails.driverId);
+                  }}
+                >
+                  Reject Driver
+                </button>
+                <button
+                  className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleDelete(selectedDriverDetails.driverId);
+                  }}
+                >
+                  Delete Driver
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Reject Driver</h2>
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectReason('');
+                  setDriverToReject(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for rejection (required):
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={4}
+                placeholder="Please provide a reason for rejecting this driver application..."
+              />
+            </div>
+            
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectReason('');
+                  setDriverToReject(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReject}
+                disabled={!rejectReason.trim()}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
+              >
+                Reject Driver
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default ManageRiders;
+export default ManageRiders;  
