@@ -1,18 +1,18 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth to access user data
 import {
   LayoutDashboard,
-  Users,
-  Bike,
-  Package,
-  FileText,
-  Megaphone,
+  Users, // For View Users
+  Bike, // For View Riders (assuming bicycle is a good representation)
+  Package, // For Materials (representing a package)
+  FileText, // For Reports (representing a document/report)
+  Megaphone, // For AdsPanel
   LogOut,
-} from 'lucide-react';
+} from 'lucide-react'; // Import Lucide icons
 
 const AdminSidebar: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout, user } = useAuth(); // Destructure user from useAuth
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -21,24 +21,25 @@ const AdminSidebar: React.FC = () => {
     navigate('/login');
   };
 
-  // Generate initials using firstName and lastName
   const getInitials = (firstName?: string, lastName?: string) => {
     if (!firstName && !lastName) return '?';
-    const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`;
-    return initials.toUpperCase();
+    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
+
 
   const menuItems = [
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
     { label: 'View Users', path: '/admin/users', icon: <Users size={20} /> },
-    { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> },
-    { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> },
-    { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
+    { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> }, // Using Bike for riders
+    { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> }, // Using Package for materials
+    { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> }, // Using FileText for reports
     { label: 'AdsPanel', path: '/admin/ads', icon: <Megaphone size={20} /> },
   ];
 
   return (
-    <div className="w-60 bg-[#C9E6F0] fixed top-5 left-3 bottom-5 shadow-lg flex flex-col justify-between rounded-3xl p-6">
+    // Adjusting padding for top, left, bottom, and adding rounded corners
+    // The top, left, bottom properties create the offset and define the sidebar's bounds.
+    <div className="w-60 bg-[#C9E6F0] fixed top-0 left-0 bottom-0 shadow-lg flex flex-col justify-start p-5 text-white overflow-hidden">
       <div>
         <div className="flex items-center space-x-3 mb-10">
           <img src="/image/blue-logo.png" alt="Logo" className="w-8 h-8" />
@@ -61,31 +62,36 @@ const AdminSidebar: React.FC = () => {
           ))}
         </nav>
       </div>
-
-      {/* Footer combining Profile and Logout */}
-      <div className="pt-4 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
+      <div className="mt-44 pt-5 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
         {/* Profile Section */}
-        <div className="flex items-center gap-3 pb-4 mb-4 cursor-pointer" onClick={() => navigate('/admin/settings')}>
-          {user?.profilePicture ? (
-            <img
-              src={user.profilePicture}
-              alt="Profile"
-              className="rounded-full w-10 h-10 object-cover"
-            />
-          ) : (
-            <div className="rounded-full w-10 h-10 bg-gray-500 flex items-center justify-center text-white font-semibold">
-              {getInitials(user?.firstName, user?.lastName)}
-            </div>
-          )}
-          <div className="font-semibold text-gray-800">
-            {user ? `${user.firstName} ${user.lastName}` : 'Admin User'}
+        <div
+          className="flex items-center space-x-3 mb-4 cursor-pointer"
+          onClick={() => navigate('/settings')}
+        >
+          <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
+            <span className="text-white font-semibold">
+              {user ? getInitials(user.firstName, user.lastName) : '...'}
+            </span>
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+          </div>
+          <div>
+            {user ? (
+              <p className="font-semibold ">
+                {`${user.firstName} ${user.lastName}`}
+              </p>
+            ) : (
+              <>
+                <p className="font-semibold text-gray-800">Loading...</p>
+                <p className="text-sm text-gray-500">Please wait</p>
+              </>
+            )}
           </div>
         </div>
 
         {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="w-full text-left bg-red-100 text-black hover:bg-red-200 px-3 py-2 rounded-3xl flex items-center gap-3"
+          className="w-full flex items-center space-x-2 text-sm text-[#FF2929] hover:text-red-500 transition px-4 py-2 rounded-lg bg-red-50"
         >
           <LogOut size={18} />
           <span>Logout</span>

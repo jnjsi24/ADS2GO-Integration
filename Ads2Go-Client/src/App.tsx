@@ -22,6 +22,7 @@ import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
 import History from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
+import AdDetailsPage from './pages/USERS/AdDetailsPage'; // New import for AdDetailsPage
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -151,6 +152,14 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/ad-details/:id"
+          element={
+            <ProtectedRoute>
+              <AdDetailsPage />
+            </ProtectedRoute>
+          }
+          />
 
         {/* Protected Admin Routes */}
         <Route
