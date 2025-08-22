@@ -1,7 +1,3 @@
-
-
-
-
 const { gql } = require('graphql-tag');
 
 const paymentTypeDefs = gql`
@@ -20,25 +16,36 @@ const paymentTypeDefs = gql`
   }
 
   type Ad {
-    id: ID!
-    title: String!
-    price: Float!
-    name: String!
-    durationDays: Int!
-    category: String!
-    materialType: String!
-    vehicleType: String!
+    id: ID
+    title: String
+    price: Float
+    name: String
+    durationDays: Int
+    category: String
+    materialType: String
+    vehicleType: String
     description: String
+    adStatus: String
+    paymentStatus: String
   }
+
+  type AdsPlan {
+    id: ID
+    title: String
+    description: String
+    durationDays: Int
+    playsPerDayPerDevice: Int
+    numberOfDevices: Int
+    pricePerPlay: Float
+  }
+
 
   type Payment {
     id: ID!
     userId: ID!
-    adsId: ID!
-    ad: Ad
-    planID: ID!
-    plan: Ad
-    paymentDate: String!
+    adsId: Ad        # returns the full Ad object
+    planID: AdsPlan  # returns the full Plan object
+    paymentDate: String
     paymentType: PaymentType!
     amount: Float!
     receiptId: String!
@@ -47,9 +54,10 @@ const paymentTypeDefs = gql`
     updatedAt: String!
   }
 
+
   input CreatePaymentInput {
     adsId: ID!
-    paymentDate: String!
+    paymentDate: String
     paymentType: PaymentType!
     receiptId: String!
   }
@@ -64,10 +72,16 @@ const paymentTypeDefs = gql`
     payment: Payment
   }
 
+  type AdPaymentInfo {
+    ad: Ad!
+    payment: Payment
+  }
+
   type Query {
-    getPaymentsByUser: [Payment!]!
-    getAllPayments: [Payment!]!
+    getPaymentsByUser(paymentStatus: PaymentStatus): [Payment!]!
+    getAllPayments(paymentStatus: PaymentStatus): [Payment!]!
     getPaymentById(id: ID!): Payment
+    getUserAdsWithPayments: [AdPaymentInfo!]!
   }
 
   type Mutation {
@@ -78,6 +92,3 @@ const paymentTypeDefs = gql`
 `;
 
 module.exports = paymentTypeDefs;
-
-
-
