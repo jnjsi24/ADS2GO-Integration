@@ -64,7 +64,12 @@ const resolvers = {
   Query: {
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
-      return Driver.find({});
+      return Driver.find({})
+        .populate({
+          path: 'material',
+          model: 'Material',
+          select: 'materialId materialType category description mountedAt dismountedAt'
+        });
     },
 
     getDriverById: async (_, { driverId }, { user }) => {
@@ -356,12 +361,16 @@ const resolvers = {
         
         // Assign the first available material
         const materialToAssign = availableMaterials[0];
+        
+        // Only assign the driver ID to the material, don't set mountedAt yet
         materialToAssign.driverId = driver.driverId;
+        materialToAssign.mountedAt = null; // Will be set when material is actually mounted
+        materialToAssign.dismountedAt = null;
         await materialToAssign.save();
 
-        // Update driver's material reference
-        driver.materialId = materialToAssign.materialId;
-        driver.installedMaterialType = materialToAssign.materialType;
+        // Update driver's material reference but don't set installedMaterialType yet
+        driver.materialId = materialToAssign._id;
+        driver.installedMaterialType = null; // Will be set when material is actually mounted
         
         // Handle admin override if needed
         if (materialTypeOverride?.length > 0) {
@@ -711,7 +720,7 @@ const resolvers = {
     material: async (driver) => {
       if (!driver.materialId) return null;
       try {
-        return await Material.findOne({ materialId: driver.materialId });
+        return await Material.findById(driver.materialId);
       } catch (error) {
         console.error('Error fetching material:', error);
         return null;

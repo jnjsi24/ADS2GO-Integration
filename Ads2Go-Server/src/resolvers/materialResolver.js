@@ -14,58 +14,35 @@ const allowedMaterialsByVehicle = {
 
 const materialResolvers = {
   Query: {
-    getAllMaterials: async (_, __, { user, driver }) => {
-      if (!user && !driver) throw new Error("Unauthorized");
-
-      // If driver is logged in → only return materials for their vehicle type
-      if (driver) {
-        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
-      }
-
-      // Admin/User can see all
+    // Admin-only
+    getAllMaterials: async (_, __, { user }) => {
+      checkAdmin(user); // only admin can access
       return await Material.find().sort({ createdAt: -1 });
     },
 
-    getMaterialsByVehicleType: async (_, { vehicleType }, { user, driver }) => {
-      if (!user && !driver) throw new Error("Unauthorized");
-
-      // If driver, override the requested vehicleType with their own
-      if (driver) {
-        return await Material.find({ vehicleType: driver.vehicleType }).sort({ createdAt: -1 });
-      }
-
+    getMaterialsByVehicleType: async (_, { vehicleType }, { user }) => {
+      checkAdmin(user); // admin-only
       return await Material.find({ vehicleType }).sort({ createdAt: -1 });
     },
 
-    getMaterialsByCategory: async (_, { category }, { user, driver }) => {
-      if (!user && !driver) throw new Error("Unauthorized");
-
+    getMaterialsByCategory: async (_, { category }, { user }) => {
+      checkAdmin(user); // admin-only
       if (!['DIGITAL', 'NON_DIGITAL'].includes(category)) {
         throw new Error('Invalid material category');
       }
-
-      // If driver, restrict to both category and their vehicleType
-      if (driver) {
-        return await Material.find({
-          category,
-          vehicleType: driver.vehicleType,
-        }).sort({ createdAt: -1 });
-      }
-
       return await Material.find({ category }).sort({ createdAt: -1 });
     },
 
-    getMaterialById: async (_, { id }, { user, driver }) => {
+    // Accessible by User & Driver (login required)
+    getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType }, { user, driver }) => {
       if (!user && !driver) throw new Error("Unauthorized");
+      return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
+    },
 
+    getMaterialById: async (_, { id }, { user }) => {
+      checkAdmin(user); // admin-only
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
-
-      // If driver, ensure the material matches their vehicleType
-      if (driver && material.vehicleType !== driver.vehicleType) {
-        throw new Error("You are not authorized to view this material");
-      }
-
       return material;
     },
   },
@@ -138,7 +115,38 @@ const materialResolvers = {
         // Update material fields
         material.driverId = null;
         material.dismountedAt = new Date();
-      } else if (input.driverId !== undefined) {
+      } 
+      // Handle mounting (when mountedAt is set)
+      else if (input.mountedAt) {
+        if (!material.driverId) {
+          throw new Error('Cannot set mountedAt: No driver assigned to this material');
+        }
+        material.mountedAt = input.mountedAt;
+        
+        // Update the driver's installedMaterialType
+        const driver = await Driver.findOne({ driverId: material.driverId });
+        if (driver) {
+          driver.installedMaterialType = material.materialType;
+          driver.materialId = material._id;
+          await driver.save();
+        }
+      }
+      // Handle dismounting (when dismountedAt is set)
+      else if (input.dismountedAt) {
+        if (!material.driverId) {
+          throw new Error('Cannot set dismountedAt: No driver assigned to this material');
+        }
+        material.dismountedAt = input.dismountedAt;
+        
+        // Clear the driver's installedMaterialType
+        const driver = await Driver.findOne({ driverId: material.driverId });
+        if (driver) {
+          driver.installedMaterialType = null;
+          driver.materialId = null;
+          await driver.save();
+        }
+      }
+      else if (input.driverId !== undefined) {
         throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
       }
       
@@ -249,14 +257,15 @@ const materialResolvers = {
         }
       }
 
-      // Update the material with the new assignment
+      // Only assign the driver to the material, but don't mark as mounted yet
+      // mountedAt should be set separately when the material is physically mounted
       availableMaterial.driverId = driver.driverId;
-      availableMaterial.mountedAt = new Date();
-      availableMaterial.dismountedAt = null; // Reset dismountedAt if it was set before
+      availableMaterial.mountedAt = null; // Will be set when material is actually mounted
+      availableMaterial.dismountedAt = null; // Reset dismountedAt
       
-      // Update the driver with the material info
+      // Only set the material reference on the driver, not the installedMaterialType
+      // installedMaterialType will be set when mountedAt is set
       driver.materialId = availableMaterial._id;
-      driver.installedMaterialType = availableMaterial.materialType;
       
       await Promise.all([
         availableMaterial.save(),
