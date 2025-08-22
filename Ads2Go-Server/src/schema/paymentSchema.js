@@ -1,7 +1,3 @@
-
-
-
-
 const { gql } = require('graphql-tag');
 
 const paymentTypeDefs = gql`
@@ -20,16 +16,19 @@ const paymentTypeDefs = gql`
   }
 
   type Ad {
-    id: ID!
-    title: String!
-    price: Float!
-    name: String!
-    durationDays: Int!
-    category: String!
-    materialType: String!
-    vehicleType: String!
-    description: String
-  }
+  id: ID!
+  title: String!
+  price: Float!
+  name: String
+  durationDays: Int
+  category: String
+  materialType: String
+  vehicleType: String
+  description: String
+  adStatus: String!
+  paymentStatus: String
+}
+
 
   type Payment {
     id: ID!
@@ -64,10 +63,16 @@ const paymentTypeDefs = gql`
     payment: Payment
   }
 
+  type AdPaymentInfo {
+    ad: Ad!
+    payment: Payment
+  }
+
   type Query {
     getPaymentsByUser: [Payment!]!
     getAllPayments: [Payment!]!
     getPaymentById(id: ID!): Payment
+    getUserAdsWithPayments: [AdPaymentInfo!]! # ✅ New query
   }
 
   type Mutation {
@@ -78,6 +83,3 @@ const paymentTypeDefs = gql`
 `;
 
 module.exports = paymentTypeDefs;
-
-
-

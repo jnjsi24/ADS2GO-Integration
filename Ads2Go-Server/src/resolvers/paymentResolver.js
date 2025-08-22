@@ -15,25 +15,15 @@ const paymentResolvers = {
     getPaymentsByUser: async (_, __, { user }) => {
       checkAuth(user);
 
-      // ✅ Debug log to check userId
-      console.log("Fetching payments for userId:", user.id);
-
-      // ✅ Fetch all payments for this user
-      const payments = await Payment.find({ userId: user.id })
+      return await Payment.find({ userId: user.id })
         .sort({ createdAt: -1 })
         .populate('adsId');
-
-      console.log(`Found ${payments.length} payments for user ${user.id}`);
-
-      return payments;
     },
 
     getPaymentById: async (_, { id }, { user }) => {
       checkAuth(user);
       const payment = await Payment.findById(id).populate('adsId');
-      if (!payment) {
-        throw new Error('Payment not found');
-      }
+      if (!payment) throw new Error('Payment not found');
       if (
         payment.userId.toString() !== user.id &&
         user.role !== 'ADMIN' &&
@@ -42,94 +32,66 @@ const paymentResolvers = {
         throw new Error('Not authorized to view this payment');
       }
       return payment;
-    }
+    },
+
+    getUserAdsWithPayments: async (_, __, { user }) => {
+      checkAuth(user);
+
+      const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
+      const payments = await Payment.find({
+        adsId: { $in: ads.map(ad => ad._id) },
+      });
+
+      return ads.map(ad => ({
+        ad,
+        payment: payments.find(p => p.adsId.toString() === ad._id.toString()) || null,
+      }));
+    },
   },
 
   Mutation: {
     createPayment: async (_, { input }, { user }) => {
-      checkAuth(user);
+      checkAuth(user); // Ensure user is logged in
 
-      const ad = await Ad.findById(input.adsId);
-      if (!ad) {
-        throw new Error('Ad not found');
-      }
+      const { adsId, paymentType, receiptId, paymentDate } = input;
+
+      const ad = await Ad.findById(adsId);
+      if (!ad) throw new Error('Ad not found');
 
       if (ad.status !== 'APPROVED') {
         throw new Error('Payment cannot be created. The ad is not yet approved.');
       }
 
-      const existingPayment = await Payment.findOne({ adsId: input.adsId });
+      // ✅ Check for existing payment for this ad
+      const existingPayment = await Payment.findOne({ adsId });
       if (existingPayment) {
-        throw new Error('A payment for this ad already exists.');
-      }
-
-      const isOwner = ad.userId.toString() === user.id;
-      const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
-
-      if (!isOwner && !isAdmin) {
-        throw new Error('Not authorized to create payment for this ad');
-      }
-
-      const plan = await AdsPlan.findById(ad.planId);
-      if (!plan) {
-        throw new Error('Associated plan not found');
+        throw new Error('A payment already exists for this ad.');
       }
 
       const newPayment = new Payment({
-        userId: ad.userId,
-        adsId: ad._id,
-        planID: plan._id,
-        paymentDate: input.paymentDate,
-        paymentType: input.paymentType,
-        amount: plan.totalPrice,
-        receiptId: input.receiptId,
-        paymentStatus: isAdmin ? 'PAID' : 'PENDING'
+        adsId,
+        planID: ad.planId,
+        userId: user.id,
+        paymentType,
+        receiptId,
+        paymentDate,
+        amount: ad.price,
+        paymentStatus: 'PENDING'
       });
 
       await newPayment.save();
 
-      if (newPayment.paymentStatus === 'PAID') {
-        ad.adStatus = 'ACTIVE';
-        ad.paymentStatus = 'PAID';
-        await ad.save();
-      }
+      // ✅ Update ad paymentStatus
+      ad.paymentStatus = 'PAID';
+      await ad.save();
 
       return {
         success: true,
         message: 'Payment created successfully',
-        payment: newPayment,
+        payment: newPayment
       };
     },
 
-    updatePayment: async (_, { id, input }, { user }) => {
-      checkAdmin(user);
-
-      const payment = await Payment.findById(id).populate('adsId');
-      if (!payment) throw new Error('Payment not found');
-
-      const { paymentStatus } = input;
-      if (!['PAID', 'PENDING', 'FAILED'].includes(paymentStatus)) {
-        throw new Error('Invalid payment status');
-      }
-
-      payment.paymentStatus = paymentStatus;
-      await payment.save();
-
-      if (payment.paymentStatus === 'PAID') {
-        const ad = await Ad.findById(payment.adsId);
-        if (ad) {
-          ad.adStatus = 'ACTIVE';
-          ad.paymentStatus = 'PAID';
-          await ad.save();
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Payment status updated successfully',
-        payment,
-      };
-    },
 
     deletePayment: async (_, { id }, { user }) => {
       checkAuth(user);
@@ -159,7 +121,7 @@ const paymentResolvers = {
     },
     ad: async (parent) => {
       return await Ad.findById(parent.adsId);
-    }
+    },
   },
 };
 
