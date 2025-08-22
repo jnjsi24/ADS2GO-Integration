@@ -122,20 +122,25 @@ const materialResolvers = {
     updateMaterial: async (_, { id, input }, { user }) => {
       checkAdmin(user);
 
-      // Only allow updating driverId to null (unlinking driver)
-      const updateFields = {};
-      if (input.driverId === null) {
-        updateFields.driverId = null;
-        updateFields.dismountedAt = new Date();
-      } else if (input.driverId !== undefined) {
-        throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
-      }
-
       const material = await Material.findById(id);
       if (!material) throw new Error('Material not found');
 
-      // Only update the allowed fields
-      Object.assign(material, updateFields);
+      // Handle material dismounting (when driverId is set to null)
+      if (input.driverId === null && material.driverId) {
+        // Find and update the driver to clear the material reference
+        const driver = await Driver.findOne({ driverId: material.driverId });
+        if (driver) {
+          driver.materialId = null;
+          driver.installedMaterialType = null;
+          await driver.save();
+        }
+        
+        // Update material fields
+        material.driverId = null;
+        material.dismountedAt = new Date();
+      } else if (input.driverId !== undefined) {
+        throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
+      }
       
       await material.save();
       return material;
@@ -149,7 +154,7 @@ const materialResolvers = {
       return 'Material deleted successfully.';
     },
 
-    assignMaterialToDriver: async (_, { driverId }, { user }) => {
+    assignMaterialToDriver: async (_, { driverId, materialId }, { user }) => {
       checkAdmin(user);
 
       // Find the driver
@@ -168,48 +173,95 @@ const materialResolvers = {
       });
       
       if (alreadyAssigned) {
-        return { 
-          success: true, 
-          message: 'Driver already has a material assigned',
-          material: alreadyAssigned,
-          driver: {
-            driverId: driver.driverId,
-            fullName: `${driver.firstName} ${driver.lastName}`,
-            email: driver.email,
-            contactNumber: driver.contactNumber,
-            vehiclePlateNumber: driver.vehiclePlateNumber
-          }
-        };
+        // If the material is already assigned to this driver, just return the current assignment
+        if (materialId && alreadyAssigned._id.toString() === materialId) {
+          return { 
+            success: true, 
+            message: 'Material already assigned to this driver',
+            material: alreadyAssigned,
+            driver: {
+              driverId: driver.driverId,
+              fullName: `${driver.firstName} ${driver.lastName}`,
+              email: driver.email,
+              contactNumber: driver.contactNumber,
+              vehiclePlateNumber: driver.vehiclePlateNumber,
+              installedMaterialType: driver.installedMaterialType
+            }
+          };
+        }
+        throw new Error('Driver already has a material assigned');
       }
 
-      // Find an unassigned material of allowed type
-      // First try to find a material that matches the driver's preferred material type
-      const preferredTypes = driver.preferredMaterialType?.length > 0 
-        ? driver.preferredMaterialType 
-        : allowedTypes;
+      let availableMaterial;
+      
+      // If materialId is provided, try to assign that specific material
+      if (materialId) {
+        availableMaterial = await Material.findOne({
+          _id: materialId,
+          vehicleType: driver.vehicleType,
+          materialType: { $in: allowedTypes },
+          $or: [
+            { driverId: null },
+            { driverId: { $exists: false } },
+            { 
+              driverId: driver.driverId,
+              dismountedAt: { $ne: null }
+            }
+          ]
+        });
+        
+        if (!availableMaterial) {
+          throw new Error('Specified material is not available for assignment or does not match vehicle type');
+        }
+      } else {
+        // Find an unassigned material of allowed type
+        // First try to find a material that matches the driver's preferred material type
+        const preferredTypes = driver.preferredMaterialType?.length > 0 
+          ? driver.preferredMaterialType 
+          : allowedTypes;
 
-      const availableMaterial = await Material.findOne({
-        vehicleType: driver.vehicleType,
-        materialType: { $in: preferredTypes },
-        $or: [
-          { driverId: null },
-          { driverId: { $exists: false } },
-          { 
-            driverId: driver.driverId, 
-            dismountedAt: { $ne: null } // Allow reassigning previously used materials
-          }
+        availableMaterial = await Material.findOne({
+          vehicleType: driver.vehicleType,
+          materialType: { $in: preferredTypes },
+          $or: [
+            { driverId: null },
+            { driverId: { $exists: false } },
+            { 
+              driverId: driver.driverId, 
+              dismountedAt: { $ne: null } // Allow reassigning previously used materials
+            }
         ]
       }).sort({ dismountedAt: 1 }); // Prefer materials that were dismounted most recently
 
-      if (!availableMaterial) {
-        throw new Error(`No available ${preferredTypes.join('/')} materials for ${driver.vehicleType} to assign`);
+        if (!availableMaterial) {
+          throw new Error('No available materials of the required type');
+        }
       }
 
-      // Assign driver
+      // Check if the material is already assigned to another driver
+      if (availableMaterial.driverId && availableMaterial.driverId !== driver.driverId) {
+        // Unassign from the previous driver
+        const previousDriver = await Driver.findOne({ driverId: availableMaterial.driverId });
+        if (previousDriver) {
+          previousDriver.materialId = null;
+          previousDriver.installedMaterialType = null;
+          await previousDriver.save();
+        }
+      }
+
+      // Update the material with the new assignment
       availableMaterial.driverId = driver.driverId;
       availableMaterial.mountedAt = new Date();
-      availableMaterial.dismountedAt = null; // Clear dismountedAt when reassigning
-      await availableMaterial.save();
+      availableMaterial.dismountedAt = null; // Reset dismountedAt if it was set before
+      
+      // Update the driver with the material info
+      driver.materialId = availableMaterial._id;
+      driver.installedMaterialType = availableMaterial.materialType;
+      
+      await Promise.all([
+        availableMaterial.save(),
+        driver.save()
+      ]);
 
       return {
         success: true,
