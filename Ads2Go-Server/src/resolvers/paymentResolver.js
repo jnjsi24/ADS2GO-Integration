@@ -92,6 +92,23 @@ const paymentResolvers = {
         payment: null,
       };
     },
+
+    // ✅ Added updatePayment for admin
+    updatePayment: async (_, { id, input }, { user }) => {
+      checkAdmin(user); // only admin can update
+
+      const payment = await Payment.findById(id);
+      if (!payment) throw new Error('Payment not found');
+
+      payment.paymentStatus = input.paymentStatus;
+      await payment.save();
+
+      return {
+        success: true,
+        message: 'Payment updated successfully',
+        payment,
+      };
+    },
   },
 
   Payment: {
