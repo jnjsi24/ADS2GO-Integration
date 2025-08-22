@@ -96,14 +96,18 @@ const PaymentHistory: React.FC = () => {
     postalCode: '9090',
   });
 
-  const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS);
+  const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
+    fetchPolicy: 'network-only', // Force fetch from server
+  });
   const [createPayment] = useMutation(CREATE_PAYMENT);
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
   useEffect(() => {
     if (data) {
+      console.log('Raw data from GET_USER_ADS_WITH_PAYMENTS:', data.getUserAdsWithPayments); // Log raw data
       const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
+        console.log('Ad:', ad.id, 'Payment:', payment); // Log each ad and payment
         const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
         let plan: string;
         switch (durationDays) {
@@ -201,7 +205,7 @@ const PaymentHistory: React.FC = () => {
     const input = {
       adsId: selectedPaymentItem.id,
       paymentType: mapPaymentType(paymentType),
-      receiptId: `REC-${Date.now()}`,
+      receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, // Enhanced receiptId
       paymentDate: new Date().toISOString(),
     };
 
@@ -210,7 +214,7 @@ const PaymentHistory: React.FC = () => {
       if (mutationData.createPayment.success) {
         alert(`Payment for ${selectedPaymentItem.productName} initiated!`);
         setShowPaymentPopup(false);
-        refetch();
+        await refetch(); // Ensure refetch awaits completion
       } else {
         alert(mutationData.createPayment.message);
       }
@@ -224,7 +228,7 @@ const PaymentHistory: React.FC = () => {
 
   const filteredPayments = payments.filter((item) => {
     const matchesSearchTerm = item.productName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-                              item.id.toString().includes(searchTerm.trim());
+                             item.id.toString().includes(searchTerm.trim());
     const matchesStatus = statusFilter === "All Status" || item.status === statusFilter;
     const matchesPlan = planFilter === "All Plans" || item.plan === planFilter;
 
@@ -234,6 +238,7 @@ const PaymentHistory: React.FC = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentPayments = filteredPayments.slice(indexOfFirstItem, indexOfLastItem);
+  console.log('Current Payments:', currentPayments); // Log payments being rendered
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const startItem = indexOfFirstItem + 1;
   const endItem = Math.min(indexOfLastItem, filteredPayments.length);
@@ -353,10 +358,10 @@ const PaymentHistory: React.FC = () => {
                   <strong>Ad Type:</strong> <span>{item.adType || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Ad Length Seconds:</strong> <span>{item.adLengthSeconds || 'N/A'}</span>
+                  <strong>adLengthSeconds:</strong> <span>{item.adLengthSeconds || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Receipt ID:</strong> <span>{item.receiptId || 'N/A'}</span>
+                  <strong>receiptId:</strong> <span>{item.receiptId || 'N/A'}</span>
                 </div>
               </div>
               
@@ -569,7 +574,7 @@ const PaymentHistory: React.FC = () => {
                 {paymentType === 'maya' && (
                   <>
                     <h2 className="font-semibold text-gray-700 mb-3">Maya Details</h2>
-                    <input type="text" placeholder="Maya Account Number" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg mb-3" />
+                    <input type="text" placeholder="Maya Account Number" className="w-full border border-[#3674B5] px-3 py-2 mb-3 rounded-lg" />
                     <input type="text" placeholder="Account Holder Name" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
                   </>
                 )}
