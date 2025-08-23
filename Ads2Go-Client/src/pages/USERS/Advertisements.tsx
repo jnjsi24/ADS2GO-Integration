@@ -245,7 +245,7 @@ const Advertisements: React.FC = () => {
         <div className="flex space-x-3">
           <span className="pt-1 mt-10 text-gray-500 ">{filteredAds.length} Ads found</span>
           <button
-            onClick={() => setShowCreateAdPopup(true)}
+            onClick={() => navigate('/create-advertisement')}
             className="px-4 py-2 bg-[#FADA7A] mt-10 text-gray-600 text-sm font-semibold w-32 rounded-2xl hover:bg-[#F5F0CD] hover:scale-105 transition-all duration-300"
           >
             Add New Ads
