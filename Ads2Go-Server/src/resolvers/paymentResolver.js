@@ -100,7 +100,7 @@ const paymentResolvers = {
         receiptId,
         paymentDate: paymentDate || new Date().toISOString(),
         amount: ad.price,
-        paymentStatus: 'PENDING'
+        paymentStatus: 'PAID'
       });
 
       await newPayment.save();

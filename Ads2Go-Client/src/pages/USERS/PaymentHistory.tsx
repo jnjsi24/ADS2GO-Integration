@@ -349,7 +349,7 @@ const PaymentHistory: React.FC = () => {
               {/* Additional Details Section */}
               <div className="px-4 pb-4 text-sm text-gray-700 grid grid-cols-2 gap-y-2">
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Payment ID:</strong> <span>{item.id}</span>
+                  <strong>Ads ID:</strong> <span>{item.id}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
                   <strong>Mode of Payment:</strong> <span>{item.paymentType || 'N/A'}</span>
