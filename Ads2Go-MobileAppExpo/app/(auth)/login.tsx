@@ -5,10 +5,9 @@ import { request, gql } from "graphql-request";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device"; // ✅ to grab real device info
 
-// Backend endpoint
-const API_URL = "http://192.168.100.22:5000/graphql";
-// If using Android Emulator, you can use: 
-// //const API_URL = "http://10.0.2.2:5000/graphql"; // special alias for localhost
+// Import API configuration
+import API_CONFIG from "../../config/api";
+const API_URL = API_CONFIG.API_URL;
 
 // ✅ Updated mutation with deviceInfo
 const LOGIN_MUTATION = gql`
