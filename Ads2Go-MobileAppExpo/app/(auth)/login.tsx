@@ -7,6 +7,8 @@ import * as Device from "expo-device"; // ✅ to grab real device info
 
 // Backend endpoint
 const API_URL = "http://192.168.100.22:5000/graphql";
+// If using Android Emulator, you can use: 
+// //const API_URL = "http://10.0.2.2:5000/graphql"; // special alias for localhost
 
 // ✅ Updated mutation with deviceInfo
 const LOGIN_MUTATION = gql`
