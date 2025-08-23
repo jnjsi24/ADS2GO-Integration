@@ -17,7 +17,14 @@ const materialResolvers = {
     // Admin-only
     getAllMaterials: async (_, __, { user }) => {
       checkAdmin(user); // only admin can access
-      return await Material.find().sort({ createdAt: -1 });
+      try {
+        const materials = await Material.find().sort({ createdAt: -1 });
+        console.log(`Found ${materials.length} materials`);
+        return materials;
+      } catch (error) {
+        console.error('Error fetching materials:', error);
+        throw new Error('Failed to fetch materials');
+      }
     },
 
     getMaterialsByVehicleType: async (_, { vehicleType }, { user }) => {
@@ -287,11 +294,61 @@ const materialResolvers = {
     },
   },
 
-
   Material: {
     id: (parent) => parent._id.toString(),
     materialId: (parent) => parent.materialId,
     driverId: (parent) => parent.driverId,
+    
+    // ✅ FIXED: Properly resolve driver information
+    driver: async (parent) => {
+      if (!parent.driverId) {
+        console.log(`No driverId for material ${parent.materialId}`);
+        return null;
+      }
+      
+      try {
+        console.log(`Fetching driver with driverId: ${parent.driverId}`);
+        const driver = await Driver.findOne({ driverId: parent.driverId });
+        
+        if (!driver) {
+          console.log(`No driver found with driverId: ${parent.driverId}`);
+          return null;
+        }
+        
+        console.log(`Found driver: ${driver.fullName}`);
+        return {
+          driverId: driver.driverId,
+          fullName: driver.fullName, // This uses the virtual field
+          email: driver.email,
+          contactNumber: driver.contactNumber,
+          vehiclePlateNumber: driver.vehiclePlateNumber,
+        };
+      } catch (error) {
+        console.error('Error fetching driver for material:', error);
+        return null;
+      }
+    },
+    
+    // ✅ FIXED: Ensure dates are properly formatted
+    createdAt: (parent) => {
+      if (!parent.createdAt) return null;
+      return parent.createdAt.toISOString();
+    },
+    
+    updatedAt: (parent) => {
+      if (!parent.updatedAt) return null;
+      return parent.updatedAt.toISOString();
+    },
+    
+    mountedAt: (parent) => {
+      if (!parent.mountedAt) return null;
+      return parent.mountedAt.toISOString();
+    },
+    
+    dismountedAt: (parent) => {
+      if (!parent.dismountedAt) return null;
+      return parent.dismountedAt.toISOString();
+    }
   },
 };
 
