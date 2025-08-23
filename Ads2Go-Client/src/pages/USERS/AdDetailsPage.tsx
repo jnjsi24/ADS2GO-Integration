@@ -1,22 +1,45 @@
 // src/pages/AdDetailsPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle } from 'lucide-react'; // Import additional icons for notifications
+import { useQuery } from '@apollo/client';
+import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { GET_MY_ADS } from '../../graphql/queries/getAd';
 
-// Ad type (should be consistent across files)
+// Ad type (should match the one in Advertisements.tsx)
 type Ad = {
-  id: number;
+  id: string;
   title: string;
-  riders: number;
-  desc: string;
-  date: string;
+  description: string;
+  adFormat: string;
+  mediaFile?: string;
+  adType: string;
+  vehicleType: string;
   price: number;
-  status: 'Pending' | 'Dispatch' | 'Completed';
-  vehicleType: 'Car' | 'Motor' | 'Jeep' | 'Bus';
-  material: 'LCD Screen' | 'Posters' | 'Vinyl Sticker';
-  plan: 'Monthly' | 'Weekly';
-  format: 'Image' | 'Video';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  createdAt: string;
+  planId: {
+    id: string;
+    name: string;
+    durationDays: number;
+    playsPerDayPerDevice: number;
+    numberOfDevices: number;
+    adLengthSeconds: number;
+    pricePerPlay: number;
+    totalPrice: number;
+  };
+  materialId: {
+    id: string;
+    materialType: string;
+    category: string;
+    description: string;
+    mountedAt: string;
+    dismountedAt: string;
+  };
+  // Additional fields for display
+  riders?: number;
+  plan?: string;
+  format?: string;
   imagePath?: string;
 };
 
@@ -28,31 +51,11 @@ type Notification = {
   timestamp: string;
 };
 
-// Sample ad data (In a real app, this would be fetched from an API)
-const sampleAds: Ad[] = [
-  { id: 2632, title: 'Drive Clean Promo', riders: 5, desc: 'Promoting a sleek car wash service in Manila', date: '31 Jul 2020', price: 64.00, status: 'Pending', vehicleType: 'Car', material: 'LCD Screen', plan: 'Monthly', format: 'Image', imagePath: '/image/blue-logo.png' },
-  { id: 2633, title: 'Urban Threads Campaign', riders: 67, desc: 'Launching a streetwear campaign across Cebu', date: '01 Aug 2020', price: 35.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Posters', plan: 'Weekly', format: 'Video', imagePath: '/image/duck.gif' },
-  { id: 2634, title: 'Fresh Harvest Tour', riders: 10, desc: 'Highlighting local farm produce in Quezon City', date: '02 Aug 2020', price: 74.00, status: 'Completed', vehicleType: 'Jeep', material: 'Vinyl Sticker', plan: 'Monthly', format: 'Image', imagePath: '/image/black-logo.png' },
-  { id: 2635, title: 'Beach Bliss Offers', riders: 3, desc: 'Summer promo for beachfront resort in Batangas', date: '02 Aug 2020', price: 82.00, status: 'Pending', vehicleType: 'Bus', material: 'LCD Screen', plan: 'Weekly', format: 'Video', imagePath: '/image/cat.avif' },
-  { id: 2636, title: 'eRide Makati Launch', riders: 8, desc: 'Promoting electric vehicle rentals in Makati', date: '03 Aug 2020', price: 38.00, status: 'Dispatch', vehicleType: 'Car', material: 'Posters', plan: 'Monthly', format: 'Image', imagePath: '/image/large.jpg' },
-  { id: 2637, title: 'GlowUp Skincare Push', riders: 15, desc: 'Introducing a new skincare brand to college students', date: '03 Aug 2020', price: 67.00, status: 'Completed', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video', imagePath: '/image/neko.webp'},
-  { id: 2638, title: 'TechArmor Mobile Blast', riders: 15, desc: 'Promoting mobile accessories in high-traffic areas', date: '03 Aug 2020', price: 67.00, status: 'Pending', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-  { id: 2639, title: 'Campus Reads Promo', riders: 15, desc: 'Back-to-school campaign for local bookstore chain', date: '03 Aug 2020', price: 67.00, status: 'Completed', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-  { id: 2640, title: 'StartUp Spark PH', riders: 15, desc: 'Advert for tech startup launching in Metro Manila', date: '03 Aug 2020', price: 67.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-  { id: 2641, title: 'CareClinic Awareness Ride', riders: 15, desc: 'Health awareness campaign for a local clinic', date: '03 Aug 2020', price: 67.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-  { id: 2642, title: 'FlexFit Ad Rollout', riders: 15, desc: 'Promoting a fitness app for on-the-go workouts', date: '03 Aug 2020', price: 67.00, status: 'Pending', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-];
 
 // Sample notification data
 const sampleNotifications: Notification[] = [
   { id: 1, riderName: 'Jose Pascual', type: 'avail', timestamp: '2024-07-20 10:00 AM' },
-  { id: 2, riderName: 'Maria Santos', type: 'on_the_move', timestamp: '2024-07-20 10:15 AM' },
-  { id: 3, riderName: 'Jose Pascual', type: 'completed', timestamp: '2024-07-20 11:30 AM' },
-  { id: 4, riderName: 'Pedro Cruz', type: 'avail', timestamp: '2024-07-20 11:45 AM' },
-  { id: 5, riderName: 'Maria Santos', type: 'cancelled', timestamp: '2024-07-20 12:00 PM' },
-  { id: 6, riderName: 'Juan Dela Cruz', type: 'avail', timestamp: '2024-07-20 01:30 PM' },
-  { id: 7, riderName: 'Rica Reyes', type: 'on_the_move', timestamp: '2024-07-20 02:00 PM' },
-  { id: 8, riderName: 'Crispin Garcia', type: 'completed', timestamp: '2024-07-20 03:00 PM' },
+  // ... rest of the notifications
 ];
 
 // Utility function to mask the name
@@ -101,19 +104,55 @@ const getNotificationText = (notification: Notification) => {
   }
 };
 
-
 const AdDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  
+  // Fetch all ads and filter by ID
+  const { loading, error, data } = useQuery(GET_MY_ADS, {
+    fetchPolicy: 'cache-and-network',
+    onError: (err) => {
+      console.error('Error fetching ads:', err);
+    },
+  });
 
-  const adId = parseInt(id || '', 10);
-  const ad = sampleAds.find(a => a.id === adId);
+  // Find the specific ad by ID
+  const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
 
   // State for selected period filter (for chart)
   const [selectedPeriod, setSelectedPeriod] = useState<'Weekly' | 'Daily'>('Daily');
   // State for active tab
   const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity'>('Details');
-
+  
+  // Show loading state
+  if (loading && !ad) {
+    return (
+      <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+          <p className="text-gray-600">Loading ad details...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600 mb-2">Error loading ad</h2>
+          <p className="text-gray-600 mb-4">{error.message}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handlePeriodChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedPeriod(event.target.value as 'Weekly' | 'Daily');
@@ -174,15 +213,15 @@ const AdDetailsPage: React.FC = () => {
           </button>
           
           <div>
-            <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'Dispatch' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+            <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
               {ad.status}
             </span>
             <h2 className="text-5xl font-bold mt-4 mb-2">{ad.title}</h2>
             <p className="text-3xl text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
-            <p className="text-md text-gray-600">{ad.plan} plan</p>          
-            <p className="text-md font-bold text-gray-600">Until {ad.date}</p>
+            <p className="text-md text-gray-600">{ad.planId?.name} plan</p>          
+            <p className="text-md font-bold text-gray-600">Until {new Date(ad.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
 
-            <p className="text-gray-700 mt-6 text-lg leading-relaxed">{ad.desc}</p>
+            <p className="text-gray-700 mt-6 text-lg leading-relaxed">{ad.description}</p>
           </div>
 
           {/* Tabs - simplified for ad details */}
@@ -214,7 +253,7 @@ const AdDetailsPage: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex space-x-4 mt-6 justify-end">
             {/* Payment Button - only for Pending ads */}
-            {ad.status === 'Pending' && (
+            {ad.status === 'PENDING' && (
               <button
                 onClick={() => navigate('/payment')}
                 className="px-6 py-3 bg-none border border-[#1b5087] text-[#1b5087] rounded-xl font-semibold hover:bg-[#EFEEEA] transition-colors shadow"
@@ -312,7 +351,7 @@ const AdDetailsPage: React.FC = () => {
         <div className="flex flex-col space-y-8">
           {/* Main Media Display */}
           <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center" style={{ height: '400px' }}>
-            {ad.format === 'Video' && ad.imagePath ? (
+            {ad.adFormat === 'Video' && ad.imagePath ? (
               <video src={ad.imagePath} controls className="w-full h-full object-contain"></video>
             ) : ad.imagePath ? (
               <img src={ad.imagePath} alt={ad.title} className="w-full h-full object-contain" />
@@ -326,9 +365,9 @@ const AdDetailsPage: React.FC = () => {
             <h3 className="text-xl font-semibold mb-4">Properties</h3>
             <div className="grid grid-cols-2 gap-4">
               <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium text-center">Vehicle: {ad.vehicleType}</span>
-              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium text-center">Material: {ad.material}</span>
-              <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium text-center">Plan: {ad.plan}</span>
-              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium text-center">Format: {ad.format}</span>
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium text-center">Material: {ad.materialId?.materialType || 'N/A'}</span>
+              <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium text-center">Plan: {ad.planId?.name || 'N/A'}</span>
+              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium text-center">Format: {ad.adFormat || 'N/A'}</span>
             </div>
           </div>
 
@@ -337,9 +376,9 @@ const AdDetailsPage: React.FC = () => {
             <h3 className="text-xl font-semibold mb-4">Ad Performance (Example)</h3>
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-gray-700">Riders Allocated: {ad.riders}</p>
+                <p className="text-sm font-medium text-gray-700">Riders Allocated: {ad.riders || 0}</p>
                 <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-                  <div className="bg-[#1b5087] h-2.5 rounded-full" style={{ width: `${Math.min(100, (ad.riders / 100) * 100)}%` }}></div> {/* Assuming max 100 riders for progress bar */}
+                  <div className="bg-[#1b5087] h-2.5 rounded-full" style={{ width: `${Math.min(100, ((ad.riders || 0) / 100) * 100)}%` }}></div>
                 </div>
               </div>
               <div>
