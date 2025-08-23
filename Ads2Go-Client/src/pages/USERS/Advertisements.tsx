@@ -167,8 +167,7 @@ const Advertisements: React.FC = () => {
   };
 
   const handleViewAd = (ad: Ad) => {
-    // Handle view ad logic here
-    console.log('Viewing ad:', ad);
+    navigate(`/advertisements/${ad.id}`);
   };
 
   const showConfirmModal = (message: string, callback: () => void) => {

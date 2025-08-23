@@ -129,6 +129,22 @@ const AppContent: React.FC = () => {
           }
         />
         <Route
+          path="/advertisements/:id"
+          element={
+            <ProtectedRoute>
+              <AdDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ad-details/:id"
+          element={
+            <ProtectedRoute>
+              <AdDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/help"
           element={
             <ProtectedRoute>
