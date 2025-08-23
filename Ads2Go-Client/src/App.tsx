@@ -38,7 +38,7 @@ import Reports from './pages/ADMIN/Reports';
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
-import SadminAccount from './pages/SUPERADMIN/SadminAccount'; // Added import for sadminAccount
+import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
 
 const AppContent: React.FC = () => {
@@ -252,8 +252,8 @@ const AppContent: React.FC = () => {
             <ProtectedRoute>
               <SadminPlans />
             </ProtectedRoute>
-  }
-/>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/landing" replace />} />

@@ -8,9 +8,13 @@ export const CREATE_ADMIN_USER = gql`
       user {
         id
         firstName
+        middleName
         lastName
         email
         role
+        companyName
+        companyAddress
+        contactNumber
         createdAt
       }
     }

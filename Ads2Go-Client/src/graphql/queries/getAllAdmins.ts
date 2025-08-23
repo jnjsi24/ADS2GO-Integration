@@ -5,10 +5,16 @@ export const GET_ALL_ADMINS = gql`
     getAllAdmins {
       id
       firstName
+      middleName
       lastName
       email
       role
+      isEmailVerified
       companyName
+      companyAddress
+      houseAddress
+      contactNumber
+      profilePicture
       createdAt
     }
   }

@@ -26,6 +26,33 @@ interface Admin {
   createdAt: string | number;
 }
 
+interface AdminFormData {
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  companyName: string;
+  companyAddress: string;
+  contactNumber: string;
+  profilePicture?: File | null;
+}
+
+interface FormErrors {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  companyName?: string;
+  companyAddress?: string;
+  contactNumber?: string;
+  profilePicture?: string;
+  general?: string;
+}
+
 type Toast = {
   id: number;
   message: string;
@@ -36,20 +63,52 @@ const SadminDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   const [showCreateAdminPopup, setShowCreateAdminPopup] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [adminToDelete, setAdminToDelete] = useState<Admin | null>(null);
   const [adminToEdit, setAdminToEdit] = useState<Admin | null>(null);
 
-  const [newAdminFormData, setNewAdminFormData] = useState({
+  const [newAdminFormData, setNewAdminFormData] = useState<AdminFormData>({
     firstName: '',
+    middleName: '',
     lastName: '',
     email: '',
     password: '',
+    confirmPassword: '',
     companyName: '',
     companyAddress: '',
-    contactNumber: '+63 ',
+    contactNumber: '',
+    profilePicture: null as File | null,
   });
+
+  // Debug: Log form state changes
+  useEffect(() => {
+    const isFormValid = (
+      newAdminFormData.firstName &&
+      newAdminFormData.lastName &&
+      newAdminFormData.email &&
+      newAdminFormData.password &&
+      newAdminFormData.confirmPassword &&
+      newAdminFormData.contactNumber &&
+      newAdminFormData.companyName &&
+      newAdminFormData.companyAddress &&
+      newAdminFormData.password === newAdminFormData.confirmPassword &&
+      /^\d{10}$/.test(newAdminFormData.contactNumber)
+    );
+    
+    console.log('Form state update:', {
+      ...newAdminFormData,
+      password: '***',
+      confirmPassword: '***',
+      isFormValid,
+      contactNumberLength: newAdminFormData.contactNumber?.length,
+      contactNumberIsValid: /^\d{10}$/.test(newAdminFormData.contactNumber)
+    });
+  }, [newAdminFormData]);
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [editAdminFormData, setEditAdminFormData] = useState({
     id: '',
@@ -72,11 +131,13 @@ const SadminDashboard: React.FC = () => {
     companyAddress: '',
   });
 
-  const [newAdminErrors, setNewAdminErrors] = useState<{ [key: string]: string }>({
+  const [newAdminErrors, setNewAdminErrors] = useState<FormErrors>({
     firstName: '',
+    middleName: '',
     lastName: '',
     email: '',
     password: '',
+    confirmPassword: '',
     companyName: '',
     companyAddress: '',
     contactNumber: '',
@@ -123,6 +184,7 @@ const SadminDashboard: React.FC = () => {
 useEffect(() => {
   if (data && data.getAllAdmins) {
     const adminUsers = data.getAllAdmins.filter((user: Admin) => user.role === 'ADMIN');
+    console.log('Admin data from server:', adminUsers); // Debug log
     setAdmins(adminUsers);
   }
 }, [data]);
@@ -132,12 +194,15 @@ useEffect(() => {
   const resetNewAdminForm = () => {
     setNewAdminFormData({
       firstName: '',
+      middleName: '',
       lastName: '',
       email: '',
       password: '',
+      confirmPassword: '',
       companyName: '',
       companyAddress: '',
-      contactNumber: '+63 ',
+      contactNumber: '',
+      profilePicture: null,
     });
     setNewAdminErrors({
       firstName: '',
@@ -159,20 +224,36 @@ useEffect(() => {
     }, 3000);
   };
 
-  // Date formatting helper
+  // Simple date display helper
   const formatDate = (dateInput: any): string => {
     if (!dateInput) return 'N/A';
-    try {
-      let date: Date;
-      if (typeof dateInput === 'object' && dateInput?.$date) {
-        date = new Date(dateInput.$date);
-      } else {
-        date = new Date(dateInput);
-      }
-      if (isNaN(date.getTime())) return 'N/A';
-      return date.toISOString().split('T')[0];
-    } catch {
-      return 'N/A';
+    return dateInput; // Just return the raw value
+  };
+
+  // Handle form input changes
+  const handleNewAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    if (name === 'contactNumber') {
+      // Allow only digits and limit to 11 characters
+      const digits = value.replace(/\D/g, '').slice(0, 11);
+      setNewAdminFormData(prev => ({
+        ...prev,
+        [name]: digits
+      }));
+    } else {
+      setNewAdminFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+    
+    // Clear error for this field if it exists
+    if (newAdminErrors[name as keyof typeof newAdminErrors]) {
+      setNewAdminErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
     }
   };
 
@@ -199,91 +280,304 @@ useEffect(() => {
       if (isNaN(dateA)) return 1;
       if (isNaN(dateB)) return -1;
 
-      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
-    });
+    return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+  });
 
-  // Validation helpers and handlers for new admin
-  const validateNewAdminForm = (): boolean => {
-    let isValid = true;
-    const errors: { [key: string]: string } = {
+/**
+ * Validates the new admin form data
+ * @returns Object containing validation result and error messages
+ */
+const validateNewAdminForm = (): { isValid: boolean; errors: FormErrors } => {
+  // Log form data for debugging (excluding sensitive fields)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] Validating form with data:', {
+      ...newAdminFormData,
+      password: '***',
+      confirmPassword: '***',
+      contactNumberLength: newAdminFormData.contactNumber?.length,
+      companyName: newAdminFormData.companyName || 'empty',
+      companyAddress: newAdminFormData.companyAddress || 'empty',
+      profilePicture: newAdminFormData.profilePicture ? 'File selected' : 'No file'
+    });
+  }
+
+  // Initialize errors object with all possible error fields
+  const errors: FormErrors = {
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    companyName: '',
+    companyAddress: '',
+    contactNumber: '',
+    profilePicture: '',
+    general: ''
+  };
+  
+  let isValid = true;
+  
+  // Helper function to add error and mark form as invalid
+  const addError = (field: keyof FormErrors, message: string): void => {
+    if (errors[field] === undefined) {
+      console.warn(`Attempted to set error for unknown field: ${field}`);
+      errors.general = errors.general || 'An unexpected error occurred';
+    } else {
+      errors[field] = message;
+    }
+    isValid = false;
+  };
+  
+  const nameRegex = /^[A-Za-z\s-']+$/;
+  
+  // Validate first name
+  if (!newAdminFormData.firstName?.trim()) {
+    addError('firstName', 'First Name is required.');
+  } else if (newAdminFormData.firstName.trim().length < 2) {
+    addError('firstName', 'First Name must be at least 2 characters long.');
+  } else if (!nameRegex.test(newAdminFormData.firstName.trim())) {
+    addError('firstName', 'First Name contains invalid characters. Only letters, spaces, hyphens, and apostrophes are allowed.');
+  }
+
+  // Validate middle name (optional)
+  if (newAdminFormData.middleName?.trim() && !nameRegex.test(newAdminFormData.middleName.trim())) {
+    addError('middleName', 'Middle Name contains invalid characters. Only letters, spaces, hyphens, and apostrophes are allowed.');
+  }
+
+  // Validate last name
+  if (!newAdminFormData.lastName?.trim()) {
+    addError('lastName', 'Last Name is required.');
+  } else if (newAdminFormData.lastName.trim().length < 2) {
+    addError('lastName', 'Last Name must be at least 2 characters long.');
+  } else if (!nameRegex.test(newAdminFormData.lastName.trim())) {
+    addError('lastName', 'Last Name contains invalid characters. Only letters, spaces, hyphens, and apostrophes are allowed.');
+  }
+  
+  // Validate email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!newAdminFormData.email?.trim()) {
+    addError('email', 'Email is required.');
+  } else if (!emailRegex.test(newAdminFormData.email.trim())) {
+    addError('email', 'Please enter a valid email address.');
+  }
+
+  // Validate password
+  if (!newAdminFormData.password) {
+    addError('password', 'Password is required.');
+  } else if (newAdminFormData.password.length < 8) {
+    addError('password', 'Password must be at least 8 characters long.');
+  } else if (!/\d/.test(newAdminFormData.password) || 
+             !/[a-z]/.test(newAdminFormData.password) || 
+             !/[A-Z]/.test(newAdminFormData.password)) {
+    addError('password', 'Password must contain at least one uppercase letter, one lowercase letter, and one number.');
+  }
+
+  // Validate confirm password
+  if (newAdminFormData.password !== newAdminFormData.confirmPassword) {
+    addError('confirmPassword', 'Passwords do not match.');
+  }
+
+  // Validate company name
+  if (!newAdminFormData.companyName?.trim()) {
+    addError('companyName', 'Company Name is required.');
+  } else if (newAdminFormData.companyName.trim().length < 2) {
+    addError('companyName', 'Company Name must be at least 2 characters long.');
+  }
+
+  // Validate company address
+  if (!newAdminFormData.companyAddress?.trim()) {
+    addError('companyAddress', 'Company Address is required.');
+  } else if (newAdminFormData.companyAddress.trim().length < 5) {
+    addError('companyAddress', 'Please enter a valid company address.');
+  }
+
+  // Validate contact number (Philippine format: 09XXXXXXXXX or +639XXXXXXXXX)
+  const phMobileRegex = /^(09|\+639)\d{9}$/;
+  if (!newAdminFormData.contactNumber?.trim()) {
+    addError('contactNumber', 'Contact Number is required.');
+  } else {
+    const cleanNumber = newAdminFormData.contactNumber.replace(/\D/g, '');
+    
+    if (/^9\d{9}$/.test(cleanNumber)) {
+      // Format as 09XXXXXXXXX if only 10 digits starting with 9
+      newAdminFormData.contactNumber = `0${cleanNumber}`;
+    } else if (!/^09\d{9}$/.test(cleanNumber)) {
+      addError('contactNumber', 'Please provide a valid Philippine phone number (e.g., 9123456789 or 09123456789).');
+    }
+  }
+  
+  // Validate profile picture (optional but if provided, check type)
+  if (newAdminFormData.profilePicture) {
+    const validImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!validImageTypes.includes(newAdminFormData.profilePicture.type)) {
+      addError('profilePicture', 'Please upload a valid image file (JPEG, PNG, or GIF).');
+    } else if (newAdminFormData.profilePicture.size > 5 * 1024 * 1024) {
+      addError('profilePicture', 'Image size should not exceed 5MB.');
+    }
+  }
+
+  // Set the errors in state
+  setNewAdminErrors(errors);
+  
+  // Return validation result
+  const result = { isValid, errors };
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] Validation result:', result);
+  }
+  
+  return result;
+};
+
+/**
+ * Handles the submission of the new admin form
+ * @param e - Form submission event
+ */
+const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+  e.preventDefault();
+  
+  // Set submitting state to disable the form
+  setSubmitting(true);
+  
+  try {
+    // Clear any previous errors
+    setNewAdminErrors({});
+    
+    // Validate form data
+    console.log('[DEBUG] Starting form validation...');
+    const { isValid, errors } = validateNewAdminForm();
+    
+    if (!isValid) {
+      console.log('[DEBUG] Form validation failed:', errors);
+      setNewAdminErrors(errors);
+      addToast('Please fix the errors in the form', 'error');
+      return;
+    }
+    
+    console.log('[DEBUG] Form validation passed, preparing data for submission...');
+    
+    // Prepare form data for submission
+    const formData = new FormData();
+    
+    // Add all form fields to formData
+    Object.entries(newAdminFormData).forEach(([key, value]) => {
+      if (value !== null && value !== undefined) {
+        formData.append(key, value);
+      }
+    });
+    
+    console.log('[DEBUG] Submitting form data...');
+    // Log form data (excluding sensitive information)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DEBUG] Form data being submitted:', {
+        ...newAdminFormData,
+        password: '***',
+        confirmPassword: '***',
+        profilePicture: newAdminFormData.profilePicture ? 'File selected' : 'No file',
+        contactNumber: newAdminFormData.contactNumber ? '***' : 'Not provided'
+      });
+    }
+    console.log('Form validation result:', { isValid, errors });
+    
+    if (!isValid) {
+      setNewAdminErrors(errors);
+      console.log('Form is not valid, stopping submission');
+      return;
+    }
+    
+    console.log('Form is valid, proceeding with submission');
+    
+    // Prepare the input object for the API call
+    const input = {
+      firstName: newAdminFormData.firstName.trim(),
+      middleName: newAdminFormData.middleName.trim() || null,
+      lastName: newAdminFormData.lastName.trim(),
+      email: newAdminFormData.email.toLowerCase(),
+      password: newAdminFormData.password,
+      companyName: newAdminFormData.companyName.trim(),
+      companyAddress: newAdminFormData.companyAddress.trim(),
+      contactNumber: newAdminFormData.contactNumber,
+      ...(newAdminFormData.profilePicture && { profilePicture: newAdminFormData.profilePicture })
+    };
+    
+    // Log the input data (excluding sensitive information)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DEBUG] Calling createAdminUser mutation with input:', {
+        ...input,
+        password: '***', // Don't log actual password
+        confirmPassword: '***' // Don't log actual confirm password
+      });
+    }
+    
+    try {
+      // Call the createAdminUser mutation
+      const { data } = await createAdminUser({
+        variables: { input },
+        refetchQueries: [{ query: GET_ALL_ADMINS }]
+      });
+      
+      if (data?.createAdminUser) {
+        // Show success message
+        addToast('Admin user created successfully!', 'success');
+        
+        // Reset the form
+        resetNewAdminForm();
+        
+        // Close the popup
+        setShowCreateAdminPopup(false);
+        
+        // Refresh the admin list
+        if (refetch) {
+          await refetch();
+        }
+      }
+    } catch (error: unknown) {
+      console.error('Error creating admin user:', error);
+      
+      // Handle GraphQL errors
+      if (error && typeof error === 'object' && 'graphQLErrors' in error) {
+        const graphQLError = error as { graphQLErrors: Array<{ message: string }> };
+        graphQLError.graphQLErrors.forEach(({ message }) => {
+          addToast(`Error: ${message}`, 'error');
+        });
+      } else {
+        // Handle network or other errors
+        const errorMessage = error instanceof Error ? error.message : 'An error occurred while creating the admin user. Please try again.';
+        addToast(errorMessage, 'error');
+      }
+    } finally {
+      // Always set submitting to false when done
+      setSubmitting(false);
+    }
+  } catch (error: unknown) {
+    console.error('Unexpected error during form submission:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
+    addToast(errorMessage, 'error');
+  } finally {
+    setSubmitting(false);
+  }
+};
+
+  // Reset form and close popup
+  const resetForm = () => {
+    setNewAdminFormData({
       firstName: '',
+      middleName: '',
       lastName: '',
       email: '',
       password: '',
+      confirmPassword: '',
       companyName: '',
       companyAddress: '',
       contactNumber: '',
-    };
-    const nameRegex = /^[A-Za-z\s]+$/;
-    if (!newAdminFormData.firstName.trim() || !nameRegex.test(newAdminFormData.firstName)) {
-      errors.firstName = 'First Name should not contain numbers or symbols and cannot be empty.';
-      isValid = false;
-    }
-    if (!newAdminFormData.lastName.trim() || !nameRegex.test(newAdminFormData.lastName)) {
-      errors.lastName = 'Last Name should not contain numbers or symbols and cannot be empty.';
-      isValid = false;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!newAdminFormData.email.trim() || !emailRegex.test(newAdminFormData.email)) {
-      errors.email = 'Please enter a valid email address.';
-      isValid = false;
-    }
-    if (!newAdminFormData.password.trim()) {
-      errors.password = 'Password is required.';
-      isValid = false;
-    }
-    const phoneRegex = /^\+63\s?\d{10}$/;
-    if (!phoneRegex.test(newAdminFormData.contactNumber)) {
-      errors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
-      isValid = false;
-    }
-    if (!newAdminFormData.companyName.trim()) {
-      errors.companyName = 'Company Name is required.';
-      isValid = false;
-    }
-    if (!newAdminFormData.companyAddress.trim()) {
-      errors.companyAddress = 'Company Address is required.';
-      isValid = false;
-    }
-    setNewAdminErrors(errors);
-    return isValid;
+      profilePicture: null,
+    });
+    setShowCreateAdminPopup(false);
   };
-
-  const handleNewAdminChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    let updatedValue = value;
-    if (name === 'contactNumber') {
-      const digitsOnly = value.replace(/\D/g, '');
-      const limitedDigits = digitsOnly.slice(0, 10);
-      updatedValue = `+63 ${limitedDigits}`;
-    }
-    setNewAdminFormData((prev) => ({ ...prev, [name]: updatedValue }));
-    if (newAdminErrors[name]) {
-      setNewAdminErrors((prev) => ({ ...prev, [name]: '' }));
-    }
-  };
-
-  const handleNewAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateNewAdminForm()) return;
-    try {
-      await createAdminUser({
-        variables: {
-          input: {
-            firstName: newAdminFormData.firstName,
-            lastName: newAdminFormData.lastName,
-            email: newAdminFormData.email,
-            password: newAdminFormData.password,
-            companyName: newAdminFormData.companyName,
-            companyAddress: newAdminFormData.companyAddress,
-            contactNumber: newAdminFormData.contactNumber,
-          },
-        },
-      });
-    } catch {
-      // Handled by onError
-    }
-  };
+  
+  const togglePasswordVisibility = () => setShowPassword(!showPassword);
+  const toggleConfirmPasswordVisibility = () => setShowConfirmPassword(!showConfirmPassword);
 
   // Delete admin
   const confirmDeleteAdmin = (admin: Admin) => {
@@ -291,7 +585,11 @@ useEffect(() => {
   };
 
   const executeDeleteAdmin = async () => {
-    if (!adminToDelete) return;
+    if (!adminToDelete) {
+      console.error('No admin selected for deletion');
+      return;
+    }
+    
     try {
       await deleteUserMutation({ variables: { id: adminToDelete.id } });
     } catch {
@@ -442,7 +740,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
   if (loading) return <p className="ml-64 p-8">Loading admins...</p>;
   if (error) {
     console.log('GraphQL query error:', error);
-    return <p className="ml-64 p-8 text-red-500">Error: {error.message}</p>;
+    return <p className="ml-64 p-8 text-red-500">Error: {error.message || 'An error occurred'}</p>;
   }
 
   return (
@@ -485,7 +783,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
       <div className="mx-6 mt-4 rounded-xl overflow-hidden">
         <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_0.5fr] gap-4 px-6 py-3 text-sm font-semibold text-[#3674B5] bg-gray-100">
           <span>Name</span>
-          <span>Company Address</span>
+          <span>Company</span>
           <span>Contact</span>
           <span>Email</span>
           <span>Date Created</span>
@@ -507,11 +805,11 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                     {admin.firstName} {admin.lastName}
                   </p>
                 </div>
-                <p className="text-sm text-gray-900 group-hover:text-white">{admin.companyAddress || 'N/A'}</p>
+                <p className="text-sm text-gray-900 group-hover:text-white">{admin.companyName || 'N/A'}</p>
                 <p className="text-sm text-gray-900 group-hover:text-white">{admin.contactNumber || 'N/A'}</p>
                 <p className="text-sm text-gray-900 truncate group-hover:text-white">{admin.email}</p>
                 <div className="text-sm text-gray-600 group-hover:text-white">
-                  <span>{formatDate(admin.createdAt)}</span>
+                  <span>{admin.createdAt ? formatDate(admin.createdAt) : 'N/A'}</span>
                 </div>
                 <div className="flex justify-center space-x-2">
                   <button
@@ -551,11 +849,47 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                   className="text-gray-500 hover:text-gray-700"
                 ></button>
               </div>
-              <form onSubmit={handleNewAdminSubmit} className="space-y-4 mt-9">
+              <form onSubmit={handleNewAdminSubmit} className="space-y-6">
+                {/* Profile Picture at the top */}
+                <div className="flex flex-col items-center mb-6">
+                  <label htmlFor="newAdminProfilePicture" className="block text-sm font-medium text-gray-500 mb-2">
+                    Profile Picture
+                  </label>
+                  <div className="relative">
+                    <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#3674B5]">
+                      {newAdminFormData.profilePicture ? (
+                        <img 
+                          src={URL.createObjectURL(newAdminFormData.profilePicture as Blob)} 
+                          alt="Profile Preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <UserPlus size={32} className="text-gray-400" />
+                      )}
+                    </div>
+                    <input
+                      id="newAdminProfilePicture"
+                      type="file"
+                      name="profilePicture"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setNewAdminFormData({
+                            ...newAdminFormData,
+                            profilePicture: e.target.files[0]
+                          });
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                  <span className="mt-2 text-xs text-gray-500">Click to upload</span>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                   <div>
                     <label htmlFor="newAdminFirstName" className="block text-sm font-medium text-gray-500 mb-1">
-                      First Name
+                      First Name *
                     </label>
                     <input
                       id="newAdminFirstName"
@@ -571,8 +905,24 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                     )}
                   </div>
                   <div>
+                    <label htmlFor="newAdminMiddleName" className="block text-sm font-medium text-gray-500 mb-1">
+                      Middle Name
+                    </label>
+                    <input
+                      id="newAdminMiddleName"
+                      type="text"
+                      name="middleName"
+                      value={newAdminFormData.middleName}
+                      onChange={handleNewAdminChange}
+                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+                    />
+                    {newAdminErrors.middleName && (
+                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.middleName}</p>
+                    )}
+                  </div>
+                  <div>
                     <label htmlFor="newAdminLastName" className="block text-sm font-medium text-gray-500 mb-1">
-                      Last Name
+                      Last Name *
                     </label>
                     <input
                       id="newAdminLastName"
@@ -590,7 +940,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                 </div>
                 <div>
                   <label htmlFor="newAdminEmail" className="block text-sm font-medium text-gray-500 mb-1">
-                    Email
+                    Email *
                   </label>
                   <input
                     id="newAdminEmail"
@@ -606,25 +956,8 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                   )}
                 </div>
                 <div>
-                  <label htmlFor="newAdminPassword" className="block text-sm font-medium text-gray-500 mb-1">
-                    Password
-                  </label>
-                  <input
-                    id="newAdminPassword"
-                    type="password"
-                    name="password"
-                    value={newAdminFormData.password}
-                    onChange={handleNewAdminChange}
-                    className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                    required
-                  />
-                  {newAdminErrors.password && (
-                    <p className="text-red-500 text-xs mt-1">{newAdminErrors.password}</p>
-                  )}
-                </div>
-                <div>
                   <label htmlFor="newAdminCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
-                    Company Name
+                    Company Name *
                   </label>
                   <input
                     id="newAdminCompanyName"
@@ -639,46 +972,104 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                     <p className="text-red-500 text-xs mt-1">{newAdminErrors.companyName}</p>
                   )}
                 </div>
-                <div>
-                  <label htmlFor="newAdminCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
-                    Company Address
-                  </label>
-                  <input
-                    id="newAdminCompanyAddress"
-                    type="text"
-                    name="companyAddress"
-                    value={newAdminFormData.companyAddress}
-                    onChange={handleNewAdminChange}
-                    className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                    required
-                  />
-                  {newAdminErrors.companyAddress && (
-                    <p className="text-red-500 text-xs mt-1">{newAdminErrors.companyAddress}</p>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                  <div>
+                    <label htmlFor="newAdminPassword" className="block text-sm font-medium text-gray-500 mb-1">
+                      Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="newAdminPassword"
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={newAdminFormData.password}
+                        onChange={handleNewAdminChange}
+                        className="w-full py-2 pr-8 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={togglePasswordVisibility}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showPassword ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    </div>
+                    {newAdminErrors.password && (
+                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.password}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="newAdminConfirmPassword" className="block text-sm font-medium text-gray-500 mb-1">
+                      Confirm Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="newAdminConfirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        name="confirmPassword"
+                        value={newAdminFormData.confirmPassword}
+                        onChange={handleNewAdminChange}
+                        className="w-full py-2 pr-8 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={toggleConfirmPasswordVisibility}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                      </button>
+                    </div>
+                    {newAdminErrors.confirmPassword && (
+                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.confirmPassword}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="newAdminContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
-                    Phone Number
-                  </label>
-                  <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
-                    <span className="text-gray-700 select-none pr-1">+63</span>
+                <div className="grid grid-cols-1 gap-y-6">
+                  <div>
+                    <label htmlFor="newAdminContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
+                      Contact Number *
+                    </label>
+                    <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
+                      <span className="text-gray-700 select-none pr-1">+63</span>
+                      <input
+                        id="newAdminContactNumber"
+                        name="contactNumber"
+                        type="tel"
+                        value={newAdminFormData.contactNumber}
+                        onChange={handleNewAdminChange}
+                        maxLength={10}
+                        className="flex-grow focus:outline-none bg-transparent"
+                        required
+                      />
+                    </div>
+                    {newAdminErrors.contactNumber && (
+                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.contactNumber}</p>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 mt -2">
+                    * Required fields
+                  </div>
+                  <div>
+                    <label htmlFor="newAdminCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
+                      Company Address *
+                    </label>
                     <input
-                      id="newAdminContactNumber"
-                      name="contactNumber"
-                      type="tel"
-                      value={newAdminFormData.contactNumber.replace('+63 ', '')}
+                      id="newAdminCompanyAddress"
+                      type="text"
+                      name="companyAddress"
+                      value={newAdminFormData.companyAddress}
                       onChange={handleNewAdminChange}
-                      maxLength={10}
-                      className="flex-grow focus:outline-none bg-transparent"
+                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
                       required
                     />
+                    {newAdminErrors.companyAddress && (
+                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.companyAddress}</p>
+                    )}
                   </div>
-                  {newAdminErrors.contactNumber && (
-                    <p className="text-red-500 text-xs mt-1">{newAdminErrors.contactNumber}</p>
-                  )}
                 </div>
-                <div className="w-full py-2 text-gray-500 font-medium">Role: Admin</div>
-                <div className="flex justify-between pt-4">
+                <div className="flex justify-between pt-6">
                   <button
                     type="button"
                     onClick={handleCancelCreateAdmin}
@@ -688,7 +1079,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                   </button>
                   <button
                     type="submit"
-                    disabled={Object.values(newAdminErrors).some((error) => error !== '')}
+                    disabled={false} // Temporarily force enabled for debugging
                     className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     Create Admin
@@ -869,7 +1260,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
             <p className="text-white mb-6">
               Are you sure you want to delete admin{' '}
               <span className="font-bold">
-                {adminToDelete.firstName} {adminToDelete.lastName}
+                {adminToDelete?.firstName || 'this admin'} {adminToDelete?.lastName || ''}
               </span>
               ? This action cannot be undone.
             </p>

@@ -7,7 +7,7 @@ import {
   Users,
   Settings,
   LogOut,
-  FileText, // Assuming you might need this for reports or other admin-like sections
+  FileText,
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
@@ -29,7 +29,7 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Plans', path: '/sadmin-plans', icon: <FileText size={20} /> }, // 👈 NEW
+    { label: 'Plans', path: '/sadmin-plans', icon: <FileText size={20} /> },
     { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];
 
