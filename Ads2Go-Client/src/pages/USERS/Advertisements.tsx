@@ -2,6 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_MY_ADS } from '../../graphql/queries/getMyAds';
+import { CREATE_AD } from '../../graphql/mutations/createAd';
+
+// Form data type
+type FormData = {
+  title: string;
+  description: string;
+  vehicleType: string;
+  materialsUsed: string;
+  adFormat: string;
+  plan: string;
+  media: File | null;
+  status: 'PENDING';
+};
 
 // Toast notification type
 type Toast = {
@@ -12,18 +27,34 @@ type Toast = {
 
 // Ad type
 type Ad = {
-  id: number;
+  id: string;
   title: string;
-  riders: number;
-  desc: string;
-  date: string;
+  description: string;
+  adFormat: string;
+  mediaFile?: string;
+  adType: string;
+  vehicleType: string;
   price: number;
-  status: 'Pending' | 'Dispatch' | 'Completed';
-  vehicleType: 'Car' | 'Motor' | 'Jeep' | 'Bus';
-  material: 'LCD Screen' | 'Posters' | 'Vinyl Sticker';
-  plan: 'Monthly' | 'Weekly';
-  format: 'Image' | 'Video';
-  imagePath?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  createdAt: string;
+  planId: {
+    id: string;
+    name: string;
+    durationDays: number;
+    playsPerDayPerDevice: number;
+    numberOfDevices: number;
+    adLengthSeconds: number;
+    pricePerPlay: number;
+    totalPrice: number;
+  };
+  materialId: {
+    id: string;
+    materialType: string;
+    category: string;
+    description: string;
+    mountedAt: string;
+    dismountedAt: string;
+  };
 };
 
 const Advertisements: React.FC = () => {
@@ -46,22 +77,21 @@ const Advertisements: React.FC = () => {
     adFormat: '',
     plan: '',
     media: null as File | null,
-    status: 'Pending',
+    status: 'PENDING' as const,
   });
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
-  const [ads, setAds] = useState<Ad[]>([
-    { id: 2632, title: 'Drive Clean Promo', riders: 5, desc: 'Promoting a sleek car wash service in Manila', date: '31 Jul 2020', price: 64.00, status: 'Pending', vehicleType: 'Car', material: 'LCD Screen', plan: 'Monthly', format: 'Image', imagePath: '/image/blue-logo.png' },
-    { id: 2633, title: 'Urban Threads Campaign', riders: 67, desc: 'Launching a streetwear campaign across Cebu', date: '01 Aug 2020', price: 35.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Posters', plan: 'Weekly', format: 'Video', imagePath: '/image/duck.gif' },
-    { id: 2634, title: 'Fresh Harvest Tour', riders: 10, desc: 'Highlighting local farm produce in Quezon City', date: '02 Aug 2020', price: 74.00, status: 'Completed', vehicleType: 'Jeep', material: 'Vinyl Sticker', plan: 'Monthly', format: 'Image', imagePath: '/image/black-logo.png' },
-    { id: 2635, title: 'Beach Bliss Offers', riders: 3, desc: 'Summer promo for beachfront resort in Batangas', date: '02 Aug 2020', price: 82.00, status: 'Pending', vehicleType: 'Bus', material: 'LCD Screen', plan: 'Weekly', format: 'Video', imagePath: '/image/cat.avif' },
-    { id: 2636, title: 'eRide Makati Launch', riders: 8, desc: 'Promoting electric vehicle rentals in Makati', date: '03 Aug 2020', price: 38.00, status: 'Dispatch', vehicleType: 'Car', material: 'Posters', plan: 'Monthly', format: 'Image', imagePath: '/image/large.jpg' },
-    { id: 2637, title: 'GlowUp Skincare Push', riders: 15, desc: 'Introducing a new skincare brand to college students', date: '03 Aug 2020', price: 67.00, status: 'Completed', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video', imagePath: '/image/neko.webp'},
-    { id: 2638, title: 'TechArmor Mobile Blast', riders: 15, desc: 'Promoting mobile accessories in high-traffic areas', date: '03 Aug 2020', price: 67.00, status: 'Pending', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-    { id: 2639, title: 'Campus Reads Promo', riders: 15, desc: 'Back-to-school campaign for local bookstore chain', date: '03 Aug 2020', price: 67.00, status: 'Completed', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-    { id: 2640, title: 'StartUp Spark PH', riders: 15, desc: 'Advert for tech startup launching in Metro Manila', date: '03 Aug 2020', price: 67.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-    { id: 2641, title: 'CareClinic Awareness Ride', riders: 15, desc: 'Health awareness campaign for a local clinic', date: '03 Aug 2020', price: 67.00, status: 'Dispatch', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-    { id: 2642, title: 'FlexFit Ad Rollout', riders: 15, desc: 'Promoting a fitness app for on-the-go workouts', date: '03 Aug 2020', price: 67.00, status: 'Pending', vehicleType: 'Motor', material: 'Vinyl Sticker', plan: 'Weekly', format: 'Video' },
-  ]);
+  const { data, loading, error } = useQuery(GET_MY_ADS);
+  const [createAd] = useMutation(CREATE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
+  });
+  
+  const ads: Ad[] = data?.getMyAds || [];
+  
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+    return new Date(dateString).toLocaleDateString('en-US', options);
+  };
 
   const materialOptionsMap: Record<string, string[]> = {
     Car: ['LCD Screen', 'Posters', 'Vinyl Sticker'],
@@ -105,25 +135,40 @@ const Advertisements: React.FC = () => {
     setEstimatedPrice(price);
   }, [formData.vehicleType, formData.materialsUsed, formData.plan]);
 
-  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
+  const addToast = (message: string, type: 'error' | 'success') => {
     const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev: Toast[]) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
     }, 5000);
   };
 
   const removeToast = (id: number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleDeleteAd = (id: number) => {
-    const message = 'Are you sure you want to delete this ad?';
-    const callback = () => {
-      setAds((prev) => prev.filter((ad) => ad.id !== id));
-      addToast('Ad deleted successfully.', 'success');
-    };
-    showConfirmModal(message, callback);
+  const handleDeleteAd = async (adId: string) => {
+    try {
+      // Handle delete ad logic here
+      console.log('Deleting ad:', adId);
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Ad deleted successfully!', 
+        type: 'success' as const 
+      }]);
+    } catch (error) {
+      console.error('Error deleting ad:', error);
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Failed to delete ad', 
+        type: 'error' as const 
+      }]);
+    }
+  };
+
+  const handleViewAd = (ad: Ad) => {
+    // Handle view ad logic here
+    console.log('Viewing ad:', ad);
   };
 
   const showConfirmModal = (message: string, callback: () => void) => {
@@ -171,16 +216,26 @@ const Advertisements: React.FC = () => {
     return d1.getFullYear() === d2.getFullYear();
   };
 
-  const filteredAds = ads.filter(ad => {
-    const matchesSearch = ad.title.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-                            ad.id.toString().includes(searchTerm.trim());
-    const matchesStatus = statusFilter === 'All Status' || ad.status === statusFilter;
-    const matchesPlan = planFilter === 'All Plans' || ad.plan === planFilter;
-
-    // Remove date filtering logic as there are no date filters
+  const filteredAds = ads.filter((ad: Ad) => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = searchTerm === '' || 
+      ad.title.toLowerCase().includes(searchLower) ||
+      ad.description.toLowerCase().includes(searchLower);
+    
+    const matchesStatus = statusFilter === 'All Status' || 
+      (statusFilter === 'Pending' && ad.status === 'PENDING') ||
+      (statusFilter === 'Approved' && ad.status === 'APPROVED') ||
+      (statusFilter === 'Rejected' && ad.status === 'REJECTED') ||
+      (statusFilter === 'Running' && ad.status === 'RUNNING');
+      
+    const matchesPlan = planFilter === 'All Plans' || 
+      (ad.planId?.name && ad.planId.name === planFilter);
+    
     return matchesSearch && matchesStatus && matchesPlan;
   });
 
+  if (loading) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 pt-10">Loading ads...</div>;
+  if (error) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 pt-10 text-red-600">Error loading ads: {error.message}</div>;
   const currentAds = filteredAds.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
 
@@ -193,49 +248,75 @@ const Advertisements: React.FC = () => {
     }
   };
 
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setCurrentPage(1);
+  };
+
+  const handlePlanFilterChange = (plan: string) => {
+    setPlanFilter(plan);
+    setCurrentPage(1);
+  };
+
+  const formatStatus = (status: string): string => {
+    if (!status) return '';
+    return status.charAt(0) + status.slice(1).toLowerCase();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, files } = e.target as HTMLInputElement;
-    if (name === 'media' && files) {
-      setFormData((prev) => ({ ...prev, media: files[0] }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+    const target = e.target as HTMLInputElement;
+    const { name, value, files } = target;
+    
+    if (name === 'media' && files && files.length > 0) {
+      setFormData((prev: FormData) => ({ ...prev, media: files[0] }));
+    } else if (name in formData) {
+      setFormData((prev: FormData) => ({
+        ...prev,
+        [name]: name === 'status' ? value.toUpperCase() : value
+      }));
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const newId = Math.max(...ads.map(ad => ad.id)) + 1;
-
-    const newAd: Ad = {
-      id: newId,
-      title: formData.title.trim(),
-      riders: Math.floor(Math.random() * 100) + 1,
-      desc: formData.description,
-      date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
-      price: estimatedPrice || 0,
-      status: 'Pending',
-      vehicleType: formData.vehicleType as Ad['vehicleType'],
-      material: formData.materialsUsed as Ad['material'],
-      plan: formData.plan as Ad['plan'],
-      format: formData.adFormat === 'Video' ? 'Video' : 'Image',
-      imagePath: formData.media ? URL.createObjectURL(formData.media) : undefined
-    };
-
-    setAds(prev => [...prev, newAd]);
-    setCurrentPage(1);
-    addToast('Advertisement created successfully!', 'success');
-    setShowCreateAdPopup(false);
-    setFormData({
-      title: '',
-      description: '',
-      vehicleType: '',
-      materialsUsed: '',
-      adFormat: '',
-      plan: '',
-      media: null,
-      status: 'Pending',
-    });
+    try {
+      const { data } = await createAd({
+        variables: {
+          input: {
+            title: formData.title.trim(),
+            description: formData.description.trim(),
+            vehicleType: formData.vehicleType,
+            materialId: formData.materialsUsed,
+            planId: formData.plan,
+            adFormat: formData.adFormat,
+            status: formData.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING',
+            price: 0, // This should be calculated based on the plan and material
+          },
+        },
+      });
+      
+      if (data?.createAd) {
+        setShowCreateAdPopup(false);
+        setFormData({
+          title: '',
+          description: '',
+          vehicleType: '',
+          materialsUsed: '',
+          adFormat: '',
+          plan: '',
+          media: null,
+          status: 'PENDING',
+        });
+        setToasts((prev: Toast[]) => [...prev, { 
+          id: Date.now(), 
+          message: 'Ad created successfully!', 
+          type: 'success' as const 
+        }]);
+      }
+    } catch (error) {
+      console.error('Error creating ad:', error);
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Failed to create ad', type: 'error' }]);
+    }
   };
 
   return (
@@ -311,27 +392,23 @@ const Advertisements: React.FC = () => {
               className="rounded-2xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
               <div className="w-full h-48 flex-shrink-0 relative">
-                {ad.format === 'Video' && ad.imagePath ? (
-                  <>
-                    <video
-                      src={ad.imagePath}
-                      className="w-full h-full object-cover"
-                      controls
-                    >
-                      Your browser does not support the video tag.
-                    </video>
-                  </>
-                ) : ad.imagePath ? (
-                  <>
-                    <img
-                      src={ad.imagePath}
-                      alt={`${ad.title} image`}
-                      className="w-full h-full object-cover"
-                    />
-                  </>
+                {ad.adFormat === 'Video' && ad.mediaFile ? (
+                  <video
+                    src={ad.mediaFile}
+                    className="w-full h-full object-cover"
+                    controls
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : ad.mediaFile ? (
+                  <img
+                    src={ad.mediaFile}
+                    alt={`${ad.title} image`}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
-                    No Image
+                    No Media
                   </div>
                 )}
               </div>
@@ -343,8 +420,8 @@ const Advertisements: React.FC = () => {
                   onClick={() => navigate(`/ad-details/${ad.id}`)}
                 >
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
-                  <p className="text-md text-gray-600">{ad.plan} Plan</p>
-                  <p className="text-sm text-gray-500 mt-2">{ad.date}</p>
+                  <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
+                  <p className="text-sm text-gray-500 mt-2">{formatDate(ad.createdAt)}</p>
                 </div>
 
                 <div className="mt-4 pt-5 border-t border-gray-200">
@@ -361,8 +438,13 @@ const Advertisements: React.FC = () => {
                 </div>
               </div>
 
-              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-xl ${ad.status === 'Pending' ? 'bg-yellow-200 text-yellow-800' : ad.status === 'Dispatch' ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-800'}`}>
-                {ad.status}
+              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-xl ${
+                ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
+                ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
+                ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
+                'bg-gray-200 text-gray-800'}`}>
+                {formatStatus(ad.status)}
               </span>
             </div>
           ))

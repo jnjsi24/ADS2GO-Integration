@@ -10,6 +10,7 @@ export const GET_MY_ADS = gql`
       mediaFile
       adType
       status
+      vehicleType
       createdAt
       price
 
@@ -19,7 +20,7 @@ export const GET_MY_ADS = gql`
         durationDays
         playsPerDayPerDevice
         numberOfDevices
-        adLengthMinutes
+        adLengthSeconds
         pricePerPlay
         totalPrice
       }
