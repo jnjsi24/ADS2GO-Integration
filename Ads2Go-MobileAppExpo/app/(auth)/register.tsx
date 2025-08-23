@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, Alert, ScrollView, Image } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import * as ImagePicker from 'expo-image-picker';
 import API_CONFIG from "../../config/api";
 
 type CreateDriverInput = {
@@ -43,14 +43,31 @@ const RegisterForm = () => {
   const [orCrPhoto, setOrCrPhoto] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const pickImage = async (setImage: any) => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
-      includeBase64: true,
-    });
+  const pickImage = async (setImage: React.Dispatch<React.SetStateAction<any>>) => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Permission to access media library is required!');
+        return;
+      }
 
-    if (result.assets && result.assets.length > 0) {
-      setImage(result.assets[0]);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImage({
+          uri: asset.uri,
+          type: 'image/jpeg',
+          fileName: `photo-${Date.now()}.jpg`,
+        });
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
 
@@ -60,48 +77,51 @@ const RegisterForm = () => {
       const formData = new FormData();
 
       // Operations
-      formData.append('operations', JSON.stringify({
-        query: `
-          mutation CreateDriver($input: CreateDriverInput!) {
-            createDriver(input: $input) {
-              success
-              message
-              token
-              driver {
-                driverId
-                email
-                accountStatus
-                firstName
-                middleName
-                lastName
-                fullName
-                preferredMaterialType
+      formData.append(
+        'operations',
+        JSON.stringify({
+          query: `
+            mutation CreateDriver($input: CreateDriverInput!) {
+              createDriver(input: $input) {
+                success
+                message
+                token
+                driver {
+                  driverId
+                  email
+                  accountStatus
+                  firstName
+                  middleName
+                  lastName
+                  fullName
+                  preferredMaterialType
+                }
               }
             }
-          }
-        `,
-        variables: {
-          input: {
-            firstName,
-            middleName,
-            lastName,
-            email,
-            contactNumber,
-            password,
-            address,
-            licenseNumber,
-            licensePictureURL: null,
-            vehiclePlateNumber,
-            vehicleType,
-            vehicleModel,
-            vehicleYear,
-            vehiclePhotoURL: null,
-            orCrPictureURL: null,
-            preferredMaterialType,
-            profilePicture: null,
-          }
-        }
-      }));
+          `,
+          variables: {
+            input: {
+              firstName,
+              middleName,
+              lastName,
+              email,
+              contactNumber,
+              password,
+              address,
+              licenseNumber,
+              licensePictureURL: null,
+              vehiclePlateNumber,
+              vehicleType,
+              vehicleModel,
+              vehicleYear,
+              vehiclePhotoURL: null,
+              orCrPictureURL: null,
+              preferredMaterialType,
+              profilePicture: null,
+            },
+          },
+        })
+      );
 
       // Map
       const map: any = {};
@@ -110,7 +130,6 @@ const RegisterForm = () => {
       if (vehiclePhoto) map[i++] = ['variables.input.vehiclePhotoURL'];
       if (licensePhoto) map[i++] = ['variables.input.licensePictureURL'];
       if (orCrPhoto) map[i++] = ['variables.input.orCrPictureURL'];
-
       formData.append('map', JSON.stringify(map));
 
       // Append files
@@ -122,9 +141,7 @@ const RegisterForm = () => {
 
       const response = await fetch(API_CONFIG.API_URL, {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { Accept: 'application/json' },
         body: formData,
       });
 
@@ -146,39 +163,29 @@ const RegisterForm = () => {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
+      {/* Form Fields */}
       <Text>First Name</Text>
       <TextInput value={firstName} onChangeText={setFirstName} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Middle Name</Text>
       <TextInput value={middleName} onChangeText={setMiddleName} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Last Name</Text>
       <TextInput value={lastName} onChangeText={setLastName} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Email</Text>
       <TextInput value={email} onChangeText={setEmail} style={{ borderWidth: 1, marginBottom: 8 }} keyboardType="email-address" />
-
       <Text>Contact Number</Text>
       <TextInput value={contactNumber} onChangeText={setContactNumber} style={{ borderWidth: 1, marginBottom: 8 }} keyboardType="phone-pad" />
-
       <Text>Password</Text>
       <TextInput value={password} onChangeText={setPassword} style={{ borderWidth: 1, marginBottom: 8 }} secureTextEntry />
-
       <Text>Address</Text>
       <TextInput value={address} onChangeText={setAddress} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>License Number</Text>
       <TextInput value={licenseNumber} onChangeText={setLicenseNumber} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Vehicle Plate Number</Text>
       <TextInput value={vehiclePlateNumber} onChangeText={setVehiclePlateNumber} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Vehicle Type</Text>
       <TextInput value={vehicleType} onChangeText={setVehicleType} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Vehicle Model</Text>
       <TextInput value={vehicleModel} onChangeText={setVehicleModel} style={{ borderWidth: 1, marginBottom: 8 }} />
-
       <Text>Vehicle Year</Text>
       <TextInput
         value={vehicleYear?.toString() || ''}
@@ -186,7 +193,6 @@ const RegisterForm = () => {
         style={{ borderWidth: 1, marginBottom: 8 }}
         keyboardType="numeric"
       />
-
       <Text>Preferred Material Types (comma-separated)</Text>
       <TextInput
         value={preferredMaterialType.join(',')}
@@ -194,27 +200,24 @@ const RegisterForm = () => {
         style={{ borderWidth: 1, marginBottom: 16 }}
       />
 
-      <Button title="Pick Profile Picture" onPress={() => pickImage(setProfilePicture)} />
-      {profilePicture && <Image source={{ uri: profilePicture.uri }} style={{ width: 100, height: 100, marginBottom: 8 }} />}
-
-      <Button title="Pick Vehicle Photo" onPress={() => pickImage(setVehiclePhoto)} />
-      {vehiclePhoto && <Image source={{ uri: vehiclePhoto.uri }} style={{ width: 100, height: 100, marginBottom: 8 }} />}
-
-     <Button title="Pick License Photo" onPress={() => pickImage(setLicensePhoto)} />
-{licensePhoto && (
-  <Image
-    source={{ uri: licensePhoto.uri }}
-    style={{ width: 100, height: 100, marginBottom: 8 }}
-  />
-)}
-
-<Button title="Pick OR/CR Photo" onPress={() => pickImage(setOrCrPhoto)} />
-{orCrPhoto && (
-  <Image
-    source={{ uri: orCrPhoto.uri }}
-    style={{ width: 100, height: 100, marginBottom: 8 }}
-  />
-)}
+      {/* Image Pickers */}
+      {[
+        { label: 'Profile Picture', image: profilePicture, setter: setProfilePicture },
+        { label: 'Vehicle Photo', image: vehiclePhoto, setter: setVehiclePhoto },
+        { label: 'License Photo', image: licensePhoto, setter: setLicensePhoto },
+        { label: 'OR/CR Photo', image: orCrPhoto, setter: setOrCrPhoto },
+      ].map((item, idx) => (
+        <View key={idx} style={{ marginBottom: 16 }}>
+          <Button title={`Pick ${item.label}`} onPress={() => pickImage(item.setter)} />
+          {item.image?.uri && (
+            <Image
+              source={{ uri: item.image.uri }}
+              style={{ width: 200, height: 200, marginVertical: 8, borderRadius: 8, alignSelf: 'center' }}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      ))}
 
       <Button title={loading ? 'Registering...' : 'Register'} onPress={handleRegister} disabled={loading} />
     </ScrollView>
