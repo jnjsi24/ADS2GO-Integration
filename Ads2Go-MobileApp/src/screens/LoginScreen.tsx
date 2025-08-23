@@ -100,36 +100,67 @@ const LoginScreen = ({ navigation }: Props) => {
     if (!validateForm()) return;
 
     setIsLoading(true);
+    const credentials = {
+      email: formData.email.trim(),
+      password: formData.password
+    };
+    
+    console.log('Attempting login with:', { 
+      email: credentials.email,
+      hasPassword: !!credentials.password 
+    });
     
     try {
-      const { data } = await loginDriver({
-        variables: {
-          email: formData.email.trim(),
-          password: formData.password
-        }
+      const { data, errors: gqlErrors } = await loginDriver({
+        variables: credentials,
+        fetchPolicy: 'no-cache' // Ensure we don't get cached responses
       });
 
-      if (data?.loginDriver?.token) {
-        // Store token and user data
-        await Promise.all([
-          AsyncStorage.setItem("authToken", data.loginDriver.token),
-          AsyncStorage.setItem("userData", JSON.stringify(data.loginDriver.driver))
-        ]);
-
-        // Navigate to home screen
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Home' }],
-        });
+      console.log('Login response received');
+      
+      if (gqlErrors) {
+        console.error('GraphQL Errors:', JSON.stringify(gqlErrors, null, 2));
+        throw new Error(gqlErrors[0]?.message || 'Authentication failed');
       }
+
+      if (!data?.loginDriver) {
+        console.error('No loginDriver data in response');
+        throw new Error('Invalid server response');
+      }
+
+      if (!data.loginDriver.token) {
+        console.error('No token in response:', data);
+        throw new Error('Authentication failed: No token received');
+      }
+
+      console.log('Login successful, storing token and user data');
+      
+      // Store token and user data
+      await Promise.all([
+        AsyncStorage.setItem("authToken", data.loginDriver.token),
+        AsyncStorage.setItem("userData", JSON.stringify(data.loginDriver.driver))
+      ]);
+
+      console.log('Navigation to Home screen');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
     } catch (error: any) {
       console.error("Login error:", error);
-      Alert.alert(
-        "Login Failed",
-        error.message.includes("Invalid credentials")
-          ? "Invalid email or password. Please try again."
-          : "An error occurred. Please try again later."
-      );
+      let errorMessage = 'An error occurred. Please try again later.';
+      
+      if (error.networkError) {
+        console.error('Network error:', error.networkError);
+        errorMessage = 'Cannot connect to the server. Please check your connection.';
+      } else if (error.graphQLErrors && error.graphQLErrors.length > 0) {
+        console.error('GraphQL errors:', error.graphQLErrors);
+        errorMessage = error.graphQLErrors[0].message || 'Invalid request';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Login Failed", errorMessage);
     } finally {
       setIsLoading(false);
     }
