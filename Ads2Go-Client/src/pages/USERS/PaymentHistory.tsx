@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, CreditCard, User, Calendar, Lock } from 'lucide-react'; // Import all necessary icons
+import { Search, X, CreditCard, User, Calendar, Lock } from 'lucide-react';
+import { useQuery, useMutation, gql } from '@apollo/client';
 
 type Status = "Paid" | "Pending" | "Failed";
 
 interface PaymentItem {
-  id: number;
+  id: string;
   productName: string;
   imageUrl: string;
   plan: string;
@@ -16,104 +17,57 @@ interface PaymentItem {
   bankNumber: string;
   adType?: string;
   address?: string;
+  durationDays: number;
+  paymentType?: string;
+  adFormat: string;
+  adLengthSeconds: number;
+  totalPrice: string;
+  receiptId?: string;
 }
 
-const mockPayments: PaymentItem[] = [
-  // 2 Paid items
-  {
-    id: 1,
-    productName: "Mahabang Name na Product",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Monthly",
-    amount: "$50.00",
-    status: "Paid" as Status,
-    userName: "John Doe",
-    companyName: "Acme Inc.",
-    bankNumber: "1234 5678 9012 3456",
-    adType: "Video",
-    address: "Quezon City",
-  },
-  {
-    id: 2,
-    productName: "Product Paid 2",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Weekly",
-    amount: "$60.00",
-    status: "Paid" as Status,
-    userName: "Jane Smith",
-    companyName: "Beta LLC",
-    bankNumber: "6543 2109 8765 4321",
-    adType: "Image",
-    address: "Manila",
-  },
-  // 2 Pending items
-  {
-    id: 3,
-    productName: "Product Pending 1",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Weekly",
-    amount: "$100.00",
-    status: "Pending" as Status,
-    userName: "Alex Brown",
-    companyName: "Gamma Corp.",
-    bankNumber: "4321 8765 2109 6543",
-    adType: "Video",
-    address: "Quezon City",
-  },
-  {
-    id: 4,
-    productName: "Product Pending 2",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Monthly",
-    amount: "$115.00",
-    status: "Pending" as Status,
-    userName: "Sarah Davis",
-    companyName: "Delta Ltd.",
-    bankNumber: "9876 5432 1098 7654",
-    adType: "Image",
-    address: "Cebu",
-  },
-  // 3 Failed items
-  {
-    id: 5,
-    productName: "Product Failed 1",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Monthly",
-    amount: "$80.00",
-    status: "Failed" as Status,
-    userName: "Michael Lee",
-    companyName: "Echo Inc.",
-    bankNumber: "5678 1234 9012 3456",
-    adType: "Video",
-    address: "Davao",
-  },
-  {
-    id: 6,
-    productName: "Product Failed 2",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Monthly",
-    amount: "$92.00",
-    status: "Failed" as Status,
-    userName: "Emily Wilson",
-    companyName: "Foxtrot LLC",
-    bankNumber: "3456 7890 1234 5678",
-    adType: "Image",
-    address: "Makati",
-  },
-  {
-    id: 7,
-    productName: "Product Failed 3",
-    imageUrl: "https://via.placeholder.com/80",
-    plan: "Weekly",
-    amount: "$104.00",
-    status: "Failed" as Status,
-    userName: "David Taylor",
-    companyName: "Golf Corp.",
-    bankNumber: "2109 6543 8765 4321",
-    adType: "Video",
-    address: "Baguio",
-  },
-];
+const GET_USER_ADS_WITH_PAYMENTS = gql`
+  query GetUserAdsWithPayments {
+    getUserAdsWithPayments {
+      ad {
+        id
+        title
+        mediaFile
+        adType
+        adFormat
+        adLengthSeconds
+        totalPrice
+        durationDays
+        planId {
+          title
+          durationDays
+        }
+      }
+      payment {
+        id
+        amount
+        paymentStatus
+        paymentType
+        receiptId
+      }
+    }
+  }
+`;
+
+const CREATE_PAYMENT = gql`
+  mutation CreatePayment($input: CreatePaymentInput!) {
+    createPayment(input: $input) {
+      success
+      message
+      payment {
+        id
+        amount
+        paymentStatus
+        paymentType
+        receiptId
+      }
+    }
+  }
+`;
 
 const PaymentHistory: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<Status | "All Status">("All Status");
@@ -123,11 +77,9 @@ const PaymentHistory: React.FC = () => {
   const itemsPerPage = 9;
   const navigate = useNavigate();
 
-  // State for controlling the payment popup and selected item
   const [showPaymentPopup, setShowPaymentPopup] = useState(false);
   const [selectedPaymentItem, setSelectedPaymentItem] = useState<PaymentItem | null>(null);
 
-  // States and handlers moved from Payment.tsx
   const [paymentType, setPaymentType] = useState<string>('');
   const [cardDetails, setCardDetails] = useState({
     number: '',
@@ -143,6 +95,86 @@ const PaymentHistory: React.FC = () => {
     state: 'Arusha, Tanzania',
     postalCode: '9090',
   });
+
+  const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
+    fetchPolicy: 'network-only', // Force fetch from server
+  });
+  const [createPayment] = useMutation(CREATE_PAYMENT);
+
+  const [payments, setPayments] = useState<PaymentItem[]>([]);
+
+  useEffect(() => {
+    if (data) {
+      console.log('Raw data from GET_USER_ADS_WITH_PAYMENTS:', data.getUserAdsWithPayments); // Log raw data
+      const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
+        console.log('Ad:', ad.id, 'Payment:', payment); // Log each ad and payment
+        const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
+        let plan: string;
+        switch (durationDays) {
+          case 30:
+            plan = "30 Days";
+            break;
+          case 60:
+            plan = "60 Days";
+            break;
+          case 90:
+            plan = "90 Days";
+            break;
+          case 120:
+            plan = "120 Days";
+            break;
+          default:
+            plan = `${durationDays} Days`;
+        }
+        const status = mapStatus(payment?.paymentStatus);
+        const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
+        const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
+
+        return {
+          id: ad.id,
+          productName: ad.title,
+          imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
+          plan,
+          amount,
+          status,
+          userName: "",
+          companyName: "",
+          bankNumber: "",
+          adType: ad.adType,
+          address: "",
+          durationDays,
+          paymentType: payment?.paymentType || "",
+          adFormat: ad.adFormat || "",
+          adLengthSeconds: ad.adLengthSeconds || 0,
+          totalPrice,
+          receiptId: payment?.receiptId || "",
+        };
+      });
+      setPayments(mappedPayments);
+    }
+  }, [data]);
+
+  const mapStatus = (status?: string): Status => {
+    if (!status) return "Pending";
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() as Status;
+  };
+
+  const mapPaymentType = (type: string): string => {
+    switch (type) {
+      case 'card':
+        return 'CREDIT_CARD';
+      case 'gcash':
+        return 'GCASH';
+      case 'paypal':
+        return 'PAYPAL';
+      case 'gpay':
+      case 'maya':
+      case 'cash':
+        return 'BANK_TRANSFER';
+      default:
+        return 'CREDIT_CARD';
+    }
+  };
 
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
     setPersonalInfo({ ...personalInfo, [key]: e.target.value });
@@ -164,21 +196,54 @@ const PaymentHistory: React.FC = () => {
     }));
   };
 
-  const handleProceed = () => {
-    // Implement your payment processing logic here
-    console.log("Processing payment for:", selectedPaymentItem);
-    console.log("Payment Type:", paymentType);
-    console.log("Card Details:", cardDetails);
-    console.log("Personal Info:", personalInfo);
-    // After successful payment (mock for now), close the popup
-    alert(`Payment for ${selectedPaymentItem?.productName || 'item'} processed!`);
-    setShowPaymentPopup(false); // Close the popup
-  };
-  // End of states and handlers moved from Payment.tsx
+  const handleProceed = async () => {
+    if (!selectedPaymentItem || !paymentType) {
+      alert("Please select a payment method.");
+      return;
+    }
 
-  const filteredPayments = mockPayments.filter((item) => {
+    const input = {
+      adsId: selectedPaymentItem.id,
+      paymentType: mapPaymentType(paymentType),
+      receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, 
+      paymentDate: new Date().toISOString(),
+    };
+
+    try {
+      const { data: mutationData } = await createPayment({ variables: { input } });
+
+      if (mutationData.createPayment.success) {
+        alert(`✅ Payment for ${selectedPaymentItem.productName} is now PAID!`);
+        
+        // Close popup
+        setShowPaymentPopup(false);
+
+        // 🔹 Immediately reflect updated status in state
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.id === selectedPaymentItem.id
+              ? { ...p, status: "Paid", paymentType: input.paymentType, receiptId: input.receiptId }
+              : p
+          )
+        );
+
+        // 🔹 Refetch from backend to stay consistent
+        await refetch();
+      } else {
+        alert(mutationData.createPayment.message);
+      }
+    } catch (e: any) {
+      alert(e.message || "Failed to create payment.");
+    }
+  };
+
+
+  if (loading) return <p>Loading payments...</p>;
+  if (error) return <p>Error loading payments: {error.message}</p>;
+
+  const filteredPayments = payments.filter((item) => {
     const matchesSearchTerm = item.productName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-                              item.id.toString().includes(searchTerm.trim());
+                             item.id.toString().includes(searchTerm.trim());
     const matchesStatus = statusFilter === "All Status" || item.status === statusFilter;
     const matchesPlan = planFilter === "All Plans" || item.plan === planFilter;
 
@@ -188,6 +253,7 @@ const PaymentHistory: React.FC = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentPayments = filteredPayments.slice(indexOfFirstItem, indexOfLastItem);
+  console.log('Current Payments:', currentPayments); // Log payments being rendered
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const startItem = indexOfFirstItem + 1;
   const endItem = Math.min(indexOfLastItem, filteredPayments.length);
@@ -242,9 +308,11 @@ const PaymentHistory: React.FC = () => {
             onChange={(e) => setPlanFilter(e.target.value)}
             className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
           >
-            <option value="All Plans">All Plans</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Weekly">Weekly</option>
+            <option>All Plans</option>
+            <option>30 Days</option>
+            <option>60 Days</option>
+            <option>90 Days</option>
+            <option>120 Days</option>
           </select>
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
             <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -252,15 +320,15 @@ const PaymentHistory: React.FC = () => {
             </svg>
           </div>
         </div>
-        <div className="relative w-96">
+        <div className="relative flex-grow">
           <input
             type="text"
             placeholder="Search Ads"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="text-xs text-black rounded-xl pl-10 py-3 w-full shadow-md border border-black focus:outline-none appearance-none bg-white"
+            className="text-xs text-black rounded-3xl pl-10 pr-4 py-3 w-full shadow-md border border-black focus:outline-none bg-gray-100"
           />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-3 text-gray-500" size={18} />
         </div>
       </div>
 
@@ -296,38 +364,32 @@ const PaymentHistory: React.FC = () => {
               {/* Additional Details Section */}
               <div className="px-4 pb-4 text-sm text-gray-700 grid grid-cols-2 gap-y-2">
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Payment ID:</strong> <span>{item.id}</span>
+                  <strong>Ads ID:</strong> <span>{item.id}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Mode of Payment:</strong> <span>Gcash</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>Company Name:</strong> <span>{item.companyName}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>User Name:</strong> <span>{item.userName}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>Bank Number:</strong> <span>{item.bankNumber}</span>
+                  <strong>Mode of Payment:</strong> <span>{item.paymentType || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
                   <strong>Ad Type:</strong> <span>{item.adType || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center col-span-2">
-                  <strong>Address:</strong> <span>{item.address || 'N/A'}</span>
+                  <strong>adLengthSeconds:</strong> <span>{item.adLengthSeconds || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between items-center col-span-2">
+                  <strong>receiptId:</strong> <span>{item.receiptId || 'N/A'}</span>
                 </div>
               </div>
               
               {/* Total and Amount Section (above buttons) */}
               <div className="border-t border-gray-200 p-4 flex justify-between items-center">
                 <p className="text-base font-semibold text-gray-700">Total:</p>
-                <p className="text-xl font-bold text-[#3674B5]">P {parseFloat(item.amount.replace('$', '')).toFixed(0)}.000</p>
+                <p className="text-xl font-bold text-[#3674B5]">P {parseFloat(item.amount.replace('$', '')).toFixed(2)}</p>
               </div>
 
               {/* Action Buttons */}
               <div className="px-4 pb-4 flex justify-end space-x-3">
                 <button
-                  onClick={() => navigate(`/ad-details/${item.id}`)}
+                  onClick={() => navigate(`/payment-details/${item.id}`)}
                   className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
                 >
                   See Details
@@ -336,9 +398,9 @@ const PaymentHistory: React.FC = () => {
                   <button
                     onClick={() => {
                       setSelectedPaymentItem(item);
-                      setPaymentType(''); // Reset payment type when opening new popup
-                      setCardDetails({ number: '', holder: '', expiry: '', cvv: '', type: '' }); // Reset card details
-                      setPersonalInfo({ address: 'P.o.Box 1223', city: 'Arusha', state: 'Arusha, Tanzania', postalCode: '9090' }); // Reset personal info
+                      setPaymentType(''); 
+                      setCardDetails({ number: '', holder: '', expiry: '', cvv: '', type: '' }); 
+                      setPersonalInfo({ address: 'P.o.Box 1223', city: 'Arusha', state: 'Arusha, Tanzania', postalCode: '9090' }); 
                       setShowPaymentPopup(true);
                     }}
                     className="px-4 py-2 text-sm bg-[#3674B5] text-white rounded-lg hover:bg-[#2a5b91] transition-colors"
@@ -390,17 +452,17 @@ const PaymentHistory: React.FC = () => {
         </div>
       </div>
 
-      {/* Payment Popup (Content from Payment.tsx) */}
+      {/* Payment Popup */}
       {showPaymentPopup && (
         <div className="fixed inset-0 z-50 flex justify-end pr-2">
           {/* Overlay */}
           <div 
             className="fixed inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
-            onClick={() => setShowPaymentPopup(false)} // Close on overlay click
+            onClick={() => setShowPaymentPopup(false)}
           ></div>
           {/* Pop-up container */}
           <div className="relative w-1/3 max-w-xl h-[730px] pb-6 rounded-3xl bg-gray-100 mt-2 shadow-lg transform transition-transform duration-300 ease-in-out animate-slideIn">
-            {/* Payment Content (formerly from Payment.tsx) */}
+            {/* Payment Content */}
             <div className="p-6 h-full overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Complete Payment</h2>
@@ -411,11 +473,11 @@ const PaymentHistory: React.FC = () => {
                 <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-lg">
                   <h3 className="font-semibold text-lg">Payment for: {selectedPaymentItem.productName}</h3>
                   <p className="text-sm">Plan: {selectedPaymentItem.plan}</p>
-                  <p className="text-xl font-bold mt-2">Amount Due: P {parseFloat(selectedPaymentItem.amount.replace('$', '')).toFixed(0)}.000</p>
+                  <p className="text-xl font-bold mt-2">Amount Due: P {parseFloat(selectedPaymentItem.amount.replace('$', '')).toFixed(2)}</p>
                 </div>
               )}
 
-              {/* Personal Details (adjusted for direct use) */}
+              {/* Personal Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                 {['address', 'city', 'state', 'postalCode'].map((field) => (
                   <div key={field}>
@@ -424,7 +486,7 @@ const PaymentHistory: React.FC = () => {
                       type="text"
                       value={personalInfo[field as keyof typeof personalInfo]}
                       onChange={(e) => handleInput(e, field)}
-                      className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus outline-none"
+                      className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none"
                     />
                   </div>
                 ))}
@@ -434,7 +496,6 @@ const PaymentHistory: React.FC = () => {
               <div className="mb-6">
                 <h2 className="font-semibold text-gray-700 mb-3">Select Payment Method</h2>
                 <div className="flex flex-wrap gap-4">
-                  {/* Note: Ensure these icon paths or actual icons are available if using image-based buttons */}
                   {["card", "gcash", "paypal", "gpay", "maya", "cash"].map((method) => (
                     <button
                       key={method}
@@ -452,7 +513,6 @@ const PaymentHistory: React.FC = () => {
               <div className="mb-8">
                 {paymentType === 'card' && (
                   <>
-                  
                     <h2 className="font-semibold text-gray-700 mb-3">Card Information</h2>
                     <div className="space-y-4">
                       <div className="relative">
@@ -529,7 +589,7 @@ const PaymentHistory: React.FC = () => {
                 {paymentType === 'maya' && (
                   <>
                     <h2 className="font-semibold text-gray-700 mb-3">Maya Details</h2>
-                    <input type="text" placeholder="Maya Account Number" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg mb-3" />
+                    <input type="text" placeholder="Maya Account Number" className="w-full border border-[#3674B5] px-3 py-2 mb-3 rounded-lg" />
                     <input type="text" placeholder="Account Holder Name" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
                   </>
                 )}
@@ -547,7 +607,7 @@ const PaymentHistory: React.FC = () => {
               {/* Action Buttons for the popup */}
               <div className="flex justify-between pt-4">
                 <button 
-                  onClick={() => setShowPaymentPopup(false)} // Close the popup
+                  onClick={() => setShowPaymentPopup(false)}
                   className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
                 >
                   Cancel
