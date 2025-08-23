@@ -83,7 +83,7 @@ const paymentResolvers = {
     createPayment: async (_, { input }, { user }) => {
       checkAuth(user);
 
-      const { adsId, paymentType, receiptId, paymentDate } = input;
+      const { adsId, paymentType, paymentDate } = input;
 
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
@@ -91,6 +91,15 @@ const paymentResolvers = {
 
       const existingPayment = await Payment.findOne({ adsId });
       if (existingPayment) throw new Error('A payment already exists for this ad.');
+
+      let receiptId;
+      let isUnique = false;
+      while (!isUnique) {
+        const randomNum = Math.floor(1000 + Math.random() * 9000); // 4 digits
+        receiptId = `REC-${randomNum}`;
+        const duplicate = await Payment.findOne({ receiptId });
+        if (!duplicate) isUnique = true;
+      }
 
       const newPayment = new Payment({
         adsId,

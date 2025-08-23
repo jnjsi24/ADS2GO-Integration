@@ -205,16 +205,30 @@ const PaymentHistory: React.FC = () => {
     const input = {
       adsId: selectedPaymentItem.id,
       paymentType: mapPaymentType(paymentType),
-      receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, // Enhanced receiptId
+      receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, 
       paymentDate: new Date().toISOString(),
     };
 
     try {
       const { data: mutationData } = await createPayment({ variables: { input } });
+
       if (mutationData.createPayment.success) {
-        alert(`Payment for ${selectedPaymentItem.productName} initiated!`);
+        alert(`✅ Payment for ${selectedPaymentItem.productName} is now PAID!`);
+        
+        // Close popup
         setShowPaymentPopup(false);
-        await refetch(); // Ensure refetch awaits completion
+
+        // 🔹 Immediately reflect updated status in state
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.id === selectedPaymentItem.id
+              ? { ...p, status: "Paid", paymentType: input.paymentType, receiptId: input.receiptId }
+              : p
+          )
+        );
+
+        // 🔹 Refetch from backend to stay consistent
+        await refetch();
       } else {
         alert(mutationData.createPayment.message);
       }
@@ -222,6 +236,7 @@ const PaymentHistory: React.FC = () => {
       alert(e.message || "Failed to create payment.");
     }
   };
+
 
   if (loading) return <p>Loading payments...</p>;
   if (error) return <p>Error loading payments: {error.message}</p>;

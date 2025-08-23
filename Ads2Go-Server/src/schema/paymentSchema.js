@@ -57,7 +57,7 @@ const paymentTypeDefs = gql`
     adsId: ID!
     paymentDate: String
     paymentType: PaymentType!
-    receiptId: String!
+    receiptId: String
   }
 
   input UpdatePaymentInput {
