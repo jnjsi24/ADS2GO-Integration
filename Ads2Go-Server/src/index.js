@@ -6,6 +6,9 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// ✅ For handling GraphQL file uploads
+const { graphqlUploadExpress } = require('graphql-upload');
+
 // 🔹 Import GraphQL typeDefs and resolvers
 const { mergeTypeDefs } = require('@graphql-tools/merge');
 const { mergeResolvers } = require('@graphql-tools/merge');
@@ -29,8 +32,8 @@ const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 
 // 👇 Middleware
-const { authMiddleware } = require('./middleware/auth'); // admin/user auth
-const { driverMiddleware } = require('./middleware/driverAuth'); // driver auth
+const { authMiddleware } = require('./middleware/auth');
+const { driverMiddleware } = require('./middleware/driverAuth');
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -67,7 +70,7 @@ const server = new ApolloServer({
     materialResolver,
     adsPlanResolvers,
     materialTrackingResolvers,
-  ])
+  ]),
 });
 
 const app = express();
@@ -85,9 +88,10 @@ async function startServer() {
       'http://192.168.1.5:3000',
     ],
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
   }));
+
+  // ✅ GraphQL file uploads middleware (must come before express.json())
+  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
 
   app.use(express.json());
 
@@ -103,13 +107,8 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
-        // driver auth
         const { driver } = await driverMiddleware({ req });
-
-        // admin/user auth
         const { user } = await authMiddleware({ req });
-
-        // Return both in context
         return { driver, user };
       },
     })
@@ -121,7 +120,7 @@ async function startServer() {
     res.status(500).json({
       error: 'Internal Server Error',
       message: err.message || 'An unexpected error occurred',
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
     });
   });
 

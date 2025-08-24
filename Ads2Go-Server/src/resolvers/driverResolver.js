@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const { JWT_SECRET, checkAdmin } = require('../middleware/auth');
@@ -7,6 +10,42 @@ const { checkDriverAuth } = require('../middleware/driverAuth');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 const { GraphQLUpload } = require('graphql-upload');
+
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Helper function to save uploaded files
+const saveFile = async (file) => {
+  if (!file) return null;
+  
+  try {
+    const { createReadStream, filename, mimetype } = await file;
+    const stream = createReadStream();
+    const fileExt = path.extname(filename);
+    const newFilename = `${uuidv4()}${fileExt}`;
+    const filePath = path.join(uploadDir, newFilename);
+    
+    // Save the file
+    await new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(filePath);
+      stream.pipe(writeStream)
+        .on('finish', resolve)
+        .on('error', (error) => {
+          console.error('Error saving file:', error);
+          reject(error);
+        });
+    });
+
+    // Return the URL path (relative to the server)
+    return `/uploads/${newFilename}`;
+  } catch (error) {
+    console.error('Error in saveFile:', error);
+    throw new Error('Failed to save file');
+  }
+};
 
 // ===== VEHICLE MATERIAL MAP =====
 const VEHICLE_MATERIAL_MAP = {
