@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const DriverSchema = new mongoose.Schema(
   {
     driverId: { type: String, unique: true, trim: true, uppercase: true },
-    materialId: { type: String, default: null }, // Reference to assigned material
+    materialId: { type: mongoose.Schema.Types.ObjectId, ref: 'Material', default: null }, // Changed to ObjectId ref
 
     firstName: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
     middleName: { type: String, trim: true, maxlength: 50 },
@@ -13,16 +13,16 @@ const DriverSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: [/^\S+@\S+\.\S+$/, 'Invalid email'] },
     password: { type: String, required: true, minlength: 6, select: false },
     address: { type: String, required: true, trim: true, minlength: 10 },
-    profilePicture: { type: String, trim: true, default: null },
+    profilePicture: { type: String, trim: true, default: null }, // Stores the URL after upload processing
 
     licenseNumber: { type: String, required: true, trim: true, uppercase: true },
-    licensePictureURL: { type: String, required: true, trim: true },
+    licensePictureURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
     vehiclePlateNumber: { type: String, required: true, trim: true, uppercase: true },
     vehicleType: { type: String, required: true, enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'], set: v => v.toUpperCase() },
     vehicleModel: { type: String, required: true, trim: true },
     vehicleYear: { type: Number, required: true, min: 1900 },
-    vehiclePhotoURL: { type: String, required: true, trim: true },
-    orCrPictureURL: { type: String, required: true, trim: true },
+    vehiclePhotoURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
+    orCrPictureURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
 
     accountStatus: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
     reviewStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
@@ -49,10 +49,22 @@ const DriverSchema = new mongoose.Schema(
 
     tokenVersion: { type: Number, default: 0 },
 
-    // ✅ NEW FIELDS
-    installedMaterialType: { type: String, enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'], default: null },
-    preferredMaterialType: { type: [String], enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'], default: [] },
-    adminOverrideMaterialType: { type: String, enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER'], default: null },
+    // Material-related fields - updated enum values to match GraphQL schema
+    installedMaterialType: { 
+      type: String, 
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER', 'POSTER'], // Added POSTER to match GraphQL
+      default: null 
+    },
+    preferredMaterialType: { 
+      type: [String], 
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER', 'POSTER'], // Added POSTER to match GraphQL
+      default: [] 
+    },
+    adminOverrideMaterialType: { 
+      type: [String], // Changed to array to match GraphQL schema
+      enum: ['LCD', 'BANNER', 'HEADDRESS', 'STICKER', 'POSTER'], // Added POSTER to match GraphQL
+      default: null 
+    },
     adminOverride: { type: Boolean, default: false },
 
     editRequestStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: null },
@@ -61,8 +73,19 @@ const DriverSchema = new mongoose.Schema(
       middleName: String,
       lastName: String,
       contactNumber: String,
+      email: String, // Added to match GraphQL schema
       address: String,
-      profilePicture: String
+      profilePicture: String,
+      licenseNumber: String, // Added to match GraphQL schema
+      licensePictureURL: String, // Added to match GraphQL schema
+      vehiclePlateNumber: String, // Added to match GraphQL schema
+      vehicleType: { type: String, enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'] }, // Added to match GraphQL schema
+      vehicleModel: String, // Added to match GraphQL schema
+      vehicleYear: Number, // Added to match GraphQL schema
+      vehiclePhotoURL: String, // Added to match GraphQL schema
+      orCrPictureURL: String, // Added to match GraphQL schema
+      preferredMaterialType: [String], // Added to match GraphQL schema
+      reason: String // Added to match GraphQL schema
     }
   },
   {
@@ -85,11 +108,11 @@ DriverSchema.virtual('fullName').get(function () {
   return `${this.firstName} ${this.middleName ? this.middleName + ' ' : ''}${this.lastName}`;
 });
 
-// Virtual for material relationship
+// Virtual for material relationship - updated to work with ObjectId reference
 DriverSchema.virtual('material', {
   ref: 'Material',
   localField: 'materialId',
-  foreignField: 'materialId',
+  foreignField: '_id',
   justOne: true
 });
 
@@ -119,9 +142,11 @@ DriverSchema.pre('save', async function (next) {
 DriverSchema.methods.isLocked = function () {
   return this.accountLocked && this.lockUntil && this.lockUntil > new Date();
 };
+
 DriverSchema.methods.isActive = function () {
   return this.accountStatus === 'ACTIVE';
 };
+
 DriverSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
@@ -131,10 +156,10 @@ DriverSchema.methods.canBeApproved = function() {
   return this.isEmailVerified && this.accountStatus === 'PENDING' && this.reviewStatus === 'PENDING';
 };
 
-// Add method to assign material
+// Updated method to assign material - works with ObjectId reference
 DriverSchema.methods.assignMaterial = async function() {
   if (this.materialId) {
-    return await Material.findOne({ materialId: this.materialId });
+    return await mongoose.model('Material').findById(this.materialId);
   }
   return null;
 };

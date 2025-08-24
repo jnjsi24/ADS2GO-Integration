@@ -6,6 +6,7 @@ const { JWT_SECRET, checkAdmin } = require('../middleware/auth');
 const { checkDriverAuth } = require('../middleware/driverAuth');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
+const { GraphQLUpload } = require('graphql-upload');
 
 // ===== VEHICLE MATERIAL MAP =====
 const VEHICLE_MATERIAL_MAP = {
@@ -61,6 +62,8 @@ async function assignMaterialToDriver(driver) {
 
 // ===== RESOLVERS =====
 const resolvers = {
+Upload: GraphQLUpload,
+
   Query: {
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
@@ -116,7 +119,6 @@ const resolvers = {
       try {
         // Validate email
         if (!validator.isEmail(input.email)) throw new Error("Invalid email format");
-
         const normalizedEmail = input.email.toLowerCase().trim();
 
         // Check if email exists
@@ -124,11 +126,11 @@ const resolvers = {
         if (existing) throw new Error("Driver with this email already exists");
 
         // Validate vehicle type
-        if (!ALLOWED_VEHICLE_TYPES.includes(input.vehicleType)) {
-          throw new Error(`Invalid vehicle type. Allowed: ${ALLOWED_VEHICLE_TYPES.join(', ')}`);
+        if (!Object.keys(VEHICLE_MATERIAL_MAP).includes(input.vehicleType)) {
+          throw new Error(`Invalid vehicle type. Allowed: ${Object.keys(VEHICLE_MATERIAL_MAP).join(', ')}`);
         }
 
-        // Check if there are available materials for the selected types
+        // Check for available materials
         const availableMaterials = await Material.find({
           vehicleType: input.vehicleType,
           materialType: { $in: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [] },
@@ -140,15 +142,19 @@ const resolvers = {
         }
 
         // Validate password
-        if (!input.password || !input.password.trim()) {
-          throw new Error("Password cannot be empty");
-        }
+        if (!input.password || !input.password.trim()) throw new Error("Password cannot be empty");
 
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
         const driverId = await generateDriverId();
         const qrCodeIdentifier = `QR-${driverId}-${Date.now()}`;
 
-        // Create the driver with plain text password - the pre-save hook will hash it
+        // Handle file uploads
+        const profilePictureURL = await saveFile(input.profilePicture);
+        const vehiclePhotoURL = await saveFile(input.vehiclePhoto);
+        const licensePictureURL = await saveFile(input.licensePicture);
+        const orCrPictureURL = await saveFile(input.orCrPicture);
+
+        // Create driver
         const newDriver = new Driver({
           driverId,
           qrCodeIdentifier,
@@ -157,18 +163,18 @@ const resolvers = {
           lastName: input.lastName.trim(),
           contactNumber: input.contactNumber.trim(),
           email: normalizedEmail,
-          password: input.password.trim(),  // Let the pre-save hook hash this
+          password: input.password.trim(),
           address: input.address?.trim() || null,
           licenseNumber: input.licenseNumber?.trim() || null,
-          licensePictureURL: input.licensePictureURL?.trim() || null,
+          licensePictureURL,
           vehiclePlateNumber: input.vehiclePlateNumber?.trim() || null,
           vehicleType: input.vehicleType,
           vehicleModel: input.vehicleModel?.trim() || null,
           vehicleYear: input.vehicleYear,
-          vehiclePhotoURL: input.vehiclePhotoURL?.trim() || null,
-          orCrPictureURL: input.orCrPictureURL?.trim() || null,
+          vehiclePhotoURL,
+          orCrPictureURL,
           preferredMaterialType: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [],
-          profilePicture: input.profilePicture?.trim() || null,
+          profilePicture: profilePictureURL,
           accountStatus: 'PENDING',
           reviewStatus: 'PENDING',
           isEmailVerified: false,
