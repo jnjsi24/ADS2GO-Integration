@@ -30,3 +30,17 @@ Ads2Go-MobileApp/.gradle/
 Ads2Go-MobileApp/android/app/build/
 Ads2Go-MobileApp/android/app/debug/
 Ads2Go-MobileApp/android/app/release/
+
+# Expo Project (androidPlayerExpo)
+androidPlayerExpo/node_modules/
+androidPlayerExpo/.expo/
+androidPlayerExpo/.expo-shared/
+androidPlayerExpo/web-build/
+androidPlayerExpo/dist/
+androidPlayerExpo/.env
+androidPlayerExpo/*.jks
+androidPlayerExpo/*.p8
+androidPlayerExpo/*.p12
+androidPlayerExpo/*.key
+androidPlayerExpo/*.mobileprovision
+androidPlayerExpo/*.orig.*
