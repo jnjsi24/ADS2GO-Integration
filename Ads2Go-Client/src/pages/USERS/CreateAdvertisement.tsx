@@ -26,7 +26,7 @@ type AdsPlan = {
 type AdvertisementForm = {
   title: string;
   description: string;
-  adType?: 'DIGITAL' | 'NON_DIGITAL'; // Made optional since it's determined by the plan
+  adType?: 'DIGITAL' | 'NON_DIGITAL';
   planId: string;
   materialId: string;
   mediaFile?: File;
@@ -34,7 +34,7 @@ type AdvertisementForm = {
   startTime?: string;
 };
 
-const CreateAdvertisement: React.FC = (): JSX.Element => {
+const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
@@ -45,34 +45,30 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
     materialId: '',
   });
   const [materials, setMaterials] = useState<any[]>([]);
-  // Update form data when material is selected
-  const setSelectedMaterialId = (materialId: string) => {
-    setFormData(prev => ({ ...prev, materialId }));
-  };
-  
-  const selectedMaterialId = formData.materialId;
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
-  // Fetch materials based on selected plan's category and vehicle type
+  // Automatically fetch and select material based on selected plan
   const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
     variables: { 
-      category: selectedPlan?.category as any, // Cast to any to satisfy TypeScript
-      vehicleType: selectedPlan?.vehicleType as any // Cast to any to satisfy TypeScript
+      category: selectedPlan?.category as any,
+      vehicleType: selectedPlan?.vehicleType as any
     },
     skip: !selectedPlan,
     onCompleted: (data) => {
       if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
         setMaterials(data.getMaterialsByCategoryAndVehicle);
-        setSelectedMaterialId(data.getMaterialsByCategoryAndVehicle[0]?.id || '');
+        // Automatically select the first available material
+        const firstMaterial = data.getMaterialsByCategoryAndVehicle[0];
+        setFormData(prev => ({ ...prev, materialId: firstMaterial?.id || '' }));
       } else {
         setMaterials([]);
-        setSelectedMaterialId('');
+        setFormData(prev => ({ ...prev, materialId: '' }));
       }
     },
     onError: (error) => {
       console.error('Error fetching materials:', error);
       setMaterials([]);
-      setSelectedMaterialId('');
+      setFormData(prev => ({ ...prev, materialId: '' }));
     }
   });
 
@@ -92,7 +88,6 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
-      // You might want to show an error message to the user here
     }
   });
 
@@ -149,7 +144,7 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
     }
 
     if (!formData.materialId) {
-      alert('Please select a material');
+      alert('No suitable material found for the selected plan');
       return;
     }
 
@@ -214,14 +209,13 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
     }
   };
 
-
   const canProceedToStep = (step: number) => {
     switch (step) {
-      case 2: // Now goes directly to ad details after plan selection
-        return selectedPlan !== null;
-      case 3: // Now handles media upload
+      case 2:
+        return selectedPlan !== null && formData.materialId !== '';
+      case 3:
         return formData.title && formData.description;
-      case 4: // Now handles review
+      case 4:
         return formData.mediaFile;
       default:
         return true;
@@ -244,7 +238,7 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
             </div>
             <span className="text-xs mt-1 text-gray-600">{step}</span>
           </div>
-          {index < 4 && (
+          {index < 3 && (
             <div className="w-16 h-1 bg-gray-200 mx-2 mt-4">
               <div
                 className={`h-full ${
@@ -289,14 +283,13 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
                   : 'border-gray-200 hover:border-gray-300'
               }`}
               onClick={() => {
-  setSelectedPlan(plan);
-  setFormData({ 
-    ...formData, 
-    planId: plan._id,
-    adType: plan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL'
-  });
-}}
-
+                setSelectedPlan(plan);
+                setFormData({ 
+                  ...formData, 
+                  planId: plan._id,
+                  adType: plan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL'
+                });
+              }}
             >
               <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
               <p className="text-gray-600 mb-4">{plan.description}</p>
@@ -332,12 +325,42 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
           ))}
         </div>
       )}
+
+      {/* Show automatic material selection status */}
+      {selectedPlan && (
+        <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="font-medium text-blue-800 mb-2">Automatic Material Selection</h3>
+          {loadingMaterials ? (
+            <div className="flex items-center text-blue-700">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Finding compatible materials...
+            </div>
+          ) : formData.materialId ? (
+            <div className="text-blue-700">
+              <p className="text-sm">
+                ✓ Compatible material automatically selected for your {selectedPlan.category} plan 
+                on {selectedPlan.vehicleType} vehicles.
+              </p>
+              {materials.length > 0 && (
+                <p className="text-sm mt-1">
+                  Material ID: {materials.find(m => m.id === formData.materialId)?.materialId}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="text-red-700">
+              <p className="text-sm">
+                ⚠ No compatible materials found for this plan. Please contact support.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 
-
-  // Step 2: Advertisement Details
-  const renderStep3 = () => (
+  // Step 2: Advertisement Details (previously step 3)
+  const renderStep2 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
       <div className="space-y-6">
@@ -368,7 +391,7 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
           />
         </div>
 
-{selectedPlan && (
+        {selectedPlan && (
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="font-semibold mb-2">Selected Plan: {selectedPlan.name}</h3>
             <p className="text-sm text-gray-600">
@@ -376,15 +399,20 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
               Price: ₱{selectedPlan.totalPrice.toLocaleString()} | 
               Ad Length: {selectedPlan.adLengthSeconds} seconds
             </p>
+            {materials.length > 0 && formData.materialId && (
+              <p className="text-sm text-gray-600 mt-2">
+                Material: {materials.find(m => m.id === formData.materialId)?.materialType} 
+                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
+              </p>
+            )}
           </div>
         )}
       </div>
     </div>
   );
 
-
-  // Step 4: Upload Media
-  const renderStep4 = () => (
+  // Step 3: Upload Media (previously step 4)
+  const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Upload Media</h2>
       <div className="space-y-6">
@@ -468,7 +496,8 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
     </div>
   );
 
-  const renderStep5 = () => (
+  // Step 4: Review & Submit (previously step 5)
+  const renderStep4 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Review & Submit</h2>
       <div className="space-y-6">
@@ -492,7 +521,7 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
 
         {selectedPlan && (
           <div className="bg-white border rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Selected Plan</h3>
+            <h3 className="text-lg font-semibold mb-4">Selected Plan & Material</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="font-medium">Plan:</span>
@@ -518,6 +547,15 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
                 <span className="font-medium">Total Price:</span>
                 <p className="text-[#251f70] font-bold">₱{selectedPlan.totalPrice.toLocaleString()}</p>
               </div>
+              {materials.length > 0 && formData.materialId && (
+                <div className="col-span-2">
+                  <span className="font-medium">Auto-selected Material:</span>
+                  <p className="text-gray-600">
+                    {materials.find(m => m.id === formData.materialId)?.materialType} 
+                    (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -576,9 +614,9 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
           
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep3()}
-            {currentStep === 3 && renderStep4()}
-            {currentStep === 4 && renderStep5()}
+            {currentStep === 2 && renderStep2()}
+            {currentStep === 3 && renderStep3()}
+            {currentStep === 4 && renderStep4()}
           </div>
           
           <div className="flex justify-between">
@@ -593,7 +631,7 @@ const CreateAdvertisement: React.FC = (): JSX.Element => {
               Previous
             </button>
             
-            {currentStep < 5 ? (
+            {currentStep < 4 ? (
               <button
                 type="button"
                 onClick={() => setCurrentStep(prev => prev + 1)}
