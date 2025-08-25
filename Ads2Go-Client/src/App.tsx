@@ -17,7 +17,7 @@ import VerifyEmail from './pages/USERS/VerifyEmail';
 import Landing from './pages/USERS/Landing';
 import Account from './pages/USERS/Account';
 import Payment from './pages/USERS/Payment';
-import CreateAdForm from './pages/USERS/CreateAdForm';
+import CreateAdForm from './pages/USERS/CreateAdFormNew';
 import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
 import History from './pages/USERS/PaymentHistory';

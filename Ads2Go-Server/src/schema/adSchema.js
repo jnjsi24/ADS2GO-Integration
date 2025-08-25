@@ -20,7 +20,7 @@ const adTypeDefs = gql`
     userId: User!          # ✅ relationship
     driverId: ID
     materialId: Material   # ✅ relationship
-    planId: AdsPlan!       # ✅ relationship
+    planId: AdsPlan        # ✅ relationship (nullable)
     title: String!
     description: String
     adFormat: String!

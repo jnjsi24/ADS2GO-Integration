@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
 } from 'react';
 import { useMutation, useApolloClient, useLazyQuery } from '@apollo/client';
 import {
@@ -284,16 +285,17 @@ export const AuthProvider: React.FC<{
     }
   };
 
-  const debugToken = (token: string): User | null => {
+  const debugToken = useCallback((token: string): User | null => {
     try {
       return jwtDecode<User>(token);
     } catch (error) {
       console.error('Token decoding error:', error);
       return null;
     }
-  };
+  }, []);
 
-  const contextValue: AuthContextType = {
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
     user,
     userEmail,
     setUser,
@@ -307,11 +309,22 @@ export const AuthProvider: React.FC<{
     navigate,
     debugToken,
     navigateToRegister,
-  };
+  }), [
+    user, 
+    userEmail, 
+    isLoading, 
+    isInitialized, 
+    login, 
+    register, 
+    logout, 
+    navigate, 
+    debugToken, 
+    navigateToRegister
+  ]);
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {children}
+      {!isLoading && isInitialized ? children : null}
     </AuthContext.Provider>
   );
 };
