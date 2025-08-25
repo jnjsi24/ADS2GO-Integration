@@ -1,175 +1,556 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@apollo/client';
-import { GET_MY_ADS } from '../../graphql/queries/getMyAds';
-import { Search } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useQuery, useMutation } from '@apollo/client';
+import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2 } from 'lucide-react';
+import { GET_ALL_ADS_PLANS } from '../../graphql/queries/adsPlans';
+import { CREATE_AD } from '../../graphql/mutations/createAd';
 
-type Ad = {
-  id: string;
-  title: string;
+type AdsPlan = {
+  _id: string;
+  name: string;
   description: string;
-  adFormat: string;
-  mediaFile?: string;
-  price: number;
+  durationDays: number;
+  totalPrice: number;
+  materialType: string;
+  vehicleType: string;
+  numberOfDevices: number;
+  adLengthSeconds: number;
+  category: string;
   status: string;
-  createdAt: string;
-  adType: 'DIGITAL' | 'NON_DIGITAL';
-  planId: {
-    _id: string;
-    name: string;
-    durationDays: number;
-    price: number;
-  };
-  materialId: {
-    _id: string;
-    name: string;
-  };
 };
 
-const Advertisements: React.FC = () => {
+type AdvertisementForm = {
+  title: string;
+  description: string;
+  adType?: 'DIGITAL' | 'NON_DIGITAL'; // Made optional since it's determined by the plan
+  planId: string;
+  mediaFile?: File;
+  mediaPreview?: string;
+};
+
+const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All Status');
-  const [planFilter, setPlanFilter] = useState('All Plans');
+  const [currentStep, setCurrentStep] = useState(1);
+  const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
+  const [formData, setFormData] = useState<AdvertisementForm>({
+    title: '',
+    description: '',
+    planId: '',
+  });
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
 
-  const { data, loading, error } = useQuery(GET_MY_ADS);
-  const ads: Ad[] = data?.getMyAds || [];
-
-  const filteredAds = ads.filter((ad) => {
-    const matchesSearch =
-      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ad.id.toString().includes(searchTerm);
-
-    const matchesStatus =
-      statusFilter === 'All Status' || ad.status === statusFilter;
-
-    const matchesPlan =
-      planFilter === 'All Plans' || ad.planId?.name === planFilter;
-
-    return matchesSearch && matchesStatus && matchesPlan;
+  // Fetch ads plans
+  const { data, loading, error } = useQuery(GET_ALL_ADS_PLANS, {
+    onCompleted: (data) => {
+      console.log('Fetched plans:', data);
+    },
+    onError: (error) => {
+      console.error('Error fetching plans:', error);
+    }
   });
 
-  if (loading) return <div className="pl-60 pt-10">Loading ads...</div>;
-  if (error) return <div className="pl-60 pt-10 text-red-600">Error: {error.message}</div>;
+  const [createAd, { loading: isSubmitting }] = useMutation(CREATE_AD, {
+    onCompleted: () => {
+      navigate('/advertisements');
+    },
+    onError: (error) => {
+      console.error('Error creating ad:', error);
+      // You might want to show an error message to the user here
+    }
+  });
 
-  return (
-    <div className="flex-1 pl-60 pb-6 bg-white">
-      <div className="bg-white p-6 shadow flex justify-between items-center">
-        <div className="relative w-96">
-          <input
-            type="text"
-            placeholder="Search Ads"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="border border-gray-500 w-full rounded-md p-2 pl-10 focus:outline-none"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-        </div>
-      </div>
+  // Transform the data to match the expected AdsPlan type
+  const plans: AdsPlan[] = React.useMemo(() => {
+    if (!data?.getAllAdsPlans) return [];
+    
+    console.log('Raw plans data:', data.getAllAdsPlans);
+    
+    return data.getAllAdsPlans
+      .filter((plan: any) => {
+        const isRunning = plan.status === 'RUNNING';
+        console.log(`Plan ${plan.id} (${plan.name}):`, { 
+          status: plan.status, 
+          isRunning,
+          hasMaterialType: !!plan.materialType,
+          hasVehicleType: !!plan.vehicleType
+        });
+        return isRunning;
+      })
+      .map((plan: any) => ({
+        _id: plan.id,
+        name: plan.name,
+        description: plan.description || `${plan.materialType} for ${plan.vehicleType}`,
+        durationDays: plan.durationDays || 30,
+        totalPrice: plan.totalPrice || 0,
+        materialType: plan.materialType,
+        vehicleType: plan.vehicleType,
+        numberOfDevices: plan.numberOfDevices || 1,
+        adLengthSeconds: plan.adLengthSeconds || 30,
+        category: plan.category || 'STANDARD',
+        status: plan.status || 'ACTIVE'
+      }));
+  }, [data]);
 
-      <div className="bg-white p-6 flex justify-between items-center">
-        <h1 className="text-3xl font-semibold">My Advertisements</h1>
-        <div className="space-x-4 flex items-center">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-white border border-gray-300 rounded-md p-2 focus:outline-none"
-          >
-            <option value="All Status">All Status</option>
-            <option value="PENDING">Pending</option>
-            <option value="APPROVED">Approved</option>
-            <option value="REJECTED">Rejected</option>
-            <option value="RUNNING">Running</option>
-            <option value="ENDED">Ended</option>
-          </select>
-          <select
-            value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
-            className="bg-white border border-gray-300 rounded-md p-2 focus:outline-none"
-          >
-            <option value="All Plans">All Plans</option>
-            <option value="Monthly">Monthly</option>
-            <option value="Weekly">Weekly</option>
-          </select>
-          <button
-            onClick={() => navigate('/create-advertisement')}
-            className="bg-[#251f70] text-white px-4 py-2 rounded hover:bg-[#1b1853] transition-all"
-          >
-            + Create Ad
-          </button>
-        </div>
-      </div>
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const previewUrl = URL.createObjectURL(file);
+      setFormData({
+        ...formData,
+        mediaFile: file,
+        mediaPreview: previewUrl
+      });
+    }
+  };
 
-      <div className="bg-white p-6 grid grid-cols-4 gap-6">
-        {filteredAds.length > 0 ? (
-          filteredAds.map((ad) => (
+  const handleSubmit = async () => {
+    if (!selectedPlan) return;
+    
+    try {
+      // Define the input type with all required fields
+      const input: {
+        title: string;
+        description: string;
+        materialId: string;
+        planId: string;
+        price: number;
+        status: string;
+        startTime: string;
+        endTime: string;
+        mediaUrl?: string;
+      } = {
+        title: formData.title,
+        description: formData.description,
+        materialId: selectedPlan._id, // This should be the material ID
+        planId: selectedPlan._id,
+        price: selectedPlan.totalPrice,
+        status: 'PENDING',
+        startTime: new Date().toISOString(),
+        endTime: new Date(
+          new Date().getTime() + (selectedPlan.durationDays * 24 * 60 * 60 * 1000)
+        ).toISOString()
+      };
+
+      // If we have a media file, we need to handle the upload separately
+      if (formData.mediaFile) {
+        // First upload the media file
+        const mediaFormData = new FormData();
+        mediaFormData.append('file', formData.mediaFile);
+        
+        const mediaResponse = await fetch('http://localhost:5000/upload', {
+          method: 'POST',
+          body: mediaFormData,
+          credentials: 'include' // Include cookies for authentication
+        });
+        
+        if (!mediaResponse.ok) {
+          throw new Error('Failed to upload media file');
+        }
+        
+        const { url } = await mediaResponse.json();
+        input.mediaUrl = url;
+      }
+
+      // Then create the ad with the media URL
+      await createAd({
+        variables: {
+          input
+        }
+      });
+    } catch (error) {
+      console.error('Error creating advertisement:', error);
+    }
+  };
+
+  const canProceedToStep = (step: number) => {
+    switch (step) {
+      case 2:
+        return selectedPlan !== null;
+      case 3:
+        return formData.title && formData.description;
+      case 4:
+        return formData.mediaFile;
+      default:
+        return true;
+    }
+  };
+
+  const renderStepIndicator = () => (
+    <div className="flex items-center justify-center mb-8">
+      {[1, 2, 3, 4].map((step) => (
+        <React.Fragment key={step}>
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+              currentStep >= step
+                ? 'bg-[#251f70] text-white'
+                : 'bg-gray-200 text-gray-500'
+            }`}
+          >
+            {step}
+          </div>
+          {step < 4 && (
             <div
-              key={ad.id}
-              className="rounded-xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className={`w-16 h-1 ${
+                currentStep > step ? 'bg-[#251f70]' : 'bg-gray-200'
+              }`}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+
+  const renderStep1 = () => (
+    <div>
+      <h2 className="text-2xl font-semibold mb-6 text-center">Choose Your Plan</h2>
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-[#251f70]" />
+          <span className="ml-2">Loading plans...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-8 text-red-500">
+          Error loading plans. Please try again later.
+        </div>
+      ) : plans.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No active plans available at the moment.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plans.map((plan) => (
+            <div
+              key={plan._id}
+              className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                selectedPlan?._id === plan._id
+                  ? 'border-[#251f70] bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => {
+                setSelectedPlan(plan);
+                setFormData({ ...formData, planId: plan._id });
+              }}
             >
-              <div className="w-full h-48 flex-shrink-0 relative">
-                {ad.adFormat === 'MP4' && ad.mediaFile ? (
-                  <video
-                    src={`/uploads/${ad.mediaFile}`}
-                    className="w-full h-full object-cover"
-                    controls
-                  />
-                ) : ad.mediaFile ? (
-                  <img
-                    src={`/uploads/${ad.mediaFile}`}
-                    alt={ad.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
-                    No Media
+              <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
+              <p className="text-gray-600 mb-4">{plan.description}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Duration:</span>
+                  <span className="font-medium">{plan.durationDays} days</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Vehicles:</span>
+                  <span className="font-medium">{plan.vehicleType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Material:</span>
+                  <span className="font-medium">{plan.materialType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Devices:</span>
+                  <span className="font-medium">{plan.numberOfDevices}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ad Length:</span>
+                  <span className="font-medium">{plan.adLengthSeconds}s</span>
+                </div>
+                <div className="border-t pt-2 mt-4">
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total Price:</span>
+                    <span className="text-[#251f70]">₱{plan.totalPrice.toLocaleString()}</span>
                   </div>
-                )}
-              </div>
-              <div className="p-4 bg-gray-100 flex-grow flex flex-col">
-                <h3 className="text-xl font-semibold">{ad.title}</h3>
-                <p className="text-gray-600 text-sm">{ad.description}</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Material: {ad.materialId?.name || 'N/A'}
-                </p>
-                <div className="mt-auto pt-4">
-                  <p className="text-sm text-gray-500">
-                    Plan: {ad.planId?.name || 'N/A'} ({ad.planId?.durationDays} days)
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    ₱{ad.price.toLocaleString()}
-                  </p>
                 </div>
               </div>
-              <span
-                className={`absolute top-2 left-2 px-2 py-1 text-xs font-bold rounded ${
-                  ad.status === 'PENDING'
-                    ? 'bg-yellow-200 text-yellow-800'
-                    : ad.status === 'APPROVED'
-                    ? 'bg-blue-200 text-blue-800'
-                    : ad.status === 'REJECTED'
-                    ? 'bg-red-200 text-red-800'
-                    : ad.status === 'RUNNING'
-                    ? 'bg-green-200 text-green-800'
-                    : ad.status === 'ENDED'
-                    ? 'bg-gray-400 text-white'
-                    : 'bg-gray-200 text-gray-800'
-                }`}
-              >
-                {ad.status}
-              </span>
             </div>
-          ))
-        ) : (
-          <div className="col-span-4 text-center text-gray-500">
-            No advertisements found.
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Advertisement Title *
+          </label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70]"
+            placeholder="Enter advertisement title"
+            required
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Description *
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70] h-32"
+            placeholder="Describe your advertisement"
+            required
+          />
+        </div>
+
+{selectedPlan && (
+          <div className="bg-gray-50 p-4 rounded-md">
+            <h3 className="font-semibold mb-2">Selected Plan: {selectedPlan.name}</h3>
+            <p className="text-sm text-gray-600">
+              Duration: {selectedPlan.durationDays} days | 
+              Price: ₱{selectedPlan.totalPrice.toLocaleString()} | 
+              Ad Length: {selectedPlan.adLengthSeconds} seconds
+            </p>
           </div>
         )}
       </div>
     </div>
   );
+
+  const renderStep3 = () => (
+    <div className="max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6 text-center">Upload Media</h2>
+      <div className="space-y-6">
+        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+          <input
+            type="file"
+            accept="image/*,video/mp4"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="media-upload"
+          />
+          <label
+            htmlFor="media-upload"
+            className="cursor-pointer flex flex-col items-center"
+          >
+            <Upload className="w-12 h-12 text-gray-400 mb-4" />
+            <p className="text-lg font-medium text-gray-700">
+              Click to upload media file
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              Supports: JPG, PNG, MP4 (Max file size: 50MB)
+            </p>
+          </label>
+        </div>
+
+        {formData.mediaPreview && (
+          <div className="mt-6">
+            <h3 className="text-lg font-medium mb-4">Preview:</h3>
+            <div className="border rounded-lg overflow-hidden">
+              {formData.mediaFile?.type.startsWith('video/') ? (
+                <div className="relative">
+                  <video
+                    src={formData.mediaPreview}
+                    className="w-full h-64 object-cover"
+                    controls={false}
+                    muted
+                    ref={(video) => {
+                      if (video) {
+                        if (isVideoPlaying) {
+                          video.play();
+                        } else {
+                          video.pause();
+                        }
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={() => setIsVideoPlaying(!isVideoPlaying)}
+                    className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 text-white"
+                  >
+                    {isVideoPlaying ? (
+                      <Pause className="w-12 h-12" />
+                    ) : (
+                      <Play className="w-12 h-12" />
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <img
+                  src={formData.mediaPreview}
+                  alt="Preview"
+                  className="w-full h-64 object-cover"
+                />
+              )}
+            </div>
+            <div className="mt-2 text-sm text-gray-600">
+              File: {formData.mediaFile?.name} ({Math.round((formData.mediaFile?.size || 0) / 1024 / 1024 * 100) / 100} MB)
+            </div>
+          </div>
+        )}
+
+        {selectedPlan && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <p className="text-sm text-yellow-800">
+              <strong>Note:</strong> Your media should be exactly {selectedPlan.adLengthSeconds} seconds long 
+              for optimal display on {selectedPlan.materialType} devices.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderStep4 = () => (
+    <div className="max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6 text-center">Review Advertisement</h2>
+      <div className="space-y-6">
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Advertisement Details</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Title:</span>
+              <p className="text-gray-600">{formData.title}</p>
+            </div>
+            <div>
+              <span className="font-medium">Type:</span>
+              <p className="text-gray-600">{formData.adType}</p>
+            </div>
+            <div className="col-span-2">
+              <span className="font-medium">Description:</span>
+              <p className="text-gray-600">{formData.description}</p>
+            </div>
+          </div>
+        </div>
+
+        {selectedPlan && (
+          <div className="bg-white border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4">Selected Plan</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Plan:</span>
+                <p className="text-gray-600">{selectedPlan.name}</p>
+              </div>
+              <div>
+                <span className="font-medium">Duration:</span>
+                <p className="text-gray-600">{selectedPlan.durationDays} days</p>
+              </div>
+              <div>
+                <span className="font-medium">Vehicle Type:</span>
+                <p className="text-gray-600">{selectedPlan.vehicleType}</p>
+              </div>
+              <div>
+                <span className="font-medium">Material:</span>
+                <p className="text-gray-600">{selectedPlan.materialType}</p>
+              </div>
+              <div>
+                <span className="font-medium">Devices:</span>
+                <p className="text-gray-600">{selectedPlan.numberOfDevices}</p>
+              </div>
+              <div>
+                <span className="font-medium">Total Price:</span>
+                <p className="text-[#251f70] font-bold">₱{selectedPlan.totalPrice.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {formData.mediaPreview && (
+          <div className="bg-white border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4">Media Preview</h3>
+            <div className="border rounded-lg overflow-hidden">
+              {formData.mediaFile?.type.startsWith('video/') ? (
+                <video
+                  src={formData.mediaPreview}
+                  className="w-full h-48 object-cover"
+                  controls
+                />
+              ) : (
+                <img
+                  src={formData.mediaPreview}
+                  alt="Media preview"
+                  className="w-full h-48 object-cover"
+                />
+              )}
+            </div>
+            <p className="text-sm text-gray-600 mt-2">
+              File: {formData.mediaFile?.name}
+            </p>
+          </div>
+        )}
+
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+          <p className="text-sm text-blue-800">
+            By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString()} 
+            for a {selectedPlan?.durationDays}-day campaign. Your advertisement will be submitted for review 
+            and you'll be notified once it's approved.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex-1 pl-60 pb-6 bg-gray-50 min-h-screen">
+      <div className="bg-white p-6 shadow">
+        <div className="flex items-center">
+          <button
+            onClick={() => navigate('/advertisements')}
+            className="flex items-center text-gray-600 hover:text-gray-800 mr-4"
+          >
+            <ChevronLeft className="w-5 h-5 mr-1" />
+            Back to Advertisements
+          </button>
+          <h1 className="text-2xl font-semibold">Create Advertisement</h1>
+        </div>
+      </div>
+
+      <div className="p-8">
+        {renderStepIndicator()}
+        
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          {currentStep === 1 && renderStep1()}
+          {currentStep === 2 && renderStep2()}
+          {currentStep === 3 && renderStep3()}
+          {currentStep === 4 && renderStep4()}
+        </div>
+
+        <div className="flex justify-between mt-8">
+          <button
+            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+            disabled={currentStep === 1}
+            className={`flex items-center px-6 py-3 rounded-md ${
+              currentStep === 1
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-500 text-white hover:bg-gray-600'
+            }`}
+          >
+            <ChevronLeft className="w-4 h-4 mr-2" />
+            Previous
+          </button>
+
+          {currentStep < 4 ? (
+            <button
+              onClick={() => setCurrentStep(currentStep + 1)}
+              disabled={!canProceedToStep(currentStep + 1)}
+              className={`flex items-center px-6 py-3 rounded-md ${
+                canProceedToStep(currentStep + 1)
+                  ? 'bg-[#251f70] text-white hover:bg-[#1b1853]'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              Next
+              <ChevronRight className="w-4 h-4 ml-2" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              className={`bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 font-semibold ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isSubmitting}
+            >
+              Create Advertisement
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export default Advertisements;
+export default CreateAdvertisement;
