@@ -6,10 +6,12 @@ export const CREATE_AD = gql`
       id
       title
       description
+      adType
+      adFormat
       materialId {
         id
-        type
-        name
+        materialType
+        vehicleType
       }
       planId {
         id
@@ -17,6 +19,7 @@ export const CREATE_AD = gql`
         durationDays
       }
       price
+      totalPrice
       status
       mediaFile
       startTime

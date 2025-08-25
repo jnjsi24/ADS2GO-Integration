@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2 } from 'lucide-react';
 import { GET_ALL_ADS_PLANS } from '../../graphql/queries/adsPlans';
+import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/queries/materials';
 import { CREATE_AD } from '../../graphql/mutations/createAd';
+
+type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
+type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
 
 type AdsPlan = {
   _id: string;
@@ -12,10 +16,10 @@ type AdsPlan = {
   durationDays: number;
   totalPrice: number;
   materialType: string;
-  vehicleType: string;
+  vehicleType: VehicleType;
   numberOfDevices: number;
   adLengthSeconds: number;
-  category: string;
+  category: MaterialCategory;
   status: string;
 };
 
@@ -24,8 +28,10 @@ type AdvertisementForm = {
   description: string;
   adType?: 'DIGITAL' | 'NON_DIGITAL'; // Made optional since it's determined by the plan
   planId: string;
+  materialId: string;
   mediaFile?: File;
   mediaPreview?: string;
+  startTime?: string;
 };
 
 const CreateAdvertisement: React.FC = () => {
@@ -36,8 +42,39 @@ const CreateAdvertisement: React.FC = () => {
     title: '',
     description: '',
     planId: '',
+    materialId: '',
   });
+  const [materials, setMaterials] = useState<any[]>([]);
+  // Update form data when material is selected
+  const setSelectedMaterialId = (materialId: string) => {
+    setFormData(prev => ({ ...prev, materialId }));
+  };
+  
+  const selectedMaterialId = formData.materialId;
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+
+  // Fetch materials based on selected plan's category and vehicle type
+  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
+    variables: { 
+      category: selectedPlan?.category as any, // Cast to any to satisfy TypeScript
+      vehicleType: selectedPlan?.vehicleType as any // Cast to any to satisfy TypeScript
+    },
+    skip: !selectedPlan,
+    onCompleted: (data) => {
+      if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
+        setMaterials(data.getMaterialsByCategoryAndVehicle);
+        setSelectedMaterialId(data.getMaterialsByCategoryAndVehicle[0]?.id || '');
+      } else {
+        setMaterials([]);
+        setSelectedMaterialId('');
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching materials:', error);
+      setMaterials([]);
+      setSelectedMaterialId('');
+    }
+  });
 
   // Fetch ads plans
   const { data, loading, error } = useQuery(GET_ALL_ADS_PLANS, {
@@ -103,78 +140,90 @@ const CreateAdvertisement: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!selectedPlan) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    try {
-      // Define the input type with all required fields
-      const input: {
-        title: string;
-        description: string;
-        materialId: string; // This should be the ID of the material, not the plan
-        planId: string;
-        price: number;
-        status: string;
-        startTime: string;
-        endTime: string;
-        mediaFile?: string;
-      } = {
-        title: formData.title,
-        description: formData.description,
-        materialId: selectedPlan.materialType || selectedPlan._id, // Use materialType as materialId
-        planId: selectedPlan._id,
-        price: selectedPlan.totalPrice,
-        status: 'PENDING',
-        startTime: new Date().toISOString(),
-        endTime: new Date(
-          new Date().getTime() + (selectedPlan.durationDays * 24 * 60 * 60 * 1000)
-        ).toISOString()
-      };
+    if (!selectedPlan) {
+      alert('Please select a plan first');
+      return;
+    }
 
-      // If we have a media file, we need to handle the upload separately
-      if (formData.mediaFile) {
-        // First upload the media file
-        const mediaFormData = new FormData();
-        mediaFormData.append('file', formData.mediaFile);
-        
-        console.log('Uploading file:', formData.mediaFile.name, 'Size:', formData.mediaFile.size, 'bytes');
-        
-        const mediaResponse = await fetch('http://localhost:5000/upload', {
-          method: 'POST',
-          body: mediaFormData,
-          credentials: 'include',
-          // Don't set Content-Type header, let the browser set it with the correct boundary
-        });
-        
-        const responseData = await mediaResponse.json();
-        console.log('Upload response:', responseData);
-        
-        if (!mediaResponse.ok) {
-          throw new Error(responseData.error || 'Failed to upload media file');
-        }
-        
-        // Use the filename from the response to construct the URL
-        input.mediaFile = `/uploads/${responseData.filename}`;
+    if (!formData.materialId) {
+      alert('Please select a material');
+      return;
+    }
+
+    if (!formData.mediaFile) {
+      alert('Please upload a media file');
+      return;
+    }
+
+    try {
+      // Upload media file
+      const mediaFormData = new FormData();
+      mediaFormData.append('file', formData.mediaFile);
+
+      console.log('Uploading file:', formData.mediaFile.name, 'Size:', formData.mediaFile.size, 'bytes');
+
+      const mediaResponse = await fetch('http://localhost:5000/upload', {
+        method: 'POST',
+        body: mediaFormData,
+        credentials: 'include',
+      });
+
+      const responseData = await mediaResponse.json();
+      console.log('Upload response:', responseData);
+
+      if (!mediaResponse.ok) {
+        throw new Error(responseData.error || 'Failed to upload media file');
       }
 
-      // Then create the ad with the media URL
+      // Determine ad format based on file type
+      const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
+      const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
+      
+      // Prepare the input for createAd mutation
+      const input = {
+        title: formData.title,
+        description: formData.description,
+        materialId: formData.materialId,
+        planId: selectedPlan._id,
+        adType: selectedPlan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL',
+        adFormat: isVideo ? 'VIDEO' : 'IMAGE',
+        price: selectedPlan.totalPrice,
+        status: 'PENDING',
+        startTime: formData.startTime || new Date().toISOString(),
+        endTime: new Date(
+          (formData.startTime ? new Date(formData.startTime) : new Date()).getTime() +
+          selectedPlan.durationDays * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        mediaFile: `/uploads/${responseData.filename}`
+      };
+
+      // Create the ad with the media URL
       await createAd({
-        variables: {
-          input
-        }
+        variables: { input },
       });
+
+      // Show success message and navigate back to advertisements page
+      alert('Advertisement created successfully!');
+      navigate('/advertisements');
     } catch (error) {
       console.error('Error creating advertisement:', error);
+      alert('Failed to create advertisement. Please try again.');
     }
   };
+
 
   const canProceedToStep = (step: number) => {
     switch (step) {
       case 2:
         return selectedPlan !== null;
       case 3:
-        return formData.title && formData.description;
+        return selectedMaterialId !== '';
       case 4:
+        return formData.title && formData.description;
+      case 5:
         return formData.mediaFile;
       default:
         return true;
@@ -183,23 +232,32 @@ const CreateAdvertisement: React.FC = () => {
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3, 4].map((step) => (
-        <React.Fragment key={step}>
-          <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-              currentStep >= step
-                ? 'bg-[#251f70] text-white'
-                : 'bg-gray-200 text-gray-500'
-            }`}
-          >
-            {step}
-          </div>
-          {step < 4 && (
+      {['Select Plan', 'Select Material', 'Ad Details', 'Upload Media', 'Review'].map((step, index) => (
+        <React.Fragment key={index}>
+          <div className="flex flex-col items-center">
             <div
-              className={`w-16 h-1 ${
-                currentStep > step ? 'bg-[#251f70]' : 'bg-gray-200'
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                currentStep > index + 1 || (currentStep === index + 1 && canProceedToStep(currentStep))
+                  ? 'bg-[#251f70] text-white'
+                  : 'bg-gray-200 text-gray-600'
               }`}
-            />
+            >
+              {index + 1}
+            </div>
+            <span className="text-xs mt-1 text-gray-600">{step}</span>
+          </div>
+          {index < 4 && (
+            <div className="w-16 h-1 bg-gray-200 mx-2 mt-4">
+              <div
+                className={`h-full ${
+                  currentStep > index + 1 ? 'bg-[#251f70]' : 'bg-gray-200'
+                }`}
+                style={{
+                  width: currentStep > index + 1 ? '100%' : '0%',
+                  transition: 'width 0.3s ease-in-out',
+                }}
+              />
+            </div>
           )}
         </React.Fragment>
       ))}
@@ -233,9 +291,14 @@ const CreateAdvertisement: React.FC = () => {
                   : 'border-gray-200 hover:border-gray-300'
               }`}
               onClick={() => {
-                setSelectedPlan(plan);
-                setFormData({ ...formData, planId: plan._id });
-              }}
+  setSelectedPlan(plan);
+  setFormData({ 
+    ...formData, 
+    planId: plan._id,
+    adType: plan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL'
+  });
+}}
+
             >
               <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
               <p className="text-gray-600 mb-4">{plan.description}</p>
@@ -274,7 +337,98 @@ const CreateAdvertisement: React.FC = () => {
     </div>
   );
 
+
+  // Step 2: Material Selection
   const renderStep2 = () => (
+    <div className="max-w-4xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6 text-center">Select Material</h2>
+      {loadingMaterials ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-[#251f70]" />
+          <span className="ml-2">Loading materials...</span>
+        </div>
+      ) : materials.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No materials available for the selected plan. Please contact support.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {materials.map((material) => (
+              <div
+                key={material.id}
+                className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedMaterialId === material.id
+                    ? 'border-[#251f70] bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => setSelectedMaterialId(material.id)}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-gray-900">{material.materialType}</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      For {material.vehicleType.replace('_', ' ').toLowerCase()}
+                    </p>
+                  </div>
+                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
+                    {material.materialId}
+                  </span>
+                </div>
+                
+                {material.description && (
+                  <p className="mt-3 text-gray-600">{material.description}</p>
+                )}
+
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500">Category</p>
+                      <p className="font-medium">{material.category}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Status</p>
+                      <p className="font-medium capitalize">
+                        {material.driverId ? 'Assigned' : 'Available'}
+                      </p>
+                    </div>
+                    {material.requirements && (
+                      <div className="col-span-2">
+                        <p className="text-gray-500">Requirements</p>
+                        <p className="font-medium">{material.requirements}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {selectedMaterialId && (
+            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
+              <h3 className="font-medium text-blue-800">Selected Material</h3>
+              <div className="mt-2 space-y-1">
+                <p className="text-sm text-blue-700">
+                  <span className="font-medium">Type:</span> {materials.find(m => m.id === selectedMaterialId)?.materialType}
+                </p>
+                <p className="text-sm text-blue-700">
+                  <span className="font-medium">ID:</span> {materials.find(m => m.id === selectedMaterialId)?.materialId}
+                </p>
+                {materials.find(m => m.id === selectedMaterialId)?.description && (
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">Description:</span> {materials.find(m => m.id === selectedMaterialId)?.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  // Step 3: Advertisement Details
+  const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
       <div className="space-y-6">
@@ -319,7 +473,9 @@ const CreateAdvertisement: React.FC = () => {
     </div>
   );
 
-  const renderStep3 = () => (
+
+  // Step 4: Upload Media
+  const renderStep4 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Upload Media</h2>
       <div className="space-y-6">
@@ -403,9 +559,9 @@ const CreateAdvertisement: React.FC = () => {
     </div>
   );
 
-  const renderStep4 = () => (
+  const renderStep5 = () => (
     <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-6 text-center">Review Advertisement</h2>
+      <h2 className="text-2xl font-semibold mb-6 text-center">Review & Submit</h2>
       <div className="space-y-6">
         <div className="bg-white border rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Advertisement Details</h3>
@@ -495,64 +651,73 @@ const CreateAdvertisement: React.FC = () => {
   return (
     <div className="flex-1 pl-60 pb-6 bg-gray-50 min-h-screen">
       <div className="bg-white p-6 shadow">
-        <div className="flex items-center">
+        <div className="flex items-center mb-6">
           <button
             onClick={() => navigate('/advertisements')}
-            className="flex items-center text-gray-600 hover:text-gray-800 mr-4"
+            className="flex items-center text-gray-600 hover:text-gray-800"
           >
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back to Advertisements
           </button>
-          <h1 className="text-2xl font-semibold">Create Advertisement</h1>
+          <h1 className="text-2xl font-bold ml-4">Create New Advertisement</h1>
         </div>
-      </div>
-
-      <div className="p-8">
-        {renderStepIndicator()}
         
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
-          {currentStep === 4 && renderStep4()}
-        </div>
-
-        <div className="flex justify-between mt-8">
-          <button
-            onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-            disabled={currentStep === 1}
-            className={`flex items-center px-6 py-3 rounded-md ${
-              currentStep === 1
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-gray-500 text-white hover:bg-gray-600'
-            }`}
-          >
-            <ChevronLeft className="w-4 h-4 mr-2" />
-            Previous
-          </button>
-
-          {currentStep < 4 ? (
+        <div className="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
+          {renderStepIndicator()}
+          
+          <div className="mb-8">
+            {currentStep === 1 && renderStep1()}
+            {currentStep === 2 && renderStep2()}
+            {currentStep === 3 && renderStep3()}
+            {currentStep === 4 && renderStep4()}
+            {currentStep === 5 && renderStep5()}
+          </div>
+          
+          <div className="flex justify-between">
             <button
-              onClick={() => setCurrentStep(currentStep + 1)}
-              disabled={!canProceedToStep(currentStep + 1)}
-              className={`flex items-center px-6 py-3 rounded-md ${
-                canProceedToStep(currentStep + 1)
-                  ? 'bg-[#251f70] text-white hover:bg-[#1b1853]'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              type="button"
+              onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
+              disabled={currentStep === 1}
+              className={`px-4 py-2 rounded-md ${
+                currentStep === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
-              Next
-              <ChevronRight className="w-4 h-4 ml-2" />
+              Previous
             </button>
-          ) : (
-            <button
-              onClick={handleSubmit}
-              className={`bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 font-semibold ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
-              disabled={isSubmitting}
-            >
-              Create Advertisement
-            </button>
-          )}
+            
+            {currentStep < 5 ? (
+              <button
+                type="button"
+                onClick={() => setCurrentStep(prev => prev + 1)}
+                disabled={!canProceedToStep(currentStep + 1)}
+                className={`px-4 py-2 rounded-md ${
+                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#251f70] text-white hover:bg-[#1a1652]'
+                }`}
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canProceedToStep(currentStep) || isSubmitting}
+                className={`px-4 py-2 rounded-md flex items-center ${
+                  !canProceedToStep(currentStep) || isSubmitting
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-[#251f70] text-white hover:bg-[#1a1652]'
+                }`}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  'Submit Advertisement'
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,3 @@
-// adSchema.js
 const gql = require('graphql-tag');
 
 const adTypeDefs = gql`
@@ -16,34 +15,30 @@ const adTypeDefs = gql`
   }
 
   type Ad {
-    id: ID!                # ✅ alias for Mongo _id
-    userId: User!          # ✅ relationship
+    id: ID!                
+    userId: User!          
     driverId: ID
-    materialId: Material   # ✅ relationship
-    planId: AdsPlan        # ✅ relationship (nullable)
+    materialId: Material   
+    planId: AdsPlan        
     title: String!
     description: String
     adFormat: String!
     mediaFile: String!
-    price: Float!          # ✅ Calculated from plan and duration
-    rejectReason: String
-
-    # Plan-related fields
+    price: Float!          # total price for the ad
+    durationDays: Int!     
     numberOfDevices: Int!
     adLengthSeconds: Int!
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     pricePerPlay: Float!
-    totalPrice: Float!     # ✅ Calculated: totalPlaysPerDay * pricePerPlay * duration in days
-    durationDays: Int!     # ✅ Direct from AdsPlan, replaces durationType
-
-    status: AdStatus!
-    startTime: String!
-    endTime: String!
+    totalPrice: Float!     
     adType: AdType!
+    status: AdStatus!
     reasonForReject: String
     approveTime: String
     rejectTime: String
+    startTime: String!
+    endTime: String!
     createdAt: String!
     updatedAt: String!
   }
@@ -56,9 +51,11 @@ const adTypeDefs = gql`
     description: String
     adFormat: String!
     mediaFile: String!
-    startTime: String!
+    price: Float!
+    status: AdStatus!
+    startTime: String!      # user-defined start time
+    endTime: String!        # calculated end time based on plan duration
     adType: AdType!
-    # ❌ Removed durationType (comes from AdsPlan.durationDays instead)
   }
 
   input UpdateAdInput {
@@ -69,10 +66,9 @@ const adTypeDefs = gql`
     materialId: ID
     planId: ID
     status: AdStatus
-    startTime: String
+    startTime: String      # update start time, auto-adjusts endTime
     adType: AdType
-    rejectReason: String
-    # ❌ Removed durationType (comes from AdsPlan.durationDays instead)
+    reasonForReject: String
   }
 
   type Query {

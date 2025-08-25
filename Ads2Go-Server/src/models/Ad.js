@@ -1,4 +1,3 @@
-// models/Ad.js
 const mongoose = require('mongoose');
 
 const AdSchema = new mongoose.Schema({
@@ -40,6 +39,7 @@ const AdSchema = new mongoose.Schema({
   },
   adFormat: {
     type: String,
+    enum: ['VIDEO', 'IMAGE'], // define formats your backend supports
     required: true
   },
   mediaFile: {
@@ -54,9 +54,7 @@ const AdSchema = new mongoose.Schema({
   totalPlaysPerDay: { type: Number, required: true },
   pricePerPlay: { type: Number, required: true },
   totalPrice: { type: Number, required: true },
-  price: { type: Number, required: true },
-
-  // ✅ Replaced durationType with durationDays (sourced from AdsPlan)
+  price: { type: Number, required: true }, // total ad price
   durationDays: { type: Number, required: true },
 
   // Approval & tracking
@@ -66,27 +64,27 @@ const AdSchema = new mongoose.Schema({
     default: 'PENDING',
     required: true
   },
+  adStatus: {
+    type: String,
+    enum: ['INACTIVE', 'ACTIVE', 'FINISHED'], // internal deployment tracking
+    default: 'INACTIVE'
+  },
   paymentStatus: {
     type: String,
     enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
     default: 'PENDING'
   },
-  adStatus: {
-    type: String,
-    enum: ['INACTIVE', 'ACTIVE', 'FINISHED'],
-    default: 'INACTIVE'
-  },
 
   impressions: { type: Number, default: 0 },
   startTime: { type: Date, required: true },
-  endTime: { type: Date, required: true },
+  endTime: { type: Date, required: true }, // calculated based on startTime + plan duration
   reasonForReject: { type: String, default: null },
   approveTime: { type: Date, default: null },
   rejectTime: { type: Date, default: null }
 }, { timestamps: true });
 
 /**
- * ✅ Pre-save validation: ensure referenced docs exist
+ * Pre-save validation: ensure referenced docs exist
  */
 AdSchema.pre('save', async function (next) {
   try {
@@ -111,7 +109,7 @@ AdSchema.pre('save', async function (next) {
 });
 
 /**
- * ✅ Post-save auto-deployment logic
+ * Post-save auto-deployment logic
  */
 AdSchema.post('save', async function (doc) {
   if (doc.adStatus === 'ACTIVE') {
