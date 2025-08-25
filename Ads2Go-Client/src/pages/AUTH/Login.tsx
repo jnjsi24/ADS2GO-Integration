@@ -20,6 +20,8 @@ const Login: React.FC = () => {
       const { token, user } = data.loginUser;
 
       localStorage.setItem('token', token);
+      // Store user data including firstName in localStorage for Dashboard access
+      localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
 
       if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {

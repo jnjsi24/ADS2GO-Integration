@@ -21,6 +21,23 @@ const Dashboard = () => {
   const [displayExpenses, setDisplayExpenses] = useState(0);
   const [displayProfit, setDisplayProfit] = useState(0);
   const [displayPeriodLabel, setDisplayPeriodLabel] = useState('');
+  const [userFirstName, setUserFirstName] = useState('User');
+
+  // Get user's first name from localStorage on component mount
+  useEffect(() => {
+    try {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        if (user && user.firstName) {
+          setUserFirstName(user.firstName);
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing user data from localStorage:', error);
+      // Keep default 'User' if there's an error
+    }
+  }, []);
 
   const barData = [
     { day: 'JAN', profit: 5000, loss: 8000 },
@@ -212,7 +229,7 @@ const Dashboard = () => {
       {/* Header Section */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-semibold text-gray-800">Welcome back, User!</h1>
+          <h1 className="text-3xl font-semibold text-gray-800">Welcome back, {userFirstName}!</h1>
           <p className="text-gray-500 text-sm">Here's your analytic detail</p>
         </div>
       </div>
@@ -301,7 +318,7 @@ const Dashboard = () => {
           </div>
           <p className="text-5xl font-bold text-[#1b5087] pl-4">12,832</p>
           <p className="text-sm pt-2 pl-4">
-            <span className="text-green-600">↑ +20.1%</span>
+            <span className="text-green-600">â†' +20.1%</span>
             <span className="text-black"> +2,123 today</span>
           </p>
           <div className="mt-32"> {/* Adjusted margin for consistent height */}
@@ -310,7 +327,7 @@ const Dashboard = () => {
               to="/advertisements"
               className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-xl px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
             >
-              View Report <span>→</span>
+              View Report <span>â†'</span>
             </Link>
           </div>
         </div>
@@ -322,7 +339,7 @@ const Dashboard = () => {
           </div>
           <p className="text-5xl font-bold text-[#1b5087] pl-4">1,062</p>
           <p className="text-sm pt-2 pl-4">
-            <span className="text-red-600">↓ -4%</span>
+            <span className="text-red-600">â†" -4%</span>
             <span className="text-black"> -426 today</span>
           </p>
           <div className="mt-32"> {/* Adjusted margin for consistent height */}
@@ -331,7 +348,7 @@ const Dashboard = () => {
               to="/advertisements"
               className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-xl px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
             >
-              View Report <span>→</span>
+              View Report <span>â†'</span>
             </Link>
           </div>
         </div>
