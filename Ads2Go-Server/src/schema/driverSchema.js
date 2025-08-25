@@ -2,6 +2,11 @@ const gql = require('graphql-tag');
 
 const typeDefs = gql`
   """
+  SCALARS
+  """
+  scalar Upload
+
+  """
   ENUMS
   """
   enum DriverAccountStatus {
@@ -188,15 +193,15 @@ const typeDefs = gql`
     password: String!
     address: String
     licenseNumber: String
-    licensePictureURL: String
+    licensePicture: Upload  # Changed from String to Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType!
     vehicleModel: String
     vehicleYear: Int!
-    vehiclePhotoURL: String
-    orCrPictureURL: String
+    vehiclePhoto: Upload    # Changed from String to Upload
+    orCrPicture: Upload     # Changed from String to Upload
     preferredMaterialType: [MaterialTypeEnum!]
-    profilePicture: String
+    profilePicture: Upload  # Changed from String to Upload
   }
 
   input DriverEditInput {
@@ -206,15 +211,15 @@ const typeDefs = gql`
     contactNumber: String
     email: String
     address: String
-    profilePicture: String
+    profilePicture: Upload  # Changed from String to Upload
     licenseNumber: String
-    licensePictureURL: String
+    licensePicture: Upload  # Changed from String to Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
-    vehiclePhotoURL: String
-    orCrPictureURL: String
+    vehiclePhoto: Upload    # Changed from String to Upload
+    orCrPicture: Upload     # Changed from String to Upload
     preferredMaterialType: [MaterialTypeEnum!]
     reason: String!
   }
@@ -250,15 +255,15 @@ const typeDefs = gql`
     password: String
     address: String
     licenseNumber: String
-    licensePictureURL: String
+    licensePicture: Upload  # Changed from String to Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
-    vehiclePhotoURL: String
-    orCrPictureURL: String
+    vehiclePhoto: Upload    # Changed from String to Upload
+    orCrPicture: Upload     # Changed from String to Upload
     preferredMaterialType: [MaterialTypeEnum!]
-    profilePicture: String
+    profilePicture: Upload  # Changed from String to Upload
   }
 
   input DriverEditRequestInput {
@@ -268,15 +273,15 @@ const typeDefs = gql`
     contactNumber: String
     email: String
     address: String
-    profilePicture: String
+    profilePicture: Upload  # Changed from String to Upload
     licenseNumber: String
-    licensePictureURL: String
+    licensePicture: Upload  # Changed from String to Upload
     vehiclePlateNumber: String
     vehicleType: VehicleType
     vehicleModel: String
     vehicleYear: Int
-    vehiclePhotoURL: String
-    orCrPictureURL: String
+    vehiclePhoto: Upload    # Changed from String to Upload
+    orCrPicture: Upload     # Changed from String to Upload
     preferredMaterialType: [MaterialTypeEnum!]
     reason: String!
   }
