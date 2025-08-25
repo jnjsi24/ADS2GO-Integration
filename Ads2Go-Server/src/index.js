@@ -90,19 +90,20 @@ async function startServer() {
     credentials: true,
   }));
 
-  // ✅ GraphQL file uploads middleware (must come before express.json())
-  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
-
+  // Regular express body parsing
   app.use(express.json());
-
-  // ✅ Serve uploaded media statically
+  
+  // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-  // ✅ Upload route
+  
+  // Regular file upload route (must come before GraphQL middleware)
   const uploadRoute = require('./routes/upload');
   app.use('/upload', uploadRoute);
+  
+  // GraphQL file uploads middleware (must come after regular upload route)
+  app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
 
-  // ✅ GraphQL endpoint with combined context
+  // GraphQL endpoint with combined context
   app.use(
     '/graphql',
     expressMiddleware(server, {

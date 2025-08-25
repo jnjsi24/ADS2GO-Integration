@@ -6,25 +6,23 @@ export const CREATE_AD = gql`
       id
       title
       description
-      materialId
-      planId
-      price
-      status
-      mediaUrl
-      startTime
-      endTime
-      createdAt
-      updatedAt
-      material {
+      materialId {
         id
         type
         name
       }
-      plan {
+      planId {
         id
         name
         durationDays
       }
+      price
+      status
+      mediaFile
+      startTime
+      endTime
+      createdAt
+      updatedAt
     }
   }
 `;

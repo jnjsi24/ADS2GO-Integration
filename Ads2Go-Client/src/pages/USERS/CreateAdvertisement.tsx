@@ -111,17 +111,17 @@ const CreateAdvertisement: React.FC = () => {
       const input: {
         title: string;
         description: string;
-        materialId: string;
+        materialId: string; // This should be the ID of the material, not the plan
         planId: string;
         price: number;
         status: string;
         startTime: string;
         endTime: string;
-        mediaUrl?: string;
+        mediaFile?: string;
       } = {
         title: formData.title,
         description: formData.description,
-        materialId: selectedPlan._id, // This should be the material ID
+        materialId: selectedPlan.materialType || selectedPlan._id, // Use materialType as materialId
         planId: selectedPlan._id,
         price: selectedPlan.totalPrice,
         status: 'PENDING',
@@ -137,18 +137,24 @@ const CreateAdvertisement: React.FC = () => {
         const mediaFormData = new FormData();
         mediaFormData.append('file', formData.mediaFile);
         
+        console.log('Uploading file:', formData.mediaFile.name, 'Size:', formData.mediaFile.size, 'bytes');
+        
         const mediaResponse = await fetch('http://localhost:5000/upload', {
           method: 'POST',
           body: mediaFormData,
-          credentials: 'include' // Include cookies for authentication
+          credentials: 'include',
+          // Don't set Content-Type header, let the browser set it with the correct boundary
         });
         
+        const responseData = await mediaResponse.json();
+        console.log('Upload response:', responseData);
+        
         if (!mediaResponse.ok) {
-          throw new Error('Failed to upload media file');
+          throw new Error(responseData.error || 'Failed to upload media file');
         }
         
-        const { url } = await mediaResponse.json();
-        input.mediaUrl = url;
+        // Use the filename from the response to construct the URL
+        input.mediaFile = `/uploads/${responseData.filename}`;
       }
 
       // Then create the ad with the media URL
