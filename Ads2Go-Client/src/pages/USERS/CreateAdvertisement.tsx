@@ -34,7 +34,7 @@ type AdvertisementForm = {
   startTime?: string;
 };
 
-const CreateAdvertisement: React.FC = () => {
+const CreateAdvertisement: React.FC = (): JSX.Element => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
@@ -217,13 +217,11 @@ const CreateAdvertisement: React.FC = () => {
 
   const canProceedToStep = (step: number) => {
     switch (step) {
-      case 2:
+      case 2: // Now goes directly to ad details after plan selection
         return selectedPlan !== null;
-      case 3:
-        return selectedMaterialId !== '';
-      case 4:
+      case 3: // Now handles media upload
         return formData.title && formData.description;
-      case 5:
+      case 4: // Now handles review
         return formData.mediaFile;
       default:
         return true;
@@ -232,7 +230,7 @@ const CreateAdvertisement: React.FC = () => {
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-      {['Select Plan', 'Select Material', 'Ad Details', 'Upload Media', 'Review'].map((step, index) => (
+      {['Select Plan', 'Ad Details', 'Upload Media', 'Review'].map((step, index) => (
         <React.Fragment key={index}>
           <div className="flex flex-col items-center">
             <div
@@ -338,96 +336,7 @@ const CreateAdvertisement: React.FC = () => {
   );
 
 
-  // Step 2: Material Selection
-  const renderStep2 = () => (
-    <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-semibold mb-6 text-center">Select Material</h2>
-      {loadingMaterials ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-[#251f70]" />
-          <span className="ml-2">Loading materials...</span>
-        </div>
-      ) : materials.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No materials available for the selected plan. Please contact support.
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {materials.map((material) => (
-              <div
-                key={material.id}
-                className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
-                  selectedMaterialId === material.id
-                    ? 'border-[#251f70] bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => setSelectedMaterialId(material.id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-gray-900">{material.materialType}</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      For {material.vehicleType.replace('_', ' ').toLowerCase()}
-                    </p>
-                  </div>
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
-                    {material.materialId}
-                  </span>
-                </div>
-                
-                {material.description && (
-                  <p className="mt-3 text-gray-600">{material.description}</p>
-                )}
-
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Category</p>
-                      <p className="font-medium">{material.category}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Status</p>
-                      <p className="font-medium capitalize">
-                        {material.driverId ? 'Assigned' : 'Available'}
-                      </p>
-                    </div>
-                    {material.requirements && (
-                      <div className="col-span-2">
-                        <p className="text-gray-500">Requirements</p>
-                        <p className="font-medium">{material.requirements}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {selectedMaterialId && (
-            <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-100">
-              <h3 className="font-medium text-blue-800">Selected Material</h3>
-              <div className="mt-2 space-y-1">
-                <p className="text-sm text-blue-700">
-                  <span className="font-medium">Type:</span> {materials.find(m => m.id === selectedMaterialId)?.materialType}
-                </p>
-                <p className="text-sm text-blue-700">
-                  <span className="font-medium">ID:</span> {materials.find(m => m.id === selectedMaterialId)?.materialId}
-                </p>
-                {materials.find(m => m.id === selectedMaterialId)?.description && (
-                  <p className="text-sm text-blue-700">
-                    <span className="font-medium">Description:</span> {materials.find(m => m.id === selectedMaterialId)?.description}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // Step 3: Advertisement Details
+  // Step 2: Advertisement Details
   const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
@@ -667,10 +576,9 @@ const CreateAdvertisement: React.FC = () => {
           
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
-            {currentStep === 5 && renderStep5()}
+            {currentStep === 2 && renderStep3()}
+            {currentStep === 3 && renderStep4()}
+            {currentStep === 4 && renderStep5()}
           </div>
           
           <div className="flex justify-between">
