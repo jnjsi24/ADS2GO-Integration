@@ -1,6 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, User, Calendar, Lock } from 'lucide-react';
-import { Link } from 'react-router-dom'; 
+import { Link, useLocation, useNavigate } from 'react-router-dom'; 
+import { useMutation, gql } from '@apollo/client';
+
+interface PaymentItem {
+  id: string;
+  productName: string;
+  imageUrl: string;
+  plan: string;
+  amount: string;
+  status: string;
+  userName: string;
+  companyName: string;
+  bankNumber: string;
+  adType?: string;
+  address?: string;
+  durationDays: number;
+  paymentType?: string;
+  adFormat: string;
+  adLengthSeconds: number;
+  totalPrice: string;
+  receiptId?: string;
+}
+
+const CREATE_PAYMENT = gql`
+  mutation CreatePayment($input: CreatePaymentInput!) {
+    createPayment(input: $input) {
+      success
+      message
+      payment {
+        id
+        amount
+        paymentStatus
+        paymentType
+        receiptId
+      }
+    }
+  }
+`;
 
 const Payment: React.FC = () => {
   const [paymentType, setPaymentType] = useState<string>('');
@@ -19,6 +56,14 @@ const Payment: React.FC = () => {
     postalCode: '9090',
   });
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [createPayment] = useMutation(CREATE_PAYMENT);
+
+  // Get payment item and return path from navigation state
+  const paymentItem = location.state?.paymentItem as PaymentItem;
+  const returnTo = location.state?.returnTo || '/advertisements';
+
   const handleInput = (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
     setPersonalInfo({ ...personalInfo, [key]: e.target.value });
   };
@@ -36,9 +81,72 @@ const Payment: React.FC = () => {
     setCardDetails({ ...cardDetails, number, type });
   };
 
+  const mapPaymentType = (type: string): string => {
+    switch (type) {
+      case 'card':
+        return 'CREDIT_CARD';
+      case 'gcash':
+        return 'GCASH';
+      case 'paypal':
+        return 'PAYPAL';
+      case 'gpay':
+      case 'maya':
+      case 'cash':
+        return 'BANK_TRANSFER';
+      default:
+        return 'CREDIT_CARD';
+    }
+  };
+
+  const handleContinue = async () => {
+    if (!paymentType) {
+      alert("Please select a payment method.");
+      return;
+    }
+
+    // If this is a payment for a specific item from PaymentHistory
+    if (paymentItem) {
+      const input = {
+        adsId: paymentItem.id,
+        paymentType: mapPaymentType(paymentType),
+        receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, 
+        paymentDate: new Date().toISOString(),
+      };
+
+      try {
+        const { data: mutationData } = await createPayment({ variables: { input } });
+
+        if (mutationData.createPayment.success) {
+          alert(`✅ Payment for ${paymentItem.productName} is now PAID!`);
+          // Navigate back to the return path (usually PaymentHistory)
+          navigate(returnTo);
+        } else {
+          alert(mutationData.createPayment.message);
+        }
+      } catch (e: any) {
+        alert(e.message || "Failed to create payment.");
+      }
+    } else {
+      // This is a regular payment flow (not from PaymentHistory)
+      // You can add your regular payment logic here
+      alert("Payment processing for regular flow - implement as needed");
+      navigate(returnTo);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
       <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Payment Information</h1>
+
+      {/* Display Payment Item Details if coming from PaymentHistory */}
+      {paymentItem && (
+        <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-lg">
+          <h3 className="font-semibold text-lg">Payment for: {paymentItem.productName}</h3>
+          <p className="text-sm">Plan: {paymentItem.plan}</p>
+          <p className="text-sm">Ad ID: {paymentItem.id}</p>
+          <p className="text-xl font-bold mt-2">Amount Due: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}</p>
+        </div>
+      )}
 
       {/* Personal Details */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -170,11 +278,17 @@ const Payment: React.FC = () => {
 
       {/* Navigation */}
       <div className="flex justify-between pt-4">
-        <Link to="/advertisements">
-        <button className="px-5 py-2 rounded-lg hover:bg-gray-100">Back</button>
-        </Link>
-        <button className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#578FCA] text-white font-semibold shadow hover:scale-105 transition-all duration-300">
-          Continue
+        <button 
+          onClick={() => navigate(returnTo)}
+          className="px-5 py-2 rounded-lg hover:bg-gray-100 border border-gray-300 text-gray-700"
+        >
+          Back
+        </button>
+        <button 
+          onClick={handleContinue}
+          className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#578FCA] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
+        >
+          {paymentItem ? 'Complete Payment' : 'Continue'}
         </button>
       </div>
     </div>
