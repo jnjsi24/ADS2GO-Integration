@@ -1,6 +1,22 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+// Pre-save hook to validate material assignment
+const validateMaterialAssignment = function(next) {
+  // Skip validation for new documents
+  if (this.isNew) return next();
+
+  // If materialId is being modified
+  if (this.isModified('materialId') && this.materialId) {
+    // Check if driver is approved and email is verified
+    if (this.accountStatus !== 'ACTIVE' || this.reviewStatus !== 'APPROVED' || !this.isEmailVerified) {
+      const err = new Error('Cannot assign material to an unapproved or unverified driver');
+      return next(err);
+    }
+  }
+  next();
+};
+
 const DriverSchema = new mongoose.Schema(
   {
     driverId: { type: String, unique: true, trim: true, uppercase: true },
@@ -90,6 +106,10 @@ const DriverSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    // Add pre-save hooks
+    pre: [
+      { method: 'save', fn: validateMaterialAssignment, parallel: false },
+    ],
     toJSON: {
       virtuals: true,
       transform: (_, ret) => {

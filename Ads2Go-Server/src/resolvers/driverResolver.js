@@ -7,6 +7,7 @@ const Driver = require('../models/Driver');
 const Material = require('../models/Material');
 const { JWT_SECRET, checkAdmin } = require('../middleware/auth');
 const { checkDriverAuth } = require('../middleware/driverAuth');
+const { verifyDriverForMaterialAssignment } = require('../middleware/driverMaterialAuth');
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 const { GraphQLUpload } = require('graphql-upload');
@@ -77,26 +78,67 @@ const generateDriverId = async () => {
 
 // ===== Helper: Assign Material to Driver =====
 async function assignMaterialToDriver(driver) {
+  // Verify driver is eligible for material assignment
+  if (driver.accountStatus !== 'ACTIVE' || driver.reviewStatus !== 'APPROVED' || !driver.isEmailVerified) {
+    throw new Error('Driver must be approved and email verified before material assignment');
+  }
+
   const allowedTypes = VEHICLE_MATERIAL_MAP[driver.vehicleType];
-  if (!allowedTypes) return;
+  if (!allowedTypes || !allowedTypes.length) {
+    throw new Error(`No allowed material types found for vehicle type: ${driver.vehicleType}`);
+  }
+
+  // Check if driver already has a material assigned
+  if (driver.materialId) {
+    const existingMaterial = await Material.findById(driver.materialId);
+    if (existingMaterial) {
+      throw new Error('Driver already has an assigned material');
+    }
+  }
+
+  // Get available materials, considering driver's preferred types or admin overrides
+  const materialTypesToSearch = driver.adminOverride && driver.adminOverrideMaterialType
+    ? driver.adminOverrideMaterialType
+    : driver.preferredMaterialType.length 
+      ? driver.preferredMaterialType 
+      : allowedTypes;
 
   const availableMaterials = await Material.find({
     vehicleType: driver.vehicleType,
-    materialType: { $in: allowedTypes },
+    materialType: { $in: materialTypesToSearch },
     driverId: null,
-  });
+  }).sort({ createdAt: 1 }); // Get oldest material first
 
-  if (!availableMaterials.length) return;
+  if (!availableMaterials.length) {
+    throw new Error('No available materials matching the criteria');
+  }
 
   const materialToAssign = availableMaterials[0];
-  materialToAssign.driverId = driver.driverId; // admin-facing driverId
-  await materialToAssign.save();
+  
+  // Use a transaction to ensure both operations succeed or fail together
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    // Assign material to driver
+    materialToAssign.driverId = driver.driverId;
+    materialToAssign.mountedAt = new Date();
+    await materialToAssign.save({ session });
 
-  if (!driver.installedMaterialType) {
+    // Update driver's material reference
+    driver.materialId = materialToAssign._id;
     driver.installedMaterialType = materialToAssign.materialType;
-    await driver.save();
+    await driver.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return materialToAssign;
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
   }
-  return materialToAssign;
 }
 
 // ===== RESOLVERS =====
@@ -154,93 +196,83 @@ Upload: GraphQLUpload,
 
   Mutation: {
     // ===== DRIVER SELF MUTATIONS =====
-    createDriver: async (_, { input }) => {
-      try {
-        // Validate email
-        if (!validator.isEmail(input.email)) throw new Error("Invalid email format");
-        const normalizedEmail = input.email.toLowerCase().trim();
+createDriver: async (_, { input }) => {
+  try {
+    // Validate email
+    if (!validator.isEmail(input.email)) throw new Error("Invalid email format");
+    const normalizedEmail = input.email.toLowerCase().trim();
 
-        // Check if email exists
-        const existing = await Driver.findOne({ email: normalizedEmail });
-        if (existing) throw new Error("Driver with this email already exists");
+    // Check if email exists
+    const existing = await Driver.findOne({ email: normalizedEmail });
+    if (existing) throw new Error("Driver with this email already exists");
 
-        // Validate vehicle type
-        if (!Object.keys(VEHICLE_MATERIAL_MAP).includes(input.vehicleType)) {
-          throw new Error(`Invalid vehicle type. Allowed: ${Object.keys(VEHICLE_MATERIAL_MAP).join(', ')}`);
-        }
+    // Validate vehicle type
+    if (!Object.keys(VEHICLE_MATERIAL_MAP).includes(input.vehicleType)) {
+      throw new Error(`Invalid vehicle type. Allowed: ${Object.keys(VEHICLE_MATERIAL_MAP).join(', ')}`);
+    }
 
-        // Check for available materials
-        const availableMaterials = await Material.find({
-          vehicleType: input.vehicleType,
-          materialType: { $in: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [] },
-          driverId: null
-        }).limit(1);
+    // Validate password
+    if (!input.password || !input.password.trim()) throw new Error("Password cannot be empty");
 
-        if (availableMaterials.length === 0) {
-          throw new Error('No available materials for the selected vehicle and material types. Please contact support.');
-        }
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const driverId = await generateDriverId();
+    const qrCodeIdentifier = `QR-${driverId}-${Date.now()}`;
 
-        // Validate password
-        if (!input.password || !input.password.trim()) throw new Error("Password cannot be empty");
+    // Handle file uploads
+    const profilePictureURL = await saveFile(input.profilePicture);
+    const vehiclePhotoURL = await saveFile(input.vehiclePhoto);
+    const licensePictureURL = await saveFile(input.licensePicture);
+    const orCrPictureURL = await saveFile(input.orCrPicture);
 
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const driverId = await generateDriverId();
-        const qrCodeIdentifier = `QR-${driverId}-${Date.now()}`;
+    // Create driver (PENDING until approved)
+    const newDriver = new Driver({
+      driverId,
+      qrCodeIdentifier,
+      firstName: input.firstName.trim(),
+      middleName: input.middleName?.trim() || null,
+      lastName: input.lastName.trim(),
+      contactNumber: input.contactNumber.trim(),
+      email: normalizedEmail,
+      password: input.password.trim(),
+      address: input.address?.trim() || null,
+      licenseNumber: input.licenseNumber?.trim() || null,
+      licensePictureURL,
+      vehiclePlateNumber: input.vehiclePlateNumber?.trim() || null,
+      vehicleType: input.vehicleType,
+      vehicleModel: input.vehicleModel?.trim() || null,
+      vehicleYear: input.vehicleYear,
+      vehiclePhotoURL,
+      orCrPictureURL,
+      preferredMaterialType: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [],
+      profilePicture: profilePictureURL,
+      accountStatus: 'PENDING',
+      reviewStatus: 'PENDING',
+      isEmailVerified: false,
+      dateJoined: new Date(),
+      currentBalance: 0,
+      totalEarnings: 0,
+      emailVerificationCode: verificationCode,
+      emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
+    });
 
-        // Handle file uploads
-        const profilePictureURL = await saveFile(input.profilePicture);
-        const vehiclePhotoURL = await saveFile(input.vehiclePhoto);
-        const licensePictureURL = await saveFile(input.licensePicture);
-        const orCrPictureURL = await saveFile(input.orCrPicture);
+    await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
+    console.log(`📩 Verification code for ${newDriver.email}: ${verificationCode}`);
 
-        // Create driver
-        const newDriver = new Driver({
-          driverId,
-          qrCodeIdentifier,
-          firstName: input.firstName.trim(),
-          middleName: input.middleName?.trim() || null,
-          lastName: input.lastName.trim(),
-          contactNumber: input.contactNumber.trim(),
-          email: normalizedEmail,
-          password: input.password.trim(),
-          address: input.address?.trim() || null,
-          licenseNumber: input.licenseNumber?.trim() || null,
-          licensePictureURL,
-          vehiclePlateNumber: input.vehiclePlateNumber?.trim() || null,
-          vehicleType: input.vehicleType,
-          vehicleModel: input.vehicleModel?.trim() || null,
-          vehicleYear: input.vehicleYear,
-          vehiclePhotoURL,
-          orCrPictureURL,
-          preferredMaterialType: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [],
-          profilePicture: profilePictureURL,
-          accountStatus: 'PENDING',
-          reviewStatus: 'PENDING',
-          isEmailVerified: false,
-          dateJoined: new Date(),
-          currentBalance: 0,
-          totalEarnings: 0,
-          emailVerificationCode: verificationCode,
-          emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
-        });
+    await newDriver.save();
 
-        await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
-        console.log(`📩 Verification code for ${newDriver.email}: ${verificationCode}`);
+    const token = jwt.sign(
+      { driverId: newDriver._id.toString(), tokenVersion: newDriver.tokenVersion },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
-        await newDriver.save();
+    return { success: true, message: "Driver created successfully", token, driver: newDriver };
+  } catch (error) {
+    console.error("createDriver error:", error);
+    return { success: false, message: error.message, token: null, driver: null };
+  }
+},
 
-        const token = jwt.sign(
-          { driverId: newDriver._id.toString(), tokenVersion: newDriver.tokenVersion },
-          JWT_SECRET,
-          { expiresIn: '7d' }
-        );
-
-        return { success: true, message: "Driver created successfully", token, driver: newDriver };
-      } catch (error) {
-        console.error("createDriver error:", error);
-        return { success: false, message: error.message, token: null, driver: null };
-      }
-    },
 
     loginDriver: async (_, { email, password, deviceInfo }) => {
       try {
@@ -339,115 +371,108 @@ Upload: GraphQLUpload,
       }
     },
 
-    // ===== ADMIN MUTATIONS =====
     approveDriver: async (_, { driverId, materialTypeOverride }, { user }) => {
-      try {
-        checkAdmin(user);
+  try {
+    checkAdmin(user);
 
-        const driver = await Driver.findOne({ driverId });
-        if (!driver) {
-          return { success: false, message: 'Driver not found', driver: null };
-        }
+    const driver = await Driver.findOne({ driverId });
+    if (!driver) {
+      return { success: false, message: 'Driver not found', driver: null };
+    }
 
-        // Check if driver can be approved
-        if (!driver.isEmailVerified) {
-          return { 
-            success: false, 
-            message: 'Cannot approve driver. Email must be verified first.',
-            driver 
-          };
-        }
+    // If driver is already approved, no need to re-approve
+    if (driver.accountStatus === 'ACTIVE' && driver.reviewStatus === 'APPROVED') {
+      return { success: false, message: 'Driver is already approved', driver };
+    }
 
-        // Use override material types if provided, otherwise use driver's preferences
-        const materialTypesToUse = materialTypeOverride?.length > 0 
-          ? materialTypeOverride 
-          : driver.preferredMaterialType;
+    // Check if driver can be approved
+    if (!driver.isEmailVerified) {
+      return { 
+        success: false, 
+        message: 'Cannot approve driver. Email must be verified first.',
+        driver 
+      };
+    }
 
-        // Check if there are available materials for the selected types
-        const availableMaterials = await Material.find({
-          vehicleType: driver.vehicleType,
-          materialType: { $in: materialTypesToUse },
-          driverId: null
-        }).sort({ createdAt: 1 });
+    // Use override material types if provided, otherwise use driver's preferences
+    const materialTypesToUse = materialTypeOverride?.length > 0 
+      ? materialTypeOverride 
+      : driver.preferredMaterialType;
 
-        if (availableMaterials.length === 0) {
-          // If no materials available, check if driver already has a material assigned
-          if (driver.materialId) {
-            // Driver already has a material, proceed with approval
-            driver.accountStatus = 'ACTIVE';
-            driver.reviewStatus = 'APPROVED';
-            driver.approvalDate = new Date();
-            await driver.save();
-            
-            const updatedDriver = await Driver.findOne({ driverId })
-              .populate({
-                path: 'material',
-                select: 'materialId materialType vehicleType'
-              });
-            
-            return { 
-              success: true, 
-              message: 'Driver approved with existing material assignment',
-              driver: updatedDriver
-            };
-          }
-          
-          return { 
-            success: false, 
-            message: 'Cannot approve driver. No available materials for the selected vehicle and material types.',
-            driver 
-          };
-        }
+    // Find an available material
+    const availableMaterials = await Material.find({
+      vehicleType: driver.vehicleType,
+      materialType: { $in: materialTypesToUse },
+      driverId: null
+    }).sort({ createdAt: 1 });
 
-        // Update driver status
+    if (availableMaterials.length === 0) {
+      // If no materials available but driver already has one assigned, still approve
+      if (driver.materialId) {
         driver.accountStatus = 'ACTIVE';
         driver.reviewStatus = 'APPROVED';
         driver.approvalDate = new Date();
-        
-        // Assign the first available material
-        const materialToAssign = availableMaterials[0];
-        
-        // Only assign the driver ID to the material, don't set mountedAt yet
-        materialToAssign.driverId = driver.driverId;
-        materialToAssign.mountedAt = null; // Will be set when material is actually mounted
-        materialToAssign.dismountedAt = null;
-        await materialToAssign.save();
-
-        // Update driver's material reference but don't set installedMaterialType yet
-        driver.materialId = materialToAssign._id;
-        driver.installedMaterialType = null; // Will be set when material is actually mounted
-        
-        // Handle admin override if needed
-        if (materialTypeOverride?.length > 0) {
-          driver.adminOverride = true;
-          driver.adminOverrideMaterialType = materialTypeOverride;
-        }
-        
         await driver.save();
-        
-        // Get the updated driver with material details
+
         const updatedDriver = await Driver.findOne({ driverId })
-          .populate({
-            path: 'material',
-            select: 'materialId materialType vehicleType'
-          });
-        
-        console.log(`Successfully approved driver ${driver.driverId} and assigned material ${materialToAssign.materialId}`);
-        
+          .populate({ path: 'material', select: 'materialId materialType vehicleType' });
+
         return { 
           success: true, 
-          message: 'Driver approved and material assigned successfully',
+          message: 'Driver approved with existing material assignment',
           driver: updatedDriver
         };
-      } catch (error) {
-        console.error('approveDriver error:', error);
-        return { 
-          success: false, 
-          message: error.message || 'Failed to approve driver',
-          driver: null
-        };
       }
-    },
+
+      return { 
+        success: false, 
+        message: 'Cannot approve driver. No available materials for the selected vehicle and material types.',
+        driver 
+      };
+    }
+
+    // Update driver status to approved
+    driver.accountStatus = 'ACTIVE';
+    driver.reviewStatus = 'APPROVED';
+    driver.approvalDate = new Date();
+
+    // Assign the first available material
+    const materialToAssign = availableMaterials[0];
+    materialToAssign.driverId = driver.driverId;
+    materialToAssign.mountedAt = null;
+    materialToAssign.dismountedAt = null;
+    await materialToAssign.save();
+
+    driver.materialId = materialToAssign._id;
+    driver.installedMaterialType = null;
+
+    if (materialTypeOverride?.length > 0) {
+      driver.adminOverride = true;
+      driver.adminOverrideMaterialType = materialTypeOverride;
+    }
+
+    await driver.save();
+
+    const updatedDriver = await Driver.findOne({ driverId })
+      .populate({ path: 'material', select: 'materialId materialType vehicleType' });
+
+    console.log(`Driver ${driver.driverId} approved and material assigned.`);
+
+    return { 
+      success: true, 
+      message: 'Driver approved and material assigned successfully',
+      driver: updatedDriver
+    };
+  } catch (error) {
+    console.error('approveDriver error:', error);
+    return { 
+      success: false, 
+      message: error.message || 'Failed to approve driver',
+      driver: null
+    };
+  }
+},
+
 
     // ===== FIXED REJECT DRIVER MUTATION =====
     rejectDriver: async (_, { driverId, reason }, { user }) => {
