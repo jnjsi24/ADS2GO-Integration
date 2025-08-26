@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -6,8 +6,22 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  PieLabelRenderProps, // Still imported for potential future use or if other charts use it
+  PieLabelRenderProps,
 } from "recharts";
+import { useQuery, gql } from '@apollo/client';
+
+// GraphQL query to get admin user details
+const GET_ADMIN_DETAILS = gql`
+  query GetAdminDetails {
+    getOwnUserDetails {
+      id
+      firstName
+      lastName
+      email
+      role
+    }
+  }
+`;
 
 // Dummy data for the Ad Impressions & QR Scans chart
 const adPerformanceData = [
@@ -46,36 +60,32 @@ const vehicles = [
 ];
 
 const Dashboard = () => {
-  // Since Budget and Saving Goals are removed, totalBudget and renderCustomizedLabel are no longer strictly needed,
-  // but I'll keep the PieLabelRenderProps import in case you add other pie charts later.
-  // const totalBudget = budgetData.reduce((sum, entry) => sum + entry.value, 0);
+  const [adminName, setAdminName] = useState("Admin");
+  
+  // Fetch admin details from the backend
+  const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
+    onCompleted: (data) => {
+      if (data && data.getOwnUserDetails) {
+        const user = data.getOwnUserDetails;
+        setAdminName(`${user.firstName} ${user.lastName}`);
+      }
+    },
+    onError: (error) => {
+      console.error("Error fetching admin details:", error);
+    }
+  });
 
-  // Custom label for the Pie Chart to show value inside (removed as PieChart is removed)
-  // If you reintroduce a PieChart, you'll need this function again.
-  // const renderCustomizedLabel = ({
-  //   cx,
-  //   cy,
-  //   midAngle,
-  //   innerRadius,
-  //   outerRadius,
-  //   percent,
-  // }: PieLabelRenderProps) => {
-  //   const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
-  //   const x = Number(cx) + radius * Math.cos(-Number(midAngle) * Math.PI / 180);
-  //   const y = Number(cy) + radius * Math.sin(-Number(midAngle) * Math.PI / 180);
+  if (loading) return (
+    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
 
-  //   return (
-  //     <text
-  //       x={x}
-  //       y={y}
-  //       fill="white"
-  //       textAnchor={x > Number(cx) ? "start" : "end"}
-  //       dominantBaseline="central"
-  //     >
-  //       {`${(Number(percent) * 100).toFixed(0)}%`}
-  //     </text>
-  //   );
-  // };
+  if (error) return (
+    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+      <div className="text-red-500">Error loading admin details: {error.message}</div>
+    </div>
+  );
 
   return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
@@ -83,14 +93,14 @@ const Dashboard = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800">
-            Welcome back, Adaline!
+            Welcome back, {adminName}!
           </h2>
           <p className="text-sm text-gray-500">
             It is the best time to manage your finances
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Calendar icon and 'This month' button */}
+          {/* Calendar icon and 'This month' button - Removed profile section */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -121,19 +131,6 @@ const Dashboard = () => {
                 d="M19 9l-7 7-7-7"
               />
             </svg>
-          </div>
-          <div className="flex items-center">
-            <img
-              src="https://via.placeholder.com/40"
-              alt="User Avatar"
-              className="w-10 h-10 rounded-full object-cover border-2 border-gray-300"
-            />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-700">
-                Adaline Lively
-              </p>
-              <p className="text-xs text-gray-500">adaline@email.com</p>
-            </div>
           </div>
         </div>
       </div>

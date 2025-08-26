@@ -1,18 +1,18 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth to access user data
+import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard,
-  Users, // For View Users
-  Bike, // For View Riders (assuming bicycle is a good representation)
-  Package, // For Materials (representing a package)
-  FileText, // For Reports (representing a document/report)
-  Megaphone, // For AdsPanel
+  Users,
+  Bike,
+  Package,
+  FileText,
+  Megaphone,
   LogOut,
-} from 'lucide-react'; // Import Lucide icons
+} from 'lucide-react';
 
 const AdminSidebar: React.FC = () => {
-  const { logout, user } = useAuth(); // Destructure user from useAuth
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -26,19 +26,16 @@ const AdminSidebar: React.FC = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
-
   const menuItems = [
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
     { label: 'View Users', path: '/admin/users', icon: <Users size={20} /> },
-    { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> }, // Using Bike for riders
-    { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> }, // Using Package for materials
-    { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> }, // Using FileText for reports
+    { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> },
+    { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> },
+    { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
     { label: 'AdsPanel', path: '/admin/ads', icon: <Megaphone size={20} /> },
   ];
 
   return (
-    // Adjusting padding for top, left, bottom, and adding rounded corners
-    // The top, left, bottom properties create the offset and define the sidebar's bounds.
     <div className="w-60 bg-[#C9E6F0] fixed top-0 left-0 bottom-0 shadow-lg flex flex-col justify-start p-5 text-white overflow-hidden">
       <div>
         <div className="flex items-center space-x-3 mb-10">
@@ -46,7 +43,6 @@ const AdminSidebar: React.FC = () => {
           <span className="text-2xl text-black font-bold">Ads2Go</span>
         </div>
 
-        {/* Menu Items */}
         <nav className="flex flex-col space-y-2 text-black">
           {menuItems.map((item) => (
             <Link
@@ -63,10 +59,10 @@ const AdminSidebar: React.FC = () => {
         </nav>
       </div>
       <div className="mt-44 pt-5 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
-        {/* Profile Section */}
+        {/* Profile Section - FIXED: Navigate to admin settings */}
         <div
           className="flex items-center space-x-3 mb-4 cursor-pointer"
-          onClick={() => navigate('/settings')}
+          onClick={() => navigate('/admin/SiteSettings')} // CHANGED THIS LINE
         >
           <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
             <span className="text-white font-semibold">
@@ -88,7 +84,6 @@ const AdminSidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Logout Button */}
         <button
           onClick={handleLogout}
           className="w-full flex items-center space-x-2 text-sm text-[#FF2929] hover:text-red-500 transition px-4 py-2 rounded-lg bg-red-50"
