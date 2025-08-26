@@ -1,3 +1,5 @@
+//EMAILVERIFICATION
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -15,6 +17,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import API_CONFIG from "../../config/api";
+import { Ionicons } from '@expo/vector-icons';
 
 // Define your navigation stack params
 type EmailVerificationRouteProp = RouteProp<RootStackParamList, '(auth)/emailVerification'>;
@@ -208,7 +211,7 @@ const EmailVerification = () => {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -216,14 +219,13 @@ const EmailVerification = () => {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.content}>
+      <View style={styles.card}>
+        <Ionicons name="sparkles" size={30} color="#34D9B0" style={styles.sparkleIcon} />
         <View style={styles.header}>
-          <Text style={styles.emoji}>📧</Text>
           <Text style={styles.title}>Verify Your Email</Text>
           <Text style={styles.subtitle}>
-            Hi {firstName}! We've sent a 6-digit verification code to
+            We've sent a code to <Text style={styles.email}>{email}</Text>
           </Text>
-          <Text style={styles.email}>{email}</Text>
           <Text style={styles.description}>
             Enter the code below to verify your email address and complete your registration.
           </Text>
@@ -266,41 +268,35 @@ const EmailVerification = () => {
           onPress={() => handleVerifyEmail()}
           disabled={verificationCode.some(digit => !digit) || loading}
         >
-          <Text style={[
-            styles.verifyButtonText,
-            (verificationCode.some(digit => !digit) || loading) && styles.verifyButtonTextDisabled
-          ]}>
+          <Text style={styles.verifyButtonText}>
             {loading ? 'Verifying...' : 'Verify Email'}
           </Text>
         </TouchableOpacity>
 
         <View style={styles.resendContainer}>
-          <Text style={styles.resendText}>Didn't receive the code?</Text>
-          
+          <Text style={styles.resendText}>Send code again</Text>
           {canResend ? (
             <TouchableOpacity
-              style={styles.resendButton}
               onPress={handleResendCode}
               disabled={resendLoading}
             >
               <Text style={styles.resendButtonText}>
-                {resendLoading ? 'Sending...' : 'Resend Code'}
+                {resendLoading ? 'Sending...' : 'Resend'}
               </Text>
             </TouchableOpacity>
           ) : (
             <Text style={styles.timerText}>
-              Resend available in {formatTime(timeLeft)}
+              {formatTime(timeLeft)}
             </Text>
           )}
         </View>
-
-        <TouchableOpacity
-          style={styles.changeEmailButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.changeEmailText}>← Change Email Address</Text>
-        </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        style={styles.changeEmailButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.changeEmailText}>Change Email Address</Text>
+      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -308,20 +304,24 @@ const EmailVerification = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  content: {
-    flex: 1,
-    padding: 20,
+    backgroundColor: '#fff',
     justifyContent: 'center',
+    padding: 20,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  sparkleIcon: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
   },
   header: {
     alignItems: 'center',
     marginBottom: 40,
-  },
-  emoji: {
-    fontSize: 60,
-    marginBottom: 20,
   },
   title: {
     fontSize: 28,
@@ -337,11 +337,8 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   email: {
-    fontSize: 16,
     fontWeight: '600',
-    color: '#3498db',
-    textAlign: 'center',
-    marginBottom: 15,
+    color: '#FF9800',
   },
   description: {
     fontSize: 14,
@@ -352,24 +349,25 @@ const styles = StyleSheet.create({
   codeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 30,
-    paddingHorizontal: 20,
+    marginBottom: 20,
+    gap: 10,
   },
   codeInput: {
-    width: 50,
+    flex: 1,
     height: 60,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e1e5e9',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  codeInputFilled: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2c3e50',
     textAlign: 'center',
-  },
-  codeInputFilled: {
-    borderColor: '#3498db',
-    backgroundColor: '#f0f8ff',
+    height: '100%',
+    width: '100%',
   },
   codeInputDisabled: {
     backgroundColor: '#f8f9fa',
@@ -387,13 +385,15 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
   },
   verifyButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1B5087',
     paddingVertical: 15,
     borderRadius: 8,
-    marginBottom: 30,
+    width: '105%',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   verifyButtonDisabled: {
-    backgroundColor: '#bdc3c7',
+    backgroundColor: '#1B5087',
   },
   verifyButtonText: {
     fontSize: 16,
@@ -401,26 +401,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     textAlign: 'center',
   },
-  verifyButtonTextDisabled: {
-    color: '#ecf0f1',
-  },
   resendContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 30,
+    justifyContent: 'center',
   },
   resendText: {
     fontSize: 14,
     color: '#7f8c8d',
-    marginBottom: 10,
-  },
-  resendButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    marginRight: 5,
   },
   resendButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3498db',
+    color: '#FF9800',
   },
   timerText: {
     fontSize: 14,
@@ -428,12 +423,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   changeEmailButton: {
+    position: 'absolute',
+    bottom: 50, // Add padding from the bottom
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingVertical: 10,
   },
   changeEmailText: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: '#1B5087',
+    fontWeight: 'bold',
   },
 });
 

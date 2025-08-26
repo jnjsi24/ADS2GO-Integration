@@ -1,9 +1,12 @@
+
+//VERIFICATIOBPROGRESS
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import API_CONFIG from "../../config/api";
 import { RootStackParamList } from '../../types/navigation';
 
@@ -128,16 +131,17 @@ const VerificationProgress = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
+      <View style={styles.cardContainer}>
+        <Ionicons name="sparkles-sharp" size={30} color="#FF9800" style={styles.sparkleIcon} />
         {status === 'pending' && (
           <>
-            <MaterialIcons name="pending-actions" size={80} color="#f39c12" />
-            <Text style={styles.title}>Verification in Progress</Text>
+            <MaterialIcons name="pending-actions" size={80} color="#FFB600" />
+            <Text style={styles.title}>
+              Your current status is{' '}
+              <Text style={styles.pendingText}>PENDING</Text>
+            </Text>
             <Text style={styles.subtitle}>
               Your account is currently under review by our admin team. This usually takes 24-48 hours.
-            </Text>
-            <Text style={styles.note}>
-              We've sent a confirmation email to {email}. Please check your inbox and verify your email address.
             </Text>
           </>
         )}
@@ -145,7 +149,10 @@ const VerificationProgress = () => {
         {status === 'approved' && (
           <>
             <MaterialIcons name="check-circle" size={80} color="#2ecc71" />
-            <Text style={styles.title}>Account Verified!</Text>
+            <Text style={styles.title}>
+              Your account has been{' '}
+              <Text style={styles.approvedText}>APPROVED</Text>
+            </Text>
             <Text style={styles.subtitle}>
               Your account has been approved. Redirecting you to the app...
             </Text>
@@ -155,7 +162,10 @@ const VerificationProgress = () => {
         {status === 'rejected' && (
           <>
             <MaterialIcons name="cancel" size={80} color="#e74c3c" />
-            <Text style={styles.title}>Verification Rejected</Text>
+            <Text style={styles.title}>
+              Your account has been{' '}
+              <Text style={styles.rejectedText}>REJECTED</Text>
+            </Text>
             <Text style={styles.subtitle}>
               We're sorry, but your account verification was not approved.
             </Text>
@@ -165,17 +175,6 @@ const VerificationProgress = () => {
           </>
         )}
 
-        <View style={styles.statusContainer}>
-          <Text style={styles.statusTitle}>Current Status:</Text>
-          <Text style={[
-            styles.statusValue,
-            status === 'approved' && styles.statusApproved,
-            status === 'rejected' && styles.statusRejected,
-          ]}>
-            {status.toUpperCase()}
-          </Text>
-        </View>
-
         <TouchableOpacity 
           style={styles.refreshButton}
           onPress={checkVerificationStatus}
@@ -184,7 +183,7 @@ const VerificationProgress = () => {
           {checkingStatus ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.refreshButtonText}>Refresh Status</Text>
+            <Text style={styles.refreshButtonText}>Refresh</Text>
           )}
         </TouchableOpacity>
 
@@ -202,20 +201,20 @@ const VerificationProgress = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
     justifyContent: 'center',
     padding: 20,
   },
-  content: {
+  cardContainer: {
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  sparkleIcon: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
   },
   title: {
     fontSize: 24,
@@ -231,6 +230,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
     lineHeight: 22,
+  },
+  pendingText: {
+    color: '#FFB600', // This is the color for "PENDING"
+  },
+  approvedText: {
+    color: '#2ecc71', // This is the color for "APPROVED"
+  },
+  rejectedText: {
+    color: '#e74c3c', // This is the color for "REJECTED"
   },
   note: {
     fontSize: 14,
@@ -252,7 +260,7 @@ const styles = StyleSheet.create({
   statusValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#f39c12', // Default pending color
+    color: '#f39c12',
   },
   statusApproved: {
     color: '#2ecc71',
@@ -261,7 +269,7 @@ const styles = StyleSheet.create({
     color: '#e74c3c',
   },
   refreshButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1B5087',
     padding: 15,
     borderRadius: 8,
     width: '100%',
@@ -274,7 +282,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   logoutButton: {
-    marginTop: 15,
+    marginTop: 50,
     padding: 10,
   },
   logoutButtonText: {

@@ -1,3 +1,5 @@
+//LAYOUT
+
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
@@ -24,7 +26,8 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/register" />
         <Stack.Screen name="(auth)/emailVerification" options={{ title: 'Verify Email' }} />
         <Stack.Screen name="(auth)/verificationProgress" options={{ title: 'Verification Status' }} />
-
+        <Stack.Screen name="(auth)/forgotPass" /> 
+        
         {/* Main App Tabs (only after login) */}
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="+not-found" />

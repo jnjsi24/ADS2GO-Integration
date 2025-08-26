@@ -1,3 +1,5 @@
+//REGISTER
+
 import React, { useState } from 'react';
 import { 
   View, 
@@ -12,24 +14,10 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import API_CONFIG from "../../config/api";
-
-// Define your navigation stack params
-type RootStackParamList = {
-  '(auth)/emailVerification': {
-    email: string;
-    driverId: string;
-    token: string;
-    firstName: string;
-  };
-  Login: undefined;
-  Register: undefined;
-};
-
-type NavigationProps = NavigationProp<RootStackParamList>;
+import { FontAwesome5, FontAwesome, AntDesign, Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
@@ -40,23 +28,22 @@ type CreateDriverInput = {
   email: string;
   contactNumber: string;
   password: string;
-  address?: string;
-  licenseNumber?: string;
-  licensePicture?: any;
-  vehiclePlateNumber?: string;
+  address: string;
+  licenseNumber: string;
+  licensePicture: any;
+  vehiclePlateNumber: string;
   vehicleType: string;
-  vehicleModel?: string;
-  vehicleYear?: number;
-  vehiclePhoto?: any;
-  orCrPicture?: any;
+  vehicleModel: string;
+  vehicleYear: number;
+  vehiclePhoto: any;
+  orCrPicture: any;
   preferredMaterialType: string[];
   profilePicture?: any;
 };
 
 const RegisterForm = () => {
-  const navigation = useNavigation<NavigationProps>();
-  
-  // Form state
+  const router = useRouter(); 
+
   const [currentStep, setCurrentStep] = useState(0);
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -77,6 +64,8 @@ const RegisterForm = () => {
   const [licensePhoto, setLicensePhoto] = useState<any>(null);
   const [orCrPhoto, setOrCrPhoto] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const steps = [
     'Personal Info',
@@ -86,8 +75,8 @@ const RegisterForm = () => {
     'Review'
   ];
 
-  const vehicleTypes = ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'];
-  const materialTypes = ['LCD', 'BANNER', 'STICKER', 'HEADDRESS', 'POSTER'];
+  const vehicleTypes = ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E-TRIKE'];
+  const materialTypes = ['LCD', 'HEADDRESS'];
 
   const pickImage = async (setImage: React.Dispatch<React.SetStateAction<any>>) => {
     try {
@@ -117,44 +106,104 @@ const RegisterForm = () => {
     }
   };
 
-  const validateStep = (step: number): boolean => {
+    const validateStep = (step: number): boolean => {
+    // Regex to check for names without numbers or symbols
+    const nameRegex = /^[A-Za-z\s.'-]+$/;
+    // Regex to check for exactly 10 digits
+    const contactNumberRegex = /^\d{10}$/;
+
     switch (step) {
-      case 0: // Personal Info
-        if (!firstName.trim() || !lastName.trim()) {
-          Alert.alert('Error', 'Please fill in your first and last name');
+      case 0:
+        if (!firstName.trim()) {
+          Alert.alert('Validation Error', 'First Name is required.');
+          return false;
+        }
+        if (!nameRegex.test(firstName.trim())) {
+          Alert.alert('Validation Error', 'First Name cannot contain numbers or symbols.');
+          return false;
+        }
+        if (!lastName.trim()) {
+          Alert.alert('Validation Error', 'Last Name is required.');
+          return false;
+        }
+        if (!nameRegex.test(lastName.trim())) {
+          Alert.alert('Validation Error', 'Last Name cannot contain numbers or symbols.');
+          return false;
+        }
+        if (!address.trim()) {
+          Alert.alert('Validation Error', 'Address is required.');
           return false;
         }
         return true;
       
-      case 1: // Account Setup
-        if (!email.trim() || !contactNumber.trim() || !password.trim()) {
-          Alert.alert('Error', 'Please fill in all required fields');
+      case 1:
+        if (!email.trim()) {
+          Alert.alert('Validation Error', 'Email Address is required.');
+          return false;
+        }
+        if (!contactNumber.trim()) {
+          Alert.alert('Validation Error', 'Contact Number is required.');
+          return false;
+        }
+        if (!contactNumberRegex.test(contactNumber.trim())) {
+          Alert.alert('Validation Error', 'Contact Number must be exactly 10 digits and contain no symbols or characters.');
+          return false;
+        }
+        if (!password.trim()) {
+          Alert.alert('Validation Error', 'Password is required.');
           return false;
         }
         if (password !== confirmPassword) {
-          Alert.alert('Error', 'Passwords do not match');
+          Alert.alert('Validation Error', 'Passwords do not match.');
           return false;
         }
         if (password.length < 6) {
-          Alert.alert('Error', 'Password must be at least 6 characters long');
+          Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
           return false;
         }
         return true;
       
-      case 2: // Vehicle Details
+      case 2:
         if (!vehicleType.trim()) {
-          Alert.alert('Error', 'Please select a vehicle type');
+          Alert.alert('Validation Error', 'Vehicle Type is required.');
+          return false;
+        }
+        if (!vehicleModel.trim()) {
+          Alert.alert('Validation Error', 'Vehicle Model is required.');
+          return false;
+        }
+        if (!vehicleYear) {
+          Alert.alert('Validation Error', 'Vehicle Year is required.');
+          return false;
+        }
+        if (!vehiclePlateNumber.trim()) {
+          Alert.alert('Validation Error', 'Plate Number is required.');
+          return false;
+        }
+        if (!licenseNumber.trim()) {
+          Alert.alert('Validation Error', 'License Number is required.');
           return false;
         }
         if (preferredMaterialType.length === 0) {
-          Alert.alert('Error', 'Please select at least one preferred material type');
+          Alert.alert('Validation Error', 'Material Type is required. Please select at least one.');
           return false;
         }
         return true;
       
-      case 3: // Documents
-        return true; // Optional documents
-      
+      case 3:
+        if (!licensePhoto) {
+          Alert.alert('Validation Error', 'License Photo is required.');
+          return false;
+        }
+        if (!vehiclePhoto) {
+          Alert.alert('Validation Error', 'Vehicle Photo is required.');
+          return false;
+        }
+        if (!orCrPhoto) {
+          Alert.alert('Validation Error', 'OR/CR Photo is required.');
+          return false;
+        }
+        return true;
       default:
         return true;
     }
@@ -175,7 +224,7 @@ const RegisterForm = () => {
   };
 
   const handleRegister = async () => {
-    if (!validateStep(2)) return; // Final validation
+    if (!validateStep(2)) return;
 
     setLoading(true);
     try {
@@ -306,12 +355,14 @@ const RegisterForm = () => {
                 console.log('Driver created:', result.data.createDriver.driver);
                 console.log('Token:', result.data.createDriver.token);
                 
-                // @ts-ignore - The route is correctly defined in the type
-                navigation.navigate('(auth)/emailVerification' as any, {
-                  email: email.trim(),
-                  driverId: result.data.createDriver.driver?.driverId,
-                  token: result.data.createDriver.token,
-                  firstName: firstName.trim()
+                router.push({
+                  pathname: '/(auth)/emailVerification',
+                  params: {
+                    email: email.trim(),
+                    driverId: result.data.createDriver.driver?.driverId,
+                    token: result.data.createDriver.token,
+                    firstName: firstName.trim()
+                  }
                 });
               }
             }
@@ -334,25 +385,18 @@ const RegisterForm = () => {
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
       {steps.map((step, index) => (
-        <View key={index} style={styles.stepContainer}>
-          <View style={[
-            styles.stepCircle,
-            index <= currentStep && styles.stepCircleActive
-          ]}>
-            <Text style={[
-              styles.stepNumber,
-              index <= currentStep && styles.stepNumberActive
-            ]}>
+        <React.Fragment key={index}>
+          <TouchableOpacity 
+            style={[styles.stepCircle, currentStep >= index && styles.stepCircleActive]}
+            onPress={() => setCurrentStep(index)}
+            disabled={currentStep < index}
+          >
+            <Text style={[styles.stepNumber, currentStep >= index && styles.stepNumberActive]}>
               {index + 1}
             </Text>
-          </View>
-          <Text style={[
-            styles.stepLabel,
-            index === currentStep && styles.stepLabelActive
-          ]}>
-            {step}
-          </Text>
-        </View>
+          </TouchableOpacity>
+          {index < steps.length - 1 && <View style={[styles.stepLine, currentStep >= index && styles.stepLineActive]} />}
+        </React.Fragment>
       ))}
     </View>
   );
@@ -368,25 +412,63 @@ const RegisterForm = () => {
       multiline?: boolean;
       autoCapitalize?: any;
       required?: boolean;
+      togglePassword?: () => void;
+      showPassword?: boolean;
+      isContactNumber?: boolean;
     }
-  ) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>
-        {label} {options?.required && <Text style={styles.required}>*</Text>}
-      </Text>
-      <TextInput
-        style={[styles.input, options?.multiline && styles.multilineInput]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={options?.placeholder || `Enter ${label.toLowerCase()}`}
-        keyboardType={options?.keyboardType || 'default'}
-        secureTextEntry={options?.secureTextEntry || false}
-        multiline={options?.multiline || false}
-        autoCapitalize={options?.autoCapitalize || 'words'}
-        placeholderTextColor="#999"
-      />
-    </View>
-  );
+  ) => {
+    const isPasswordInput = options?.secureTextEntry !== undefined;
+    const isContactNumberInput = options?.isContactNumber;
+    
+    return (
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>
+          {label} {options?.required && <Text style={styles.required}>*</Text>}
+        </Text>
+        <View style={isPasswordInput ? styles.passwordContainer : isContactNumberInput ? styles.mobileInputGroup : null}>
+          {isContactNumberInput && (
+            <View style={styles.countryCodeContainer}>
+              <Text style={styles.countryText}>🇵🇭</Text>
+              <Text style={styles.countryCodeText}>+63</Text>
+            </View>
+          )}
+          <TextInput
+            style={[
+              styles.input, 
+              options?.multiline && styles.multilineInput,
+              isPasswordInput && styles.passwordInput,
+              isContactNumberInput && styles.mobileInput
+            ]}
+            value={value}
+            onChangeText={(text) => {
+              if (isContactNumberInput) {
+                // Regex to allow only digits and limit to 10 characters
+                const cleanedText = text.replace(/[^0-9]/g, '');
+                onChangeText(cleanedText.slice(0, 10));
+              } else {
+                onChangeText(text);
+              }
+            }}
+            placeholder={options?.placeholder || `Enter ${label.toLowerCase()}`}
+            keyboardType={options?.keyboardType || 'default'}
+            secureTextEntry={options?.secureTextEntry}
+            multiline={options?.multiline || false}
+            autoCapitalize={options?.autoCapitalize || 'words'}
+            placeholderTextColor="#999"
+          />
+          {isPasswordInput && (
+            <TouchableOpacity onPress={options?.togglePassword} style={styles.passwordToggle}>
+              <Ionicons
+                name={options?.showPassword ? "eye-off-outline" : "eye-outline"}
+                size={22}
+                color="#666"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
 
   const renderSelectButton = (
     label: string,
@@ -456,23 +538,61 @@ const RegisterForm = () => {
 
   const renderStepContent = () => {
     switch (currentStep) {
-      case 0: // Personal Info
+      case 0:
         return (
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Personal Information</Text>
             <Text style={styles.stepDescription}>Let's start with your basic information</Text>
             
-            {renderInput('First Name', firstName, setFirstName, { required: true })}
+            {renderInput('First Name', firstName, setFirstName, { required: true, placeholder: 'Enter First Name' })}
             {renderInput('Middle Name', middleName, setMiddleName, { placeholder: 'Optional' })}
-            {renderInput('Last Name', lastName, setLastName, { required: true })}
+            {renderInput('Last Name', lastName, setLastName, { required: true, placeholder: 'Enter Last Name' })}
             {renderInput('Address', address, setAddress, { 
               multiline: true, 
               placeholder: 'Your complete address (optional)' 
             })}
+
+            <View style={styles.formButtonContainer}>
+              {currentStep > 0 && (
+                  <TouchableOpacity
+                      style={[styles.button, styles.backButton]}
+                      onPress={prevStep}
+                  >
+                      <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                  style={[
+                      styles.button,
+                      styles.nextButton,
+                      currentStep === 0 && styles.singleButton
+                  ]}
+                  onPress={nextStep}
+              >
+                  <Text style={styles.nextButtonText}>Next →</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View>
+              <Text style={styles.socialSeparator}>or Register with</Text>
+              <View style={styles.socialButtonsContainer}>
+                <TouchableOpacity style={styles.socialButton}>
+                  <Ionicons name="logo-facebook" size={22} color="#1877F2" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialButton}>
+                  <Ionicons name="logo-google" size={22} color="#DB4437" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.socialButton}>
+                  <Ionicons name="logo-apple" size={22} color="#000" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+                <Text style={styles.loginLink}>Already have an account? <Text style={styles.loginLinkBold}>Log in</Text></Text>
+              </TouchableOpacity>
+            </View>
           </View>
         );
 
-      case 1: // Account Setup
+      case 1:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Account Setup</Text>
@@ -483,65 +603,106 @@ const RegisterForm = () => {
               autoCapitalize: 'none',
               required: true
             })}
-            {renderInput('Contact Number', contactNumber, setContactNumber, {
-              keyboardType: 'phone-pad',
-              required: true
+            {renderInput('Contact Number', contactNumber, setContactNumber, { 
+              keyboardType: 'number-pad',
+              required: true, 
+              isContactNumber: true 
             })}
             {renderInput('Password', password, setPassword, {
-              secureTextEntry: true,
+              secureTextEntry: !showPassword,
               placeholder: 'At least 6 characters',
-              required: true
+              required: true,
+              togglePassword: () => setShowPassword(!showPassword),
+              showPassword: showPassword
             })}
             {renderInput('Confirm Password', confirmPassword, setConfirmPassword, {
-              secureTextEntry: true,
+              secureTextEntry: !showConfirmPassword,
               placeholder: 'Re-enter your password',
-              required: true
+              required: true,
+              togglePassword: () => setShowConfirmPassword(!showConfirmPassword),
+              showPassword: showConfirmPassword
             })}
+
+            <View style={styles.formButtonContainer}>
+              {currentStep > 0 && (
+                  <TouchableOpacity
+                      style={[styles.button, styles.backButton]}
+                      onPress={prevStep}
+                  >
+                      <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                  style={[
+                      styles.button,
+                      styles.nextButton
+                  ]}
+                  onPress={nextStep}
+              >
+                  <Text style={styles.nextButtonText}>Next</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         );
 
-      case 2: // Vehicle Details
+      case 2:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Vehicle Information</Text>
             <Text style={styles.stepDescription}>Tell us about your vehicle</Text>
-            
-            {renderSelectButton('Vehicle Type', vehicleTypes, [vehicleType], (values) => setVehicleType(values[0] || ''))}
-            
-            {renderInput('Vehicle Model', vehicleModel, setVehicleModel, {
-              placeholder: 'e.g., Toyota Vios, Honda Click'
-            })}
-            {renderInput('Vehicle Year', vehicleYear?.toString() || '', (text) => {
-              const year = parseInt(text);
-              setVehicleYear(isNaN(year) ? undefined : year);
-            }, { keyboardType: 'numeric' })}
-            {renderInput('Plate Number', vehiclePlateNumber, setVehiclePlateNumber, {
-              autoCapitalize: 'characters',
-              placeholder: 'ABC-1234'
-            })}
-            {renderInput('License Number', licenseNumber, setLicenseNumber, {
-              autoCapitalize: 'characters',
-              placeholder: 'Your driver\'s license number'
-            })}
-            
+            {renderSelectButton('Vehicle Type', vehicleTypes, [vehicleType], (values) => setVehicleType(values[0] || ''), false)}
+            {renderInput('Vehicle Model', vehicleModel, setVehicleModel, { required: true, placeholder: 'e.g., Toyota Vios, Honda Click' })}
+            {renderInput('Vehicle Year', vehicleYear?.toString() || '', (text) => { const year = parseInt(text); setVehicleYear(isNaN(year) ? undefined : year); }, { keyboardType: 'numeric', required: true })}
+            {renderInput('Plate Number', vehiclePlateNumber, setVehiclePlateNumber, { autoCapitalize: 'characters', required: true, placeholder: 'ABC-1234' })}
+            {renderInput('License Number', licenseNumber, setLicenseNumber, { autoCapitalize: 'characters', required: true, placeholder: 'Your driver\'s license number' })}
             {renderSelectButton('Preferred Material Types', materialTypes, preferredMaterialType, setPreferredMaterialType, true)}
+            <View style={styles.formButtonContainer}>
+              {currentStep > 0 && (
+                <TouchableOpacity style={[styles.button, styles.backButton]} onPress={prevStep} >
+                  <Text style={styles.backButtonText}>Back</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[ styles.button, styles.nextButton ]} onPress={nextStep} >
+                <Text style={styles.nextButtonText}>Next</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         );
 
-      case 3: // Documents
+      case 3:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Upload Documents</Text>
             <Text style={styles.stepDescription}>Upload your photos and documents (optional but recommended)</Text>
             
             {renderImagePicker('Profile Picture', profilePicture, () => pickImage(setProfilePicture))}
-            {renderImagePicker('Vehicle Photo', vehiclePhoto, () => pickImage(setVehiclePhoto))}
-            {renderImagePicker('License Photo', licensePhoto, () => pickImage(setLicensePhoto))}
-            {renderImagePicker('OR/CR Photo', orCrPhoto, () => pickImage(setOrCrPhoto))}
+            {renderImagePicker('Vehicle Photo', vehiclePhoto, () => pickImage(setVehiclePhoto), true)}
+            {renderImagePicker('License Photo', licensePhoto, () => pickImage(setLicensePhoto), true)}
+            {renderImagePicker('OR/CR Photo', orCrPhoto, () => pickImage(setOrCrPhoto), true)}
+
+            <View style={styles.formButtonContainer}>
+                {currentStep > 0 && (
+                    <TouchableOpacity
+                        style={[styles.button, styles.backButton]}
+                        onPress={prevStep}
+                    >
+                        <Text style={styles.backButtonText}>Back</Text>
+                    </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                    style={[
+                        styles.button,
+                        styles.nextButton
+                    ]}
+                    onPress={nextStep}
+                >
+                    <Text style={styles.nextButtonText}>Next</Text>
+                </TouchableOpacity>
+            </View>
           </View>
         );
 
-      case 4: // Review
+      case 4:
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Review Your Information</Text>
@@ -574,6 +735,29 @@ const RegisterForm = () => {
               <Text style={styles.reviewItem}>License Photo: {licensePhoto ? '✓' : '✗'}</Text>
               <Text style={styles.reviewItem}>OR/CR Photo: {orCrPhoto ? '✓' : '✗'}</Text>
             </View>
+
+            <View style={styles.formButtonContainer}>
+              {currentStep > 0 && (
+                  <TouchableOpacity
+                      style={[styles.button, styles.backButton]}
+                      onPress={prevStep}
+                  >
+                      <Text style={styles.backButtonText}>Back</Text>
+                  </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                  style={[
+                      styles.button,
+                      styles.nextButton
+                  ]}
+                  onPress={handleRegister}
+                  disabled={loading}
+              >
+                  <Text style={styles.nextButtonText}>
+                      {loading ? 'Registering...' : 'Complete Registration'}
+                  </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         );
 
@@ -588,7 +772,19 @@ const RegisterForm = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Driver Registration</Text>
+        <Text style={styles.logo}>✨</Text>
+        <Text style={styles.title}>Ads2go</Text>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tab, styles.tabInactive]}
+            onPress={() => router.push('/(auth)/login')} 
+          >
+            <Text style={styles.tabTextInactive}>Log In</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tab, styles.tabActive]}>
+            <Text style={styles.tabTextActive}>Register</Text>
+          </TouchableOpacity>
+        </View>
         {renderProgressBar()}
       </View>
 
@@ -599,103 +795,105 @@ const RegisterForm = () => {
       >
         {renderStepContent()}
       </ScrollView>
-
-      <View style={styles.buttonContainer}>
-        {currentStep > 0 && (
-          <TouchableOpacity
-            style={[styles.button, styles.backButton]}
-            onPress={prevStep}
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </TouchableOpacity>
-        )}
-        
-        <TouchableOpacity
-          style={[
-            styles.button,
-            styles.nextButton,
-            currentStep === 0 && styles.singleButton
-          ]}
-          onPress={currentStep === steps.length - 1 ? handleRegister : nextStep}
-          disabled={loading}
-        >
-          <Text style={styles.nextButtonText}>
-            {loading ? 'Registering...' : 
-             currentStep === steps.length - 1 ? 'Complete Registration' : 
-             'Next →'}
-          </Text>
-        </TouchableOpacity>
-      </View>
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
+  container: { flex: 1, backgroundColor: "#fff", justifyContent: "center", padding: 20 },
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e5e9',
+    alignItems: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#2c3e50',
-    marginBottom: 20,
+    color: '#000',
+    marginBottom: 5,
   },
+  logo: { fontSize: 30 },
   progressContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  stepContainer: {
-    alignItems: 'center',
-    flex: 1,
+    marginVertical: 20,
   },
   stepCircle: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e1e5e9',
+    backgroundColor: '#d8d8d8',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 5,
   },
   stepCircleActive: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1B5087',
+  },
+  stepLine: {
+    height: 2,
+    width: 25,
+    backgroundColor: '#d8d8d8',
+    marginHorizontal: 5,
+  },
+  stepLineActive: {
+    backgroundColor: '#1B5087',
   },
   stepNumber: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#7f8c8d',
   },
   stepNumberActive: {
     color: '#fff',
   },
-  stepLabel: {
-    fontSize: 10,
-    color: '#7f8c8d',
-    textAlign: 'center',
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f2f2f2',
+    borderRadius: 10,
+    padding: 5,
+    width: '100%',
+    marginTop: 15,
+    marginBottom: 5,
   },
-  stepLabelActive: {
-    color: '#3498db',
-    fontWeight: '600',
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tabInactive: {
+    backgroundColor: 'transparent',
+  },
+  tabText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#555',
+  },
+  tabTextActive: {
+    color: '#1B5087',
+    fontWeight: 'bold',
+  },
+  tabTextInactive: {
+    color: '#999',
   },
   content: {
     flex: 1,
+    backgroundColor: '#ffffffff',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   stepContent: {
-    padding: 20,
+    paddingVertical: 20,
   },
   stepTitle: {
     fontSize: 24,
@@ -712,9 +910,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2c3e50',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#555',
     marginBottom: 8,
   },
   required: {
@@ -723,12 +921,26 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#e1e5e9',
-    borderRadius: 8,
+    borderColor: '#ccc',
+    borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
-    fontSize: 16,
     color: '#2c3e50',
+  },
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 10,
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+    marginBottom: 0,
+  },
+  passwordToggle: {
+    padding: 5,
   },
   multilineInput: {
     minHeight: 80,
@@ -747,8 +959,8 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   optionButtonSelected: {
-    backgroundColor: '#3498db',
-    borderColor: '#3498db',
+    backgroundColor: '#FF9800',
+    borderColor: '#FF9800',
   },
   optionText: {
     fontSize: 14,
@@ -769,7 +981,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageButtonSelected: {
-    borderColor: '#3498db',
+    borderColor: '#fff',
     borderStyle: 'solid',
   },
   imagePlaceholder: {
@@ -808,30 +1020,25 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     lineHeight: 20,
   },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
+  formButtonContainer: {
     flexDirection: 'row',
-    padding: 20,
-    paddingBottom: 30,
-    borderTopWidth: 1,
-    borderTopColor: '#e1e5e9',
+    paddingTop: 20,
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   button: {
     flex: 1,
     paddingVertical: 15,
-    borderRadius: 8,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   singleButton: {
+    marginHorizontal: 0,
     marginLeft: 0,
   },
   backButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e1e5e9',
     marginRight: 10,
@@ -842,13 +1049,74 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   nextButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1B5087',
     marginLeft: 10,
   },
   nextButtonText: {
     fontSize: 16,
     color: '#fff',
-    fontWeight: '600',
+    fontWeight: 'bold',
+  },
+  socialSeparator: {
+    textAlign: 'center',
+    color: '#999',
+    marginVertical: 20,
+    fontSize: 14,
+  },
+  socialButtonsContainer: {
+    flexDirection: "row", 
+    justifyContent: "center", 
+    gap: 15
+  },
+  socialButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#f2f2f2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loginLink: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#555',
+    marginTop: 20,
+  },
+  loginLinkBold: {
+    fontWeight: 'bold',
+    color: '#1B5087',
+  },
+  mobileInputGroup: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  countryCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    backgroundColor: '#f8f8f8',
+    borderRightWidth: 1,
+    borderRightColor: '#e1e5e9',
+  },
+  countryText: {
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  countryCodeText: {
+    marginLeft: 8,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  mobileInput: {
+    flex: 1,
+    borderWidth: 0,
+    marginBottom: 0,
+    padding: 15,
+    fontSize: 16,
   },
 });
 
