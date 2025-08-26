@@ -195,7 +195,7 @@ const AppContent: React.FC = () => {
           }
         />
         <Route
-          path="/admin/settings"
+          path="/admin/SiteSettings"
           element={
             <ProtectedRoute>
               <SiteSettings />
