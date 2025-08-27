@@ -1,11 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebase';
 
 const Login: React.FC = () => {
   const { navigateToRegister, setUser } = useAuth();
@@ -16,40 +14,27 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
 
   const [loginUser, { loading }] = useMutation(LOGIN_MUTATION, {
-    onCompleted: async (data) => {
+    onCompleted(data) {
       console.log('Login successful:', data);
 
       const { token, user } = data.loginUser;
 
-      try {
-        // Sign in to Firebase with email/password
-        const firebaseAuth = getAuth();
-        const userCredential = await signInWithEmailAndPassword(firebaseAuth, email, password);
-        const firebaseToken = await userCredential.user.getIdToken();
-        
-        // Store both tokens and user data
-        localStorage.setItem('token', token);
-        localStorage.setItem('firebaseToken', firebaseToken);
-        localStorage.setItem('user', JSON.stringify(user));
-        setUser(user);
+      localStorage.setItem('token', token);
+      // Store user data including firstName in localStorage for Dashboard access
+      localStorage.setItem('user', JSON.stringify(user));
+      setUser(user);
 
-        if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {
-          setError('Admin users must use the dedicated admin login page.');
-          // Sign out from Firebase if not allowed
-          await getAuth().signOut();
-          return;
-        }
-
-        if (!user.isEmailVerified) {
-          navigate('/verify-email');
-          return;
-        }
-
-        navigate('/dashboard');
-      } catch (error) {
-        console.error('Firebase sign in error:', error);
-        setError('Failed to authenticate with Firebase. Please try again.');
+      if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {
+        setError('Admin users must use the dedicated admin login page.');
+        return;
       }
+
+      if (!user.isEmailVerified) {
+        navigate('/verify-email');
+        return;
+      }
+
+      navigate('/dashboard');
     },
     onError(error) {
       console.error('Login error:', error);

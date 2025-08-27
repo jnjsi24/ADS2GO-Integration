@@ -31,6 +31,8 @@ const adResolvers = {
 
     getAdById: async (_, { id }, { user }) => {
       checkAuth(user);
+
+      // Only admins can view any ad
       if (!['ADMIN', 'SUPERADMIN'].includes(user.role)) {
         throw new Error('Not authorized to view ads');
       }
@@ -67,6 +69,11 @@ const adResolvers = {
       const material = await Material.findById(input.materialId);
       if (!material) throw new Error('Material not found');
 
+      // IMPORTANT: Ensure mediaFile is a Firebase Storage URL
+      if (!input.mediaFile || !input.mediaFile.startsWith('http')) {
+        throw new Error('Media file must be uploaded to Firebase first');
+      }
+
       // Calculate total price
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
@@ -92,14 +99,15 @@ const adResolvers = {
         impressions: 0,
         reasonForReject: null,
         approveTime: null,
-        rejectTime: null
+        rejectTime: null,
       });
 
       const savedAd = await ad.save();
 
       return await Ad.findById(savedAd._id)
         .populate('planId')
-        .populate('materialId');
+        .populate('materialId')
+        .populate('userId');
     },
 
     updateAd: async (_, { id, input }, { user }) => {
@@ -170,7 +178,14 @@ const adResolvers = {
         if (input.adFormat) ad.adFormat = input.adFormat;
         if (input.title !== undefined) ad.title = input.title;
         if (input.description !== undefined) ad.description = input.description;
-        if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
+
+        if (input.mediaFile !== undefined) {
+          if (!input.mediaFile.startsWith('http')) {
+            throw new Error('Media file must be a Firebase Storage URL');
+          }
+          ad.mediaFile = input.mediaFile;
+        }
+
         if (input.materialId !== undefined) ad.materialId = input.materialId;
 
       } else {
@@ -192,7 +207,14 @@ const adResolvers = {
         if (input.adFormat) ad.adFormat = input.adFormat;
         if (input.title !== undefined) ad.title = input.title;
         if (input.description !== undefined) ad.description = input.description;
-        if (input.mediaFile !== undefined) ad.mediaFile = input.mediaFile;
+
+        if (input.mediaFile !== undefined) {
+          if (!input.mediaFile.startsWith('http')) {
+            throw new Error('Media file must be a Firebase Storage URL');
+          }
+          ad.mediaFile = input.mediaFile;
+        }
+
         if (input.materialId !== undefined) ad.materialId = input.materialId;
       }
 
