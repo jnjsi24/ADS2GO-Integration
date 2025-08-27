@@ -20,9 +20,9 @@ class EmailService {
   // Send verification email
   static async sendVerificationEmail(email, code) {
     const mailOptions = {
-      from: `TradeIN <${process.env.EMAIL_USER}>`,
+      from: `Ads2Go <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: 'TradeIN Email Verification',
+      subject: 'Ads2Go Email Verification',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -61,9 +61,9 @@ class EmailService {
     const resetLink = `http://localhost:4000/reset-password?token=${resetToken}`;
   
     const mailOptions = {
-      from: `TradeIN <${process.env.EMAIL_USER}>`,
+      from: `Ads2Go <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: 'Reset Your TradeIN Password',
+      subject: 'Reset Your Ads2Go Password',
       html: `
         <h1>Password Reset Request</h1>
         <p>Click the link below to reset your password:</p>
