@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2 } from 'lucide-react';
+import { storage } from '../../firebase/init';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/queries/adsPlans';
 import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/queries/materials';
 import { CREATE_AD } from '../../graphql/mutations/createAd';
@@ -46,6 +48,7 @@ const CreateAdvertisement: React.FC = () => {
   });
   const [materials, setMaterials] = useState<any[]>([]);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Automatically fetch and select material based on selected plan
   const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
@@ -135,6 +138,39 @@ const CreateAdvertisement: React.FC = () => {
     }
   };
 
+  // Firebase Storage upload function
+  const uploadFileToFirebase = async (file: File): Promise<string> => {
+    try {
+      setUploadProgress(0);
+      
+      // Generate unique filename with timestamp
+      const timestamp = new Date().getTime();
+      const fileExtension = file.name.split('.').pop() || '';
+      const fileName = `advertisements/${timestamp}_${file.name}`;
+      
+      // Create Firebase Storage reference
+      const storageRef = ref(storage, fileName);
+      
+      console.log('Uploading file to Firebase:', fileName, 'Size:', file.size, 'bytes');
+      
+      // Upload file to Firebase Storage
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      console.log('File uploaded successfully. Download URL:', downloadURL);
+      setUploadProgress(100);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading file to Firebase:', error);
+      throw new Error('Failed to upload media file to Firebase Storage');
+    } finally {
+      setUploadProgress(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -154,24 +190,8 @@ const CreateAdvertisement: React.FC = () => {
     }
 
     try {
-      // Upload media file
-      const mediaFormData = new FormData();
-      mediaFormData.append('file', formData.mediaFile);
-
-      console.log('Uploading file:', formData.mediaFile.name, 'Size:', formData.mediaFile.size, 'bytes');
-
-      const mediaResponse = await fetch('http://localhost:5000/upload', {
-        method: 'POST',
-        body: mediaFormData,
-        credentials: 'include',
-      });
-
-      const responseData = await mediaResponse.json();
-      console.log('Upload response:', responseData);
-
-      if (!mediaResponse.ok) {
-        throw new Error(responseData.error || 'Failed to upload media file');
-      }
+      // Upload media file to Firebase Storage
+      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile);
 
       // Determine ad format based on file type
       const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
@@ -192,10 +212,10 @@ const CreateAdvertisement: React.FC = () => {
           (formData.startTime ? new Date(formData.startTime) : new Date()).getTime() +
           selectedPlan.durationDays * 24 * 60 * 60 * 1000
         ).toISOString(),
-        mediaFile: `/uploads/${responseData.filename}`
+        mediaFile: mediaFileURL // Use Firebase download URL instead of local path
       };
 
-      // Create the ad with the media URL
+      // Create the ad with the Firebase media URL
       await createAd({
         variables: { input },
       });
@@ -437,6 +457,22 @@ const CreateAdvertisement: React.FC = () => {
             </p>
           </label>
         </div>
+
+        {/* Upload Progress Indicator */}
+        {uploadProgress !== null && (
+          <div className="mt-4">
+            <div className="flex justify-between text-sm text-gray-600 mb-2">
+              <span>Uploading to Firebase...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-[#251f70] h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
 
         {formData.mediaPreview && (
           <div className="mt-6">
