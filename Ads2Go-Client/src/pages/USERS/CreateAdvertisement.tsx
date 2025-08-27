@@ -111,7 +111,7 @@ const CreateAdvertisement: React.FC = () => {
       .map((plan: any) => ({
         _id: plan.id,
         name: plan.name,
-        description: plan.description || `${plan.materialType} for ${plan.vehicleType}`,
+        description: plan.description,
         durationDays: plan.durationDays || 30,
         totalPrice: plan.totalPrice || 0,
         materialType: plan.materialType,

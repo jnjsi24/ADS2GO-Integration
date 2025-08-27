@@ -5,6 +5,7 @@ export const GET_ALL_ADS_PLANS = gql`
     getAllAdsPlans {
       id
       name
+      description
       category
       materialType
       vehicleType
@@ -36,6 +37,7 @@ export const GET_FILTERED_ADS_PLANS = gql`
     ) {
       id
       name
+      description
       category
       materialType
       vehicleType

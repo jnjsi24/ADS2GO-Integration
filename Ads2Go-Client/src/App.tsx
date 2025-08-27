@@ -33,6 +33,7 @@ import ManageRiders from './pages/ADMIN/ManageRiders';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
+import ManageAds from 'pages/ADMIN/ManageAds';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -116,7 +117,7 @@ const AppContent: React.FC = () => {
           path="/create-advertisement"
           element={
             <ProtectedRoute>
-<CreateAdvertisement />
+              <CreateAdvertisement />
             </ProtectedRoute>
           }
         />
@@ -234,6 +235,14 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/manage-ads"
+          element={
+            <ProtectedRoute>
+              <ManageAds />
+            </ProtectedRoute>
+          }
+          />
 
         {/* Protected SuperAdmin Routes */}
         <Route
