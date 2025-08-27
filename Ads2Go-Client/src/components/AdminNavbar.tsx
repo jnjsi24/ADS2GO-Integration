@@ -33,6 +33,8 @@ const AdminSidebar: React.FC = () => {
     { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> },
     { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
     { label: 'AdsPanel', path: '/admin/ads', icon: <Megaphone size={20} /> },
+    { label: 'Manage Ads', path: '/admin/manage-ads', icon: <Megaphone size={20} /> },
+
   ];
 
   return (
