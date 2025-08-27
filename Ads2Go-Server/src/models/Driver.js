@@ -34,7 +34,7 @@ const DriverSchema = new mongoose.Schema(
     licenseNumber: { type: String, required: true, trim: true, uppercase: true },
     licensePictureURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
     vehiclePlateNumber: { type: String, required: true, trim: true, uppercase: true },
-    vehicleType: { type: String, required: true, enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'], set: v => v.toUpperCase() },
+    vehicleType: { type: String, required: true, enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'], set: v => v.toUpperCase() },
     vehicleModel: { type: String, required: true, trim: true },
     vehicleYear: { type: Number, required: true, min: 1900 },
     vehiclePhotoURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
@@ -95,7 +95,7 @@ const DriverSchema = new mongoose.Schema(
       licenseNumber: String, // Added to match GraphQL schema
       licensePictureURL: String, // Added to match GraphQL schema
       vehiclePlateNumber: String, // Added to match GraphQL schema
-      vehicleType: { type: String, enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'] }, // Added to match GraphQL schema
+      vehicleType: { type: String, enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'] }, // Added to match GraphQL schema
       vehicleModel: String, // Added to match GraphQL schema
       vehicleYear: Number, // Added to match GraphQL schema
       vehiclePhotoURL: String, // Added to match GraphQL schema

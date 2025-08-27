@@ -8,7 +8,7 @@ const allowedMaterialsByVehicle = {
   CAR: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
   BUS: ['STICKER', 'HEADDRESS'],
   JEEP: ['POSTER', 'STICKER'],
-  MOTOR: ['LCD', 'BANNER'],
+  MOTORCYCLE: ['LCD', 'BANNER'],
   E_TRIKE: ['BANNER', 'LCD'],
 };
 
