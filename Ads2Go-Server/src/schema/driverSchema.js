@@ -39,7 +39,7 @@ const typeDefs = gql`
 
   enum VehicleType {
     CAR
-    MOTOR
+    MOTORCYCLE
     BUS
     JEEP
     E_TRIKE

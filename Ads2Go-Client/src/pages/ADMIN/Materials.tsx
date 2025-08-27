@@ -137,14 +137,14 @@ interface Driver {
 }
 
 interface DriverWithVehicleType extends Driver {
-  vehicleType: 'CAR' | 'MOTOR' | 'BUS' | 'JEEP' | 'E_TRIKE';
+  vehicleType: 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
   preferredMaterialType?: ('POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER')[];
 }
 
 interface Material {
   id: string;
   materialId: string;
-  vehicleType: 'CAR' | 'MOTOR' | 'BUS' | 'JEEP' | 'E_TRIKE';
+  vehicleType: 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
   materialType: 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER';
   description?: string;
   requirements: string;
@@ -158,10 +158,11 @@ interface Material {
 }
 
 interface CreateMaterialInput {
-  vehicleType: 'CAR' | 'MOTOR' | 'BUS' | 'JEEP' | 'E_TRIKE';
+  vehicleType: 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
   materialType: 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER';
   description: string;
   requirements: string;
+  materialId: string;
   category: 'DIGITAL' | 'NON_DIGITAL';
 }
 
@@ -169,14 +170,14 @@ interface CreateMaterialInput {
 const VEHICLE_MATERIAL_MAP = {
   DIGITAL: {
     CAR: ['HEADDRESS', 'LCD'],
-    MOTOR: ['LCD'],
+    MOTORCYCLE: ['LCD'],
     BUS: ['LCD'],
     JEEP: ['LCD'],
     E_TRIKE: ['LCD']
   },
   NON_DIGITAL: {
     CAR: ['BANNER', 'STICKER'],
-    MOTOR: ['BANNER', 'STICKER'],
+    MOTORCYCLE: ['BANNER', 'STICKER'],
     BUS: ['BANNER', 'STICKER'],
     JEEP: ['BANNER', 'STICKER'],
     E_TRIKE: ['BANNER', 'STICKER']
@@ -1010,7 +1011,7 @@ const Materials: React.FC = () => {
                   required
                 >
                   <option value="CAR">Car</option>
-                  <option value="MOTOR">Motor</option>
+                  <option value="MOTORCYCLE">Motorcycle</option>
                   <option value="BUS">Bus</option>
                   <option value="JEEP">Jeep</option>
                   <option value="E_TRIKE">E-Trike</option>

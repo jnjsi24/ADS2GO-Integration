@@ -75,7 +75,7 @@ const RegisterForm = () => {
     'Review'
   ];
 
-  const vehicleTypes = ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E-TRIKE'];
+  const vehicleTypes = ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E-TRIKE'];
   const materialTypes = ['LCD', 'HEADDRESS'];
 
   const pickImage = async (setImage: React.Dispatch<React.SetStateAction<any>>) => {
