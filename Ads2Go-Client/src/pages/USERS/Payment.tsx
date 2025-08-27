@@ -39,6 +39,76 @@ const CREATE_PAYMENT = gql`
   }
 `;
 
+// Media display component for payment preview
+const PaymentMediaPreview: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
+  mediaFile, 
+  adFormat, 
+  productName 
+}) => {
+  const [mediaError, setMediaError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const handleError = () => {
+    setMediaError(true);
+    setIsLoading(false);
+  };
+
+  const handleLoad = () => {
+    setIsLoading(false);
+  };
+
+  if (mediaError || !mediaFile) {
+    return (
+      <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
+        <span className="text-xs text-gray-500 text-center">No Media</span>
+      </div>
+    );
+  }
+
+  if (adFormat === 'VIDEO') {
+    return (
+      <div className="w-20 h-20 rounded-lg overflow-hidden bg-black flex items-center justify-center relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+            <span className="text-xs text-gray-500">Loading...</span>
+          </div>
+        )}
+        <video
+          src={mediaFile}
+          className="max-w-full max-h-full object-cover"
+          muted
+          preload="metadata"
+          onError={handleError}
+          onLoadedData={handleLoad}
+          onLoadStart={() => setIsLoading(false)}
+        />
+        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+          <div className="w-5 h-5 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
+            <div className="w-0 h-0 border-l-[5px] border-l-gray-700 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent ml-0.5"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+          <span className="text-xs text-gray-500">Loading...</span>
+        </div>
+      )}
+      <img
+        src={mediaFile}
+        alt={`${productName} preview`}
+        className="max-w-full max-h-full object-cover"
+        onError={handleError}
+        onLoad={handleLoad}
+      />
+    </div>
+  );
+};
+
 const Payment: React.FC = () => {
   const [paymentType, setPaymentType] = useState<string>('');
   const [cardDetails, setCardDetails] = useState({
@@ -141,10 +211,30 @@ const Payment: React.FC = () => {
       {/* Display Payment Item Details if coming from PaymentHistory */}
       {paymentItem && (
         <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-lg">
-          <h3 className="font-semibold text-lg">Payment for: {paymentItem.productName}</h3>
-          <p className="text-sm">Plan: {paymentItem.plan}</p>
-          <p className="text-sm">Ad ID: {paymentItem.id}</p>
-          <p className="text-xl font-bold mt-2">Amount Due: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}</p>
+          <div className="flex items-center space-x-4 mb-4">
+            <PaymentMediaPreview 
+              mediaFile={paymentItem.imageUrl} 
+              adFormat={paymentItem.adFormat} 
+              productName={paymentItem.productName}
+            />
+            <div className="flex-grow">
+              <h3 className="font-semibold text-lg text-blue-900">{paymentItem.productName}</h3>
+              <div className="text-sm text-blue-700 mt-1 space-y-1">
+                <p>Plan: {paymentItem.plan}</p>
+                <p>Ad ID: {paymentItem.id}</p>
+                <p>Format: {paymentItem.adFormat}</p>
+                <p>Type: {paymentItem.adType}</p>
+                {paymentItem.adLengthSeconds > 0 && (
+                  <p>Duration: {paymentItem.adLengthSeconds}s</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="border-t border-blue-300 pt-3">
+            <p className="text-xl font-bold text-blue-900">
+              Amount Due: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+            </p>
+          </div>
         </div>
       )}
 

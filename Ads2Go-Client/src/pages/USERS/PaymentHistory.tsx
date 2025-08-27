@@ -53,6 +53,76 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
   }
 `;
 
+// Media display component to handle both images and videos
+const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
+  mediaFile, 
+  adFormat, 
+  productName 
+}) => {
+  const [mediaError, setMediaError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const handleError = () => {
+    setMediaError(true);
+    setIsLoading(false);
+  };
+
+  const handleLoad = () => {
+    setIsLoading(false);
+  };
+
+  if (mediaError) {
+    return (
+      <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
+        <span className="text-xs text-gray-500 text-center">No Media</span>
+      </div>
+    );
+  }
+
+  if (adFormat === 'VIDEO') {
+    return (
+      <div className="w-24 h-24 rounded-lg overflow-hidden bg-black flex items-center justify-center relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+            <span className="text-xs text-gray-500">Loading...</span>
+          </div>
+        )}
+        <video
+          src={mediaFile}
+          className="max-w-full max-h-full object-cover"
+          muted
+          preload="metadata"
+          onError={handleError}
+          onLoadedData={handleLoad}
+          onLoadStart={() => setIsLoading(false)}
+        />
+        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+          <div className="w-6 h-6 bg-white bg-opacity-80 rounded-full flex items-center justify-center">
+            <div className="w-0 h-0 border-l-[6px] border-l-gray-700 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent ml-1"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
+      {isLoading && (
+        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
+          <span className="text-xs text-gray-500">Loading...</span>
+        </div>
+      )}
+      <img
+        src={mediaFile || "https://via.placeholder.com/80"}
+        alt={`${productName} preview`}
+        className="max-w-full max-h-full object-cover"
+        onError={handleError}
+        onLoad={handleLoad}
+      />
+    </div>
+  );
+};
+
 const PaymentHistory: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<Status | "All Status">("All Status");
   const [planFilter, setPlanFilter] = useState("All Plans");
@@ -242,11 +312,11 @@ const PaymentHistory: React.FC = () => {
             >
               {/* Main Product Info Section */}
               <div className="p-4 flex items-center space-x-4">
-                <div className="w-24 h-24 flex-shrink-0 flex items-center justify-center p-1 border border-gray-200 rounded-lg">
-                  <img
-                    src={item.imageUrl}
-                    alt={`${item.productName} image`}
-                    className="max-w-full max-h-full object-contain"
+                <div className="flex-shrink-0">
+                  <MediaDisplay 
+                    mediaFile={item.imageUrl} 
+                    adFormat={item.adFormat} 
+                    productName={item.productName}
                   />
                 </div>
                 <div className="flex-grow">
@@ -258,6 +328,7 @@ const PaymentHistory: React.FC = () => {
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{item.plan} Plan</p>
+                  <p className="text-xs text-gray-500 mt-1">Format: {item.adFormat}</p>
                 </div>
               </div>
 
