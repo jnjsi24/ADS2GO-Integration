@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,7 +22,7 @@ import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
 import History from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
-import AdDetailsPage from './pages/USERS/AdDetailsPage'; // New import for AdDetailsPage
+import AdDetailsPage from './pages/USERS/AdDetailsPage';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -41,6 +41,12 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+
+// Initialize Firebase when the app starts
+console.log('🚀 Initializing Firebase...');
+import('./firebase/init')
+  .then(() => console.log('🔥 Firebase initialization complete'))
+  .catch((error) => console.error('❌ Firebase initialization failed:', error));
 
 const AppContent: React.FC = () => {
   const { user } = useAuth();
