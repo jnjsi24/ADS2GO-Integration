@@ -16,6 +16,9 @@ import {
 import { GET_OWN_USER_DETAILS } from '../graphql/queries/getOwnUserDetails';
 import { jwtDecode } from 'jwt-decode';
 
+// 🚨 Firebase imports removed except analytics/storage usage
+import { auth } from '../firebase'; // still available for storage/analytics if needed
+
 // Types
 type UserRole = 'ADMIN' | 'USER' | 'SUPERADMIN';
 
@@ -79,8 +82,12 @@ export const AuthProvider: React.FC<{
     const initializeAuth = async () => {
       setIsLoading(true);
       setIsInitialized(false);
+
       const token = localStorage.getItem('token');
+
       if (!token) {
+        setUser(null);
+        setUserEmail('');
         setIsLoading(false);
         setIsInitialized(true);
         return;
@@ -89,20 +96,15 @@ export const AuthProvider: React.FC<{
       try {
         const decoded = jwtDecode<any>(token);
         if (!decoded?.email) {
-          localStorage.removeItem('token');
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
+          throw new Error('Invalid token');
         }
 
+        // Fetch user details from backend
         const { data } = await fetchUserDetails();
         const freshUserRaw = data?.getOwnUserDetails;
 
         if (!freshUserRaw) {
-          localStorage.removeItem('token');
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
+          throw new Error('User not found');
         }
 
         const freshUser: User = {
@@ -126,11 +128,10 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-          // Skip redirection if we're on the superadmin login page
           if (window.location.pathname === '/superadmin-login') {
             return;
           }
-          
+
           if (!freshUser.isEmailVerified) {
             hasRedirectedRef.current = true;
             navigate('/verify-email');
@@ -138,7 +139,6 @@ export const AuthProvider: React.FC<{
             publicPages.includes(window.location.pathname) ||
             window.location.pathname === '/verify-email'
           ) {
-            // ✅ Updated role-based redirection with check to avoid redundant redirects
             let redirectPath = '/home';
             if (freshUser.role === 'ADMIN') {
               redirectPath = '/admin';
@@ -153,14 +153,20 @@ export const AuthProvider: React.FC<{
           }
         }
       } catch (err) {
-        console.error('Error restoring auth:', err);
+        console.error('Error initializing auth:', err);
         localStorage.removeItem('token');
+        setUser(null);
+        setUserEmail('');
         setIsLoading(false);
         setIsInitialized(true);
       }
     };
 
-    initializeAuth();
+    initializeAuth().catch((err) => {
+      console.error('Error in initializeAuth:', err);
+      setIsLoading(false);
+      setIsInitialized(true);
+    });
   }, [fetchUserDetails, navigate]);
 
   const login = async (email: string, password: string): Promise<User | null> => {
@@ -171,6 +177,7 @@ export const AuthProvider: React.FC<{
         deviceName: navigator.userAgent,
       };
 
+      // ✅ Only authenticate with GraphQL API
       const { data } = await loginMutation({
         variables: { email, password, deviceInfo },
       });
@@ -219,7 +226,7 @@ export const AuthProvider: React.FC<{
 
         return user;
       } else {
-        throw new Error('Invalid login response');
+        throw new Error('Invalid login response from server');
       }
     } catch (error: any) {
       console.error('Login error:', error.message || error);
@@ -274,8 +281,15 @@ export const AuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
-      await logoutMutation();
+      // ✅ No Firebase signOut — only clear tokens and backend logout
       localStorage.removeItem('token');
+
+      try {
+        await logoutMutation();
+      } catch (error) {
+        console.error('Logout mutation error:', error);
+      }
+
       setUser(null);
       setUserEmail('');
       await apolloClient.resetStore();
@@ -294,33 +308,35 @@ export const AuthProvider: React.FC<{
     }
   }, []);
 
-  // Memoize the context value to prevent unnecessary re-renders
-  const contextValue = useMemo(() => ({
-    user,
-    userEmail,
-    setUser,
-    setUserEmail,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!user,
-    isLoading,
-    isInitialized,
-    navigate,
-    debugToken,
-    navigateToRegister,
-  }), [
-    user, 
-    userEmail, 
-    isLoading, 
-    isInitialized, 
-    login, 
-    register, 
-    logout, 
-    navigate, 
-    debugToken, 
-    navigateToRegister
-  ]);
+  const contextValue = useMemo(
+    () => ({
+      user,
+      userEmail,
+      setUser,
+      setUserEmail,
+      login,
+      register,
+      logout,
+      isAuthenticated: !!user,
+      isLoading,
+      isInitialized,
+      navigate,
+      debugToken,
+      navigateToRegister,
+    }),
+    [
+      user,
+      userEmail,
+      isLoading,
+      isInitialized,
+      login,
+      register,
+      logout,
+      navigate,
+      debugToken,
+      navigateToRegister,
+    ]
+  );
 
   return (
     <AuthContext.Provider value={contextValue}>
