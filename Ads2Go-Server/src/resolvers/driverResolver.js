@@ -407,44 +407,26 @@ createDriver: async (_, { input }) => {
     }).sort({ createdAt: 1 });
 
     if (availableMaterials.length === 0) {
-      // If no materials available but driver already has one assigned, still approve
-      if (driver.materialId) {
-        driver.accountStatus = 'ACTIVE';
-        driver.reviewStatus = 'APPROVED';
-        driver.approvalDate = new Date();
-        await driver.save();
-
-        const updatedDriver = await Driver.findOne({ driverId })
-          .populate({ path: 'material', select: 'materialId materialType vehicleType' });
-
-        return { 
-          success: true, 
-          message: 'Driver approved with existing material assignment',
-          driver: updatedDriver
-        };
-      }
-
       return { 
         success: false, 
-        message: 'Cannot approve driver. No available materials for the selected vehicle and material types.',
+        message: `Cannot approve driver. No available ${materialTypesToUse.join('/')} materials for vehicle type ${driver.vehicleType}.`,
         driver 
       };
     }
 
-    // Update driver status to approved
-    driver.accountStatus = 'ACTIVE';
-    driver.reviewStatus = 'APPROVED';
-    driver.approvalDate = new Date();
-
-    // Assign the first available material
+    // Assign the first available material first to ensure it's available
     const materialToAssign = availableMaterials[0];
     materialToAssign.driverId = driver.driverId;
-    materialToAssign.mountedAt = null;
+    materialToAssign.mountedAt = new Date();
     materialToAssign.dismountedAt = null;
     await materialToAssign.save();
 
+    // Then update driver status to approved with the assigned material
+    driver.accountStatus = 'ACTIVE';
+    driver.reviewStatus = 'APPROVED';
+    driver.approvalDate = new Date();
     driver.materialId = materialToAssign._id;
-    driver.installedMaterialType = null;
+    driver.installedMaterialType = materialToAssign.materialType;
 
     if (materialTypeOverride?.length > 0) {
       driver.adminOverride = true;
