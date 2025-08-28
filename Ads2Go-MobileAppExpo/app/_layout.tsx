@@ -26,7 +26,13 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)/register" />
         <Stack.Screen name="(auth)/emailVerification" options={{ title: 'Verify Email' }} />
         <Stack.Screen name="(auth)/verificationProgress" options={{ title: 'Verification Status' }} />
-        <Stack.Screen name="(auth)/forgotPass" /> 
+        <Stack.Screen 
+          name="(auth)/forgotPass" 
+          options={{ 
+            title: 'Reset Password',
+            headerShown: false 
+          }} 
+        /> 
         
         {/* Main App Tabs (only after login) */}
         <Stack.Screen name="(tabs)" />

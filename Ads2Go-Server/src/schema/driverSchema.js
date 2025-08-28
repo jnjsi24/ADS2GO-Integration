@@ -175,6 +175,12 @@ const typeDefs = gql`
     driver: Driver
   }
 
+  # NEW PASSWORD RESET RESPONSE TYPE
+  type PasswordResetResponse {
+    success: Boolean!
+    message: String!
+  }
+
   """
   INPUTS
   """
@@ -309,6 +315,10 @@ const typeDefs = gql`
     verifyDriverEmail(code: String!): DriverResponse!
     resendDriverVerificationCode(email: String!): Response!
     resetDriverPassword(email: String!, newPassword: String!): Response!
+
+    # NEW PASSWORD RESET MUTATIONS
+    requestDriverPasswordReset(email: String!): PasswordResetResponse!
+    resetDriverPasswordWithCode(token: String!, newPassword: String!): PasswordResetResponse!
 
     """
     Approve a driver's account and optionally assign a material type

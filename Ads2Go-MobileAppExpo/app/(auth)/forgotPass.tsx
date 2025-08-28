@@ -1,6 +1,6 @@
 //FORGOTPASS
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-
+import API_CONFIG from '@/config/api';
 
 const ForgotPasswordScreen = () => {
   const router = useRouter();
 
-  // Changed initial step to -1 to show the new option screen first
-  const [currentStep, setCurrentStep] = useState(-1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -28,73 +27,171 @@ const ForgotPasswordScreen = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [timer, setTimer] = useState(60);
+  const [loading, setLoading] = useState(false);
 
-  // New state for mobile number flow
-  const [phoneNumber, setPhoneNumber] = useState('');
+  // Timer countdown effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (timer > 0 && currentStep === 1) {
+      interval = setInterval(() => {
+        setTimer(timer - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timer, currentStep]);
 
-  // Function to handle sending the reset code (mock-up)
-  const handleSendCode = () => {
-    if (!email) {
+  // GraphQL mutation to request password reset
+  const requestPasswordReset = async () => {
+    const query = `
+      mutation RequestDriverPasswordReset($email: String!) {
+        requestDriverPasswordReset(email: $email) {
+          success
+          message
+        }
+      }
+    `;
+
+    try {
+      const response = await fetch(API_CONFIG.API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: { email: email.toLowerCase().trim() }
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.errors) {
+        console.error('GraphQL errors:', result.errors);
+        return { success: false, message: result.errors[0]?.message || 'Request failed' };
+      }
+
+      return result.data?.requestDriverPasswordReset || { success: false, message: 'Network error' };
+    } catch (error) {
+      console.error('Request password reset error:', error);
+      return { success: false, message: 'Network error. Please try again.' };
+    }
+  };
+
+  // GraphQL mutation to reset password with code
+  const resetPasswordWithCode = async () => {
+    const query = `
+      mutation ResetDriverPasswordWithCode($token: String!, $newPassword: String!) {
+        resetDriverPasswordWithCode(token: $token, newPassword: $newPassword) {
+          success
+          message
+        }
+      }
+    `;
+
+    try {
+      const response = await fetch(API_CONFIG.API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query,
+          variables: { 
+            token: code.trim(),
+            newPassword: newPassword.trim()
+          }
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.errors) {
+        console.error('GraphQL errors:', result.errors);
+        return { success: false, message: result.errors[0]?.message || 'Reset failed' };
+      }
+
+      return result.data?.resetDriverPasswordWithCode || { success: false, message: 'Network error' };
+    } catch (error) {
+      console.error('Reset password error:', error);
+      return { success: false, message: 'Network error. Please try again.' };
+    }
+  };
+
+  // Function to handle sending the reset code
+  const handleSendCode = async () => {
+    if (!email || !email.trim()) {
       Alert.alert('Error', 'Please enter your email address.');
       return;
     }
-    Alert.alert('Success', 'A verification code has been sent to your email.');
-    setCurrentStep(1);
-    setTimer(60);
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address.');
+      return;
+    }
+
+    setLoading(true);
+    const result = await requestPasswordReset();
+    setLoading(false);
+
+    if (result.success) {
+      Alert.alert('Success', 'A verification code has been sent to your email.');
+      setCurrentStep(1);
+      setTimer(60);
+      setCode(''); // Reset code input
+    } else {
+      Alert.alert('Error', result.message || 'Failed to send verification code.');
+    }
   };
 
-  // Function to handle verifying the code (mock-up)
-  const handleVerifyCode = () => {
+  // Function to handle resetting the password
+  const handleResetPassword = async () => {
     if (code.length !== 6) {
       Alert.alert('Error', 'Please enter the 6-digit code.');
       return;
     }
-    Alert.alert('Success', 'Code verified successfully.');
-    setCurrentStep(2);
-  };
 
-  // Function to handle resetting the password (mock-up)
-  const handleResetPassword = () => {
-    if (newPassword.length < 8) {
-      Alert.alert('Error', 'New password must be at least 8 characters.');
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters.');
       return;
     }
+    
     if (newPassword !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match.');
       return;
     }
-    Alert.alert('Success', 'Password has been reset successfully.');
-    setCurrentStep(3);
+
+    setLoading(true);
+    const result = await resetPasswordWithCode();
+    setLoading(false);
+
+    if (result.success) {
+      Alert.alert('Success', 'Password has been reset successfully.');
+      setCurrentStep(2);
+    } else {
+      Alert.alert('Error', result.message || 'Failed to reset password.');
+    }
   };
 
-  // New function for mobile number
-  const handleSendMobileCode = () => {
-    if (!phoneNumber) {
-      Alert.alert('Error', 'Please enter your phone number.');
-      return;
+  // Function to handle resending code
+  const handleResendCode = async () => {
+    setLoading(true);
+    const result = await requestPasswordReset();
+    setLoading(false);
+
+    if (result.success) {
+      Alert.alert('Success', 'A new verification code has been sent to your email.');
+      setTimer(60);
+      setCode(''); // Reset code input
+    } else {
+      Alert.alert('Error', result.message || 'Failed to resend verification code.');
     }
-    Alert.alert('Success', 'A verification code has been sent to your mobile number.');
-    // Move to the next step for mobile code verification
-    setCurrentStep(1);
-    setTimer(60);
   };
 
   // Function to render content based on the current step
   const renderContent = () => {
     switch (currentStep) {
-      case -1:
-        return (
-          <>
-            <Text style={styles.heading}>Forgot password?</Text>
-            <Text style={styles.subheading}>
-              Select a method to receive a password reset code.
-            </Text>
-            <TouchableOpacity style={styles.optionButton} onPress={() => setCurrentStep(0)}>
-              <Ionicons name="mail-outline" size={24} color="#4BA3C3" />
-              <Text style={styles.optionText}>Use Email</Text>
-            </TouchableOpacity>
-          </>
-        );
       case 0:
         return (
           <>
@@ -112,10 +209,17 @@ const ForgotPasswordScreen = () => {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!loading}
               />
             </View>
-            <TouchableOpacity style={styles.button} onPress={handleSendCode}>
-              <Text style={styles.buttonText}>Send code</Text>
+            <TouchableOpacity 
+              style={[styles.button, loading && styles.buttonDisabled]} 
+              onPress={handleSendCode}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Sending...' : 'Send code'}
+              </Text>
             </TouchableOpacity>
           </>
         );
@@ -134,50 +238,39 @@ const ForgotPasswordScreen = () => {
                     maxLength={1}
                     keyboardType="numeric"
                     value={code[index] || ''}
+                    editable={!loading}
                     onChangeText={(text) => {
                       const newCode = code.substring(0, index) + text + code.substring(index + 1);
                       setCode(newCode);
+                      
+                      // Auto-focus next input
+                      if (text && index < 5) {
+                        // You can implement auto-focus logic here if needed
+                      }
                     }}
                   />
                 </View>
               ))}
             </View>
-            <TouchableOpacity style={styles.button} onPress={handleVerifyCode}>
-              <Text style={styles.buttonText}>Verify</Text>
-            </TouchableOpacity>
-            <View style={styles.resendContainer}>
-              <TouchableOpacity onPress={() => {}} disabled={timer > 0}>
-                <Text style={[styles.linkText, timer > 0 && { color: '#ccc' }]}>
-                  Send code again: <Text style={styles.linkBold}>{`00:${timer < 10 ? '0' + timer : timer}`}</Text>
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        );
-
-      case 2:
-        return (
-          <>
-            <Text style={styles.heading}>Reset password</Text>
-            <Text style={styles.subheading}>
-              Please type something you'll remember
-            </Text>
+            
             <View style={styles.inputGroup}>
               <Text style={styles.label}>New password</Text>
               <View style={styles.passwordContainer}>
                 <TextInput
                   style={styles.passwordInput}
-                  placeholder="must be 8 characters"
+                  placeholder="must be at least 6 characters"
                   placeholderTextColor="#7f8c8d"
                   secureTextEntry={!showNewPassword}
                   value={newPassword}
                   onChangeText={setNewPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.passwordToggle}>
                   <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
                 </TouchableOpacity>
               </View>
             </View>
+            
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Confirm new password</Text>
               <View style={styles.passwordContainer}>
@@ -188,18 +281,41 @@ const ForgotPasswordScreen = () => {
                   secureTextEntry={!showConfirmPassword}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
+                  editable={!loading}
                 />
                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.passwordToggle}>
                   <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color="#666" />
                 </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity style={styles.button} onPress={handleResetPassword}>
-              <Text style={styles.buttonText}>Reset password</Text>
+            
+            <TouchableOpacity 
+              style={[styles.button, loading && styles.buttonDisabled]} 
+              onPress={handleResetPassword}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Resetting...' : 'Reset password'}
+              </Text>
             </TouchableOpacity>
+            
+            <View style={styles.resendContainer}>
+              <TouchableOpacity 
+                onPress={handleResendCode} 
+                disabled={timer > 0 || loading}
+              >
+                <Text style={[styles.linkText, (timer > 0 || loading) && { color: '#ccc' }]}>
+                  {timer > 0 
+                    ? `Send code again: ${`00:${timer < 10 ? '0' + timer : timer}`}`
+                    : 'Send code again'
+                  }
+                </Text>
+              </TouchableOpacity>
+            </View>
           </>
         );
-      case 3:
+
+      case 2:
         return (
           <>
             <Text style={[styles.changed, { fontSize: 30 }]}>Password changed</Text>
@@ -220,10 +336,22 @@ const ForgotPasswordScreen = () => {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {currentStep !== -1 && currentStep < 3 && (
+        {currentStep < 2 && (
           <View style={styles.header}>
-            {currentStep > -1 && (
-              <TouchableOpacity style={styles.backButton} onPress={() => setCurrentStep(currentStep === 0.5 ? -1 : currentStep - 1)}>
+            {currentStep > 0 && (
+              <TouchableOpacity 
+                style={styles.backButton} 
+                onPress={() => {
+                  if (currentStep === 1) {
+                    setCurrentStep(0);
+                    setCode('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setTimer(60);
+                  }
+                }}
+                disabled={loading}
+              >
                 <Ionicons name="chevron-back-outline" size={24} color="#000" />
               </TouchableOpacity>
             )}
@@ -231,18 +359,15 @@ const ForgotPasswordScreen = () => {
             <Ionicons name="star" size={24} color="#4BA3C3" style={styles.starIcon} />
           </View>
         )}
-        <View style={[styles.content, (currentStep === -1 || currentStep === 3) && styles.centeredContent]}>
+        <View style={[styles.content, currentStep === 2 && styles.centeredContent]}>
           {renderContent()}
         </View>
         <View style={styles.linkContainer}>
-          {currentStep === 0 && (
+          {(currentStep === 0 || currentStep === 1) && (
             <TouchableOpacity style={styles.link} onPress={() => router.push('/(auth)/login')}>
-              <Text style={styles.linkText}>Remember password? <Text style={styles.linkBold}>Log in</Text></Text>
-            </TouchableOpacity>
-          )}
-          {currentStep === 2 && (
-            <TouchableOpacity style={styles.link} onPress={() => router.push('/(auth)/login')}>
-              <Text style={styles.linkText}>Already have an account? <Text style={styles.linkBold}>Log in</Text></Text>
+              <Text style={styles.linkText}>
+                Remember password? <Text style={styles.linkBold}>Log in</Text>
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -340,6 +465,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  buttonDisabled: {
+    backgroundColor: '#ccc',
+  },
   buttonText: {
     color: '#fff',
     fontSize: 16,
@@ -413,59 +541,6 @@ const styles = StyleSheet.create({
   centeredContent: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  // New styles for the option screen
-  optionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 15,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    marginBottom: 10,
-    width: '100%',
-    textAlign: 'center',
-  },
-  optionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#2c3e50',
-    marginLeft: 10,
-  },
-  // New styles for the mobile number input screen
-  mobileInputGroup: {
-    flexDirection: 'row',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  countryCodeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 2,
-    backgroundColor: '#f8f8f8',
-    borderRightWidth: 1,
-    borderRightColor: '#e1e5e9',
-  },
-  countryText: {
-    marginLeft: 8,
-    fontSize: 16,
-    color: '#2c3e50',
-  },
-  countryCodeText: {
-    marginLeft: 8,
-    fontWeight: 'bold',
-    color: '#2c3e50',
-  },
-  mobileInput: {
-    flex: 1,
-    height: 50,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    color: '#2c3e50',
   },
 });
 
