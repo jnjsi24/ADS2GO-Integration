@@ -11,42 +11,7 @@ const { verifyDriverForMaterialAssignment } = require('../middleware/driverMater
 const EmailService = require('../utils/emailService');
 const validator = require('validator');
 const { GraphQLUpload } = require('graphql-upload');
-
-// Ensure uploads directory exists
-const uploadDir = path.join(__dirname, '../../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Helper function to save uploaded files
-const saveFile = async (file) => {
-  if (!file) return null;
-  
-  try {
-    const { createReadStream, filename, mimetype } = await file;
-    const stream = createReadStream();
-    const fileExt = path.extname(filename);
-    const newFilename = `${uuidv4()}${fileExt}`;
-    const filePath = path.join(uploadDir, newFilename);
-    
-    // Save the file
-    await new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(filePath);
-      stream.pipe(writeStream)
-        .on('finish', resolve)
-        .on('error', (error) => {
-          console.error('Error saving file:', error);
-          reject(error);
-        });
-    });
-
-    // Return the URL path (relative to the server)
-    return `/uploads/${newFilename}`;
-  } catch (error) {
-    console.error('Error in saveFile:', error);
-    throw new Error('Failed to save file');
-  }
-};
+const { uploadToFirebase, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } = require('../utils/firebaseStorage');
 
 // ===== VEHICLE MATERIAL MAP =====
 const VEHICLE_MATERIAL_MAP = {
@@ -218,11 +183,13 @@ createDriver: async (_, { input }) => {
     const driverId = await generateDriverId();
     const qrCodeIdentifier = `QR-${driverId}-${Date.now()}`;
 
-    // Handle file uploads
-    const profilePictureURL = await saveFile(input.profilePicture);
-    const vehiclePhotoURL = await saveFile(input.vehiclePhoto);
-    const licensePictureURL = await saveFile(input.licensePicture);
-    const orCrPictureURL = await saveFile(input.orCrPicture);
+    // Handle file uploads to Firebase Storage with proper folder structure
+    const [licensePictureUrl, vehiclePhotoUrl, orCrPictureUrl, profilePictureUrl] = await Promise.all([
+      input.licensePicture ? uploadToFirebase(input.licensePicture, 'drivers', normalizedEmail, 'licenses') : null,
+      input.vehiclePhoto ? uploadToFirebase(input.vehiclePhoto, 'drivers', normalizedEmail, 'vehicles') : null,
+      input.orCrPicture ? uploadToFirebase(input.orCrPicture, 'drivers', normalizedEmail, 'documents') : null,
+      input.profilePicture ? uploadToFirebase(input.profilePicture, 'drivers', normalizedEmail, 'profiles') : null
+    ]);
 
     // Create driver (PENDING until approved)
     const newDriver = new Driver({
@@ -236,15 +203,15 @@ createDriver: async (_, { input }) => {
       password: input.password.trim(),
       address: input.address?.trim() || null,
       licenseNumber: input.licenseNumber?.trim() || null,
-      licensePictureURL,
+      licensePictureURL: licensePictureUrl?.url || null,
       vehiclePlateNumber: input.vehiclePlateNumber?.trim() || null,
       vehicleType: input.vehicleType,
       vehicleModel: input.vehicleModel?.trim() || null,
       vehicleYear: input.vehicleYear,
-      vehiclePhotoURL,
-      orCrPictureURL,
+      vehiclePhotoURL: vehiclePhotoUrl?.url || null,
+      orCrPictureURL: orCrPictureUrl?.url || null,
       preferredMaterialType: Array.isArray(input.preferredMaterialType) ? input.preferredMaterialType : [],
-      profilePicture: profilePictureURL,
+      profilePicture: profilePictureUrl?.url || null,
       accountStatus: 'PENDING',
       reviewStatus: 'PENDING',
       isEmailVerified: false,
