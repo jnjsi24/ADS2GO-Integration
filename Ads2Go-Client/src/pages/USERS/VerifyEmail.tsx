@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { VERIFY_EMAIL_MUTATION, RESEND_VERIFICATION_CODE_MUTATION } from '../../services/graphql';
 import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
@@ -6,6 +6,9 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const VerifyEmail: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState('');
+  const [code, setCode] = useState<string[]>(new Array(6).fill(''));
+  const inputRefs = useRef<HTMLInputElement[]>([]);
+
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(60);
   const [canResend, setCanResend] = useState(false);
@@ -29,6 +32,45 @@ const VerifyEmail: React.FC = () => {
     setError('');
     setSuccessMessage('');
   }, []);
+
+  useEffect(() => {
+    // Update the single verificationCode state from the array
+    const combinedCode = code.join('');
+    setVerificationCode(combinedCode);
+  }, [code]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const { value } = e.target;
+    // Allow only one character and digits
+    const sanitizedValue = value.replace(/\D/g, '').slice(0, 1);
+
+    const newCode = [...code];
+    newCode[index] = sanitizedValue;
+    setCode(newCode);
+
+    if (sanitizedValue && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').slice(0, 6).replace(/\D/g, '');
+    const newCode = [...code];
+    for (let i = 0; i < pasteData.length; i++) {
+      newCode[i] = pasteData[i];
+      if (inputRefs.current[i + 1]) {
+        inputRefs.current[i + 1].focus();
+      }
+    }
+    setCode(newCode);
+  };
 
   const handleVerification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,21 +124,43 @@ const VerifyEmail: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <form onSubmit={handleVerification} className="bg-white shadow-md rounded px-8 pt-6 pb-8">
+    <div className="relative min-h-screen">
+      {/* Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="/image/verify.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+
+      {/* Overlay to darken the video and make text readable */}
+      <div className="absolute inset-0"></div>
+
+      <div className="relative z-10 p-10 top-14 left-80 max-w-lg w-full space-y-8">
+        <form onSubmit={handleVerification} className="bg-none px-8 pt-6 pb-8">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold">Email Verification</h2>
+          </div>
           <div className="mb-4">
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Enter Verification Code
-            </label>
-            <input
-              type="text"
-              maxLength={6}
-              value={verificationCode}
-              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 border-gray-300 leading-tight focus:outline-none focus:shadow-outline"
-              placeholder="6-digit code"
-            />
+            <div className="flex justify-between items-center space-x-2">
+              {code.map((digit, index) => (
+                <input
+                  key={index}
+                  ref={el => (inputRefs.current[index] = el!)}
+                  type="text"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handleInputChange(e, index)}
+                  onKeyDown={(e) => handleKeyDown(e, index)}
+                  onPaste={handlePaste}
+                  className="w-12 h-12 text-2xl text-center border-2 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 outline-none"
+                />
+              ))}
+            </div>
           </div>
 
           {error && (
