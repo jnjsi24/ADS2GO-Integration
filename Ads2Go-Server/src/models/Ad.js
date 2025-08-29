@@ -112,19 +112,31 @@ AdSchema.pre('save', async function (next) {
  * Post-save auto-deployment logic
  */
 AdSchema.post('save', async function (doc) {
-  if (doc.adStatus === 'ACTIVE') {
+  if (doc.adStatus === 'ACTIVE' && doc.paymentStatus === 'PAID') {
     const Material = require('./Material');
     const AdsDeployment = require('./adsDeployment');
 
     try {
+      console.log(`🔄 Starting deployment for Ad ${doc._id}`);
+      
       const material = await Material.findById(doc.materialId);
-      if (!material || !material.driverId) {
-        console.error(`❌ Cannot deploy Ad ${doc._id}: no driver assigned to material`);
+      if (!material) {
+        console.error(`❌ Cannot deploy Ad ${doc._id}: Material not found`);
+        return;
+      }
+      
+      if (!material.driverId) {
+        console.error(`❌ Cannot deploy Ad ${doc._id}: No driver assigned to material`);
         return;
       }
 
-      // Non-LCD ads → create new deployment directly
-      if (!material.isLCD) {
+      // Determine if this should use LCD deployment system
+      // LCD and HEADDRESS materials both use the LCD deployment system
+      const useLCDDeployment = ['LCD', 'HEADDRESS'].includes(material.materialType);
+      
+      // Standard non-LCD ads → create new deployment directly
+      if (!useLCDDeployment) {
+        console.log(`🔄 Deploying non-LCD Ad ${doc._id}`);
         await AdsDeployment.create({
           adId: doc._id,
           materialId: material._id,
@@ -139,14 +151,32 @@ AdSchema.post('save', async function (doc) {
       }
 
       // LCD ads → use addToLCD method for single deployment doc
-      const deployment = await AdsDeployment.addToLCD(
-        material._id,
-        material.driverId,
-        doc._id,
-        doc.startTime,
-        doc.endTime
-      );
-      console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId}`);
+      console.log(`🔄 Deploying LCD Ad ${doc._id} to material ${material._id}`);
+      try {
+        const deployment = await AdsDeployment.addToLCD(
+          material._id,
+          material.driverId,
+          doc._id,
+          doc.startTime,
+          doc.endTime
+        );
+        
+        if (!deployment) {
+          throw new Error('Deployment returned null');
+        }
+        
+        console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId || deployment._id}`);
+        console.log(`📋 Deployment details:`, {
+          deploymentId: deployment._id,
+          adDeploymentId: deployment.adDeploymentId,
+          lcdSlots: deployment.lcdSlots,
+          materialId: deployment.materialId,
+          driverId: deployment.driverId
+        });
+      } catch (lcdError) {
+        console.error(`❌ Failed to add LCD Ad ${doc._id} to deployment:`, lcdError);
+        throw lcdError; // Re-throw to be caught by the outer try-catch
+      }
 
     } catch (err) {
       console.error(`❌ Failed to deploy Ad ${doc._id}: ${err.message}`);

@@ -28,6 +28,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "multer": "^2.0.2",
+    "node-geocoder": "^4.4.1",
+    "node-osrm": "^1.0.3",
     "nodemailer": "^6.9.7",
     "uuid": "^9.0.1"
   },

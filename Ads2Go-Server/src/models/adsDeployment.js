@@ -68,8 +68,9 @@ const AdsDeploymentSchema = new mongoose.Schema({
     required: true
   },
   driverId: {
-    type: String,
-    required: true
+    type: String,  // This matches the Material model's driverId format (e.g., 'DRV-002')
+    required: true,
+    index: true
   },
 
   // For LCD materials - store as array
@@ -144,52 +145,103 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, dr
 
 // Static method to add ad to LCD material (single deployment per LCD)
 AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId, startTime, endTime) {
-  // Find existing deployment for this material-driver
-  let deployment = await this.findOne({ materialId, driverId });
-  
-  // If no deployment exists, create a new one
-  if (!deployment) {
-    deployment = new this({
+  try {
+    console.log(`🔄 Starting LCD deployment for ad ${adId} on material ${materialId}`);
+    
+    // Input validation
+    if (!mongoose.Types.ObjectId.isValid(materialId)) {
+      throw new Error('Invalid materialId');
+    }
+    // Driver ID can be either a string (like 'DRV-002') or ObjectId
+    if (!driverId) {
+      throw new Error('driverId is required');
+    }
+    if (!mongoose.Types.ObjectId.isValid(adId)) {
+      throw new Error('Invalid adId');
+    }
+    if (!startTime || !endTime) {
+      throw new Error('startTime and endTime are required');
+    }
+
+    // Find existing deployment for this material-driver
+    let deployment = await this.findOne({ materialId, driverId });
+    
+    // If no deployment exists, create a new one
+    if (!deployment) {
+      console.log(`ℹ️  No existing deployment found, creating new one for material ${materialId}`);
+      deployment = new this({
+        materialId,
+        driverId,
+        lcdSlots: []
+      });
+    }
+
+    // Convert adId to string for comparison
+    const adIdStr = adId.toString();
+    
+    // Check if the adId already exists in the current deployment
+    const isAdAlreadyDeployed = deployment.lcdSlots.some(slot => {
+      const slotAdId = slot.adId?.toString();
+      return slotAdId === adIdStr;
+    });
+    
+    if (isAdAlreadyDeployed) {
+      throw new Error(`Ad ${adId} is already deployed on this LCD material.`);
+    }
+
+    // Check next available slot
+    const activeSlots = deployment.lcdSlots
+      .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
+      .map(slot => slot.slotNumber);
+
+    console.log(`ℹ️  Active slots: ${activeSlots.join(', ') || 'none'}`);
+
+    let nextSlot = null;
+    for (let i = 1; i <= 5; i++) {
+      if (!activeSlots.includes(i)) {
+        nextSlot = i;
+        break;
+      }
+    }
+    
+    if (!nextSlot) {
+      throw new Error('All LCD slots (1-5) are currently occupied.');
+    }
+
+    console.log(`ℹ️  Next available slot: ${nextSlot}`);
+
+    // Create new ad slot
+    const newSlot = {
+      adId,
+      slotNumber: nextSlot,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      status: new Date(startTime) <= new Date() ? 'RUNNING' : 'SCHEDULED',
+      deployedAt: new Date(startTime) <= new Date() ? new Date() : null
+    };
+    
+    console.log(`ℹ️  Creating new slot:`, newSlot);
+    
+    // Add the new slot
+    deployment.lcdSlots.push(newSlot);
+
+    // Save the deployment
+    const savedDeployment = await deployment.save();
+    
+    console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on material ${materialId}`);
+    return savedDeployment;
+    
+  } catch (error) {
+    console.error(`❌ Error in addToLCD: ${error.message}`, {
       materialId,
       driverId,
-      lcdSlots: []
+      adId,
+      startTime,
+      endTime,
+      error: error.stack
     });
+    throw error; // Re-throw to be handled by the caller
   }
-
-  // Check if the adId already exists in the current deployment
-  const isAdAlreadyDeployed = deployment.lcdSlots.some(slot => slot.adId.toString() === adId);
-  if (isAdAlreadyDeployed) {
-    throw new Error('This ad is already deployed on this LCD material.');
-  }
-
-  // Check next available slot
-  const activeSlots = deployment.lcdSlots
-    .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
-    .map(slot => slot.slotNumber);
-
-  let nextSlot = null;
-  for (let i = 1; i <= 5; i++) {
-    if (!activeSlots.includes(i)) {
-      nextSlot = i;
-      break;
-    }
-  }
-  if (!nextSlot) throw new Error('All LCD slots (1-5) are occupied.');
-
-  // Add new ad slot
-  const newSlot = {
-    adId,
-    slotNumber: nextSlot,
-    startTime: new Date(startTime),
-    endTime: new Date(endTime),
-    status: new Date(startTime) <= new Date() ? 'RUNNING' : 'SCHEDULED',
-    deployedAt: new Date(startTime) <= new Date() ? new Date() : null
-  };
-  
-  deployment.lcdSlots.push(newSlot);
-
-  await deployment.save();
-  return deployment;
 };
 
 // Static method to remove ads from LCD
