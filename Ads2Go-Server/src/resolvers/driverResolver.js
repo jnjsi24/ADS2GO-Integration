@@ -223,7 +223,7 @@ createDriver: async (_, { input }) => {
     });
 
     await EmailService.sendVerificationEmail(newDriver.email, verificationCode);
-    console.log(`📩 Verification code for ${newDriver.email}: ${verificationCode}`);
+    console.log(`Verification code for ${newDriver.email}: ${verificationCode}`);
 
     await newDriver.save();
 
@@ -239,7 +239,6 @@ createDriver: async (_, { input }) => {
     return { success: false, message: error.message, token: null, driver: null };
   }
 },
-
 
     loginDriver: async (_, { email, password, deviceInfo }) => {
       try {
@@ -329,12 +328,101 @@ createDriver: async (_, { input }) => {
         await driver.save();
 
         await EmailService.sendVerificationEmail(driver.email, verificationCode);
-        console.log(`📩 Verification code for ${driver.email}: ${verificationCode}`);
+        console.log(`Verification code for ${driver.email}: ${verificationCode}`);
 
         return { success: true, message: "Verification code resent successfully" };
       } catch (error) {
         console.error("resendDriverVerificationCode error:", error);
         return { success: false, message: "Failed to resend verification code" };
+      }
+    },
+
+    // ===== NEW PASSWORD RESET MUTATIONS =====
+    requestDriverPasswordReset: async (_, { email }) => {
+      try {
+        const normalizedEmail = email.toLowerCase().trim();
+        const driver = await Driver.findOne({ email: normalizedEmail });
+        
+        if (!driver) {
+          return {
+            success: false,
+            message: "No driver found with this email"
+          };
+        }
+
+        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Set reset code and expiration (15 minutes)
+        driver.emailVerificationCode = resetCode;
+        driver.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000);
+        
+        await driver.save();
+        
+        // Send reset email
+        await EmailService.sendVerificationEmail(driver.email, resetCode);
+        console.log(`Password reset code for ${driver.email}: ${resetCode}`);
+
+        return {
+          success: true,
+          message: "Password reset code sent to your email"
+        };
+      } catch (error) {
+        console.error('requestDriverPasswordReset error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to send password reset code'
+        };
+      }
+    },
+
+    resetDriverPasswordWithCode: async (_, { token, newPassword }) => {
+      try {
+        // Find driver with valid reset token
+        const driver = await Driver.findOne({
+          emailVerificationCode: token.trim(),
+          emailVerificationCodeExpires: { $gt: new Date() }
+        });
+
+        if (!driver) {
+          return {
+            success: false,
+            message: "Invalid or expired reset token"
+          };
+        }
+
+        // Log the verification code for debugging
+        console.log(`Password reset verification code for ${driver.email}: ${token.trim()}`);
+
+        // Validate password strength (basic validation)
+        if (!newPassword || newPassword.length < 6) {
+          return {
+            success: false,
+            message: "Password must be at least 6 characters long"
+          };
+        }
+
+        // Update password (pre-save hook will hash it)
+        driver.password = newPassword;
+        driver.emailVerificationCode = null;
+        driver.emailVerificationCodeExpires = null;
+        
+        // Reset any login attempts
+        driver.loginAttempts = 0;
+        driver.accountLocked = false;
+        driver.lockUntil = null;
+
+        await driver.save();
+
+        return {
+          success: true,
+          message: "Password reset successfully"
+        };
+      } catch (error) {
+        console.error('resetDriverPasswordWithCode error:', error);
+        return {
+          success: false,
+          message: error.message || 'Failed to reset password'
+        };
       }
     },
 
@@ -421,7 +509,6 @@ createDriver: async (_, { input }) => {
     };
   }
 },
-
 
     // ===== FIXED REJECT DRIVER MUTATION =====
     rejectDriver: async (_, { driverId, reason }, { user }) => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { ChevronDown, Edit, X, Eye } from 'lucide-react';
+import { ChevronDown, Edit, X, Eye, User } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
 
 // === GraphQL ===
@@ -25,6 +25,7 @@ const GET_ALL_DRIVERS = gql`
       licensePictureURL
       orCrPictureURL
       vehiclePhotoURL
+      profilePicture
       dateJoined
       approvalDate
       rejectedReason
@@ -99,6 +100,7 @@ interface Driver {
   licensePictureURL?: string;
   orCrPictureURL?: string;
   vehiclePhotoURL?: string;
+  profilePicture?: string;
   dateJoined: string;
   approvalDate?: string;
   rejectedReason?: string;
@@ -113,6 +115,94 @@ interface Driver {
 // === Helper ===
 const getInitials = (firstName: string, lastName: string) =>
   `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+
+// Helper to get full image URL
+const getImageUrl = (imagePath: string | undefined | null) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // If it starts with /uploads, prepend your server URL
+  if (imagePath.startsWith('/uploads')) {
+    // Replace with your actual server URL
+    return `${process.env.REACT_APP_SERVER_URL || 'http://localhost:4000'}${imagePath}`;
+  }
+  return imagePath;
+};
+
+// Profile Picture Component
+const ProfilePicture: React.FC<{ 
+  driver: Driver; 
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}> = ({ driver, size = 'sm', className = '' }) => {
+  const [imageError, setImageError] = useState(false);
+  const imageUrl = getImageUrl(driver.profilePicture);
+  
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-12 h-12 text-sm',
+    lg: 'w-24 h-24 text-lg'
+  };
+
+  if (imageUrl && !imageError) {
+    return (
+      <img
+        src={imageUrl}
+        alt={`${driver.firstName} ${driver.lastName}`}
+        className={`${sizeClasses[size]} rounded-full object-cover ${className}`}
+        onError={() => setImageError(true)}
+      />
+    );
+  }
+
+  // Fallback to initials
+  return (
+    <div className={`${sizeClasses[size]} flex items-center justify-center font-semibold text-white rounded-full bg-[#FF9D3D] ${className}`}>
+      {getInitials(driver.firstName, driver.lastName)}
+    </div>
+  );
+};
+
+// Document Image Component with Error Handling
+const DocumentImage: React.FC<{
+  src: string | undefined | null;
+  alt: string;
+  title: string;
+  className?: string;
+}> = ({ src, alt, title, className = '' }) => {
+  const [imageError, setImageError] = useState(false);
+  const imageUrl = getImageUrl(src);
+
+  if (!imageUrl || imageError) {
+    return (
+      <div className={`${className} bg-gray-200 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center`}>
+        <User size={32} className="text-gray-400 mb-2" />
+        <p className="text-sm text-gray-500 text-center">No {title} available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative group">
+      <p className="font-medium mb-2">{title}</p>
+      <img 
+        src={imageUrl}
+        alt={alt}
+        className={`${className} border rounded-lg cursor-pointer hover:opacity-90 transition-opacity`}
+        onError={() => setImageError(true)}
+        onClick={() => {
+          // Open image in a new tab for better viewing
+          window.open(imageUrl, '_blank');
+        }}
+      />
+      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center">
+        <Eye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={24} />
+      </div>
+    </div>
+  );
+};
 
 const ManageRiders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -336,9 +426,7 @@ const ManageRiders: React.FC = () => {
                     onChange={() => handleSelect(r.driverId)}
                   />
                   <div className="flex items-center">
-                    <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                      {getInitials(r.firstName, r.lastName)}
-                    </div>
+                    <ProfilePicture driver={r} className="mr-2" />
                     <span className="truncate">
                       {`${r.firstName} ${r.middleName || ''} ${r.lastName}`}
                     </span>
@@ -408,7 +496,10 @@ const ManageRiders: React.FC = () => {
 
               {expandedId === r.driverId && (
                 <div className="bg-gray-50 p-6">
-                  <h3 className="text-lg font-bold mb-4">{r.firstName} {r.lastName}</h3>
+                  <div className="flex items-center gap-4 mb-4">
+                    <ProfilePicture driver={r} size="md" />
+                    <h3 className="text-lg font-bold">{r.firstName} {r.lastName}</h3>
+                  </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p><strong>Email:</strong> {r.email}</p>
@@ -449,9 +540,12 @@ const ManageRiders: React.FC = () => {
       {/* Details Modal */}
       {showDetailsModal && selectedDriverDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+          <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold">Driver Details</h2>
+              <div className="flex items-center gap-4">
+                <ProfilePicture driver={selectedDriverDetails} size="lg" />
+                <h2 className="text-2xl font-bold">Driver Details</h2>
+              </div>
               <button
                 onClick={() => setShowDetailsModal(false)}
                 className="text-gray-500 hover:text-gray-700"
@@ -460,7 +554,7 @@ const ManageRiders: React.FC = () => {
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div>
                 <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
                 <div className="space-y-2">
@@ -515,47 +609,32 @@ const ManageRiders: React.FC = () => {
 
             {/* Document Images */}
             <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-3">Documents</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {selectedDriverDetails.licensePictureURL && (
-                  <div>
-                    <p className="font-medium mb-2">License Picture</p>
-                    <img 
-                      src={selectedDriverDetails.licensePictureURL} 
-                      alt="License"
-                      className="w-full h-40 object-cover border rounded"
-                      onError={(e) => {
-                        e.currentTarget.src = '/placeholder-document.png';
-                      }}
-                    />
-                  </div>
-                )}
-                {selectedDriverDetails.orCrPictureURL && (
-                  <div>
-                    <p className="font-medium mb-2">OR/CR Picture</p>
-                    <img 
-                      src={selectedDriverDetails.orCrPictureURL} 
-                      alt="OR/CR"
-                      className="w-full h-40 object-cover border rounded"
-                      onError={(e) => {
-                        e.currentTarget.src = '/placeholder-document.png';
-                      }}
-                    />
-                  </div>
-                )}
-                {selectedDriverDetails.vehiclePhotoURL && (
-                  <div>
-                    <p className="font-medium mb-2">Vehicle Photo</p>
-                    <img 
-                      src={selectedDriverDetails.vehiclePhotoURL} 
-                      alt="Vehicle"
-                      className="w-full h-40 object-cover border rounded"
-                      onError={(e) => {
-                        e.currentTarget.src = '/placeholder-vehicle.png';
-                      }}
-                    />
-                  </div>
-                )}
+              <h3 className="text-lg font-semibold mb-4">Documents & Photos</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <DocumentImage
+                  src={selectedDriverDetails.licensePictureURL}
+                  alt="Driver License"
+                  title="Driver License"
+                  className="w-full h-40 object-cover"
+                />
+                <DocumentImage
+                  src={selectedDriverDetails.orCrPictureURL}
+                  alt="OR/CR Document"
+                  title="OR/CR Document"
+                  className="w-full h-40 object-cover"
+                />
+                <DocumentImage
+                  src={selectedDriverDetails.vehiclePhotoURL}
+                  alt="Vehicle Photo"
+                  title="Vehicle Photo"
+                  className="w-full h-40 object-cover"
+                />
+                <DocumentImage
+                  src={selectedDriverDetails.profilePicture}
+                  alt="Profile Picture"
+                  title="Profile Picture"
+                  className="w-full h-40 object-cover"
+                />
               </div>
             </div>
 
@@ -652,4 +731,4 @@ const ManageRiders: React.FC = () => {
   );
 };
 
-export default ManageRiders;  
+export default ManageRiders;
