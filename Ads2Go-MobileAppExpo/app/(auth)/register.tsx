@@ -55,7 +55,7 @@ const RegisterForm = () => {
   const [address, setAddress] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [vehiclePlateNumber, setVehiclePlateNumber] = useState('');
-  const [vehicleType, setVehicleType] = useState('');
+  const [vehicleType, setVehicleType] = useState<string | null>(null);
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleYear, setVehicleYear] = useState<number | undefined>(undefined);
   const [preferredMaterialType, setPreferredMaterialType] = useState<string[]>([]);
@@ -76,7 +76,7 @@ const RegisterForm = () => {
   ];
 
   const vehicleTypes = ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E-TRIKE'];
-  const materialTypes = ['LCD', 'HEADDRESS'];
+  const materialTypes = ['LCD', 'BANNER', 'STICKER', 'HEADDRESS', 'POSTER'];
 
   const pickImage = async (setImage: React.Dispatch<React.SetStateAction<any>>) => {
     try {
@@ -85,28 +85,59 @@ const RegisterForm = () => {
         Alert.alert('Permission Denied', 'Permission to access media library is required!');
         return;
       }
-
+  
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         quality: 0.8,
+        base64: false,
+        exif: false,
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
       });
-
+  
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        setImage({
+        
+        // Get the file extension from the URI
+        const uriParts = asset.uri.split('.');
+        const fileExtension = uriParts.length > 1 ? uriParts[uriParts.length - 1].toLowerCase() : 'jpg';
+        
+        // Map file extension to MIME type with additional iOS formats
+        const mimeTypeMap: Record<string, string> = {
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'webp': 'image/webp',
+          'heic': 'image/jpeg',
+          'heif': 'image/jpeg'
+        };
+        
+        // Determine the MIME type
+        const mimeType = asset.mimeType || mimeTypeMap[fileExtension] || 'image/jpeg';
+        
+        // Create a proper file name with extension
+        const fileName = asset.fileName || `file-${Date.now()}.${fileExtension}`;
+  
+        // Create a standard RN FormData file object
+        const fileObj = {
           uri: asset.uri,
-          type: 'image/jpeg',
-          name: `photo-${Date.now()}.jpg`,
-        });
+          name: fileName,
+          type: mimeType,
+          // keep size for local state if needed, but it won't be sent by FormData
+          size: asset.fileSize || 0,
+        } as any;
+        
+        setImage(fileObj);
       }
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
+  
 
-    const validateStep = (step: number): boolean => {
+
+  const validateStep = (step: number): boolean => {
     // Regex to check for names without numbers or symbols
     const nameRegex = /^[A-Za-z\s.'-]+$/;
     // Regex to check for exactly 10 digits
@@ -130,10 +161,6 @@ const RegisterForm = () => {
           Alert.alert('Validation Error', 'Last Name cannot contain numbers or symbols.');
           return false;
         }
-        if (!address.trim()) {
-          Alert.alert('Validation Error', 'Address is required.');
-          return false;
-        }
         return true;
       
       case 1:
@@ -146,7 +173,7 @@ const RegisterForm = () => {
           return false;
         }
         if (!contactNumberRegex.test(contactNumber.trim())) {
-          Alert.alert('Validation Error', 'Contact Number must be exactly 10 digits and contain no symbols or characters.');
+          Alert.alert('Validation Error', 'Contact Number must be exactly 10 digits.');
           return false;
         }
         if (!password.trim()) {
@@ -164,7 +191,7 @@ const RegisterForm = () => {
         return true;
       
       case 2:
-        if (!vehicleType.trim()) {
+        if (!vehicleType) {
           Alert.alert('Validation Error', 'Vehicle Type is required.');
           return false;
         }
@@ -185,25 +212,15 @@ const RegisterForm = () => {
           return false;
         }
         if (preferredMaterialType.length === 0) {
-          Alert.alert('Validation Error', 'Material Type is required. Please select at least one.');
+          Alert.alert('Validation Error', 'Please select at least one Material Type.');
           return false;
         }
         return true;
-      
+
+      // Document validation is optional, so we don't block submission
       case 3:
-        if (!licensePhoto) {
-          Alert.alert('Validation Error', 'License Photo is required.');
-          return false;
-        }
-        if (!vehiclePhoto) {
-          Alert.alert('Validation Error', 'Vehicle Photo is required.');
-          return false;
-        }
-        if (!orCrPhoto) {
-          Alert.alert('Validation Error', 'OR/CR Photo is required.');
-          return false;
-        }
         return true;
+
       default:
         return true;
     }
@@ -224,119 +241,122 @@ const RegisterForm = () => {
   };
 
   const handleRegister = async () => {
-    if (!validateStep(2)) return;
+    if (!validateStep(0) || !validateStep(1) || !validateStep(2)) {
+      Alert.alert('Validation Error', 'Please complete all required fields correctly before submitting.');
+      return;
+    }
 
     setLoading(true);
+
     try {
-      const formData = new FormData();
+      const variables: any = {
+        firstName: firstName.trim(),
+        middleName: middleName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        contactNumber: contactNumber.trim(),
+        password: password.trim(),
+        address: address.trim(),
+        licenseNumber: licenseNumber.trim(),
+        vehiclePlateNumber: vehiclePlateNumber.trim(),
+        vehicleType: vehicleType!.trim().toUpperCase(),
+        vehicleModel: vehicleModel.trim(),
+        vehicleYear: vehicleYear,
+        preferredMaterialType: preferredMaterialType,
+        profilePicture: null,
+        vehiclePhoto: null,
+        licensePicture: null,
+        orCrPicture: null,
+      };
 
       const operations = {
         query: `
-          mutation CreateDriver($input: DriverInput!) {
-            createDriver(input: $input) {
+          mutation CreateDriver(
+            $firstName: String!,
+            $middleName: String,
+            $lastName: String!,
+            $email: String!,
+            $contactNumber: String!,
+            $password: String!,
+            $address: String!,
+            $licenseNumber: String!,
+            $vehiclePlateNumber: String!,
+            $vehicleType: VehicleType!,
+            $vehicleModel: String!,
+            $vehicleYear: Int!,
+            $preferredMaterialType: [MaterialTypeEnum!]!,
+            $profilePicture: Upload,
+            $vehiclePhoto: Upload,
+            $licensePicture: Upload,
+            $orCrPicture: Upload
+          ) {
+            createDriver(input: {
+              firstName: $firstName,
+              middleName: $middleName,
+              lastName: $lastName,
+              email: $email,
+              contactNumber: $contactNumber,
+              password: $password,
+              address: $address,
+              licenseNumber: $licenseNumber,
+              vehiclePlateNumber: $vehiclePlateNumber,
+              vehicleType: $vehicleType,
+              vehicleModel: $vehicleModel,
+              vehicleYear: $vehicleYear,
+              preferredMaterialType: $preferredMaterialType,
+              profilePicture: $profilePicture,
+              vehiclePhoto: $vehiclePhoto,
+              licensePicture: $licensePicture,
+              orCrPicture: $orCrPicture
+            }) {
               success
               message
               token
               driver {
                 driverId
                 email
-                accountStatus
-                firstName
-                middleName
-                lastName
-                fullName
-                preferredMaterialType
-                isEmailVerified
               }
             }
           }
         `,
-        variables: {
-          input: {
-            firstName: firstName.trim(),
-            middleName: middleName.trim() || null,
-            lastName: lastName.trim(),
-            email: email.trim(),
-            contactNumber: contactNumber.trim(),
-            password: password.trim(),
-            address: address.trim() || null,
-            licenseNumber: licenseNumber.trim() || null,
-            vehiclePlateNumber: vehiclePlateNumber.trim() || null,
-            vehicleType: vehicleType.toUpperCase(),
-            vehicleModel: vehicleModel.trim() || null,
-            vehicleYear: vehicleYear || null,
-            preferredMaterialType: preferredMaterialType.filter(type => type.trim()),
-            profilePicture: null,
-            vehiclePhoto: null,
-            licensePicture: null,
-            orCrPicture: null,
-          },
-        },
+        variables,
       };
 
+      const formData = new FormData();
       formData.append('operations', JSON.stringify(operations));
 
-      const map: Record<string, string[]> = {};
+      const fileMap: { [key: string]: string[] } = {};
+      const filesToUpload: { file: any; varName: string; fileKey: string }[] = [];
       let fileIndex = 0;
 
-      if (profilePicture) {
-        map[fileIndex.toString()] = ['variables.input.profilePicture'];
-        fileIndex++;
-      }
-      if (vehiclePhoto) {
-        map[fileIndex.toString()] = ['variables.input.vehiclePhoto'];
-        fileIndex++;
-      }
-      if (licensePhoto) {
-        map[fileIndex.toString()] = ['variables.input.licensePicture'];
-        fileIndex++;
-      }
-      if (orCrPhoto) {
-        map[fileIndex.toString()] = ['variables.input.orCrPicture'];
-        fileIndex++;
-      }
+      [
+        { file: profilePicture, varName: 'profilePicture' },
+        { file: vehiclePhoto, varName: 'vehiclePhoto' },
+        { file: licensePhoto, varName: 'licensePicture' },
+        { file: orCrPhoto, varName: 'orCrPicture' },
+      ].forEach(({ file, varName }) => {
+        if (file) {
+          fileIndex++;
+          const fileKey = fileIndex.toString();
+          fileMap[fileKey] = [`variables.${varName}`];
+          filesToUpload.push({ file, varName, fileKey });
+        }
+      });
 
-      formData.append('map', JSON.stringify(map));
+      formData.append('map', JSON.stringify(fileMap));
 
-      fileIndex = 0;
-      if (profilePicture) {
-        formData.append(fileIndex.toString(), {
-          uri: profilePicture.uri,
-          type: profilePicture.type,
-          name: profilePicture.name,
+      for (const { file, fileKey } of filesToUpload) {
+        // Append the file using the standard RN FormData format
+        formData.append(fileKey, {
+          uri: file.uri,
+          name: file.name || `file-${Date.now()}.jpg`,
+          type: file.type || 'image/jpeg',
         } as any);
-        fileIndex++;
-      }
-      if (vehiclePhoto) {
-        formData.append(fileIndex.toString(), {
-          uri: vehiclePhoto.uri,
-          type: vehiclePhoto.type,
-          name: vehiclePhoto.name,
-        } as any);
-        fileIndex++;
-      }
-      if (licensePhoto) {
-        formData.append(fileIndex.toString(), {
-          uri: licensePhoto.uri,
-          type: licensePhoto.type,
-          name: licensePhoto.name,
-        } as any);
-        fileIndex++;
-      }
-      if (orCrPhoto) {
-        formData.append(fileIndex.toString(), {
-          uri: orCrPhoto.uri,
-          type: orCrPhoto.type,
-          name: orCrPhoto.name,
-        } as any);
-        fileIndex++;
       }
 
       const response = await fetch(API_CONFIG.API_URL, {
         method: 'POST',
         headers: {
-          Accept: 'application/json',
-          'Content-Type': 'multipart/form-data',
           'Apollo-Require-Preflight': 'true',
         },
         body: formData,
@@ -346,32 +366,27 @@ const RegisterForm = () => {
 
       if (result.data?.createDriver.success) {
         Alert.alert(
-          'Registration Successful!', 
+          'Registration Successful!',
           result.data.createDriver.message + '\n\nPlease check your email to verify your account.',
           [
             {
               text: 'Continue to Email Verification',
               onPress: () => {
-                console.log('Driver created:', result.data.createDriver.driver);
-                console.log('Token:', result.data.createDriver.token);
-                
                 router.push({
                   pathname: '/(auth)/emailVerification',
                   params: {
                     email: email.trim(),
                     driverId: result.data.createDriver.driver?.driverId,
                     token: result.data.createDriver.token,
-                    firstName: firstName.trim()
-                  }
+                    firstName: firstName.trim(),
+                  },
                 });
-              }
-            }
+              },
+            },
           ]
         );
       } else {
-        const errorMessage = result.data?.createDriver.message || 
-                           result.errors?.[0]?.message || 
-                           'Registration failed';
+        const errorMessage = result.data?.createDriver.message || result.errors?.[0]?.message || 'Registration failed';
         Alert.alert('Error', errorMessage);
       }
     } catch (error: any) {
@@ -650,7 +665,7 @@ const RegisterForm = () => {
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Vehicle Information</Text>
             <Text style={styles.stepDescription}>Tell us about your vehicle</Text>
-            {renderSelectButton('Vehicle Type', vehicleTypes, [vehicleType], (values) => setVehicleType(values[0] || ''), false)}
+            {renderSelectButton('Vehicle Type', vehicleTypes, vehicleType ? [vehicleType] : [], (values) => setVehicleType(values[0] || null), false)}
             {renderInput('Vehicle Model', vehicleModel, setVehicleModel, { required: true, placeholder: 'e.g., Toyota Vios, Honda Click' })}
             {renderInput('Vehicle Year', vehicleYear?.toString() || '', (text) => { const year = parseInt(text); setVehicleYear(isNaN(year) ? undefined : year); }, { keyboardType: 'numeric', required: true })}
             {renderInput('Plate Number', vehiclePlateNumber, setVehiclePlateNumber, { autoCapitalize: 'characters', required: true, placeholder: 'ABC-1234' })}

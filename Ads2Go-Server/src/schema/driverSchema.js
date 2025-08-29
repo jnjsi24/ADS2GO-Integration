@@ -191,16 +191,16 @@ const typeDefs = gql`
     contactNumber: String!
     email: String!
     password: String!
-    address: String
-    licenseNumber: String
+    address: String!
+    licenseNumber: String!
     licensePicture: Upload  # Changed from String to Upload
-    vehiclePlateNumber: String
+    vehiclePlateNumber: String!
     vehicleType: VehicleType!
-    vehicleModel: String
+    vehicleModel: String!
     vehicleYear: Int!
     vehiclePhoto: Upload    # Changed from String to Upload
     orCrPicture: Upload     # Changed from String to Upload
-    preferredMaterialType: [MaterialTypeEnum!]
+    preferredMaterialType: [MaterialTypeEnum!]!
     profilePicture: Upload  # Changed from String to Upload
   }
 

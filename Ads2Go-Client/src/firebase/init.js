@@ -10,13 +10,13 @@ import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA5q4G5fQjZ8Z3Z1Z2Z3Z4Z5Z6Z7Z8Z9Z0", // You'll need to get this from Firebase Console
+  apiKey: "AIzaSyBcJD2Ttm5ykalj-PK8T4ttgodGqVNc-Do",
   authDomain: "ads2go-6ead4.firebaseapp.com",
   projectId: "ads2go-6ead4",
   storageBucket: "ads2go-6ead4.firebasestorage.app",
-  messagingSenderId: "115930695724", // First part of client_id
-  appId: "1:115930695724:web:your-app-id-here", // You'll need to get this from Firebase Console
-  measurementId: "G-XXXXXXXXXX" // You'll need to get this from Firebase Console
+  messagingSenderId: "380830146533",
+  appId: "1:380830146533:web:86708e4a57a07ab59f590c",
+  measurementId: "G-P0TNVP9BEX"
 };
 
 // --- Initialize Firebase ---

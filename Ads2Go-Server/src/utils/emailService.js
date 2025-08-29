@@ -26,7 +26,7 @@ class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="color: #333; text-align: center;">TradeIN Email Verification</h2>
+            <h2 style="color: #333; text-align: center;">Ads2Go Email Verification</h2>
             <p style="text-align: center; font-size: 16px; color: #666;">Your verification code is:</p>
             <h1 style="
               text-align: center; 

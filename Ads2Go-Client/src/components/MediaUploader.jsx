@@ -1,27 +1,65 @@
-import React, { useState } from 'react';
-import { handleMediaUpload } from '../utils/mediaUploader';
+import React, { useState, useCallback } from 'react';
+import { uploadDriverDocument, uploadMediaWithLocation } from '../utils/mediaUploader';
 import { useAuth } from '../contexts/AuthContext';
+import { FaUpload, FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
 
-const MediaUploader = () => {
+const MediaUploader = ({ documentType, onUploadComplete, label = 'Select a file', accept = 'image/*,video/*', showPreview = true }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const { currentUser } = useAuth();
+
+  const resetUploader = useCallback(() => {
+    setPreviewUrl(null);
+    setUploadStatus(null);
+  }, []);
 
   const onFileChange = async (event) => {
     if (!event.target.files || event.target.files.length === 0) return;
     
+    const file = event.target.files[0];
     setIsUploading(true);
-    setUploadStatus({ type: 'info', message: 'Uploading media...' });
+    setUploadStatus({ type: 'info', message: 'Uploading file...' });
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setPreviewUrl(e.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setPreviewUrl(null);
+    }
 
     try {
-      const result = await handleMediaUpload(event, currentUser.uid);
+      let result;
+      
+      if (documentType) {
+        // Handle driver document upload
+        result = await uploadDriverDocument(file, documentType, currentUser?.uid || 'anonymous');
+      } else {
+        // Handle regular media upload with location (legacy)
+        const location = await getCurrentLocation();
+        result = await uploadMediaWithLocation(file, location, currentUser?.uid || 'anonymous');
+      }
       
       if (result.success) {
+        const successMessage = documentType 
+          ? `${documentType.charAt(0).toUpperCase() + documentType.slice(1)} uploaded successfully!`
+          : 'Media uploaded successfully!';
+        
         setUploadStatus({
           type: 'success',
-          message: 'Media uploaded successfully!',
+          message: successMessage,
           data: result
         });
+        
+        // Notify parent component about successful upload
+        if (onUploadComplete) {
+          onUploadComplete({
+            url: result.url || result.downloadURL,
+            metadata: result.metadata || {}
+          });
+        }
       } else {
         throw new Error(result.error || 'Upload failed');
       }
@@ -29,76 +67,112 @@ const MediaUploader = () => {
       console.error('Upload error:', error);
       setUploadStatus({
         type: 'error',
-        message: error.message || 'Failed to upload media'
+        message: error.message || 'Failed to upload file'
       });
     } finally {
       setIsUploading(false);
+      event.target.value = ''; // Reset file input
     }
   };
 
+  const getStatusIcon = () => {
+    if (isUploading) return <FaSpinner className="animate-spin mr-2" />;
+    if (uploadStatus?.type === 'success') return <FaCheckCircle className="text-green-500 mr-2" />;
+    if (uploadStatus?.type === 'error') return <FaTimesCircle className="text-red-500 mr-2" />;
+    return <FaUpload className="mr-2" />;
+  };
+
   return (
-    <div className="p-4 max-w-md mx-auto bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-semibold mb-4">Upload Media with Location</h2>
-      
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select an image or video
+    <div className="w-full">
+      <div className="flex flex-col items-center justify-center w-full">
+        <label 
+          htmlFor="file-upload" 
+          className={`flex flex-col items-center justify-center w-full p-6 border-2 border-dashed rounded-lg cursor-pointer 
+            ${isUploading ? 'border-gray-300 bg-gray-50' : 'border-blue-300 hover:border-blue-400 bg-white'}
+            transition-colors duration-200`}
+        >
+          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            {getStatusIcon()}
+            <p className="mb-2 text-sm text-gray-500">
+              {isUploading ? (
+                <span>Uploading...</span>
+              ) : uploadStatus?.type === 'success' ? (
+                <span className="text-green-600 font-medium">{uploadStatus.message}</span>
+              ) : uploadStatus?.type === 'error' ? (
+                <span className="text-red-600">{uploadStatus.message}</span>
+              ) : (
+                <>
+                  <span className="font-semibold">Click to upload</span> or drag and drop
+                </>
+              )}
+            </p>
+            <p className="text-xs text-gray-500">{label} ({accept})</p>
+          </div>
+          <input
+            id="file-upload"
+            name="file-upload"
+            type="file"
+            className="hidden"
+            accept={accept}
+            onChange={onFileChange}
+            disabled={isUploading}
+          />
         </label>
-        <input
-          type="file"
-          accept="image/*,video/*"
-          onChange={onFileChange}
-          disabled={isUploading}
-          className="block w-full text-sm text-gray-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-md file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-blue-50 file:text-blue-700
-                    hover:file:bg-blue-100"
-        />
       </div>
 
-      {uploadStatus && (
-        <div className={`p-3 rounded-md ${
-          uploadStatus.type === 'error' ? 'bg-red-100 text-red-800' :
-          uploadStatus.type === 'success' ? 'bg-green-100 text-green-800' :
-          'bg-blue-100 text-blue-800'
-        }`}>
-          {uploadStatus.message}
-          
-          {uploadStatus.type === 'success' && uploadStatus.data && (
-            <div className="mt-2 p-2 bg-white bg-opacity-50 rounded">
-              <p className="text-sm">
-                <strong>File URL:</strong>{' '}
-                <a 
-                  href={uploadStatus.data.downloadURL} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline break-all"
-                >
-                  {uploadStatus.data.downloadURL}
-                </a>
-              </p>
-              {uploadStatus.data.metadata?.location && (
-                <p className="text-sm mt-1">
-                  <strong>Location:</strong>{' '}
-                  {uploadStatus.data.metadata.location.latitude.toFixed(6)}, 
-                  {uploadStatus.data.metadata.location.longitude.toFixed(6)}
-                </p>
-              )}
-            </div>
-          )}
+      {showPreview && previewUrl && (
+        <div className="mt-4">
+          <p className="text-sm font-medium text-gray-700 mb-2">Preview:</p>
+          <div className="relative w-full h-48 bg-gray-100 rounded-md overflow-hidden">
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="w-full h-full object-contain"
+            />
+          </div>
         </div>
       )}
 
-      {isUploading && (
-        <div className="mt-4 flex items-center">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
-          <span>Uploading, please wait...</span>
+      {uploadStatus?.type === 'success' && (
+        <div className="mt-4 p-3 bg-green-50 text-green-800 text-sm rounded-md">
+          <p>File uploaded successfully!</p>
+          {uploadStatus.data?.url && (
+            <p className="mt-1 truncate">
+              URL: <a href={uploadStatus.data.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {uploadStatus.data.url}
+              </a>
+            </p>
+          )}
+          <button
+            onClick={resetUploader}
+            className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+          >
+            Upload a different file
+          </button>
+        </div>
+      )}
+
+      {uploadStatus?.type === 'error' && (
+        <div className="mt-4 p-3 bg-red-50 text-red-800 text-sm rounded-md">
+          <p>Error: {uploadStatus.message}</p>
+          <button
+            onClick={resetUploader}
+            className="mt-2 text-xs text-red-600 hover:text-red-800"
+          >
+            Try again
+          </button>
         </div>
       )}
     </div>
   );
+};
+
+MediaUploader.defaultProps = {
+  documentType: null,
+  onUploadComplete: null,
+  label: 'Select a file',
+  accept: 'image/*',
+  showPreview: true
 };
 
 export default MediaUploader;
