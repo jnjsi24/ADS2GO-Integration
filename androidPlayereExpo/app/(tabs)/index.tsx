@@ -118,7 +118,7 @@ export default function HomeScreen() {
           <>
             <Video
               ref={videoRef}
-              source={{ uri: currentAd.ad.mediaFile }}
+              source={{ uri: currentAd.ad.mediaFile || currentAd.ad.mediaUrl }}
               style={styles.video}
               useNativeControls={false}
               resizeMode={ResizeMode.CONTAIN}
@@ -127,8 +127,17 @@ export default function HomeScreen() {
               onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
               onError={(error) => {
                 console.error('Video playback error:', error);
-                // Skip to next video on error
-                setCurrentAdIndex(prev => (prev + 1) % Math.max(1, ads.length));
+                // Try fallback URL if available
+                if (currentAd.ad.mediaFile && currentAd.ad.mediaUrl) {
+                  console.log('Trying fallback media URL...');
+                  videoRef.current?.loadAsync(
+                    { uri: currentAd.ad.mediaUrl },
+                    { shouldPlay: true }
+                  );
+                } else {
+                  // Skip to next video if no fallback available
+                  setCurrentAdIndex(prev => (prev + 1) % Math.max(1, ads.length));
+                }
               }}
             />
             <Text style={styles.adTitle}>{currentAd.ad.title}</Text>

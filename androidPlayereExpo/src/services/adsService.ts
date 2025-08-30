@@ -10,7 +10,10 @@ export interface AdDeployment {
     id: string;
     title: string;
     mediaFile: string;
+    mediaUrl: string;
     durationDays: number;
+    status: string;
+    adFormat: string;
   };
   startTime: string;
   endTime: string;
@@ -26,7 +29,10 @@ export const fetchAds = async (location: { latitude: number; longitude: number }
             id
             title
             mediaFile
+            mediaUrl
             durationDays
+            status
+            adFormat
           }
           startTime
           endTime
