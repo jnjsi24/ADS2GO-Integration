@@ -52,6 +52,10 @@ const LCDSlotSchema = new mongoose.Schema({
   removalReason: {
     type: String,
     default: null
+  },
+  mediaFile: {
+    type: String,
+    required: true
   }
 }, { _id: true });
 
@@ -210,6 +214,13 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
 
     console.log(`ℹ️  Next available slot: ${nextSlot}`);
 
+    // Fetch the ad to get the mediaFile
+    const Ad = require('./Ad');
+    const ad = await Ad.findById(adId);
+    if (!ad) {
+      throw new Error(`Ad ${adId} not found`);
+    }
+
     // Create new ad slot
     const newSlot = {
       adId,
@@ -217,7 +228,8 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
       startTime: new Date(startTime),
       endTime: new Date(endTime),
       status: new Date(startTime) <= new Date() ? 'RUNNING' : 'SCHEDULED',
-      deployedAt: new Date(startTime) <= new Date() ? new Date() : null
+      deployedAt: new Date(startTime) <= new Date() ? new Date() : null,
+      mediaFile: ad.mediaFile
     };
     
     console.log(`ℹ️  Creating new slot:`, newSlot);

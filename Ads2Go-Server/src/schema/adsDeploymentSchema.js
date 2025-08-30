@@ -26,6 +26,7 @@ const adsDeploymentTypeDefs = gql`
     removedAt: String
     removedBy: ID
     removalReason: String
+    mediaFile: String!
     
     # Populated field - references existing Ad type
     ad: Ad
