@@ -15,6 +15,8 @@ const AdminLogin: React.FC = () => {
 
   const [loginAdmin, { loading }] = useMutation(LOGIN_ADMIN_MUTATION, {
     onCompleted(data) {
+      console.log('Admin login successful:', data);
+      
       const { token, user } = data.loginAdmin;
 
       if (!user || (user.role?.toUpperCase() !== 'ADMIN' && user.role?.toUpperCase() !== 'SUPERADMIN')) {

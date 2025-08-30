@@ -17,6 +17,8 @@ const SuperAdminLogin: React.FC = () => {
 
   const [loginAdmin, { loading }] = useMutation(LOGIN_ADMIN_MUTATION, {
     onCompleted: (data) => {
+      console.log('SuperAdmin login successful:', data);
+      
       if (data?.loginAdmin?.token) {
         localStorage.setItem('token', data.loginAdmin.token);
         localStorage.setItem('role', data.loginAdmin.user.role || 'SUPERADMIN'); // from backend
