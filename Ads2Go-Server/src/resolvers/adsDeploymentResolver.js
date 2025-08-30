@@ -11,32 +11,6 @@ const { checkAuth, checkAdmin } = require('../middleware/auth');
 
 const adsDeploymentResolvers = {
   Query: {
-    getActiveDeployments: async () => {
-      try {
-        const now = new Date();
-        
-        // Find active deployments
-        const deployments = await AdsDeployment.find({
-          status: 'ACTIVE',
-          startTime: { $lte: now },
-          endTime: { $gte: now }
-        })
-        .populate({
-          path: 'ad',
-          match: { status: 'APPROVED' },
-          select: 'title mediaFile durationDays'
-        })
-        .populate('materialId', 'name')
-        .sort({ priority: -1, createdAt: 1 });
-
-        // Filter out deployments without a valid ad
-        return deployments.filter(dep => dep.ad);
-      } catch (error) {
-        console.error('Error in getActiveDeployments:', error);
-        throw new Error('Failed to fetch active deployments');
-      }
-    },
-
     getAllDeployments: async (_, __, { user }) => {
       checkAdmin(user);
       const deployments = await AdsDeployment.find({})
@@ -124,6 +98,35 @@ const adsDeploymentResolvers = {
 
       const deployments = await AdsDeployment.find({
         $or: [{ adId: { $in: adIds } }, { 'lcdSlots.adId': { $in: adIds } }]
+      })
+        .populate({
+          path: 'adId',
+          populate: { path: 'planId', model: 'AdsPlan' }
+        })
+        .populate({
+          path: 'lcdSlots.adId',
+          populate: { path: 'planId', model: 'AdsPlan' }
+        })
+        .populate('materialId')
+        .populate('driverId')
+        .populate('removedBy')
+        .sort({ startTime: -1 });
+
+      deployments.forEach(d => {
+        if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
+      });
+
+      return deployments;
+    },
+
+    getActiveDeployments: async (_, __, { user }) => {
+      checkAdmin(user);
+      const now = new Date();
+
+      const deployments = await AdsDeployment.find({
+        currentStatus: 'RUNNING',
+        startTime: { $lte: now },
+        endTime: { $gte: now }
       })
         .populate({
           path: 'adId',
