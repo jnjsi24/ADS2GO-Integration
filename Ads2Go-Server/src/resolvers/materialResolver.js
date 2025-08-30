@@ -41,9 +41,13 @@ const materialResolvers = {
     },
 
     // Accessible by User & Driver (login required)
-    getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType }, { user, driver }) => {
+    getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType, materialType }, { user, driver }) => {
       if (!user && !driver) throw new Error("Unauthorized");
-      return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
+      const query = { category, vehicleType };
+      if (materialType) {
+        query.materialType = materialType;
+      }
+      return await Material.find(query).sort({ createdAt: -1 });
     },
 
     getMaterialById: async (_, { id }, { user }) => {

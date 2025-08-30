@@ -1,0 +1,43 @@
+=type AdDeployment {
+  id: ID!
+  ad: Ad!
+  materialId: Material
+  driverId: ID
+  startTime: String!
+  endTime: String!
+  status: String!
+  priority: Int
+  lcdSlots: [LCDSlot]
+  removedBy: ID
+  removalReason: String
+  removalTime: String
+  createdAt: String!
+  updatedAt: String!
+}
+
+type LCDSlot {
+  adId: ID!
+  startTime: String!
+  endTime: String!
+  status: String!
+}
+
+type Ad {
+  id: ID!
+  title: String!
+  mediaUrl: String!
+  mediaFile: String
+  duration: Int
+  durationDays: Int
+  status: String
+}
+
+type Material {
+  id: ID!
+  name: String
+}
+
+type Query {
+  getActiveDeployments: [AdDeployment]!
+  # ... other queries ...
+}
