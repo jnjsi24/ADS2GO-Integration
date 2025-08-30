@@ -1,3 +1,5 @@
+
+
 // adsDeploymentResolver.js
 
 const AdsDeployment = require('../models/adsDeployment');
@@ -13,58 +15,22 @@ const adsDeploymentResolvers = {
       try {
         const now = new Date();
         
-        // Find deployments with active LCD slots
+        // Find active deployments
         const deployments = await AdsDeployment.find({
-          'lcdSlots.status': 'RUNNING',
-          'lcdSlots.startTime': { $lte: now },
-          'lcdSlots.endTime': { $gte: now }
+          status: 'ACTIVE',
+          startTime: { $lte: now },
+          endTime: { $gte: now }
         })
         .populate({
-          path: 'lcdSlots.adId',
+          path: 'ad',
           match: { status: 'APPROVED' },
-          select: 'title mediaFile mediaUrl durationDays status adFormat userId'
+          select: 'title mediaFile durationDays'
         })
-        .populate('materialId', 'name materialType')
-        .populate('driverId', '_id name')
+        .populate('materialId', 'name')
         .sort({ priority: -1, createdAt: 1 });
 
-        // Flatten the deployments into individual ad slots with complete ad information
-        const activeSlots = [];
-        
-        for (const deployment of deployments) {
-          for (const slot of deployment.lcdSlots) {
-            // Only include slots that have populated ad data and are running
-            if (slot.adId && slot.status === 'RUNNING') {
-              activeSlots.push({
-                id: deployment._id.toString(),
-                deploymentId: deployment._id.toString(),
-                materialId: deployment.materialId._id.toString(),
-                materialName: deployment.materialId.name,
-                materialType: deployment.materialId.materialType,
-                driverId: deployment.driverId ? deployment.driverId._id.toString() : deployment.driverId,
-                driverName: deployment.driverId?.name || null,
-                slotNumber: slot.slotNumber,
-                ad: {
-                  id: slot.adId._id.toString(),
-                  title: slot.adId.title,
-                  mediaFile: slot.adId.mediaFile,
-                  mediaUrl: slot.adId.mediaUrl,
-                  durationDays: slot.adId.durationDays,
-                  status: slot.adId.status,
-                  adFormat: slot.adId.adFormat,
-                  userId: slot.adId.userId
-                },
-                startTime: slot.startTime,
-                endTime: slot.endTime,
-                status: slot.status,
-                deployedAt: slot.deployedAt,
-                lastFrameUpdate: slot.lastFrameUpdate
-              });
-            }
-          }
-        }
-
-        return activeSlots;
+        // Filter out deployments without a valid ad
+        return deployments.filter(dep => dep.ad);
       } catch (error) {
         console.error('Error in getActiveDeployments:', error);
         throw new Error('Failed to fetch active deployments');
@@ -404,3 +370,4 @@ const adsDeploymentResolvers = {
 };
 
 module.exports = adsDeploymentResolvers;
+
