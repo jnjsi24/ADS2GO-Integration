@@ -21,6 +21,7 @@ const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
+const tabletTypeDefs = require('./schema/tabletSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -30,6 +31,7 @@ const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
+const tabletResolvers = require('./resolvers/tabletResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -61,6 +63,7 @@ const server = new ApolloServer({
     materialTypeDefs,
     adsPlanTypeDefs,
     materialTrackingTypeDefs,
+    tabletTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -70,6 +73,7 @@ const server = new ApolloServer({
     materialResolver,
     adsPlanResolvers,
     materialTrackingResolvers,
+    tabletResolvers,
   ]),
 });
 
@@ -99,6 +103,10 @@ async function startServer() {
   // Regular file upload route (must come before GraphQL middleware)
   const uploadRoute = require('./routes/upload');
   app.use('/upload', uploadRoute);
+  
+  // Tablet registration routes
+  const tabletRoute = require('./routes/tablet');
+  app.use('/', tabletRoute);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

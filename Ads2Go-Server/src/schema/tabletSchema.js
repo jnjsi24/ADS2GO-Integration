@@ -1,15 +1,18 @@
 const { gql } = require('apollo-server-express');
 
 module.exports = gql`
+  type TabletUnit {
+    tabletNumber: Int!
+    status: String!
+    gps: GPS
+    lastSeen: String
+  }
+
   type Tablet {
     id: ID!
-    deviceId: String!
-    materialId: String!
-    role: String!
-    gps: GPS
-    isOnline: Boolean
-    lastOnlineAt: String
-    lastReportedAt: String
+    materialId: ID!
+    carGroupId: String!
+    tablets: [TabletUnit!]!
     createdAt: String
     updatedAt: String
   }

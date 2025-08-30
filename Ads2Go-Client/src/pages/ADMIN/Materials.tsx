@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
-import { ChevronDown, TrashIcon, Edit, X, Plus, UserX, Check, Calendar, UserPlus } from 'lucide-react';
+import { ChevronDown, TrashIcon, Edit, X, Plus, UserX, Check, Calendar, UserPlus, QrCode, Copy } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 // GraphQL Queries
 const GET_ALL_MATERIALS = gql`
@@ -24,6 +25,27 @@ const GET_ALL_MATERIALS = gql`
       }
       mountedAt
       dismountedAt
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+const GET_TABLETS_BY_MATERIAL = gql`
+  query GetTabletsByMaterial($materialId: String!) {
+    getTabletsByMaterial(materialId: $materialId) {
+      id
+      materialId
+      carGroupId
+      tablets {
+        tabletNumber
+        status
+        gps {
+          lat
+          lng
+        }
+        lastSeen
+      }
       createdAt
       updatedAt
     }
@@ -162,8 +184,32 @@ interface CreateMaterialInput {
   materialType: 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER';
   description: string;
   requirements: string;
-  materialId: string;
   category: 'DIGITAL' | 'NON_DIGITAL';
+}
+
+interface TabletUnit {
+  tabletNumber: number;
+  status: string;
+  gps: {
+    lat: number | null;
+    lng: number | null;
+  } | null;
+  lastSeen: string | null;
+}
+
+interface Tablet {
+  id: string;
+  materialId: string;
+  carGroupId: string;
+  tablets: TabletUnit[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ConnectionDetails {
+  materialId: string;
+  slotNumber: number;
+  carGroupId: string;
 }
 
 // Vehicle-Material mapping based on your requirements
@@ -207,6 +253,11 @@ const Materials: React.FC = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedMaterialForAssign, setSelectedMaterialForAssign] = useState<Material | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+
+  // State for Tablet interface and connection details
+  const [showTabletInterface, setShowTabletInterface] = useState(false);
+  const [selectedTabletMaterialId, setSelectedTabletMaterialId] = useState<string | null>(null);
+  const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
 
   // Get available material types based on vehicle and category
   const getAvailableMaterialTypes = (vehicleType: string, category: string) => {
@@ -287,6 +338,39 @@ const Materials: React.FC = () => {
       alert(`Error deleting material: ${error.message}`);
     }
   });
+
+  // Tablet query hook
+  const { data: tabletData, loading: tabletLoading } = useQuery(GET_TABLETS_BY_MATERIAL, {
+    variables: { materialId: selectedTabletMaterialId || '' },
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    skip: !selectedTabletMaterialId,
+    errorPolicy: 'all',
+    onError: (error) => {
+      console.error('Error loading tablets:', error);
+    }
+  });
+
+
+
+  // Function to copy connection details to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Connection details copied to clipboard!');
+    }).catch(() => {
+      alert('Failed to copy to clipboard');
+    });
+  };
+
+  // Function to show connection details modal
+  const showConnectionDetails = (materialId: string, slotNumber: number) => {
+    setSelectedTabletMaterialId(materialId);
+    setSelectedTabletSlotNumber(slotNumber);
+    setShowTabletInterface(true);
+  };
 
   const [updateMaterial] = useMutation(UPDATE_MATERIAL, {
     context: {
@@ -888,6 +972,24 @@ const Materials: React.FC = () => {
                             <UserX size={16} />
                           </button>
                         )}
+                        {material.materialType === 'HEADDRESS' && (
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => showConnectionDetails(material.id, 1)}
+                              className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors"
+                              title="View tablet connection details for Slot 1"
+                            >
+                              <QrCode size={16} />
+                            </button>
+                            <button
+                              onClick={() => showConnectionDetails(material.id, 2)}
+                              className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors"
+                              title="View tablet connection details for Slot 2"
+                            >
+                              <QrCode size={16} />
+                            </button>
+                          </div>
+                        )}
                         <button className="p-1 text-[#3674B5] rounded-full hover:bg-gray-100 transition-colors">
                           <Edit size={16} />
                         </button>
@@ -1179,6 +1281,118 @@ const Materials: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Details Modal */}
+      {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-800">
+                Tablet Connection Details - Slot {selectedTabletSlotNumber}
+              </h2>
+              <button
+                onClick={() => setShowTabletInterface(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {tabletLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-2 text-gray-600">Loading tablet data...</span>
+              </div>
+            ) : !tabletData?.getTabletsByMaterial?.[0] ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="text-red-500 mb-2">⚠️</div>
+                  <span className="text-gray-600">No tablet configuration found for this material.</span>
+                  <br />
+                  <span className="text-sm text-gray-500">Please ensure this is a HEADDRESS material.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Connection Details */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Material ID:</span>
+                      <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Slot Number:</span>
+                      <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Car Group ID:</span>
+                      <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* QR Code */}
+                <div className="flex flex-col items-center space-y-4">
+                  <h3 className="font-semibold text-gray-800">QR Code</h3>
+                  <div className="bg-white p-4 border border-gray-200 rounded-lg">
+                    <QRCodeSVG 
+                      value={JSON.stringify({
+                        materialId: selectedTabletMaterialId,
+                        slotNumber: selectedTabletSlotNumber,
+                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                      })}
+                      size={200}
+                      level="M"
+                      includeMargin={true}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 text-center">
+                    Scan this QR code with the AndroidPlayer app to connect
+                  </p>
+                </div>
+
+                {/* Manual Code */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-800">Manual Code</h3>
+                  <div className="bg-gray-100 p-3 rounded-lg">
+                    <code className="text-sm text-gray-800 break-all">
+                      {JSON.stringify({
+                        materialId: selectedTabletMaterialId,
+                        slotNumber: selectedTabletSlotNumber,
+                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                      }, null, 2)}
+                    </code>
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(JSON.stringify({
+                      materialId: selectedTabletMaterialId,
+                      slotNumber: selectedTabletSlotNumber,
+                      carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                    }, null, 2))}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Copy size={16} />
+                    Copy to Clipboard
+                  </button>
+                </div>
+
+                {/* Instructions */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
+                  <div className="text-sm text-yellow-700 space-y-1">
+                    <p>1. Scan the QR code or copy the manual code</p>
+                    <p>2. Open the AndroidPlayer app on your tablet</p>
+                    <p>3. Enter the connection details</p>
+                    <p>4. The tablet will connect to the system</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

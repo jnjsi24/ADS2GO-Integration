@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const TabletUnitSchema = new mongoose.Schema({
   tabletNumber: { type: Number, required: true },
+  deviceId: { type: String, default: null }, // Unique device identifier
   status: { 
     type: String, 
     enum: ['ONLINE', 'OFFLINE'], 

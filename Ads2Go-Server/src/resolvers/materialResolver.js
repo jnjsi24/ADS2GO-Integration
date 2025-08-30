@@ -75,29 +75,35 @@ const materialResolvers = {
 
       // Create tablet pair if the material type is HEADDRESS
       if (materialType === 'HEADDRESS') {
-        const carGroupId = `GRP-${uuidv4().substring(0, 8).toUpperCase()}`;
+        // Check if a tablet document already exists for this material
+        let existingTablet = await Tablet.findOne({ materialId: material._id });
         
-        // Create a single document with both tablets
-        const tabletPair = new Tablet({
-          materialId: material._id,
-          carGroupId,
-          tablets: [
-            {
-              tabletNumber: 1,
-              status: 'OFFLINE',
-              gps: { lat: null, lng: null },
-              lastSeen: null
-            },
-            {
-              tabletNumber: 2,
-              status: 'OFFLINE',
-              gps: { lat: null, lng: null },
-              lastSeen: null
-            }
-          ]
-        });
-        
-        await tabletPair.save();
+        if (!existingTablet) {
+          // Only create new tablet document if one doesn't exist
+          const carGroupId = `GRP-${uuidv4().substring(0, 8).toUpperCase()}`;
+          
+          // Create a single document with both tablets
+          const tabletPair = new Tablet({
+            materialId: material._id,
+            carGroupId,
+            tablets: [
+              {
+                tabletNumber: 1,
+                status: 'OFFLINE',
+                gps: { lat: null, lng: null },
+                lastSeen: null
+              },
+              {
+                tabletNumber: 2,
+                status: 'OFFLINE',
+                gps: { lat: null, lng: null },
+                lastSeen: null
+              }
+            ]
+          });
+          
+          await tabletPair.save();
+        }
       }
 
       return material;
