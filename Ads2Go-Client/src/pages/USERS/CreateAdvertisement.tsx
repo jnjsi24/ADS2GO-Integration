@@ -60,13 +60,23 @@ const CreateAdvertisement: React.FC = () => {
     onCompleted: (data) => {
       if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
         setMaterials(data.getMaterialsByCategoryAndVehicle);
-        // Automatically select the first available material
-        const firstMaterial = data.getMaterialsByCategoryAndVehicle[0];
-        setFormData(prev => ({ ...prev, materialId: firstMaterial?.id || '' }));
+    
+        // Try to find a material that matches the plan's materialType
+        const matchingMaterial = data.getMaterialsByCategoryAndVehicle.find(
+          (m: any) => m.materialType === selectedPlan?.materialType
+        );
+    
+        if (matchingMaterial) {
+          setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
+        } else {
+          // fallback: pick first material if exact match not found
+          setFormData(prev => ({ ...prev, materialId: data.getMaterialsByCategoryAndVehicle[0]?.id || '' }));
+        }
       } else {
         setMaterials([]);
         setFormData(prev => ({ ...prev, materialId: '' }));
       }
+    
     },
     onError: (error) => {
       console.error('Error fetching materials:', error);
@@ -364,7 +374,7 @@ const CreateAdvertisement: React.FC = () => {
               {materials.length > 0 && (
                 <p className="text-sm mt-1">
                   Material ID: {materials.find(m => m.id === formData.materialId)?.materialId}
-                </p>
+                  </p>
               )}
             </div>
           ) : (
