@@ -407,12 +407,45 @@ const AdDetailsPage: React.FC = () => {
 
         {/* RIGHT Section (Media, Properties, Levels, Stats) */}
         <div className="flex flex-col space-y-8">
-          {/* Main Media Display */}
+          {/* Main Media Display - Fixed based on ManageAds.tsx */}
           <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center" style={{ height: '400px' }}>
-            {ad.adFormat === 'VIDEO' && ad.mediaFile ? (
-              <video src={ad.mediaFile} controls className="w-full h-full object-contain"></video>
-            ) : ad.mediaFile ? (
-              <img src={ad.mediaFile} alt={ad.title} className="w-full h-full object-contain" />
+            {ad.mediaFile ? (
+              ad.adFormat === 'IMAGE' ? (
+                <img 
+                  src={ad.mediaFile} 
+                  alt={ad.title}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                  }}
+                />
+              ) : ad.adFormat === 'VIDEO' ? (
+                <video 
+                  controls 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'w-full h-full flex items-center justify-center';
+                    errorDiv.innerHTML = '<span class="text-gray-500 text-xl">Video not available</span>';
+                    e.currentTarget.parentNode?.appendChild(errorDiv);
+                  }}
+                >
+                  <source src={ad.mediaFile} />
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <a 
+                    href={ad.mediaFile} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-700 underline text-xl"
+                  >
+                    View Media File
+                  </a>
+                </div>
+              )
             ) : (
               <div className="text-gray-500 text-xl">No Media Available</div>
             )}

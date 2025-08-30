@@ -388,9 +388,10 @@ const Advertisements: React.FC = () => {
               className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
             >
               <option value="All Status">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Dispatch">Dispatch</option>
-              <option value="Completed">Completed</option>
+              <option value="Pending">PENDING</option>
+              <option value="Approved">APPROVED</option>
+              <option value="Running">RUNNING</option>
+              <option value="Completed">COMPLETED</option>
             </select>
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
               <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -437,20 +438,44 @@ const Advertisements: React.FC = () => {
               className="rounded-2xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
               <div className="w-full h-48 flex-shrink-0 relative">
-                {ad.adFormat === 'Video' && ad.mediaFile ? (
-                  <video
-                    src={ad.mediaFile}
-                    className="w-full h-full object-cover"
-                    controls
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                ) : ad.mediaFile ? (
-                  <img
-                    src={ad.mediaFile}
-                    alt={`${ad.title} image`}
-                    className="w-full h-full object-cover"
-                  />
+                {/* Fixed media display based on ManageAds.tsx */}
+                {ad.mediaFile ? (
+                  ad.adFormat === 'IMAGE' ? (
+                    <img
+                      src={ad.mediaFile}
+                      alt={`${ad.title} image`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                      }}
+                    />
+                  ) : ad.adFormat === 'VIDEO' ? (
+                    <video
+                      className="w-full h-full object-cover"
+                      controls
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'w-full h-full bg-gray-500 flex items-center justify-center text-white';
+                        errorDiv.innerHTML = 'Video not available';
+                        e.currentTarget.parentNode?.appendChild(errorDiv);
+                      }}
+                    >
+                      <source src={ad.mediaFile} />
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="w-full h-full bg-gray-500 flex items-center justify-center">
+                      <a 
+                        href={ad.mediaFile} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-white hover:text-gray-300 underline"
+                      >
+                        View Media File
+                      </a>
+                    </div>
+                  )
                 ) : (
                   <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
                     No Media
@@ -666,7 +691,7 @@ const Advertisements: React.FC = () => {
                 {formData.vehicleType && formData.materialsUsed && formData.plan && (
                   <div className="text-green-700 font-semibold mt-2">
                     {estimatedPrice !== null
-                      ? `Total Price: $${estimatedPrice.toFixed(2)}`
+                      ? `Total Price: ${estimatedPrice.toFixed(2)}`
                       : <span className="text-red-600">Price unavailable for selected options</span>}
                   </div>
                 )}
@@ -747,4 +772,4 @@ const Advertisements: React.FC = () => {
   );
 };
 
-export default Advertisements;
+export default Advertisements; 
