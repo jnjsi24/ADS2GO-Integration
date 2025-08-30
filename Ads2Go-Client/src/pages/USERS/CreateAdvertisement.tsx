@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/queries/adsPlans';
@@ -33,7 +33,7 @@ type AdvertisementForm = {
   materialId: string;
   mediaFile?: File;
   mediaPreview?: string;
-  startTime?: string;
+  startDate: string; // Changed from startTime to startDate for better UX
 };
 
 const CreateAdvertisement: React.FC = () => {
@@ -45,10 +45,28 @@ const CreateAdvertisement: React.FC = () => {
     description: '',
     planId: '',
     materialId: '',
+    startDate: new Date().toISOString().split('T')[0], // Default to today's date
   });
   const [materials, setMaterials] = useState<any[]>([]);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  // Function to calculate end date based on start date and duration
+  const calculateEndDate = (startDate: string, durationDays: number): string => {
+    const start = new Date(startDate);
+    const end = new Date(start.getTime() + durationDays * 24 * 60 * 60 * 1000);
+    return end.toISOString().split('T')[0];
+  };
+
+  // Function to format date for display
+  const formatDateForDisplay = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
   // Automatically fetch and select material based on selected plan
   const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
@@ -76,7 +94,6 @@ const CreateAdvertisement: React.FC = () => {
         setMaterials([]);
         setFormData(prev => ({ ...prev, materialId: '' }));
       }
-    
     },
     onError: (error) => {
       console.error('Error fetching materials:', error);
@@ -199,6 +216,11 @@ const CreateAdvertisement: React.FC = () => {
       return;
     }
 
+    if (!formData.startDate) {
+      alert('Please select a start date');
+      return;
+    }
+
     try {
       // Upload media file to Firebase Storage
       const mediaFileURL = await uploadFileToFirebase(formData.mediaFile);
@@ -206,6 +228,12 @@ const CreateAdvertisement: React.FC = () => {
       // Determine ad format based on file type
       const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
       const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
+      
+      // Calculate start and end times
+      const startTime = new Date(formData.startDate).toISOString();
+      const endTime = new Date(
+        new Date(formData.startDate).getTime() + selectedPlan.durationDays * 24 * 60 * 60 * 1000
+      ).toISOString();
       
       // Prepare the input for createAd mutation
       const input = {
@@ -217,11 +245,8 @@ const CreateAdvertisement: React.FC = () => {
         adFormat: isVideo ? 'VIDEO' : 'IMAGE',
         price: selectedPlan.totalPrice,
         status: 'PENDING',
-        startTime: formData.startTime || new Date().toISOString(),
-        endTime: new Date(
-          (formData.startTime ? new Date(formData.startTime) : new Date()).getTime() +
-          selectedPlan.durationDays * 24 * 60 * 60 * 1000
-        ).toISOString(),
+        startTime: startTime,
+        endTime: endTime,
         mediaFile: mediaFileURL // Use Firebase download URL instead of local path
       };
 
@@ -244,7 +269,7 @@ const CreateAdvertisement: React.FC = () => {
       case 2:
         return selectedPlan !== null && formData.materialId !== '';
       case 3:
-        return formData.title && formData.description;
+        return formData.title && formData.description && formData.startDate;
       case 4:
         return formData.mediaFile;
       default:
@@ -421,6 +446,30 @@ const CreateAdvertisement: React.FC = () => {
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Campaign Start Date *
+          </label>
+          <div className="relative">
+            <input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              min={new Date().toISOString().split('T')[0]} // Prevent selecting past dates
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70] pl-10"
+              required
+            />
+            <Calendar className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+          </div>
+          {selectedPlan && formData.startDate && (
+            <p className="text-sm text-gray-600 mt-2">
+              Campaign will end on: <span className="font-medium">
+                {formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays))}
+              </span>
+            </p>
+          )}
+        </div>
+
         {selectedPlan && (
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="font-semibold mb-2">Selected Plan: {selectedPlan.name}</h3>
@@ -565,6 +614,26 @@ const CreateAdvertisement: React.FC = () => {
           </div>
         </div>
 
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Campaign Schedule</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Start Date:</span>
+              <p className="text-gray-600">{formatDateForDisplay(formData.startDate)}</p>
+            </div>
+            <div>
+              <span className="font-medium">End Date:</span>
+              <p className="text-gray-600">
+                {selectedPlan ? formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays)) : 'N/A'}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <span className="font-medium">Campaign Duration:</span>
+              <p className="text-gray-600">{selectedPlan?.durationDays} days</p>
+            </div>
+          </div>
+        </div>
+
         {selectedPlan && (
           <div className="bg-white border rounded-lg p-6 shadow-sm">
             <h3 className="text-lg font-semibold mb-4">Selected Plan & Material</h3>
@@ -633,8 +702,8 @@ const CreateAdvertisement: React.FC = () => {
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
           <p className="text-sm text-blue-800">
             By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString()} 
-            for a {selectedPlan?.durationDays}-day campaign. Your advertisement will be submitted for review 
-            and you'll be notified once it's approved.
+            for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}. 
+            Your advertisement will be submitted for review and you'll be notified once it's approved.
           </p>
         </div>
       </div>
