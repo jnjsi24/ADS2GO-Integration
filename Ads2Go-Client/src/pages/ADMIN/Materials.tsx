@@ -195,7 +195,8 @@ const Materials: React.FC = () => {
     materialType: 'LCD',
     description: '',
     requirements: '',
-    category: 'DIGITAL'
+    category: 'DIGITAL',
+    materialId: ''
   });
 
   // State for date editing
@@ -268,7 +269,8 @@ const Materials: React.FC = () => {
         materialType: 'LCD',
         description: '',
         requirements: '',
-        category: 'DIGITAL'
+        category: 'DIGITAL',
+        materialId: ''
       });
       refetch();
     },

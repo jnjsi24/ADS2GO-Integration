@@ -136,7 +136,7 @@ const ForgotPasswordScreen = () => {
     setLoading(false);
 
     if (result.success) {
-      Alert.alert('Success', 'A verification code has been sent to your email.');
+      Alert.alert('Success', 'A verification code has been sent to your email');
       setCurrentStep(1);
       setTimer(60);
       setCode(''); // Reset code input
@@ -158,7 +158,7 @@ const ForgotPasswordScreen = () => {
     }
     
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match.');
+      Alert.alert('Error', 'Passwords do not match, Please Try again');
       return;
     }
 

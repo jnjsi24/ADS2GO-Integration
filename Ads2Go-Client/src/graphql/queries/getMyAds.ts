@@ -13,8 +13,9 @@ export const GET_MY_ADS = gql`
       vehicleType
       createdAt
       price
-
-      planId {       # populated AdsPlan object
+      startTime
+      endTime
+      planId {
         id
         name
         durationDays
@@ -24,8 +25,7 @@ export const GET_MY_ADS = gql`
         pricePerPlay
         totalPrice
       }
-
-      materialId {   # populated Material object
+      materialId {
         id
         materialType
         category
@@ -33,8 +33,6 @@ export const GET_MY_ADS = gql`
         mountedAt
         dismountedAt
       }
-
-      
     }
   }
 `;

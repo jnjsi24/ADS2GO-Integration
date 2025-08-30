@@ -53,7 +53,7 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
   }
 `;
 
-// Media display component to handle both images and videos
+// Media display component to handle both images and videos (following ManageAds.tsx pattern)
 const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
   mediaFile, 
   adFormat, 
@@ -71,7 +71,17 @@ const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName:
     setIsLoading(false);
   };
 
-  if (mediaError) {
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    handleError();
+    // Additional error handling like in ManageAds
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'w-full h-full flex items-center justify-center text-gray-500 text-xs';
+    errorDiv.innerHTML = 'Video not available';
+    e.currentTarget.style.display = 'none';
+    e.currentTarget.parentNode?.appendChild(errorDiv);
+  };
+
+  if (mediaError || !mediaFile) {
     return (
       <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
         <span className="text-xs text-gray-500 text-center">No Media</span>
@@ -88,23 +98,20 @@ const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName:
           </div>
         )}
         <video
-          src={mediaFile}
+          controls
           className="max-w-full max-h-full object-cover"
-          muted
-          preload="metadata"
-          onError={handleError}
+          onError={handleVideoError}
           onLoadedData={handleLoad}
           onLoadStart={() => setIsLoading(false)}
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-          <div className="w-6 h-6 bg-white bg-opacity-80 rounded-full flex items-center justify-center">
-            <div className="w-0 h-0 border-l-[6px] border-l-gray-700 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent ml-1"></div>
-          </div>
-        </div>
+        >
+          <source src={mediaFile} />
+          Your browser does not support the video tag.
+        </video>
       </div>
     );
   }
 
+  // For IMAGE format (following ManageAds.tsx pattern)
   return (
     <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
       {isLoading && (
@@ -113,10 +120,14 @@ const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName:
         </div>
       )}
       <img
-        src={mediaFile || "https://via.placeholder.com/80"}
+        src={mediaFile}
         alt={`${productName} preview`}
         className="max-w-full max-h-full object-cover"
-        onError={handleError}
+        onError={(e) => {
+          handleError();
+          // Fallback image like in ManageAds
+          e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+        }}
         onLoad={handleLoad}
       />
     </div>
@@ -132,7 +143,8 @@ const PaymentHistory: React.FC = () => {
   const navigate = useNavigate();
 
   const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
-    fetchPolicy: 'network-only',
+    fetchPolicy: 'cache-and-network', // Similar to ManageAds
+    errorPolicy: 'all',
   });
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
@@ -167,7 +179,7 @@ const PaymentHistory: React.FC = () => {
         return {
           id: ad.id,
           productName: ad.title,
-          imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
+          imageUrl: ad.mediaFile || "", // No fallback URL - let error handling manage it
           plan,
           amount,
           status,
@@ -178,7 +190,7 @@ const PaymentHistory: React.FC = () => {
           address: "",
           durationDays,
           paymentType: payment?.paymentType || "",
-          adFormat: ad.adFormat || "",
+          adFormat: ad.adFormat || "IMAGE",
           adLengthSeconds: ad.adLengthSeconds || 0,
           totalPrice,
           receiptId: payment?.receiptId || "",
@@ -198,8 +210,35 @@ const PaymentHistory: React.FC = () => {
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() as Status;
   };
 
-  if (loading) return <p>Loading payments...</p>;
-  if (error) return <p>Error loading payments: {error.message}</p>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+        <div className="flex items-center justify-center h-64">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-lg text-gray-600">Loading payments...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <strong className="font-bold">Error loading payments: </strong>
+          <span className="block sm:inline">{error.message}</span>
+          <button
+            onClick={() => refetch()}
+            className="mt-2 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filteredPayments = payments.filter((item) => {
     const matchesSearchTerm = item.productName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
@@ -378,7 +417,10 @@ const PaymentHistory: React.FC = () => {
           ))
         ) : (
           <div className="col-span-full text-center text-gray-500 py-8">
-            No payments found for the selected filters.
+            {searchTerm || statusFilter !== 'All Status' || planFilter !== 'All Plans' ? 
+              'No payments match your search criteria' : 
+              'No payments found'
+            }
           </div>
         )}
       </div>
