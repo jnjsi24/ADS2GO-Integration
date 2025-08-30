@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, Mail, Phone, MapPin, Edit, X, MoreVertical } from 'lucide-react';
+import { ChevronDown, Mail, Phone, MapPin, Edit, X, MoreVertical, Eye } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
 
@@ -178,16 +178,22 @@ const formatLastAccess = (date: Date | null): string => {
   }
 };
 
+// Helper function to get initials for the user avatar
+const getInitials = (firstName: string, lastName: string) => {
+  return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+};
+
 const ManageUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<User | null>(null);
 
   // Fetch users from backend
   useEffect(() => {
@@ -303,11 +309,6 @@ const ManageUsers: React.FC = () => {
     }
   };
 
-  // Helper function to get initials for the user avatar
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
-  };
-
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
@@ -319,7 +320,6 @@ const ManageUsers: React.FC = () => {
         if (result.data.deleteUser.success) {
           // Remove the user from the local state
           setUsers(prev => prev.filter((user) => user.id !== id));
-          if (expandedId === id) setExpandedId(null);
           // Remove from selected users if it was selected
           setSelectedUsers(prev => prev.filter(userId => userId !== id));
           alert('User deleted successfully');
@@ -331,6 +331,12 @@ const ManageUsers: React.FC = () => {
         console.error('Error deleting user:', err);
       }
     }
+  };
+
+  // Handle view details
+  const handleViewDetails = (user: User) => {
+    setSelectedUserDetails(user);
+    setShowDetailsModal(true);
   };
 
   // Filter users based on search term, status, and city
@@ -348,11 +354,6 @@ const ManageUsers: React.FC = () => {
     
     return matchesSearch && matchesStatus && matchesCity;
   });
-
-  // Toggle the expanded user card
-  const toggleExpand = (id: string) => {
-    setExpandedId(prev => (prev === id ? null : id));
-  };
   
   // Handle individual user selection
   const handleUserSelect = (id: string, e: React.MouseEvent) => {
@@ -490,177 +491,57 @@ const ManageUsers: React.FC = () => {
           {filteredUsers.map((user) => (
             <div
               key={user.id}
-              className={`bg-white border-t border-gray-300 transition-all duration-500 ease-in-out transform origin-top ${
-                expandedId === user.id ? 'z-10 relative scale-105 shadow-xl' : ''
-              }`}
+              className="bg-white border-t border-gray-300 transition-colors cursor-pointer"
             >
-              {expandedId !== user.id ? (
-                // Collapsed User Card
-                <div
-                  className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => toggleExpand(user.id)}
-                >
-                  <div className="col-span-3 gap-7 flex items-center">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={selectedUsers.includes(user.id)}
-                      onChange={() => {}}
-                      onClick={(e) => handleUserSelect(user.id, e)}
-                    />
-                    <div className="flex items-center">
-                      <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                        {getInitials(user.firstName, user.lastName)}
-                      </div>
-                      <span className="truncate">
-                        {user.firstName} {user.middleName} {user.lastName}
-                      </span>
+              <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-gray-100">
+                <div className="col-span-3 gap-7 flex items-center">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={selectedUsers.includes(user.id)}
+                    onChange={() => {}}
+                    onClick={(e) => handleUserSelect(user.id, e)}
+                  />
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
+                      {getInitials(user.firstName, user.lastName)}
                     </div>
-                  </div>
-                  <div className="col-span-3 truncate">{user.email}</div>
-                  <div className="col-span-2 truncate">{user.company}</div>
-                  <div className="col-span-1">
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                      }`}
-                    >
-                      {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                    <span className="truncate">
+                      {user.firstName} {user.middleName} {user.lastName}
                     </span>
                   </div>
-                  <div className="col-span-2 truncate">
-                    {formatLastAccess(user.lastLogin)}
-                  </div>
-                  <div className="col-span-1 flex items-center justify-center gap-2">
-                    <button onClick={() => toggleExpand(user.id)}>
-                      <ChevronDown size={16} className="inline-block text-gray-500" />
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                // Expanded User Card
-                <div className="bg-white p-6 shadow-xl rounded-md flex flex-col lg:flex-row items-start justify-between">
-                  {/* Left Section: Avatar, Name, Personal Details */}
-                  <div className="flex items-start pl-6 gap-4 mb-6 lg:mb-0 lg:pr-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white bg-[#FF9D3D] shadow-md">
-                        {getInitials(user.firstName, user.lastName)}
-                      </div>
-                      <span className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white ${user.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                    </div>
-                    <div className="flex-grow">
-                      <h3 className="text-xl font-bold text-gray-800 mb-1">
-                        {user.firstName} {user.lastName}
-                      </h3>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">ID:</span>
-                          <span className="text-gray-600">{user.id}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">City:</span>
-                          <span className="text-gray-600">{user.city}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Company:</span>
-                          <span className="text-gray-600">{user.company}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Status:</span>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                          }`}>
-                            {user.status === 'active' ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Middle Section: System Details */}
-                  <div className="flex flex-col gap-4 mt-6 lg:mb-0 lg:px-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                    <div className="text-sm">
-                      <div className="space-y-2">
-                        {/* Ads Count Detail */}
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Ads Count:</span>
-                          <span className="text-gray-600">{user.adsCount}</span>
-                        </div>
-                        {/* Riders Count Detail */}
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Riders Count:</span>
-                          <span className="text-gray-600">{user.ridersCount}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Email Verified:</span>
-                          <span className="text-gray-600">
-                            {user.isEmailVerified ? 'Yes' : 'No'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Last Login:</span>
-                          <span className="text-gray-600">
-                            {formatDate(user.lastLogin)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Created At:</span>
-                          <span className="text-gray-600">
-                            {formatDate(user.createdAt)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-gray-700">Updated At:</span>
-                          <span className="text-gray-600">
-                            {formatDate(user.updatedAt)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Right Section: Contacts & Address */}
-                  <div className="flex flex-col gap-4 w-full lg:w-1/3 pt-6 lg:pt-0 lg:pl-8">
-                    {/* Icons and Close Button - Top Right */}
-                    <div className="absolute top-4 right-4 pr-6 flex items-center gap-2">
-                      <button className="p-1 text-[#3674B5] rounded-full hover:bg-gray-100 transition-colors">
-                        <Edit size={16} />
-                      </button>
-                      <button className="p-1 text-red-500 rounded-full hover:bg-gray-100 transition-colors" onClick={() => handleDelete(user.id)}>
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                      <button className="p-1 text-gray-500 rounded-full hover:bg-gray-100 transition-colors" onClick={() => toggleExpand(user.id)}>
-                        <X size={16} />
-                      </button>
-                      <button className="p-1 text-gray-500 rounded-full hover:bg-gray-100 transition-colors">
-                        <MoreVertical size={16} />
-                      </button>
-                    </div>
-                    <div className="text-sm mt-6">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Mail size={16} />
-                          <span>{user.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Phone size={16} />
-                          <span>{user.contact}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <MapPin size={16} />
-                          <p>{user.address}, {user.city}</p>
-                        </div>
-                        {user.houseAddress && (
-                          <div className="flex items-center gap-2 text-gray-600">
-                            <MapPin size={16} />
-                            <p>House: {user.houseAddress}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                <div className="col-span-3 truncate">{user.email}</div>
+                <div className="col-span-2 truncate">{user.company}</div>
+                <div className="col-span-1">
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                    }`}
+                  >
+                    {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                  </span>
                 </div>
-              )}
+                <div className="col-span-2 truncate">
+                  {formatLastAccess(user.lastLogin)}
+                </div>
+                <div className="col-span-1 flex items-center justify-center gap-2">
+                  <button 
+                    onClick={() => handleViewDetails(user)}
+                    className="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600"
+                    title="View Details"
+                  >
+                    <Eye size={12} />
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(user.id)}
+                    className="bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700"
+                    title="Delete"
+                  >
+                    <TrashIcon className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
           {filteredUsers.length === 0 && (
@@ -682,6 +563,109 @@ const ManageUsers: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Details Modal */}
+        {showDetailsModal && selectedUserDetails && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto m-4">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center w-16 h-16 text-2xl font-bold text-white rounded-full bg-[#FF9D3D]">
+                    {getInitials(selectedUserDetails.firstName, selectedUserDetails.lastName)}
+                  </div>
+                  <h2 className="text-2xl font-bold">User Details</h2>
+                </div>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Personal Information</h3>
+                  <div className="space-y-2">
+                    <p><strong>User ID:</strong> {selectedUserDetails.id}</p>
+                    <p><strong>Full Name:</strong> {`${selectedUserDetails.firstName} ${selectedUserDetails.middleName} ${selectedUserDetails.lastName}`}</p>
+                    <p><strong>Email:</strong> {selectedUserDetails.email}</p>
+                    <p><strong>Contact:</strong> {selectedUserDetails.contact}</p>
+                    <p><strong>Company:</strong> {selectedUserDetails.company}</p>
+                    <p><strong>Address:</strong> {selectedUserDetails.address}</p>
+                    <p><strong>City:</strong> {selectedUserDetails.city}</p>
+                    {selectedUserDetails.houseAddress && (
+                      <p><strong>House Address:</strong> {selectedUserDetails.houseAddress}</p>
+                    )}
+                    <p><strong>Status:</strong> 
+                      <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
+                        selectedUserDetails.status === 'active'
+                          ? 'bg-green-200 text-green-800'
+                          : 'bg-red-200 text-red-800'
+                      }`}>
+                        {selectedUserDetails.status.toUpperCase()}
+                      </span>
+                    </p>
+                    <p><strong>Email Verified:</strong> {selectedUserDetails.isEmailVerified ? 'Yes' : 'No'}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">System Information</h3>
+                  <div className="space-y-2">
+                    <p><strong>Role:</strong> {selectedUserDetails.role}</p>
+                    <p><strong>Ads Count:</strong> {selectedUserDetails.adsCount}</p>
+                    <p><strong>Riders Count:</strong> {selectedUserDetails.ridersCount}</p>
+                    <p><strong>Last Login:</strong> {formatDate(selectedUserDetails.lastLogin)}</p>
+                    <p><strong>Created At:</strong> {formatDate(selectedUserDetails.createdAt)}</p>
+                    <p><strong>Updated At:</strong> {formatDate(selectedUserDetails.updatedAt)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold mb-3">Contact Information</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Mail size={16} className="text-gray-600" />
+                    <span>{selectedUserDetails.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone size={16} className="text-gray-600" />
+                    <span>{selectedUserDetails.contact}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} className="text-gray-600" />
+                    <span>{selectedUserDetails.address}, {selectedUserDetails.city}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-4 mt-6 pt-4 border-t">
+                <button
+                  className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
+                  onClick={() => {
+                    // TODO: Implement edit functionality
+                    console.log('Edit user:', selectedUserDetails.id);
+                  }}
+                >
+                  Edit User
+                </button>
+                <button
+                  className="bg-red-500 text-white px-6 py-2 rounded hover:bg-red-600"
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    handleDelete(selectedUserDetails.id);
+                  }}
+                >
+                  Delete User
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
