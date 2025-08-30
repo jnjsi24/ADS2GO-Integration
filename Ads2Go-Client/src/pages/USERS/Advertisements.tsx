@@ -37,6 +37,8 @@ type Ad = {
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
   createdAt: string;
+  startTime: string;  // Added start date
+  endTime: string;    // Added end date
   planId: {
     id: string;
     name: string;
@@ -87,10 +89,50 @@ const Advertisements: React.FC = () => {
   
   const ads: Ad[] = data?.getMyAds || [];
   
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+  // Fixed format date function to handle both timestamp strings and date strings
+  const formatDate = (dateValue: string | number) => {
+    if (!dateValue) return 'N/A';
+    
+    try {
+      let date: Date;
+      
+      // Check if it's a timestamp string (all digits)
+      if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
+        // Convert timestamp string to number and create date
+        date = new Date(parseInt(dateValue));
+      } else if (typeof dateValue === 'number') {
+        // Handle numeric timestamp
+        date = new Date(dateValue);
+      } else {
+        // Handle regular date string
+        date = new Date(dateValue);
+      }
+      
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      const options: Intl.DateTimeFormatOptions = { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      };
+      return date.toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Input:', dateValue);
+      return 'Invalid Date';
+    }
+  };
+
+  // Format date range for display
+  const formatDateRange = (startDate: string, endDate: string) => {
+    if (!startDate || !endDate) return 'Dates not set';
+    try {
+      const start = formatDate(startDate);
+      const end = formatDate(endDate);
+      if (start === 'Invalid Date' || end === 'Invalid Date') return 'Invalid Date Range';
+      return `${start} - ${end}`;
+    } catch (error) {
+      return 'Invalid Date Range';
+    }
   };
 
   const materialOptionsMap: Record<string, string[]> = {
@@ -179,8 +221,12 @@ const Advertisements: React.FC = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
-  // Helper function to parse ad date string
+  // Helper function to parse ad date string (removed as no longer needed)
   const parseAdDate = (dateString: string): Date => {
+    // Handle timestamp strings
+    if (/^\d+$/.test(dateString)) {
+      return new Date(parseInt(dateString));
+    }
     // Example: "31 Jul 2020" -> "Jul 31 2020" for Date constructor
     const parts = dateString.split(' ');
     const formattedDateString = `${parts[1]} ${parts[0]} ${parts[2]}`;
@@ -420,7 +466,17 @@ const Advertisements: React.FC = () => {
                 >
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
-                  <p className="text-sm text-gray-500 mt-2">{formatDate(ad.createdAt)}</p>
+                  <p className="text-sm text-gray-500 mt-2">Created: {formatDate(ad.createdAt)}</p>
+                  {/* Display campaign duration */}
+                  {ad.startTime && ad.endTime ? (
+                    <p className="text-sm text-blue-600 mt-1 font-medium">
+                      Campaign: {formatDateRange(ad.startTime, ad.endTime)}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 mt-1">
+                      Campaign dates: Not available
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-4 pt-5 border-t border-gray-200">
