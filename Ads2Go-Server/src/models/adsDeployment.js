@@ -67,8 +67,7 @@ const AdsDeploymentSchema = new mongoose.Schema({
     trim: true
   },
   materialId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Material',
+    type: String,
     required: true
   },
   driverId: {

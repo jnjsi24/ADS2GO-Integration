@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
 import * as Location from "expo-location";
-import { Video, ResizeMode } from "expo-av";
 import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router/build/imperative-api";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
+import AdPlayer from '../../components/AdPlayer';
 
 export default function HomeScreen() {
 
@@ -265,19 +265,21 @@ export default function HomeScreen() {
       {/* Advertisement Player */}
       <View style={styles.adSection}>
         <Text style={styles.adTitle}>📺 Advertisement Player</Text>
-        <View style={styles.videoContainer}>
-          <Video
-            source={{ uri: "https://www.w3schools.com/html/mov_bbb.mp4" }}
-            style={styles.video}
-            useNativeControls
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay
-            isLooping
+        {registrationData ? (
+          <AdPlayer
+            materialId={registrationData.materialId}
+            slotNumber={registrationData.slotNumber}
+            onAdError={(error) => {
+              console.log('Ad Player Error:', error);
+            }}
           />
-        </View>
-        <Text style={styles.adInfo}>
-          Currently playing: Sample Advertisement
-        </Text>
+        ) : (
+          <View style={styles.notRegisteredContainer}>
+            <Text style={styles.notRegisteredTitle}>
+              Please register the tablet to start playing advertisements
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Tablet QR Code */}
@@ -455,28 +457,22 @@ const styles = StyleSheet.create({
     color: '#95a5a6',
   },
   adSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
     padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    minHeight: 400,
   },
   adTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#2c3e50',
     marginBottom: 16,
-  },
-  videoContainer: {
-    backgroundColor: '#000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  video: {
-    width: '100%',
-    height: 200,
-  },
-  adInfo: {
-    fontSize: 14,
-    color: '#7f8c8d',
-    textAlign: 'center',
   },
   qrSection: {
     padding: 20,

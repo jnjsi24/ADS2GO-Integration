@@ -44,6 +44,27 @@ export interface ConnectionCheckResponse {
   };
 }
 
+export interface Ad {
+  adId: string;
+  adDeploymentId: string;
+  slotNumber: number;
+  startTime: string;
+  endTime: string;
+  status: string;
+  mediaFile: string;
+  adTitle: string;
+  adDescription: string;
+  duration: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdsResponse {
+  success: boolean;
+  ads: Ad[];
+  message: string;
+}
+
 // For device/emulator testing, use your computer's IP address
 const API_BASE_URL = 'http://192.168.100.22:5000'; // Update with your server URL
 
@@ -273,6 +294,36 @@ export class TabletRegistrationService {
         success: false,
         message: 'Network error: Unable to connect to server',
         isConnected: false
+      };
+    }
+  }
+
+  async fetchAds(materialId: string, slotNumber: number): Promise<AdsResponse> {
+    try {
+      console.log('Fetching ads for:', { materialId, slotNumber });
+
+      const response = await fetch(`${API_BASE_URL}/ads/${materialId}/${slotNumber}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result: AdsResponse = await response.json();
+      
+      if (result.success) {
+        console.log('Fetched ads:', result.ads.length);
+      } else {
+        console.error('Failed to fetch ads:', result.message);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+      return {
+        success: false,
+        ads: [],
+        message: 'Network error: Unable to fetch ads'
       };
     }
   }
