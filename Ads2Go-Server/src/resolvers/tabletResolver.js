@@ -1,4 +1,5 @@
 
+const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
 
 module.exports = {
@@ -7,39 +8,329 @@ module.exports = {
       return await Tablet.findOne({ deviceId });
     },
     getTabletsByMaterial: async (_, { materialId }) => {
-      return await Tablet.find({ materialId });
+      try {
+        console.log('=== getTabletsByMaterial called ===');
+        console.log('Searching for tablets with materialId:', materialId);
+        console.log('materialId type:', typeof materialId);
+        
+        // Try to find tablets by materialId (as string)
+        let tablets = await Tablet.find({ materialId });
+        console.log('Direct search result count:', tablets.length);
+        
+        // If no tablets found and materialId looks like an ObjectId, try converting it
+        if (tablets.length === 0 && mongoose.Types.ObjectId.isValid(materialId)) {
+          console.log('Trying ObjectId conversion for materialId:', materialId);
+          tablets = await Tablet.find({ materialId: new mongoose.Types.ObjectId(materialId) });
+          console.log('Found tablets by ObjectId materialId:', materialId, 'Count:', tablets.length);
+        }
+        
+        // If still no tablets found, let's check what's actually in the database
+        if (tablets.length === 0) {
+          console.log('No tablets found, checking all tablets in database...');
+          const allTablets = await Tablet.find({});
+          console.log('All tablets in database:', allTablets.map(t => ({ id: t._id, materialId: t.materialId, carGroupId: t.carGroupId })));
+        }
+        
+        console.log('Final tablets result count:', tablets.length);
+        return tablets;
+      } catch (error) {
+        console.error('Error fetching tablets by material:', error);
+        return [];
+      }
     },
     getAllTablets: async () => {
       return await Tablet.find();
+    },
+    getTabletConnectionStatus: async (_, { materialId, slotNumber }) => {
+      try {
+        console.log('=== getTabletConnectionStatus called ===');
+        console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
+        console.log('materialId type:', typeof materialId);
+        
+        // Try to find tablet by materialId (as string)
+        let tablet = await Tablet.findOne({ materialId });
+        console.log('Found tablet by string materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        
+        // If no tablet found and materialId looks like an ObjectId, try converting it
+        if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
+          console.log('Trying ObjectId conversion for materialId:', materialId);
+          tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
+          console.log('Found tablet by ObjectId materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        }
+        
+        // If still no tablet found, let's check what's actually in the database
+        if (!tablet) {
+          console.log('No tablet found, checking all tablets in database...');
+          const allTablets = await Tablet.find({});
+          console.log('All tablets in database:', allTablets.map(t => ({ id: t._id, materialId: t.materialId, carGroupId: t.carGroupId })));
+        }
+        
+        if (!tablet) {
+          console.log('No tablet found for materialId:', materialId);
+          return {
+            isConnected: false,
+            materialId,
+            slotNumber,
+            carGroupId: null
+          };
+        }
+
+        const tabletUnit = tablet.tablets[slotNumber - 1]; // slotNumber is 1-based
+        if (!tabletUnit) {
+          return {
+            isConnected: false,
+            materialId,
+            slotNumber,
+            carGroupId: tablet.carGroupId || null
+          };
+        }
+
+        const isConnected = tabletUnit.deviceId && tabletUnit.status === 'ONLINE';
+        
+        return {
+          isConnected,
+          connectedDevice: isConnected ? {
+            deviceId: tabletUnit.deviceId,
+            status: tabletUnit.status,
+            lastSeen: tabletUnit.lastSeen,
+            gps: tabletUnit.gps
+          } : null,
+          materialId,
+          slotNumber,
+          carGroupId: tablet.carGroupId || null
+        };
+      } catch (error) {
+        console.error('Error getting tablet connection status:', error);
+        throw new Error('Failed to get tablet connection status');
+      }
     }
   },
 
   Mutation: {
     registerTablet: async (_, { input }) => {
-      const exists = await Tablet.findOne({ deviceId: input.deviceId });
-      if (exists) {
-        throw new Error('Tablet with this deviceId already exists');
+      try {
+        const { deviceId, materialId, slotNumber, carGroupId } = input;
+        
+        console.log('GraphQL registerTablet called with:', { deviceId, materialId, slotNumber, carGroupId });
+        
+        // Validate required fields
+        if (!deviceId || !materialId || !slotNumber || !carGroupId) {
+          throw new Error('Missing required fields: deviceId, materialId, slotNumber, carGroupId');
+        }
+        
+        // Validate slot number
+        if (slotNumber < 1 || slotNumber > 2) {
+          throw new Error('Slot number must be 1 or 2');
+        }
+        
+        // Find the tablet document for this material
+        let tablet = await Tablet.findOne({ materialId });
+        if (!tablet) {
+          throw new Error('No tablet configuration found for this material');
+        }
+        
+        // Validate car group ID
+        if (tablet.carGroupId !== carGroupId) {
+          throw new Error('Invalid car group ID');
+        }
+        
+        // Check if the slot is already occupied by another device
+        const existingTablet = tablet.tablets.find(t => t.tabletNumber === slotNumber);
+        if (existingTablet && existingTablet.deviceId && existingTablet.deviceId !== deviceId) {
+          throw new Error(`Slot ${slotNumber} is already occupied by device ${existingTablet.deviceId}`);
+        }
+        
+        // Update the tablet slot
+        const tabletIndex = tablet.tablets.findIndex(t => t.tabletNumber === slotNumber);
+        if (tabletIndex === -1) {
+          throw new Error(`Invalid slot number: ${slotNumber}`);
+        }
+        
+        // Update the tablet slot with device information
+        tablet.tablets[tabletIndex] = {
+          tabletNumber: slotNumber,
+          deviceId,
+          status: 'ONLINE',
+          lastSeen: new Date(),
+          gps: tablet.tablets[tabletIndex].gps || null
+        };
+        
+        await tablet.save();
+        
+        console.log('Tablet registered successfully:', { deviceId, materialId, slotNumber });
+        return tablet;
+        
+      } catch (error) {
+        console.error('Error in GraphQL registerTablet:', error);
+        throw error;
       }
-      const tablet = new Tablet(input);
-      return await tablet.save();
     },
 
     updateTabletStatus: async (_, { input }) => {
-      const { deviceId, gps, isOnline } = input;
-      const tablet = await Tablet.findOne({ deviceId });
-      if (!tablet) throw new Error('Tablet not found');
-
-      if (gps) tablet.gps = gps;
-      if (typeof isOnline === 'boolean') {
-        tablet.isOnline = isOnline;
-        if (isOnline) {
-          tablet.lastOnlineAt = new Date();
+      try {
+        const { deviceId, gps, isOnline } = input;
+        
+        console.log('GraphQL updateTabletStatus called with:', { deviceId, gps, isOnline });
+        
+        // Find tablet by device ID in the tablets array
+        const tablet = await Tablet.findOne({
+          'tablets.deviceId': deviceId
+        });
+        
+        if (!tablet) {
+          throw new Error('Tablet not found');
         }
+        
+        // Find the specific tablet slot
+        const tabletIndex = tablet.tablets.findIndex(t => t.deviceId === deviceId);
+        if (tabletIndex === -1) {
+          throw new Error('Tablet slot not found');
+        }
+        
+        // Update tablet status
+        const currentTablet = tablet.tablets[tabletIndex];
+        tablet.tablets[tabletIndex] = {
+          tabletNumber: currentTablet.tabletNumber,
+          deviceId: currentTablet.deviceId,
+          status: isOnline ? 'ONLINE' : 'OFFLINE',
+          lastSeen: new Date(),
+          gps: gps || currentTablet.gps || null
+        };
+        
+        await tablet.save();
+        
+        console.log('Tablet status updated successfully:', { deviceId, status: isOnline ? 'ONLINE' : 'OFFLINE' });
+        return tablet;
+        
+      } catch (error) {
+        console.error('Error in GraphQL updateTabletStatus:', error);
+        throw error;
       }
-      tablet.lastReportedAt = new Date();
+    },
 
-      await tablet.save();
-      return tablet;
+    unregisterTablet: async (_, { input }) => {
+      try {
+        const { materialId, slotNumber, carGroupId } = input;
+        
+        console.log('Unregistering tablet for materialId:', materialId, 'slotNumber:', slotNumber);
+        
+        // Try to find tablet by materialId (as string)
+        let tablet = await Tablet.findOne({ materialId });
+        console.log('Found tablet by string materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        
+        // If no tablet found and materialId looks like an ObjectId, try converting it
+        if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
+          console.log('Trying ObjectId conversion for materialId:', materialId);
+          tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
+          console.log('Found tablet by ObjectId materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        }
+        
+        if (!tablet) {
+          return {
+            success: false,
+            message: 'Tablet configuration not found for this material'
+          };
+        }
+
+        if (tablet.carGroupId !== carGroupId) {
+          return {
+            success: false,
+            message: 'Car Group ID mismatch'
+          };
+        }
+
+        const tabletUnit = tablet.tablets[slotNumber - 1]; // slotNumber is 1-based
+        if (!tabletUnit) {
+          return {
+            success: false,
+            message: 'Invalid slot number'
+          };
+        }
+
+        if (!tabletUnit.deviceId) {
+          return {
+            success: false,
+            message: 'No device connected to this slot'
+          };
+        }
+
+        // Clear the device connection
+        tabletUnit.deviceId = null;
+        tabletUnit.status = 'OFFLINE';
+        tabletUnit.gps = { lat: null, lng: null };
+        tabletUnit.lastSeen = null;
+
+        await tablet.save();
+
+        return {
+          success: true,
+          message: 'Tablet unregistered successfully'
+        };
+      } catch (error) {
+        console.error('Error unregistering tablet:', error);
+        return {
+          success: false,
+          message: 'Failed to unregister tablet'
+        };
+      }
+    },
+
+    createTabletConfiguration: async (_, { input }) => {
+      try {
+        const { materialId, carGroupId } = input;
+        
+        console.log('Creating tablet configuration for materialId:', materialId);
+        
+        // Check if tablet configuration already exists (try both string and ObjectId)
+        let existingTablet = await Tablet.findOne({ materialId });
+        if (!existingTablet && mongoose.Types.ObjectId.isValid(materialId)) {
+          existingTablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
+        }
+        
+        if (existingTablet) {
+          return {
+            success: false,
+            message: 'Tablet configuration already exists for this material'
+          };
+        }
+
+        // Create new tablet configuration with 2 slots
+        // Store materialId as string to match existing database structure
+        const tablet = new Tablet({
+          materialId: materialId.toString(),
+          carGroupId,
+          tablets: [
+            {
+              tabletNumber: 1,
+              deviceId: null,
+              status: 'OFFLINE',
+              gps: { lat: null, lng: null },
+              lastSeen: null
+            },
+            {
+              tabletNumber: 2,
+              deviceId: null,
+              status: 'OFFLINE',
+              gps: { lat: null, lng: null },
+              lastSeen: null
+            }
+          ]
+        });
+
+        await tablet.save();
+
+        return {
+          success: true,
+          message: 'Tablet configuration created successfully',
+          tablet
+        };
+      } catch (error) {
+        console.error('Error creating tablet configuration:', error);
+        return {
+          success: false,
+          message: 'Failed to create tablet configuration'
+        };
+      }
     }
   }
 };

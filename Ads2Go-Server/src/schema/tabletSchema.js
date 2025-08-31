@@ -3,6 +3,7 @@ const { gql } = require('apollo-server-express');
 module.exports = gql`
   type TabletUnit {
     tabletNumber: Int!
+    deviceId: String
     status: String!
     gps: GPS
     lastSeen: String
@@ -43,11 +44,51 @@ module.exports = gql`
     getTablet(deviceId: String!): Tablet
     getTabletsByMaterial(materialId: String!): [Tablet]
     getAllTablets: [Tablet]
+    getTabletConnectionStatus(materialId: String!, slotNumber: Int!): TabletConnectionStatus
   }
 
   extend type Mutation {
     registerTablet(input: RegisterTabletInput!): Tablet
     updateTabletStatus(input: UpdateTabletStatusInput!): Tablet
+    unregisterTablet(input: UnregisterTabletInput!): UnregisterTabletResponse
+    createTabletConfiguration(input: CreateTabletConfigurationInput!): CreateTabletConfigurationResponse
+  }
+
+  type TabletConnectionStatus {
+    isConnected: Boolean!
+    connectedDevice: ConnectedDevice
+    materialId: String!
+    slotNumber: Int!
+    carGroupId: String
+  }
+
+  type ConnectedDevice {
+    deviceId: String!
+    status: String!
+    lastSeen: String
+    gps: GPS
+  }
+
+  input UnregisterTabletInput {
+    materialId: String!
+    slotNumber: Int!
+    carGroupId: String!
+  }
+
+  type UnregisterTabletResponse {
+    success: Boolean!
+    message: String!
+  }
+
+  input CreateTabletConfigurationInput {
+    materialId: String!
+    carGroupId: String!
+  }
+
+  type CreateTabletConfigurationResponse {
+    success: Boolean!
+    message: String!
+    tablet: Tablet
   }
 `;
 

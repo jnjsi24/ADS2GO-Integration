@@ -25,7 +25,8 @@ router.post('/registerTablet', async (req, res) => {
     }
 
     // Check if material exists and is HEADDRESS type
-    const material = await Material.findById(materialId);
+    // Find material by materialId field (not by _id)
+    const material = await Material.findOne({ materialId });
     if (!material) {
       return res.status(404).json({
         success: false,
@@ -204,6 +205,152 @@ router.get('/tablet/:deviceId', async (req, res) => {
 
   } catch (error) {
     console.error('Error getting tablet info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /checkExistingConnection
+router.post('/checkExistingConnection', async (req, res) => {
+  try {
+    const { materialId, slotNumber } = req.body;
+
+    // Validate required fields
+    if (!materialId || !slotNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: materialId, slotNumber'
+      });
+    }
+
+    // Validate slot number
+    if (slotNumber < 1 || slotNumber > 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Slot number must be 1 or 2'
+      });
+    }
+
+    // Find the tablet document for this material
+    const tablet = await Tablet.findOne({ materialId });
+    if (!tablet) {
+      return res.json({
+        success: true,
+        hasExistingConnection: false,
+        message: 'No tablet configuration found for this material'
+      });
+    }
+
+    // Check if the slot has an existing connection
+    const tabletUnit = tablet.tablets.find(t => t.tabletNumber === slotNumber);
+    if (!tabletUnit) {
+      return res.json({
+        success: true,
+        hasExistingConnection: false,
+        message: 'Invalid slot number'
+      });
+    }
+
+    const hasExistingConnection = tabletUnit.deviceId && tabletUnit.status === 'ONLINE';
+
+    res.json({
+      success: true,
+      hasExistingConnection,
+      existingDevice: hasExistingConnection ? {
+        deviceId: tabletUnit.deviceId,
+        status: tabletUnit.status,
+        lastSeen: tabletUnit.lastSeen,
+        gps: tabletUnit.gps
+      } : null,
+      message: hasExistingConnection 
+        ? `Slot ${slotNumber} is already occupied by device ${tabletUnit.deviceId}`
+        : `Slot ${slotNumber} is available for connection`
+    });
+
+  } catch (error) {
+    console.error('Error checking existing connection:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /unregisterTablet
+router.post('/unregisterTablet', async (req, res) => {
+  try {
+    const { materialId, slotNumber, carGroupId } = req.body;
+
+    // Validate required fields
+    if (!materialId || !slotNumber || !carGroupId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: materialId, slotNumber, carGroupId'
+      });
+    }
+
+    // Validate slot number
+    if (slotNumber < 1 || slotNumber > 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Slot number must be 1 or 2'
+      });
+    }
+
+    // Find the tablet document for this material
+    const tablet = await Tablet.findOne({ materialId });
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'No tablet configuration found for this material'
+      });
+    }
+
+    // Validate car group ID
+    if (tablet.carGroupId !== carGroupId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid car group ID'
+      });
+    }
+
+    // Find the tablet slot
+    const tabletIndex = tablet.tablets.findIndex(t => t.tabletNumber === slotNumber);
+    if (tabletIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid slot number'
+      });
+    }
+
+    const tabletUnit = tablet.tablets[tabletIndex];
+    if (!tabletUnit.deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No device connected to this slot'
+      });
+    }
+
+    // Clear the device connection
+    tablet.tablets[tabletIndex] = {
+      tabletNumber: slotNumber,
+      deviceId: null,
+      status: 'OFFLINE',
+      lastSeen: null,
+      gps: { lat: null, lng: null }
+    };
+
+    await tablet.save();
+
+    res.json({
+      success: true,
+      message: 'Tablet unregistered successfully'
+    });
+
+  } catch (error) {
+    console.error('Error unregistering tablet:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

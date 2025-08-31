@@ -39,6 +39,7 @@ const GET_TABLETS_BY_MATERIAL = gql`
       carGroupId
       tablets {
         tabletNumber
+        deviceId
         status
         gps {
           lat
@@ -48,6 +49,26 @@ const GET_TABLETS_BY_MATERIAL = gql`
       }
       createdAt
       updatedAt
+    }
+  }
+`;
+
+const GET_TABLET_CONNECTION_STATUS = gql`
+  query GetTabletConnectionStatus($materialId: String!, $slotNumber: Int!) {
+    getTabletConnectionStatus(materialId: $materialId, slotNumber: $slotNumber) {
+      isConnected
+      connectedDevice {
+        deviceId
+        status
+        lastSeen
+        gps {
+          lat
+          lng
+        }
+      }
+      materialId
+      slotNumber
+      carGroupId
     }
   }
 `;
@@ -150,6 +171,41 @@ const UPDATE_MATERIAL = gql`
   }
 `;
 
+const UNREGISTER_TABLET = gql`
+  mutation UnregisterTablet($input: UnregisterTabletInput!) {
+    unregisterTablet(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+const CREATE_TABLET_CONFIGURATION = gql`
+  mutation CreateTabletConfiguration($input: CreateTabletConfigurationInput!) {
+    createTabletConfiguration(input: $input) {
+      success
+      message
+      tablet {
+        id
+        materialId
+        carGroupId
+        tablets {
+          tabletNumber
+          deviceId
+          status
+          gps {
+            lat
+            lng
+          }
+          lastSeen
+        }
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
 interface Driver {
   driverId: string;
   fullName: string;
@@ -189,6 +245,7 @@ interface CreateMaterialInput {
 
 interface TabletUnit {
   tabletNumber: number;
+  deviceId?: string;
   status: string;
   gps: {
     lat: number | null;
@@ -207,6 +264,24 @@ interface Tablet {
 }
 
 interface ConnectionDetails {
+  materialId: string;
+  slotNumber: number;
+  carGroupId: string;
+}
+
+interface ConnectedDevice {
+  deviceId: string;
+  status: string;
+  lastSeen?: string;
+  gps?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+interface TabletConnectionStatus {
+  isConnected: boolean;
+  connectedDevice?: ConnectedDevice;
   materialId: string;
   slotNumber: number;
   carGroupId: string;
@@ -258,6 +333,8 @@ const Materials: React.FC = () => {
   const [showTabletInterface, setShowTabletInterface] = useState(false);
   const [selectedTabletMaterialId, setSelectedTabletMaterialId] = useState<string | null>(null);
   const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
+  const [unregistering, setUnregistering] = useState(false);
+  const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
 
   // Get available material types based on vehicle and category
   const getAvailableMaterialTypes = (vehicleType: string, category: string) => {
@@ -349,10 +426,42 @@ const Materials: React.FC = () => {
     },
     skip: !selectedTabletMaterialId,
     errorPolicy: 'all',
+    onCompleted: (data) => {
+      console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data });
+    },
     onError: (error) => {
       console.error('Error loading tablets:', error);
     }
   });
+
+  // Tablet connection status query hook
+  const { data: connectionStatusData, loading: connectionStatusLoading, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
+    variables: { 
+      materialId: selectedTabletMaterialId || '', 
+      slotNumber: selectedTabletSlotNumber || 1 
+    },
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    skip: !selectedTabletMaterialId || !selectedTabletSlotNumber,
+    errorPolicy: 'all',
+    onError: (error) => {
+      console.error('Error loading tablet connection status:', error);
+    }
+  });
+
+  // Get connection status for both slots of a material
+  const getSlotConnectionStatus = (materialId: string, slotNumber: number) => {
+    // This is a simplified approach - in a real implementation, you might want to cache this data
+    // For now, we'll use the existing tablet data to determine connection status
+    const tabletData = data?.getAllMaterials?.find(m => m.id === materialId);
+    if (!tabletData) return null;
+    
+    // This would need to be enhanced with actual connection status data
+    return null;
+  };
 
 
 
@@ -367,9 +476,67 @@ const Materials: React.FC = () => {
 
   // Function to show connection details modal
   const showConnectionDetails = (materialId: string, slotNumber: number) => {
+    console.log('Opening connection details for:', { materialId, slotNumber });
     setSelectedTabletMaterialId(materialId);
     setSelectedTabletSlotNumber(slotNumber);
     setShowTabletInterface(true);
+  };
+
+  // Function to create tablet configuration
+  const handleCreateTabletConfiguration = async () => {
+    if (!selectedTabletMaterialId) {
+      alert('Missing material ID');
+      return;
+    }
+
+    if (!window.confirm('Create tablet configuration for this HEADDRESS material? This will set up 2 tablet slots.')) {
+      return;
+    }
+
+    setCreatingTabletConfig(true);
+    try {
+      // Generate a car group ID based on the material ID
+      const carGroupId = `GRP-${selectedTabletMaterialId.replace(/[^A-Z0-9]/g, '')}-${Date.now().toString(16).toUpperCase()}`;
+      
+      await createTabletConfiguration({
+        variables: {
+          input: {
+            materialId: selectedTabletMaterialId,
+            carGroupId
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error creating tablet configuration:', error);
+    }
+  };
+
+  // Function to unregister tablet
+  const handleUnregisterTablet = async () => {
+    if (!selectedTabletMaterialId || !selectedTabletSlotNumber || !tabletData?.getTabletsByMaterial?.[0]?.carGroupId) {
+      alert('Missing required information for unregistration');
+      return;
+    }
+
+    // Use window.confirm instead of confirm to avoid ESLint error
+    if (!window.confirm('Are you sure you want to unregister this tablet? This will disconnect the device from the system.')) {
+      return;
+    }
+
+    setUnregistering(true);
+    try {
+      await unregisterTablet({
+        variables: {
+          input: {
+            materialId: selectedTabletMaterialId,
+            slotNumber: selectedTabletSlotNumber,
+            carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error unregistering tablet:', error);
+    }
   };
 
   const [updateMaterial] = useMutation(UPDATE_MATERIAL, {
@@ -405,6 +572,52 @@ const Materials: React.FC = () => {
     },
     onError: (error) => {
       alert(`Error assigning material: ${error.message}`);
+    }
+  });
+
+  const [unregisterTablet] = useMutation(UNREGISTER_TABLET, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    onCompleted: (data) => {
+      if (data.unregisterTablet.success) {
+        alert(data.unregisterTablet.message);
+        refetchConnectionStatus();
+      } else {
+        alert(`Unregistration failed: ${data.unregisterTablet.message}`);
+      }
+      setUnregistering(false);
+    },
+    onError: (error) => {
+      alert(`Error unregistering tablet: ${error.message}`);
+      setUnregistering(false);
+    }
+  });
+
+  const [createTabletConfiguration] = useMutation(CREATE_TABLET_CONFIGURATION, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    onCompleted: (data) => {
+      if (data.createTabletConfiguration.success) {
+        alert(data.createTabletConfiguration.message);
+        // Refetch tablet data
+        if (selectedTabletMaterialId) {
+          // Refetch the tablet data
+          refetch();
+        }
+      } else {
+        alert(`Failed to create tablet configuration: ${data.createTabletConfiguration.message}`);
+      }
+      setCreatingTabletConfig(false);
+    },
+    onError: (error) => {
+      alert(`Error creating tablet configuration: ${error.message}`);
+      setCreatingTabletConfig(false);
     }
   });
 
@@ -974,19 +1187,21 @@ const Materials: React.FC = () => {
                         )}
                         {material.materialType === 'HEADDRESS' && (
                           <div className="flex gap-1">
-                            <button
-                              onClick={() => showConnectionDetails(material.id, 1)}
-                              className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors"
-                              title="View tablet connection details for Slot 1"
-                            >
+                                                         <button
+                               onClick={() => showConnectionDetails(material.materialId, 1)}
+                               className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors relative"
+                               title="View tablet connection details for Slot 1"
+                             >
+                               <QrCode size={16} />
+                               <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-300 rounded-full border border-white"></div>
+                             </button>
+                             <button
+                               onClick={() => showConnectionDetails(material.materialId, 2)}
+                               className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors relative"
+                               title="View tablet connection details for Slot 2"
+                             >
                               <QrCode size={16} />
-                            </button>
-                            <button
-                              onClick={() => showConnectionDetails(material.id, 2)}
-                              className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors"
-                              title="View tablet connection details for Slot 2"
-                            >
-                              <QrCode size={16} />
+                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-300 rounded-full border border-white"></div>
                             </button>
                           </div>
                         )}
@@ -1306,15 +1521,32 @@ const Materials: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <span className="ml-2 text-gray-600">Loading tablet data...</span>
               </div>
-            ) : !tabletData?.getTabletsByMaterial?.[0] ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="text-red-500 mb-2">⚠️</div>
-                  <span className="text-gray-600">No tablet configuration found for this material.</span>
-                  <br />
-                  <span className="text-sm text-gray-500">Please ensure this is a HEADDRESS material.</span>
-                </div>
-              </div>
+                         ) : !tabletData?.getTabletsByMaterial?.[0] ? (
+               <div className="flex items-center justify-center py-8">
+                 <div className="text-center">
+                   <div className="text-red-500 mb-2">⚠️</div>
+                   <span className="text-gray-600">No tablet configuration found for this material.</span>
+                   <br />
+                   <span className="text-sm text-gray-500 mb-4">Please ensure this is a HEADDRESS material.</span>
+                   <button
+                     onClick={handleCreateTabletConfiguration}
+                     disabled={creatingTabletConfig}
+                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 flex items-center gap-2 mx-auto"
+                   >
+                     {creatingTabletConfig ? (
+                       <>
+                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                         Creating...
+                       </>
+                     ) : (
+                       <>
+                         <QrCode size={16} />
+                         Create Tablet Configuration
+                       </>
+                     )}
+                   </button>
+                 </div>
+               </div>
             ) : (
               <div className="space-y-6">
                 {/* Connection Details */}
@@ -1336,21 +1568,114 @@ const Materials: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Connection Status */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-semibold text-gray-800">Connection Status</h3>
+                    <button
+                      onClick={() => refetchConnectionStatus()}
+                      disabled={connectionStatusLoading}
+                      className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                    >
+                      <div className={`w-3 h-3 border border-white rounded-full ${connectionStatusLoading ? 'animate-spin' : ''}`}></div>
+                      Refresh
+                    </button>
+                  </div>
+                  {connectionStatusLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600">Checking connection status...</span>
+                    </div>
+                  ) : connectionStatusData?.getTabletConnectionStatus ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-700">Status:</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <span className={`font-semibold ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                            {connectionStatusData.getTabletConnectionStatus.isConnected ? 'Connected' : 'Not Connected'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {connectionStatusData.getTabletConnectionStatus.isConnected && connectionStatusData.getTabletConnectionStatus.connectedDevice && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                          <h4 className="font-medium text-gray-800">Connected Device Details:</h4>
+                          <div className="text-sm space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Device ID:</span>
+                              <span className="font-mono text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.deviceId}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Status:</span>
+                              <span className="text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.status}</span>
+                            </div>
+                            {connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Last Seen:</span>
+                                <span className="text-gray-800">{new Date(connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen).toLocaleString()}</span>
+                              </div>
+                            )}
+                            {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">GPS:</span>
+                                <span className="text-gray-800">
+                                  {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lat?.toFixed(6)}, {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lng?.toFixed(6)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {connectionStatusData.getTabletConnectionStatus.isConnected && (
+                        <button
+                          onClick={handleUnregisterTablet}
+                          disabled={unregistering}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400"
+                        >
+                          {unregistering ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              Unregistering...
+                            </>
+                          ) : (
+                            <>
+                              <UserX size={16} />
+                              Unregister Tablet
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <span className="text-gray-600">Unable to load connection status</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* QR Code */}
                 <div className="flex flex-col items-center space-y-4">
                   <h3 className="font-semibold text-gray-800">QR Code</h3>
-                  <div className="bg-white p-4 border border-gray-200 rounded-lg">
-                    <QRCodeSVG 
-                      value={JSON.stringify({
-                        materialId: selectedTabletMaterialId,
-                        slotNumber: selectedTabletSlotNumber,
-                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                      })}
-                      size={200}
-                      level="M"
-                      includeMargin={true}
-                    />
-                  </div>
+                                     <div className="bg-white p-4 border border-gray-200 rounded-lg">
+                     {(() => {
+                       const qrData = {
+                         materialId: selectedTabletMaterialId,
+                         slotNumber: selectedTabletSlotNumber,
+                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                       };
+                       console.log('QR Code data:', qrData);
+                       return (
+                         <QRCodeSVG 
+                           value={JSON.stringify(qrData)}
+                           size={200}
+                           level="M"
+                           includeMargin={true}
+                         />
+                       );
+                     })()}
+                   </div>
                   <p className="text-xs text-gray-500 text-center">
                     Scan this QR code with the AndroidPlayer app to connect
                   </p>
@@ -1368,17 +1693,21 @@ const Materials: React.FC = () => {
                       }, null, 2)}
                     </code>
                   </div>
-                  <button
-                    onClick={() => copyToClipboard(JSON.stringify({
-                      materialId: selectedTabletMaterialId,
-                      slotNumber: selectedTabletSlotNumber,
-                      carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                    }, null, 2))}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Copy size={16} />
-                    Copy to Clipboard
-                  </button>
+                                     <button
+                     onClick={() => {
+                       const connectionData = {
+                         materialId: selectedTabletMaterialId,
+                         slotNumber: selectedTabletSlotNumber,
+                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                       };
+                       console.log('Copying connection data:', connectionData);
+                       copyToClipboard(JSON.stringify(connectionData, null, 2));
+                     }}
+                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                   >
+                     <Copy size={16} />
+                     Copy to Clipboard
+                   </button>
                 </div>
 
                 {/* Instructions */}

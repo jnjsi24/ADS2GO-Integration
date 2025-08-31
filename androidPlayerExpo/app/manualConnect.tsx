@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,16 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { router } from "expo-router/build/imperative-api";
+import { Ionicons } from '@expo/vector-icons';
 import tabletRegistrationService, { ConnectionDetails } from '../services/tabletRegistration';
+import QRCodeScanner from '../components/QRCodeScanner';
 
 export default function ManualConnectScreen() {
   const [loading, setLoading] = useState(false);
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const [existingConnection, setExistingConnection] = useState<any>(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   
   // Manual input fields
   const [materialId, setMaterialId] = useState('');
@@ -38,6 +44,11 @@ export default function ManualConnectScreen() {
     const slotNum = parseInt(slotNumber);
     if (isNaN(slotNum) || slotNum < 1 || slotNum > 2) {
       Alert.alert('Error', 'Slot Number must be 1 or 2');
+      return false;
+    }
+
+    if (existingConnection) {
+      Alert.alert('Error', 'Another tablet is already connected to this material and slot combination. Please choose different details.');
       return false;
     }
     
@@ -66,8 +77,7 @@ export default function ManualConnectScreen() {
             {
               text: 'OK',
               onPress: () => {
-                // Navigate back to main screen
-                console.log('Registration successful, redirecting to main screen');
+                router.push('/(tabs)');
               }
             }
           ]
@@ -82,13 +92,52 @@ export default function ManualConnectScreen() {
     }
   };
 
-  const handleScanQR = () => {
-    Alert.alert(
-      'QR Code Scanning',
-      'QR code scanning feature will be implemented in the next version. For now, please enter the connection details manually.',
-      [{ text: 'OK' }]
-    );
+  const handleQRScanSuccess = (details: ConnectionDetails) => {
+    setMaterialId(details.materialId);
+    setSlotNumber(details.slotNumber.toString());
+    setCarGroupId(details.carGroupId);
+    
+    // Automatically check for existing connection
+    checkExistingConnection();
   };
+
+  const handleScanQR = () => {
+    setShowQRScanner(true);
+  };
+
+  const checkExistingConnection = async () => {
+    if (!materialId.trim() || !slotNumber.trim()) {
+      setExistingConnection(null);
+      return;
+    }
+
+    setCheckingConnection(true);
+    try {
+      const result = await tabletRegistrationService.checkExistingConnection(
+        materialId.trim(),
+        parseInt(slotNumber)
+      );
+      
+      if (result.success) {
+        setExistingConnection(result.isConnected ? result.connectedDevice : null);
+      } else {
+        setExistingConnection(null);
+      }
+    } catch (error) {
+      console.error('Error checking existing connection:', error);
+      setExistingConnection(null);
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      checkExistingConnection();
+    }, 1000); // Debounce for 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [materialId, slotNumber]);
 
   return (
     <KeyboardAvoidingView
@@ -140,37 +189,93 @@ export default function ManualConnectScreen() {
             />
           </View>
 
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.button, styles.scanButton]}
-              onPress={handleScanQR}
-              disabled={loading}
-            >
-              <Text style={styles.buttonText}>Scan QR Code (Coming Soon)</Text>
-            </TouchableOpacity>
+                     {/* Connection Status */}
+           {(checkingConnection || existingConnection !== null) && (
+             <View style={styles.connectionStatusContainer}>
+               {checkingConnection ? (
+                 <View style={styles.connectionStatus}>
+                   <ActivityIndicator size="small" color="#3498db" />
+                   <Text style={styles.connectionStatusText}>Checking connection status...</Text>
+                 </View>
+               ) : existingConnection ? (
+                 <View style={[styles.connectionStatus, styles.existingConnection]}>
+                   <Text style={styles.connectionStatusTitle}>⚠️ Device Already Connected</Text>
+                   <Text style={styles.connectionStatusText}>
+                     Another tablet is already connected to this material and slot:
+                   </Text>
+                   <View style={styles.connectedDeviceInfo}>
+                     <Text style={styles.deviceInfoText}>
+                       <Text style={styles.deviceInfoLabel}>Device ID:</Text> {existingConnection.deviceId}
+                     </Text>
+                     <Text style={styles.deviceInfoText}>
+                       <Text style={styles.deviceInfoLabel}>Car Group ID:</Text> {existingConnection.carGroupId}
+                     </Text>
+                     <Text style={styles.deviceInfoText}>
+                       <Text style={styles.deviceInfoLabel}>Status:</Text> {existingConnection.status}
+                     </Text>
+                     <Text style={styles.deviceInfoText}>
+                       <Text style={styles.deviceInfoLabel}>Last Active:</Text> {new Date(existingConnection.lastReportedAt).toLocaleString()}
+                     </Text>
+                   </View>
+                   <Text style={styles.connectionWarningText}>
+                     You cannot register this tablet to the same material and slot combination.
+                   </Text>
+                 </View>
+               ) : (
+                 <View style={[styles.connectionStatus, styles.availableConnection]}>
+                   <Text style={styles.connectionStatusTitle}>✅ Slot Available</Text>
+                   <Text style={styles.connectionStatusText}>
+                     This material and slot combination is available for registration.
+                   </Text>
+                 </View>
+               )}
+             </View>
+           )}
 
-            <TouchableOpacity
-              style={[styles.button, styles.connectButton]}
-              onPress={handleConnect}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Connect Tablet</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+           <View style={styles.buttonGroup}>
+             <TouchableOpacity
+               style={[styles.button, styles.scanButton]}
+               onPress={handleScanQR}
+               disabled={loading}
+             >
+               <View style={styles.buttonContent}>
+                 <Ionicons name="qr-code" size={20} color="white" />
+                 <Text style={styles.buttonText}>Enter QR Data</Text>
+               </View>
+             </TouchableOpacity>
+
+             <TouchableOpacity
+               style={[styles.button, styles.connectButton]}
+               onPress={handleConnect}
+               disabled={loading || existingConnection}
+             >
+               {loading ? (
+                 <ActivityIndicator color="#fff" />
+               ) : (
+                 <Text style={styles.buttonText}>
+                   {existingConnection ? 'Cannot Connect (Device Exists)' : 'Connect Tablet'}
+                 </Text>
+               )}
+             </TouchableOpacity>
+           </View>
         </View>
 
-        <View style={styles.info}>
-          <Text style={styles.infoTitle}>Instructions:</Text>
-          <Text style={styles.infoText}>1. Get connection details from the admin dashboard</Text>
-          <Text style={styles.infoText}>2. Enter the details manually</Text>
-          <Text style={styles.infoText}>3. Click "Connect Tablet" to register</Text>
-          <Text style={styles.infoText}>4. Once registered, the tablet will auto-connect on startup</Text>
-        </View>
+                 <View style={styles.info}>
+           <Text style={styles.infoTitle}>Instructions:</Text>
+           <Text style={styles.infoText}>1. Get QR code data from the admin dashboard</Text>
+           <Text style={styles.infoText}>2. Enter QR data or input details manually</Text>
+           <Text style={styles.infoText}>3. Click "Connect Tablet" to register</Text>
+           <Text style={styles.infoText}>4. Once registered, the tablet will auto-connect on startup</Text>
+         </View>
       </ScrollView>
+
+      {/* QR Code Scanner Modal */}
+      {showQRScanner && (
+        <QRCodeScanner
+          onScanSuccess={handleQRScanSuccess}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -251,6 +356,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   info: {
     backgroundColor: '#e8f4fd',
     borderRadius: 12,
@@ -269,5 +379,58 @@ const styles = StyleSheet.create({
     color: '#34495e',
     marginBottom: 5,
     lineHeight: 20,
+  },
+  connectionStatusContainer: {
+    marginTop: 20,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e8ed',
+  },
+  existingConnection: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffeaa7',
+  },
+  availableConnection: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+  },
+  connectionStatusTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  connectionStatusText: {
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  connectedDeviceInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  deviceInfoText: {
+    fontSize: 12,
+    color: '#856404',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  deviceInfoLabel: {
+    fontWeight: '600',
+  },
+  connectionWarningText: {
+    fontSize: 12,
+    color: '#e74c3c',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

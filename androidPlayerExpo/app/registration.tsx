@@ -1,12 +1,76 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, TextInput, ScrollView } from "react-native";
+import { router } from "expo-router/build/imperative-api";
+import { Ionicons } from '@expo/vector-icons';
 import tabletRegistrationService, { ConnectionDetails } from '../services/tabletRegistration';
+import QRCodeScanner from '../components/QRCodeScanner';
 
 export default function RegistrationScreen() {
   const [loading, setLoading] = useState(false);
   const [materialId, setMaterialId] = useState('');
   const [slotNumber, setSlotNumber] = useState('');
   const [carGroupId, setCarGroupId] = useState('');
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const [existingConnection, setExistingConnection] = useState<any>(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+
+  useEffect(() => {
+    checkExistingRegistration();
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      checkExistingConnection();
+    }, 1000); // Debounce for 1 second
+
+    return () => clearTimeout(timeoutId);
+  }, [materialId, slotNumber]);
+
+  const checkExistingRegistration = async () => {
+    try {
+      const registration = await tabletRegistrationService.getRegistrationData();
+      if (registration) {
+        Alert.alert(
+          'Already Registered',
+          'This tablet is already registered. You will be redirected to the main screen.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.push('/(tabs)')
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error checking registration:', error);
+    }
+  };
+
+  const checkExistingConnection = async () => {
+    if (!materialId.trim() || !slotNumber.trim()) {
+      setExistingConnection(null);
+      return;
+    }
+
+    setCheckingConnection(true);
+    try {
+      const result = await tabletRegistrationService.checkExistingConnection(
+        materialId.trim(),
+        parseInt(slotNumber)
+      );
+      
+      if (result.success) {
+        setExistingConnection(result.isConnected ? result.connectedDevice : null);
+      } else {
+        setExistingConnection(null);
+      }
+    } catch (error) {
+      console.error('Error checking existing connection:', error);
+      setExistingConnection(null);
+    } finally {
+      setCheckingConnection(false);
+    }
+  };
 
   const validateInputs = (): boolean => {
     if (!materialId.trim()) {
@@ -25,6 +89,11 @@ export default function RegistrationScreen() {
     const slotNum = parseInt(slotNumber);
     if (isNaN(slotNum) || slotNum < 1 || slotNum > 2) {
       Alert.alert('Error', 'Slot Number must be 1 or 2');
+      return false;
+    }
+
+    if (existingConnection) {
+      Alert.alert('Error', 'Another tablet is already connected to this material and slot combination. Please choose different details.');
       return false;
     }
     
@@ -53,8 +122,7 @@ export default function RegistrationScreen() {
             {
               text: 'OK',
               onPress: () => {
-                // For now, just reload the app
-                console.log('Registration successful, reloading app...');
+                router.push('/(tabs)');
               }
             }
           ]
@@ -69,18 +137,29 @@ export default function RegistrationScreen() {
     }
   };
 
+  const handleQRScanSuccess = (details: ConnectionDetails) => {
+    setMaterialId(details.materialId);
+    setSlotNumber(details.slotNumber.toString());
+    setCarGroupId(details.carGroupId);
+    
+    // Automatically check for existing connection
+    checkExistingConnection(details.materialId, details.slotNumber);
+  };
+
   const handleScanQR = () => {
-    Alert.alert(
-      'QR Code Scanning',
-      'QR code scanning will be available in the next update. For now, please enter the connection details manually.',
-      [{ text: 'OK' }]
-    );
+    setShowQRScanner(true);
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.push('/(tabs)')}
+        >
+          <Text style={styles.backButtonText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Tablet Registration</Text>
       </View>
 
@@ -131,6 +210,49 @@ export default function RegistrationScreen() {
             />
           </View>
 
+          {/* Connection Status */}
+          {(checkingConnection || existingConnection !== null) && (
+            <View style={styles.connectionStatusContainer}>
+              {checkingConnection ? (
+                <View style={styles.connectionStatus}>
+                  <ActivityIndicator size="small" color="#3498db" />
+                  <Text style={styles.connectionStatusText}>Checking connection status...</Text>
+                </View>
+              ) : existingConnection ? (
+                <View style={[styles.connectionStatus, styles.existingConnection]}>
+                  <Text style={styles.connectionStatusTitle}>⚠️ Device Already Connected</Text>
+                  <Text style={styles.connectionStatusText}>
+                    Another tablet is already connected to this material and slot:
+                  </Text>
+                  <View style={styles.connectedDeviceInfo}>
+                    <Text style={styles.deviceInfoText}>
+                      <Text style={styles.deviceInfoLabel}>Device ID:</Text> {existingConnection.deviceId}
+                    </Text>
+                    <Text style={styles.deviceInfoText}>
+                      <Text style={styles.deviceInfoLabel}>Car Group ID:</Text> {existingConnection.carGroupId}
+                    </Text>
+                    <Text style={styles.deviceInfoText}>
+                      <Text style={styles.deviceInfoLabel}>Status:</Text> {existingConnection.status}
+                    </Text>
+                    <Text style={styles.deviceInfoText}>
+                      <Text style={styles.deviceInfoLabel}>Last Active:</Text> {new Date(existingConnection.lastReportedAt).toLocaleString()}
+                    </Text>
+                  </View>
+                  <Text style={styles.connectionWarningText}>
+                    You cannot register this tablet to the same material and slot combination.
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.connectionStatus, styles.availableConnection]}>
+                  <Text style={styles.connectionStatusTitle}>✅ Slot Available</Text>
+                  <Text style={styles.connectionStatusText}>
+                    This material and slot combination is available for registration.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Action Buttons */}
           <View style={styles.buttonGroup}>
             <TouchableOpacity
@@ -138,18 +260,23 @@ export default function RegistrationScreen() {
               onPress={handleScanQR}
               disabled={loading}
             >
-              <Text style={styles.buttonText}>📷 Scan QR Code (Coming Soon)</Text>
+                             <View style={styles.buttonContent}>
+                 <Ionicons name="qr-code" size={20} color="white" />
+                 <Text style={styles.buttonText}>📷 Enter QR Data</Text>
+               </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.button, styles.connectButton]}
               onPress={handleConnect}
-              disabled={loading}
+              disabled={loading || existingConnection}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.buttonText}>🔗 Connect Tablet</Text>
+                <Text style={styles.buttonText}>
+                  {existingConnection ? '❌ Cannot Connect (Device Exists)' : '🔗 Connect Tablet'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -158,12 +285,12 @@ export default function RegistrationScreen() {
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionsTitle}>📋 Instructions:</Text>
-          <View style={styles.instructionSteps}>
-            <Text style={styles.instructionStep}>1. Get connection details from the admin dashboard</Text>
-            <Text style={styles.instructionStep}>2. Enter the details manually</Text>
-            <Text style={styles.instructionStep}>3. Click "Connect Tablet" to register</Text>
-            <Text style={styles.instructionStep}>4. Once registered, the tablet will auto-connect on startup</Text>
-          </View>
+                     <View style={styles.instructionSteps}>
+             <Text style={styles.instructionStep}>1. Get QR code data from the admin dashboard</Text>
+             <Text style={styles.instructionStep}>2. Enter QR data or input details manually</Text>
+             <Text style={styles.instructionStep}>3. Click "Connect Tablet" to register</Text>
+             <Text style={styles.instructionStep}>4. Once registered, the tablet will auto-connect on startup</Text>
+           </View>
         </View>
 
         {/* Help Section */}
@@ -174,6 +301,14 @@ export default function RegistrationScreen() {
           </Text>
         </View>
       </View>
+
+      {/* QR Code Scanner Modal */}
+      {showQRScanner && (
+        <QRCodeScanner
+          onScanSuccess={handleQRScanSuccess}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -187,12 +322,26 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
     paddingTop: 60,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e1e8ed',
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    top: 60,
+    padding: 8,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#3498db',
+    fontWeight: '600',
   },
   headerTitle: {
     fontSize: 18,
@@ -268,6 +417,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   instructionsContainer: {
     backgroundColor: '#fff',
     borderRadius: 16,
@@ -310,5 +464,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7f8c8d',
     lineHeight: 20,
+  },
+  connectionStatusContainer: {
+    marginTop: 20,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e8ed',
+  },
+  existingConnection: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffeaa7',
+  },
+  availableConnection: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+  },
+  connectionStatusTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  connectionStatusText: {
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  connectedDeviceInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  deviceInfoText: {
+    fontSize: 12,
+    color: '#856404',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  deviceInfoLabel: {
+    fontWeight: '600',
+  },
+  connectionWarningText: {
+    fontSize: 12,
+    color: '#e74c3c',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

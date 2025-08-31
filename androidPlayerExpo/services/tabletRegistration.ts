@@ -30,6 +30,20 @@ export interface RegistrationResponse {
   adsList?: any[];
 }
 
+export interface ConnectionCheckResponse {
+  success: boolean;
+  message: string;
+  isConnected: boolean;
+  connectedDevice?: {
+    deviceId: string;
+    materialId: string;
+    slotNumber: number;
+    carGroupId: string;
+    status: string;
+    lastReportedAt: string;
+  };
+}
+
 // For device/emulator testing, use your computer's IP address
 const API_BASE_URL = 'http://192.168.100.22:5000'; // Update with your server URL
 
@@ -161,6 +175,105 @@ export class TabletRegistrationService {
       this.registration = null;
     } catch (error) {
       console.error('Error clearing registration:', error);
+    }
+  }
+
+  async unregisterTablet(): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!this.registration) {
+        return {
+          success: false,
+          message: 'No registration found to unregister'
+        };
+      }
+
+      const requestBody = {
+        deviceId: this.registration.deviceId,
+        materialId: this.registration.materialId,
+        slotNumber: this.registration.slotNumber,
+        carGroupId: this.registration.carGroupId
+      };
+
+      console.log('Unregistering tablet with:', requestBody);
+
+      const response = await fetch(`${API_BASE_URL}/unregisterTablet`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Clear local registration data
+        await AsyncStorage.removeItem('tabletRegistration');
+        this.registration = null;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error unregistering tablet:', error);
+      return {
+        success: false,
+        message: 'Network error: Unable to connect to server'
+      };
+    }
+  }
+
+  async forceUnregisterTablet(): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!this.registration) {
+        return {
+          success: false,
+          message: 'No registration found to unregister'
+        };
+      }
+
+      // Clear local registration data even if server is not available
+      await AsyncStorage.removeItem('tabletRegistration');
+      this.registration = null;
+
+      return {
+        success: true,
+        message: 'Tablet unregistered locally (server may not be updated)'
+      };
+    } catch (error) {
+      console.error('Error force unregistering tablet:', error);
+      return {
+        success: false,
+        message: 'Failed to unregister tablet locally'
+      };
+    }
+  }
+
+  async checkExistingConnection(materialId: string, slotNumber: number): Promise<ConnectionCheckResponse> {
+    try {
+      const requestBody = {
+        materialId,
+        slotNumber
+      };
+
+      console.log('Checking existing connection for:', requestBody);
+
+      const response = await fetch(`${API_BASE_URL}/checkExistingConnection`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result: ConnectionCheckResponse = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error checking existing connection:', error);
+      return {
+        success: false,
+        message: 'Network error: Unable to connect to server',
+        isConnected: false
+      };
     }
   }
 }

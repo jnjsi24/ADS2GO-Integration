@@ -20,8 +20,7 @@ const TabletUnitSchema = new mongoose.Schema({
 
 const TabletSchema = new mongoose.Schema({
   materialId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Material', 
+    type: String, 
     required: true 
   },
   carGroupId: { 

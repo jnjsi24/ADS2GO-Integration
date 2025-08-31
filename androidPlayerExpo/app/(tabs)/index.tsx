@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Scr
 import * as Location from "expo-location";
 import { Video, ResizeMode } from "expo-av";
 import QRCode from "react-native-qrcode-svg";
-
+import { router } from "expo-router/build/imperative-api";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [registrationData, setRegistrationData] = useState<TabletRegistration | null>(null);
   const [isOnline, setIsOnline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [unregistering, setUnregistering] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -59,15 +60,67 @@ export default function HomeScreen() {
   const handleReRegister = () => {
     Alert.alert(
       'Re-register Tablet',
-      'This will clear the current registration and redirect you to the registration screen. Continue?',
+      'This will unregister this tablet from the server and redirect you to the registration screen. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Continue',
           style: 'destructive',
           onPress: async () => {
-            await tabletRegistrationService.clearRegistration();
-            console.log('Navigate to registration screen');
+            setUnregistering(true);
+            try {
+              const result = await tabletRegistrationService.unregisterTablet();
+              if (result.success) {
+                Alert.alert(
+                  'Success',
+                  'Tablet unregistered successfully. You will be redirected to the registration screen.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => router.push('/registration')
+                    }
+                  ]
+                );
+              } else {
+                // If server unregistration fails, offer to force unregister locally
+                Alert.alert(
+                  'Server Unavailable',
+                  'Unable to unregister from server. Would you like to unregister locally and continue?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Force Unregister',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const forceResult = await tabletRegistrationService.forceUnregisterTablet();
+                          if (forceResult.success) {
+                            Alert.alert(
+                              'Success',
+                              'Tablet unregistered locally. You will be redirected to the registration screen.',
+                              [
+                                {
+                                  text: 'OK',
+                                  onPress: () => router.push('/registration')
+                                }
+                              ]
+                            );
+                          } else {
+                            Alert.alert('Error', forceResult.message);
+                          }
+                        } catch (error) {
+                          Alert.alert('Error', 'Failed to unregister tablet locally.');
+                        }
+                      }
+                    }
+                  ]
+                );
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to unregister tablet. Please try again.');
+            } finally {
+              setUnregistering(false);
+            }
           }
         }
       ]
@@ -75,11 +128,44 @@ export default function HomeScreen() {
   };
 
   const handleGoToRegistration = () => {
-    // For now, just show an alert
+    router.push('/registration');
+  };
+
+  const handleEmergencyUnregister = () => {
     Alert.alert(
-      'Registration',
-      'Please manually navigate to the registration screen or restart the app.',
-      [{ text: 'OK' }]
+      'Emergency Unregister',
+      'This will clear the local registration data without contacting the server. Use this only if the server is completely unavailable. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Emergency Clear',
+          style: 'destructive',
+          onPress: async () => {
+            setUnregistering(true);
+            try {
+              const result = await tabletRegistrationService.forceUnregisterTablet();
+              if (result.success) {
+                Alert.alert(
+                  'Success',
+                  'Local registration cleared. You will be redirected to the registration screen.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => router.push('/registration')
+                    }
+                  ]
+                );
+              } else {
+                Alert.alert('Error', result.message);
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear local registration.');
+            } finally {
+              setUnregistering(false);
+            }
+          }
+        }
+      ]
     );
   };
 
@@ -213,15 +299,28 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionSection}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={handleReRegister}
-        >
-          <Text style={styles.actionButtonText}>🔄 Re-register Tablet</Text>
-        </TouchableOpacity>
-      </View>
+             {/* Action Buttons */}
+       <View style={styles.actionSection}>
+         <TouchableOpacity 
+           style={styles.actionButton}
+           onPress={handleReRegister}
+           disabled={unregistering}
+         >
+           {unregistering ? (
+             <ActivityIndicator color="#fff" />
+           ) : (
+             <Text style={styles.actionButtonText}>🔄 Re-register Tablet</Text>
+           )}
+         </TouchableOpacity>
+         
+         <TouchableOpacity 
+           style={[styles.actionButton, styles.emergencyButton]}
+           onPress={handleEmergencyUnregister}
+           disabled={unregistering}
+         >
+           <Text style={styles.actionButtonText}>🚨 Emergency Unregister</Text>
+         </TouchableOpacity>
+       </View>
     </ScrollView>
   );
 }
@@ -413,6 +512,10 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  emergencyButton: {
+    backgroundColor: '#f39c12',
   },
   actionButtonText: {
     color: '#fff',
