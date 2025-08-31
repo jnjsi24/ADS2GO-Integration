@@ -416,17 +416,26 @@ router.get('/ads/:materialId/:slotNumber', async (req, res) => {
       
       // First, try to find the material by ObjectId to get its string materialId
       const material = await Material.findById(materialId);
+      console.log('Material lookup result:', material ? 'Found' : 'Not found');
+      if (material) {
+        console.log('  Material _id:', material._id);
+        console.log('  Material materialId:', material.materialId);
+        console.log('  Material materialType:', material.materialType);
+      }
+      
       if (material && material.materialId) {
         console.log('Found material by ObjectId, searching with string materialId:', material.materialId);
         adDeployments = await AdsDeployment.find({ materialId: material.materialId })
           .populate('lcdSlots.adId') // Populate the ad details
           .sort({ createdAt: -1 }); // Get the most recent deployment
+        console.log('Deployments found with string materialId:', adDeployments.length);
       } else {
         // If material not found, try direct ObjectId search as fallback
         console.log('Material not found by ObjectId, trying direct ObjectId search');
         adDeployments = await AdsDeployment.find({ materialId: new mongoose.Types.ObjectId(materialId) })
           .populate('lcdSlots.adId') // Populate the ad details
           .sort({ createdAt: -1 }); // Get the most recent deployment
+        console.log('Deployments found with ObjectId materialId:', adDeployments.length);
       }
     }
 
@@ -451,27 +460,20 @@ router.get('/ads/:materialId/:slotNumber', async (req, res) => {
       console.log('📋 Processing deployment:', deployment._id);
       console.log('📺 LCD slots count:', deployment.lcdSlots.length);
       
-             // Find LCD slots that match the requested slot number
-       let matchingSlots = deployment.lcdSlots.filter(slot => 
-         slot.slotNumber === parseInt(slotNumber) && 
-         slot.status === 'RUNNING' &&
-         new Date(slot.startTime) <= currentTime &&
-         new Date(slot.endTime) >= currentTime
-       );
-
-       // If no ads found in the requested slot, try to find ads in any available slot
-       if (matchingSlots.length === 0) {
-         console.log(`🎯 No ads found in slot ${slotNumber}, searching for ads in any available slot...`);
-         matchingSlots = deployment.lcdSlots.filter(slot => 
-           slot.status === 'RUNNING' &&
-           new Date(slot.startTime) <= currentTime &&
-           new Date(slot.endTime) >= currentTime
-         );
-         
-         if (matchingSlots.length > 0) {
-           console.log(`🎯 Found ${matchingSlots.length} ads in other slots, using first available`);
-         }
-       }
+                   // Fetch ALL ads from ALL slots that are RUNNING and within time range
+      console.log(`🎯 Fetching ads from all available slots...`);
+      let matchingSlots = deployment.lcdSlots.filter(slot => 
+        slot.status === 'RUNNING' &&
+        new Date(slot.startTime) <= currentTime &&
+        new Date(slot.endTime) >= currentTime
+      );
+      
+      console.log(`🎯 Found ${matchingSlots.length} ads across all slots`);
+      
+      // Log details of each slot for debugging
+      deployment.lcdSlots.forEach((slot, index) => {
+        console.log(`  Slot ${slot.slotNumber}: status=${slot.status}, startTime=${slot.startTime}, endTime=${slot.endTime}`);
+      });
 
       console.log('🎯 Matching slots:', matchingSlots.length);
 
