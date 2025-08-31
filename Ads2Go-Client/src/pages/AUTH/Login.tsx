@@ -67,7 +67,7 @@ const Login: React.FC = () => {
         loop
         muted
         playsInline
-        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover "
+        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover"
       >
         <source src="/image/login.mp4" type="video/mp4" />
         Your browser does not support the video tag.
@@ -78,7 +78,7 @@ const Login: React.FC = () => {
 
       {/* Form Container */}
       <div className="relative z-10 w-full max-w-xl ml-auto mr-12 flex flex-col justify-center px-10">
-        <div className="p-8 rounded-xl shadow-2xl bg-white">
+        <div className="p-8 rounded-xl shadow-2xl bg-[#fdfdfd]">
           <div className="flex items-center space-x-2 mb-6">
             <h1 className="text-5xl font-extrabold text-black">Log in</h1>
           </div>
@@ -127,7 +127,7 @@ const Login: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
+                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
               />
             </div>
 
@@ -147,7 +147,7 @@ const Login: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
+                  className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
                 />
                 <button
                   type="button"

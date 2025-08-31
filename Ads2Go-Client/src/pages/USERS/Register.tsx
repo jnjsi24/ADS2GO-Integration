@@ -244,8 +244,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800  rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400  rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    
                   />
                   {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                 </div>
@@ -259,8 +259,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.middleName}
                     onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none"
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className="mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none"
+                    
                   />
                 </div>
                 <div>
@@ -273,10 +273,9 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none`}
                   />
-                  {errors.lastName && <p className="mt-1 text-md text-red-600">{errors.lastName}</p>}
+                  {errors.lastName && <p className="mt-1 text-red-600">{errors.lastName}</p>}
                 </div>
                 <button
                   type="button"
@@ -300,8 +299,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.companyName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    
                   />
                   {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
                 </div>
@@ -315,8 +314,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.companyAddress}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    
                   />
                   {errors.companyAddress && <p className="mt-1 text-sm text-red-600">{errors.companyAddress}</p>}
                 </div>
@@ -330,8 +329,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.houseAddress}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-md focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-md focus:outline-none`}
+                    
                   />
                   {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
                 </div>
@@ -339,7 +338,7 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="w-1/2 mr-2 px-3 text-md border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
+                    className="w-1/2 mr-2 px-3 border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
                     
                   >
                     Back
@@ -347,7 +346,7 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="w-full ml-2 py-3 px-4 text-md bg-[#FF9800] text-white font-semibold rounded-md hover:bg-[#FF9B45] focus:outline-none"
+                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-md hover:bg-[#FF9B45] focus:outline-none"
            
                   >
                     Next
@@ -368,8 +367,8 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.contactNumber}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    
                   />
                   {errors.contactNumber && <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>}
                 </div>
@@ -383,8 +382,8 @@ const Register: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-800   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    
                   />
                   {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
@@ -399,8 +398,8 @@ const Register: React.FC = () => {
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
                       onChange={handleChange}
-                      className="block w-full border border-gray-800 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
-                      style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                      className="block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
+                      
                     />
                     <button
                       type="button"
@@ -424,8 +423,8 @@ const Register: React.FC = () => {
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={formData.confirmPassword}
                       onChange={handleChange}
-                      className="block w-full border border-gray-800 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
-                      style={{ borderColor: '#6B6A68', backgroundColor: 'transparent' }}
+                      className="block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
+                      
                     />
                     <button
                       type="button"
@@ -442,14 +441,14 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="w-1/2 mr-2 py-3 px-4 text-lg border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
+                    className="w-1/2 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting} // Disable the button while submitting
-                    className={`w-full py-3 px-4 text-md text-white font-semibold rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    className={`w-full py-3 px-4 text-white font-semibold rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                       isSubmitting
                         ? 'bg-gray-500 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-[#FF9B45]'

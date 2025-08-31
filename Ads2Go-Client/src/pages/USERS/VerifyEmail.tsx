@@ -157,7 +157,7 @@ const VerifyEmail: React.FC = () => {
                   onChange={(e) => handleInputChange(e, index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
                   onPaste={handlePaste}
-                  className="w-12 h-12 text-2xl text-center border-2 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 outline-none"
+                  className="w-12 h-12 text-2xl text-center border-2 border-gray-300 rounded-lg shadow-sm focus:border-[#FF9800] focus:ring-[#FF9800] outline-none"
                 />
               ))}
             </div>
@@ -182,7 +182,7 @@ const VerifyEmail: React.FC = () => {
             disabled={verificationCode.length !== 6 || verifyLoading}
             className={`w-full py-2 px-4 rounded focus:outline-none focus:shadow-outline ${
               verificationCode.length === 6 && !verifyLoading
-                ? 'bg-blue-500 text-white hover:bg-blue-700'
+                ? 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
