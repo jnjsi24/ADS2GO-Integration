@@ -4,9 +4,9 @@ import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { GET_ALL_ADS_PLANS } from '../../graphql/queries/adsPlans';
-import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/queries/materials';
-import { CREATE_AD } from '../../graphql/mutations/createAd';
+import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
+import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/admin';
+import { CREATE_AD } from '../../graphql/admin';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';

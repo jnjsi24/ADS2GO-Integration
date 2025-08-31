@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMutation } from '@apollo/client';
 import { toast } from 'sonner';
-import { UPDATE_ADMIN_USER } from '../../graphql/mutations/updateAdminUser';
+import { UPDATE_ADMIN_USER } from '../../graphql/admin';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {

@@ -4,10 +4,10 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Pencil, UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ALL_ADMINS } from '../../graphql/queries/getAllAdmins';
-import { CREATE_ADMIN_USER } from '../../graphql/mutations/createAdminUser';
-import { UPDATE_ADMIN_USER } from "../../graphql/mutations/updateAdminUser";
-import { DELETE_USER } from '../../graphql/mutations/deleteUser';
+import { GET_ALL_ADMINS } from '../../graphql/superadmin';
+import { CREATE_ADMIN_USER } from '../../graphql/admin';
+import { UPDATE_ADMIN_USER } from "../../graphql/admin";
+import { DELETE_USER } from '../../graphql/superadmin';
 
 
 interface Admin {

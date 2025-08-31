@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, gql } from '@apollo/client';
 import { useAuth } from '../../contexts/AuthContext';
-import { LOGIN_ADMIN_MUTATION } from '../../graphql/mutations/LoginAdmin'; // ✅ UPDATED
+import { LOGIN_ADMIN_MUTATION } from '../../graphql/admin'; // ✅ UPDATED
 
 
 

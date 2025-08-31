@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LOGIN_ADMIN_MUTATION } from '../../graphql/mutations/LoginAdmin'; // ✅ UPDATED
+import { LOGIN_ADMIN_MUTATION } from '../../graphql/admin';
 
 const AdminLogin: React.FC = () => {
   const { setUser } = useAuth();

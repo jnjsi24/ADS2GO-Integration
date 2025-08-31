@@ -12,8 +12,8 @@ import {
   LOGIN_MUTATION,
   REGISTER_MUTATION,
   LOGOUT_MUTATION,
-} from '../services/graphql';
-import { GET_OWN_USER_DETAILS } from '../graphql/queries/getOwnUserDetails';
+  GET_OWN_USER_DETAILS,
+} from '../graphql/user';
 import { jwtDecode } from 'jwt-decode';
 
 // 🚨 Firebase imports removed except analytics/storage usage

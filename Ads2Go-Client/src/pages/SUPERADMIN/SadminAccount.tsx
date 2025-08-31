@@ -5,7 +5,7 @@ import { BellIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMutation } from "@apollo/client";
 import { toast } from 'sonner';
-import { UPDATE_SUPER_ADMIN_DETAIL } from "../../graphql/mutations/updateSuperAdminDetail";
+import { UPDATE_SUPER_ADMIN_DETAIL } from "../../graphql/superadmin";
 
 // Define the structure for user data from useAuth
 interface UserData {

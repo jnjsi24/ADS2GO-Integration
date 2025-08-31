@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { GET_MY_ADS } from '../../graphql/queries/getAd';
+import { GET_AD } from '../../graphql/admin';
 
 // Ad type (should match the one in Advertisements.tsx)
 type Ad = {

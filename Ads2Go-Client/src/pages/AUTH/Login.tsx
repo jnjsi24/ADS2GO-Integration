@@ -3,7 +3,7 @@ import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { LOGIN_MUTATION } from '../../graphql/mutations/Login';
+import { LOGIN_MUTATION } from '../../graphql/user';
 
 const Login: React.FC = () => {
   const { navigateToRegister, setUser } = useAuth();

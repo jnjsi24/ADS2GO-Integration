@@ -3,8 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_MY_ADS } from '../../graphql/queries/getMyAds';
-import { CREATE_AD } from '../../graphql/mutations/createAd';
+import { GET_MY_ADS } from '../../graphql/user';
+import { CREATE_AD } from '../../graphql/admin';
 
 // Form data type
 type FormData = {
