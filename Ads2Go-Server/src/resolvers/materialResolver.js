@@ -76,7 +76,7 @@ const materialResolvers = {
       // Create tablet pair if the material type is HEADDRESS
       if (materialType === 'HEADDRESS') {
         // Check if a tablet document already exists for this material
-        let existingTablet = await Tablet.findOne({ materialId: material._id });
+        let existingTablet = await Tablet.findOne({ materialId: material.materialId });
         
         if (!existingTablet) {
           // Only create new tablet document if one doesn't exist
@@ -84,7 +84,7 @@ const materialResolvers = {
           
           // Create a single document with both tablets
           const tabletPair = new Tablet({
-            materialId: material._id,
+            materialId: material.materialId, // Use the string materialId, not the ObjectId _id
             carGroupId,
             tablets: [
               {

@@ -97,7 +97,7 @@ GET /tablet/TABLET-UNIQUE-ID
 ### Tablet Model
 ```javascript
 {
-  materialId: ObjectId,        // Reference to Material
+  materialId: String,          // Material's materialId field (e.g., "DGL-HEADDRESS-CAR-001")
   carGroupId: String,          // e.g., "GRP-E522A5CC"
   tablets: [
     {

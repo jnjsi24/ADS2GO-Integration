@@ -302,6 +302,15 @@ export class TabletRegistrationService {
     try {
       console.log('Fetching ads for:', { materialId, slotNumber });
 
+      // Check if materialId looks like an ObjectId (24 character hex string)
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(materialId);
+      
+      if (isObjectId) {
+        console.log('⚠️  Warning: materialId appears to be an ObjectId format, this might cause issues');
+        console.log('   Expected format: "DGL-HEADDRESS-CAR-001"');
+        console.log('   Current format: "' + materialId + '"');
+      }
+
       const response = await fetch(`${API_BASE_URL}/ads/${materialId}/${slotNumber}`, {
         method: 'GET',
         headers: {

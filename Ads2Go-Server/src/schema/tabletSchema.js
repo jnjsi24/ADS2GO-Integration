@@ -11,7 +11,7 @@ module.exports = gql`
 
   type Tablet {
     id: ID!
-    materialId: ID!
+    materialId: String!  # Changed from ID! to String! to match the model
     carGroupId: String!
     tablets: [TabletUnit!]!
     createdAt: String

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
 const Material = require('../models/Material');
 const AdsDeployment = require('../models/adsDeployment'); // Added AdsDeployment import
@@ -35,8 +36,15 @@ router.post('/registerTablet', async (req, res) => {
     }
 
     // Check if material exists and is HEADDRESS type
-    // Find material by materialId field (not by _id)
-    const material = await Material.findOne({ materialId });
+    // Try to find material by materialId field first (string format)
+    let material = await Material.findOne({ materialId });
+    
+    // If not found and materialId looks like an ObjectId, try finding by _id
+    if (!material && mongoose.Types.ObjectId.isValid(materialId)) {
+      console.log('Material not found by materialId, trying ObjectId:', materialId);
+      material = await Material.findById(materialId);
+    }
+    
     if (!material) {
       return res.status(404).json({
         success: false,
@@ -52,7 +60,15 @@ router.post('/registerTablet', async (req, res) => {
     }
 
     // Find the tablet document for this material
+    // Try to find by materialId first (string format)
     let tablet = await Tablet.findOne({ materialId });
+    
+    // If not found and materialId looks like an ObjectId, try finding by ObjectId
+    if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
+      console.log('Tablet not found by materialId, trying ObjectId:', materialId);
+      tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
+    }
+    
     if (!tablet) {
       return res.status(404).json({
         success: false,
@@ -388,9 +404,31 @@ router.get('/ads/:materialId/:slotNumber', async (req, res) => {
 
     // Find AdsDeployment documents that match the materialId
     console.log('🔍 Searching for materialId:', materialId);
-    const adDeployments = await AdsDeployment.find({ materialId })
+    
+    // Try to find by materialId first (string format)
+    let adDeployments = await AdsDeployment.find({ materialId })
       .populate('lcdSlots.adId') // Populate the ad details
       .sort({ createdAt: -1 }); // Get the most recent deployment
+    
+    // If no deployments found and materialId looks like an ObjectId, try finding by ObjectId
+    if (adDeployments.length === 0 && mongoose.Types.ObjectId.isValid(materialId)) {
+      console.log('No deployments found by materialId, trying ObjectId:', materialId);
+      
+      // First, try to find the material by ObjectId to get its string materialId
+      const material = await Material.findById(materialId);
+      if (material && material.materialId) {
+        console.log('Found material by ObjectId, searching with string materialId:', material.materialId);
+        adDeployments = await AdsDeployment.find({ materialId: material.materialId })
+          .populate('lcdSlots.adId') // Populate the ad details
+          .sort({ createdAt: -1 }); // Get the most recent deployment
+      } else {
+        // If material not found, try direct ObjectId search as fallback
+        console.log('Material not found by ObjectId, trying direct ObjectId search');
+        adDeployments = await AdsDeployment.find({ materialId: new mongoose.Types.ObjectId(materialId) })
+          .populate('lcdSlots.adId') // Populate the ad details
+          .sort({ createdAt: -1 }); // Get the most recent deployment
+      }
+    }
 
     console.log('📊 Found deployments:', adDeployments.length);
 

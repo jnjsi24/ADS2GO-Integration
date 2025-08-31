@@ -13,18 +13,11 @@ module.exports = {
         console.log('Searching for tablets with materialId:', materialId);
         console.log('materialId type:', typeof materialId);
         
-        // Try to find tablets by materialId (as string)
-        let tablets = await Tablet.find({ materialId });
-        console.log('Direct search result count:', tablets.length);
+        // Find tablets by materialId (as string)
+        const tablets = await Tablet.find({ materialId });
+        console.log('Found tablets count:', tablets.length);
         
-        // If no tablets found and materialId looks like an ObjectId, try converting it
-        if (tablets.length === 0 && mongoose.Types.ObjectId.isValid(materialId)) {
-          console.log('Trying ObjectId conversion for materialId:', materialId);
-          tablets = await Tablet.find({ materialId: new mongoose.Types.ObjectId(materialId) });
-          console.log('Found tablets by ObjectId materialId:', materialId, 'Count:', tablets.length);
-        }
-        
-        // If still no tablets found, let's check what's actually in the database
+        // If no tablets found, let's check what's actually in the database
         if (tablets.length === 0) {
           console.log('No tablets found, checking all tablets in database...');
           const allTablets = await Tablet.find({});
@@ -47,18 +40,11 @@ module.exports = {
         console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
         console.log('materialId type:', typeof materialId);
         
-        // Try to find tablet by materialId (as string)
-        let tablet = await Tablet.findOne({ materialId });
-        console.log('Found tablet by string materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        // Find tablet by materialId (as string)
+        const tablet = await Tablet.findOne({ materialId });
+        console.log('Found tablet by materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
         
-        // If no tablet found and materialId looks like an ObjectId, try converting it
-        if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
-          console.log('Trying ObjectId conversion for materialId:', materialId);
-          tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
-          console.log('Found tablet by ObjectId materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
-        }
-        
-        // If still no tablet found, let's check what's actually in the database
+        // If no tablet found, let's check what's actually in the database
         if (!tablet) {
           console.log('No tablet found, checking all tablets in database...');
           const allTablets = await Tablet.find({});
@@ -214,16 +200,9 @@ module.exports = {
         
         console.log('Unregistering tablet for materialId:', materialId, 'slotNumber:', slotNumber);
         
-        // Try to find tablet by materialId (as string)
-        let tablet = await Tablet.findOne({ materialId });
-        console.log('Found tablet by string materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
-        
-        // If no tablet found and materialId looks like an ObjectId, try converting it
-        if (!tablet && mongoose.Types.ObjectId.isValid(materialId)) {
-          console.log('Trying ObjectId conversion for materialId:', materialId);
-          tablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
-          console.log('Found tablet by ObjectId materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
-        }
+        // Find tablet by materialId (as string)
+        const tablet = await Tablet.findOne({ materialId });
+        console.log('Found tablet by materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
         
         if (!tablet) {
           return {
@@ -281,11 +260,8 @@ module.exports = {
         
         console.log('Creating tablet configuration for materialId:', materialId);
         
-        // Check if tablet configuration already exists (try both string and ObjectId)
+        // Check if tablet configuration already exists
         let existingTablet = await Tablet.findOne({ materialId });
-        if (!existingTablet && mongoose.Types.ObjectId.isValid(materialId)) {
-          existingTablet = await Tablet.findOne({ materialId: new mongoose.Types.ObjectId(materialId) });
-        }
         
         if (existingTablet) {
           return {
@@ -295,9 +271,8 @@ module.exports = {
         }
 
         // Create new tablet configuration with 2 slots
-        // Store materialId as string to match existing database structure
         const tablet = new Tablet({
-          materialId: materialId.toString(),
+          materialId: materialId, // Store as string
           carGroupId,
           tablets: [
             {

@@ -139,7 +139,7 @@ AdSchema.post('save', async function (doc) {
         console.log(`🔄 Deploying non-LCD Ad ${doc._id}`);
         await AdsDeployment.create({
           adId: doc._id,
-          materialId: material._id,
+          materialId: material.materialId, // Use string materialId, not ObjectId _id
           driverId: material.driverId,
           startTime: doc.startTime,
           endTime: doc.endTime,
@@ -151,10 +151,10 @@ AdSchema.post('save', async function (doc) {
       }
 
       // LCD ads → use addToLCD method for single deployment doc
-      console.log(`🔄 Deploying LCD Ad ${doc._id} to material ${material._id}`);
+      console.log(`🔄 Deploying LCD Ad ${doc._id} to material ${material.materialId}`);
       try {
         const deployment = await AdsDeployment.addToLCD(
-          material._id,
+          material.materialId, // Use string materialId, not ObjectId _id
           material.driverId,
           doc._id,
           doc.startTime,

@@ -152,8 +152,8 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     console.log(`🔄 Starting LCD deployment for ad ${adId} on material ${materialId}`);
     
     // Input validation
-    if (!mongoose.Types.ObjectId.isValid(materialId)) {
-      throw new Error('Invalid materialId');
+    if (!materialId || typeof materialId !== 'string') {
+      throw new Error('Invalid materialId - must be a string');
     }
     // Driver ID can be either a string (like 'DRV-002') or ObjectId
     if (!driverId) {
