@@ -37,6 +37,13 @@ const tabletResolvers = require('./resolvers/tabletResolver');
 const { authMiddleware } = require('./middleware/auth');
 const { driverMiddleware } = require('./middleware/driverAuth');
 
+// Import routes
+const tabletRoutes = require('./routes/tablet');
+const screenTrackingRoutes = require('./routes/screenTracking');
+const materialRoutes = require('./routes/material');
+const adsRoutes = require('./routes/ads');
+const uploadRoute = require('./routes/upload');
+
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
   console.error('\n❌ MONGODB_URI is not defined in the .env file');
@@ -101,12 +108,13 @@ async function startServer() {
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   
   // Regular file upload route (must come before GraphQL middleware)
-  const uploadRoute = require('./routes/upload');
   app.use('/upload', uploadRoute);
   
-  // Tablet registration routes
-  const tabletRoute = require('./routes/tablet');
-  app.use('/', tabletRoute);
+  // Routes
+  app.use('/tablet', tabletRoutes);
+  app.use('/screenTracking', screenTrackingRoutes);
+  app.use('/material', materialRoutes);
+  app.use('/ads', adsRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

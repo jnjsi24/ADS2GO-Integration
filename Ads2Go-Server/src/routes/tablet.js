@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
 const Material = require('../models/Material');
+const ScreenTracking = require('../models/screenTracking');
 const AdsDeployment = require('../models/adsDeployment'); // Added AdsDeployment import
 
 // Test route to verify tablet routes are working
@@ -12,6 +13,39 @@ router.get('/test', (req, res) => {
     message: 'Tablet routes are working!',
     timestamp: new Date().toISOString()
   });
+});
+
+// GET /tablet/list - List all tablets (for debugging) - MUST COME FIRST
+router.get('/list', async (req, res) => {
+  try {
+    const tablets = await Tablet.find({}).populate('materialId');
+    
+    const simplifiedTablets = tablets.map(tab => ({
+      id: tab._id,
+      materialId: tab.materialId,
+      carGroupId: tab.carGroupId,
+      tablets: tab.tablets.map(t => ({
+        tabletNumber: t.tabletNumber,
+        deviceId: t.deviceId,
+        status: t.status,
+        lastSeen: t.lastSeen
+      }))
+    }));
+
+    res.json({
+      success: true,
+      tablets: simplifiedTablets,
+      message: `Found ${tablets.length} tablet configurations`
+    });
+
+  } catch (error) {
+    console.error('Error fetching tablets:', error);
+    res.status(500).json({
+      success: false,
+      tablets: [],
+      message: 'Internal server error'
+    });
+  }
 });
 
 // POST /registerTablet
@@ -113,6 +147,45 @@ router.post('/registerTablet', async (req, res) => {
 
     await tablet.save();
 
+    // Create or update tablet tracking record
+         let tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    
+    if (!tabletTracking) {
+             // Create new tracking record
+       tabletTracking = new ScreenTracking({
+        deviceId,
+        materialId,
+        carGroupId,
+        slotNumber,
+        isOnline: true,
+        lastSeen: new Date()
+      });
+      
+      // Start daily session
+      await tabletTracking.startDailySession();
+    } else {
+      // Update existing tracking record
+      tabletTracking.isOnline = true;
+      tabletTracking.lastSeen = new Date();
+      
+      // Check if we need to start a new daily session
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (!tabletTracking.currentSession || 
+          new Date(tabletTracking.currentSession.date).getTime() !== today.getTime()) {
+        // End previous session if exists
+        if (tabletTracking.currentSession && tabletTracking.currentSession.isActive) {
+          await tabletTracking.endDailySession();
+        }
+        
+        // Start new daily session
+        await tabletTracking.startDailySession();
+      }
+    }
+
+    await tabletTracking.save();
+
     // Return success response with tablet info
     res.json({
       success: true,
@@ -124,6 +197,12 @@ router.post('/registerTablet', async (req, res) => {
         carGroupId,
         status: 'ONLINE',
         lastReportedAt: new Date().toISOString()
+      },
+      trackingInfo: {
+        currentHours: tabletTracking.currentHoursToday,
+        hoursRemaining: tabletTracking.hoursRemaining,
+        isCompliant: tabletTracking.isCompliantToday,
+        targetHours: 8
       },
       adsList: [] // TODO: Add actual ads list when ads system is implemented
     });
@@ -384,136 +463,4 @@ router.post('/unregisterTablet', async (req, res) => {
   }
 });
 
-// Get ads for a specific tablet
-router.get('/ads/:materialId/:slotNumber', async (req, res) => {
-  try {
-    const { materialId, slotNumber } = req.params;
-    
-    console.log('🔍 Fetching ads for:', { materialId, slotNumber });
-
-    // Check if AdsDeployment model is available
-    if (!AdsDeployment) {
-      console.error('❌ AdsDeployment model not found');
-      return res.status(500).json({
-        success: false,
-        message: 'AdsDeployment model not available'
-      });
-    }
-
-    console.log('✅ AdsDeployment model found, searching...');
-
-    // Find AdsDeployment documents that match the materialId
-    console.log('🔍 Searching for materialId:', materialId);
-    
-    // Try to find by materialId first (string format)
-    let adDeployments = await AdsDeployment.find({ materialId })
-      .populate('lcdSlots.adId') // Populate the ad details
-      .sort({ createdAt: -1 }); // Get the most recent deployment
-    
-    // If no deployments found and materialId looks like an ObjectId, try finding by ObjectId
-    if (adDeployments.length === 0 && mongoose.Types.ObjectId.isValid(materialId)) {
-      console.log('No deployments found by materialId, trying ObjectId:', materialId);
-      
-      // First, try to find the material by ObjectId to get its string materialId
-      const material = await Material.findById(materialId);
-      console.log('Material lookup result:', material ? 'Found' : 'Not found');
-      if (material) {
-        console.log('  Material _id:', material._id);
-        console.log('  Material materialId:', material.materialId);
-        console.log('  Material materialType:', material.materialType);
-      }
-      
-      if (material && material.materialId) {
-        console.log('Found material by ObjectId, searching with string materialId:', material.materialId);
-        adDeployments = await AdsDeployment.find({ materialId: material.materialId })
-          .populate('lcdSlots.adId') // Populate the ad details
-          .sort({ createdAt: -1 }); // Get the most recent deployment
-        console.log('Deployments found with string materialId:', adDeployments.length);
-      } else {
-        // If material not found, try direct ObjectId search as fallback
-        console.log('Material not found by ObjectId, trying direct ObjectId search');
-        adDeployments = await AdsDeployment.find({ materialId: new mongoose.Types.ObjectId(materialId) })
-          .populate('lcdSlots.adId') // Populate the ad details
-          .sort({ createdAt: -1 }); // Get the most recent deployment
-        console.log('Deployments found with ObjectId materialId:', adDeployments.length);
-      }
-    }
-
-    console.log('📊 Found deployments:', adDeployments.length);
-
-    if (!adDeployments || adDeployments.length === 0) {
-      console.log('❌ No deployments found');
-      return res.json({
-        success: true,
-        ads: [],
-        message: 'No ad deployments found for this material'
-      });
-    }
-
-    const ads = [];
-    const currentTime = new Date();
-
-    console.log('🕐 Current time:', currentTime);
-
-    // Process each deployment
-    for (const deployment of adDeployments) {
-      console.log('📋 Processing deployment:', deployment._id);
-      console.log('📺 LCD slots count:', deployment.lcdSlots.length);
-      
-                   // Fetch ALL ads from ALL slots that are RUNNING and within time range
-      console.log(`🎯 Fetching ads from all available slots...`);
-      let matchingSlots = deployment.lcdSlots.filter(slot => 
-        slot.status === 'RUNNING' &&
-        new Date(slot.startTime) <= currentTime &&
-        new Date(slot.endTime) >= currentTime
-      );
-      
-      console.log(`🎯 Found ${matchingSlots.length} ads across all slots`);
-      
-      // Log details of each slot for debugging
-      deployment.lcdSlots.forEach((slot, index) => {
-        console.log(`  Slot ${slot.slotNumber}: status=${slot.status}, startTime=${slot.startTime}, endTime=${slot.endTime}`);
-      });
-
-      console.log('🎯 Matching slots:', matchingSlots.length);
-
-      // Add matching ads to the result
-      for (const slot of matchingSlots) {
-        if (slot.adId) {
-          ads.push({
-            adId: slot.adId._id || slot.adId,
-            adDeploymentId: deployment._id,
-            slotNumber: slot.slotNumber,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            status: slot.status,
-            mediaFile: slot.mediaFile,
-            adTitle: slot.adId.title || 'Untitled Ad',
-            adDescription: slot.adId.description || '',
-            duration: slot.adId.duration || 30,
-            createdAt: slot.createdAt,
-            updatedAt: slot.updatedAt
-          });
-        }
-      }
-    }
-
-    console.log('✅ Found ads:', ads.length);
-
-    res.json({
-      success: true,
-      ads: ads,
-      message: `Found ${ads.length} active ads for material ${materialId}, slot ${slotNumber}`
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching ads:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error while fetching ads',
-      error: error.message
-    });
-  }
-});
-
-module.exports = router;
+ module.exports = router;

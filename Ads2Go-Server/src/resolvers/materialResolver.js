@@ -1,6 +1,7 @@
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet');
+const ScreenTracking = require('../models/screenTracking');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
@@ -105,6 +106,66 @@ const materialResolvers = {
           });
           
           await tabletPair.save();
+        }
+      }
+
+      // Create ScreenTracking record for all screen types (HEADDRESS, LCD, etc.)
+      if (['HEADDRESS', 'LCD', 'BILLBOARD', 'DIGITAL_DISPLAY'].includes(materialType)) {
+        // Check if ScreenTracking record already exists
+        const existingScreenTracking = await ScreenTracking.findOne({ materialId: material.materialId });
+        
+        if (!existingScreenTracking) {
+          const carGroupId = materialType === 'HEADDRESS' ? 
+            `GRP-${uuidv4().substring(0, 8).toUpperCase()}` : 
+            `GRP-${uuidv4().substring(0, 8).toUpperCase()}`;
+          
+          const screenTracking = new ScreenTracking({
+            deviceId: null, // Will be set when device registers
+            materialId: material.materialId,
+            carGroupId: carGroupId,
+            slotNumber: 1,
+            screenType: materialType,
+            isOnline: false,
+            lastSeen: new Date(),
+            currentSession: {
+              date: new Date().toISOString().split('T')[0],
+              startTime: new Date(),
+              endTime: null,
+              totalHoursOnline: 0,
+              totalDistanceTraveled: 0,
+              isActive: true,
+              targetHours: materialType === 'HEADDRESS' ? 8 : 0, // Only HEADDRESS has 8-hour requirement
+              complianceStatus: 'PENDING',
+              locationHistory: []
+            },
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            averageDailyHours: 0,
+            complianceRate: 0,
+            currentRoute: {
+              totalDistance: 0,
+              estimatedDuration: 0,
+              actualDuration: 0,
+              status: 'ACTIVE',
+              waypoints: []
+            },
+            screenMetrics: {
+              displayHours: 0,
+              adPlayCount: 0,
+              brightness: 100,
+              volume: 50,
+              isDisplaying: true,
+              maintenanceMode: false
+            },
+            alerts: [],
+            isActive: true,
+            dailySessions: [],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          
+          await screenTracking.save();
+          console.log(`✅ Created ScreenTracking record for ${materialType} material: ${material.materialId}`);
         }
       }
 

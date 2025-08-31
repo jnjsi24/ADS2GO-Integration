@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
+import * as Location from 'expo-location';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -65,12 +66,33 @@ export interface AdsResponse {
   message: string;
 }
 
+export interface LocationUpdate {
+  deviceId: string;
+  lat: number;
+  lng: number;
+  speed?: number;
+  heading?: number;
+  accuracy?: number;
+}
+
+export interface TrackingStatus {
+  deviceId: string;
+  materialId: string;
+  currentHours: number;
+  hoursRemaining: number;
+  isCompliant: boolean;
+  totalDistanceToday: number;
+  lastSeen: string;
+}
+
 // For device/emulator testing, use your computer's IP address
 const API_BASE_URL = 'http://192.168.100.22:5000'; // Update with your server URL
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
   private registration: TabletRegistration | null = null;
+  private locationUpdateInterval: number | null = null;
+  private isTracking = false;
 
   static getInstance(): TabletRegistrationService {
     if (!TabletRegistrationService.instance) {
@@ -125,7 +147,7 @@ export class TabletRegistrationService {
 
       console.log('Registering tablet with:', requestBody);
 
-      const response = await fetch(`${API_BASE_URL}/registerTablet`, {
+      const response = await fetch(`${API_BASE_URL}/tablet/registerTablet`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -163,7 +185,7 @@ export class TabletRegistrationService {
   async updateTabletStatus(isOnline: boolean, gps?: { lat: number; lng: number }): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.error('Tablet not registered');
+        console.error('No registration data available');
         return false;
       }
 
@@ -174,7 +196,9 @@ export class TabletRegistrationService {
         lastReportedAt: new Date().toISOString()
       };
 
-      const response = await fetch(`${API_BASE_URL}/updateTabletStatus`, {
+      console.log('Updating tablet status:', requestBody);
+
+      const response = await fetch(`${API_BASE_URL}/tablet/updateTabletStatus`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,11 +207,157 @@ export class TabletRegistrationService {
       });
 
       const result = await response.json();
-      return result.success;
+
+      if (result.success) {
+        console.log('Tablet status updated successfully');
+        
+        // If GPS data is provided, also update location tracking
+        if (gps) {
+          await this.updateLocationTracking(gps.lat, gps.lng);
+        }
+        
+        return true;
+      } else {
+        console.error('Failed to update tablet status:', result.message);
+        return false;
+      }
     } catch (error) {
       console.error('Error updating tablet status:', error);
       return false;
     }
+  }
+
+  async updateLocationTracking(lat: number, lng: number, speed: number = 0, heading: number = 0, accuracy: number = 0): Promise<boolean> {
+    try {
+      if (!this.registration) {
+        console.error('No registration data available');
+        return false;
+      }
+
+      const locationUpdate: LocationUpdate = {
+        deviceId: this.registration.deviceId,
+        lat,
+        lng,
+        speed,
+        heading,
+        accuracy
+      };
+
+      console.log('Updating location tracking:', locationUpdate);
+
+      const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(locationUpdate),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('Location tracking updated successfully');
+        return true;
+      } else {
+        console.error('Failed to update location tracking:', result.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error updating location tracking:', error);
+      return false;
+    }
+  }
+
+  async getTrackingStatus(): Promise<TrackingStatus | null> {
+    try {
+      if (!this.registration) {
+        console.error('No registration data available');
+        return null;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/screenTracking/status/${this.registration.deviceId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        return result.data;
+      } else {
+        console.error('Failed to get tracking status:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('Error getting tracking status:', error);
+      return null;
+    }
+  }
+
+  async startLocationTracking(): Promise<void> {
+    if (this.isTracking) {
+      console.log('Location tracking already started');
+      return;
+    }
+
+    try {
+      // Request location permissions
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.error('Location permission denied');
+        return;
+      }
+
+      this.isTracking = true;
+
+      // Start periodic location updates (every 30 seconds)
+      this.locationUpdateInterval = setInterval(async () => {
+        try {
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+            timeInterval: 30000,
+            distanceInterval: 10, // Update every 10 meters
+          });
+
+          const { latitude, longitude, speed, heading, accuracy } = location.coords;
+
+          // Update both tablet status and location tracking
+          await this.updateTabletStatus(true, { lat: latitude, lng: longitude });
+          await this.updateLocationTracking(
+            latitude, 
+            longitude, 
+            speed || 0, 
+            heading || 0, 
+            accuracy || 0
+          );
+
+          console.log('Location updated:', { latitude, longitude, speed, heading, accuracy });
+        } catch (error) {
+          console.error('Error updating location:', error);
+        }
+      }, 30000); // Update every 30 seconds
+
+      console.log('Location tracking started');
+    } catch (error) {
+      console.error('Error starting location tracking:', error);
+      this.isTracking = false;
+    }
+  }
+
+  async stopLocationTracking(): Promise<void> {
+    if (this.locationUpdateInterval) {
+      clearInterval(this.locationUpdateInterval);
+      this.locationUpdateInterval = null;
+    }
+    
+    this.isTracking = false;
+    console.log('Location tracking stopped');
+  }
+
+  isLocationTrackingActive(): boolean {
+    return this.isTracking;
   }
 
   async clearRegistration(): Promise<void> {
@@ -217,7 +387,7 @@ export class TabletRegistrationService {
 
       console.log('Unregistering tablet with:', requestBody);
 
-      const response = await fetch(`${API_BASE_URL}/unregisterTablet`, {
+      const response = await fetch(`${API_BASE_URL}/tablet/unregisterTablet`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -278,7 +448,7 @@ export class TabletRegistrationService {
 
       console.log('Checking existing connection for:', requestBody);
 
-      const response = await fetch(`${API_BASE_URL}/checkExistingConnection`, {
+      const response = await fetch(`${API_BASE_URL}/tablet/checkExistingConnection`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

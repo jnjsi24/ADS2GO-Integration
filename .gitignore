@@ -44,3 +44,14 @@ androidPlayerExpo/*.p12
 androidPlayerExpo/*.key
 androidPlayerExpo/*.mobileprovision
 androidPlayerExpo/*.orig.*
+
+# Temporary debugging scripts (Ads2Go-Server)
+Ads2Go-Server/create*.js
+Ads2Go-Server/update*.js
+Ads2Go-Server/fix*.js
+Ads2Go-Server/check*.js
+Ads2Go-Server/add*.js
+Ads2Go-Server/remove*.js
+Ads2Go-Server/debug*.js
+Ads2Go-Server/find*.js
+Ads2Go-Server/test*.js

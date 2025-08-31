@@ -34,6 +34,7 @@ import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
+import ScreenTracking from './pages/ADMIN/ScreenTracking';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -248,7 +249,15 @@ const AppContent: React.FC = () => {
               <ManageAds />
             </ProtectedRoute>
           }
-          />
+        />
+        <Route
+          path="/admin/tablet-tracking"
+          element={
+            <ProtectedRoute>
+              <ScreenTracking />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected SuperAdmin Routes */}
         <Route

@@ -1,181 +1,185 @@
 const express = require('express');
-const multer = require('multer');
 const router = express.Router();
-const { db, bucket } = require('../firebase-admin');
-const { v4: uuidv4 } = require('uuid');
+const Ad = require('../models/Ad');
+const Material = require('../models/Material');
+const AdsDeployment = require('../models/adsDeployment');
 
-// Configure multer for memory storage (we'll upload directly to Firebase)
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image and video files are allowed!'), false);
-    }
-  },
-});
-
-// Upload multiple files (both images and videos)
-const uploadMultiple = upload.fields([
-  { name: 'images', maxCount: 10 },
-  { name: 'videos', maxCount: 5 }
-]);
-
-// Create a new ad with media
-router.post('/', uploadMultiple, async (req, res) => {
+// GET /ads/deployments - Get all deployments (for debugging) - MUST COME FIRST
+router.get('/deployments', async (req, res) => {
   try {
-    const { title, description, userId, price, duration, category } = req.body;
-    const files = req.files;
-    
-    if (!title || !description || !userId) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    const deployments = await AdsDeployment.find({})
+      .populate('lcdSlots.adId')
+      .limit(10);
 
-    // Upload files to Firebase Storage
-    const uploadPromises = [];
-    const mediaUrls = [];
+    const simplifiedDeployments = deployments.map(dep => ({
+      id: dep._id,
+      materialId: dep.materialId,
+      driverId: dep.driverId,
+      lcdSlotsCount: dep.lcdSlots.length,
+      slots: dep.lcdSlots.map(slot => ({
+        slotNumber: slot.slotNumber,
+        status: slot.status,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        adId: slot.adId ? slot.adId._id : null,
+        mediaFile: slot.mediaFile
+      }))
+    }));
 
-    // Process images
-    if (files.images) {
-      for (const file of files.images) {
-        const fileName = `ads/${userId}/${uuidv4()}-${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
-        
-        const blobStream = fileUpload.createWriteStream({
-          metadata: {
-            contentType: file.mimetype,
-            metadata: {
-              uploadedBy: userId,
-              originalName: file.originalname
-            }
-          }
-        });
-
-        const promise = new Promise((resolve, reject) => {
-          blobStream.on('error', error => reject(error));
-          blobStream.on('finish', async () => {
-            // Make the file public
-            await fileUpload.makePublic();
-            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
-            mediaUrls.push({
-              url: publicUrl,
-              type: 'image',
-              name: file.originalname,
-              size: file.size
-            });
-            resolve();
-          });
-          blobStream.end(file.buffer);
-        });
-        uploadPromises.push(promise);
-      }
-    }
-
-    // Process videos (similar to images)
-    if (files.videos) {
-      for (const file of files.videos) {
-        const fileName = `ads/${userId}/videos/${uuidv4()}-${file.originalname}`;
-        const fileUpload = bucket.file(fileName);
-        
-        const blobStream = fileUpload.createWriteStream({
-          metadata: {
-            contentType: file.mimetype,
-            metadata: {
-              uploadedBy: userId,
-              originalName: file.originalname
-            }
-          }
-        });
-
-        const promise = new Promise((resolve, reject) => {
-          blobStream.on('error', error => reject(error));
-          blobStream.on('finish', async () => {
-            // Make the file public
-            await fileUpload.makePublic();
-            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
-            mediaUrls.push({
-              url: publicUrl,
-              type: 'video',
-              name: file.originalname,
-              size: file.size
-            });
-            resolve();
-          });
-          blobStream.end(file.buffer);
-        });
-        uploadPromises.push(promise);
-      }
-    }
-
-    // Wait for all uploads to complete
-    await Promise.all(uploadPromises);
-
-    // Create ad document in Firestore
-    const adRef = await db.collection('ads').add({
-      title,
-      description,
-      userId,
-      price: parseFloat(price) || 0,
-      duration: parseInt(duration) || 30, // Default 30 days
-      category: category || 'general',
-      media: mediaUrls,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    res.status(201).json({
+    res.json({
       success: true,
-      adId: adRef.id,
-      media: mediaUrls
+      deployments: simplifiedDeployments,
+      message: `Found ${deployments.length} deployments`
     });
 
   } catch (error) {
-    console.error('Error creating ad:', error);
+    console.error('Error fetching deployments:', error);
     res.status(500).json({
-      error: 'Failed to create ad',
-      details: error.message
+      success: false,
+      deployments: [],
+      message: 'Internal server error'
     });
   }
 });
 
-// Get all ads
+// GET /ads/:materialId/:slotNumber - Get ads for a specific material and slot
+  router.get('/:materialId/:slotNumber', async (req, res) => {
+    try {
+      const { materialId, slotNumber } = req.params;
+
+      console.log('Fetching ads for:', { materialId, slotNumber });
+
+      // Find the material first
+      const material = await Material.findOne({ materialId });
+      if (!material) {
+        return res.status(404).json({
+          success: false,
+          ads: [],
+          message: 'Material not found'
+        });
+      }
+
+      // Find ad deployments for this material and slot
+      const currentTime = new Date();
+      console.log('Searching for deployment with criteria:', {
+        materialId: materialId,
+        slotNumber: parseInt(slotNumber),
+        currentTime: currentTime.toISOString()
+      });
+      
+      const deployment = await AdsDeployment.findOne({
+        materialId: materialId,
+        'lcdSlots.slotNumber': parseInt(slotNumber),
+        'lcdSlots.status': 'RUNNING',
+        'lcdSlots.startTime': { $lte: currentTime },
+        'lcdSlots.endTime': { $gte: currentTime }
+      }).populate('lcdSlots.adId');
+      
+      console.log('Deployment found:', deployment ? 'Yes' : 'No');
+      if (deployment) {
+        console.log('Deployment details:', {
+          id: deployment._id,
+          materialId: deployment.materialId,
+          lcdSlotsCount: deployment.lcdSlots.length,
+          slots: deployment.lcdSlots.map(s => ({
+            slotNumber: s.slotNumber,
+            status: s.status,
+            startTime: s.startTime,
+            endTime: s.endTime
+          }))
+        });
+      }
+
+      if (!deployment) {
+        console.log(`No deployment found for material ${materialId}, slot ${slotNumber}`);
+        return res.json({
+          success: true,
+          ads: [],
+          message: 'No ads deployed for this material and slot'
+        });
+      }
+
+      // Find the specific slot
+      const slot = deployment.lcdSlots.find(s => s.slotNumber === parseInt(slotNumber));
+      if (!slot) {
+        console.log(`Slot ${slotNumber} not found in deployment`);
+        return res.json({
+          success: true,
+          ads: [],
+          message: 'Slot not found in deployment'
+        });
+      }
+
+      // Get the ad details
+      const ad = slot.adId;
+      if (!ad) {
+        console.log(`Ad not found for slot ${slotNumber}`);
+        return res.json({
+          success: true,
+          ads: [],
+          message: 'Ad not found'
+        });
+      }
+
+      // Transform to match the mobile app's expected format
+      const transformedAds = [{
+        adId: ad._id.toString(),
+        adDeploymentId: deployment._id.toString(),
+        slotNumber: parseInt(slotNumber),
+        startTime: slot.startTime.toISOString(),
+        endTime: slot.endTime.toISOString(),
+        status: slot.status,
+        mediaFile: slot.mediaFile,
+        adTitle: ad.title,
+        adDescription: ad.description || '',
+        duration: ad.adLengthSeconds || 30,
+        createdAt: slot.createdAt,
+        updatedAt: slot.updatedAt
+      }];
+
+      console.log(`Found ${transformedAds.length} ads for material ${materialId}, slot ${slotNumber}`);
+
+      res.json({
+        success: true,
+        ads: transformedAds,
+        message: `Found ${transformedAds.length} ads`
+      });
+
+    } catch (error) {
+      console.error('Error fetching ads:', error);
+      res.status(500).json({
+        success: false,
+        ads: [],
+        message: 'Internal server error'
+      });
+    }
+  });
+
+// GET /ads - Get all ads (for debugging)
 router.get('/', async (req, res) => {
   try {
-    const snapshot = await db.collection('ads').get();
-    const ads = [];
-    snapshot.forEach(doc => {
-      ads.push({
-        id: doc.id,
-        ...doc.data()
-      });
+    const ads = await Ad.find({ status: 'RUNNING' })
+      .populate('userId', 'firstName lastName companyName')
+      .populate('materialId', 'materialId materialType vehicleType')
+      .populate('planId', 'planName durationDays')
+      .limit(10);
+
+    res.json({
+      success: true,
+      ads: ads,
+      message: `Found ${ads.length} ads`
     });
-    res.json(ads);
+
   } catch (error) {
-    console.error('Error getting ads:', error);
-    res.status(500).json({ error: 'Failed to get ads' });
+    console.error('Error fetching all ads:', error);
+    res.status(500).json({
+      success: false,
+      ads: [],
+      message: 'Internal server error'
+    });
   }
 });
 
-// Get ad by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const ad = await db.collection('ads').doc(req.params.id).get();
-    if (!ad.exists) {
-      return res.status(404).json({ error: 'Ad not found' });
-    }
-    res.json({
-      id: ad.id,
-      ...ad.data()
-    });
-  } catch (error) {
-    console.error('Error getting ad:', error);
-    res.status(500).json({ error: 'Failed to get ad' });
-  }
-});
+
 
 module.exports = router;
