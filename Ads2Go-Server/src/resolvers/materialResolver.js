@@ -92,12 +92,14 @@ const materialResolvers = {
                 status: 'OFFLINE',
                 gps: { lat: null, lng: null },
                 lastSeen: null
+                // deviceId is omitted - will be set when tablet is registered
               },
               {
                 tabletNumber: 2,
                 status: 'OFFLINE',
                 gps: { lat: null, lng: null },
                 lastSeen: null
+                // deviceId is omitted - will be set when tablet is registered
               }
             ]
           });

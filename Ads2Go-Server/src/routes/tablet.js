@@ -362,7 +362,7 @@ router.post('/unregisterTablet', async (req, res) => {
     // Clear the device connection
     tablet.tablets[tabletIndex] = {
       tabletNumber: slotNumber,
-      deviceId: null,
+      // deviceId is omitted - will be undefined instead of null
       status: 'OFFLINE',
       lastSeen: null,
       gps: { lat: null, lng: null }

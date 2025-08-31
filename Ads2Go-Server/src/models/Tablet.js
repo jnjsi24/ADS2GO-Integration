@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const TabletUnitSchema = new mongoose.Schema({
   tabletNumber: { type: Number, required: true },
-  deviceId: { type: String, default: null }, // Unique device identifier
+  deviceId: { type: String }, // Remove default: null to prevent unique index conflicts
   status: { 
     type: String, 
     enum: ['ONLINE', 'OFFLINE'], 
@@ -44,6 +44,13 @@ TabletSchema.pre('save', function(next) {
     throw new Error('Each Tablet document must contain exactly 2 tablets');
   }
   next();
+});
+
+// Create a sparse unique index for deviceId (only applies to non-null values)
+TabletSchema.index({ 'tablets.deviceId': 1 }, { 
+  unique: true, 
+  sparse: true,
+  name: 'tablets_deviceId_sparse_unique'
 });
 
 module.exports = mongoose.model('Tablet', TabletSchema);

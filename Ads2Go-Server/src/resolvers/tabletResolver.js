@@ -234,7 +234,7 @@ module.exports = {
         }
 
         // Clear the device connection
-        tabletUnit.deviceId = null;
+        delete tabletUnit.deviceId; // Remove deviceId field instead of setting to null
         tabletUnit.status = 'OFFLINE';
         tabletUnit.gps = { lat: null, lng: null };
         tabletUnit.lastSeen = null;
@@ -277,17 +277,17 @@ module.exports = {
           tablets: [
             {
               tabletNumber: 1,
-              deviceId: null,
               status: 'OFFLINE',
               gps: { lat: null, lng: null },
               lastSeen: null
+              // deviceId is omitted - will be set when tablet is registered
             },
             {
               tabletNumber: 2,
-              deviceId: null,
               status: 'OFFLINE',
               gps: { lat: null, lng: null },
               lastSeen: null
+              // deviceId is omitted - will be set when tablet is registered
             }
           ]
         });
