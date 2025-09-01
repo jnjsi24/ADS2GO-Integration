@@ -8,20 +8,11 @@ import {
   ResponsiveContainer,
   PieLabelRenderProps,
 } from "recharts";
-import { useQuery, gql } from '@apollo/client';
+import { useQuery } from '@apollo/client';
+import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
 
-// GraphQL query to get admin user details
-const GET_ADMIN_DETAILS = gql`
-  query GetAdminDetails {
-    getOwnUserDetails {
-      id
-      firstName
-      lastName
-      email
-      role
-    }
-  }
-`;
+// GraphQL query to get admin details
+const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
 
 // Dummy data for the Ad Impressions & QR Scans chart
 const adPerformanceData = [
@@ -65,9 +56,9 @@ const Dashboard = () => {
   // Fetch admin details from the backend
   const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
     onCompleted: (data) => {
-      if (data && data.getOwnUserDetails) {
-        const user = data.getOwnUserDetails;
-        setAdminName(`${user.firstName} ${user.lastName}`);
+      if (data && data.getOwnAdminDetails) {
+        const admin = data.getOwnAdminDetails;
+        setAdminName(`${admin.firstName} ${admin.lastName}`);
       }
     },
     onError: (error) => {

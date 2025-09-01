@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Admin = require('../models/Admin');
+const SuperAdmin = require('../models/SuperAdmin');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -8,18 +10,49 @@ const getUser = async (token) => {
     if (!token) return null;
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    if (!decoded.userId) return null;
+    // Check for admin token
+    if (decoded.adminId) {
+      const admin = await Admin.findById(decoded.adminId).select('id email role isEmailVerified tokenVersion');
+      if (!admin || admin.tokenVersion !== decoded.tokenVersion) return null;
 
-    const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
-    if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
+      return {
+        id: admin.id,
+        email: admin.email,
+        role: admin.role,
+        isEmailVerified: admin.isEmailVerified,
+        tokenVersion: admin.tokenVersion,
+      };
+    }
 
-    return {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      isEmailVerified: user.isEmailVerified,
-      tokenVersion: user.tokenVersion,
-    };
+    // Check for superadmin token
+    if (decoded.superAdminId) {
+      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id email role isEmailVerified tokenVersion');
+      if (!superAdmin || superAdmin.tokenVersion !== decoded.tokenVersion) return null;
+
+      return {
+        id: superAdmin.id,
+        email: superAdmin.email,
+        role: superAdmin.role,
+        isEmailVerified: superAdmin.isEmailVerified,
+        tokenVersion: superAdmin.tokenVersion,
+      };
+    }
+
+    // Check for regular user token
+    if (decoded.userId) {
+      const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
+      if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
+
+      return {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: user.isEmailVerified,
+        tokenVersion: user.tokenVersion,
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error('Authentication error:', error.message);
     return null;

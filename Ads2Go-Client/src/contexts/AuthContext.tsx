@@ -14,6 +14,8 @@ import {
   LOGOUT_MUTATION,
   GET_OWN_USER_DETAILS,
 } from '../graphql/user';
+import { GET_OWN_ADMIN_DETAILS } from '../graphql/admin';
+import { GET_OWN_SUPERADMIN_DETAILS } from '../graphql/superadmin';
 import { jwtDecode } from 'jwt-decode';
 
 // 🚨 Firebase imports removed except analytics/storage usage
@@ -70,6 +72,8 @@ export const AuthProvider: React.FC<{
   const [logoutMutation] = useMutation(LOGOUT_MUTATION);
   const apolloClient = useApolloClient();
   const [fetchUserDetails] = useLazyQuery(GET_OWN_USER_DETAILS);
+  const [fetchAdminDetails] = useLazyQuery(GET_OWN_ADMIN_DETAILS);
+  const [fetchSuperAdminDetails] = useLazyQuery(GET_OWN_SUPERADMIN_DETAILS);
 
   // ✅ Added /superadmin-login to publicPages
   const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
@@ -99,28 +103,74 @@ export const AuthProvider: React.FC<{
           throw new Error('Invalid token');
         }
 
-        // Fetch user details from backend
-        const { data } = await fetchUserDetails();
-        const freshUserRaw = data?.getOwnUserDetails;
+        let freshUserRaw: any;
+        let freshUser: User;
 
-        if (!freshUserRaw) {
-          throw new Error('User not found');
+        // Fetch user details from backend based on role
+        if (decoded.role === 'ADMIN') {
+          const { data } = await fetchAdminDetails();
+          freshUserRaw = data?.getOwnAdminDetails;
+          
+          if (!freshUserRaw) {
+            throw new Error('Admin not found');
+          }
+
+          freshUser = {
+            userId: freshUserRaw.id,
+            email: freshUserRaw.email,
+            role: freshUserRaw.role,
+            isEmailVerified: freshUserRaw.isEmailVerified,
+            firstName: freshUserRaw.firstName,
+            middleName: freshUserRaw.middleName,
+            lastName: freshUserRaw.lastName,
+            companyName: freshUserRaw.companyName,
+            companyAddress: freshUserRaw.companyAddress,
+            contactNumber: freshUserRaw.contactNumber,
+          };
+        } else if (decoded.role === 'SUPERADMIN') {
+          const { data } = await fetchSuperAdminDetails();
+          freshUserRaw = data?.getOwnSuperAdminDetails;
+          
+          if (!freshUserRaw) {
+            throw new Error('SuperAdmin not found');
+          }
+
+          freshUser = {
+            userId: freshUserRaw.id,
+            email: freshUserRaw.email,
+            role: freshUserRaw.role,
+            isEmailVerified: freshUserRaw.isEmailVerified,
+            firstName: freshUserRaw.firstName,
+            middleName: freshUserRaw.middleName,
+            lastName: freshUserRaw.lastName,
+            companyName: freshUserRaw.companyName,
+            companyAddress: freshUserRaw.companyAddress,
+            contactNumber: freshUserRaw.contactNumber,
+          };
+        } else {
+          // Regular user
+          const { data } = await fetchUserDetails();
+          freshUserRaw = data?.getOwnUserDetails;
+          
+          if (!freshUserRaw) {
+            throw new Error('User not found');
+          }
+
+          freshUser = {
+            userId: freshUserRaw.id,
+            email: freshUserRaw.email,
+            role: freshUserRaw.role,
+            isEmailVerified: freshUserRaw.isEmailVerified,
+            firstName: freshUserRaw.firstName,
+            middleName: freshUserRaw.middleName,
+            lastName: freshUserRaw.lastName,
+            houseAddress: freshUserRaw.houseAddress,
+            companyName: freshUserRaw.companyName,
+            companyAddress: freshUserRaw.companyAddress,
+            contactNumber: freshUserRaw.contactNumber,
+            profilePicture: freshUserRaw.profilePicture,
+          };
         }
-
-        const freshUser: User = {
-          userId: freshUserRaw.id,
-          email: freshUserRaw.email,
-          role: freshUserRaw.role,
-          isEmailVerified: freshUserRaw.isEmailVerified,
-          firstName: freshUserRaw.firstName,
-          middleName: freshUserRaw.middleName,
-          lastName: freshUserRaw.lastName,
-          houseAddress: freshUserRaw.houseAddress,
-          companyName: freshUserRaw.companyName,
-          companyAddress: freshUserRaw.companyAddress,
-          contactNumber: freshUserRaw.contactNumber,
-          profilePicture: freshUserRaw.profilePicture,
-        };
 
         setUser(freshUser);
         setUserEmail(freshUser.email);
@@ -167,7 +217,7 @@ export const AuthProvider: React.FC<{
       setIsLoading(false);
       setIsInitialized(true);
     });
-  }, [fetchUserDetails, navigate]);
+  }, [fetchUserDetails, fetchAdminDetails, fetchSuperAdminDetails, navigate]);
 
   const login = async (email: string, password: string): Promise<User | null> => {
     try {

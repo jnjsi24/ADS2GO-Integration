@@ -17,15 +17,15 @@ const AdminLogin: React.FC = () => {
     onCompleted(data) {
       console.log('Admin login successful:', data);
       
-      const { token, user } = data.loginAdmin;
+      const { token, admin } = data.loginAdmin;
 
-      if (!user || (user.role?.toUpperCase() !== 'ADMIN' && user.role?.toUpperCase() !== 'SUPERADMIN')) {
+      if (!admin || admin.role?.toUpperCase() !== 'ADMIN') {
         setError('You are not authorized to access the admin panel.');
         return;
       }
 
       localStorage.setItem('token', token);
-      setUser(user);
+      setUser(admin);
       navigate('/admin');
     },
     onError(err) {

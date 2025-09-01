@@ -2,13 +2,13 @@ require('dotenv').config({ path: './.env' });
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const User = require('./src/models/User'); // Adjust path if needed
+const SuperAdmin = require('./src/models/SuperAdmin'); // Adjust path if needed
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
     const email = 'ads2go.superadmin2@example.com'; // 👈 NEW email to avoid conflict
 
-    const existing = await User.findOne({ email });
+    const existing = await SuperAdmin.findOne({ email });
     if (existing) {
       console.log('❌ Superadmin already exists.');
       return mongoose.disconnect();
@@ -16,7 +16,7 @@ mongoose.connect(process.env.MONGODB_URI)
 
     const hashedPassword = await bcrypt.hash('Ads2gosuperadmin2_123', 10);
 
-    await User.create({
+    await SuperAdmin.create({
       firstName: 'Ms',
       middleName: 'Ultra',
       lastName: 'AdminTwo',

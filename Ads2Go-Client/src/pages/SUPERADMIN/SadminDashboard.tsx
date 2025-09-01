@@ -4,10 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Pencil, UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ALL_ADMINS } from '../../graphql/superadmin';
-import { CREATE_ADMIN_USER } from '../../graphql/admin';
-import { UPDATE_ADMIN_USER } from "../../graphql/admin";
-import { DELETE_USER } from '../../graphql/superadmin';
+import { GET_ALL_ADMINS, CREATE_ADMIN, UPDATE_ADMIN, DELETE_ADMIN } from '../../graphql/superadmin';
+import { uploadAdminProfilePicture } from '../../utils/fileUpload';
 
 
 interface Admin {
@@ -120,6 +118,7 @@ const SadminDashboard: React.FC = () => {
     companyName: '',
     companyAddress: '',
     password: '',
+    profilePicture: null as File | null,
   });
 
   const [editErrors, setEditErrors] = useState<{ [key: string]: string }>({
@@ -146,7 +145,7 @@ const SadminDashboard: React.FC = () => {
   const { loading, error, data, refetch } = useQuery(GET_ALL_ADMINS);
 
   // Mutations with success and error handlers
-  const [createAdminUser, { loading: creatingAdmin }] = useMutation(CREATE_ADMIN_USER, {
+  const [createAdminUser, { loading: creatingAdmin }] = useMutation(CREATE_ADMIN, {
     onCompleted: () => {
       addToast('Admin user created successfully!', 'success');
       setShowCreateAdminPopup(false);
@@ -158,7 +157,7 @@ const SadminDashboard: React.FC = () => {
     }
   });
 
-  const [updateAdminUser] = useMutation(UPDATE_ADMIN_USER, {
+  const [updateAdminUser] = useMutation(UPDATE_ADMIN, {
     onCompleted: () => {
       addToast('Admin user updated successfully!', 'success');
       setAdminToEdit(null);
@@ -169,7 +168,7 @@ const SadminDashboard: React.FC = () => {
     }
   });
 
-  const [deleteUserMutation, { loading: deletingUser }] = useMutation(DELETE_USER, {
+  const [deleteAdminMutation, { loading: deletingAdmin }] = useMutation(DELETE_ADMIN, {
     onCompleted: () => {
       addToast('Admin user deleted successfully!', 'success');
       setAdminToDelete(null);
@@ -182,9 +181,13 @@ const SadminDashboard: React.FC = () => {
 
 // Set admins filtered by role ADMIN whenever data changes
 useEffect(() => {
-  if (data && data.getAllAdmins) {
-    const adminUsers = data.getAllAdmins.filter((user: Admin) => user.role === 'ADMIN');
+  if (data && data.getAllAdmins && data.getAllAdmins.admins) {
+    const adminUsers = data.getAllAdmins.admins.filter((user: Admin) => user.role === 'ADMIN');
     console.log('Admin data from server:', adminUsers); // Debug log
+    console.log('Profile pictures:', adminUsers.map((admin: Admin) => ({ 
+      name: `${admin.firstName} ${admin.lastName}`, 
+      profilePicture: admin.profilePicture 
+    })));
     setAdmins(adminUsers);
   }
 }, [data]);
@@ -224,10 +227,47 @@ useEffect(() => {
     }, 3000);
   };
 
-  // Simple date display helper
+  // Date display helper
   const formatDate = (dateInput: any): string => {
     if (!dateInput) return 'N/A';
-    return dateInput; // Just return the raw value
+    
+    try {
+      // Handle different date formats
+      let date: Date;
+      
+      if (typeof dateInput === 'number') {
+        // If it's a timestamp (milliseconds)
+        date = new Date(dateInput);
+      } else if (typeof dateInput === 'string') {
+        // If it's a date string, try to parse it
+        // First, try to parse as ISO string
+        date = new Date(dateInput);
+        
+        // If that fails, try to parse as timestamp string
+        if (isNaN(date.getTime()) && /^\d+$/.test(dateInput)) {
+          date = new Date(parseInt(dateInput));
+        }
+      } else {
+        // If it's already a Date object
+        date = dateInput;
+      }
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date input:', dateInput, 'Type:', typeof dateInput);
+        return 'Invalid Date';
+      }
+      
+      // Format the date as "MMM DD, YYYY" (e.g., "Jan 15, 2024")
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error, 'Input:', dateInput);
+      return 'Invalid Date';
+    }
   };
 
   // Handle form input changes
@@ -488,18 +528,30 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
     
     console.log('Form is valid, proceeding with submission');
     
-    // Prepare the input object for the API call
-    const input = {
-      firstName: newAdminFormData.firstName.trim(),
-      middleName: newAdminFormData.middleName.trim() || null,
-      lastName: newAdminFormData.lastName.trim(),
-      email: newAdminFormData.email.toLowerCase(),
-      password: newAdminFormData.password,
-      companyName: newAdminFormData.companyName.trim(),
-      companyAddress: newAdminFormData.companyAddress.trim(),
-      contactNumber: newAdminFormData.contactNumber,
-      ...(newAdminFormData.profilePicture && { profilePicture: newAdminFormData.profilePicture })
-    };
+         // Handle file upload if profile picture is selected
+     let profilePictureUrl = null;
+     if (newAdminFormData.profilePicture) {
+       try {
+         profilePictureUrl = await uploadAdminProfilePicture(newAdminFormData.profilePicture);
+       } catch (error) {
+         console.error('Error uploading profile picture:', error);
+         addToast('Error uploading profile picture. Please try again.', 'error');
+         return;
+       }
+     }
+
+     // Prepare the input object for the API call
+     const input = {
+       firstName: newAdminFormData.firstName.trim(),
+       middleName: newAdminFormData.middleName.trim() || null,
+       lastName: newAdminFormData.lastName.trim(),
+       email: newAdminFormData.email.toLowerCase(),
+       password: newAdminFormData.password,
+       companyName: newAdminFormData.companyName.trim(),
+       companyAddress: newAdminFormData.companyAddress.trim(),
+       contactNumber: newAdminFormData.contactNumber,
+       ...(profilePictureUrl && { profilePicture: profilePictureUrl })
+     };
     
     // Log the input data (excluding sensitive information)
     if (process.env.NODE_ENV === 'development') {
@@ -591,7 +643,7 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
     }
     
     try {
-      await deleteUserMutation({ variables: { id: adminToDelete.id } });
+      await deleteAdminMutation({ variables: { id: adminToDelete.id } });
     } catch {
       // Handled by onError
     }
@@ -617,6 +669,7 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
       companyName: admin.companyName || '',
       companyAddress: admin.companyAddress || '',
       password: '',
+      profilePicture: null,
     });
     setEditErrors({
       firstName: '',
@@ -698,6 +751,18 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
   if (!validateEditForm()) return;
 
   try {
+    // Handle file upload if a new profile picture is selected
+    let profilePictureUrl = undefined;
+    if (editAdminFormData.profilePicture instanceof File) {
+      try {
+        profilePictureUrl = await uploadAdminProfilePicture(editAdminFormData.profilePicture);
+      } catch (error) {
+        console.error('Error uploading profile picture:', error);
+        addToast('Error uploading profile picture. Please try again.', 'error');
+        return;
+      }
+    }
+
     await updateAdminUser({
       variables: {
         adminId: editAdminFormData.id,
@@ -710,6 +775,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
           companyName: editAdminFormData.companyName,
           companyAddress: editAdminFormData.companyAddress,
           password: editAdminFormData.password || undefined,
+          ...(profilePictureUrl && { profilePicture: profilePictureUrl }),
         },
       },
     });
@@ -776,6 +842,22 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
             {sortOrder === 'newest' ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
             <span>{sortOrder === 'newest' ? 'Newest' : 'Oldest'}</span>
           </button>
+          {/* Debug: Test profile picture functionality */}
+          {process.env.NODE_ENV === 'development' && (
+            <button
+              onClick={() => {
+                console.log('Current admins:', admins);
+                console.log('Profile pictures:', admins.map(admin => ({
+                  name: `${admin.firstName} ${admin.lastName}`,
+                  profilePicture: admin.profilePicture,
+                  hasProfilePicture: !!admin.profilePicture
+                })));
+              }}
+              className="flex items-center space-x-2 px-4 py-3 border border-red-300 rounded-3xl bg-red-100 text-red-700 text-xs hover:bg-red-200 transition-colors"
+            >
+              <span>Debug Profile Pics</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -797,9 +879,25 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                 className="group grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_0.5fr] gap-4 px-6 py-4 bg-white rounded-xl h-20 shadow-md items-center hover:bg-[#3674B5] transition-colors"
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold group-hover:bg-white group-hover:text-[#3674B5]">
-                    {admin.firstName.charAt(0)}
-                    {admin.lastName.charAt(0)}
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold group-hover:bg-white group-hover:text-[#3674B5] overflow-hidden">
+                    {admin.profilePicture ? (
+                      <img 
+                        src={admin.profilePicture} 
+                        alt={`${admin.firstName} ${admin.lastName}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to initials if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `${admin.firstName.charAt(0)}${admin.lastName.charAt(0)}`;
+                          }
+                        }}
+                      />
+                    ) : (
+                      `${admin.firstName.charAt(0)}${admin.lastName.charAt(0)}`
+                    )}
                   </div>
                   <p className="font-medium text-gray-900 group-hover:text-white">
                     {admin.firstName} {admin.lastName}
@@ -1214,19 +1312,40 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
       {editErrors.companyAddress && <p className="text-red-500 text-xs mt-1">{editErrors.companyAddress}</p>}
     </div>
 
-    <div>
-      <label htmlFor="editPassword" className="block text-sm font-medium text-gray-500 mb-1">
-        New Password <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
-      </label>
-      <input
-        id="editPassword"
-        name="password"
-        type="password"
-        value={editAdminFormData.password || ''}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-      />
-    </div>
+         <div>
+       <label htmlFor="editPassword" className="block text-sm font-medium text-gray-500 mb-1">
+         New Password <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
+       </label>
+       <input
+         id="editPassword"
+         name="password"
+         type="password"
+         value={editAdminFormData.password || ''}
+         onChange={handleEditAdminChange}
+         className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+       />
+     </div>
+
+     <div>
+       <label htmlFor="editProfilePicture" className="block text-sm font-medium text-gray-500 mb-1">
+         Profile Picture <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
+       </label>
+       <input
+         id="editProfilePicture"
+         name="profilePicture"
+         type="file"
+         accept="image/*"
+         onChange={(e) => {
+           if (e.target.files && e.target.files[0]) {
+             setEditAdminFormData(prev => ({
+               ...prev,
+               profilePicture: e.target.files![0]
+             }));
+           }
+         }}
+         className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+       />
+     </div>
   </div>
 
   <div className="flex justify-between pt-4">

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, gql } from '@apollo/client';
 import { useAuth } from '../../contexts/AuthContext';
-import { LOGIN_ADMIN_MUTATION } from '../../graphql/admin'; // ✅ UPDATED
+import { LOGIN_SUPERADMIN_MUTATION } from '../../graphql/superadmin'; // ✅ UPDATED
 
 
 
@@ -15,15 +15,15 @@ const SuperAdminLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const [loginAdmin, { loading }] = useMutation(LOGIN_ADMIN_MUTATION, {
+  const [loginSuperAdmin, { loading }] = useMutation(LOGIN_SUPERADMIN_MUTATION, {
     onCompleted: (data) => {
       console.log('SuperAdmin login successful:', data);
       
-      if (data?.loginAdmin?.token) {
-        localStorage.setItem('token', data.loginAdmin.token);
-        localStorage.setItem('role', data.loginAdmin.user.role || 'SUPERADMIN'); // from backend
+      if (data?.loginSuperAdmin?.token) {
+        localStorage.setItem('token', data.loginSuperAdmin.token);
+        localStorage.setItem('role', data.loginSuperAdmin.superAdmin.role || 'SUPERADMIN'); // from backend
 
-        setUser({ ...data.loginAdmin.user }); // use backend role
+        setUser({ ...data.loginSuperAdmin.superAdmin }); // use backend role
 
         navigate('/sadmin-dashboard');
       } else {
@@ -46,7 +46,7 @@ const SuperAdminLogin: React.FC = () => {
       deviceName: window.navigator.userAgent || 'browser',
     };
 
-    loginAdmin({ variables: { email, password, deviceInfo } });
+    loginSuperAdmin({ variables: { email, password, deviceInfo } });
   };
 
   return (

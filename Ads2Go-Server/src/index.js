@@ -15,6 +15,8 @@ const { mergeResolvers } = require('@graphql-tools/merge');
 
 // 👇 Schemas
 const userTypeDefs = require('./schema/userSchema');
+const adminTypeDefs = require('./schema/adminSchema');
+const superAdminTypeDefs = require('./schema/superAdminSchema');
 const adTypeDefs = require('./schema/adSchema');
 const driverTypeDefs = require('./schema/driverSchema');
 const paymentTypeDefs = require('./schema/paymentSchema');
@@ -25,6 +27,8 @@ const tabletTypeDefs = require('./schema/tabletSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
+const adminResolvers = require('./resolvers/adminResolver');
+const superAdminResolvers = require('./resolvers/superAdminResolver');
 const adResolvers = require('./resolvers/adResolver');
 const driverResolvers = require('./resolvers/driverResolver');
 const paymentResolvers = require('./resolvers/paymentResolver');
@@ -43,6 +47,9 @@ const screenTrackingRoutes = require('./routes/screenTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
+
+// Import services
+const syncService = require('./services/syncService');
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -64,6 +71,8 @@ mongoose.connect(process.env.MONGODB_URI, {
 const server = new ApolloServer({
   typeDefs: mergeTypeDefs([
     userTypeDefs,
+    adminTypeDefs,
+    superAdminTypeDefs,
     adTypeDefs,
     driverTypeDefs,
     paymentTypeDefs,
@@ -74,6 +83,8 @@ const server = new ApolloServer({
   ]),
   resolvers: mergeResolvers([
     userResolvers,
+    adminResolvers,
+    superAdminResolvers,
     adResolvers,
     driverResolvers,
     paymentResolvers,
@@ -126,7 +137,19 @@ async function startServer() {
       context: async ({ req }) => {
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
-        return { driver, user };
+        
+        // Provide role-specific context
+        let context = { driver, user };
+        
+        if (user) {
+          if (user.role === 'ADMIN') {
+            context.admin = user;
+          } else if (user.role === 'SUPERADMIN') {
+            context.superAdmin = user;
+          }
+        }
+        
+        return context;
       },
     })
   );
@@ -144,6 +167,11 @@ async function startServer() {
   const PORT = process.env.PORT || 5000;
   const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Server ready at http://localhost:${PORT}/graphql`);
+    
+    // Start sync service in production (no longer needed - using MongoDB only)
+    if (process.env.NODE_ENV === 'production') {
+      syncService.start();
+    }
   });
 
   httpServer.on('error', (error) => {

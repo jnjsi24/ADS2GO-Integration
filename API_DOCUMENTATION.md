@@ -20,6 +20,15 @@ const uploadProfilePicture = async (file, userId) => {
       userId,                // Current user ID
       { purpose: 'profile' } // Optional metadata
     );
+
+// Example: Uploading an admin profile picture
+const uploadAdminProfilePicture = async (file) => {
+  try {
+    const result = await uploadFileToFirebase(
+      file,                  // File object from file input
+      'admin',               // Storage path for admin profile pictures
+      { purpose: 'admin-profile' } // Optional metadata
+    );
     
     if (result.success) {
       console.log('File uploaded successfully:', result.url);

@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronDown, Mail, Phone, MapPin, Edit, X, MoreVertical } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
-import { ApolloClient, InMemoryCache, gql } from '@apollo/client';
-
-// Initialize Apollo Client
-const client = new ApolloClient({
-  uri: 'http://localhost:5000/graphql',
-  cache: new InMemoryCache(),
-  headers: {
-    authorization: localStorage.getItem('token') || '',
-  },
-});
+import { useQuery, useMutation, gql } from '@apollo/client';
 
 // GraphQL queries - UPDATED to match exact schema fields
 const GET_ALL_USERS = gql`
@@ -189,119 +180,74 @@ const ManageUsers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
 
-  // Fetch users from backend
+  // Fetch users using useQuery hook
+  const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
+    fetchPolicy: 'network-only',
+  });
+
+  // Delete user mutation
+  const [deleteUser] = useMutation(DELETE_USER);
+
+  // Transform users data when it changes
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-        const result = await client.query({
-          query: GET_ALL_USERS,
-          fetchPolicy: 'network-only',
-        });
-        
-        const userData = result.data.getAllUsers;
-        
-        // Transform the data to match the User interface
-        const transformedUsers: User[] = userData.map((user: any) => {
-          // Extract city from address (last part after comma)
-          const addressParts = user.companyAddress?.split(',') || [];
-          const city = addressParts.length > 1 ? addressParts[addressParts.length - 1].trim() : 'Unknown';
-          
-          // Parse dates safely
-          const lastLogin = parseDate(user.lastLogin);
-          const createdAt = parseDate(user.createdAt) || new Date();
-          const updatedAt = parseDate(user.updatedAt) || new Date();
-          
-          return {
-            id: user.id,
-            lastName: user.lastName || '',
-            firstName: user.firstName || '',
-            middleName: user.middleName || '',
-            company: user.companyName || '',
-            address: user.companyAddress || '',
-            contact: user.contactNumber || '',
-            email: user.email || '',
-            status: user.isEmailVerified ? 'active' : 'inactive',
-            city: city,
-            adsCount: 0,
-            ridersCount: 0,
-            isEmailVerified: user.isEmailVerified || false,
-            lastLogin,
-            createdAt,
-            updatedAt,
-            role: user.role || 'USER',
-            profilePicture: user.profilePicture || null,
-            houseAddress: user.houseAddress || null
-          };
-        });
-        
-        setUsers(transformedUsers);
-        setError(null);
-        
-        // Fetch ads count for each user
-        fetchAdsCounts(transformedUsers);
-      } catch (err: any) {
-        const errorMessage = err.message || 'Unknown error';
-        setError('Failed to fetch users: ' + errorMessage);
-        console.error('Error fetching users:', err);
-        
-        // Log more detailed error information
-        if (err.networkError && err.networkError.result) {
-          console.error('GraphQL errors:', err.networkError.result.errors);
-        }
-        if (err.graphQLErrors) {
-          console.error('GraphQL errors:', err.graphQLErrors);
-          err.graphQLErrors.forEach((graphQLError: any, index: number) => {
-            console.error(`GraphQL Error ${index + 1}:`, graphQLError);
-          });
-        }
-        
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  // Fetch ads counts for all users
-  const fetchAdsCounts = async (usersList: User[]) => {
-    try {
-      const counts: Record<string, number> = {};
+    if (usersData?.getAllUsers) {
+      const userData = usersData.getAllUsers;
       
-      // Create an array of promises for all ads count queries
-      const adsCountPromises = usersList.map(async (user) => {
-        try {
-          const result = await client.query({
-            query: GET_USER_ADS_COUNT,
-            variables: { userId: user.id },
-          });
-          
-          counts[user.id] = result.data.getUserById.ads.length;
-        } catch (err) {
-          console.error(`Error fetching ads count for user ${user.id}:`, err);
-          counts[user.id] = 0;
-        }
+      // Transform the data to match the User interface
+      const transformedUsers: User[] = userData.map((user: any) => {
+        // Extract city from address (last part after comma)
+        const addressParts = user.companyAddress?.split(',') || [];
+        const city = addressParts.length > 1 ? addressParts[addressParts.length - 1].trim() : 'Unknown';
+        
+        // Parse dates safely
+        const lastLogin = parseDate(user.lastLogin);
+        const createdAt = parseDate(user.createdAt) || new Date();
+        const updatedAt = parseDate(user.updatedAt) || new Date();
+        
+        return {
+          id: user.id,
+          lastName: user.lastName || '',
+          firstName: user.firstName || '',
+          middleName: user.middleName || '',
+          company: user.companyName || '',
+          address: user.companyAddress || '',
+          contact: user.contactNumber || '',
+          email: user.email || '',
+          status: user.isEmailVerified ? 'active' : 'inactive',
+          city: city,
+          adsCount: 0,
+          ridersCount: 0,
+          isEmailVerified: user.isEmailVerified || false,
+          lastLogin,
+          createdAt,
+          updatedAt,
+          role: user.role || 'USER',
+          profilePicture: user.profilePicture || null,
+          houseAddress: user.houseAddress || null
+        };
       });
       
-      // Wait for all promises to resolve
-      await Promise.all(adsCountPromises);
-      
-      // Update the ads counts state
-      setAdsCounts(counts);
-      
-      // Update users with their ads counts
-      setUsers(prevUsers => 
-        prevUsers.map(user => ({
-          ...user,
-          adsCount: counts[user.id] || 0
-        }))
-      );
-    } catch (err) {
-      console.error('Error fetching ads counts:', err);
-    } finally {
+      setUsers(transformedUsers);
+      setError(null);
       setLoading(false);
     }
-  };
+  }, [usersData]);
+
+  // Handle loading and error states
+  useEffect(() => {
+    setLoading(usersLoading);
+  }, [usersLoading]);
+
+  useEffect(() => {
+    if (usersError) {
+      const errorMessage = usersError.message || 'Unknown error';
+      setError('Failed to fetch users: ' + errorMessage);
+      console.error('Error fetching users:', usersError);
+      setLoading(false);
+    }
+  }, [usersError]);
+
+
 
   // Helper function to get initials for the user avatar
   const getInitials = (firstName: string, lastName: string) => {
@@ -311,12 +257,11 @@ const ManageUsers: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        const result = await client.mutate({
-          mutation: DELETE_USER,
+        const result = await deleteUser({
           variables: { id },
         });
         
-        if (result.data.deleteUser.success) {
+        if (result.data?.deleteUser?.success) {
           // Remove the user from the local state
           setUsers(prev => prev.filter((user) => user.id !== id));
           if (expandedId === id) setExpandedId(null);
@@ -324,7 +269,7 @@ const ManageUsers: React.FC = () => {
           setSelectedUsers(prev => prev.filter(userId => userId !== id));
           alert('User deleted successfully');
         } else {
-          alert('Failed to delete user: ' + result.data.deleteUser.message);
+          alert('Failed to delete user: ' + (result.data?.deleteUser?.message || 'Unknown error'));
         }
       } catch (err: any) {
         alert('Error deleting user: ' + (err.message || 'Unknown error'));

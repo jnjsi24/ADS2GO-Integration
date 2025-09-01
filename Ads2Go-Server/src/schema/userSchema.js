@@ -3,8 +3,6 @@ const gql = require('graphql-tag');
 const typeDefs = gql`
   # Enums
   enum UserRole {
-    ADMIN
-    SUPERADMIN
     USER
   }
 
@@ -77,17 +75,6 @@ const typeDefs = gql`
     houseAddress: String!
   }
 
-  input CreateAdminInput {
-    firstName: String!
-    middleName: String
-    lastName: String!
-    companyName: String!
-    companyAddress: String!
-    contactNumber: String!
-    email: String!
-    password: String!
-  }
-
   input UpdateUserInput {
     firstName: String
     middleName: String
@@ -100,17 +87,6 @@ const typeDefs = gql`
     password: String
   }
 
-  input UpdateAdminDetailsInput {
-    firstName: String
-    middleName: String
-    lastName: String
-    companyName: String
-    companyAddress: String
-    contactNumber: String
-    email: String
-    password: String
-  }
-
   input DeviceInfoInput {
     deviceId: String!
     deviceType: String!
@@ -119,11 +95,6 @@ const typeDefs = gql`
 
   # Queries
   type Query {
-    # Admin queries
-    getAllUsers: [User!]!
-    getUserById(id: ID!): User
-    getAllAdmins: [User!]!
-
     # User queries
     getOwnUserDetails: User
     checkPasswordStrength(password: String!): PasswordStrength!
@@ -137,16 +108,8 @@ const typeDefs = gql`
     logout: Boolean!
     logoutAllSessions: Boolean!
 
-    # Admin authentication
-    loginAdmin(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
-
     # User management
     updateUser(input: UpdateUserInput!): UserUpdateResponse!
-    deleteUser(id: ID!): ResponseMessage!
-
-    # Admin management
-    createAdminUser(input: CreateAdminInput!): UserUpdateResponse!
-    updateAdminDetails(adminId: ID!, input: UpdateAdminDetailsInput!): UserUpdateResponse!
 
     # Email verification
     verifyEmail(code: String!): VerificationResponse

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema({
+const AdminSchema = new mongoose.Schema({
   firstName: {
     type: String,
     required: [true, 'First name is required'],
@@ -35,16 +35,15 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     minlength: [10, 'Company address must be at least 10 characters long']
   },
-  houseAddress: {
-    type: String,
-    trim: true,
-    default: null
-  },  
   contactNumber: {
     type: String,
     required: [true, 'Contact number is required'],
     trim: true,
     match: [/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/, 'Please provide a valid phone number']
+  },
+  profilePicture: {
+    type: String,
+    default: null
   },
   email: {
     type: String,
@@ -61,29 +60,38 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['USER'],
-    default: 'USER'
-  },  
+    enum: ['ADMIN'],
+    default: 'ADMIN'
+  },
   isEmailVerified: {
     type: Boolean,
-    default: false
+    default: true // Admins are pre-verified
   },
-  emailVerificationToken: {
-    type: String,
-    default: null
-  },
-  emailVerificationCode: {
-    type: String,
-    default: null
-  },
-  emailVerificationCodeExpires: {
-    type: Date,
-    default: null
-  },
-  emailVerificationAttempts: {
-    type: Number,
-    default: 0,
-    max: 3
+  permissions: {
+    userManagement: {
+      type: Boolean,
+      default: true
+    },
+    adManagement: {
+      type: Boolean,
+      default: true
+    },
+    driverManagement: {
+      type: Boolean,
+      default: true
+    },
+    tabletManagement: {
+      type: Boolean,
+      default: true
+    },
+    paymentManagement: {
+      type: Boolean,
+      default: true
+    },
+    reports: {
+      type: Boolean,
+      default: true
+    }
   },
   loginAttempts: {
     type: Number,
@@ -105,6 +113,10 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -123,14 +135,14 @@ const UserSchema = new mongoose.Schema({
 });
 
 // Pre-save hook to update updatedAt
-UserSchema.pre('save', function(next) {
+AdminSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
 
 // Ensure email uniqueness (case-insensitive)
-UserSchema.index({ email: 1 }, { unique: true });
+AdminSchema.index({ email: 1 }, { unique: true });
 
-const User = mongoose.model('User', UserSchema);
+const Admin = mongoose.model('Admin', AdminSchema);
 
-module.exports = User;
+module.exports = Admin;
