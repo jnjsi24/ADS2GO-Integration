@@ -52,6 +52,9 @@ const getUser = async (token) => {
       };
     }
 
+    // Note: Driver tokens are handled by driverAuth.js middleware
+    // This prevents conflicts between the two authentication systems
+
     return null;
   } catch (error) {
     console.error('Authentication error:', error.message);
@@ -67,7 +70,12 @@ const authMiddleware = async ({ req }) => {
     if (isVerifyEmailRequest) return { user: null };
 
     const user = await getUser(token);
-    return { user: user || null };
+    
+    // For admins and regular users only
+    // Drivers are handled by driverAuth.js middleware
+    return { 
+      user: user || null
+    };
   } catch (error) {
     console.error('Auth Middleware Error:', error);
     return { user: null };
@@ -94,6 +102,8 @@ const checkAdmin = (user) => {
   }
   return user;
 };
+
+
 
 // ✅ Express middleware for protecting admin routes
 const checkAdminMiddleware = async (req, res, next) => {

@@ -137,11 +137,17 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
+        // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
         
         // Provide role-specific context
         let context = { driver, user };
+        
+        if (driver) {
+          console.log('🚗 Driver context:', { id: driver.id, driverId: driver.driverId, email: driver.email, role: driver.role });
+          context.driver = driver;
+        }
         
         if (user) {
           console.log('🔐 User context:', { id: user.id, email: user.email, role: user.role });
@@ -154,8 +160,10 @@ async function startServer() {
             context.admin = user;
             console.log('✅ Set admin context for SUPERADMIN user');
           }
-        } else {
-          console.log('❌ No user in context');
+        }
+        
+        if (!driver && !user) {
+          console.log('❌ No authentication context found');
         }
         
         console.log('🔧 Final context:', Object.keys(context));

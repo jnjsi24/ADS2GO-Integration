@@ -298,6 +298,7 @@ const typeDefs = gql`
   type Query {
     getAllDrivers: [Driver!]!
     getDriverById(driverId: ID!): Driver
+    getDriver(driverId: ID!): DriverResponse!
     getPendingDrivers: [Driver!]!
     getDriversWithPendingEdits: [Driver!]!
     getDriverWithMaterial(driverId: ID!): DriverWithMaterial

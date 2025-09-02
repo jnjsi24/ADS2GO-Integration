@@ -28,6 +28,29 @@ const MaterialSchema = new mongoose.Schema({
     type: String,
     index: true,
   },
+  materialName: {
+    type: String,
+    trim: true,
+    default: function() {
+      return `${this.materialType} for ${this.vehicleType}`;
+    }
+  },
+  status: {
+    type: String,
+    enum: ['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'RETIRED'],
+    default: 'ACTIVE'
+  },
+  assignedDate: {
+    type: Date,
+    default: null
+  },
+  location: {
+    address: String,
+    coordinates: {
+      type: [Number],
+      index: '2dsphere'
+    }
+  },
   driverId: {
     type: String,   // DRV-001, not ObjectId
     default: null,
@@ -89,6 +112,7 @@ MaterialSchema.methods.assignToDriver = async function(driverId) {
   
   this.driverId = driverId;
   this.mountedAt = new Date();
+  this.assignedDate = new Date();
   await this.save();
   return this;
 };

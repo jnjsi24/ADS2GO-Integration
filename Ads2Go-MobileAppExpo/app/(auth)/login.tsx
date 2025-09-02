@@ -89,6 +89,9 @@ export default function Login() {
       );
 
       console.log("Login response:", JSON.stringify(data, null, 2));
+      console.log("Driver data:", data.loginDriver?.driver);
+      console.log("Driver ID:", data.loginDriver?.driver?.driverId);
+      console.log("Driver _id:", data.loginDriver?.driver?.id);
 
       if (data.loginDriver?.message?.includes("PENDING")) {
         const pendingDriver = data.loginDriver.driver || {
@@ -124,10 +127,31 @@ export default function Login() {
         await AsyncStorage.setItem("token", data.loginDriver.token);
 
         if (data.loginDriver.driver) {
+          console.log("📱 Storing driver data in AsyncStorage...");
+          
+          // Store driver info
           await AsyncStorage.setItem(
             "driverInfo",
             JSON.stringify(data.loginDriver.driver)
           );
+          console.log("✅ Stored driverInfo");
+          
+          // Store driver ID separately for easy access
+          const driverId = data.loginDriver.driver.driverId || data.loginDriver.driver.id;
+          console.log("🔑 Extracted driverId:", driverId);
+          
+          if (driverId) {
+            await AsyncStorage.setItem("driverId", driverId);
+            console.log("✅ Stored driverId in AsyncStorage:", driverId);
+          } else {
+            console.log("❌ No driverId found in driver data");
+          }
+          
+          // Debug: Verify what was stored
+          const storedDriverId = await AsyncStorage.getItem("driverId");
+          const storedDriverInfo = await AsyncStorage.getItem("driverInfo");
+          console.log("🔍 Verification - stored driverId:", storedDriverId);
+          console.log("🔍 Verification - stored driverInfo:", storedDriverInfo);
         }
 
         const shouldRedirect =

@@ -14,7 +14,7 @@ module.exports = gql`
     E_TRIKE
   }
 
-  enum MaterialType {
+  enum MaterialTypeEnum {
     POSTER
     LCD
     STICKER
@@ -34,7 +34,7 @@ module.exports = gql`
     id: ID!
     materialId: String!          # e.g., DGL-0001 or NDGL-0001
     vehicleType: VehicleType!
-    materialType: MaterialType!
+    materialType: MaterialTypeEnum!
     description: String
     requirements: String
     category: MaterialCategory!
@@ -53,7 +53,7 @@ module.exports = gql`
 
   input CreateMaterialInput {
     vehicleType: VehicleType!
-    materialType: MaterialType!
+    materialType: MaterialTypeEnum!
     description: String
     requirements: String!
     category: MaterialCategory!
@@ -61,7 +61,7 @@ module.exports = gql`
 
   input UpdateMaterialInput {
     vehicleType: VehicleType
-    materialType: MaterialType
+    materialType: MaterialTypeEnum
     description: String
     requirements: String
     category: MaterialCategory
@@ -77,6 +77,42 @@ module.exports = gql`
     driver: DriverInfo
   }
 
+  type MaterialTrackingInfo {
+    photoComplianceStatus: String
+    nextPhotoDue: String
+    lastPhotoUpload: String
+    monthlyPhotos: [MonthlyPhoto]
+  }
+
+  type MonthlyPhoto {
+    month: String!
+    status: String!
+    photoUrls: [String!]!
+  }
+
+  type MaterialWithTracking {
+    id: ID!
+    materialId: String!
+    materialType: MaterialTypeEnum!
+    materialName: String
+    description: String
+    status: String
+    assignedDate: String
+    location: LocationInfo
+    materialTracking: MaterialTrackingInfo
+  }
+
+  type LocationInfo {
+    address: String
+    coordinates: [Float!]
+  }
+
+  type DriverMaterialsResponse {
+    success: Boolean!
+    message: String!
+    materials: [MaterialWithTracking!]!
+  }
+
 extend type Query {
   # Admin-only
   getAllMaterials: [Material!]!
@@ -88,6 +124,9 @@ extend type Query {
   getMaterialsByCategoryAndVehicle(category: MaterialCategory!, vehicleType: VehicleType!): [Material!]!
 
   getMaterialWithDriver(materialId: ID!): MaterialWithDriver
+  
+  # Get materials assigned to a specific driver
+  getDriverMaterials(driverId: ID!): DriverMaterialsResponse!
 }
 
   type Mutation {

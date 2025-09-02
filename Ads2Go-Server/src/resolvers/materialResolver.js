@@ -54,6 +54,57 @@ const materialResolvers = {
       if (!material) throw new Error('Material not found');
       return material;
     },
+
+    // Get materials assigned to a specific driver
+    getDriverMaterials: async (_, { driverId }, { user, driver }) => {
+      try {
+
+        // Check if user is admin or if driver is requesting their own materials
+        if (!user && !driver) {
+          throw new Error('Unauthorized access');
+        }
+
+        // If driver is requesting, verify they're requesting their own materials
+        if (driver && driver.driverId !== driverId) {
+          throw new Error('Drivers can only view their own materials');
+        }
+
+        // Find materials assigned to the driver
+        const materials = await Material.find({ driverId }).sort({ createdAt: -1 });
+        
+        // Get material tracking information for each material
+        const materialsWithTracking = await Promise.all(
+          materials.map(async (material) => {
+            const tracking = await MaterialTracking.findOne({ materialId: material.id });
+            return {
+              ...material.toObject(),
+              materialTracking: tracking ? {
+                photoComplianceStatus: tracking.photoComplianceStatus,
+                nextPhotoDue: tracking.nextPhotoDue,
+                lastPhotoUpload: tracking.lastPhotoUpload,
+                monthlyPhotos: tracking.monthlyPhotos || []
+              } : null
+            };
+          })
+        );
+
+        console.log(`✅ Found ${materialsWithTracking.length} materials for driver ${driverId}`);
+        
+        return {
+          success: true,
+          message: `Found ${materialsWithTracking.length} materials`,
+          materials: materialsWithTracking
+        };
+
+      } catch (error) {
+        console.error('Error fetching driver materials:', error);
+        return {
+          success: false,
+          message: error.message,
+          materials: []
+        };
+      }
+    },
   },
 
   Mutation: {
@@ -78,7 +129,7 @@ const materialResolvers = {
       
       try {
         await material.save();
-        console.log(`✅ Material saved successfully: ${material.materialId} with ID: ${material._id}`);
+        console.log(`✅ Material saved successfully: ${material.materialId} with ID: ${material.id}`);
       } catch (error) {
         console.error(`❌ Error saving material:`, error);
         throw new Error(`Failed to save material: ${error.message}`);
@@ -95,7 +146,7 @@ const materialResolvers = {
           
           // Create a single document with both tablets
           const tabletPair = new Tablet({
-            materialId: material.materialId, // Use the string materialId, not the ObjectId _id
+            materialId: material.materialId, // Use the string materialId, not the ObjectId id
             carGroupId,
             tablets: [
               {
@@ -186,11 +237,11 @@ const materialResolvers = {
       // Create MaterialTracking record using GraphQL mutation approach
       try {
         // Check if MaterialTracking record already exists
-        const existingMaterialTracking = await MaterialTracking.findOne({ materialId: material._id });
+        const existingMaterialTracking = await MaterialTracking.findOne({ materialId: material.id });
         
         if (!existingMaterialTracking) {
           const materialTracking = new MaterialTracking({
-            materialId: material._id, // Use ObjectId reference
+            materialId: material.id, // Use ObjectId reference
             driverId: null, // No driver assigned yet
             location: {
               type: 'Point',
@@ -212,7 +263,7 @@ const materialResolvers = {
         // Don't throw error - MaterialTracking is optional
       }
 
-      console.log(`🎯 Returning created material: ${material.materialId} with ID: ${material._id}`);
+              console.log(`🎯 Returning created material: ${material.materialId} with ID: ${material.id}`);
       return material;
     },
 
@@ -247,7 +298,7 @@ const materialResolvers = {
         const driver = await Driver.findOne({ driverId: material.driverId });
         if (driver) {
           driver.installedMaterialType = material.materialType;
-          driver.materialId = material._id;
+          driver.materialId = material.id;
           await driver.save();
         }
       }
@@ -302,7 +353,7 @@ const materialResolvers = {
       
       if (alreadyAssigned) {
         // If the material is already assigned to this driver, just return the current assignment
-        if (materialId && alreadyAssigned._id.toString() === materialId) {
+        if (materialId && alreadyAssigned.id.toString() === materialId) {
           return { 
             success: true, 
             message: 'Material already assigned to this driver',

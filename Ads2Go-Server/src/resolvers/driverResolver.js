@@ -128,6 +128,44 @@ Upload: GraphQLUpload,
       return driver;
     },
 
+    // Get driver profile (accessible by driver themselves or admin)
+    getDriver: async (_, { driverId }, { user, driver }) => {
+      try {
+        // Check if user is admin or if driver is requesting their own profile
+        if (!user && !driver) {
+          throw new Error('Unauthorized access');
+        }
+
+        // If driver is requesting, verify they're requesting their own profile
+        if (driver && driver.driverId !== driverId) {
+          throw new Error('Drivers can only view their own profile');
+        }
+
+        // Find driver by driverId (not _id)
+        const driverProfile = await Driver.findOne({ driverId }).select('-password');
+        
+        if (!driverProfile) {
+          throw new Error('Driver not found');
+        }
+
+        console.log(`✅ Found driver profile for ${driverId}`);
+        
+        return {
+          success: true,
+          message: 'Driver profile retrieved successfully',
+          driver: driverProfile
+        };
+
+      } catch (error) {
+        console.error('Error fetching driver profile:', error);
+        return {
+          success: false,
+          message: error.message,
+          driver: null
+        };
+      }
+    },
+
     getPendingDrivers: async (_, __, { user }) => {
       checkAdmin(user);
       return Driver.find({ accountStatus: "PENDING", reviewStatus: "PENDING" });
@@ -283,7 +321,7 @@ createDriver: async (_, { input }) => {
         await driver.save();
 
         const token = jwt.sign({
-          driverId: driver._id.toString(),
+          driverId: driver.driverId, // Use the string driverId (DRV-002) instead of MongoDB _id
           email: driver.email,
           role: 'DRIVER',
           tokenVersion: driver.tokenVersion,

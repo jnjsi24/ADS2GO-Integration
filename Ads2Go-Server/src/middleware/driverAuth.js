@@ -10,9 +10,15 @@ const getDriverFromToken = async (token) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     if (!decoded.driverId) return null;
 
-    // Using _id for driver login/auth
-    const driver = await Driver.findById(decoded.driverId)
+    // Try to find driver by driverId first (new format), then by _id (old format)
+    let driver = await Driver.findOne({ driverId: decoded.driverId })
       .select('+password driverId firstName middleName lastName email profilePicture accountStatus tokenVersion isEmailVerified editRequestStatus');
+    
+    // If not found and decoded.driverId looks like a MongoDB ObjectId, try finding by _id (backward compatibility)
+    if (!driver && decoded.driverId.match(/^[0-9a-fA-F]{24}$/)) {
+      driver = await Driver.findById(decoded.driverId)
+        .select('+password driverId firstName middleName lastName email profilePicture accountStatus tokenVersion isEmailVerified editRequestStatus');
+    }
 
     if (!driver) return null;
 
