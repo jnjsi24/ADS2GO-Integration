@@ -2,6 +2,7 @@ const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet');
 const ScreenTracking = require('../models/screenTracking');
+const MaterialTracking = require('../models/materialTracking');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
@@ -72,7 +73,16 @@ const materialResolvers = {
         driverId: null, // unassigned on creation
       });
 
-      await material.save();
+      console.log(`🔄 Creating material with input:`, input);
+      console.log(`🔄 Material object before save:`, material);
+      
+      try {
+        await material.save();
+        console.log(`✅ Material saved successfully: ${material.materialId} with ID: ${material._id}`);
+      } catch (error) {
+        console.error(`❌ Error saving material:`, error);
+        throw new Error(`Failed to save material: ${error.message}`);
+      }
 
       // Create tablet pair if the material type is HEADDRESS
       if (materialType === 'HEADDRESS') {
@@ -106,6 +116,7 @@ const materialResolvers = {
           });
           
           await tabletPair.save();
+          console.log(`✅ Created tablet pair for material: ${material.materialId} with carGroupId: ${carGroupId}`);
         }
       }
 
@@ -119,8 +130,11 @@ const materialResolvers = {
             `GRP-${uuidv4().substring(0, 8).toUpperCase()}` : 
             `GRP-${uuidv4().substring(0, 8).toUpperCase()}`;
           
+          // Generate a temporary deviceId that can be updated later
+          const tempDeviceId = `TEMP-${material.materialId}-${Date.now()}`;
+          
           const screenTracking = new ScreenTracking({
-            deviceId: null, // Will be set when device registers
+            deviceId: tempDeviceId, // Temporary ID - will be updated when actual device registers
             materialId: material.materialId,
             carGroupId: carGroupId,
             slotNumber: 1,
@@ -165,10 +179,40 @@ const materialResolvers = {
           });
           
           await screenTracking.save();
-          console.log(`✅ Created ScreenTracking record for ${materialType} material: ${material.materialId}`);
+          console.log(`✅ Created ScreenTracking record for ${materialType} material: ${material.materialId} with temp deviceId: ${tempDeviceId}`);
         }
       }
 
+      // Create MaterialTracking record using GraphQL mutation approach
+      try {
+        // Check if MaterialTracking record already exists
+        const existingMaterialTracking = await MaterialTracking.findOne({ materialId: material._id });
+        
+        if (!existingMaterialTracking) {
+          const materialTracking = new MaterialTracking({
+            materialId: material._id, // Use ObjectId reference
+            driverId: null, // No driver assigned yet
+            location: {
+              type: 'Point',
+              coordinates: [0, 0] // Default coordinates - will be updated when device reports location
+            },
+            address: 'Location not set',
+            deviceStatus: 'OFFLINE',
+            isOnline: false,
+            lastSeen: new Date(),
+            materialCondition: 'GOOD',
+            isActive: true
+          });
+          
+          await materialTracking.save();
+          console.log(`✅ Created MaterialTracking record for material: ${material.materialId}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error creating MaterialTracking:`, error);
+        // Don't throw error - MaterialTracking is optional
+      }
+
+      console.log(`🎯 Returning created material: ${material.materialId} with ID: ${material._id}`);
       return material;
     },
 

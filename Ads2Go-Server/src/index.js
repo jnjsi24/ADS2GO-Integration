@@ -47,6 +47,7 @@ const screenTrackingRoutes = require('./routes/screenTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
+const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 
 // Import services
 const syncService = require('./services/syncService');
@@ -126,6 +127,7 @@ async function startServer() {
   app.use('/screenTracking', screenTrackingRoutes);
   app.use('/material', materialRoutes);
   app.use('/ads', adsRoutes);
+  app.use('/material-photos', materialPhotoUploadRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

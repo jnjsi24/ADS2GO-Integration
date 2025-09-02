@@ -209,5 +209,5 @@ DriverSchema.index({ driverId: 1 }, { unique: true });
 DriverSchema.index({ accountStatus: 1, reviewStatus: 1 });
 DriverSchema.index({ vehiclePlateNumber: 1 });
 
-const Driver = mongoose.model('Driver', DriverSchema);
+const Driver = mongoose.models.Driver || mongoose.model('Driver', DriverSchema);
 module.exports = Driver;

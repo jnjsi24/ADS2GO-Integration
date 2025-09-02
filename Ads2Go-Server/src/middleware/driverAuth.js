@@ -46,7 +46,32 @@ const checkDriverAuth = (driver) => {
   return driver;
 };
 
+// ✅ Express middleware for protecting driver routes
+const checkDriver = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    const driver = await getDriverFromToken(token);
+    
+    if (!driver) {
+      return res.status(401).json({
+        success: false,
+        message: 'Driver authentication required'
+      });
+    }
+    
+    req.driver = driver;
+    next();
+  } catch (error) {
+    console.error('Driver Auth Middleware Error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid driver token'
+    });
+  }
+};
+
 module.exports = {
   driverMiddleware,
   checkDriverAuth,
+  checkDriver,
 };

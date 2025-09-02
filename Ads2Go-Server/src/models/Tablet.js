@@ -53,4 +53,4 @@ TabletSchema.index({ 'tablets.deviceId': 1 }, {
   name: 'tablets_deviceId_sparse_unique'
 });
 
-module.exports = mongoose.model('Tablet', TabletSchema);
+module.exports = mongoose.models.Tablet || mongoose.model('Tablet', TabletSchema);

@@ -51,18 +51,24 @@ const MaterialSchema = new mongoose.Schema({
 // Pre-save hook to generate sequential materialId
 MaterialSchema.pre('save', async function() {
   if (this.isNew) {
-    const prefix = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
-    const baseId = `${prefix}-${this.materialType}-${this.vehicleType}`;
-    
-    // Find the count of existing materials with the same type and vehicle
-    const count = await this.constructor.countDocuments({
-      materialType: this.materialType,
-      vehicleType: this.vehicleType,
-      category: this.category
-    });
-    
-    // Generate the new ID with 3-digit padding
-    this.materialId = `${baseId}-${String(count + 1).padStart(3, '0')}`;
+    try {
+      const prefix = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
+      const baseId = `${prefix}-${this.materialType}-${this.vehicleType}`;
+      
+      // Find the count of existing materials with the same type and vehicle
+      const count = await this.constructor.countDocuments({
+        materialType: this.materialType,
+        vehicleType: this.vehicleType,
+        category: this.category
+      });
+      
+      // Generate the new ID with 3-digit padding
+      this.materialId = `${baseId}-${String(count + 1).padStart(3, '0')}`;
+      console.log(`🔧 Generated materialId: ${this.materialId} for ${this.materialType} ${this.vehicleType}`);
+    } catch (error) {
+      console.error(`❌ Error in pre-save hook:`, error);
+      throw error;
+    }
   }
 });
 
@@ -109,4 +115,4 @@ MaterialSchema.index(
   }
 );
 
-module.exports = mongoose.model('Material', MaterialSchema);
+module.exports = mongoose.models.Material || mongoose.model('Material', MaterialSchema);

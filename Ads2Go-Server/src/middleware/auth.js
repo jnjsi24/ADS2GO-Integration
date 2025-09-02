@@ -95,10 +95,42 @@ const checkAdmin = (user) => {
   return user;
 };
 
+// ✅ Express middleware for protecting admin routes
+const checkAdminMiddleware = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    const user = await getUser(token);
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    if (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+    
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Admin Auth Middleware Error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+};
+
 module.exports = {
   authMiddleware,
   adminMiddleware,
   JWT_SECRET,
   checkAuth,
   checkAdmin,
+  checkAdminMiddleware,
 };

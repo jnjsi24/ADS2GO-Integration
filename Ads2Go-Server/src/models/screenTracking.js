@@ -30,8 +30,9 @@ const ScreenTrackingSchema = new mongoose.Schema({
   // Screen identification
   deviceId: { 
     type: String, 
-    required: true,
+    required: false, // Made optional - will be set when device registers
     unique: true,
+    sparse: true, // Allow multiple null values
     index: true
   },
   materialId: { 
@@ -330,4 +331,4 @@ ScreenTrackingSchema.statics.findDisplayIssues = function() {
   });
 };
 
-module.exports = mongoose.model('ScreenTracking', ScreenTrackingSchema);
+module.exports = mongoose.models.ScreenTracking || mongoose.model('ScreenTracking', ScreenTrackingSchema);
