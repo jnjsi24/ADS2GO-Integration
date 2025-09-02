@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 // Toast notification type
 type Toast = {
@@ -10,7 +10,7 @@ type Toast = {
 };
 
 const Settings: React.FC = () => {
-  const { user } = useAuth();
+  const { user } = useUserAuth();
   const navigate = useNavigate();
   // State for Notification Settings form
   const [notificationForm, setNotificationForm] = useState({

@@ -178,7 +178,7 @@ const typeDefs = gql`
     deactivateAdmin(id: ID!): AdminResponse!
 
     # User management (for SuperAdmins)
-    deleteUser(id: ID!): ResponseMessage!
+    # Note: deleteUser is handled by adminResolver for both ADMIN and SUPERADMIN roles
 
     # Password management
     changeSuperAdminPassword(currentPassword: String!, newPassword: String!): Boolean!

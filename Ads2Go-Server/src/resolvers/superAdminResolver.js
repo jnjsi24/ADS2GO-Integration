@@ -503,21 +503,7 @@ const resolvers = {
       };
     },
 
-    deleteUser: async (_, { id }, { superAdmin }) => {
-      checkAuth(superAdmin);
-      if (superAdmin.role !== 'SUPERADMIN') {
-        throw new Error('Not authorized to delete users');
-      }
-
-      const User = require('../models/User');
-      const user = await User.findById(id);
-      if (!user) {
-        return { success: false, message: 'User not found' };
-      }
-
-      await User.findByIdAndDelete(id);
-      return { success: true, message: 'User deleted successfully' };
-    },
+    // Note: deleteUser is handled by adminResolver for both ADMIN and SUPERADMIN roles
   },
 };
 

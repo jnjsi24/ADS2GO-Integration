@@ -476,6 +476,11 @@ createDriver: async (_, { input }) => {
     materialToAssign.dismountedAt = null;
     await materialToAssign.save();
 
+    // Generate QR code identifier for approved drivers
+    if (!driver.qrCodeIdentifier) {
+      driver.qrCodeIdentifier = `QR-${driver.driverId}-${Date.now()}`;
+    }
+
     // Then update driver status to approved with the assigned material
     driver.accountStatus = 'ACTIVE';
     driver.reviewStatus = 'APPROVED';

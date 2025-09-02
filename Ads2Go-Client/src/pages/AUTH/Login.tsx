@@ -1,63 +1,40 @@
 import React, { useState, useCallback } from 'react';
-import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
-import { LOGIN_MUTATION } from '../../graphql/user';
+import { useUserAuth } from '../../contexts/UserAuthContext';
+import { Link } from 'react-router-dom';
 
 const Login: React.FC = () => {
-  const { navigateToRegister, setUser } = useAuth();
+  const { navigateToRegister, login } = useUserAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const [loginUser, { loading }] = useMutation(LOGIN_MUTATION, {
-    onCompleted(data) {
-      console.log('Login successful:', data);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setIsLoggingIn(true);
 
-      const { token, user } = data.loginUser;
-
-      localStorage.setItem('token', token);
-      // Store user data including firstName in localStorage for Dashboard access
-      localStorage.setItem('user', JSON.stringify(user));
-      setUser(user);
-
-      if (user.role?.toUpperCase() === 'ADMIN' || user.role?.toUpperCase() === 'SUPERADMIN') {
-        setError('Admin users must use the dedicated admin login page.');
-        return;
+    try {
+      const user = await login(email, password);
+      if (user) {
+        // Login successful - the UserAuthContext will handle navigation
+        console.log('Login successful, user:', user);
+      } else {
+        setError('Login failed. Please check your credentials.');
       }
-
-      if (!user.isEmailVerified) {
-        navigate('/verify-email');
-        return;
-      }
-
-      navigate('/dashboard');
-    },
-    onError(error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      setError(error.message.replace('GraphQL error: ', ''));
-    },
-  });
+      setError(error.message || 'Login failed');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   const handleRegisterClick = useCallback(() => {
     navigateToRegister();
   }, [navigateToRegister]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    const deviceInfo = {
-      deviceId: 'web-client',
-      deviceType: 'web',
-      deviceName: navigator.userAgent,
-    };
-
-    loginUser({ variables: { email, password, deviceInfo } });
-  };
 
   return (
     <div className="flex min-h-screen bg-white">
@@ -125,20 +102,20 @@ const Login: React.FC = () => {
             </Link>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white py-2 rounded-md transition"
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Logging in...
-              </div>
-            ) : (
-              'Login'
-            )}
-          </button>
+                     <button
+             type="submit"
+             disabled={isLoggingIn}
+             className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white py-2 rounded-md transition"
+           >
+             {isLoggingIn ? (
+               <div className="flex items-center justify-center">
+                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                 Logging in...
+               </div>
+             ) : (
+               'Login'
+             )}
+           </button>
         </form>
 
         <p className="text-sm mt-4 text-gray-600">

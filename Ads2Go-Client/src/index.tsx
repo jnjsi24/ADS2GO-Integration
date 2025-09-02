@@ -2,20 +2,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ApolloProvider } from '@apollo/client';
-import { BrowserRouter, useNavigate } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 import client from './services/apolloClient';
 import './index.css';
 import App from './App';
-import { AuthProvider } from './contexts/AuthContext';
+// Removed AuthProvider import since App.tsx now handles auth contexts internally
 
-const AuthWrapper: React.FC = () => {
-  const navigate = useNavigate();
-
-  return (
-    <AuthProvider navigate={navigate}>
-      <App />
-    </AuthProvider>
-  );
+const AppWrapper: React.FC = () => {
+  return <App />;
 };
 
 const root = ReactDOM.createRoot(
@@ -26,7 +20,7 @@ root.render(
   <React.StrictMode>
     <ApolloProvider client={client}>
       <BrowserRouter>
-        <AuthWrapper />
+        <AppWrapper />
       </BrowserRouter>
     </ApolloProvider>
   </React.StrictMode>

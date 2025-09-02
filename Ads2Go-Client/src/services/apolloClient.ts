@@ -15,7 +15,17 @@ const httpLink = createHttpLink({
 });
 
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('token');
+  // Check for admin token first, then user token
+  const adminToken = localStorage.getItem('adminToken');
+  const userToken = localStorage.getItem('userToken');
+  const token = adminToken || userToken;
+  
+  console.log('🔐 Apollo Client authLink:', { 
+    adminToken: adminToken ? `${adminToken.substring(0, 20)}...` : null,
+    userToken: userToken ? `${userToken.substring(0, 20)}...` : null,
+    finalToken: token ? `${token.substring(0, 20)}...` : null
+  });
+  
   return {
     headers: {
       ...headers,

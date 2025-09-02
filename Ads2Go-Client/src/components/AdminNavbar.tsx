@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import {
   LayoutDashboard,
   Users,
@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 
 const AdminSidebar: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout, admin } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = async () => {
     await logout();
-    navigate('/login');
+    navigate('/admin-login');
   };
 
   const getInitials = (firstName?: string, lastName?: string) => {
@@ -69,14 +69,14 @@ const AdminSidebar: React.FC = () => {
         >
           <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
             <span className="text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : '...'}
+              {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
             </span>
             <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
           </div>
           <div>
-            {user ? (
+            {admin ? (
               <p className="font-semibold ">
-                {`${user.firstName} ${user.lastName}`}
+                {`${admin.firstName} ${admin.lastName}`}
               </p>
             ) : (
               <>

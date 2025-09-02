@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
+import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Import Navbars
@@ -49,141 +50,20 @@ import('./firebase/init')
   .then(() => console.log('🔥 Firebase initialization complete'))
   .catch((error) => console.error('❌ Firebase initialization failed:', error));
 
-const AppContent: React.FC = () => {
-  const { user } = useAuth();
-  const location = useLocation();
-
-  const publicPages = [
-    '/admin-login',
-    '/superadmin-login',
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/verify-email',
-    '/landing',
-  ];
-
-  const hideNavbarOnRoutes = publicPages;
-
-  if (hideNavbarOnRoutes.includes(location.pathname)) {
-    return (
-      <Routes>
-        <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPass />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/landing" element={<Landing />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    );
-  }
-
+// Separate components for admin and user routes to avoid conditional hooks
+const AdminAppContent: React.FC = () => {
+  const { admin } = useAdminAuth();
+  
   return (
     <div className="min-h-screen bg-white text-black">
-      {/* Show navbar depending on user role */}
-      {user?.role === 'SUPERADMIN' && <SadminNavbar />}
-      {user?.role === 'ADMIN' && <AdminNavbar />}
-      {user?.role === 'USER' && <UserNavbar />}
-
+      {/* Show navbar depending on admin role */}
+      {admin?.role === 'SUPERADMIN' && <SadminNavbar />}
+      {admin?.role === 'ADMIN' && <AdminNavbar />}
+      
       <Routes>
         {/* Public routes */}
-        <Route path="/login" element={<Login />} />
         <Route path="/admin-login" element={<AdminLogin />} />
         <Route path="/superadmin-login" element={<SuperAdminLogin />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-
-        {/* Protected user routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/account"
-          element={
-            <ProtectedRoute>
-              <Account />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/payment"
-          element={
-            <ProtectedRoute>
-              <Payment />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/create-advertisement"
-          element={
-            <ProtectedRoute>
-              <CreateAdvertisement />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/advertisements"
-          element={
-            <ProtectedRoute>
-              <Advertisements />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/advertisements/:id"
-          element={
-            <ProtectedRoute>
-              <AdDetailsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ad-details/:id"
-          element={
-            <ProtectedRoute>
-              <AdDetailsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/help"
-          element={
-            <ProtectedRoute>
-              <Help />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/history"
-          element={
-            <ProtectedRoute>
-              <History />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ad-details/:id"
-          element={
-            <ProtectedRoute>
-              <AdDetailsPage />
-            </ProtectedRoute>
-          }
-          />
 
         {/* Protected Admin Routes */}
         <Route
@@ -276,7 +156,6 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        {/* NEW: Sadmin Account Page */}
         <Route
           path="/sadmin-account"
           element={
@@ -285,7 +164,6 @@ const AppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
-        {/* 👇 NEW */}
         <Route
           path="/sadmin-plans"
           element={
@@ -296,19 +174,202 @@ const AppContent: React.FC = () => {
         />
 
         {/* Default redirects */}
-        <Route path="/" element={<Navigate to="/landing" replace />} />
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/admin-login" replace />} />
+      </Routes>
+    </div>
+  );
+};
+
+const UserAppContent: React.FC = () => {
+  const { user } = useUserAuth();
+  
+  return (
+    <div className="min-h-screen bg-white text-black">
+      {/* Show navbar depending on user role */}
+      {user?.role === 'USER' && <UserNavbar />}
+      
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+
+        {/* Protected user routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <Account />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment"
+          element={
+            <ProtectedRoute>
+              <Payment />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-advertisement"
+          element={
+            <ProtectedRoute>
+              <CreateAdvertisement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/advertisements"
+          element={
+            <ProtectedRoute>
+              <Advertisements />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/advertisements/:id"
+          element={
+            <ProtectedRoute>
+              <AdDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ad-details/:id"
+          element={
+            <ProtectedRoute>
+              <AdDetailsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute>
+              <Help />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <History />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Default redirects */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
   );
 };
 
+const AppContent: React.FC = () => {
+  const location = useLocation();
+  
+  const publicPages = [
+    '/admin-login',
+    '/superadmin-login',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/verify-email',
+    '/landing',
+  ];
+
+  const hideNavbarOnRoutes = publicPages;
+
+  if (hideNavbarOnRoutes.includes(location.pathname)) {
+    return (
+      <Routes>
+        <Route path="/admin-login" element={<AdminLogin />} />
+        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPass />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  // Check if we're on admin routes to determine which content to show
+  const isAdminRoute = location.pathname.startsWith('/admin') || 
+                      location.pathname.startsWith('/sadmin') ||
+                      location.pathname === '/admin-login';
+  
+    if (isAdminRoute) {
+    return <AdminAppContent />;
+  } else {
+    return <UserAppContent />;
+  }
+};
+
 const App: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Check if we're on admin-related routes
+  const isAdminRoute = location.pathname.startsWith('/admin') || 
+                      location.pathname.startsWith('/sadmin') ||
+                      location.pathname === '/admin-login';
+  
+  // Check if we're on user-related routes
+  const isUserRoute = location.pathname.startsWith('/dashboard') || 
+                     location.pathname.startsWith('/advertisements') ||
+                     location.pathname.startsWith('/account') ||
+                     location.pathname.startsWith('/settings') ||
+                     location.pathname === '/login' ||
+                     location.pathname === '/register' ||
+                     location.pathname === '/verify-email';
+  
+  // If we're on admin routes, only provide AdminAuthProvider
+  if (isAdminRoute) {
+    return (
+      <AdminAuthProvider navigate={navigate}>
+        <AppContent />
+      </AdminAuthProvider>
+    );
+  }
+  
+  // If we're on user routes, only provide UserAuthProvider
+  if (isUserRoute) {
+    return (
+      <UserAuthProvider navigate={navigate}>
+        <AppContent />
+      </UserAuthProvider>
+    );
+  }
+  
+  // For other routes (like home page), provide both contexts
   return (
-    <AuthProvider navigate={navigate}>
-      <AppContent />
-    </AuthProvider>
+    <UserAuthProvider navigate={navigate}>
+      <AdminAuthProvider navigate={navigate}>
+        <AppContent />
+      </AdminAuthProvider>
+    </UserAuthProvider>
   );
 };
 

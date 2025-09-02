@@ -1,7 +1,7 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil } from "lucide-react";
-import { useAuth } from "../../contexts/AuthContext";
+import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client"; // ✅ Added
 
 // ✅ GraphQL Mutation
@@ -40,7 +40,7 @@ interface FormData {
 const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useUserAuth();
 
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -58,6 +58,7 @@ const Account: React.FC = () => {
   const [updateUser] = useMutation(UPDATE_USER);
 
   useEffect(() => {
+    console.log('🔄 Account: User data received:', user);
     if (user) {
       setFormData({
         firstName: user.firstName || "",
@@ -70,6 +71,8 @@ const Account: React.FC = () => {
         profilePicture: user.profilePicture || "",
         cityState: user.houseAddress || "",
       });
+    } else {
+      console.log('❌ Account: No user data available');
     }
   }, [user]);
 

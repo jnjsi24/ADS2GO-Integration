@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 
 // GraphQL Queries and Mutations
 const GET_ALL_ADS = gql`
@@ -119,6 +120,7 @@ interface Ad {
 }
 
 const ManageAds: React.FC = () => {
+  const { admin, isLoading, isInitialized } = useAdminAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'APPROVED' | 'PENDING' | 'REJECTED'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -153,15 +155,26 @@ const ManageAds: React.FC = () => {
     }
   });
 
-  // Check authentication token
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      alert('Please log in to access this page');
-      // Redirect to login if needed
-      window.location.href = '/admin/login';
-    }
-  }, []);
+  // Show loading state while authentication is being checked
+  if (isLoading || !isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Check if admin is authenticated
+  if (!admin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600">You must be logged in to access this page.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Filtered ads
   const filteredAds = data?.getAllAds?.filter((ad: Ad) => {

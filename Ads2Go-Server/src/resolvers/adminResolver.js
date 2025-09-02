@@ -328,6 +328,7 @@ const resolvers = {
     },
 
     deleteUser: async (_, { id }, { admin }) => {
+      console.log('🗑️ deleteUser called with context:', { admin: admin ? { id: admin.id, email: admin.email, role: admin.role } : null });
       checkAuth(admin);
       if (admin.role !== 'ADMIN' && admin.role !== 'SUPERADMIN') {
         throw new Error('Not authorized to delete users');

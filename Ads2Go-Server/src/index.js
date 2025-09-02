@@ -142,13 +142,21 @@ async function startServer() {
         let context = { driver, user };
         
         if (user) {
+          console.log('🔐 User context:', { id: user.id, email: user.email, role: user.role });
           if (user.role === 'ADMIN') {
             context.admin = user;
+            console.log('✅ Set admin context for ADMIN user');
           } else if (user.role === 'SUPERADMIN') {
             context.superAdmin = user;
+            // SuperAdmin should also have admin access
+            context.admin = user;
+            console.log('✅ Set admin context for SUPERADMIN user');
           }
+        } else {
+          console.log('❌ No user in context');
         }
         
+        console.log('🔧 Final context:', Object.keys(context));
         return context;
       },
     })

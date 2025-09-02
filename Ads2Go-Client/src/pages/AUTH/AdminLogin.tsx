@@ -1,50 +1,37 @@
 import React, { useState } from 'react';
-import { useMutation } from '@apollo/client';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useNavigate } from 'react-router-dom';
-import { LOGIN_ADMIN_MUTATION } from '../../graphql/admin';
 
 const AdminLogin: React.FC = () => {
-  const { setUser } = useAuth();
+  const { login } = useAdminAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const [loginAdmin, { loading }] = useMutation(LOGIN_ADMIN_MUTATION, {
-    onCompleted(data) {
-      console.log('Admin login successful:', data);
-      
-      const { token, admin } = data.loginAdmin;
-
-      if (!admin || admin.role?.toUpperCase() !== 'ADMIN') {
-        setError('You are not authorized to access the admin panel.');
-        return;
-      }
-
-      localStorage.setItem('token', token);
-      setUser(admin);
-      navigate('/admin');
-    },
-    onError(err) {
-      console.error('Admin login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
-    },
-  });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoggingIn(true);
 
-    const deviceInfo = {
-      deviceId: 'admin-web-client',
-      deviceType: 'web',
-      deviceName: navigator.userAgent,
-    };
-
-    loginAdmin({ variables: { email, password, deviceInfo } });
+    try {
+      const admin = await login(email, password);
+      if (admin) {
+        console.log('Admin login successful:', admin);
+        // The AdminAuthContext will handle navigation
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      setError(error.message || 'Login failed');
+    } finally {
+      setIsLoggingIn(false);
+    }
   };
 
   return (
@@ -99,10 +86,10 @@ const AdminLogin: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isLoggingIn}
             className="w-full py-3 rounded-lg bg-[#0A192F] text-white text-lg font-bold hover:bg-[#091a2c] transition disabled:bg-gray-400"
           >
-            {loading ? (
+            {isLoggingIn ? (
               <div className="flex items-center justify-center">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                 Logging in...

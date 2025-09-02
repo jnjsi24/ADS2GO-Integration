@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../../contexts/AuthContext';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 // CREATE USER
 const RiderCompanyRegister: React.FC = () => {
@@ -22,7 +22,7 @@ const RiderCompanyRegister: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [registrationError, setRegistrationError] = useState('');
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register } = useUserAuth();
 
   const validateField = (name: string, value: string): string => {
     switch (name) {

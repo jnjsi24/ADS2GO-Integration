@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useUserAuth } from '../contexts/UserAuthContext';
 import {
   LayoutDashboard,
   Megaphone,
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const SideNavbar: React.FC = () => {
-  const { logout, user } = useAuth();
+  const { logout, user } = useUserAuth();
   const navigate = useNavigate();
   const location = useLocation();
 

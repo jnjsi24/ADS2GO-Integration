@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown, Mail, Phone, MapPin, Edit, X, MoreVertical } from 'lucide-react';
 import { TrashIcon } from '@heroicons/react/24/outline';
 import { useQuery, useMutation, gql } from '@apollo/client';
+import AdminLayout from '../../components/AdminLayout';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 
 // GraphQL queries - UPDATED to match exact schema fields
 const GET_ALL_USERS = gql`
@@ -170,6 +172,7 @@ const formatLastAccess = (date: Date | null): string => {
 };
 
 const ManageUsers: React.FC = () => {
+  const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -321,6 +324,27 @@ const ManageUsers: React.FC = () => {
 
   const isAllSelected = selectedUsers.length === filteredUsers.length && filteredUsers.length > 0;
 
+  // Show loading state while authentication is being checked
+  if (authLoading || !isInitialized) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Check if admin is authenticated
+  if (!admin) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600">You must be logged in to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
@@ -352,8 +376,9 @@ const ManageUsers: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <div className="bg-gray-100 w-full min-h-screen">
+    <AdminLayout>
+      <div className="pr-5 p-10">
+        <div className="bg-gray-100 w-full min-h-screen">
         {/* Header with Title and Add New Button */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="px-3 py-1 text-3xl font-bold text-gray-800">User List</h1>
@@ -628,7 +653,8 @@ const ManageUsers: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </AdminLayout>
   );
 };
 

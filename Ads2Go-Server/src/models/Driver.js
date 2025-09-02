@@ -17,6 +17,24 @@ const validateMaterialAssignment = function(next) {
   next();
 };
 
+// Pre-save hook to validate required fields based on status
+const validateRequiredFields = function(next) {
+  // Skip validation for new documents
+  if (this.isNew) return next();
+
+  // Only validate required fields if driver is being approved or is active
+  if (this.accountStatus === 'ACTIVE' && this.reviewStatus === 'APPROVED') {
+    if (!this.orCrPictureURL) {
+      return next(new Error('orCrPictureURL is required for approved drivers'));
+    }
+    if (!this.qrCodeIdentifier) {
+      return next(new Error('qrCodeIdentifier is required for approved drivers'));
+    }
+  }
+  
+  next();
+};
+
 const DriverSchema = new mongoose.Schema(
   {
     driverId: { type: String, unique: true, trim: true, uppercase: true },
@@ -38,7 +56,7 @@ const DriverSchema = new mongoose.Schema(
     vehicleModel: { type: String, required: true, trim: true },
     vehicleYear: { type: Number, required: true, min: 1900 },
     vehiclePhotoURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
-    orCrPictureURL: { type: String, required: true, trim: true }, // Stores the URL after upload processing
+    orCrPictureURL: { type: String, required: false, trim: true }, // Stores the URL after upload processing
 
     accountStatus: { type: String, enum: ['PENDING', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
     reviewStatus: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED', 'RESUBMITTED'], default: 'PENDING' },
@@ -50,7 +68,7 @@ const DriverSchema = new mongoose.Schema(
     currentBalance: { type: Number, default: 0 },
     totalEarnings: { type: Number, default: 0 },
 
-    qrCodeIdentifier: { type: String, required: true, trim: true },
+    qrCodeIdentifier: { type: String, required: false, trim: true },
 
     isEmailVerified: { type: Boolean, default: false },
     emailVerificationToken: { type: String, select: false },
@@ -109,6 +127,7 @@ const DriverSchema = new mongoose.Schema(
     // Add pre-save hooks
     pre: [
       { method: 'save', fn: validateMaterialAssignment, parallel: false },
+      { method: 'save', fn: validateRequiredFields, parallel: false },
     ],
     toJSON: {
       virtuals: true,

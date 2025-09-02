@@ -14,8 +14,8 @@ import {
   LOGOUT_MUTATION,
   GET_OWN_USER_DETAILS,
 } from '../graphql/user';
-import { GET_OWN_ADMIN_DETAILS } from '../graphql/admin';
-import { GET_OWN_SUPERADMIN_DETAILS } from '../graphql/superadmin';
+import { GET_OWN_ADMIN_DETAILS, LOGIN_ADMIN_MUTATION } from '../graphql/admin';
+import { GET_OWN_SUPERADMIN_DETAILS, LOGIN_SUPERADMIN_MUTATION } from '../graphql/superadmin';
 import { jwtDecode } from 'jwt-decode';
 
 // 🚨 Firebase imports removed except analytics/storage usage
@@ -67,7 +67,9 @@ export const AuthProvider: React.FC<{
   const [userEmail, setUserEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [loginMutation] = useMutation(LOGIN_MUTATION);
+  const [loginUserMutation] = useMutation(LOGIN_MUTATION);
+  const [loginAdminMutation] = useMutation(LOGIN_ADMIN_MUTATION);
+  const [loginSuperAdminMutation] = useMutation(LOGIN_SUPERADMIN_MUTATION);
   const [registerMutation] = useMutation(REGISTER_MUTATION);
   const [logoutMutation] = useMutation(LOGOUT_MUTATION);
   const apolloClient = useApolloClient();
@@ -227,57 +229,124 @@ export const AuthProvider: React.FC<{
         deviceName: navigator.userAgent,
       };
 
-      // ✅ Only authenticate with GraphQL API
-      const { data } = await loginMutation({
-        variables: { email, password, deviceInfo },
-      });
+      // Try admin login first
+      try {
+        const { data: adminData } = await loginAdminMutation({
+          variables: { email, password, deviceInfo },
+        });
 
-      const token = data?.login?.token;
-      const userRaw = data?.login?.user;
+        if (adminData?.loginAdmin?.token && adminData?.loginAdmin?.admin) {
+          const { token, admin } = adminData.loginAdmin;
+          localStorage.setItem('token', token);
 
-      if (token && userRaw) {
-        localStorage.setItem('token', token);
+          const user: User = {
+            userId: admin.id,
+            email: admin.email,
+            role: admin.role,
+            isEmailVerified: admin.isEmailVerified,
+            firstName: admin.firstName,
+            middleName: admin.middleName,
+            lastName: admin.lastName,
+            companyName: admin.companyName,
+            companyAddress: admin.companyAddress,
+            contactNumber: admin.contactNumber,
+            profilePicture: admin.profilePicture,
+          };
 
-        const user: User = {
-          userId: userRaw._id || userRaw.userId,
-          email: userRaw.email,
-          role: userRaw.role,
-          isEmailVerified: userRaw.isEmailVerified,
-          firstName: userRaw.firstName,
-          middleName: userRaw.middleName,
-          lastName: userRaw.lastName,
-          houseAddress: userRaw.houseAddress,
-          companyName: userRaw.companyName,
-          companyAddress: userRaw.companyAddress,
-          contactNumber: userRaw.contactNumber,
-          profilePicture: userRaw.profilePicture,
-        };
+          setUser(user);
+          setUserEmail(user.email);
 
-        setUser(user);
-        setUserEmail(user.email);
+          setTimeout(() => {
+            navigate('/admin');
+          }, 0);
 
-        if (!user.isEmailVerified) {
-          navigate('/verify-email');
           return user;
         }
+      } catch (adminError) {
+        // Admin login failed, try superadmin login
+        try {
+          const { data: superAdminData } = await loginSuperAdminMutation({
+            variables: { email, password, deviceInfo },
+          });
 
-        setTimeout(() => {
-          switch (user.role.toUpperCase()) {
-            case 'ADMIN':
-              navigate('/admin');
-              break;
-            case 'SUPERADMIN':
+          if (superAdminData?.loginSuperAdmin?.token && superAdminData?.loginSuperAdmin?.superAdmin) {
+            const { token, superAdmin } = superAdminData.loginSuperAdmin;
+            localStorage.setItem('token', token);
+
+            const user: User = {
+              userId: superAdmin.id,
+              email: superAdmin.email,
+              role: superAdmin.role,
+              isEmailVerified: superAdmin.isEmailVerified,
+              firstName: superAdmin.firstName,
+              middleName: superAdmin.middleName,
+              lastName: superAdmin.lastName,
+              companyName: superAdmin.companyName,
+              companyAddress: superAdmin.companyAddress,
+              contactNumber: superAdmin.contactNumber,
+              profilePicture: superAdmin.profilePicture,
+            };
+
+            setUser(user);
+            setUserEmail(user.email);
+
+            setTimeout(() => {
               navigate('/sadmin-dashboard');
-              break;
-            default:
-              navigate('/home');
-          }
-        }, 0);
+            }, 0);
 
-        return user;
-      } else {
-        throw new Error('Invalid login response from server');
+            return user;
+          }
+        } catch (superAdminError) {
+          // Both admin and superadmin login failed, try regular user login
+        }
       }
+
+      // If we reach here, try regular user login as fallback
+      try {
+        const { data: userData } = await loginUserMutation({
+          variables: { email, password, deviceInfo },
+        });
+
+        if (userData?.login?.token && userData?.login?.user) {
+          const { token, user: userRaw } = userData.login;
+          localStorage.setItem('token', token);
+
+          const user: User = {
+            userId: userRaw._id || userRaw.userId,
+            email: userRaw.email,
+            role: userRaw.role,
+            isEmailVerified: userRaw.isEmailVerified,
+            firstName: userRaw.firstName,
+            middleName: userRaw.middleName,
+            lastName: userRaw.lastName,
+            houseAddress: userRaw.houseAddress,
+            companyName: userRaw.companyName,
+            companyAddress: userRaw.companyAddress,
+            contactNumber: userRaw.contactNumber,
+            profilePicture: userRaw.profilePicture,
+          };
+
+          setUser(user);
+          setUserEmail(user.email);
+
+          if (!user.isEmailVerified) {
+            navigate('/verify-email');
+            return user;
+          }
+
+          setTimeout(() => {
+            navigate('/home');
+          }, 0);
+
+          return user;
+        }
+      } catch (userError) {
+        // All login attempts failed
+        throw new Error('Invalid credentials');
+      }
+
+      // This should never be reached, but TypeScript requires it
+      throw new Error('Login failed');
     } catch (error: any) {
       console.error('Login error:', error.message || error);
       alert(error.message || 'Login failed');

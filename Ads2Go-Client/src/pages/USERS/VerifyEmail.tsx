@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useMutation } from '@apollo/client';
 import { VERIFY_EMAIL_MUTATION, RESEND_VERIFICATION_CODE_MUTATION } from '../../graphql/user';
 import { CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../../contexts/AuthContext';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 const VerifyEmail: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState('');
@@ -11,7 +11,7 @@ const VerifyEmail: React.FC = () => {
   const [canResend, setCanResend] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  const { navigate, setUser, setUserEmail, userEmail, debugToken } = useAuth();
+  const { navigate, setUser, setUserEmail, userEmail, debugToken } = useUserAuth();
 
   const [verifyEmail, { loading: verifyLoading }] = useMutation(VERIFY_EMAIL_MUTATION);
   const [resendVerificationCode, { loading: resendLoading }] = useMutation(RESEND_VERIFICATION_CODE_MUTATION);

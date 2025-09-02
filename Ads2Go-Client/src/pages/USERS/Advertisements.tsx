@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 import { Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
@@ -58,7 +58,7 @@ type Ad = {
 };
 
 const Advertisements: React.FC = () => {
-  const { user } = useAuth();
+  const { user } = useUserAuth();
   const navigate = useNavigate();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
