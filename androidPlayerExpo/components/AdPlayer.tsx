@@ -46,10 +46,19 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
       const cachedData = await AsyncStorage.getItem(cacheKey);
       if (cachedData) {
         const parsedAds = JSON.parse(cachedData);
-        setAds(parsedAds);
-        setCurrentAdIndex(0);
-        console.log('Loaded cached ads:', parsedAds.length);
-        return true;
+        
+        // Validate cached ads as well
+        const validCachedAds = await filterValidAds(parsedAds);
+        
+        if (validCachedAds.length > 0) {
+          setAds(validCachedAds);
+          setCurrentAdIndex(0);
+          console.log('Loaded valid cached ads:', validCachedAds.length);
+          return true;
+        } else {
+          console.log('No valid cached ads found, clearing cache');
+          await AsyncStorage.removeItem(cacheKey);
+        }
       }
     } catch (err) {
       console.error('Error loading cached ads:', err);
@@ -71,6 +80,36 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
   // Check if we have cached ads available
   const hasCachedAds = () => {
     return ads.length > 0;
+  };
+
+  // Validate video URL before attempting playback
+  const validateVideoUrl = async (url: string): Promise<boolean> => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
+    } catch (error) {
+      console.log('Video URL validation failed:', url, error);
+      return false;
+    }
+  };
+
+  // Filter out invalid ads
+  const filterValidAds = async (adsToFilter: Ad[]): Promise<Ad[]> => {
+    const validAds: Ad[] = [];
+    
+    for (const ad of adsToFilter) {
+      if (ad.mediaFile && ad.mediaFile.trim() !== '') {
+        const isValid = await validateVideoUrl(ad.mediaFile);
+        if (isValid) {
+          validAds.push(ad);
+        } else {
+          console.log('Skipping invalid video URL:', ad.mediaFile);
+        }
+      }
+    }
+    
+    console.log(`Filtered ${adsToFilter.length} ads to ${validAds.length} valid ads`);
+    return validAds;
   };
 
   // Import the service dynamically to avoid circular dependencies
@@ -100,12 +139,27 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
       const result = await tabletRegistrationService.fetchAds(materialId, slotNumber);
       
       if (result.success && result.ads.length > 0) {
-        setAds(result.ads);
-        setCurrentAdIndex(0);
-        console.log('Loaded ads from server:', result.ads.length);
+        // Filter out invalid ads before setting state
+        const validAds = await filterValidAds(result.ads);
         
-        // Cache the ads for offline use
-        await saveAdsToCache(result.ads);
+        if (validAds.length > 0) {
+          setAds(validAds);
+          setCurrentAdIndex(0);
+          console.log('Loaded valid ads from server:', validAds.length);
+          
+          // Cache the valid ads for offline use
+          await saveAdsToCache(validAds);
+        } else {
+          console.log('No valid ads found after filtering');
+          // Try to load cached ads if server has no valid ads
+          const hasCached = await loadCachedAds();
+          if (!hasCached) {
+            setError('No valid ads available');
+            if (onAdError) {
+              onAdError('No valid ads available');
+            }
+          }
+        }
       } else {
         // Try to load cached ads if server has no ads
         const hasCached = await loadCachedAds();
@@ -205,9 +259,29 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
 
   const handleVideoError = (error: any) => {
     console.error('Video playback error:', error);
-    setError('Failed to play video');
+    
+    // Try to get more specific error information
+    let errorMessage = 'Failed to play video';
+    if (error && error.error && error.error.message) {
+      errorMessage = `Video error: ${error.error.message}`;
+    } else if (error && error.message) {
+      errorMessage = `Video error: ${error.message}`;
+    }
+    
+    console.log('Ad Player Error:', errorMessage);
+    
+    // If this is a network error (404, etc.), try to skip to next ad
+    if (errorMessage.includes('404') || errorMessage.includes('Response code')) {
+      console.log('Network error detected, attempting to skip to next ad...');
+      setTimeout(() => {
+        handleVideoEnd(); // Skip to next ad
+      }, 1000);
+      return;
+    }
+    
+    setError(errorMessage);
     if (onAdError) {
-      onAdError('Failed to play video');
+      onAdError(errorMessage);
     }
   };
 
@@ -234,6 +308,18 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
           <Text style={styles.errorTitle}>No Ads Available</Text>
           <Text style={styles.errorText}>
             {error || 'No advertisements are currently scheduled for this slot.'}
+          </Text>
+          <Text style={styles.errorSubtext}>
+            This could be due to:
+          </Text>
+          <Text style={styles.errorSubtext}>
+            • No ads scheduled for this time slot
+          </Text>
+          <Text style={styles.errorSubtext}>
+            • Network connectivity issues
+          </Text>
+          <Text style={styles.errorSubtext}>
+            • Invalid material ID or slot number
           </Text>
           <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
             <Ionicons name="refresh" size={20} color="white" />
@@ -273,6 +359,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
             }
           }}
           onError={handleVideoError}
+          onLoadStart={() => {
+            console.log('Video loading started:', currentAd?.mediaFile);
+          }}
+          onLoad={() => {
+            console.log('Video loaded successfully:', currentAd?.mediaFile);
+          }}
+          onReadyForDisplay={() => {
+            console.log('Video ready for display:', currentAd?.mediaFile);
+          }}
         />
         
         {/* Minimal Ad Info Overlay */}
@@ -335,6 +430,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 20,
+  },
+  errorSubtext: {
+    color: '#95a5a6',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 4,
   },
   refreshButton: {
     flexDirection: 'row',

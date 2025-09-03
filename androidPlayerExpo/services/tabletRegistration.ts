@@ -101,6 +101,33 @@ export class TabletRegistrationService {
     return TabletRegistrationService.instance;
   }
 
+  // Helper method to convert ObjectId to expected materialId format
+  private async convertObjectIdToMaterialId(objectId: string): Promise<string> {
+    try {
+      // Try to fetch the material details from the server to get the actual materialId
+      const response = await fetch(`${API_BASE_URL}/material/${objectId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.material && result.material.materialId) {
+          console.log('Converted ObjectId to materialId:', objectId, '→', result.material.materialId);
+          return result.material.materialId;
+        }
+      }
+    } catch (error) {
+      console.error('Error converting ObjectId to materialId:', error);
+    }
+
+    // If conversion fails, return the original ObjectId but log a warning
+    console.warn('⚠️  Could not convert ObjectId to materialId format. Using ObjectId as fallback.');
+    return objectId;
+  }
+
   async generateDeviceId(): Promise<string> {
     const deviceId = Device.osInternalBuildId || Device.deviceName || 'unknown';
     return `TABLET-${deviceId}-${Date.now()}`;
@@ -219,6 +246,25 @@ export class TabletRegistrationService {
         return true;
       } else {
         console.error('Failed to update tablet status:', result.message);
+        
+        // If tablet not found, try to re-register
+        if (result.message === 'Tablet not found') {
+          console.log('Tablet not found, attempting to re-register...');
+          const reRegisterResult = await this.registerTablet({
+            materialId: this.registration.materialId,
+            slotNumber: this.registration.slotNumber,
+            carGroupId: this.registration.carGroupId
+          });
+          
+          if (reRegisterResult.success) {
+            console.log('Tablet re-registered successfully, retrying status update...');
+            // Retry the status update
+            return await this.updateTabletStatus(isOnline, gps);
+          } else {
+            console.error('Failed to re-register tablet:', reRegisterResult.message);
+          }
+        }
+        
         return false;
       }
     } catch (error) {
@@ -475,13 +521,18 @@ export class TabletRegistrationService {
       // Check if materialId looks like an ObjectId (24 character hex string)
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(materialId);
       
+      let finalMaterialId = materialId;
+      
       if (isObjectId) {
-        console.log('⚠️  Warning: materialId appears to be an ObjectId format, this might cause issues');
+        console.log('⚠️  Warning: materialId appears to be an ObjectId format, attempting conversion');
         console.log('   Expected format: "DGL-HEADDRESS-CAR-001"');
         console.log('   Current format: "' + materialId + '"');
+        
+        // Try to convert ObjectId to proper materialId format
+        finalMaterialId = await this.convertObjectIdToMaterialId(materialId);
       }
 
-      const response = await fetch(`${API_BASE_URL}/ads/${materialId}/${slotNumber}`, {
+      const response = await fetch(`${API_BASE_URL}/ads/${finalMaterialId}/${slotNumber}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
