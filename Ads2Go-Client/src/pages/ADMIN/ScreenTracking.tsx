@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
-import { Icon } from 'leaflet';
+import { Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
+import { LatLngTuple, Map } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+
+// Fix for default markers
+import 'leaflet-defaulticon-compatibility';
+import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
+
+// Import MapView directly since we're not using Next.js
+import MapView from '../../components/MapView';
 import { 
   Clock, 
   Car, 
@@ -13,13 +20,6 @@ import {
   Activity
 } from 'lucide-react';
 
-// Fix for default markers in react-leaflet
-delete (Icon.Default.prototype as any)._getIconUrl;
-Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-  iconUrl: require('leaflet/dist/images/marker-icon.png'),
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-});
 
 interface ScreenStatus {
   deviceId: string;
@@ -113,7 +113,7 @@ const ScreenTracking: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [mapCenter, setMapCenter] = useState([14.5995, 120.9842]); // Manila coordinates
+  const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
   const [zoom, setZoom] = useState(12);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -121,7 +121,7 @@ const ScreenTracking: React.FC = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
 
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<Map | null>(null);
 
   // Fetch materials list
   const fetchMaterials = async () => {
@@ -435,62 +435,61 @@ const ScreenTracking: React.FC = () => {
                 <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
               </div>
               <div className="h-96">
-                <MapContainer
-                  center={mapCenter as [number, number]}
+                <MapView 
+                  center={mapCenter}
                   zoom={zoom}
-                  className="h-full w-full"
-                  ref={mapRef}
+                  onMapLoad={(map: Map) => {
+                    if (mapRef) {
+                      (mapRef as React.MutableRefObject<Map | null>).current = map;
+                    }
+                    // Any map initialization code can go here
+                  }}
                 >
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                  />
                   
-                                     {/* Screen markers */}
-                   {filteredScreens?.map((screen) => (
-                     <Marker
-                       key={screen.deviceId}
-                       position={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0]}
-                       eventHandlers={{
-                         click: () => handleScreenSelect(screen),
-                       }}
-                     >
-                       <CircleMarker
-                         center={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0]}
-                         radius={8}
-                         pathOptions={{
-                           color: getMarkerColor(screen),
-                           fillColor: getMarkerColor(screen),
-                           fillOpacity: 0.7,
-                           weight: 2
-                         }}
-                       />
-                       <Popup>
-                         <div className="p-2">
-                           <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
-                           <p className="text-sm">Material: {screen.materialId}</p>
-                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
-                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
-                           <p className="text-sm">Status: {screen.displayStatus}</p>
-                         </div>
-                       </Popup>
-                     </Marker>
-                   ))}
+                  {/* Screen markers */}
+                  {filteredScreens?.map((screen) => (
+                    <Marker
+                      key={screen.deviceId}
+                      position={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
+                      eventHandlers={{
+                        click: () => handleScreenSelect(screen),
+                      }}
+                    >
+                      <CircleMarker
+                        center={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
+                        radius={8}
+                        pathOptions={{
+                          color: getMarkerColor(screen),
+                          fillColor: getMarkerColor(screen),
+                          fillOpacity: 0.7,
+                          weight: 2
+                        }}
+                      />
+                      <Popup>
+                        <div className="p-2">
+                          <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
+                          <p className="text-sm">Material: {screen.materialId}</p>
+                          <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
+                          <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
+                          <p className="text-sm">Status: {screen.displayStatus}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
                   
                   {/* Path for selected tablet */}
                   {pathData && pathData.locationHistory?.length > 1 && (
                     <Polyline
-                      positions={pathData.locationHistory.map(point => [point.lat, point.lng])}
+                      positions={pathData.locationHistory.map(point => [point.lat, point.lng] as LatLngTuple)}
                       color="#3b82f6"
                       weight={3}
                       opacity={0.7}
                     />
                   )}
-                </MapContainer>
+                </MapView>
               </div>
             </div>
           </div>
-
                        {/* Screen List */}
              <div className="lg:col-span-1">
                <div className="bg-white rounded-lg shadow">

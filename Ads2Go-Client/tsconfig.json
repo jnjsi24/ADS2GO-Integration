@@ -27,6 +27,7 @@
   },
   "include": [
     "src",
-    "src/heroicons.d.ts"
+    "src/heroicons.d.ts",
+    "src/types"
   ]
 }
