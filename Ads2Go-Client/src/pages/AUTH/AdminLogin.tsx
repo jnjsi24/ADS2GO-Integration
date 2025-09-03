@@ -35,13 +35,28 @@ const AdminLogin: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0A192F] px-4">
-      <div className="bg-white rounded-2xl shadow-xl p-12 w-full max-w-xl">
-        <div className="text-center mb-10">
-          <img alt="Ads2Go Logo" className="mx-auto my-5 w-32 h-32" />
-          <h2 className="text-xl font-semibold text-gray-800">Admin Login</h2>
-        </div>
+    <div className="relative flex min-h-screen bg-[#fdfdfd]">
+      {/* Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="fixed top-1/2 left-10 -translate-y-1/2 w-[50vw] h-auto object-cover "
+      >
+        <source src="/image/admin.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      
+      {/* Dark overlay for video */}
+      <div className="absolute inset-0"></div>
 
+      {/* Form Container */}
+      <div className="relative z-10 w-full max-w-xl ml-auto mr-28 flex flex-col justify-center px-10">
+        <div className="p-8 rounded-xl shadow-xl bg-[#fdfdfd]">
+          <div className="flex items-center space-x-2 mb-6">
+            <h1 className="text-5xl font-extrabold text-black">Admin Log in</h1>
+          </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-gray-700 font-semibold mb-2 text-lg">Email</label>
@@ -49,7 +64,7 @@ const AdminLogin: React.FC = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-6 py-4 rounded-lg bg-[#CBF3F0] text-black placeholder:text-black text-base focus:outline-none"
+              className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
               placeholder="admin@example.com"
               autoComplete="email"
               required
@@ -63,7 +78,7 @@ const AdminLogin: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-6 py-4 rounded-lg bg-[#CBF3F0] text-black placeholder:text-black text-base focus:outline-none"
+                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
                 placeholder="••••••••••••••••••••"
                 autoComplete="current-password"
                 required
@@ -100,6 +115,7 @@ const AdminLogin: React.FC = () => {
           </button>
         </form>
       </div>
+    </div>
     </div>
   );
 };

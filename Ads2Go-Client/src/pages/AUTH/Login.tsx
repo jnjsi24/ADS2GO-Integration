@@ -160,9 +160,9 @@ const Login: React.FC = () => {
             </button>
             <div className="text-center mt-6">
               <span className="text-gray-800">Don't have an account?</span>
-              <button onClick={handleRegisterClick} className="text-blue-600 ml-1 hover:underline">
+              <a href="/register" className="text-blue-600 ml-1 hover:underline">
                 Sign up
-              </button>
+              </a>
             </div>
           </form>
         </div>
