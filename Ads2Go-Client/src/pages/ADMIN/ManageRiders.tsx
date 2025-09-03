@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, gql } from '@apollo/client';
-import { ChevronDown, Edit, X, Eye, User } from 'lucide-react';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { X, Eye, User } from 'lucide-react';
 
 // === GraphQL ===
 const GET_ALL_DRIVERS = gql`
@@ -206,14 +205,14 @@ const DocumentImage: React.FC<{
 
 const ManageRiders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'PENDING'>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDriverDetails, setSelectedDriverDetails] = useState<Driver | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [driverToReject, setDriverToReject] = useState<string | null>(null);
+  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
 
   // Apollo hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
@@ -257,9 +256,7 @@ const ManageRiders: React.FC = () => {
                          r.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          r.contactNumber.includes(searchTerm) ||
                          r.driverId.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || r.accountStatus === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   // Actions
@@ -277,6 +274,30 @@ const ManageRiders: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Error approving driver:', error);
+      alert(error.message || 'Failed to approve driver');
+    }
+  };
+
+  // Approve with selected materials from popup
+  const handleConfirmApproveWithMaterials = async () => {
+    if (!selectedDriverDetails) return;
+    try {
+      const override = selectedMaterials.length > 0 ? selectedMaterials : null;
+      const result = await approveDriver({
+        variables: { driverId: selectedDriverDetails.driverId, materialTypeOverride: override }
+      });
+
+      if (result.data?.approveDriver?.success) {
+        alert(result.data.approveDriver.message);
+        setShowMaterialModal(false);
+        setShowDetailsModal(false);
+        setSelectedMaterials([]);
+        refetch();
+      } else {
+        alert(result.data?.approveDriver?.message || 'Failed to approve driver');
+      }
+    } catch (error: any) {
+      console.error('Error approving driver with materials:', error);
       alert(error.message || 'Failed to approve driver');
     }
   };
@@ -375,8 +396,8 @@ const ManageRiders: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-800">Drivers List</h1>
       </div>
 
-      {/* Search + Filter */}
-      <div className="flex justify-between items-center mb-4">
+      {/* Search */}
+      <div className="flex justify-start items-center mb-4">
         <input
           type="text"
           className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md border border-gray-400 focus:outline-none bg-white"
@@ -384,15 +405,6 @@ const ManageRiders: React.FC = () => {
           value={searchTerm}
           onChange={e => setSearchTerm(e.target.value)}
         />
-        <select
-          className="text-sm text-black rounded-xl pl-5 py-3 pr-8 w-48 shadow-md border border-gray-400 focus:outline-none bg-white"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as 'all' | 'ACTIVE' | 'PENDING')}
-        >
-          <option value="all">All Status</option>
-          <option value="ACTIVE">Active</option>
-          <option value="PENDING">Pending</option>
-        </select>
       </div>
 
       {/* Table */}
@@ -457,7 +469,7 @@ const ManageRiders: React.FC = () => {
                     <Eye size={12} />
                   </button>
                   
-                  {r.accountStatus === 'PENDING' ? (
+                  {r.accountStatus === 'PENDING' && (
                     <>
                       <button
                         className="bg-green-500 text-white text-xs px-2 py-1 rounded hover:bg-green-600"
@@ -474,66 +486,62 @@ const ManageRiders: React.FC = () => {
                         ✕
                       </button>
                     </>
-                  ) : (
-                    <button
-                      onClick={() => setExpandedId(expandedId === r.driverId ? null : r.driverId)}
-                      className="text-gray-500 hover:text-gray-700"
-                      title="Toggle details"
-                    >
-                      <ChevronDown size={16} className={`transition-transform ${expandedId === r.driverId ? 'rotate-180' : ''}`} />
-                    </button>
                   )}
-                  
-                  <button
-                    className="bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700"
-                    onClick={() => handleDelete(r.driverId)}
-                    title="Delete"
-                  >
-                    <TrashIcon className="w-3 h-3" />
-                  </button>
                 </div>
               </div>
-
-              {expandedId === r.driverId && (
-                <div className="bg-gray-50 p-6">
-                  <div className="flex items-center gap-4 mb-4">
-                    <ProfilePicture driver={r} size="md" />
-                    <h3 className="text-lg font-bold">{r.firstName} {r.lastName}</h3>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p><strong>Email:</strong> {r.email}</p>
-                      <p><strong>Contact:</strong> {r.contactNumber}</p>
-                      <p><strong>Address:</strong> {r.address || 'N/A'}</p>
-                      <p><strong>License Number:</strong> {r.licenseNumber || 'N/A'}</p>
-                      <p><strong>Date Joined:</strong> {formatDate(r.dateJoined)}</p>
-                      {r.approvalDate && <p><strong>Approval Date:</strong> {formatDate(r.approvalDate)}</p>}
-                    </div>
-                    <div>
-                      <p><strong>Vehicle:</strong> {r.vehicleType} {r.vehicleModel}</p>
-                      <p><strong>Plate Number:</strong> {r.vehiclePlateNumber}</p>
-                      <p><strong>Material Type:</strong> {r.installedMaterialType || 'N/A'}</p>
-                      {r.material && (
-                        <>
-                          <p><strong>Material ID:</strong> {r.material.materialId}</p>
-                          <p><strong>Material Category:</strong> {r.material.category}</p>
-                        </>
-                      )}
-                      {r.rejectedReason && <p><strong>Rejection Reason:</strong> {r.rejectedReason}</p>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      className="p-1 text-gray-500 rounded-full hover:bg-gray-200"
-                      onClick={() => setExpandedId(null)}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
+              
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Material Selection Modal */}
+      {showMaterialModal && selectedDriverDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full m-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Select Material Type(s)</h2>
+              <button
+                onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-3">Choose one or more materials to approve for this driver. If you leave it empty, the current server default will be used.</p>
+
+            <div className="grid grid-cols-1 gap-2 mb-4">
+              {['CAR_TOP', 'CAR_BODY', 'TRICYCLE_REAR', 'BICYCLE_FRAME', 'MOTORCYCLE_SIDE', 'OTHER'].map((m) => (
+                <label key={m} className="flex items-center gap-3 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selectedMaterials.includes(m)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setSelectedMaterials(prev => checked ? [...prev, m] : prev.filter(x => x !== m));
+                    }}
+                  />
+                  <span>{m.replace('_', ' ')}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                onClick={() => { setShowMaterialModal(false); setSelectedMaterials([]); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={handleConfirmApproveWithMaterials}
+              >
+                Confirm Approve
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -644,8 +652,8 @@ const ManageRiders: React.FC = () => {
                 <button
                   className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600"
                   onClick={() => {
-                    handleApprove(selectedDriverDetails.driverId);
-                    setShowDetailsModal(false);
+                    setSelectedMaterials([]);
+                    setShowMaterialModal(true);
                   }}
                 >
                   Approve Driver
@@ -659,14 +667,26 @@ const ManageRiders: React.FC = () => {
                 >
                   Reject Driver
                 </button>
+              </div>
+            )}
+
+            {/* Footer actions for non-pending drivers */}
+            {selectedDriverDetails.accountStatus !== 'PENDING' && (
+              <div className="flex gap-3 justify-end mt-6 pt-4 border-t">
                 <button
-                  className="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700"
+                  className="px-4 py-2 text-red-600 border border-red-600 rounded hover:bg-red-50"
                   onClick={() => {
                     setShowDetailsModal(false);
                     handleDelete(selectedDriverDetails.driverId);
                   }}
                 >
                   Delete Driver
+                </button>
+                <button
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+                  onClick={() => setShowDetailsModal(false)}
+                >
+                  Close
                 </button>
               </div>
             )}

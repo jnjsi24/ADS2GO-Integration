@@ -199,10 +199,17 @@ module.exports = {
         const { materialId, slotNumber, carGroupId } = input;
         
         console.log('Unregistering tablet for materialId:', materialId, 'slotNumber:', slotNumber);
+
+        // Normalize materialId to handle accidental trailing commas/spaces
+        const normalizedMaterialId = String(materialId).trim().replace(/,+$/, '');
         
         // Find tablet by materialId (as string)
-        const tablet = await Tablet.findOne({ materialId });
-        console.log('Found tablet by materialId:', materialId, 'Tablet:', tablet ? 'Found' : 'Not found');
+        let tablet = await Tablet.findOne({ materialId: normalizedMaterialId });
+        if (!tablet) {
+          // Fallback: regex to match value with optional trailing comma stored in DB
+          tablet = await Tablet.findOne({ materialId: { $regex: `^${normalizedMaterialId},?$` } });
+        }
+        console.log('Found tablet by materialId:', normalizedMaterialId, 'Tablet:', tablet ? 'Found' : 'Not found');
         
         if (!tablet) {
           return {
@@ -218,7 +225,8 @@ module.exports = {
           };
         }
 
-        const tabletUnit = tablet.tablets[slotNumber - 1]; // slotNumber is 1-based
+        const tabletIndex = slotNumber - 1; // slotNumber is 1-based
+        const tabletUnit = tablet.tablets[tabletIndex];
         if (!tabletUnit) {
           return {
             success: false,
@@ -233,11 +241,14 @@ module.exports = {
           };
         }
 
-        // Clear the device connection
-        delete tabletUnit.deviceId; // Remove deviceId field instead of setting to null
-        tabletUnit.status = 'OFFLINE';
-        tabletUnit.gps = { lat: null, lng: null };
-        tabletUnit.lastSeen = null;
+        // Replace the slot object entirely to ensure Mongoose persists removal of deviceId
+        tablet.tablets[tabletIndex] = {
+          tabletNumber: slotNumber,
+          // deviceId intentionally omitted
+          status: 'OFFLINE',
+          lastSeen: null,
+          gps: { lat: null, lng: null }
+        };
 
         await tablet.save();
 
