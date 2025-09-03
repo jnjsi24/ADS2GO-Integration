@@ -214,7 +214,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
   const companyAd = {
     adId: 'company-ad',
     adTitle: 'Ads2Go',
-    mediaFile: 'https://firebasestorage.googleapis.com/v0/b/ads2go-6ead4.firebasestorage.app/o/advertisements%2Fcomapanyads.mp4?alt=media',
+    mediaFile: 'https://firebasestorage.googleapis.com/v0/b/ads2go-6ead4.appspot.com/o/advertisements%2Fcomapanyads.mp4?alt=media',
     duration: 15
   };
 
