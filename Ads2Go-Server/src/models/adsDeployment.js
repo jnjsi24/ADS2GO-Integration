@@ -146,6 +146,114 @@ AdsDeploymentSchema.statics.getNextAvailableSlot = async function(materialId, dr
   return null;
 };
 
+// Static method to add ad to HEADDRESS material (shared across tablet slots)
+AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId, adId, startTime, endTime) {
+  try {
+    console.log(`🔄 Starting HEADDRESS deployment for ad ${adId} on material ${materialId}`);
+    
+    // Input validation
+    if (!materialId || typeof materialId !== 'string') {
+      throw new Error('Invalid materialId - must be a string');
+    }
+    if (!driverId) {
+      throw new Error('driverId is required');
+    }
+    if (!mongoose.Types.ObjectId.isValid(adId)) {
+      throw new Error('Invalid adId');
+    }
+    if (!startTime || !endTime) {
+      throw new Error('startTime and endTime are required');
+    }
+
+    // Find existing deployment for this material-driver
+    let deployment = await this.findOne({ materialId, driverId });
+    
+    // If no deployment exists, create a new one
+    if (!deployment) {
+      console.log(`ℹ️  No existing deployment found, creating new one for material ${materialId}`);
+      deployment = new this({
+        materialId,
+        driverId,
+        lcdSlots: []
+      });
+    }
+
+    // Convert adId to string for comparison
+    const adIdStr = adId.toString();
+    
+    // Check if the adId already exists in the current deployment
+    const isAdAlreadyDeployed = deployment.lcdSlots.some(slot => {
+      const slotAdId = slot.adId?.toString();
+      return slotAdId === adIdStr;
+    });
+    
+    if (isAdAlreadyDeployed) {
+      throw new Error(`Ad ${adId} is already deployed on this HEADDRESS material.`);
+    }
+
+    // Check next available slot (1-5 limit still applies)
+    const activeSlots = deployment.lcdSlots
+      .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
+      .map(slot => slot.slotNumber);
+
+    console.log(`ℹ️  Active slots: ${activeSlots.join(', ') || 'none'}`);
+
+    let nextSlot = null;
+    for (let i = 1; i <= 5; i++) {
+      if (!activeSlots.includes(i)) {
+        nextSlot = i;
+        break;
+      }
+    }
+    
+    if (!nextSlot) {
+      throw new Error('All HEADDRESS slots (1-5) are currently occupied.');
+    }
+
+    console.log(`ℹ️  Next available slot: ${nextSlot}`);
+
+    // Fetch the ad to get the mediaFile
+    const Ad = require('./Ad');
+    const ad = await Ad.findById(adId);
+    if (!ad) {
+      throw new Error(`Ad ${adId} not found`);
+    }
+
+    // Create new ad slot (this slot number is just for tracking, both tablet slots will use this ad)
+    const newSlot = {
+      adId,
+      slotNumber: nextSlot,
+      startTime: new Date(startTime),
+      endTime: new Date(endTime),
+      status: new Date(startTime) <= new Date() ? 'RUNNING' : 'SCHEDULED',
+      deployedAt: new Date(startTime) <= new Date() ? new Date() : null,
+      mediaFile: ad.mediaFile
+    };
+    
+    console.log(`ℹ️  Creating new slot:`, newSlot);
+    
+    // Add the new slot
+    deployment.lcdSlots.push(newSlot);
+
+    // Save the deployment
+    const savedDeployment = await deployment.save();
+    
+    console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on HEADDRESS material ${materialId} (available to both tablet slots)`);
+    return savedDeployment;
+    
+  } catch (error) {
+    console.error(`❌ Error in addToHEADDRESS: ${error.message}`, {
+      materialId,
+      driverId,
+      adId,
+      startTime,
+      endTime,
+      error: error.stack
+    });
+    throw error; // Re-throw to be handled by the caller
+  }
+};
+
 // Static method to add ad to LCD material (single deployment per LCD)
 AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId, startTime, endTime) {
   try {

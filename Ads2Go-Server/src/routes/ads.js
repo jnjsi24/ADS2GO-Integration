@@ -59,90 +59,81 @@ router.get('/deployments', async (req, res) => {
         });
       }
 
-      // Find ad deployments for this material and slot
+      // Find all active ad deployments for this material (shared across all slots)
       const currentTime = new Date();
-      console.log('Searching for deployment with criteria:', {
+      const requestedSlotNumber = parseInt(slotNumber);
+      
+      console.log('Searching for deployments for material:', {
         materialId: materialId,
-        slotNumber: parseInt(slotNumber),
+        requestedSlotNumber: requestedSlotNumber,
         currentTime: currentTime.toISOString()
       });
       
-      const deployment = await AdsDeployment.findOne({
+      // Find all deployments for this material with running ads
+      const deployments = await AdsDeployment.find({
         materialId: materialId,
-        'lcdSlots.slotNumber': parseInt(slotNumber),
         'lcdSlots.status': 'RUNNING',
         'lcdSlots.startTime': { $lte: currentTime },
         'lcdSlots.endTime': { $gte: currentTime }
       }).populate('lcdSlots.adId');
       
-      console.log('Deployment found:', deployment ? 'Yes' : 'No');
-      if (deployment) {
-        console.log('Deployment details:', {
+      console.log('Found deployments for material:', deployments.length);
+      
+      if (deployments.length === 0) {
+        console.log(`No active deployments found for material ${materialId}`);
+        return res.json({
+          success: true,
+          ads: [],
+          message: 'No ads deployed for this material'
+        });
+      }
+
+      // Collect all active ads from all deployments
+      const allActiveAds = [];
+      
+      deployments.forEach(deployment => {
+        console.log('Processing deployment:', {
           id: deployment._id,
           materialId: deployment.materialId,
-          lcdSlotsCount: deployment.lcdSlots.length,
-          slots: deployment.lcdSlots.map(s => ({
-            slotNumber: s.slotNumber,
-            status: s.status,
-            startTime: s.startTime,
-            endTime: s.endTime
-          }))
+          lcdSlotsCount: deployment.lcdSlots.length
         });
-      }
-
-      if (!deployment) {
-        console.log(`No deployment found for material ${materialId}, slot ${slotNumber}`);
-        return res.json({
-          success: true,
-          ads: [],
-          message: 'No ads deployed for this material and slot'
+        
+        deployment.lcdSlots.forEach(slot => {
+          if (slot.status === 'RUNNING' && 
+              slot.startTime <= currentTime && 
+              slot.endTime >= currentTime && 
+              slot.adId) {
+            
+            console.log('Found active ad in slot:', {
+              slotNumber: slot.slotNumber,
+              adId: slot.adId._id,
+              adTitle: slot.adId.title
+            });
+            
+            allActiveAds.push({
+              adId: slot.adId._id.toString(),
+              adDeploymentId: deployment._id.toString(),
+              slotNumber: requestedSlotNumber, // Always return the requested slot number
+              startTime: slot.startTime.toISOString(),
+              endTime: slot.endTime.toISOString(),
+              status: slot.status,
+              mediaFile: slot.mediaFile,
+              adTitle: slot.adId.title,
+              adDescription: slot.adId.description || '',
+              duration: slot.adId.adLengthSeconds || 30,
+              createdAt: slot.createdAt,
+              updatedAt: slot.updatedAt
+            });
+          }
         });
-      }
+      });
 
-      // Find the specific slot
-      const slot = deployment.lcdSlots.find(s => s.slotNumber === parseInt(slotNumber));
-      if (!slot) {
-        console.log(`Slot ${slotNumber} not found in deployment`);
-        return res.json({
-          success: true,
-          ads: [],
-          message: 'Slot not found in deployment'
-        });
-      }
-
-      // Get the ad details
-      const ad = slot.adId;
-      if (!ad) {
-        console.log(`Ad not found for slot ${slotNumber}`);
-        return res.json({
-          success: true,
-          ads: [],
-          message: 'Ad not found'
-        });
-      }
-
-      // Transform to match the mobile app's expected format
-      const transformedAds = [{
-        adId: ad._id.toString(),
-        adDeploymentId: deployment._id.toString(),
-        slotNumber: parseInt(slotNumber),
-        startTime: slot.startTime.toISOString(),
-        endTime: slot.endTime.toISOString(),
-        status: slot.status,
-        mediaFile: slot.mediaFile,
-        adTitle: ad.title,
-        adDescription: ad.description || '',
-        duration: ad.adLengthSeconds || 30,
-        createdAt: slot.createdAt,
-        updatedAt: slot.updatedAt
-      }];
-
-      console.log(`Found ${transformedAds.length} ads for material ${materialId}, slot ${slotNumber}`);
+      console.log(`Found ${allActiveAds.length} active ads for material ${materialId}, slot ${requestedSlotNumber}`);
 
       res.json({
         success: true,
-        ads: transformedAds,
-        message: `Found ${transformedAds.length} ads`
+        ads: allActiveAds,
+        message: `Found ${allActiveAds.length} ads`
       });
 
     } catch (error) {
