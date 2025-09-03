@@ -37,114 +37,135 @@ const Login: React.FC = () => {
   }, [navigateToRegister]);
 
   return (
-    <div className="flex min-h-screen bg-white">
-      <div className="w-full md:w-1/2 flex flex-col justify-center px-10">
-        <div className="mb-10">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Artificial Intelligence Driving Results For The Travel Industry
-          </h1>
-          <p className="text-sm text-gray-500 mt-2">
-            Welcome back! Please login to your account.
-          </p>
-        </div>
+    <div className="relative flex min-h-screen bg-[#fdfdfd]">
+      {/* Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover"
+      >
+        <source src="/image/login.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      
+      {/* Dark overlay for video */}
+      <div className="absolute inset-0"></div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+      {/* Form Container */}
+      <div className="relative z-10 w-full max-w-xl ml-auto mr-12 flex flex-col justify-center px-10">
+        <div className="p-8 rounded-xl shadow-2xl bg-[#fdfdfd]">
+          <div className="flex items-center space-x-2 mb-6">
+            <h1 className="text-5xl font-extrabold text-black">Log in</h1>
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          {/* Social Sign-in Buttons */}
+          <div className="flex space-x-2 mb-6">
+            <button
+              type="button"
+              className="flex-1 flex items-center justify-center py-2 px-4 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
+            >
+              <img
+                src="/image/g.png"
+                alt="Google logo"
+                className="h-5 w-5 mr-2"
               />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-3 flex items-center"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <EyeIcon className="h-5 w-5 text-gray-500" />
-                )}
+
+              <span>Sign in with Google</span>
+            </button>
+            <button
+              type="button"
+              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
+            >
+             <img
+                src="/image/f.png"
+                alt="Facebook logo"
+                className="h-5 w-5"
+              />
+
+            </button>
+            <button
+              type="button"
+              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
+            >
+              <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-5 w-5" />
+            </button>
+          </div>
+
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                id="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label htmlFor="password" className="block text-md text-gray-700 font-semibold">
+                  Password
+                </label>
+                <Link to="/forgot-password" className="text-blue-500 hover:underline text-sm font-semibold">
+                  Forgot Password?
+                </Link>
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeSlashIcon className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5 text-gray-500" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className={`w-full py-3 px-4 rounded-lg shadow-md transition-colors ${
+                isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              } text-white font-semibold text-lg`}
+            >
+              {isLoggingIn ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Logging in...
+                </div>
+              ) : (
+                'Log in'
+              )}
+            </button>
+            <div className="text-center mt-6">
+              <span className="text-gray-800">Don't have an account?</span>
+              <button onClick={handleRegisterClick} className="text-blue-600 ml-1 hover:underline">
+                Sign up
               </button>
             </div>
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          <div className="flex justify-between items-center text-sm">
-            <label className="flex items-center">
-              <input type="checkbox" className="mr-2" />
-              Remember Me
-            </label>
-            <Link to="/forgot-password" className="text-indigo-600 hover:underline">
-              Forgot Password?
-            </Link>
-          </div>
-
-                     <button
-             type="submit"
-             disabled={isLoggingIn}
-             className="w-full bg-teal-500 hover:bg-teal-600 disabled:bg-teal-300 text-white py-2 rounded-md transition"
-           >
-             {isLoggingIn ? (
-               <div className="flex items-center justify-center">
-                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                 Logging in...
-               </div>
-             ) : (
-               'Login'
-             )}
-           </button>
-        </form>
-
-        <p className="text-sm mt-4 text-gray-600">
-          Don't have an account?{' '}
-          <button onClick={handleRegisterClick} className="text-indigo-600 hover:underline">
-            Sign Up
-          </button>
-        </p>
-      </div>
-
-      <div className="hidden md:flex w-1/2 flex-col relative bg-[#0e2a47]">
-        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center text-white">
-          <div className="text-xl font-bold">Ads2Go</div>
-          <nav className="space-x-6">
-            <Link to="/" className="text-indigo-400 underline">
-              Home
-            </Link>
-            <Link to="/about" className="hover:text-indigo-300">
-              About us
-            </Link>
-            <Link to="/blog" className="hover:text-indigo-300">
-              Blog
-            </Link>
-            <Link to="/pricing" className="hover:text-indigo-300">
-              Pricing
-            </Link>
-          </nav>
+          </form>
         </div>
-        <img src="/image/image.jpeg" alt="Scooter Advertisement" className="w-full h-full object-cover" />
       </div>
     </div>
   );
