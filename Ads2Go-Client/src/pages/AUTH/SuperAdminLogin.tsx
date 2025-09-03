@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, gql } from '@apollo/client';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { LOGIN_SUPERADMIN_MUTATION } from '../../graphql/superadmin'; // ✅ UPDATED
 
 
@@ -9,7 +9,7 @@ import { LOGIN_SUPERADMIN_MUTATION } from '../../graphql/superadmin'; // ✅ UPD
 
 const SuperAdminLogin: React.FC = () => {
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { setAdmin } = useAdminAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,10 +20,15 @@ const SuperAdminLogin: React.FC = () => {
       console.log('SuperAdmin login successful:', data);
       
       if (data?.loginSuperAdmin?.token) {
-        localStorage.setItem('token', data.loginSuperAdmin.token);
+        localStorage.setItem('adminToken', data.loginSuperAdmin.token);
         localStorage.setItem('role', data.loginSuperAdmin.superAdmin.role || 'SUPERADMIN'); // from backend
 
-        setUser({ ...data.loginSuperAdmin.superAdmin }); // use backend role
+        // Transform the GraphQL response to match the Admin interface
+        const adminData = {
+          ...data.loginSuperAdmin.superAdmin,
+          userId: data.loginSuperAdmin.superAdmin.id, // Map id to userId
+        };
+        setAdmin(adminData); // use backend role
 
         navigate('/sadmin-dashboard');
       } else {

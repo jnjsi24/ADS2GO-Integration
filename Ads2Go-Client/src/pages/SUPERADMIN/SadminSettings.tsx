@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { User, Lock, Bell, CheckCircle } from 'lucide-react';
 
 // Function to get initials from name
@@ -23,7 +23,7 @@ type Toast = {
 };
 
 const SadminSettings: React.FC = () => {
-  const { user } = useAuth();
+  const { admin } = useAdminAuth();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Security and Privacy');

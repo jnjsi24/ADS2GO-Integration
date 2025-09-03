@@ -1,7 +1,7 @@
 // src/components/SadminNavbar.tsx
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
-  const { logout, user } = useAuth(); // Use the useAuth hook
+  const { logout, admin } = useAdminAuth(); // Use the useAdminAuth hook
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -64,19 +64,19 @@ const SadminNavbar: React.FC = () => {
       <div className="pt-4 border-t border-gray-600 text-sm text-gray-200 flex flex-col">
         {/* Profile Section */}
         <div className="flex items-center gap-3 pb-4 mb-4 cursor-pointer" onClick={() => navigate('/sadmin-account')}> {/* Assuming settings page is shared or sadmin has a dedicated one */}
-          {user?.profilePicture ? ( // Assuming user object might have a profilePicture
+          {admin?.profilePicture ? ( // Assuming admin object might have a profilePicture
             <img
-              src={user.profilePicture}
+              src={admin.profilePicture}
               alt="Profile"
               className="rounded-full w-10 h-10 object-cover"
             />
           ) : (
             <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : '?'}
+              {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
             </div>
           )}
           <div className="font-semibold text-white">
-            {user ? `${user.firstName || ''} ${user.lastName || ''}` : 'SuperAdmin User'}
+            {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
           </div>
         </div>
 

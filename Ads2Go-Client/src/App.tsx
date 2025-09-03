@@ -318,7 +318,8 @@ const AppContent: React.FC = () => {
   // Check if we're on admin routes to determine which content to show
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
-                      location.pathname === '/admin-login';
+                      location.pathname === '/admin-login' ||
+                      location.pathname === '/superadmin-login';
   
     if (isAdminRoute) {
     return <AdminAppContent />;
@@ -334,7 +335,8 @@ const App: React.FC = () => {
   // Check if we're on admin-related routes
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
-                      location.pathname === '/admin-login';
+                      location.pathname === '/admin-login' ||
+                      location.pathname === '/superadmin-login';
   
   // Check if we're on user-related routes
   const isUserRoute = location.pathname.startsWith('/dashboard') || 

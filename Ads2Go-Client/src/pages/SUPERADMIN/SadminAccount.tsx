@@ -2,13 +2,13 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil } from "lucide-react";
 import { BellIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useMutation } from "@apollo/client";
 import { toast } from 'sonner';
 import { UPDATE_SUPER_ADMIN_DETAIL } from "../../graphql/superadmin";
 
-// Define the structure for user data from useAuth
-interface UserData {
+// Define the structure for admin data from useAdminAuth
+interface AdminData {
   userId: string;
   email: string;
   role: string;
@@ -44,7 +44,7 @@ const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user, setUser } = useAuth() as { user: UserData | null; setUser: (user: UserData | null) => void };
+  const { admin, setAdmin } = useAdminAuth() as { admin: AdminData | null; setAdmin: (admin: AdminData | null) => void };
   
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -72,37 +72,37 @@ const Account: React.FC = () => {
 
   // Populate form with user data from AuthContext
   useEffect(() => {
-    console.log('User object from AuthContext:', user);
-    if (user) {
-      console.log('User ID:', user.userId);
-      const initialContactNumber = user.contactNumber && user.contactNumber.startsWith("+63 ")
-        ? user.contactNumber
-        : (user.contactNumber ? `+63 ${user.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+    console.log('Admin object from AdminAuthContext:', admin);
+    if (admin) {
+      console.log('Admin ID:', admin.userId);
+      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
+        ? admin.contactNumber
+        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
 
       setFormData({
-        firstName: user.firstName || "",
-        middleName: user.middleName || "",
-        lastName: user.lastName || "",
-        companyName: user.companyName || "",
-        companyAddress: user.companyAddress || "",
+        firstName: admin.firstName || "",
+        middleName: admin.middleName || "",
+        lastName: admin.lastName || "",
+        companyName: admin.companyName || "",
+        companyAddress: admin.companyAddress || "",
         contactNumber: initialContactNumber,
-        email: user.email || "",
-        profilePicture: user.profilePicture || `https://placehold.co/100x100/F3A26D/FFFFFF?text=${getInitials(user.firstName, user.lastName)}`,
-        city: user.houseAddress || "",
+        email: admin.email || "",
+        profilePicture: admin.profilePicture || `https://placehold.co/100x100/F3A26D/FFFFFF?text=${getInitials(admin.firstName, admin.lastName)}`,
+        city: admin.houseAddress || "",
         state: "New York",
-        postalCode: user.postalCode || "",
+        postalCode: admin.postalCode || "",
         country: "United States",
       });
     }
-  }, [user]);
+  }, [admin]);
 
   useEffect(() => {
-    console.log('User object updated:', user);
-    if (user) {
-      console.log('User ID in effect:', user.userId);
-      console.log('User keys:', Object.keys(user));
+    console.log('Admin object updated:', admin);
+    if (admin) {
+      console.log('Admin ID in effect:', admin.userId);
+      console.log('Admin keys:', Object.keys(admin));
     }
-  }, [user]);
+  }, [admin]);
 
   useEffect(() => {
     console.log('Form validation errors:', errors);
@@ -136,10 +136,10 @@ const Account: React.FC = () => {
   const [updateAdminDetails] = useMutation(UPDATE_SUPER_ADMIN_DETAIL, {
     onCompleted: (data) => {
       if (data.updateAdminDetails.success) {
-        // Update the user in the auth context
-        if (user) {
-          setUser({
-            ...user,
+        // Update the admin in the auth context
+        if (admin) {
+          setAdmin({
+            ...admin,
             ...data.updateAdminDetails.user,
           });
         }
@@ -161,9 +161,9 @@ const Account: React.FC = () => {
     e.preventDefault(); // Prevent default form submission
     console.log('Update button clicked');
     
-    if (!user?.userId) {
-      console.error('User ID is missing');
-      toast.error("User ID is missing. Please try again.");
+    if (!admin?.userId) {
+      console.error('Admin ID is missing');
+      toast.error("Admin ID is missing. Please try again.");
       return;
     }
     
@@ -191,11 +191,11 @@ const Account: React.FC = () => {
         if (formData.companyName) input.companyName = formData.companyName;
         if (formData.companyAddress) input.companyAddress = formData.companyAddress;
         
-        console.log('Sending update request with:', { adminId: user.userId, input });
+        console.log('Sending update request with:', { adminId: admin.userId, input });
         
         const { data } = await updateAdminDetails({
           variables: {
-            adminId: user.userId,
+            adminId: admin.userId,
             input
           },
         });
@@ -204,9 +204,9 @@ const Account: React.FC = () => {
 
         if (data?.updateAdminDetails?.success) {
           console.log('Update successful, updating user context...');
-          // Update the user context with the new data
-          setUser({
-            ...user,
+          // Update the admin context with the new data
+          setAdmin({
+            ...admin,
             ...data.updateAdminDetails.user,
           });
           
@@ -252,24 +252,24 @@ const Account: React.FC = () => {
   };
 
   const handleCancel = () => {
-    // Reset form data to current user data if available
-    if (user) {
-      const initialContactNumber = user.contactNumber && user.contactNumber.startsWith("+63 ")
-        ? user.contactNumber
-        : (user.contactNumber ? `+63 ${user.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+    // Reset form data to current admin data if available
+    if (admin) {
+      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
+        ? admin.contactNumber
+        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
 
       setFormData({
-        firstName: user.firstName || "",
-        middleName: user.middleName || "",
-        lastName: user.lastName || "",
-        companyName: user.companyName || "",
-        companyAddress: user.companyAddress || "",
+        firstName: admin.firstName || "",
+        middleName: admin.middleName || "",
+        lastName: admin.lastName || "",
+        companyName: admin.companyName || "",
+        companyAddress: admin.companyAddress || "",
         contactNumber: initialContactNumber,
-        email: user.email || "",
-        profilePicture: user.profilePicture || `https://placehold.co/100x100/F3A26D/FFFFFF?text=${getInitials(user.firstName, user.lastName)}`,
-        city: user.houseAddress || "",
+        email: admin.email || "",
+        profilePicture: admin.profilePicture || `https://placehold.co/100x100/F3A26D/FFFFFF?text=${getInitials(admin.firstName, admin.lastName)}`,
+        city: admin.houseAddress || "",
         state: "New York",
-        postalCode: user.postalCode || "",
+        postalCode: admin.postalCode || "",
         country: "United States",
       });
     }
@@ -306,7 +306,7 @@ const Account: React.FC = () => {
               </label>
             )}
           </div>
-          <p className="text-2xl font-semibold">{user?.firstName} {user?.lastName}</p>
+          <p className="text-2xl font-semibold">{admin?.firstName} {admin?.lastName}</p>
           <button
             onClick={() => {
               // If not editing, enter edit mode, then trigger file input click

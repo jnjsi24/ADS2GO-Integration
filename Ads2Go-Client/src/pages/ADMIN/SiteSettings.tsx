@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useMutation } from '@apollo/client';
 import { toast } from 'sonner';
 import { UPDATE_ADMIN_USER } from '../../graphql/admin';
@@ -39,7 +39,7 @@ interface AccountFormState {
 }
 
 const SiteSettings: React.FC = () => {
-  const { user, setUser } = useAuth();
+  const { admin, setAdmin } = useAdminAuth();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Account Settings');
@@ -59,18 +59,18 @@ const SiteSettings: React.FC = () => {
   });
   // State for Account Settings form
   const [accountForm, setAccountForm] = useState<AccountFormState>({
-    firstName: user?.firstName || '',
-    middleName: user?.middleName,
-    lastName: user?.lastName || '',
+    firstName: admin?.firstName || '',
+    middleName: admin?.middleName,
+    lastName: admin?.lastName || '',
     title: 'CEO',
     practice: 'Finance',
     branch: 'Quezon City',
-    email: user?.email || 'ceo@yes.com',
-    contactNumber: user?.contactNumber,
-    loginId: `id/${user?.email?.split('@')[0] || 'ceo'}`,
+    email: admin?.email || 'ceo@yes.com',
+    contactNumber: admin?.contactNumber,
+    loginId: `id/${admin?.email?.split('@')[0] || 'ceo'}`,
     statusHistory: 'Active',
-    companyName: user?.companyName,
-    houseAddress: user?.houseAddress,
+    companyName: admin?.companyName,
+    houseAddress: admin?.houseAddress,
   });
 
   const initialAccountFormRef = useRef(accountForm);
@@ -90,11 +90,11 @@ const SiteSettings: React.FC = () => {
       console.log('Mutation response:', data);
       if (data?.updateAdminDetails?.success) {
         console.log('Update successful, new user data:', data.updateAdminDetails.user);
-        // Update the user context with the new data
-        setUser({
-          ...(user || {}),
+        // Update the admin context with the new data
+        setAdmin({
+          ...(admin || {}),
           ...data.updateAdminDetails.user,
-          name: `${data.updateAdminDetails.user.firstName || user?.firstName || ''} ${data.updateAdminDetails.user.middleName || user?.middleName || ''} ${data.updateAdminDetails.user.lastName || user?.lastName || ''}`.replace(/\s+/g, ' ').trim()
+          name: `${data.updateAdminDetails.user.firstName || admin?.firstName || ''} ${data.updateAdminDetails.user.middleName || admin?.middleName || ''} ${data.updateAdminDetails.user.lastName || admin?.lastName || ''}`.replace(/\s+/g, ' ').trim()
         });
         toast.success('Profile updated successfully!');
         setIsFormEditable(false);

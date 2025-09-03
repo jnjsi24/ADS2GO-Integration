@@ -27,6 +27,9 @@ interface Admin {
   companyAddress?: string;
   contactNumber?: string;
   profilePicture?: string;
+  houseAddress?: string;
+  postalCode?: string;
+  taxId?: string;
 }
 
 interface AdminAuthContextType {
