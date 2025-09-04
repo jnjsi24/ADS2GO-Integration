@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
-import { LatLngTuple, Map } from 'leaflet';
+import { Popup, Polyline, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-
-// Fix for default markers
+import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
+import { LatLngTuple, Map } from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
-import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -114,6 +112,15 @@ const ScreenTracking: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
+  
+  // Helper function to validate coordinates
+  const isValidCoordinate = (lat: number, lng: number): boolean => {
+    return typeof lat === 'number' && typeof lng === 'number' &&
+           !isNaN(lat) && !isNaN(lng) &&
+           lat >= -90 && lat <= 90 &&
+           lng >= -180 && lng <= 180 &&
+           lat !== 0 && lng !== 0;
+  };
   const [zoom, setZoom] = useState(12);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -163,7 +170,9 @@ const ScreenTracking: React.FC = () => {
          setConnectionStatus('connected');
 
          // Auto-center map on first screen if available
-         if (complianceData.data?.screens?.length > 0 && complianceData.data.screens[0].currentLocation) {
+         if (complianceData.data?.screens?.length > 0 && 
+             complianceData.data.screens[0].currentLocation &&
+             isValidCoordinate(complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng)) {
            setMapCenter([complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng]);
          }
        } else {
@@ -218,18 +227,18 @@ const ScreenTracking: React.FC = () => {
     
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [selectedDate]);
+  }, [selectedDate, fetchData]);
 
   // Fetch path when screen is selected
   useEffect(() => {
     if (selectedScreen) {
       fetchPathData(selectedScreen.deviceId);
     }
-  }, [selectedScreen, selectedDate]);
+  }, [selectedScreen, selectedDate, fetchPathData]);
 
   const handleScreenSelect = (screen: ScreenStatus) => {
     setSelectedScreen(screen);
-    if (screen.currentLocation) {
+    if (screen.currentLocation && isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
       setMapCenter([screen.currentLocation.lat, screen.currentLocation.lng]);
       setZoom(15);
     }
@@ -434,7 +443,7 @@ const ScreenTracking: React.FC = () => {
                 <h2 className="text-lg font-semibold text-gray-900">Live Map</h2>
                 <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
               </div>
-              <div className="h-96">
+              <div className="h-96 relative">
                 <MapView 
                   center={mapCenter}
                   zoom={zoom}
@@ -446,25 +455,26 @@ const ScreenTracking: React.FC = () => {
                   }}
                 >
                   
-                  {/* Screen markers */}
-                  {filteredScreens?.map((screen) => (
-                    <Marker
+                  {/* Screen markers - only show markers for screens with valid location data */}
+                  {filteredScreens?.filter(screen => 
+                    screen && 
+                    screen.currentLocation && 
+                    isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+                  ).map((screen) => (
+                    <CircleMarker
                       key={screen.deviceId}
-                      position={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
+                      center={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                      radius={8}
+                      pathOptions={{
+                        color: getMarkerColor(screen),
+                        fillColor: getMarkerColor(screen),
+                        fillOpacity: 0.7,
+                        weight: 2
+                      }}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
                       }}
                     >
-                      <CircleMarker
-                        center={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
-                        radius={8}
-                        pathOptions={{
-                          color: getMarkerColor(screen),
-                          fillColor: getMarkerColor(screen),
-                          fillOpacity: 0.7,
-                          weight: 2
-                        }}
-                      />
                       <Popup>
                         <div className="p-2">
                           <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
@@ -472,9 +482,10 @@ const ScreenTracking: React.FC = () => {
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
+                          <p className="text-sm">Address: {screen.currentLocation.address}</p>
                         </div>
                       </Popup>
-                    </Marker>
+                    </CircleMarker>
                   ))}
                   
                   {/* Path for selected tablet */}
@@ -487,6 +498,31 @@ const ScreenTracking: React.FC = () => {
                     />
                   )}
                 </MapView>
+                
+                {/* Show message when no tablets have valid location data */}
+                {filteredScreens && filteredScreens.filter(screen => 
+                  screen && 
+                  screen.currentLocation && 
+                  isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+                ).length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
+                    <div className="text-center p-6">
+                      <div className="text-gray-500 mb-2">
+                        <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Location Data Available</h3>
+                      <p className="text-sm text-gray-600">
+                        No tablets currently have valid GPS location data to display on the map.
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Make sure tablets are online and have GPS permissions enabled.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

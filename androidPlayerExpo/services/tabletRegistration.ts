@@ -86,8 +86,7 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http://192.168.254.110:5000'; // Update with your server URL
-
+const API_BASE_URL = 'http://192.168.100.22:5000'; // Update with your server URL
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
@@ -277,7 +276,7 @@ export class TabletRegistrationService {
   async updateLocationTracking(lat: number, lng: number, speed: number = 0, heading: number = 0, accuracy: number = 0): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.error('No registration data available');
+        console.error('No registration data available for location tracking');
         return false;
       }
 
@@ -291,6 +290,7 @@ export class TabletRegistrationService {
       };
 
       console.log('Updating location tracking:', locationUpdate);
+      console.log('API URL:', `${API_BASE_URL}/screenTracking/updateLocation`);
 
       const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
         method: 'POST',
@@ -300,17 +300,41 @@ export class TabletRegistrationService {
         body: JSON.stringify(locationUpdate),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error:', response.status, errorText);
+        return false;
+      }
+
       const result = await response.json();
+      console.log('Response result:', result);
 
       if (result.success) {
         console.log('Location tracking updated successfully');
         return true;
       } else {
         console.error('Failed to update location tracking:', result.message);
+        
+        // If ScreenTracking record not found, try to create it
+        if (result.message && result.message.includes('Screen tracking record not found')) {
+          console.log('ScreenTracking record not found, attempting to create one...');
+          return await this.createScreenTrackingRecord();
+        }
+        
         return false;
       }
     } catch (error) {
       console.error('Error updating location tracking:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
       return false;
     }
   }
@@ -354,6 +378,13 @@ export class TabletRegistrationService {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         console.error('Location permission denied');
+        return;
+      }
+
+      // Check if backend server is accessible
+      const serverAccessible = await this.checkServerAccessibility();
+      if (!serverAccessible) {
+        console.error('Backend server is not accessible. Please check server status.');
         return;
       }
 
@@ -405,6 +436,75 @@ export class TabletRegistrationService {
 
   isLocationTrackingActive(): boolean {
     return this.isTracking;
+  }
+
+  getLocalTrackingStatus(): { isActive: boolean; interval: number | null } {
+    return {
+      isActive: this.isTracking,
+      interval: this.locationUpdateInterval
+    };
+  }
+
+  async createScreenTrackingRecord(): Promise<boolean> {
+    try {
+      if (!this.registration) {
+        console.error('No registration data available to create ScreenTracking record');
+        return false;
+      }
+
+      console.log('Creating ScreenTracking record for device:', this.registration.deviceId);
+
+      // First, try to update tablet status which should create the ScreenTracking record
+      const success = await this.updateTabletStatus(true, {
+        lat: 0, // Will be updated with actual location
+        lng: 0
+      });
+
+      if (success) {
+        console.log('ScreenTracking record created successfully via tablet status update');
+        return true;
+      } else {
+        console.error('Failed to create ScreenTracking record via tablet status update');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error creating ScreenTracking record:', error);
+      return false;
+    }
+  }
+
+  async checkServerAccessibility(): Promise<boolean> {
+    try {
+      console.log('Checking server accessibility at:', API_BASE_URL);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const response = await fetch(`${API_BASE_URL}/tablet/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        console.log('Server is accessible');
+        return true;
+      } else {
+        console.error('Server responded with status:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('Server accessibility check failed:', error);
+      console.error('Please ensure:');
+      console.error('1. Backend server is running (npm start in Ads2Go-Server)');
+      console.error('2. Server URL is correct:', API_BASE_URL);
+      console.error('3. Network connectivity is available');
+      return false;
+    }
   }
 
   async clearRegistration(): Promise<void> {
@@ -556,6 +656,110 @@ export class TabletRegistrationService {
         ads: [],
         message: 'Network error: Unable to fetch ads'
       };
+    }
+  }
+
+  // Track ad playback
+  async trackAdPlayback(adId: string, adTitle: string, adDuration: number, viewTime: number = 0): Promise<boolean> {
+    try {
+      const registrationData = await this.getRegistrationData();
+      if (!registrationData) {
+        console.error('No registration data found');
+        return false;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/screenTracking/trackAd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: registrationData.deviceId,
+          adId,
+          adTitle,
+          adDuration,
+          viewTime
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Ad playback tracked successfully:', result);
+        return true;
+      } else {
+        console.error('Failed to track ad playback:', response.status, response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error tracking ad playback:', error);
+      return false;
+    }
+  }
+
+  // End ad playback
+  async endAdPlayback(): Promise<boolean> {
+    try {
+      const registrationData = await this.getRegistrationData();
+      if (!registrationData) {
+        console.error('No registration data found');
+        return false;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/screenTracking/endAd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: registrationData.deviceId
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Ad playback ended successfully:', result);
+        return true;
+      } else {
+        console.error('Failed to end ad playback:', response.status, response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error ending ad playback:', error);
+      return false;
+    }
+  }
+
+  // Update driver activity
+  async updateDriverActivity(isActive: boolean = true): Promise<boolean> {
+    try {
+      const registrationData = await this.getRegistrationData();
+      if (!registrationData) {
+        console.error('No registration data found');
+        return false;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/screenTracking/updateDriverActivity`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: registrationData.deviceId,
+          isActive
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Driver activity updated successfully:', result);
+        return true;
+      } else {
+        console.error('Failed to update driver activity:', response.status, response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error updating driver activity:', error);
+      return false;
     }
   }
 }

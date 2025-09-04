@@ -241,6 +241,9 @@ module.exports = {
           };
         }
 
+        // Get the old deviceId before removing it
+        const oldDeviceId = tabletUnit.deviceId;
+
         // Replace the slot object entirely to ensure Mongoose persists removal of deviceId
         tablet.tablets[tabletIndex] = {
           tabletNumber: slotNumber,
@@ -251,6 +254,31 @@ module.exports = {
         };
 
         await tablet.save();
+
+        // Handle ScreenTracking record - SHARED TRACKING approach
+        // Update the specific device in the devices array
+        const ScreenTracking = require('../models/screenTracking');
+        const screenTracking = await ScreenTracking.findOne({ materialId: normalizedMaterialId });
+        
+        if (screenTracking) {
+          console.log(`Updating SHARED ScreenTracking record for materialId: ${normalizedMaterialId} - device ${oldDeviceId} going offline`);
+          
+          // Update the specific device in the devices array
+          if (screenTracking.devices && screenTracking.devices.length > 0) {
+            const deviceIndex = screenTracking.devices.findIndex(d => d.deviceId === oldDeviceId);
+            if (deviceIndex >= 0) {
+              screenTracking.devices[deviceIndex].isOnline = false;
+              screenTracking.devices[deviceIndex].lastSeen = new Date();
+              console.log(`Updated device ${oldDeviceId} in devices array to offline`);
+            }
+          }
+          
+          // Update legacy fields (for backward compatibility)
+          screenTracking.isOnline = false;
+          screenTracking.lastSeen = new Date();
+          await screenTracking.save();
+          console.log(`SHARED ScreenTracking record preserved for materialId: ${normalizedMaterialId} (device ${oldDeviceId} unregistered)`);
+        }
 
         return {
           success: true,

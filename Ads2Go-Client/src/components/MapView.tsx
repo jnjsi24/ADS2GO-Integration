@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline, CircleMarker, MapContainerProps } from 'react-leaflet';
-import L from 'leaflet';
+import { MapContainer, TileLayer, MapContainerProps } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-
-// Fix for default markers
+import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
+import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
-import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 
 // Define types for the component props
 interface MapViewProps extends MapContainerProps {

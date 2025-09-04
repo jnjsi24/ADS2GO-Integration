@@ -15,6 +15,16 @@ router.get('/test', (req, res) => {
   });
 });
 
+// Health check endpoint for server accessibility
+router.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Server is healthy and accessible',
+    timestamp: new Date().toISOString(),
+    status: 'OK'
+  });
+});
+
 // GET /tablet/list - List all tablets (for debugging) - MUST COME FIRST
 router.get('/list', async (req, res) => {
   try {
@@ -147,15 +157,25 @@ router.post('/registerTablet', async (req, res) => {
 
     await tablet.save();
 
-    // Create or update tablet tracking record
-         let tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    // SHARED TRACKING: Create or update tablet tracking record per materialId (not per slot)
+    // Look for existing record by materialId only (shared across all slots)
+    let tabletTracking = await ScreenTracking.findOne({ materialId });
     
     if (!tabletTracking) {
-             // Create new tracking record
-       tabletTracking = new ScreenTracking({
-        deviceId,
+      // Create new shared tracking record for this materialId
+      console.log(`Creating new SHARED ScreenTracking record for materialId: ${materialId} with deviceId: ${deviceId} (Slot ${slotNumber})`);
+      tabletTracking = new ScreenTracking({
         materialId,
         carGroupId,
+        screenType: 'HEADDRESS',
+        devices: [{
+          deviceId,
+          slotNumber,
+          isOnline: true,
+          lastSeen: new Date()
+        }],
+        // Legacy fields for backward compatibility
+        deviceId,
         slotNumber,
         isOnline: true,
         lastSeen: new Date()
@@ -164,7 +184,43 @@ router.post('/registerTablet', async (req, res) => {
       // Start daily session
       await tabletTracking.startDailySession();
     } else {
-      // Update existing tracking record
+      // Update existing shared record - add or update device in devices array
+      console.log(`Updating SHARED ScreenTracking record for materialId: ${materialId} with deviceId: ${deviceId} (Slot ${slotNumber})`);
+      
+      // Initialize devices array if it doesn't exist
+      if (!tabletTracking.devices) {
+        tabletTracking.devices = [];
+      }
+      
+      // Find existing device in the array
+      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
+      
+      if (existingDeviceIndex >= 0) {
+        // Update existing device
+        console.log(`Updating existing device in slot ${slotNumber}`);
+        tabletTracking.devices[existingDeviceIndex] = {
+          deviceId,
+          slotNumber,
+          isOnline: true,
+          lastSeen: new Date(),
+          currentLocation: tabletTracking.devices[existingDeviceIndex].currentLocation,
+          totalHoursOnline: tabletTracking.devices[existingDeviceIndex].totalHoursOnline,
+          totalDistanceTraveled: tabletTracking.devices[existingDeviceIndex].totalDistanceTraveled
+        };
+      } else {
+        // Add new device
+        console.log(`Adding new device to slot ${slotNumber}`);
+        tabletTracking.devices.push({
+          deviceId,
+          slotNumber,
+          isOnline: true,
+          lastSeen: new Date()
+        });
+      }
+      
+      // Update legacy fields (for backward compatibility)
+      tabletTracking.deviceId = deviceId;
+      tabletTracking.slotNumber = slotNumber;
       tabletTracking.isOnline = true;
       tabletTracking.lastSeen = new Date();
       

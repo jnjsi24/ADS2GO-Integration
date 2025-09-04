@@ -16,9 +16,25 @@ export default function HomeScreen() {
   const [isOnline, setIsOnline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [unregistering, setUnregistering] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
+  const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
 
   useEffect(() => {
     initializeApp();
+    
+    // Cleanup function to stop tracking when component unmounts
+    return () => {
+      if (isTracking) {
+        console.log('Stopping location tracking on component unmount...');
+        tabletRegistrationService.stopLocationTracking();
+      }
+      
+      // Stop ad tracking simulation
+      if ((window as any).adTrackingInterval) {
+        clearInterval((window as any).adTrackingInterval);
+        (window as any).adTrackingInterval = null;
+      }
+    };
   }, []);
 
   const initializeApp = async () => {
@@ -42,6 +58,20 @@ export default function HomeScreen() {
           lng: location?.coords.longitude || 0
         });
         setIsOnline(online);
+        
+        // Start continuous location tracking
+        console.log('Starting continuous location tracking...');
+        setTrackingStatus('Starting tracking...');
+        
+        try {
+          await tabletRegistrationService.startLocationTracking();
+          setIsTracking(true);
+          setTrackingStatus('Active - Sending data every 30 seconds');
+          console.log('Continuous location tracking started successfully');
+        } catch (error) {
+          console.error('Error starting continuous tracking:', error);
+          setTrackingStatus('Error: Check server connection and permissions');
+        }
       }
 
     } catch (error) {
@@ -55,6 +85,85 @@ export default function HomeScreen() {
     setRefreshing(true);
     await initializeApp();
     setRefreshing(false);
+  };
+
+  const handleStartTracking = async () => {
+    try {
+      console.log('Manually starting location tracking...');
+      setTrackingStatus('Starting tracking...');
+      
+      await tabletRegistrationService.startLocationTracking();
+      setIsTracking(true);
+      setTrackingStatus('Active - Sending data every 30 seconds');
+      console.log('Location tracking started manually');
+      
+      // Start ad tracking simulation
+      startAdTrackingSimulation();
+    } catch (error) {
+      console.error('Error starting tracking:', error);
+      setTrackingStatus('Error: Check server connection and permissions');
+    }
+  };
+
+  const startAdTrackingSimulation = () => {
+    // Simulate ad tracking every 30 seconds
+    const adTrackingInterval = setInterval(async () => {
+      if (!isTracking) {
+        clearInterval(adTrackingInterval);
+        return;
+      }
+
+      try {
+        // Simulate different ads
+        const ads = [
+          { id: 'ad_001', title: 'McDonald\'s Big Mac', duration: 30 },
+          { id: 'ad_002', title: 'Coca-Cola Refresh', duration: 25 },
+          { id: 'ad_003', title: 'Nike Just Do It', duration: 35 },
+          { id: 'ad_004', title: 'Samsung Galaxy', duration: 40 },
+          { id: 'ad_005', title: 'Toyota Camry', duration: 45 }
+        ];
+
+        const randomAd = ads[Math.floor(Math.random() * ads.length)];
+        const viewTime = Math.random() * randomAd.duration; // Random view time
+
+        // Track ad playback
+        await tabletRegistrationService.trackAdPlayback(
+          randomAd.id,
+          randomAd.title,
+          randomAd.duration,
+          viewTime
+        );
+
+        // Update driver activity
+        await tabletRegistrationService.updateDriverActivity(true);
+
+        console.log(`Ad tracked: ${randomAd.title} (${viewTime.toFixed(1)}s viewed)`);
+      } catch (error) {
+        console.error('Error in ad tracking simulation:', error);
+      }
+    }, 30000); // Every 30 seconds
+
+    // Store interval ID for cleanup
+    (window as any).adTrackingInterval = adTrackingInterval;
+  };
+
+  const handleStopTracking = async () => {
+    try {
+      console.log('Stopping location tracking...');
+      await tabletRegistrationService.stopLocationTracking();
+      setIsTracking(false);
+      setTrackingStatus('Stopped');
+      console.log('Location tracking stopped');
+      
+      // Stop ad tracking simulation
+      if ((window as any).adTrackingInterval) {
+        clearInterval((window as any).adTrackingInterval);
+        (window as any).adTrackingInterval = null;
+      }
+    } catch (error) {
+      console.error('Error stopping tracking:', error);
+      setTrackingStatus('Error stopping tracking');
+    }
   };
 
   const handleReRegister = () => {
@@ -260,6 +369,42 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Tracking Status */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusHeader}>
+            <Text style={styles.statusTitle}>🔄 Continuous Tracking</Text>
+            <View style={[styles.statusIndicator, { backgroundColor: isTracking ? '#27ae60' : '#e74c3c' }]} />
+          </View>
+          <View style={styles.statusContent}>
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>Status:</Text>
+              <Text style={[styles.statusValue, { color: isTracking ? '#27ae60' : '#e74c3c' }]}>
+                {isTracking ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+            <Text style={styles.trackingStatusText}>
+              {trackingStatus}
+            </Text>
+            <View style={styles.trackingControls}>
+              {!isTracking ? (
+                <TouchableOpacity 
+                  style={[styles.trackingButton, styles.startButton]}
+                  onPress={handleStartTracking}
+                >
+                  <Text style={styles.trackingButtonText}>▶️ Start Tracking</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.trackingButton, styles.stopButton]}
+                  onPress={handleStopTracking}
+                >
+                  <Text style={styles.trackingButtonText}>⏹️ Stop Tracking</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Advertisement Player */}
@@ -455,6 +600,34 @@ const styles = StyleSheet.create({
   locationTimestamp: {
     fontSize: 12,
     color: '#95a5a6',
+  },
+  trackingStatusText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  trackingControls: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  trackingButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 150,
+    alignItems: 'center',
+  },
+  startButton: {
+    backgroundColor: '#27ae60',
+  },
+  stopButton: {
+    backgroundColor: '#e74c3c',
+  },
+  trackingButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   adSection: {
     backgroundColor: '#fff',

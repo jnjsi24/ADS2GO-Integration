@@ -15,7 +15,14 @@ class OSMService {
    */
   static async reverseGeocode(lat, lng) {
     try {
-      const results = await geocoder.reverse({ lat, lon: lng });
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Geocoding timeout')), 5000);
+      });
+
+      const geocodingPromise = geocoder.reverse({ lat, lon: lng });
+      
+      const results = await Promise.race([geocodingPromise, timeoutPromise]);
       
       if (results && results.length > 0) {
         const result = results[0];
@@ -32,8 +39,8 @@ class OSMService {
       
       return 'Unknown location';
     } catch (error) {
-      console.error('Geocoding error:', error);
-      return 'Unknown location';
+      console.warn('Geocoding failed:', error.message);
+      return `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
   }
 

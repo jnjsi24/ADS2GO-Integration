@@ -26,13 +26,14 @@ router.post('/updateLocation', async (req, res) => {
       });
     }
 
-    // Get address from coordinates using OSM
+    // Get address from coordinates using OSM (optional - don't fail if geocoding fails)
     let address = '';
     try {
       address = await OSMService.reverseGeocode(lat, lng);
+      console.log('Geocoding successful:', address);
     } catch (error) {
-      console.error('Geocoding error:', error);
-      address = 'Unknown location';
+      console.warn('Geocoding failed, continuing without address:', error.message);
+      address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 
     // Check if we need to start a new daily session
@@ -51,28 +52,39 @@ router.post('/updateLocation', async (req, res) => {
     }
 
     // Update location
-    await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
-
-    // Check for alerts
-    const currentHours = screenTracking.currentHoursToday;
-    const hoursRemaining = screenTracking.hoursRemaining;
-    
-    // Alert for low hours (less than 6 hours with 2 hours remaining) - Only for HEADDRESS
-    if (screenTracking.screenType === 'HEADDRESS' && currentHours < 6 && hoursRemaining > 2) {
-      await screenTracking.addAlert(
-        'LOW_HOURS',
-        `Driver has only ${currentHours} hours today. ${hoursRemaining} hours remaining to meet 8-hour target.`,
-        'HIGH'
-      );
+    try {
+      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
+      console.log('Location updated successfully for device:', deviceId);
+    } catch (error) {
+      console.error('Error updating location:', error);
+      // Continue processing even if location update fails
     }
 
-    // Alert for speed violations (over 80 km/h) - Only for HEADDRESS
-    if (screenTracking.screenType === 'HEADDRESS' && speed > 80) {
-      await screenTracking.addAlert(
-        'SPEED_VIOLATION',
-        `Speed violation detected: ${speed} km/h`,
-        'MEDIUM'
-      );
+    // Check for alerts (optional - don't fail if alerts fail)
+    try {
+      const currentHours = screenTracking.currentHoursToday;
+      const hoursRemaining = screenTracking.hoursRemaining;
+      
+      // Alert for low hours (less than 6 hours with 2 hours remaining) - Only for HEADDRESS
+      if (screenTracking.screenType === 'HEADDRESS' && currentHours < 6 && hoursRemaining > 2) {
+        await screenTracking.addAlert(
+          'LOW_HOURS',
+          `Driver has only ${currentHours} hours today. ${hoursRemaining} hours remaining to meet 8-hour target.`,
+          'HIGH'
+        );
+      }
+
+      // Alert for speed violations (over 80 km/h) - Only for HEADDRESS
+      if (screenTracking.screenType === 'HEADDRESS' && speed > 80) {
+        await screenTracking.addAlert(
+          'SPEED_VIOLATION',
+          `Speed violation detected: ${speed} km/h`,
+          'MEDIUM'
+        );
+      }
+    } catch (error) {
+      console.warn('Error processing alerts:', error.message);
+      // Continue processing even if alerts fail
     }
 
     res.json({
@@ -207,7 +219,7 @@ router.post('/endSession', async (req, res) => {
         carGroupId: tabletTracking.carGroupId,
         slotNumber: tabletTracking.slotNumber,
         isOnline: tabletTracking.isOnline,
-        currentLocation: tabletTracking.currentLocation,
+        currentLocation: tabletTracking.getFormattedLocation(),
         lastSeen: tabletTracking.lastSeen,
         currentHours: tabletTracking.currentHoursToday,
         hoursRemaining: tabletTracking.hoursRemaining,
@@ -241,7 +253,7 @@ router.get('/material/:materialId', async (req, res) => {
       deviceId: tablet.deviceId,
       slotNumber: tablet.slotNumber,
       isOnline: tablet.isOnline,
-      currentLocation: tablet.currentLocation,
+      currentLocation: tablet.getFormattedLocation(),
       lastSeen: tablet.lastSeen,
       currentHours: tablet.currentHoursToday,
       hoursRemaining: tablet.hoursRemaining,
@@ -362,7 +374,7 @@ router.get('/compliance', async (req, res) => {
       carGroupId: tablet.carGroupId,
       slotNumber: tablet.slotNumber,
       isOnline: tablet.isOnline,
-      currentLocation: tablet.currentLocation,
+      currentLocation: tablet.getFormattedLocation(),
       lastSeen: tablet.lastSeen,
       currentHours: tablet.currentHoursToday,
       hoursRemaining: tablet.hoursRemaining,
@@ -384,6 +396,234 @@ router.get('/compliance', async (req, res) => {
 
   } catch (error) {
     console.error('Error getting compliance report:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /trackAd - Track ad playback
+router.post('/trackAd', async (req, res) => {
+  try {
+    const { deviceId, adId, adTitle, adDuration, viewTime = 0 } = req.body;
+
+    // Validate required fields
+    if (!deviceId || !adId || !adTitle) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: deviceId, adId, adTitle'
+      });
+    }
+
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    // Track ad playback
+    await screenTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime);
+
+    res.json({
+      success: true,
+      message: 'Ad playback tracked successfully',
+      data: {
+        deviceId: screenTracking.deviceId,
+        currentAd: screenTracking.screenMetrics.currentAd,
+        totalAdsPlayed: screenTracking.screenMetrics.adPlayCount,
+        dailyStats: screenTracking.screenMetrics.dailyAdStats
+      }
+    });
+
+  } catch (error) {
+    console.error('Error tracking ad playback:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /endAd - End ad playback
+router.post('/endAd', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: deviceId'
+      });
+    }
+
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    // End ad playback
+    await screenTracking.endAdPlayback();
+
+    res.json({
+      success: true,
+      message: 'Ad playback ended successfully',
+      data: {
+        deviceId: screenTracking.deviceId,
+        completedAd: screenTracking.screenMetrics.currentAd
+      }
+    });
+
+  } catch (error) {
+    console.error('Error ending ad playback:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /updateDriverActivity - Update driver activity status
+router.post('/updateDriverActivity', async (req, res) => {
+  try {
+    const { deviceId, isActive = true } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: deviceId'
+      });
+    }
+
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    // Update driver activity
+    await screenTracking.updateDriverActivity(isActive);
+
+    res.json({
+      success: true,
+      message: 'Driver activity updated successfully',
+      data: {
+        deviceId: screenTracking.deviceId,
+        displayHours: screenTracking.screenMetrics.displayHours,
+        currentHours: screenTracking.currentHoursToday,
+        totalHours: screenTracking.totalHoursOnline,
+        isActive: isActive
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating driver activity:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /adAnalytics/:deviceId - Get ad analytics for a specific device
+router.get('/adAnalytics/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { date } = req.query;
+
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    let adPerformance = screenTracking.screenMetrics.adPerformance || [];
+    let dailyStats = screenTracking.screenMetrics.dailyAdStats || {};
+
+    // Filter by date if provided
+    if (date) {
+      const targetDate = new Date(date);
+      // You can add date filtering logic here if needed
+    }
+
+    res.json({
+      success: true,
+      data: {
+        deviceId: screenTracking.deviceId,
+        materialId: screenTracking.materialId,
+        currentAd: screenTracking.screenMetrics.currentAd,
+        dailyStats: dailyStats,
+        adPerformance: adPerformance,
+        totalAdsPlayed: screenTracking.screenMetrics.adPlayCount,
+        displayHours: screenTracking.screenMetrics.displayHours,
+        lastAdPlayed: screenTracking.screenMetrics.lastAdPlayed
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting ad analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /adAnalytics - Get ad analytics for all devices
+router.get('/adAnalytics', async (req, res) => {
+  try {
+    const { date, materialId } = req.query;
+
+    let query = { isActive: true };
+    if (materialId) {
+      query.materialId = materialId;
+    }
+
+    const allTablets = await ScreenTracking.find(query);
+    
+    const analytics = allTablets.map(tablet => ({
+      deviceId: tablet.deviceId,
+      materialId: tablet.materialId,
+      screenType: tablet.screenType,
+      currentAd: tablet.screenMetrics.currentAd,
+      dailyStats: tablet.screenMetrics.dailyAdStats,
+      totalAdsPlayed: tablet.screenMetrics.adPlayCount,
+      displayHours: tablet.screenMetrics.displayHours,
+      adPerformance: tablet.screenMetrics.adPerformance || [],
+      lastAdPlayed: tablet.screenMetrics.lastAdPlayed,
+      isOnline: tablet.isOnline,
+      lastSeen: tablet.lastSeen
+    }));
+
+    // Calculate summary statistics
+    const summary = {
+      totalDevices: analytics.length,
+      onlineDevices: analytics.filter(a => a.isOnline).length,
+      totalAdsPlayed: analytics.reduce((sum, a) => sum + a.totalAdsPlayed, 0),
+      totalDisplayHours: analytics.reduce((sum, a) => sum + a.displayHours, 0),
+      averageAdsPerDevice: analytics.length > 0 ? analytics.reduce((sum, a) => sum + a.totalAdsPlayed, 0) / analytics.length : 0,
+      averageDisplayHours: analytics.length > 0 ? analytics.reduce((sum, a) => sum + a.displayHours, 0) / analytics.length : 0
+    };
+
+    res.json({
+      success: true,
+      data: {
+        summary: summary,
+        devices: analytics
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting ad analytics:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -542,7 +782,7 @@ router.get('/screens', async (req, res) => {
       carGroupId: screen.carGroupId,
       slotNumber: screen.slotNumber,
       isOnline: screen.isOnline,
-      currentLocation: screen.currentLocation,
+      currentLocation: screen.getFormattedLocation(),
       lastSeen: screen.lastSeen,
       currentHours: screen.currentHoursToday,
       hoursRemaining: screen.hoursRemaining,
