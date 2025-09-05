@@ -4,8 +4,7 @@ const { getStorage } = require('firebase-admin/storage');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { db, admin } = require('../firebase-admin');
-const { uploadToFirebase } = require('../utils/firebasestorage');
-
+const { uploadToFirebase } = require('../utils/firebaseStorage');
 // Configure multer for memory storage and file size limits
 const upload = multer({
   storage: multer.memoryStorage(),
