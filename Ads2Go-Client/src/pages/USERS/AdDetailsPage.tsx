@@ -1,8 +1,8 @@
 // src/pages/AdDetailsPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 
