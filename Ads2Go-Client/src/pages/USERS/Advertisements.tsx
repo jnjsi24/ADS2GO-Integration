@@ -3,8 +3,8 @@ import { useUserAuth } from '../../contexts/UserAuthContext';
 import { Search } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_MY_ADS } from '../../graphql/user';
-import { CREATE_AD } from '../../graphql/admin';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 
 // Form data type
 type FormData = {
@@ -37,6 +37,8 @@ type Ad = {
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
   createdAt: string;
+  startTime: string;  // Added start date
+  endTime: string;    // Added end date
   planId: {
     id: string;
     name: string;
@@ -87,10 +89,50 @@ const Advertisements: React.FC = () => {
   
   const ads: Ad[] = data?.getMyAds || [];
   
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+  // Fixed format date function to handle both timestamp strings and date strings
+  const formatDate = (dateValue: string | number) => {
+    if (!dateValue) return 'N/A';
+    
+    try {
+      let date: Date;
+      
+      // Check if it's a timestamp string (all digits)
+      if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
+        // Convert timestamp string to number and create date
+        date = new Date(parseInt(dateValue));
+      } else if (typeof dateValue === 'number') {
+        // Handle numeric timestamp
+        date = new Date(dateValue);
+      } else {
+        // Handle regular date string
+        date = new Date(dateValue);
+      }
+      
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      const options: Intl.DateTimeFormatOptions = { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      };
+      return date.toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Input:', dateValue);
+      return 'Invalid Date';
+    }
+  };
+
+  // Format date range for display
+  const formatDateRange = (startDate: string, endDate: string) => {
+    if (!startDate || !endDate) return 'Dates not set';
+    try {
+      const start = formatDate(startDate);
+      const end = formatDate(endDate);
+      if (start === 'Invalid Date' || end === 'Invalid Date') return 'Invalid Date Range';
+      return `${start} - ${end}`;
+    } catch (error) {
+      return 'Invalid Date Range';
+    }
   };
 
   const materialOptionsMap: Record<string, string[]> = {
@@ -179,8 +221,12 @@ const Advertisements: React.FC = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
 
-  // Helper function to parse ad date string
+  // Helper function to parse ad date string (removed as no longer needed)
   const parseAdDate = (dateString: string): Date => {
+    // Handle timestamp strings
+    if (/^\d+$/.test(dateString)) {
+      return new Date(parseInt(dateString));
+    }
     // Example: "31 Jul 2020" -> "Jul 31 2020" for Date constructor
     const parts = dateString.split(' ');
     const formattedDateString = `${parts[1]} ${parts[0]} ${parts[2]}`;
@@ -319,8 +365,8 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen rounded-l-xl bg-white pl-64 pr-5">
-      <div className="bg-white p-6 flex justify-between items-center">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5">
+      <div className="bg-gray-100 p-6 flex justify-between items-center">
         <h1 className="text-4xl mt-8 font-semibold">Advertisements</h1>
         <div className="flex space-x-3">
           <span className="pt-1 mt-10 text-gray-500 ">{filteredAds.length} Ads found</span>
@@ -342,9 +388,10 @@ const Advertisements: React.FC = () => {
               className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
             >
               <option value="All Status">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Dispatch">Dispatch</option>
-              <option value="Completed">Completed</option>
+              <option value="Pending">PENDING</option>
+              <option value="Approved">APPROVED</option>
+              <option value="Running">RUNNING</option>
+              <option value="Completed">COMPLETED</option>
             </select>
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
               <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -383,62 +430,102 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className=" bg-none p-6 grid grid-cols-4 gap-6">
+      <div className=" bg-gray-100 p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
               key={ad.id}
-              className=" overflow-hidden relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className="rounded-2xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
-              <div className="w-full h-48 flex-shrink-0 rounded-lg relative bg-gray-300">
-                {ad.adFormat === 'Video' && ad.mediaFile ? (
-                  <video
-                    src={ad.mediaFile}
-                    className="w-full h-full object-cover rounded-lg"
-                    controls
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                ) : ad.mediaFile ? (
-                  <img
-                    src={ad.mediaFile}
-                    alt={`${ad.title} image`}
-                    className="w-full h-full object-cover rounded-lg"
-                  />
+              <div className="w-full h-48 flex-shrink-0 relative">
+                {/* Fixed media display based on ManageAds.tsx */}
+                {ad.mediaFile ? (
+                  ad.adFormat === 'IMAGE' ? (
+                    <img
+                      src={ad.mediaFile}
+                      alt={`${ad.title} image`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                      }}
+                    />
+                  ) : ad.adFormat === 'VIDEO' ? (
+                    <video
+                      className="w-full h-full object-cover"
+                      controls
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'w-full h-full bg-gray-500 flex items-center justify-center text-white';
+                        errorDiv.innerHTML = 'Video not available';
+                        e.currentTarget.parentNode?.appendChild(errorDiv);
+                      }}
+                    >
+                      <source src={ad.mediaFile} />
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="w-full h-full bg-gray-500 flex items-center justify-center">
+                      <a 
+                        href={ad.mediaFile} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-white hover:text-gray-300 underline"
+                      >
+                        View Media File
+                      </a>
+                    </div>
+                  )
                 ) : (
-                  <div className="w-full h-full bg-gray-300 flex items-center justify-center text-white">
-                    {/* Placeholder div to match the image */}
+                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
+                    No Media
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-none flex-grow flex flex-col">
-                <div className="flex-grow cursor-pointer" onClick={() => navigate(`/ad-details/${ad.id}`)}>
+              <div className="p-4 bg-gray-100 flex-grow flex flex-col">
+                <div
+                  className="flex-grow cursor-pointer"
+                  // Corrected navigation to user ad details page
+                  onClick={() => navigate(`/ad-details/${ad.id}`)}
+                >
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
-                  <p className="text-sm text-gray-500 mt-2 overflow-hidden whitespace-nowrap text-ellipsis">{ad.description}</p>
+                  <p className="text-sm text-gray-500 mt-2">Created: {formatDate(ad.createdAt)}</p>
+                  {/* Display campaign duration */}
+                  {ad.startTime && ad.endTime ? (
+                    <p className="text-sm text-blue-600 mt-1 font-medium">
+                      Campaign: {formatDateRange(ad.startTime, ad.endTime)}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 mt-1">
+                      Campaign dates: Not available
+                    </p>
+                  )}
                 </div>
 
-                <div className="mt-4 pt-5 border-t border-gray-200 flex space-x-2">
-                  <span className={`px-4 py-2 text-sm font-semibold rounded-xl text-black ${
-                      ad.status === 'PENDING' ? 'bg-yellow-200' : 
-                      ad.status === 'APPROVED' ? 'bg-blue-200' :
-                      ad.status === 'REJECTED' ? 'bg-red-200' :
-                      ad.status === 'RUNNING' ? 'bg-green-200' :
-                      'bg-gray-200'}`}>
-                    {formatStatus(ad.status)}
-                  </span>
+                <div className="mt-4 pt-5 border-t border-gray-200">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      // Corrected navigation to user ad details page
                       navigate(`/ad-details/${ad.id}`);
                     }}
-                    className="text-black text-sm bg-none border font-semibold rounded-xl px-4 py-2 flex items-center justify-center flex-grow hover:bg-[#1B5087] hover:text-white transition-colors"
+                    className="text-white text-sm bg-[#3674B5] font-semibold rounded-xl px-4 py-2 flex items-center justify-between w-full hover:bg-[#0E2A47] hover:text-white transition-colors"
                   >
-                    View Details
+                    View Details <span>→</span>
                   </button>
                 </div>
               </div>
+
+              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-xl ${
+                ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
+                ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
+                ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
+                'bg-gray-200 text-gray-800'}`}>
+                {formatStatus(ad.status)}
+              </span>
             </div>
           ))
         ) : (
@@ -604,7 +691,7 @@ const Advertisements: React.FC = () => {
                 {formData.vehicleType && formData.materialsUsed && formData.plan && (
                   <div className="text-green-700 font-semibold mt-2">
                     {estimatedPrice !== null
-                      ? `Total Price: $${estimatedPrice.toFixed(2)}`
+                      ? `Total Price: ${estimatedPrice.toFixed(2)}`
                       : <span className="text-red-600">Price unavailable for selected options</span>}
                   </div>
                 )}
@@ -685,4 +772,4 @@ const Advertisements: React.FC = () => {
   );
 };
 
-export default Advertisements;
+export default Advertisements; 

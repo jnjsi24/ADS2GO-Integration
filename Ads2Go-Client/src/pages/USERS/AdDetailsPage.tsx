@@ -4,9 +4,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
+import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 
-// Ad type (should match the one in Advertisements.tsx)
+// Ad type (updated to include startTime and endTime)
 type Ad = {
   id: string;
   title: string;
@@ -18,6 +18,8 @@ type Ad = {
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
   createdAt: string;
+  startTime: string;  // Campaign start date
+  endTime: string;    // Campaign end date
   planId: {
     id: string;
     name: string;
@@ -50,7 +52,6 @@ type Notification = {
   type: 'avail' | 'on_the_move' | 'completed' | 'cancelled';
   timestamp: string;
 };
-
 
 // Sample notification data
 const sampleNotifications: Notification[] = [
@@ -123,6 +124,52 @@ const AdDetailsPage: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'Weekly' | 'Daily'>('Daily');
   // State for active tab
   const [activeTab, setActiveTab] = useState<'Details' | 'AdActivity'>('Details');
+  
+  // Fixed format date function to handle both timestamp strings and date strings
+  const formatDate = (dateValue: string | number) => {
+    if (!dateValue) return 'N/A';
+    
+    try {
+      let date: Date;
+      
+      // Check if it's a timestamp string (all digits)
+      if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
+        // Convert timestamp string to number and create date
+        date = new Date(parseInt(dateValue));
+      } else if (typeof dateValue === 'number') {
+        // Handle numeric timestamp
+        date = new Date(dateValue);
+      } else {
+        // Handle regular date string
+        date = new Date(dateValue);
+      }
+      
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      const options: Intl.DateTimeFormatOptions = { 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      };
+      return date.toLocaleDateString('en-US', options);
+    } catch (error) {
+      console.error('Date formatting error:', error, 'Input:', dateValue);
+      return 'Invalid Date';
+    }
+  };
+
+  // Format date range for display
+  const formatDateRange = (startDate: string, endDate: string) => {
+    if (!startDate || !endDate) return 'Dates not set';
+    try {
+      const start = formatDate(startDate);
+      const end = formatDate(endDate);
+      if (start === 'Invalid Date' || end === 'Invalid Date') return 'Invalid Date Range';
+      return `${start} - ${end}`;
+    } catch (error) {
+      return 'Invalid Date Range';
+    }
+  };
   
   // Show loading state
   if (loading && !ad) {
@@ -199,19 +246,18 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white ml-60">
+    <div className="min-h-screen bg-gray-100 ml-60">
 
-      <div className="bg-white rounded-lg p-8 grid grid-cols-2 gap-8">
+      <div className="bg-gray-100 rounded-lg p-8 grid grid-cols-2 gap-8">
         {/* LEFT Section (Details, Description, Price, Profit Chart / Notifications) */}
         <div className="flex flex-col space-y-8">
           {/* Back button moved here, above the status and title */}
-                    <button
-                      onClick={() => navigate('/advertisements')}
-                      className="flex items-center text-gray-600 hover:text-gray-800"
-                    >
-                      <ChevronLeft className="w-5 h-5 mr-1" />
-                      Back to Advertisements
-                    </button>
+          <button
+            onClick={() => navigate('/advertisements')}
+            className="py-2 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center mb-4" // Added mb-4 for spacing
+          >
+            <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
+          </button>
           
           <div>
             <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
@@ -220,7 +266,18 @@ const AdDetailsPage: React.FC = () => {
             <h2 className="text-5xl font-bold mt-4 mb-2">{ad.title}</h2>
             <p className="text-3xl text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
             <p className="text-md text-gray-600">{ad.planId?.name} plan</p>          
-            <p className="text-md font-bold text-gray-600">Until {new Date(ad.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+            <p className="text-md font-bold text-gray-600">Created: {formatDate(ad.createdAt)}</p>
+            
+            {/* Display campaign duration */}
+            {ad.startTime && ad.endTime ? (
+              <p className="text-md font-bold text-blue-600 mt-2">
+                Campaign: {formatDateRange(ad.startTime, ad.endTime)}
+              </p>
+            ) : (
+              <p className="text-md text-gray-400 mt-2">
+                Campaign dates: Not available
+              </p>
+            )}
 
             <p className="text-gray-700 mt-6 text-lg leading-relaxed">{ad.description}</p>
           </div>
@@ -350,12 +407,45 @@ const AdDetailsPage: React.FC = () => {
 
         {/* RIGHT Section (Media, Properties, Levels, Stats) */}
         <div className="flex flex-col space-y-8">
-          {/* Main Media Display */}
+          {/* Main Media Display - Fixed based on ManageAds.tsx */}
           <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center" style={{ height: '400px' }}>
-            {ad.adFormat === 'Video' && ad.imagePath ? (
-              <video src={ad.imagePath} controls className="w-full h-full object-contain"></video>
-            ) : ad.imagePath ? (
-              <img src={ad.imagePath} alt={ad.title} className="w-full h-full object-contain" />
+            {ad.mediaFile ? (
+              ad.adFormat === 'IMAGE' ? (
+                <img 
+                  src={ad.mediaFile} 
+                  alt={ad.title}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                  }}
+                />
+              ) : ad.adFormat === 'VIDEO' ? (
+                <video 
+                  controls 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'w-full h-full flex items-center justify-center';
+                    errorDiv.innerHTML = '<span class="text-gray-500 text-xl">Video not available</span>';
+                    e.currentTarget.parentNode?.appendChild(errorDiv);
+                  }}
+                >
+                  <source src={ad.mediaFile} />
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <a 
+                    href={ad.mediaFile} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-blue-500 hover:text-blue-700 underline text-xl"
+                  >
+                    View Media File
+                  </a>
+                </div>
+              )
             ) : (
               <div className="text-gray-500 text-xl">No Media Available</div>
             )}
@@ -369,6 +459,30 @@ const AdDetailsPage: React.FC = () => {
               <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium text-center">Material: {ad.materialId?.materialType || 'N/A'}</span>
               <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium text-center">Plan: {ad.planId?.name || 'N/A'}</span>
               <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium text-center">Format: {ad.adFormat || 'N/A'}</span>
+            </div>
+            
+            {/* Campaign Duration Section */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h4 className="text-lg font-semibold mb-3 text-gray-700">Campaign Schedule</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">Start Date:</span>
+                  <span className="text-sm text-gray-800">{formatDate(ad.startTime)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">End Date:</span>
+                  <span className="text-sm text-gray-800">{formatDate(ad.endTime)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium text-gray-600">Duration:</span>
+                  <span className="text-sm text-gray-800">{ad.planId?.durationDays || 'N/A'} days</span>
+                </div>
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                  <span className="text-sm font-medium text-blue-800">
+                    Campaign Period: {formatDateRange(ad.startTime, ad.endTime)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
