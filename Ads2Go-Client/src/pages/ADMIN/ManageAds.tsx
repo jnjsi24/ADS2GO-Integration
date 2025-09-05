@@ -114,9 +114,9 @@ interface Ad {
   pricePerPlay: number;
   createdAt: string;
   updatedAt: string;
-  userId: User;
-  materialId: Material;
-  planId: AdsPlan;
+  userId: User | null;
+  materialId: Material | null;
+  planId: AdsPlan | null;
 }
 
 const ManageAds: React.FC = () => {
@@ -180,7 +180,7 @@ const ManageAds: React.FC = () => {
   const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
     const matchesSearch =
       ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ad.userId.firstName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
       ad.id.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
@@ -205,9 +205,10 @@ const ManageAds: React.FC = () => {
     }).format(amount);
   };
 
-  const getAdvertiserName = (user: User) => {
+  const getAdvertiserName = (user: User | null) => {
+    if (!user) return 'N/A';
     if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
-    return user.email;
+    return user.email || 'N/A';
   };
 
   // Actions
@@ -441,10 +442,10 @@ const ManageAds: React.FC = () => {
                         <div><strong className="text-gray-600">Ad ID:</strong> <span className="text-gray-800">{ad.id}</span></div>
                         <div><strong className="text-gray-600">Title:</strong> <span className="text-gray-800">{ad.title}</span></div>
                         <div><strong className="text-gray-600">Advertiser:</strong> <span className="text-gray-800">{getAdvertiserName(ad.userId)}</span></div>
-                        <div><strong className="text-gray-600">Email:</strong> <span className="text-gray-800">{ad.userId.email}</span></div>
+                        <div><strong className="text-gray-600">Email:</strong> <span className="text-gray-800">{ad.userId?.email || 'N/A'}</span></div>
                         <div><strong className="text-gray-600">Ad Type:</strong> <span className="text-gray-800">{ad.adType}</span></div>
                         <div><strong className="text-gray-600">Format:</strong> <span className="text-gray-800">{ad.adFormat}</span></div>
-                        <div><strong className="text-gray-600">Material ID:</strong> <span className="text-gray-800">{ad.materialId.id}</span></div>
+                        <div><strong className="text-gray-600">Material ID:</strong> <span className="text-gray-800">{ad.materialId?.id || 'N/A'}</span></div>
                       </div>
                     </div>
                     
