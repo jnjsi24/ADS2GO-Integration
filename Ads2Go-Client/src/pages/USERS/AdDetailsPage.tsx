@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { ChevronLeft, Bell, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { GET_AD } from '../../graphql/admin';
+import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 
 // Ad type (should match the one in Advertisements.tsx)
 type Ad = {
@@ -199,18 +199,19 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 ml-60">
+    <div className="min-h-screen bg-white ml-60">
 
-      <div className="bg-gray-100 rounded-lg p-8 grid grid-cols-2 gap-8">
+      <div className="bg-white rounded-lg p-8 grid grid-cols-2 gap-8">
         {/* LEFT Section (Details, Description, Price, Profit Chart / Notifications) */}
         <div className="flex flex-col space-y-8">
           {/* Back button moved here, above the status and title */}
-          <button
-            onClick={() => navigate('/advertisements')}
-            className="py-2 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center mb-4" // Added mb-4 for spacing
-          >
-            <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
-          </button>
+                    <button
+                      onClick={() => navigate('/advertisements')}
+                      className="flex items-center text-gray-600 hover:text-gray-800"
+                    >
+                      <ChevronLeft className="w-5 h-5 mr-1" />
+                      Back to Advertisements
+                    </button>
           
           <div>
             <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>

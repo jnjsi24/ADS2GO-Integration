@@ -1,26 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, User, Calendar, Lock } from 'lucide-react';
-import { Link, useLocation, useNavigate } from 'react-router-dom'; 
+import React, { useState } from 'react';
 import { useMutation, gql } from '@apollo/client';
 
-interface PaymentItem {
-  id: string;
-  productName: string;
-  imageUrl: string;
-  plan: string;
-  amount: string;
-  status: string;
-  userName: string;
-  companyName: string;
-  bankNumber: string;
-  adType?: string;
-  address?: string;
-  durationDays: number;
-  paymentType?: string;
-  adFormat: string;
-  adLengthSeconds: number;
-  totalPrice: string;
-  receiptId?: string;
+interface PaymentProps {
+  paymentItem: {
+    id: string;
+    productName: string;
+    amount: string;
+  };
+  paymentType: string;
+  onClose: () => void;
 }
 
 const CREATE_PAYMENT = gql`
@@ -39,350 +27,215 @@ const CREATE_PAYMENT = gql`
   }
 `;
 
-// Media display component for payment preview
-const PaymentMediaPreview: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
-  mediaFile, 
-  adFormat, 
-  productName 
-}) => {
-  const [mediaError, setMediaError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) => {
+  const [createPayment, { loading }] = useMutation(CREATE_PAYMENT);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleError = () => {
-    setMediaError(true);
-    setIsLoading(false);
-  };
+  const handlePayNow = async () => {
+    const input = {
+      adsId: paymentItem.id,
+      paymentType,
+      paymentDate: new Date().toISOString(),
+      receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    };
 
-  const handleLoad = () => {
-    setIsLoading(false);
-  };
-
-  if (mediaError || !mediaFile) {
-    return (
-      <div className="w-20 h-20 bg-gray-200 rounded-lg flex items-center justify-center">
-        <span className="text-xs text-gray-500 text-center">No Media</span>
-      </div>
-    );
-  }
-
-  if (adFormat === 'VIDEO') {
-    return (
-      <div className="w-20 h-20 rounded-lg overflow-hidden bg-black flex items-center justify-center relative">
-        {isLoading && (
-          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-            <span className="text-xs text-gray-500">Loading...</span>
-          </div>
-        )}
-        <video
-          src={mediaFile}
-          className="max-w-full max-h-full object-cover"
-          muted
-          preload="metadata"
-          onError={handleError}
-          onLoadedData={handleLoad}
-          onLoadStart={() => setIsLoading(false)}
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-          <div className="w-5 h-5 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
-            <div className="w-0 h-0 border-l-[5px] border-l-gray-700 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent ml-0.5"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
-      {isLoading && (
-        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-          <span className="text-xs text-gray-500">Loading...</span>
-        </div>
-      )}
-      <img
-        src={mediaFile}
-        alt={`${productName} preview`}
-        className="max-w-full max-h-full object-cover"
-        onError={handleError}
-        onLoad={handleLoad}
-      />
-    </div>
-  );
-};
-
-const Payment: React.FC = () => {
-  const [paymentType, setPaymentType] = useState<string>('');
-  const [cardDetails, setCardDetails] = useState({
-    number: '',
-    holder: '',
-    expiry: '',
-    cvv: '',
-    type: '',
-  });
-
-  const [personalInfo, setPersonalInfo] = useState({
-    address: 'P.o.Box 1223',
-    city: 'Arusha',
-    state: 'Arusha, Tanzania',
-    postalCode: '9090',
-  });
-
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [createPayment] = useMutation(CREATE_PAYMENT);
-
-  // Get payment item and return path from navigation state
-  const paymentItem = location.state?.paymentItem as PaymentItem;
-  const returnTo = location.state?.returnTo || '/advertisements';
-
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>, key: string) => {
-    setPersonalInfo({ ...personalInfo, [key]: e.target.value });
-  };
-
-  const detectCardType = (number: string) => {
-    const cleaned = number.replace(/\D/g, '');
-    if (/^4[0-9]{12}(?:[0-9]{3})?$/.test(cleaned)) return 'Visa';
-    if (/^5[1-5][0-9]{14}$/.test(cleaned)) return 'Mastercard';
-    return 'Unknown';
-  };
-
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const number = e.target.value;
-    const type = detectCardType(number);
-    setCardDetails({ ...cardDetails, number, type });
-  };
-
-  const mapPaymentType = (type: string): string => {
-    switch (type) {
-      case 'card':
-        return 'CREDIT_CARD';
-      case 'gcash':
-        return 'GCASH';
-      case 'paypal':
-        return 'PAYPAL';
-      case 'gpay':
-      case 'maya':
-      case 'cash':
-        return 'BANK_TRANSFER';
-      default:
-        return 'CREDIT_CARD';
-    }
-  };
-
-  const handleContinue = async () => {
-    if (!paymentType) {
-      alert("Please select a payment method.");
-      return;
-    }
-
-    // If this is a payment for a specific item from PaymentHistory
-    if (paymentItem) {
-      const input = {
-        adsId: paymentItem.id,
-        paymentType: mapPaymentType(paymentType),
-        receiptId: `REC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`, 
-        paymentDate: new Date().toISOString(),
-      };
-
-      try {
-        const { data: mutationData } = await createPayment({ variables: { input } });
-
-        if (mutationData.createPayment.success) {
-          alert(`✅ Payment for ${paymentItem.productName} is now PAID!`);
-          // Navigate back to the return path (usually PaymentHistory)
-          navigate(returnTo);
-        } else {
-          alert(mutationData.createPayment.message);
-        }
-      } catch (e: any) {
-        alert(e.message || "Failed to create payment.");
+    try {
+      const { data } = await createPayment({ variables: { input } });
+      if (data?.createPayment?.success) {
+        alert(`✅ Payment for ${paymentItem.productName} is now PAID!`);
+        onClose();
+      } else {
+        showError(data?.createPayment?.message || "Payment failed.");
       }
-    } else {
-      // This is a regular payment flow (not from PaymentHistory)
-      // You can add your regular payment logic here
-      alert("Payment processing for regular flow - implement as needed");
-      navigate(returnTo);
+    } catch (err: any) {
+      const msg = err.message || "";
+
+      if (msg.includes("Ad is not approved")) {
+        showError("⚠️ This ad is not yet approved. You can only pay for approved ads.");
+      } else if (msg.includes("Ad not found")) {
+        showError("❌ The ad you’re trying to pay for was not found.");
+      } else if (msg.includes("A payment already exists")) {
+        showError("⚠️ A payment already exists for this ad.");
+      } else {
+        showError("❌ Unexpected error: " + msg);
+      }
+    }
+  };
+
+  const showError = (msg: string) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(null), 5000); // auto-hide after 5s
+  };
+
+  const renderPaymentDetails = () => {
+    switch (paymentType) {
+      case 'CASH':
+        return (
+          <div className="fixed bottom-4 right-[400px] bg-white rounded-xl shadow-lg w-80 max-w-sm p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-2">
+              <span className="text-lg font-bold">Cash</span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="mb-4">
+              <div className="flex justify-between items-baseline mb-2">
+                <span className="text-xl font-bold">Total Payment</span>
+                <span className="text-xl font-bold">
+                  P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <button
+              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors"
+              onClick={handlePayNow}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Pay"}
+            </button>
+          </div>
+        );
+
+      case 'CREDIT_CARD':
+      case 'DEBIT_CARD':
+        return (
+          <div className="fixed bottom-4 right-[400px] bg-white rounded-xl shadow-lg w-80 max-w-md p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-2">
+              <span className="text-lg font-bold">Card Payment</span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <p className="text-sm font-semibold text-gray-800 mb-2">
+              Total: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+            </p>
+            <div className="space-y-4">
+              <input type="text" placeholder="Card Number" className="w-full border p-2 rounded" />
+              <input type="text" placeholder="Card Holder Name" className="w-full border p-2 rounded" />
+              <div className="flex space-x-4">
+                <input type="text" placeholder="Expiry Date (MM/YY)" className="w-1/2 border p-2 rounded" />
+                <input type="text" placeholder="CVV" className="w-1/2 border p-2 rounded" />
+              </div>
+            </div>
+            <button
+              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              onClick={handlePayNow}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Pay with Card"}
+            </button>
+          </div>
+        );
+
+      case 'GCASH':
+        return ( 
+          <div className="fixed bottom-4 right-[400px] bg-white rounded-xl shadow-lg w-80 max-w-sm p-6 ">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-2">
+              <span className="text-lg font-bold">GCash Payment</span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <p className="text-sm font-semibold text-gray-800 mb-2">
+              Total: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-600 mb-4">Please enter your GCash mobile number to proceed.</p>
+            <input type="text" placeholder="GCash Mobile Number" className="w-full border p-2 rounded" />
+            <button
+              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              onClick={handlePayNow}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Pay with GCash"}
+            </button>
+          </div>
+        );
+
+      case 'PAYPAL':
+        return (
+          <div className="fixed bottom-4 right-[400px] bg-white rounded-xl shadow-lg w-80 max-w-md p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-2">
+              <span className="text-lg font-bold">PayPal Payment</span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <p className="text-sm font-semibold text-gray-800 mb-2">
+              Total: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              You will be redirected to PayPal to complete your payment.
+            </p>
+            <button
+              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              onClick={handlePayNow}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Continue to PayPal"}
+            </button>
+          </div>
+        );
+
+      case 'BANK_TRANSFER':
+        return (
+          <div className="fixed bottom-4 right-[400px] bg-white rounded-xl shadow-lg w-80 max-w-md p-6">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-300 pb-2">
+              <span className="text-lg font-bold">Bank Transfer Details</span>
+              <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <p className="text-sm font-semibold text-gray-800 mb-2">
+              Total: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
+            </p>
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="text-sm font-bold text-gray-800">Bank Name:</p>
+              <p className="text-sm text-gray-600 mb-2">Your Bank Name</p>
+              <p className="text-sm font-bold text-gray-800">Account Name:</p>
+              <p className="text-sm text-gray-600 mb-2">Your Company Name</p>
+              <p className="text-sm font-bold text-gray-800">Account Number:</p>
+              <p className="text-sm text-gray-600">123-456-7890</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Please transfer the exact amount and send a screenshot of the transaction to our support team for confirmation.
+            </p>
+            <button
+              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              onClick={handlePayNow}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "I have Paid"}
+            </button>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-2 pt-20 pl-36 rounded-lg">
-      <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Payment Information</h1>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      {renderPaymentDetails()}
 
-      {/* Display Payment Item Details if coming from PaymentHistory */}
-      {paymentItem && (
-        <div className="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-800 rounded-lg">
-          <div className="flex items-center space-x-4 mb-4">
-            <PaymentMediaPreview 
-              mediaFile={paymentItem.imageUrl} 
-              adFormat={paymentItem.adFormat} 
-              productName={paymentItem.productName}
-            />
-            <div className="flex-grow">
-              <h3 className="font-semibold text-lg text-blue-900">{paymentItem.productName}</h3>
-              <div className="text-sm text-blue-700 mt-1 space-y-1">
-                <p>Plan: {paymentItem.plan}</p>
-                <p>Ad ID: {paymentItem.id}</p>
-                <p>Format: {paymentItem.adFormat}</p>
-                <p>Type: {paymentItem.adType}</p>
-                {paymentItem.adLengthSeconds > 0 && (
-                  <p>Duration: {paymentItem.adLengthSeconds}s</p>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="border-t border-blue-300 pt-3">
-            <p className="text-xl font-bold text-blue-900">
-              Amount Due: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
-            </p>
-          </div>
+      {/* ✅ Toast error bottom-right */}
+      {errorMessage && (
+        <div className="fixed bottom-5 right-5 w-44 text-center bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg text-sm font-bold animate-slide-right z-[9999]">
+          {errorMessage}
         </div>
       )}
 
-      {/* Personal Details */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        {['address', 'city', 'state', 'postalCode'].map((field) => (
-          <div key={field}>
-            <label className="text-sm font-medium text-gray-800 mb-1 block capitalize">{field.replace(/([A-Z])/g, ' $1')}</label>
-            <input
-              type="text"
-              value={personalInfo[field as keyof typeof personalInfo]}
-              onChange={(e) => handleInput(e, field)}
-              className="w-full border border-[#3674B5] rounded-lg px-3 py-2"
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Payment Methods */}
-      <div className="mb-6">
-        <h2 className="font-semibold text-gray-700 mb-3">Select Payment Method</h2>
-        <div className="flex flex-wrap gap-4">
-          {["card", "gcash", "paypal", "gpay", "maya", "cash"].map((method) => (
-            <button
-              key={method}
-              onClick={() => setPaymentType(method)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition 
-                ${paymentType === method ? 'bg-[#3674B5] text-white border-[#3674B5]' : 'bg-white border-[#3674B5] hover:bg-[#3674B5] hover:text-white'}`}
-            >
-              <img src={`/icons/${method}.png`} alt={method} className="h-6 w-6" />
-              <span className="capitalize">{method}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Conditional Payment Fields */}
-      <div className="mb-8">
-        {paymentType === "card" && (
-          <>
-            <h2 className="font-semibold text-gray-700 mb-3">Card Information</h2>
-            <div className="space-y-4">
-              <div className="relative">
-                <User className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Cardholder Name"
-                  className="pl-10 w-full border border-[#3674B5] rounded-lg px-3 py-2"
-                  value={cardDetails.holder}
-                  onChange={(e) => setCardDetails({ ...cardDetails, holder: e.target.value })}
-                />
-              </div>
-              <div className="relative">
-                <CreditCard className="absolute left-3 top-3 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Card Number"
-                  className="pl-10 w-full border border-[#3674B5] rounded-lg px-3 py-2"
-                  value={cardDetails.number}
-                  onChange={handleCardNumberChange}
-                />
-              </div>
-              {cardDetails.type && (
-                <p className="text-sm text-gray-500 ml-1">Detected: {cardDetails.type}</p>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-3 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="MM/YY"
-                    className="pl-10 w-full border border-[#3674B5] rounded-lg px-3 py-2"
-                    value={cardDetails.expiry}
-                    onChange={(e) => setCardDetails({ ...cardDetails, expiry: e.target.value })}
-                  />
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 text-gray-400" size={18} />
-                  <input
-                    type="text"
-                    placeholder="CVC"
-                    className="pl-10 w-full border border-[#3674B5] rounded-lg px-3 py-2"
-                    value={cardDetails.cvv}
-                    onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })}
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {paymentType === 'gcash' && (
-          <>
-            <h2 className="font-semibold text-gray-700 mb-3">GCash Details</h2>
-            <input type="text" placeholder="GCash Number" className="w-full border border-[#3674B5] px-3 py-2 mb-3 rounded-lg" />
-            <input type="text" placeholder="Account Holder Name" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
-          </>
-        )}
-
-        {paymentType === 'paypal' && (
-          <>
-            <h2 className="font-semibold text-gray-700 mb-3">PayPal Email</h2>
-            <input type="email" placeholder="example@paypal.com" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
-          </>
-        )}
-
-        {paymentType === 'gpay' && (
-          <>
-            <h2 className="font-semibold text-gray-700 mb-3">Google Pay</h2>
-            <input type="email" placeholder="GPay Email or Phone" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
-          </>
-        )}
-
-        {paymentType === 'maya' && (
-          <>
-            <h2 className="font-semibold text-gray-700 mb-3">Maya Details</h2>
-            <input type="text" placeholder="Maya Account Number" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg mb-3" />
-            <input type="text" placeholder="Account Holder Name" className="w-full border border-[#3674B5] px-3 py-2 rounded-lg" />
-          </>
-        )}
-
-        {paymentType === 'cash' && (
-          <div className="bg-yellow-50 p-4 border-l-4 border-yellow-400 rounded-lg">
-            <h2 className="font-semibold text-gray-700 mb-2">Pay at Office</h2>
-            <p className="text-sm text-gray-600">
-              Please visit our office at <strong>123 Main Street, Arusha</strong> between <strong>8:00 AM – 4:00 PM</strong>, Monday–Friday.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex justify-between pt-4">
-        <button 
-          onClick={() => navigate(returnTo)}
-          className="px-5 py-2 rounded-lg hover:bg-gray-100 border border-gray-300 text-gray-700"
-        >
-          Back
-        </button>
-        <button 
-          onClick={handleContinue}
-          className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#578FCA] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
-        >
-          {paymentItem ? 'Complete Payment' : 'Continue'}
-        </button>
-      </div>
+      {/* Inline CSS for animation */}
+      <style>
+        {`
+          @keyframes slide-right {
+            from {
+              opacity: 0;
+              transform: translateX(100%);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          .animate-slide-right {
+            animation: slide-right 0.3s ease-out;
+          }
+        `}
+      </style>
     </div>
   );
+
 };
 
 export default Payment;
