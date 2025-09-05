@@ -4,6 +4,7 @@ import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
+
 // Import Navbars
 import UserNavbar from './components/UserNavbar';
 import AdminNavbar from './components/AdminNavbar';
@@ -43,6 +44,7 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+import PaymentHistory from './pages/USERS/PaymentHistory';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -213,10 +215,10 @@ const UserAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/payment"
+          path="/paymentHistory"
           element={
             <ProtectedRoute>
-              <Payment />
+              <PaymentHistory />
             </ProtectedRoute>
           }
         />
@@ -343,6 +345,8 @@ const App: React.FC = () => {
                      location.pathname.startsWith('/advertisements') ||
                      location.pathname.startsWith('/account') ||
                      location.pathname.startsWith('/settings') ||
+                     location.pathname.startsWith('/payment') || // ✅ covers /payment
+                     location.pathname.startsWith('/paymentHistory') || 
                      location.pathname === '/login' ||
                      location.pathname === '/register' ||
                      location.pathname === '/verify-email';

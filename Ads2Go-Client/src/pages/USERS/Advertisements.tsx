@@ -319,8 +319,8 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5">
-      <div className="bg-gray-100 p-6 flex justify-between items-center">
+    <div className="min-h-screen rounded-l-xl bg-white pl-64 pr-5">
+      <div className="bg-white p-6 flex justify-between items-center">
         <h1 className="text-4xl mt-8 font-semibold">Advertisements</h1>
         <div className="flex space-x-3">
           <span className="pt-1 mt-10 text-gray-500 ">{filteredAds.length} Ads found</span>
@@ -383,18 +383,18 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className=" bg-gray-100 p-6 grid grid-cols-4 gap-6">
+      <div className=" bg-none p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
               key={ad.id}
-              className="rounded-2xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className=" overflow-hidden relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
-              <div className="w-full h-48 flex-shrink-0 relative">
+              <div className="w-full h-48 flex-shrink-0 rounded-lg relative bg-gray-300">
                 {ad.adFormat === 'Video' && ad.mediaFile ? (
                   <video
                     src={ad.mediaFile}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-lg"
                     controls
                   >
                     Your browser does not support the video tag.
@@ -403,48 +403,42 @@ const Advertisements: React.FC = () => {
                   <img
                     src={ad.mediaFile}
                     alt={`${ad.title} image`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover rounded-lg"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
-                    No Media
+                  <div className="w-full h-full bg-gray-300 flex items-center justify-center text-white">
+                    {/* Placeholder div to match the image */}
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-gray-100 flex-grow flex flex-col">
-                <div
-                  className="flex-grow cursor-pointer"
-                  // Corrected navigation to user ad details page
-                  onClick={() => navigate(`/ad-details/${ad.id}`)}
-                >
+              <div className="p-4 bg-none flex-grow flex flex-col">
+                <div className="flex-grow cursor-pointer" onClick={() => navigate(`/ad-details/${ad.id}`)}>
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
-                  <p className="text-sm text-gray-500 mt-2">{formatDate(ad.createdAt)}</p>
+                  <p className="text-sm text-gray-500 mt-2 overflow-hidden whitespace-nowrap text-ellipsis">{ad.description}</p>
                 </div>
 
-                <div className="mt-4 pt-5 border-t border-gray-200">
+                <div className="mt-4 pt-5 border-t border-gray-200 flex space-x-2">
+                  <span className={`px-4 py-2 text-sm font-semibold rounded-xl text-black ${
+                      ad.status === 'PENDING' ? 'bg-yellow-200' : 
+                      ad.status === 'APPROVED' ? 'bg-blue-200' :
+                      ad.status === 'REJECTED' ? 'bg-red-200' :
+                      ad.status === 'RUNNING' ? 'bg-green-200' :
+                      'bg-gray-200'}`}>
+                    {formatStatus(ad.status)}
+                  </span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Corrected navigation to user ad details page
                       navigate(`/ad-details/${ad.id}`);
                     }}
-                    className="text-white text-sm bg-[#3674B5] font-semibold rounded-xl px-4 py-2 flex items-center justify-between w-full hover:bg-[#0E2A47] hover:text-white transition-colors"
+                    className="text-black text-sm bg-none border font-semibold rounded-xl px-4 py-2 flex items-center justify-center flex-grow hover:bg-[#1B5087] hover:text-white transition-colors"
                   >
-                    View Details <span>→</span>
+                    View Details
                   </button>
                 </div>
               </div>
-
-              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-xl ${
-                ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
-                ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
-                ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
-                ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
-                'bg-gray-200 text-gray-800'}`}>
-                {formatStatus(ad.status)}
-              </span>
             </div>
           ))
         ) : (
