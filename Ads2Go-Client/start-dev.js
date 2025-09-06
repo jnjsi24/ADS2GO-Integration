@@ -5,16 +5,14 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 // Set environment variables for memory optimization
-process.env.NODE_OPTIONS = '--max-old-space-size=8192 --optimize-for-size --gc-interval=100 --max-semi-space-size=128';
+process.env.NODE_OPTIONS = '--max-old-space-size=8192 --gc-interval=100 --max-semi-space-size=128';
 
 // Additional memory optimization flags
 const nodeArgs = [
   '--max-old-space-size=8192',
-  '--optimize-for-size',
   '--gc-interval=100',
   '--max-semi-space-size=128',
-  '--expose-gc',
-  '--trace-gc'
+  '--expose-gc'
 ];
 
 const reactScriptsPath = path.join(__dirname, 'node_modules', '.bin', 'react-scripts');
@@ -23,9 +21,9 @@ const args = ['start'];
 console.log('🚀 Starting development server with memory optimizations...');
 console.log('📊 Memory settings:', {
   maxOldSpaceSize: '8GB',
-  optimizeForSize: true,
   gcInterval: '100ms',
-  maxSemiSpaceSize: '128MB'
+  maxSemiSpaceSize: '128MB',
+  exposeGC: true
 });
 
 const child = spawn('node', [...nodeArgs, reactScriptsPath, ...args], {
