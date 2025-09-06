@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import { memoryOptimizer } from './utils/memoryOptimization';
 
 
 // Import Navbars
@@ -334,25 +333,6 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Initialize memory optimization
-  useEffect(() => {
-    // Start memory optimization with 30-second intervals
-    memoryOptimizer.startOptimization(30000);
-    
-    // Log memory info periodically
-    const memoryInterval = setInterval(() => {
-      const memoryInfo = memoryOptimizer.getMemoryInfo();
-      if (memoryInfo) {
-        console.log('Memory usage:', memoryInfo);
-      }
-    }, 60000); // Every minute
-    
-    return () => {
-      memoryOptimizer.stopOptimization();
-      clearInterval(memoryInterval);
-    };
-  }, []);
   
   // Check if we're on admin-related routes
   const isAdminRoute = location.pathname.startsWith('/admin') || 
