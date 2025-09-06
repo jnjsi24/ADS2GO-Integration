@@ -18,11 +18,12 @@ import ForgotPass from './pages/USERS/ForgotPass';
 import VerifyEmail from './pages/USERS/VerifyEmail';
 import Landing from './pages/USERS/Landing';
 import Account from './pages/USERS/Account';
+import Payment from './pages/USERS/Payment';
 import Help from './pages/USERS/Help';
 import Settings from './pages/USERS/Settings';
 
 // Lazy load heavy components
-import { LazyCreateAdvertisement, LazyDashboard, LazyAdvertisements, LazyPaymentHistory, LazyAdDetailsPage } from './utils/lazyComponents';
+import { LazyCreateAdvertisement, LazyDashboard, LazyAdvertisements, LazyPaymentHistory, LazyAdDetailsPage, LoadingSpinner } from './utils/lazyComponents';
 
 // Admin pages - Lazy load heavy components
 import AdminLogin from './pages/AUTH/AdminLogin';
