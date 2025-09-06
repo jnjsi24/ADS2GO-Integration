@@ -51,22 +51,14 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
 
 const client = new ApolloClient({
   link: ApolloLink.from([errorLink, authLink, httpLink]),
-  cache: new InMemoryCache({
-    typePolicies: {
-      Query: {
-        fields: {
-          // Add specific field policies to control caching
-        }
-      }
-    }
-  }),
+  cache: new InMemoryCache(),
   defaultOptions: {
     watchQuery: {
-      fetchPolicy: 'cache-first',
+      fetchPolicy: 'network-only',
       errorPolicy: 'all',
     },
     query: {
-      fetchPolicy: 'cache-first',
+      fetchPolicy: 'network-only',
       errorPolicy: 'all',
     },
     mutate: {
