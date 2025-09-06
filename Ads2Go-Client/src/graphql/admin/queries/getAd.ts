@@ -13,8 +13,6 @@ export const GET_MY_ADS = gql`
       price
       status
       createdAt
-      startTime
-      endTime
       planId {
         id
         name
