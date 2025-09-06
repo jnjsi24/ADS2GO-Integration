@@ -4,13 +4,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Set environment variables for memory optimization
-process.env.NODE_OPTIONS = '--max-old-space-size=8192';
-
-// Additional memory optimization flags
+// Memory optimization flags - only use direct node arguments
 const nodeArgs = [
-  '--max-old-space-size=8192',
-  '--expose-gc'
+  '--max-old-space-size=8192'
 ];
 
 const reactScriptsPath = path.join(__dirname, 'node_modules', '.bin', 'react-scripts');
@@ -18,16 +14,12 @@ const args = ['start'];
 
 console.log('🚀 Starting development server with memory optimizations...');
 console.log('📊 Memory settings:', {
-  maxOldSpaceSize: '8GB',
-  exposeGC: true
+  maxOldSpaceSize: '8GB'
 });
 
 const child = spawn('node', [...nodeArgs, reactScriptsPath, ...args], {
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    NODE_OPTIONS: nodeArgs.join(' ')
-  }
+  env: process.env
 });
 
 child.on('error', (error) => {
