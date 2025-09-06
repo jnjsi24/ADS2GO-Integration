@@ -15,7 +15,7 @@ PORT = "5000"
 [[services]]
 name = "ads2go-client"
 root = "Ads2Go-Client"
-build = "npm ci && NODE_OPTIONS='--max-old-space-size=4096' npm run build"
+build = "npm ci && npm run build:ci"
 start = "npx --yes serve -s build -l $PORT"
 
 [[services.env]]
