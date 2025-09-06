@@ -8,6 +8,7 @@ export const LazyManageUsers = React.lazy(() => import('../pages/ADMIN/ManageUse
 export const LazyPaymentHistory = React.lazy(() => import('../pages/USERS/PaymentHistory'));
 export const LazyAdvertisements = React.lazy(() => import('../pages/USERS/Advertisements'));
 export const LazyDashboard = React.lazy(() => import('../pages/USERS/Dashboard'));
+export const LazyAdDetailsPage = React.lazy(() => import('../pages/USERS/AdDetailsPage'));
 
 // Loading component for Suspense
 export const LoadingSpinner = () => (
