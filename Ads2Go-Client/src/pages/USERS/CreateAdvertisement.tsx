@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
@@ -40,59 +40,6 @@ const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
-  const [activePlanIndex, setActivePlanIndex] = useState(0);
-  const [showToast, setShowToast] = useState(false);
-
-  // State for custom calendar
-  const [currentDate, setCurrentDate] = useState(new Date()); // Initialize with today's date (September 5, 2025)
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Initialize with today's date
-
-// Function to generate days for the current month
-const getDaysInMonth = (date: Date) => {
-  
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const days = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysArray = [];
-  for (let i = 0; i < firstDay; i++) {
-    daysArray.push(null);
-  }
-  for (let i = 1; i <= days; i++) {
-    daysArray.push(i);
-  }
-  return daysArray;
-};
-
-// Handle date selection
-const today = new Date(); // Current date
-
-// Handle date selection
-const handleDateClick = (day: number | null) => {
-  if (day) {
-    const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-
-    // Prevent selecting past dates
-    if (newDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-      return;
-    }
-
-    setSelectedDate(newDate);
-    setFormData({ ...formData, startDate: newDate.toISOString().split('T')[0] });
-  }
-};
-
-
-// Navigate to previous month
-const prevMonth = () => {
-  setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-};
-
-// Navigate to next month
-const nextMonth = () => {
-  setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-};
-
   const [formData, setFormData] = useState<AdvertisementForm>({
     title: '',
     description: '',
@@ -120,9 +67,6 @@ const nextMonth = () => {
       day: 'numeric'
     });
   };
-
-  
-
 
   // Automatically fetch and select material based on selected plan
   const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
@@ -307,23 +251,17 @@ const nextMonth = () => {
       };
 
       // Create the ad with the Firebase media URL
-       await createAd({
-    variables: { input },
-  });
+      await createAd({
+        variables: { input },
+      });
 
-  // Show toast instead of alert
-  setShowToast(true);
-
-  // Auto-hide after 3 seconds
-  setTimeout(() => {
-    setShowToast(false);
-    navigate('/advertisements'); // navigate after toast disappears
-  }, 3000);
-
-} catch (error) {
-  console.error('Error creating advertisement:', error);
-  alert('Failed to create advertisement. Please try again.');
-}
+      // Show success message and navigate back to advertisements page
+      alert('Advertisement created successfully!');
+      navigate('/advertisements');
+    } catch (error) {
+      console.error('Error creating advertisement:', error);
+      alert('Failed to create advertisement. Please try again.');
+    }
   };
 
   const canProceedToStep = (step: number) => {
@@ -345,21 +283,21 @@ const nextMonth = () => {
         <React.Fragment key={index}>
           <div className="flex flex-col items-center">
             <div
-              className={`w-11 h-11 rounded-full flex items-center justify-center ${
+              className={`w-8 h-8 rounded-full flex items-center justify-center ${
                 currentStep > index + 1 || (currentStep === index + 1 && canProceedToStep(currentStep))
-                  ? 'bg-[#FF9800] text-white font-bold'
-                  : 'bg-gray-200 text-gray-600 '
+                  ? 'bg-[#251f70] text-white'
+                  : 'bg-gray-200 text-gray-600'
               }`}
             >
               {index + 1}
             </div>
-            <span className={`text-sm mt-1 text-gray-600 ${currentStep === index + 1 ? 'font-bold' : ''}`}>{step}</span>
+            <span className="text-xs mt-1 text-gray-600">{step}</span>
           </div>
           {index < 3 && (
-            <div className="w-16 h-1 bg-gray-200 mx-2 mb-5">
+            <div className="w-16 h-1 bg-gray-200 mx-2 mt-4">
               <div
                 className={`h-full ${
-                  currentStep > index + 1 ? 'bg-[#FF9B45]' : 'bg-gray-200'
+                  currentStep > index + 1 ? 'bg-[#251f70]' : 'bg-gray-200'
                 }`}
                 style={{
                   width: currentStep > index + 1 ? '100%' : '0%',
@@ -373,164 +311,108 @@ const nextMonth = () => {
     </div>
   );
 
-  // Inside your CreateAdvertisement component, before return (...)
-useEffect(() => {
-  if (plans.length > 0) {
-    const activePlan = plans[activePlanIndex];
-    setSelectedPlan(activePlan);
-    setFormData((prev) => ({
-      ...prev,
-      planId: activePlan._id,
-      adType: activePlan.category === "DIGITAL" ? "DIGITAL" : "NON_DIGITAL",
-    }));
-  }
-}, [activePlanIndex, plans]);
-
   const renderStep1 = () => (
-  <div>
-    <h2 className="text-2xl font-semibold mb-6 text-center">Choose Your Plan</h2>
-
-    {loading ? (
-      <div className="flex justify-center items-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-[#251f70]" />
-        <span className="ml-2">Loading plans...</span>
-      </div>
-    ) : error ? (
-      <div className="text-center py-8 text-red-500">
-        Error loading plans. Please try again later.
-      </div>
-    ) : plans.length === 0 ? (
-      <div className="text-center py-8 text-gray-500">
-        No active plans available at the moment.
-      </div>
-    ) : (
-      <div className="relative h-[550px] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          {plans.map((plan, index) => {
-            let transformClass = "scale-90 opacity-0";
-            if (index === activePlanIndex) {
-              transformClass = "scale-105 opacity-100 z-20"; // front card slightly bigger
-            } else if (index === (activePlanIndex + 1) % plans.length) {
-              transformClass = "translate-x-[40%] scale-100 opacity-60 z-10"; // right
-            } else if (index === (activePlanIndex - 1 + plans.length) % plans.length) {
-              transformClass = "translate-x-[-40%] scale-100 opacity-60 z-10"; // left
-            }
-
-            return (
-              <div
-                key={plan._id}
-                className={`absolute mb-8 w-full max-w-md h-[480px] transform transition-all duration-500 ${transformClass}`}
-                onClick={() => setActivePlanIndex(index)} // 🆕 click side card to bring it front
-              >
-                <div
-                  className={`border-2 rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
-                    selectedPlan?._id === plan._id
-                      ? "shadow-xl bg-white border-gray-400"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
-                  }`}
-                >
-                  <h3 className="text-xl mt-4 font-semibold mb-2">{plan.name}</h3>
-                  <p className="text-gray-600 mb-4">{plan.description}</p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Duration:</span>
-                      <span className="font-medium">{plan.durationDays} days</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Vehicles:</span>
-                      <span className="font-medium">{plan.vehicleType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Material:</span>
-                      <span className="font-medium">{plan.materialType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Devices:</span>
-                      <span className="font-medium">{plan.numberOfDevices}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Ad Length:</span>
-                      <span className="font-medium">{plan.adLengthSeconds}s</span>
-                    </div>
-                    <div className="border-t pt-2 mt-4">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total Price:</span>
-                        <span className="text-[#251f70]">
-                          ₱{plan.totalPrice.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
+    <div>
+      <h2 className="text-2xl font-semibold mb-6 text-center">Choose Your Plan</h2>
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-[#251f70]" />
+          <span className="ml-2">Loading plans...</span>
+        </div>
+      ) : error ? (
+        <div className="text-center py-8 text-red-500">
+          Error loading plans. Please try again later.
+        </div>
+      ) : plans.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          No active plans available at the moment.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plans.map((plan) => (
+            <div
+              key={plan._id}
+              className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                selectedPlan?._id === plan._id
+                  ? 'border-[#251f70] bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+              onClick={() => {
+                setSelectedPlan(plan);
+                setFormData({ 
+                  ...formData, 
+                  planId: plan._id,
+                  adType: plan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL'
+                });
+              }}
+            >
+              <h3 className="text-xl font-semibold mb-2">{plan.name}</h3>
+              <p className="text-gray-600 mb-4">{plan.description}</p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span>Duration:</span>
+                  <span className="font-medium">{plan.durationDays} days</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Vehicles:</span>
+                  <span className="font-medium">{plan.vehicleType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Material:</span>
+                  <span className="font-medium">{plan.materialType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Devices:</span>
+                  <span className="font-medium">{plan.numberOfDevices}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Ad Length:</span>
+                  <span className="font-medium">{plan.adLengthSeconds}s</span>
+                </div>
+                <div className="border-t pt-2 mt-4">
+                  <div className="flex justify-between text-lg font-bold">
+                    <span>Total Price:</span>
+                    <span className="text-[#251f70]">₱{plan.totalPrice.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Navigation buttons */}
-        <button
-          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 rounded-full flex items-center justify-center text-gray-500 hover:bg-white shadow-md transition-all hover:scale-110"
-          onClick={() =>
-            setActivePlanIndex((prev) => (prev - 1 + plans.length) % plans.length)
-          }
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <button
-          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 rounded-full flex items-center justify-center text-gray-500 hover:bg-white shadow-md transition-all hover:scale-110"
-          onClick={() => setActivePlanIndex((prev) => (prev + 1) % plans.length)}
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
-
-        {/* Dots */}
-        <div className="absolute bottom-1 left-0 right-0 flex justify-center items-center space-x-3">
-          {plans.map((_, idx) => (
-            <button
-              key={idx}
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                activePlanIndex === idx ? "bg-[#251f70] w-5" : "bg-gray-300"
-              }`}
-              onClick={() => setActivePlanIndex(idx)}
-            />
+            </div>
           ))}
         </div>
-      </div>
-    )}
+      )}
 
-    {/* Auto-material selection section (unchanged, but always matches selectedPlan) */}
-    {selectedPlan && (
-      <div className="mt-8 p-4 bg-blue-50 max-w-2xl mx-auto rounded-lg">
-        <h3 className="font-medium text-[#1B5087] mb-2">Automatic Material Selection</h3>
-        {loadingMaterials ? (
-          <div className="flex items-center text-blue-700">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Finding compatible materials...
-          </div>
-        ) : formData.materialId ? (
-          <div className="text-[#1B5087]">
-            <p className="text-sm">
-              ✓ Compatible material automatically selected for your {selectedPlan.category} plan
-              on {selectedPlan.vehicleType} vehicles.
-            </p>
-            {materials.length > 0 && (
-              <p className="text-sm mt-1">
-                Material ID: {materials.find((m) => m.id === formData.materialId)?.materialId}
+      {/* Show automatic material selection status */}
+      {selectedPlan && (
+        <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 className="font-medium text-blue-800 mb-2">Automatic Material Selection</h3>
+          {loadingMaterials ? (
+            <div className="flex items-center text-blue-700">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              Finding compatible materials...
+            </div>
+          ) : formData.materialId ? (
+            <div className="text-blue-700">
+              <p className="text-sm">
+                ✓ Compatible material automatically selected for your {selectedPlan.category} plan 
+                on {selectedPlan.vehicleType} vehicles.
               </p>
-            )}
-          </div>
-        ) : (
-          <div className="text-red-700">
-            <p className="text-sm">
-              ⚠ No compatible materials found for this plan. Please contact support.
-            </p>
-          </div>
-        )}
-      </div>
-    )}
-  </div>
-);
-
+              {materials.length > 0 && (
+                <p className="text-sm mt-1">
+                  Material ID: {materials.find(m => m.id === formData.materialId)?.materialId}
+                  </p>
+              )}
+            </div>
+          ) : (
+            <div className="text-red-700">
+              <p className="text-sm">
+                ⚠ No compatible materials found for this plan. Please contact support.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // Step 2: Advertisement Details (previously step 3)
   const renderStep2 = () => (
@@ -538,127 +420,50 @@ useEffect(() => {
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
       <div className="space-y-6">
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Advertisement Title *
           </label>
           <input
             type="text"
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400"
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70]"
             placeholder="Enter advertisement title"
             required
           />
         </div>
         
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Description *
           </label>
           <textarea
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400 h-32"
-
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70] h-32"
             placeholder="Describe your advertisement"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Campaign Start Date *
           </label>
           <div className="relative">
-            <div className="bg-white border border-gray-300 rounded-md shadow-sm p-14">
-              <div className="flex justify-between items-center mb-3">
-                <button onClick={prevMonth} className="text-black pl-6 mb-7 hover:text-[#FF9B45]">
-                  <ChevronLeft size={20} />
-                </button>
-                <select
-                  value={currentDate.getMonth()}
-                  onChange={(e) => {
-                    const newMonth = parseInt(e.target.value);
-                    const newDate = new Date(currentDate.getFullYear(), newMonth, 1);
-
-                    // Prevent selecting past month in the current year
-                    if (currentDate.getFullYear() === today.getFullYear() && newMonth < today.getMonth()) {
-                      return;
-                    }
-                    setCurrentDate(newDate);
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {[
-                    'January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'
-                  ].map((month, index) => {
-                    const isDisabled = currentDate.getFullYear() === today.getFullYear() && index < today.getMonth();
-                    return (
-                      <option key={month} value={index} disabled={isDisabled}>
-                        {month}
-                      </option>
-                    );
-                  })}
-                </select>
-                <select
-                  value={currentDate.getFullYear()}
-                  onChange={(e) => {
-                    const newYear = parseInt(e.target.value);
-                    if (newYear < today.getFullYear()) return; // prevent past years
-                    setCurrentDate(new Date(newYear, currentDate.getMonth(), 1));
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {Array.from({ length: 10 }, (_, i) => today.getFullYear() - 5 + i).map(year => (
-                    <option key={year} value={year} disabled={year < today.getFullYear()}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-
-                <button onClick={nextMonth} className="text-black mb-7 pr-8 hover:text-[#FF9B45]">
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-              {/* This container holds the days of the week and the horizontal line */}
-              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 border-b-2 pb-4 border-gray-300 pb-2">
-                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
-                  <div key={day} className="font-semibold text-sm">{day}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 pt-2">
-  {getDaysInMonth(currentDate).map((day, index) => {
-    const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
-    const isPast = dayDate ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
-
-    return (
-      <div
-        key={index}
-        onClick={() => !isPast && handleDateClick(day)}
-        className={`cursor-pointer p-2 rounded-lg ${
-          day
-            ? isPast
-              ? 'text-gray-300 cursor-not-allowed'
-              : selectedDate.getDate() === day &&
-                selectedDate.getMonth() === currentDate.getMonth() &&
-                selectedDate.getFullYear() === currentDate.getFullYear()
-              ? 'bg-[#1B5087] text-white'
-              : 'text-gray-800 hover:bg-gray-200 hover:text-black'
-            : 'text-gray-300'
-        }`}
-      >
-        {day || ''}
-      </div>
-    );
-  })}
-</div>
-
-            </div>
+            <input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+              min={new Date().toISOString().split('T')[0]} // Prevent selecting past dates
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#251f70] pl-10"
+              required
+            />
+            <Calendar className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
           </div>
           {selectedPlan && formData.startDate && (
             <p className="text-sm text-gray-600 mt-2">
-              Campaign will end on: <span className="font-bold">
+              Campaign will end on: <span className="font-medium">
                 {formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays))}
               </span>
             </p>
@@ -684,6 +489,7 @@ useEffect(() => {
       </div>
     </div>
   );
+
   // Step 3: Upload Media (previously step 4)
   const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
@@ -787,148 +593,127 @@ useEffect(() => {
 
   // Step 4: Review & Submit (previously step 5)
   const renderStep4 = () => (
-  <div className="max-w-4xl mx-auto">
-    <h2 className="text-xl text-center font-medium mb-4 text-gray-800">Review & Submit</h2>
+    <div className="max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6 text-center">Review & Submit</h2>
+      <div className="space-y-6">
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Advertisement Details</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Title:</span>
+              <p className="text-gray-600">{formData.title}</p>
+            </div>
+            <div>
+              <span className="font-medium">Type:</span>
+              <p className="text-gray-600">{formData.adType}</p>
+            </div>
+            <div className="col-span-2">
+              <span className="font-medium">Description:</span>
+              <p className="text-gray-600">{formData.description}</p>
+            </div>
+          </div>
+        </div>
 
-    {/* Top Row: Media Preview + Title/Description/Duration */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
+        <div className="bg-white border rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Campaign Schedule</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium">Start Date:</span>
+              <p className="text-gray-600">{formatDateForDisplay(formData.startDate)}</p>
+            </div>
+            <div>
+              <span className="font-medium">End Date:</span>
+              <p className="text-gray-600">
+                {selectedPlan ? formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays)) : 'N/A'}
+              </p>
+            </div>
+            <div className="col-span-2">
+              <span className="font-medium">Campaign Duration:</span>
+              <p className="text-gray-600">{selectedPlan?.durationDays} days</p>
+            </div>
+          </div>
+        </div>
 
-      {/* Media Preview */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <h3 className="text-xl font-medium text-gray-600 mb-7">Media Preview</h3>
+        {selectedPlan && (
+          <div className="bg-white border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4">Selected Plan & Material</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="font-medium">Plan:</span>
+                <p className="text-gray-600">{selectedPlan.name}</p>
+              </div>
+              <div>
+                <span className="font-medium">Duration:</span>
+                <p className="text-gray-600">{selectedPlan.durationDays} days</p>
+              </div>
+              <div>
+                <span className="font-medium">Vehicle Type:</span>
+                <p className="text-gray-600">{selectedPlan.vehicleType}</p>
+              </div>
+              <div>
+                <span className="font-medium">Material:</span>
+                <p className="text-gray-600">{selectedPlan.materialType}</p>
+              </div>
+              <div>
+                <span className="font-medium">Devices:</span>
+                <p className="text-gray-600">{selectedPlan.numberOfDevices}</p>
+              </div>
+              <div>
+                <span className="font-medium">Total Price:</span>
+                <p className="text-[#251f70] font-bold">₱{selectedPlan.totalPrice.toLocaleString()}</p>
+              </div>
+              {materials.length > 0 && formData.materialId && (
+                <div className="col-span-2">
+                  <span className="font-medium">Auto-selected Material:</span>
+                  <p className="text-gray-600">
+                    {materials.find(m => m.id === formData.materialId)?.materialType} 
+                    (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {formData.mediaPreview && (
-          <div className="mb-1">
-            <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
+          <div className="bg-white border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4">Media Preview</h3>
+            <div className="border rounded-lg overflow-hidden">
               {formData.mediaFile?.type.startsWith('video/') ? (
                 <video
                   src={formData.mediaPreview}
-                  className="w-full h-60 object-cover"
+                  className="w-full h-48 object-cover"
                   controls
                 />
               ) : (
                 <img
                   src={formData.mediaPreview}
                   alt="Media preview"
-                  className="w-full h-32 object-cover"
+                  className="w-full h-48 object-cover"
                 />
               )}
             </div>
-            <p className="text-md text-center mt-2 text-black">
+            <p className="text-sm text-gray-600 mt-2">
               File: {formData.mediaFile?.name}
             </p>
           </div>
         )}
-      </div>
 
-      {/* Title/Description/Duration */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Advertisement Information</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Title:</span>
-            <p className="text-lg text-gray-600">{formData.title}</p>
-          </div>
-          <div>
-            <span className="font-medium">Description:</span>
-            <p className="text-lg text-gray-600">{formData.description}</p>
-          </div>
-          <div>
-            <span className="font-medium">Campaign Duration:</span>
-            <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-        </div>
-
-        {/* Agreement / Notice */}
-    <div className="bg-blue-50 rounded-lg p-4 mt-10 text-sm text-blue-800">
-      <p>
-        By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString() }
-        for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}.
-        Your advertisement will be submitted for review and you'll be notified once it's approved.
-      </p>
-    </div>
-
-      </div>
-    </div>
-
-    {/* Second Row: Campaign Schedule + Selected Plan & Material */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
-
-      {/* Campaign Schedule */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Campaign Schedule</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Start Date:</span>
-            <p className="text-lg text-gray-600">{formatDateForDisplay(formData.startDate)}</p>
-          </div>
-          <div>
-            <span className="font-medium">End Date:</span>
-           <p className="text-lg text-gray-600">
-              {selectedPlan ? formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays)) : 'N/A'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Selected Plan & Material */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Selected Plan & Material</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-700">Plan:</span>
-            <p className="text-blue-600">{selectedPlan?.name}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Duration:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Vehicle Type:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.vehicleType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Material:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.materialType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Devices:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.numberOfDevices}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Total Price:</span>
-            <p className="text-blue-600 text-lg font-medium">P{selectedPlan?.totalPrice.toLocaleString()}</p>
-          </div>
-          {materials.length > 0 && formData.materialId && (
-            <div className="col-span-2">
-              <span className="font-medium text-gray-700">Auto-selected Material:</span>
-             <p className="text-lg text-gray-600">
-                {materials.find(m => m.id === formData.materialId)?.materialType}
-                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
-              </p>
-            </div>
-          )}
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+          <p className="text-sm text-blue-800">
+            By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString()} 
+            for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}. 
+            Your advertisement will be submitted for review and you'll be notified once it's approved.
+          </p>
         </div>
       </div>
     </div>
+  );
 
-    
-  </div>
-);
-
-  
   return (
-    <div className="min-h-screen bg-white pl-64 pr-5 p-10">
-      <div className="bg-white ">
-        <div className="flex items-center mb-6 pl-9">
+    <div className="flex-1 pl-60 pb-6 bg-gray-50 min-h-screen">
+      <div className="bg-white p-6 shadow">
+        <div className="flex items-center mb-6">
           <button
             onClick={() => navigate('/advertisements')}
             className="flex items-center text-gray-600 hover:text-gray-800"
@@ -936,9 +721,10 @@ useEffect(() => {
             <ChevronLeft className="w-5 h-5 mr-1" />
             Back to Advertisements
           </button>
+          <h1 className="text-2xl font-bold ml-4">Create New Advertisement</h1>
         </div>
         
-        <div className="max-w-5xl mx-auto bg-white">
+        <div className="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md">
           {renderStepIndicator()}
           
           <div className="mb-8">
@@ -953,8 +739,8 @@ useEffect(() => {
               type="button"
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
               disabled={currentStep === 1}
-              className={`px-4 py-2 rounded-md ml-44 w-60${
-                currentStep === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-200'
+              className={`px-4 py-2 rounded-md ${
+                currentStep === 1 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Previous
@@ -965,8 +751,8 @@ useEffect(() => {
                 type="button"
                 onClick={() => setCurrentStep(prev => prev + 1)}
                 disabled={!canProceedToStep(currentStep + 1)}
-                className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                className={`px-4 py-2 rounded-md ${
+                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#251f70] text-white hover:bg-[#1a1652]'
                 }`}
               >
                 Next
@@ -976,10 +762,10 @@ useEffect(() => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canProceedToStep(currentStep) || isSubmitting}
-                className={`px-4 py-2 rounded-md mr-44 w-60 ${
+                className={`px-4 py-2 rounded-md flex items-center ${
                   !canProceedToStep(currentStep) || isSubmitting
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                    : 'bg-[#251f70] text-white hover:bg-[#1a1652]'
                 }`}
               >
                 {isSubmitting ? (
@@ -994,13 +780,6 @@ useEffect(() => {
             )}
           </div>
         </div>
-      </div>
-      <div
-        className={`fixed bottom-5 right-5 bg-[#251f70] text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-500 ${
-          showToast ? 'translate-x-0 opacity-100' : 'translate-x-32 opacity-0'
-        }`}
-      >
-        Advertisement created successfully!
       </div>
     </div>
   );
