@@ -45,25 +45,10 @@ const ForgotPass: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center bg-[#fdfdfd] justify-center">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70vw] h-auto object-cover"
-      >
-        <source src="/image/forgot.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0 "></div>
-      
-      {/* Form Container */}
-      <div className="absolute top-44 mr-44 z-10 max-w-md w-full p-6 text-center bg-none">
-        <h2 className="text-4xl font-semibold text-gray-200 mb-4 mt-2">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-100 px-4">
+      <div className="max-w-md w-full p-6 text-center">
+        <img src="/image/blue-logo.png" alt="Logo" className="mx-auto mb-4 w-20 h-auto" />
+        <h2 className="text-3xl font-semibold text-gray-800 mb-4">
           {step === "request" ? "Forgot Password" : "Reset Password"}
         </h2>
         <p className="text-gray-500 mb-6">
@@ -79,7 +64,7 @@ const ForgotPass: React.FC = () => {
             <input
               type="email"
               placeholder="Email"
-              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -87,7 +72,7 @@ const ForgotPass: React.FC = () => {
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              className="w-full bg-[#FF9800] text-white py-3 rounded-lg hover:bg-[#FF9B45] transition"
+              className="w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-400 transition"
               disabled={requesting}
             >
               {requesting ? "Sending..." : "Send Reset Token"}
@@ -98,7 +83,7 @@ const ForgotPass: React.FC = () => {
             <input
               type="text"
               placeholder="Reset Token"
-              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               required
@@ -106,7 +91,7 @@ const ForgotPass: React.FC = () => {
             <input
               type="password"
               placeholder="New Password"
-              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
@@ -114,7 +99,7 @@ const ForgotPass: React.FC = () => {
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              className="w-full bg-[#FF9800] text-white py-3 rounded-lg hover:bg-[#FF9B45] transition"
+              className="w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-400 transition"
               disabled={resetting}
             >
               {resetting ? "Resetting..." : "Reset Password"}
@@ -124,7 +109,7 @@ const ForgotPass: React.FC = () => {
 
         <a
           href="/login"
-          className="mt-6 inline-block text-blue-600 ml-1 hover:underline text-sm"
+          className="mt-6 inline-block text-gray-500 hover:text-gray-700 text-sm"
         >
           ← Go back to login
         </a>

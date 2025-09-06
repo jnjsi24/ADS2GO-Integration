@@ -39,7 +39,7 @@ const CREATE_PAYMENT = gql`
   }
 `;
 
-// Media display component for payment preview (following ManageAds.tsx pattern)
+// Media display component for payment preview
 const PaymentMediaPreview: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
   mediaFile, 
   adFormat, 
@@ -74,28 +74,23 @@ const PaymentMediaPreview: React.FC<{ mediaFile: string; adFormat: string; produ
           </div>
         )}
         <video
-          controls
+          src={mediaFile}
           className="max-w-full max-h-full object-cover"
-          onError={(e) => {
-            handleError();
-            // Additional error handling like in ManageAds
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'w-full h-full flex items-center justify-center text-gray-500 text-xs';
-            errorDiv.innerHTML = 'Video not available';
-            e.currentTarget.style.display = 'none';
-            e.currentTarget.parentNode?.appendChild(errorDiv);
-          }}
+          muted
+          preload="metadata"
+          onError={handleError}
           onLoadedData={handleLoad}
           onLoadStart={() => setIsLoading(false)}
-        >
-          <source src={mediaFile} />
-          Your browser does not support the video tag.
-        </video>
+        />
+        <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+          <div className="w-5 h-5 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
+            <div className="w-0 h-0 border-l-[5px] border-l-gray-700 border-t-[3px] border-t-transparent border-b-[3px] border-b-transparent ml-0.5"></div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // For IMAGE format (following ManageAds.tsx pattern)
   return (
     <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
       {isLoading && (
@@ -107,11 +102,7 @@ const PaymentMediaPreview: React.FC<{ mediaFile: string; adFormat: string; produ
         src={mediaFile}
         alt={`${productName} preview`}
         className="max-w-full max-h-full object-cover"
-        onError={(e) => {
-          handleError();
-          // Fallback image like in ManageAds
-          e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
-        }}
+        onError={handleError}
         onLoad={handleLoad}
       />
     </div>
@@ -195,19 +186,19 @@ const Payment: React.FC = () => {
       try {
         const { data: mutationData } = await createPayment({ variables: { input } });
 
-        if (mutationData?.createPayment?.success) {
-          alert(`Payment for ${paymentItem.productName} is now PAID!`);
+        if (mutationData.createPayment.success) {
+          alert(`✅ Payment for ${paymentItem.productName} is now PAID!`);
           // Navigate back to the return path (usually PaymentHistory)
           navigate(returnTo);
         } else {
-          alert(mutationData?.createPayment?.message || "Payment failed");
+          alert(mutationData.createPayment.message);
         }
       } catch (e: any) {
-        console.error('Payment error:', e);
         alert(e.message || "Failed to create payment.");
       }
     } else {
       // This is a regular payment flow (not from PaymentHistory)
+      // You can add your regular payment logic here
       alert("Payment processing for regular flow - implement as needed");
       navigate(returnTo);
     }
@@ -241,7 +232,7 @@ const Payment: React.FC = () => {
           </div>
           <div className="border-t border-blue-300 pt-3">
             <p className="text-xl font-bold text-blue-900">
-              Amount Due: P {parseFloat(paymentItem.amount.replace(',', '')).toFixed(2)}
+              Amount Due: P {parseFloat(paymentItem.amount.replace('$', '')).toFixed(2)}
             </p>
           </div>
         </div>
