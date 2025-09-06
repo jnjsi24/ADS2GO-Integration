@@ -418,7 +418,7 @@ const Materials: React.FC = () => {
   });
 
   // Tablet query hook
-  const { data: tabletData, loading: tabletLoading, error: tabletError, refetch: refetchTabletData } = useQuery(GET_TABLETS_BY_MATERIAL, {
+  const { data: tabletData, loading: tabletLoading } = useQuery(GET_TABLETS_BY_MATERIAL, {
     variables: { materialId: selectedTabletMaterialId || '' },
     context: {
       headers: {
@@ -427,7 +427,6 @@ const Materials: React.FC = () => {
     },
     skip: !selectedTabletMaterialId,
     errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network',
     onCompleted: (data) => {
       console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data });
     },
@@ -437,7 +436,7 @@ const Materials: React.FC = () => {
   });
 
   // Tablet connection status query hook
-  const { data: connectionStatusData, loading: connectionStatusLoading, error: connectionStatusError, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
+  const { data: connectionStatusData, loading: connectionStatusLoading, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
     variables: { 
       materialId: selectedTabletMaterialId || '', 
       slotNumber: selectedTabletSlotNumber || 1 
@@ -449,10 +448,6 @@ const Materials: React.FC = () => {
     },
     skip: !selectedTabletMaterialId || !selectedTabletSlotNumber,
     errorPolicy: 'all',
-    fetchPolicy: 'cache-and-network',
-    onCompleted: (data) => {
-      console.log('Connection status query completed:', { materialId: selectedTabletMaterialId, slotNumber: selectedTabletSlotNumber, data });
-    },
     onError: (error) => {
       console.error('Error loading tablet connection status:', error);
     }
@@ -462,7 +457,7 @@ const Materials: React.FC = () => {
   const getSlotConnectionStatus = (materialId: string, slotNumber: number) => {
     // This is a simplified approach - in a real implementation, you might want to cache this data
     // For now, we'll use the existing tablet data to determine connection status
-    const tabletData = data?.getAllMaterials?.find((m: any) => m.id === materialId);
+    const tabletData = data?.getAllMaterials?.find(m => m.id === materialId);
     if (!tabletData) return null;
     
     // This would need to be enhanced with actual connection status data
@@ -474,20 +469,9 @@ const Materials: React.FC = () => {
   // Function to copy connection details to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      // Show a more user-friendly notification
-      const notification = document.createElement('div');
-      notification.textContent = 'Connection details copied to clipboard!';
-      notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-[70] transition-opacity duration-300';
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300);
-      }, 2000);
+      alert('Connection details copied to clipboard!');
     }).catch(() => {
-      alert('Failed to copy to clipboard. Please try again.');
+      alert('Failed to copy to clipboard');
     });
   };
 
@@ -1305,27 +1289,14 @@ const Materials: React.FC = () => {
 
       {/* Connection Details Modal */}
       {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTabletInterface(false);
-              setSelectedTabletMaterialId(null);
-              setSelectedTabletSlotNumber(null);
-            }
-          }}
-        >
-          <div className="bg-white rounded-2xl p-6 w-full max-w-4xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-800">
                 Tablet Connection Details - Slot {selectedTabletSlotNumber}
               </h2>
               <button
-                onClick={() => {
-                  setShowTabletInterface(false);
-                  setSelectedTabletMaterialId(null);
-                  setSelectedTabletSlotNumber(null);
-                }}
+                onClick={() => setShowTabletInterface(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X size={20} />
@@ -1337,23 +1308,7 @@ const Materials: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <span className="ml-2 text-gray-600">Loading tablet data...</span>
               </div>
-            ) : tabletError ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="text-red-500 mb-2">❌</div>
-                  <span className="text-gray-600">Error loading tablet data.</span>
-                  <br />
-                  <span className="text-sm text-gray-500 mb-4">{tabletError.message}</span>
-                  <button
-                    onClick={() => refetchTabletData()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
-                  >
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Retry
-                  </button>
-                </div>
-              </div>
-            ) : !tabletData?.getTabletsByMaterial?.[0] ? (
+                         ) : !tabletData?.getTabletsByMaterial?.[0] ? (
                <div className="flex items-center justify-center py-8">
                  <div className="text-center">
                    <div className="text-red-500 mb-2">⚠️</div>
@@ -1380,30 +1335,28 @@ const Materials: React.FC = () => {
                  </div>
                </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Column */}
-                <div className="space-y-6">
-                  {/* Connection Details */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Material ID:</span>
-                        <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Slot Number:</span>
-                        <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Car Group ID:</span>
-                        <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
-                      </div>
+              <div className="space-y-6">
+                {/* Connection Details */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Material ID:</span>
+                      <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Slot Number:</span>
+                      <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-gray-700">Car Group ID:</span>
+                      <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Connection Status */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                {/* Connection Status */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-semibold text-gray-800">Connection Status</h3>
                     <button
@@ -1419,19 +1372,6 @@ const Materials: React.FC = () => {
                     <div className="flex items-center justify-center py-4">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2 text-gray-600">Checking connection status...</span>
-                    </div>
-                  ) : connectionStatusError ? (
-                    <div className="text-center py-4">
-                      <div className="text-red-500 mb-2">❌</div>
-                      <span className="text-gray-600">Error loading connection status</span>
-                      <br />
-                      <span className="text-sm text-gray-500 mb-2">{connectionStatusError.message}</span>
-                      <button
-                        onClick={() => refetchConnectionStatus()}
-                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        Retry
-                      </button>
                     </div>
                   ) : connectionStatusData?.getTabletConnectionStatus ? (
                     <div className="space-y-3">
@@ -1501,74 +1441,70 @@ const Materials: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* QR Code */}
+                <div className="flex flex-col items-center space-y-4">
+                  <h3 className="font-semibold text-gray-800">QR Code</h3>
+                                     <div className="bg-white p-4 border border-gray-200 rounded-lg">
+                     {(() => {
+                       const qrData = {
+                         materialId: selectedTabletMaterialId,
+                         slotNumber: selectedTabletSlotNumber,
+                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                       };
+                       console.log('QR Code data:', qrData);
+                       return (
+                         <QRCodeSVG 
+                           value={JSON.stringify(qrData)}
+                           size={200}
+                           level="M"
+                           includeMargin={true}
+                         />
+                       );
+                     })()}
+                   </div>
+                  <p className="text-xs text-gray-500 text-center">
+                    Scan this QR code with the AndroidPlayer app to connect
+                  </p>
                 </div>
 
-                {/* Right Column */}
-                <div className="space-y-6">
-                  {/* QR Code */}
-                  <div className="flex flex-col items-center space-y-4">
-                    <h3 className="font-semibold text-gray-800">QR Code</h3>
-                    <div className="bg-white p-3 border border-gray-200 rounded-lg">
-                      {(() => {
-                        const qrData = {
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        };
-                        console.log('QR Code data:', qrData);
-                        return (
-                          <QRCodeSVG 
-                            value={JSON.stringify(qrData)}
-                            size={150}
-                            level="M"
-                            includeMargin={true}
-                          />
-                        );
-                      })()}
-                    </div>
-                    <p className="text-xs text-gray-500 text-center">
-                      Scan this QR code with the AndroidPlayer app to connect
-                    </p>
+                {/* Manual Code */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-800">Manual Code</h3>
+                  <div className="bg-gray-100 p-3 rounded-lg">
+                    <code className="text-sm text-gray-800 break-all">
+                      {JSON.stringify({
+                        materialId: selectedTabletMaterialId,
+                        slotNumber: selectedTabletSlotNumber,
+                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                      }, null, 2)}
+                    </code>
                   </div>
+                                     <button
+                     onClick={() => {
+                       const connectionData = {
+                         materialId: selectedTabletMaterialId,
+                         slotNumber: selectedTabletSlotNumber,
+                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                       };
+                       console.log('Copying connection data:', connectionData);
+                       copyToClipboard(JSON.stringify(connectionData, null, 2));
+                     }}
+                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                   >
+                     <Copy size={16} />
+                     Copy to Clipboard
+                   </button>
+                </div>
 
-                  {/* Manual Code */}
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-gray-800">Manual Code</h3>
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <code className="text-sm text-gray-800 break-all">
-                        {JSON.stringify({
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        }, null, 2)}
-                      </code>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const connectionData = {
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        };
-                        console.log('Copying connection data:', connectionData);
-                        copyToClipboard(JSON.stringify(connectionData, null, 2));
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Copy size={16} />
-                      Copy to Clipboard
-                    </button>
-                  </div>
-
-                  {/* Instructions */}
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
-                    <div className="text-sm text-yellow-700 space-y-1">
-                      <p>1. Scan the QR code or copy the manual code</p>
-                      <p>2. Open the AndroidPlayer app on your tablet</p>
-                      <p>3. Enter the connection details</p>
-                      <p>4. The tablet will connect to the system</p>
-                    </div>
+                {/* Instructions */}
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
+                  <div className="text-sm text-yellow-700 space-y-1">
+                    <p>1. Scan the QR code or copy the manual code</p>
+                    <p>2. Open the AndroidPlayer app on your tablet</p>
+                    <p>3. Enter the connection details</p>
+                    <p>4. The tablet will connect to the system</p>
                   </div>
                 </div>
               </div>
@@ -1580,7 +1516,7 @@ const Materials: React.FC = () => {
       {/* Material Details Modal */}
       {showDetailsModal && selectedMaterialDetails && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4 relative shadow-2xl">
+          <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4 relative">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-800">Material Details</h2>
               <button
