@@ -5,11 +5,13 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 // Set environment variables for memory optimization
-process.env.NODE_OPTIONS = '--max-old-space-size=8192';
+process.env.NODE_OPTIONS = '--max-old-space-size=8192 --gc-interval=100 --max-semi-space-size=128';
 
 // Additional memory optimization flags
 const nodeArgs = [
   '--max-old-space-size=8192',
+  '--gc-interval=100',
+  '--max-semi-space-size=128',
   '--expose-gc'
 ];
 
@@ -19,6 +21,8 @@ const args = ['start'];
 console.log('🚀 Starting development server with memory optimizations...');
 console.log('📊 Memory settings:', {
   maxOldSpaceSize: '8GB',
+  gcInterval: '100ms',
+  maxSemiSpaceSize: '128MB',
   exposeGC: true
 });
 
