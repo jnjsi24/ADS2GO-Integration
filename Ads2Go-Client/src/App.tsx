@@ -11,38 +11,41 @@ import UserNavbar from './components/UserNavbar';
 import AdminNavbar from './components/AdminNavbar';
 import SadminNavbar from './components/SadminNavbar';
 
-// Regular user pages - Lazy load heavy components
+// Regular user pages
 import Login from './pages/AUTH/Login';
 import Register from './pages/USERS/Register';
 import ForgotPass from './pages/USERS/ForgotPass';
+import Dashboard from './pages/USERS/Dashboard';
 import VerifyEmail from './pages/USERS/VerifyEmail';
 import Landing from './pages/USERS/Landing';
 import Account from './pages/USERS/Account';
 import Payment from './pages/USERS/Payment';
+import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
+import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
+import History from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
+import AdDetailsPage from './pages/USERS/AdDetailsPage';
 
-// Lazy load heavy components
-import { LazyCreateAdvertisement, LazyDashboard, LazyAdvertisements, LazyPaymentHistory, LazyAdDetailsPage, LoadingSpinner } from './utils/lazyComponents';
-
-// Admin pages - Lazy load heavy components
+// Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
 import AdminDashboard from './pages/ADMIN/AdminDashboard';
+import ManageUsers from './pages/ADMIN/ManageUsers';
 import SiteSettings from './pages/ADMIN/SiteSettings';
 import ManageRiders from './pages/ADMIN/ManageRiders';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
+import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
-
-// Lazy load heavy admin components
-import { LazyManageUsers, LazyManageAds, LazySadminDashboard } from './utils/lazyComponents';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
+import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+import PaymentHistory from './pages/USERS/PaymentHistory';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -78,7 +81,7 @@ const AdminAppContent: React.FC = () => {
           path="/admin/users"
           element={
             <ProtectedRoute>
-              <LazyManageUsers />
+              <ManageUsers />
             </ProtectedRoute>
           }
         />
@@ -126,7 +129,7 @@ const AdminAppContent: React.FC = () => {
           path="/admin/manage-ads"
           element={
             <ProtectedRoute>
-              <LazyManageAds />
+              <ManageAds />
             </ProtectedRoute>
           }
         />
@@ -144,7 +147,7 @@ const AdminAppContent: React.FC = () => {
           path="/sadmin-dashboard"
           element={
             <ProtectedRoute>
-              <LazySadminDashboard />
+              <SadminDashboard />
             </ProtectedRoute>
           }
         />
@@ -200,7 +203,7 @@ const UserAppContent: React.FC = () => {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <LazyDashboard />
+              <Dashboard />
             </ProtectedRoute>
           }
         />
@@ -216,7 +219,7 @@ const UserAppContent: React.FC = () => {
           path="/paymentHistory"
           element={
             <ProtectedRoute>
-              <LazyPaymentHistory />
+              <PaymentHistory />
             </ProtectedRoute>
           }
         />
@@ -224,7 +227,7 @@ const UserAppContent: React.FC = () => {
           path="/create-advertisement"
           element={
             <ProtectedRoute>
-              <LazyCreateAdvertisement />
+              <CreateAdvertisement />
             </ProtectedRoute>
           }
         />
@@ -232,7 +235,7 @@ const UserAppContent: React.FC = () => {
           path="/advertisements"
           element={
             <ProtectedRoute>
-              <LazyAdvertisements />
+              <Advertisements />
             </ProtectedRoute>
           }
         />
@@ -240,7 +243,7 @@ const UserAppContent: React.FC = () => {
           path="/advertisements/:id"
           element={
             <ProtectedRoute>
-              <LazyAdDetailsPage />
+              <AdDetailsPage />
             </ProtectedRoute>
           }
         />
@@ -248,7 +251,7 @@ const UserAppContent: React.FC = () => {
           path="/ad-details/:id"
           element={
             <ProtectedRoute>
-              <LazyAdDetailsPage />
+              <AdDetailsPage />
             </ProtectedRoute>
           }
         />
@@ -264,7 +267,7 @@ const UserAppContent: React.FC = () => {
           path="/history"
           element={
             <ProtectedRoute>
-              <LazyPaymentHistory />
+              <History />
             </ProtectedRoute>
           }
         />
