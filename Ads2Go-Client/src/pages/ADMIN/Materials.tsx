@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
-import { ChevronDown, TrashIcon, Edit, X, Plus, UserX, Check, Calendar, UserPlus, QrCode, Copy } from 'lucide-react';
+import { ChevronDown, TrashIcon, Edit, X, Plus, UserX, Check, Calendar, UserPlus, QrCode, Copy, Eye } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 // GraphQL Queries
@@ -309,9 +309,10 @@ const Materials: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Used' | 'Available'>('All');
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedMaterialDetails, setSelectedMaterialDetails] = useState<Material | null>(null);
   const [createForm, setCreateForm] = useState<CreateMaterialInput>({
     vehicleType: 'CAR',
     materialType: 'LCD',
@@ -417,7 +418,7 @@ const Materials: React.FC = () => {
   });
 
   // Tablet query hook
-  const { data: tabletData, loading: tabletLoading } = useQuery(GET_TABLETS_BY_MATERIAL, {
+  const { data: tabletData, loading: tabletLoading, error: tabletError, refetch: refetchTabletData } = useQuery(GET_TABLETS_BY_MATERIAL, {
     variables: { materialId: selectedTabletMaterialId || '' },
     context: {
       headers: {
@@ -426,6 +427,7 @@ const Materials: React.FC = () => {
     },
     skip: !selectedTabletMaterialId,
     errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network',
     onCompleted: (data) => {
       console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data });
     },
@@ -435,7 +437,7 @@ const Materials: React.FC = () => {
   });
 
   // Tablet connection status query hook
-  const { data: connectionStatusData, loading: connectionStatusLoading, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
+  const { data: connectionStatusData, loading: connectionStatusLoading, error: connectionStatusError, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
     variables: { 
       materialId: selectedTabletMaterialId || '', 
       slotNumber: selectedTabletSlotNumber || 1 
@@ -447,6 +449,10 @@ const Materials: React.FC = () => {
     },
     skip: !selectedTabletMaterialId || !selectedTabletSlotNumber,
     errorPolicy: 'all',
+    fetchPolicy: 'cache-and-network',
+    onCompleted: (data) => {
+      console.log('Connection status query completed:', { materialId: selectedTabletMaterialId, slotNumber: selectedTabletSlotNumber, data });
+    },
     onError: (error) => {
       console.error('Error loading tablet connection status:', error);
     }
@@ -456,7 +462,7 @@ const Materials: React.FC = () => {
   const getSlotConnectionStatus = (materialId: string, slotNumber: number) => {
     // This is a simplified approach - in a real implementation, you might want to cache this data
     // For now, we'll use the existing tablet data to determine connection status
-    const tabletData = data?.getAllMaterials?.find(m => m.id === materialId);
+    const tabletData = data?.getAllMaterials?.find((m: any) => m.id === materialId);
     if (!tabletData) return null;
     
     // This would need to be enhanced with actual connection status data
@@ -468,9 +474,20 @@ const Materials: React.FC = () => {
   // Function to copy connection details to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Connection details copied to clipboard!');
+      // Show a more user-friendly notification
+      const notification = document.createElement('div');
+      notification.textContent = 'Connection details copied to clipboard!';
+      notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-[70] transition-opacity duration-300';
+      document.body.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 2000);
     }).catch(() => {
-      alert('Failed to copy to clipboard');
+      alert('Failed to copy to clipboard. Please try again.');
     });
   };
 
@@ -749,11 +766,17 @@ const Materials: React.FC = () => {
     return compatibleDrivers;
   };
 
+  const handleViewDetails = (material: Material) => {
+    setSelectedMaterialDetails(material);
+    setShowDetailsModal(true);
+  };
+
   const handleDeleteMaterial = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this material?')) {
       try {
         await deleteMaterial({ variables: { id } });
-        setExpandedId(null);
+        setShowDetailsModal(false);
+        setSelectedMaterialDetails(null);
       } catch (error) {
         console.error('Error deleting material:', error);
       }
@@ -771,7 +794,8 @@ const Materials: React.FC = () => {
             }
           }
         });
-        setExpandedId(null);
+        setShowDetailsModal(false);
+        setSelectedMaterialDetails(null);
       } catch (error) {
         console.error('Error removing material from driver:', error);
       }
@@ -991,271 +1015,50 @@ const Materials: React.FC = () => {
           {/* Table Body */}
           {filtered.map((material) => {
             const status = getStatus(material);
-            const isEditingThisMaterial = editingDates[material.id];
-            const isSaving = savingDates[material.id];
             
             return (
               <div
                 key={material.id}
-                className={`
-                  bg-white border-t border-gray-300 transition-all duration-500 ease-in-out transform origin-top
-                  ${expandedId === material.id ? 'z-10 relative scale-105 shadow-xl' : ''}
-                `}
+                className="bg-white border-t border-gray-300 hover:bg-gray-50 transition-colors"
               >
-                {expandedId !== material.id ? (
-                  // Collapsed Card
-                  <div
-                    className="grid grid-cols-12 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                    onClick={() => setExpandedId(material.id)}
-                  >
-                    <div className="col-span-2 gap-10 flex items-center">
-                      <input
-                        type="checkbox"
-                        className="form-checkbox"
-                        checked={selectedMaterials.includes(material.id)}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          handleMaterialSelect(material.id);
-                        }}
-                      />
-                      <div className="flex items-center">
-                        <span className="truncate">{material.materialType}</span>
-                      </div>
-                    </div>
-                    <div className="col-span-1 truncate">{material.materialId}</div>
-                    <div className="col-span-2 truncate">{material.materialType}</div>
-                    <div className="col-span-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          status === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
-                        }`}
-                      >
-                        {status}
-                      </span>
-                    </div>
-                    <div className="col-span-2 truncate">{material.driver?.fullName || 'N/A'}</div>
-                    <div className="col-span-2 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
-                    <div className="col-span-1 flex justify-center items-center">
-                      <ChevronDown size={16} className="text-gray-500" />
+                <div className="grid grid-cols-12 items-center px-4 py-3 text-sm">
+                  <div className="col-span-2 gap-10 flex items-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={selectedMaterials.includes(material.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleMaterialSelect(material.id);
+                      }}
+                    />
+                    <div className="flex items-center">
+                      <span className="truncate">{material.materialType}</span>
                     </div>
                   </div>
-                ) : (
-                  // Expanded Details
-                  <div className="bg-white p-6 shadow-xl rounded-md flex flex-col lg:flex-row items-start justify-between">
-                    {/* Left Section: Details */}
-                    <div className="flex items-start pl-6 gap-4 mb-6 lg:mb-0 lg:pr-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                      <div className="flex-grow">
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">
-                          {material.materialType}
-                        </h3>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">ID:</span>
-                            <span className="text-gray-600">{material.materialId}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Type:</span>
-                            <span className="text-gray-600">{material.materialType}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Category:</span>
-                            <span className="text-gray-600">{material.category}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Status:</span>
-                            <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                status === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
-                              }`}
-                            >
-                              {status}
-                            </span>
-                          </div>
-                          {material.description && (
-                            <div className="mt-2">
-                              <span className="font-semibold text-gray-700">Description:</span>
-                              <p className="text-gray-600 text-xs mt-1">{material.description}</p>
-                            </div>
-                          )}
-                          {material.requirements && (
-                            <div className="mt-2">
-                              <span className="font-semibold text-gray-700">Requirements:</span>
-                              <p className="text-gray-600 text-xs mt-1">{material.requirements}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Middle Section: Date Details */}
-                    <div className="flex flex-col gap-4 mt-6 lg:mb-0 lg:px-8 border-b lg:border-b-0 lg:border-r border-gray-200 w-full lg:w-1/3">
-                      <div className="text-sm">
-                        <div className="space-y-3">
-                          {/* Editable Mounted Date */}
-                          <div className="flex flex-col space-y-1">
-                            <div className="flex justify-between items-center">
-                              <span className="font-semibold text-gray-700">Mounted Date:</span>
-                              {!isEditingThisMaterial && (
-                                <button
-                                  onClick={() => startEditingDates(material.id, material)}
-                                  className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                                  title="Edit dates"
-                                >
-                                  <Calendar size={14} />
-                                </button>
-                              )}
-                            </div>
-                            {isEditingThisMaterial ? (
-                              <input
-                                type="datetime-local"
-                                value={isEditingThisMaterial.mountedAt}
-                                onChange={(e) => updateEditingDate(material.id, 'mountedAt', e.target.value)}
-                                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            ) : (
-                              <span className="text-gray-600 text-xs">{formatDate(material.mountedAt)}</span>
-                            )}
-                          </div>
-
-                          {/* Editable Dismounted Date */}
-                          <div className="flex flex-col space-y-1">
-                            <span className="font-semibold text-gray-700">Dismounted Date:</span>
-                            {isEditingThisMaterial ? (
-                              <input
-                                type="datetime-local"
-                                value={isEditingThisMaterial.dismountedAt}
-                                onChange={(e) => updateEditingDate(material.id, 'dismountedAt', e.target.value)}
-                                className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              />
-                            ) : (
-                              <span className="text-gray-600 text-xs">{formatDate(material.dismountedAt)}</span>
-                            )}
-                          </div>
-
-                          {/* Save/Cancel buttons for date editing */}
-                          {isEditingThisMaterial && (
-                            <div className="flex gap-2 pt-2">
-                              <button
-                                onClick={() => saveDateChanges(material.id)}
-                                disabled={isSaving}
-                                className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
-                              >
-                                {isSaving ? 'Saving...' : <><Check size={12} /> Save</>}
-                              </button>
-                              <button
-                                onClick={() => cancelEditingDates(material.id)}
-                                disabled={isSaving}
-                                className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
-                              >
-                                <X size={12} /> Cancel
-                              </button>
-                            </div>
-                          )}
-
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Created:</span>
-                            <span className="text-gray-600 text-xs">{formatDate(material.createdAt)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Updated:</span>
-                            <span className="text-gray-600 text-xs">{formatDate(material.updatedAt)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right Section: Driver Details and Actions */}
-                    <div className="flex flex-col gap-4 w-full lg:w-1/3 pt-6 lg:pt-0 lg:pl-8">
-                      <div className="absolute top-4 right-4 pr-6 flex items-center gap-2">
-                        {!material.driverId && (
-                          <button
-                            onClick={() => openAssignModal(material)}
-                            className="p-1 text-blue-500 rounded-full hover:bg-gray-100 transition-colors"
-                            title="Assign to driver"
-                          >
-                            <UserPlus size={16} />
-                          </button>
-                        )}
-                        {material.driverId && (
-                          <button
-                            onClick={() => handleRemoveFromDriver(material.id)}
-                            className="p-1 text-orange-500 rounded-full hover:bg-gray-100 transition-colors"
-                            title="Remove from driver"
-                          >
-                            <UserX size={16} />
-                          </button>
-                        )}
-                        {material.materialType === 'HEADDRESS' && (
-                          <div className="flex gap-1">
-                                                         <button
-                               onClick={() => showConnectionDetails(material.materialId, 1)}
-                               className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors relative"
-                               title="View tablet connection details for Slot 1"
-                             >
-                               <QrCode size={16} />
-                               <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-300 rounded-full border border-white"></div>
-                             </button>
-                             <button
-                               onClick={() => showConnectionDetails(material.materialId, 2)}
-                               className="p-1 text-green-500 rounded-full hover:bg-gray-100 transition-colors relative"
-                               title="View tablet connection details for Slot 2"
-                             >
-                              <QrCode size={16} />
-                              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-300 rounded-full border border-white"></div>
-                            </button>
-                          </div>
-                        )}
-                        <button className="p-1 text-[#3674B5] rounded-full hover:bg-gray-100 transition-colors">
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMaterial(material.id)}
-                          className="p-1 text-red-500 rounded-full hover:bg-gray-100 transition-colors"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="p-1 text-gray-500 rounded-full hover:bg-gray-100 transition-colors"
-                          onClick={() => setExpandedId(null)}
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                      <div className="text-sm mt-6">
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Driver Name:</span>
-                            <span className="text-gray-600 text-right max-w-32 truncate">
-                              {material.driver?.fullName || (material.driverId ? 'Loading...' : 'N/A')}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Vehicle Plate:</span>
-                            <span className="text-gray-600 text-right max-w-32 truncate">
-                              {material.driver?.vehiclePlateNumber || (material.driverId ? 'Loading...' : 'N/A')}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Car Type:</span>
-                            <span className="text-gray-600">{material.vehicleType || 'N/A'}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Driver Contact:</span>
-                            <span className="text-gray-600 text-right max-w-32 truncate">
-                              {material.driver?.contactNumber || (material.driverId ? 'Loading...' : 'N/A')}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-gray-700">Driver Email:</span>
-                            <span className="text-gray-600 text-right max-w-32 truncate">
-                              {material.driver?.email || (material.driverId ? 'Loading...' : 'N/A')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="col-span-1 truncate">{material.materialId}</div>
+                  <div className="col-span-2 truncate">{material.materialType}</div>
+                  <div className="col-span-2">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${
+                        status === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
+                      }`}
+                    >
+                      {status}
+                    </span>
                   </div>
-                )}
+                  <div className="col-span-2 truncate">{material.driver?.fullName || 'N/A'}</div>
+                  <div className="col-span-2 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                  <div className="col-span-1 flex justify-center items-center gap-1">
+                    <button
+                      onClick={() => handleViewDetails(material)}
+                      className="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600"
+                      title="View Details"
+                    >
+                      <Eye size={12} />
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -1502,14 +1305,27 @@ const Materials: React.FC = () => {
 
       {/* Connection Details Modal */}
       {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowTabletInterface(false);
+              setSelectedTabletMaterialId(null);
+              setSelectedTabletSlotNumber(null);
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-4xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-800">
                 Tablet Connection Details - Slot {selectedTabletSlotNumber}
               </h2>
               <button
-                onClick={() => setShowTabletInterface(false)}
+                onClick={() => {
+                  setShowTabletInterface(false);
+                  setSelectedTabletMaterialId(null);
+                  setSelectedTabletSlotNumber(null);
+                }}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X size={20} />
@@ -1521,7 +1337,23 @@ const Materials: React.FC = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 <span className="ml-2 text-gray-600">Loading tablet data...</span>
               </div>
-                         ) : !tabletData?.getTabletsByMaterial?.[0] ? (
+            ) : tabletError ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="text-red-500 mb-2">❌</div>
+                  <span className="text-gray-600">Error loading tablet data.</span>
+                  <br />
+                  <span className="text-sm text-gray-500 mb-4">{tabletError.message}</span>
+                  <button
+                    onClick={() => refetchTabletData()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
+                  >
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : !tabletData?.getTabletsByMaterial?.[0] ? (
                <div className="flex items-center justify-center py-8">
                  <div className="text-center">
                    <div className="text-red-500 mb-2">⚠️</div>
@@ -1548,28 +1380,30 @@ const Materials: React.FC = () => {
                  </div>
                </div>
             ) : (
-              <div className="space-y-6">
-                {/* Connection Details */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Material ID:</span>
-                      <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Slot Number:</span>
-                      <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="font-medium text-gray-700">Car Group ID:</span>
-                      <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column */}
+                <div className="space-y-6">
+                  {/* Connection Details */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-700">Material ID:</span>
+                        <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-700">Slot Number:</span>
+                        <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium text-gray-700">Car Group ID:</span>
+                        <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Connection Status */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  {/* Connection Status */}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h3 className="font-semibold text-gray-800">Connection Status</h3>
                     <button
@@ -1585,6 +1419,19 @@ const Materials: React.FC = () => {
                     <div className="flex items-center justify-center py-4">
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                       <span className="ml-2 text-gray-600">Checking connection status...</span>
+                    </div>
+                  ) : connectionStatusError ? (
+                    <div className="text-center py-4">
+                      <div className="text-red-500 mb-2">❌</div>
+                      <span className="text-gray-600">Error loading connection status</span>
+                      <br />
+                      <span className="text-sm text-gray-500 mb-2">{connectionStatusError.message}</span>
+                      <button
+                        onClick={() => refetchConnectionStatus()}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        Retry
+                      </button>
                     </div>
                   ) : connectionStatusData?.getTabletConnectionStatus ? (
                     <div className="space-y-3">
@@ -1654,74 +1501,332 @@ const Materials: React.FC = () => {
                     </div>
                   )}
                 </div>
-
-                {/* QR Code */}
-                <div className="flex flex-col items-center space-y-4">
-                  <h3 className="font-semibold text-gray-800">QR Code</h3>
-                                     <div className="bg-white p-4 border border-gray-200 rounded-lg">
-                     {(() => {
-                       const qrData = {
-                         materialId: selectedTabletMaterialId,
-                         slotNumber: selectedTabletSlotNumber,
-                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                       };
-                       console.log('QR Code data:', qrData);
-                       return (
-                         <QRCodeSVG 
-                           value={JSON.stringify(qrData)}
-                           size={200}
-                           level="M"
-                           includeMargin={true}
-                         />
-                       );
-                     })()}
-                   </div>
-                  <p className="text-xs text-gray-500 text-center">
-                    Scan this QR code with the AndroidPlayer app to connect
-                  </p>
                 </div>
 
-                {/* Manual Code */}
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-gray-800">Manual Code</h3>
-                  <div className="bg-gray-100 p-3 rounded-lg">
-                    <code className="text-sm text-gray-800 break-all">
-                      {JSON.stringify({
-                        materialId: selectedTabletMaterialId,
-                        slotNumber: selectedTabletSlotNumber,
-                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                      }, null, 2)}
-                    </code>
+                {/* Right Column */}
+                <div className="space-y-6">
+                  {/* QR Code */}
+                  <div className="flex flex-col items-center space-y-4">
+                    <h3 className="font-semibold text-gray-800">QR Code</h3>
+                    <div className="bg-white p-3 border border-gray-200 rounded-lg">
+                      {(() => {
+                        const qrData = {
+                          materialId: selectedTabletMaterialId,
+                          slotNumber: selectedTabletSlotNumber,
+                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                        };
+                        console.log('QR Code data:', qrData);
+                        return (
+                          <QRCodeSVG 
+                            value={JSON.stringify(qrData)}
+                            size={150}
+                            level="M"
+                            includeMargin={true}
+                          />
+                        );
+                      })()}
+                    </div>
+                    <p className="text-xs text-gray-500 text-center">
+                      Scan this QR code with the AndroidPlayer app to connect
+                    </p>
                   </div>
-                                     <button
-                     onClick={() => {
-                       const connectionData = {
-                         materialId: selectedTabletMaterialId,
-                         slotNumber: selectedTabletSlotNumber,
-                         carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                       };
-                       console.log('Copying connection data:', connectionData);
-                       copyToClipboard(JSON.stringify(connectionData, null, 2));
-                     }}
-                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                   >
-                     <Copy size={16} />
-                     Copy to Clipboard
-                   </button>
-                </div>
 
-                {/* Instructions */}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
-                  <div className="text-sm text-yellow-700 space-y-1">
-                    <p>1. Scan the QR code or copy the manual code</p>
-                    <p>2. Open the AndroidPlayer app on your tablet</p>
-                    <p>3. Enter the connection details</p>
-                    <p>4. The tablet will connect to the system</p>
+                  {/* Manual Code */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-gray-800">Manual Code</h3>
+                    <div className="bg-gray-100 p-3 rounded-lg">
+                      <code className="text-sm text-gray-800 break-all">
+                        {JSON.stringify({
+                          materialId: selectedTabletMaterialId,
+                          slotNumber: selectedTabletSlotNumber,
+                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                        }, null, 2)}
+                      </code>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const connectionData = {
+                          materialId: selectedTabletMaterialId,
+                          slotNumber: selectedTabletSlotNumber,
+                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                        };
+                        console.log('Copying connection data:', connectionData);
+                        copyToClipboard(JSON.stringify(connectionData, null, 2));
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Copy size={16} />
+                      Copy to Clipboard
+                    </button>
+                  </div>
+
+                  {/* Instructions */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
+                    <div className="text-sm text-yellow-700 space-y-1">
+                      <p>1. Scan the QR code or copy the manual code</p>
+                      <p>2. Open the AndroidPlayer app on your tablet</p>
+                      <p>3. Enter the connection details</p>
+                      <p>4. The tablet will connect to the system</p>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Material Details Modal */}
+      {showDetailsModal && selectedMaterialDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4 relative shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-800">Material Details</h2>
+              <button
+                onClick={() => {
+                  setShowDetailsModal(false);
+                  setSelectedMaterialDetails(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Section: Basic Details */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Name:</span>
+                    <span className="text-gray-600">{selectedMaterialDetails.materialType}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">ID:</span>
+                    <span className="text-gray-600 font-mono text-sm">{selectedMaterialDetails.materialId}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Type:</span>
+                    <span className="text-gray-600">{selectedMaterialDetails.materialType}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Category:</span>
+                    <span className="text-gray-600">{selectedMaterialDetails.category}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Vehicle Type:</span>
+                    <span className="text-gray-600">{selectedMaterialDetails.vehicleType}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Status:</span>
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        getStatus(selectedMaterialDetails) === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
+                      }`}
+                    >
+                      {getStatus(selectedMaterialDetails)}
+                    </span>
+                  </div>
+                  {selectedMaterialDetails.description && (
+                    <div className="mt-3">
+                      <span className="font-semibold text-gray-700">Description:</span>
+                      <p className="text-gray-600 text-sm mt-1">{selectedMaterialDetails.description}</p>
+                    </div>
+                  )}
+                  {selectedMaterialDetails.requirements && (
+                    <div className="mt-3">
+                      <span className="font-semibold text-gray-700">Requirements:</span>
+                      <p className="text-gray-600 text-sm mt-1">{selectedMaterialDetails.requirements}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Middle Section: Date Details */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Date Information</h3>
+                <div className="space-y-3">
+                  <div className="flex flex-col space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-gray-700">Mounted Date:</span>
+                      {!editingDates[selectedMaterialDetails.id] && (
+                        <button
+                          onClick={() => startEditingDates(selectedMaterialDetails.id, selectedMaterialDetails)}
+                          className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit dates"
+                        >
+                          <Calendar size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {editingDates[selectedMaterialDetails.id] ? (
+                      <input
+                        type="datetime-local"
+                        value={editingDates[selectedMaterialDetails.id].mountedAt}
+                        onChange={(e) => updateEditingDate(selectedMaterialDetails.id, 'mountedAt', e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.mountedAt)}</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-semibold text-gray-700">Dismounted Date:</span>
+                    {editingDates[selectedMaterialDetails.id] ? (
+                      <input
+                        type="datetime-local"
+                        value={editingDates[selectedMaterialDetails.id].dismountedAt}
+                        onChange={(e) => updateEditingDate(selectedMaterialDetails.id, 'dismountedAt', e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.dismountedAt)}</span>
+                    )}
+                  </div>
+
+                  {editingDates[selectedMaterialDetails.id] && (
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={() => saveDateChanges(selectedMaterialDetails.id)}
+                        disabled={savingDates[selectedMaterialDetails.id]}
+                        className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
+                      >
+                        {savingDates[selectedMaterialDetails.id] ? 'Saving...' : <><Check size={12} /> Save</>}
+                      </button>
+                      <button
+                        onClick={() => cancelEditingDates(selectedMaterialDetails.id)}
+                        disabled={savingDates[selectedMaterialDetails.id]}
+                        className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
+                      >
+                        <X size={12} /> Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Created:</span>
+                    <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Updated:</span>
+                    <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.updatedAt)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Section: Driver Details and Actions */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Driver Information</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Driver Name:</span>
+                    <span className="text-gray-600 text-right max-w-32 truncate">
+                      {selectedMaterialDetails.driver?.fullName || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Vehicle Plate:</span>
+                    <span className="text-gray-600 text-right max-w-32 truncate">
+                      {selectedMaterialDetails.driver?.vehiclePlateNumber || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Car Type:</span>
+                    <span className="text-gray-600">{selectedMaterialDetails.vehicleType || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Driver Contact:</span>
+                    <span className="text-gray-600 text-right max-w-32 truncate">
+                      {selectedMaterialDetails.driver?.contactNumber || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Driver Email:</span>
+                    <span className="text-gray-600 text-right max-w-32 truncate">
+                      {selectedMaterialDetails.driver?.email || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* QR Code Section for HEADDRESS materials */}
+                {selectedMaterialDetails.materialType === 'HEADDRESS' && (
+                  <div className="mt-6 space-y-4">
+                    <h4 className="text-md font-semibold text-gray-800 border-b pb-2">QR Codes</h4>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => showConnectionDetails(selectedMaterialDetails.materialId, 1)}
+                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                        title="View tablet connection details for Slot 1"
+                      >
+                        <QrCode size={16} />
+                        Slot 1
+                      </button>
+                      <button
+                        onClick={() => showConnectionDetails(selectedMaterialDetails.materialId, 2)}
+                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                        title="View tablet connection details for Slot 2"
+                      >
+                        <QrCode size={16} />
+                        Slot 2
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center mt-6 pt-4 border-t">
+              <div className="flex gap-2">
+                {!selectedMaterialDetails.driverId && (
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      openAssignModal(selectedMaterialDetails);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    <UserPlus size={16} />
+                    Assign to Driver
+                  </button>
+                )}
+                {selectedMaterialDetails.driverId && (
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      handleRemoveFromDriver(selectedMaterialDetails.id);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+                  >
+                    <UserX size={16} />
+                    Remove from Driver
+                  </button>
+                )}
+                <button className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                  <Edit size={16} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleDeleteMaterial(selectedMaterialDetails.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  <TrashIcon size={16} />
+                  Delete
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDetailsModal(false);
+                  setSelectedMaterialDetails(null);
+                }}
+                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

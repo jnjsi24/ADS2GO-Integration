@@ -13,6 +13,8 @@ export const GET_MY_ADS = gql`
       vehicleType
       createdAt
       price
+      startTime
+      endTime
 
       planId {       # populated AdsPlan object
         id
