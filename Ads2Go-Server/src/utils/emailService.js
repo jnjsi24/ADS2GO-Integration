@@ -14,11 +14,23 @@ class EmailService {
 
   // Generate 6-digit verification code
   static generateVerificationCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[EMAIL_DEBUG] Generated verification code: ${code}`);
+    return code;
   }
 
   // Send verification email
   static async sendVerificationEmail(email, code) {
+    if (!email || !code) {
+      console.error('Missing email or verification code');
+      return false;
+    }
+    
+    // Log the verification code for debugging
+    console.log(`[EMAIL_DEBUG] Sending verification code ${code} to ${email}`);
+
+    console.log(`Preparing to send verification email to: ${email}`);
+    
     const mailOptions = {
       from: `Ads2Go <${process.env.EMAIL_USER}>`,
       to: email,
@@ -35,11 +47,15 @@ class EmailService {
               background-color: #f0f0f0; 
               padding: 15px; 
               border-radius: 5px;
+              margin: 20px 0;
             ">
               ${code}
             </h1>
             <p style="text-align: center; color: #999; margin-top: 20px;">
               This code will expire in 15 minutes. Do not share this code with anyone.
+            </p>
+            <p style="text-align: center; color: #999; font-size: 12px; margin-top: 30px;">
+              If you didn't request this email, please ignore it.
             </p>
           </div>
         </div>
@@ -47,11 +63,29 @@ class EmailService {
     };
 
     try {
-      await this.transporter.sendMail(mailOptions);
-      console.log(`Verification email sent to ${email}`);
+      // Verify connection configuration
+      await this.transporter.verify(function(error, success) {
+        if (error) {
+          console.error('SMTP Connection Error:', error);
+        } else {
+          console.log('Server is ready to take our messages');
+        }
+      });
+
+      // Send the email
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('Message sent: %s', info.messageId);
+      console.log(`Verification email successfully sent to ${email}`);
       return true;
     } catch (error) {
-      console.error('Error sending verification email:', error);
+      console.error('Error sending verification email to', email, 'Error:', error);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode,
+        responseMessage: error.responseMessage
+      });
       return false;
     }
   }

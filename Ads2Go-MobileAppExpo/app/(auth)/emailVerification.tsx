@@ -169,8 +169,8 @@ const EmailVerification = () => {
         },
         body: JSON.stringify({
           query: `
-            mutation ResendVerificationEmail($email: String!) {
-              resendVerificationEmail(email: $email) {
+            mutation ResendDriverVerificationCode($email: String!) {
+              resendDriverVerificationCode(email: $email) {
                 success
                 message
               }
@@ -184,7 +184,7 @@ const EmailVerification = () => {
 
       const result = await response.json();
 
-      if (result.data?.resendVerificationEmail.success) {
+      if (result.data?.resendDriverVerificationCode.success) {
         Alert.alert('Code Sent', 'A new verification code has been sent to your email.');
         
         // Reset timer
@@ -195,7 +195,7 @@ const EmailVerification = () => {
         setVerificationCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       } else {
-        const errorMessage = result.data?.resendVerificationEmail.message || 
+        const errorMessage = result.data?.resendDriverVerificationCode.message || 
                            result.errors?.[0]?.message || 
                            'Failed to resend code. Please try again.';
         Alert.alert('Error', errorMessage);
