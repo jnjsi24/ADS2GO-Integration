@@ -24,6 +24,16 @@ const VEHICLE_MATERIAL_MAP = {
 
 const ALLOWED_VEHICLE_TYPES = Object.keys(VEHICLE_MATERIAL_MAP);
 
+// ===== Helper: Enhanced Password Validation =====
+const isValidPassword = (password) => {
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  
+  return password.length >= 8 && hasUppercase && hasLowercase && hasNumber && hasSpecialChar;
+};
+
 // ===== Helper: Generate Unique Driver ID =====
 const generateDriverId = async () => {
   let newId;
@@ -209,13 +219,65 @@ createDriver: async (_, { input }) => {
     const existing = await Driver.findOne({ email: normalizedEmail });
     if (existing) throw new Error("Driver with this email already exists");
 
+    // Validate required fields with name regex
+    const nameRegex = /^[A-Za-z\s.'-]+$/;
+    
+    if (!input.firstName || !input.firstName.trim()) {
+      throw new Error("First name is required");
+    }
+    if (!nameRegex.test(input.firstName.trim())) {
+      throw new Error("First name cannot contain numbers or symbols");
+    }
+    
+    if (!input.lastName || !input.lastName.trim()) {
+      throw new Error("Last name is required");
+    }
+    if (!nameRegex.test(input.lastName.trim())) {
+      throw new Error("Last name cannot contain numbers or symbols");
+    }
+    
+    if (!input.address || !input.address.trim()) {
+      throw new Error("Address is required");
+    }
+
+    // Enhanced password validation
+    if (!input.password || !input.password.trim()) {
+      throw new Error("Password cannot be empty");
+    }
+    if (!isValidPassword(input.password.trim())) {
+      throw new Error("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character");
+    }
+
+    // Validate contact number (exactly 10 digits)
+    const contactNumberRegex = /^\d{10}$/;
+    if (!input.contactNumber || !input.contactNumber.trim()) {
+      throw new Error("Contact number is required");
+    }
+    if (!contactNumberRegex.test(input.contactNumber.trim())) {
+      throw new Error("Contact number must be exactly 10 digits");
+    }
+
     // Validate vehicle type
     if (!Object.keys(VEHICLE_MATERIAL_MAP).includes(input.vehicleType)) {
       throw new Error(`Invalid vehicle type. Allowed: ${Object.keys(VEHICLE_MATERIAL_MAP).join(', ')}`);
     }
 
-    // Validate password
-    if (!input.password || !input.password.trim()) throw new Error("Password cannot be empty");
+    // Validate other required vehicle fields
+    if (!input.vehicleModel || !input.vehicleModel.trim()) {
+      throw new Error("Vehicle model is required");
+    }
+    if (!input.vehicleYear) {
+      throw new Error("Vehicle year is required");
+    }
+    if (!input.vehiclePlateNumber || !input.vehiclePlateNumber.trim()) {
+      throw new Error("Vehicle plate number is required");
+    }
+    if (!input.licenseNumber || !input.licenseNumber.trim()) {
+      throw new Error("License number is required");
+    }
+    if (!input.preferredMaterialType || input.preferredMaterialType.length === 0) {
+      throw new Error("At least one preferred material type is required");
+    }
 
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const driverId = await generateDriverId();
@@ -239,12 +301,12 @@ createDriver: async (_, { input }) => {
       contactNumber: input.contactNumber.trim(),
       email: normalizedEmail,
       password: input.password.trim(),
-      address: input.address?.trim() || null,
-      licenseNumber: input.licenseNumber?.trim() || null,
+      address: input.address.trim(), // Now required
+      licenseNumber: input.licenseNumber.trim(),
       licensePictureURL: licensePictureUrl?.url || null,
-      vehiclePlateNumber: input.vehiclePlateNumber?.trim() || null,
+      vehiclePlateNumber: input.vehiclePlateNumber.trim(),
       vehicleType: input.vehicleType,
-      vehicleModel: input.vehicleModel?.trim() || null,
+      vehicleModel: input.vehicleModel.trim(),
       vehicleYear: input.vehicleYear,
       vehiclePhotoURL: vehiclePhotoUrl?.url || null,
       orCrPictureURL: orCrPictureUrl?.url || null,
@@ -375,7 +437,7 @@ createDriver: async (_, { input }) => {
       }
     },
 
-    // ===== NEW PASSWORD RESET MUTATIONS =====
+    // ===== UPDATED PASSWORD RESET MUTATIONS =====
     requestDriverPasswordReset: async (_, { email }) => {
       try {
         const normalizedEmail = email.toLowerCase().trim();
@@ -431,11 +493,11 @@ createDriver: async (_, { input }) => {
         // Log the verification code for debugging
         console.log(`Password reset verification code for ${driver.email}: ${token.trim()}`);
 
-        // Validate password strength (basic validation)
-        if (!newPassword || newPassword.length < 6) {
+        // Enhanced password validation
+        if (!newPassword || !isValidPassword(newPassword)) {
           return {
             success: false,
-            message: "Password must be at least 6 characters long"
+            message: "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character"
           };
         }
 
