@@ -34,7 +34,9 @@
   "scripts": {
     "start": "react-scripts start",
     "start:prod": "serve -s build -l 3000",
-    "build": "CI=false react-scripts build",
+    "build": "node build-optimized.js",
+    "build:dev": "CI=false node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
+    "build:standard": "node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
