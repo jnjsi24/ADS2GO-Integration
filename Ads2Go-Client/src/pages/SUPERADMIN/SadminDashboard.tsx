@@ -1,12 +1,11 @@
 //pages/SUPERADMIN/SadminDashboard.tsx
 
-
 import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Pencil, UserPlus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_ADMINS, CREATE_ADMIN, UPDATE_ADMIN, DELETE_ADMIN } from '../../graphql/superadmin';
-import { uploadAdminProfilePicture } from '../../utils/fileUpload';
-
+import { uploadAdminProfilePicture } from '../../utils/fileUpload'
+import { Eye, EyeOff } from "lucide-react";
 
 interface Admin {
   id: string;
@@ -457,9 +456,6 @@ const validateNewAdminForm = (): { isValid: boolean; errors: FormErrors } => {
     }
   }
 
-  // Set the errors in state
-  setNewAdminErrors(errors);
-  
   // Return validation result
   const result = { isValid, errors };
   
@@ -481,77 +477,47 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
   setSubmitting(true);
   
   try {
-    // Clear any previous errors
-    setNewAdminErrors({});
-    
     // Validate form data
     console.log('[DEBUG] Starting form validation...');
     const { isValid, errors } = validateNewAdminForm();
     
+    // Set errors in state to display them
+    setNewAdminErrors(errors);
+    
     if (!isValid) {
       console.log('[DEBUG] Form validation failed:', errors);
-      setNewAdminErrors(errors);
       addToast('Please fix the errors in the form', 'error');
+      setSubmitting(false);
       return;
     }
     
     console.log('[DEBUG] Form validation passed, preparing data for submission...');
     
-    // Prepare form data for submission
-    const formData = new FormData();
-    
-    // Add all form fields to formData
-    Object.entries(newAdminFormData).forEach(([key, value]) => {
-      if (value !== null && value !== undefined) {
-        formData.append(key, value);
+    // Handle file upload if profile picture is selected
+    let profilePictureUrl = null;
+    if (newAdminFormData.profilePicture) {
+      try {
+        profilePictureUrl = await uploadAdminProfilePicture(newAdminFormData.profilePicture);
+      } catch (error) {
+        console.error('Error uploading profile picture:', error);
+        addToast('Error uploading profile picture. Please try again.', 'error');
+        setSubmitting(false);
+        return;
       }
-    });
-    
-    console.log('[DEBUG] Submitting form data...');
-    // Log form data (excluding sensitive information)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[DEBUG] Form data being submitted:', {
-        ...newAdminFormData,
-        password: '***',
-        confirmPassword: '***',
-        profilePicture: newAdminFormData.profilePicture ? 'File selected' : 'No file',
-        contactNumber: newAdminFormData.contactNumber ? '***' : 'Not provided'
-      });
     }
-    console.log('Form validation result:', { isValid, errors });
-    
-    if (!isValid) {
-      setNewAdminErrors(errors);
-      console.log('Form is not valid, stopping submission');
-      return;
-    }
-    
-    console.log('Form is valid, proceeding with submission');
-    
-         // Handle file upload if profile picture is selected
-     let profilePictureUrl = null;
-     if (newAdminFormData.profilePicture) {
-       try {
-         profilePictureUrl = await uploadAdminProfilePicture(newAdminFormData.profilePicture);
-       } catch (error) {
-         console.error('Error uploading profile picture:', error);
-         addToast('Error uploading profile picture. Please try again.', 'error');
-         return;
-       }
-     }
 
-     // Prepare the input object for the API call
-     const input = {
-       firstName: newAdminFormData.firstName.trim(),
-       middleName: newAdminFormData.middleName.trim() || null,
-       lastName: newAdminFormData.lastName.trim(),
-       email: newAdminFormData.email.toLowerCase(),
-       password: newAdminFormData.password,
-       companyName: newAdminFormData.companyName.trim(),
-       companyAddress: newAdminFormData.companyAddress.trim(),
-       contactNumber: newAdminFormData.contactNumber,
-       ...(profilePictureUrl && { profilePicture: profilePictureUrl })
-     };
+    // Prepare the input object for the API call
+    const input = {
+      firstName: newAdminFormData.firstName.trim(),
+      middleName: newAdminFormData.middleName.trim() || null,
+      lastName: newAdminFormData.lastName.trim(),
+      email: newAdminFormData.email.toLowerCase(),
+      password: newAdminFormData.password,
+      companyName: newAdminFormData.companyName.trim(),
+      companyAddress: newAdminFormData.companyAddress.trim(),
+      contactNumber: newAdminFormData.contactNumber,
+      ...(profilePictureUrl && { profilePicture: profilePictureUrl })
+    };
     
     // Log the input data (excluding sensitive information)
     if (process.env.NODE_ENV === 'development') {
@@ -606,7 +572,6 @@ const handleNewAdminSubmit = async (e: React.FormEvent<HTMLFormElement>): Promis
     console.error('Unexpected error during form submission:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.';
     addToast(errorMessage, 'error');
-  } finally {
     setSubmitting(false);
   }
 };
@@ -981,13 +946,16 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                   </div>
-                  <span className="mt-2 text-xs text-gray-500">Click to upload</span>
+                  {newAdminErrors.profilePicture && (
+                    <p className="mt-1 text-sm text-red-600">{newAdminErrors.profilePicture}</p>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                {/* Name Fields */}
+                <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <label htmlFor="newAdminFirstName" className="block text-sm font-medium text-gray-500 mb-1">
-                      First Name *
+                    <label htmlFor="newAdminFirstName" className="block text-sm font-medium text-gray-700 mb-1">
+                      First Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="newAdminFirstName"
@@ -995,15 +963,17 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                       name="firstName"
                       value={newAdminFormData.firstName}
                       onChange={handleNewAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                        newAdminErrors.firstName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="First Name"
                     />
                     {newAdminErrors.firstName && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.firstName}</p>
+                      <p className="mt-1 text-sm text-red-600">{newAdminErrors.firstName}</p>
                     )}
                   </div>
                   <div>
-                    <label htmlFor="newAdminMiddleName" className="block text-sm font-medium text-gray-500 mb-1">
+                    <label htmlFor="newAdminMiddleName" className="block text-sm font-medium text-gray-700 mb-1">
                       Middle Name
                     </label>
                     <input
@@ -1012,15 +982,16 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                       name="middleName"
                       value={newAdminFormData.middleName}
                       onChange={handleNewAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                      placeholder="Middle Name"
                     />
                     {newAdminErrors.middleName && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.middleName}</p>
+                      <p className="mt-1 text-sm text-red-600">{newAdminErrors.middleName}</p>
                     )}
                   </div>
                   <div>
-                    <label htmlFor="newAdminLastName" className="block text-sm font-medium text-gray-500 mb-1">
-                      Last Name *
+                    <label htmlFor="newAdminLastName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Last Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       id="newAdminLastName"
@@ -1028,17 +999,21 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                       name="lastName"
                       value={newAdminFormData.lastName}
                       onChange={handleNewAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                        newAdminErrors.lastName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Last Name"
                     />
                     {newAdminErrors.lastName && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.lastName}</p>
+                      <p className="mt-1 text-sm text-red-600">{newAdminErrors.lastName}</p>
                     )}
                   </div>
                 </div>
+
+                {/* Email */}
                 <div>
-                  <label htmlFor="newAdminEmail" className="block text-sm font-medium text-gray-500 mb-1">
-                    Email *
+                  <label htmlFor="newAdminEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="newAdminEmail"
@@ -1046,16 +1021,91 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                     name="email"
                     value={newAdminFormData.email}
                     onChange={handleNewAdminChange}
-                    className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                    required
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      newAdminErrors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Email"
                   />
                   {newAdminErrors.email && (
-                    <p className="text-red-500 text-xs mt-1">{newAdminErrors.email}</p>
+                    <p className="mt-1 text-sm text-red-600">{newAdminErrors.email}</p>
                   )}
                 </div>
+
+                {/* Password Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        htmlFor="newAdminPassword"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Password <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="newAdminPassword"
+                          type={showPassword ? "text" : "password"}
+                          name="password"
+                          value={newAdminFormData.password}
+                          onChange={handleNewAdminChange}
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                            newAdminErrors.password ? "border-red-500" : "border-gray-300"
+                          }`}
+                          placeholder="Password"
+                        />
+                        <button
+                          type="button"
+                          onClick={togglePasswordVisibility}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-600 hover:text-gray-800"
+                        >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {newAdminErrors.password && (
+                        <p className="mt-1 text-sm text-red-600">
+                          {newAdminErrors.password}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="newAdminConfirmPassword"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Confirm Password <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="newAdminConfirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          name="confirmPassword"
+                          value={newAdminFormData.confirmPassword}
+                          onChange={handleNewAdminChange}
+                          className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                            newAdminErrors.confirmPassword ? "border-red-500" : "border-gray-300"
+                          }`}
+                          placeholder="Confirm Password"
+                        />
+                        <button
+                          type="button"
+                          onClick={toggleConfirmPasswordVisibility}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-600 hover:text-gray-800"
+                        >
+                          {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                      {newAdminErrors.confirmPassword && (
+                        <p className="mt-1 text-sm text-red-600">
+                          {newAdminErrors.confirmPassword}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                {/* Company Name */}
                 <div>
-                  <label htmlFor="newAdminCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
-                    Company Name *
+                  <label htmlFor="newAdminCompanyName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="newAdminCompanyName"
@@ -1063,124 +1113,76 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
                     name="companyName"
                     value={newAdminFormData.companyName}
                     onChange={handleNewAdminChange}
-                    className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                    required
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      newAdminErrors.companyName ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Company Name"
                   />
                   {newAdminErrors.companyName && (
-                    <p className="text-red-500 text-xs mt-1">{newAdminErrors.companyName}</p>
+                    <p className="mt-1 text-sm text-red-600">{newAdminErrors.companyName}</p>
                   )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                  <div>
-                    <label htmlFor="newAdminPassword" className="block text-sm font-medium text-gray-500 mb-1">
-                      Password *
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="newAdminPassword"
-                        type={showPassword ? 'text' : 'password'}
-                        name="password"
-                        value={newAdminFormData.password}
-                        onChange={handleNewAdminChange}
-                        className="w-full py-2 pr-8 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={togglePasswordVisibility}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      >
-                        {showPassword ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                    </div>
-                    {newAdminErrors.password && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.password}</p>
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="newAdminConfirmPassword" className="block text-sm font-medium text-gray-500 mb-1">
-                      Confirm Password *
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="newAdminConfirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        name="confirmPassword"
-                        value={newAdminFormData.confirmPassword}
-                        onChange={handleNewAdminChange}
-                        className="w-full py-2 pr-8 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={toggleConfirmPasswordVisibility}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      >
-                        {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
-                      </button>
-                    </div>
-                    {newAdminErrors.confirmPassword && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.confirmPassword}</p>
-                    )}
-                  </div>
+
+                {/* Company Address */}
+                <div>
+                  <label htmlFor="newAdminCompanyAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Address <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="newAdminCompanyAddress"
+                    type="text"
+                    name="companyAddress"
+                    value={newAdminFormData.companyAddress}
+                    onChange={handleNewAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      newAdminErrors.companyAddress ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Company Address"
+                  />
+                  {newAdminErrors.companyAddress && (
+                    <p className="mt-1 text-sm text-red-600">{newAdminErrors.companyAddress}</p>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 gap-y-6">
-                  <div>
-                    <label htmlFor="newAdminContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
-                      Contact Number *
-                    </label>
-                    <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
-                      <span className="text-gray-700 select-none pr-1">+63</span>
-                      <input
-                        id="newAdminContactNumber"
-                        name="contactNumber"
-                        type="tel"
-                        value={newAdminFormData.contactNumber}
-                        onChange={handleNewAdminChange}
-                        maxLength={10}
-                        className="flex-grow focus:outline-none bg-transparent"
-                        required
-                      />
-                    </div>
-                    {newAdminErrors.contactNumber && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.contactNumber}</p>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 mt -2">
-                    * Required fields
-                  </div>
-                  <div>
-                    <label htmlFor="newAdminCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
-                      Company Address *
-                    </label>
-                    <input
-                      id="newAdminCompanyAddress"
-                      type="text"
-                      name="companyAddress"
-                      value={newAdminFormData.companyAddress}
-                      onChange={handleNewAdminChange}
-                      className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                      required
-                    />
-                    {newAdminErrors.companyAddress && (
-                      <p className="text-red-500 text-xs mt-1">{newAdminErrors.companyAddress}</p>
-                    )}
-                  </div>
+
+                {/* Contact Number */}
+                <div>
+                  <label htmlFor="newAdminContactNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="newAdminContactNumber"
+                    type="text"
+                    name="contactNumber"
+                    value={newAdminFormData.contactNumber}
+                    onChange={handleNewAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      newAdminErrors.contactNumber ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="e.g., 09123456789"
+                    maxLength={11}
+                  />
+                  {newAdminErrors.contactNumber && (
+                    <p className="mt-1 text-sm text-red-600">{newAdminErrors.contactNumber}</p>
+                  )}
                 </div>
-                <div className="flex justify-between pt-6">
+
+                {/* Form Actions */}
+                <div className="flex justify-end space-x-4 pt-4">
                   <button
                     type="button"
                     onClick={handleCancelCreateAdmin}
-                    className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={false} // Temporarily force enabled for debugging
-                    className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled={submitting}
+                    className={`px-4 py-2 text-sm font-medium text-white bg-[#3674B5] rounded-md hover:bg-[#0E2A47] focus:outline-none focus:ring-2 focus:ring-[#0E2A47] ${
+                      submitting ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
-                    Create Admin
+                    {submitting ? 'Creating...' : 'Create Admin'}
                   </button>
                 </div>
               </form>
@@ -1191,181 +1193,243 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
 
       {/* Edit Admin Popup */}
       {adminToEdit && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end p-4">
-          <div className="fixed inset-0 bg-black bg-opacity-30" onClick={handleCancelEdit}></div>
-          <div className="relative w-full md:w-1/2 lg:w-1/3 max-w-xl h-auto pb-6 rounded-3xl bg-gray-100 mt-2 shadow-lg transform transition-transform duration-300 ease-in-out animate-slideIn">
+        <div className="fixed inset-0 z-50 flex justify-end pr-2">
+          <div
+            className="fixed inset-0 bg-black bg-opacity-30"
+            onClick={handleCancelEdit}
+          ></div>
+          <div className="relative w-full md:w-1/2 lg:w-1/3 max-w-xl h-full pb-6 rounded-l-3xl bg-gray-100 shadow-lg transform transition-transform duration-300 ease-in-out animate-slideIn">
             <div className="p-6 h-full overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-[#3674B5]">Edit Admin</h2>
-                <button onClick={handleCancelEdit} className="text-gray-500 hover:text-gray-700"></button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="text-gray-500 hover:text-gray-700"
+                ></button>
               </div>
-              <form onSubmit={handleUpdateAdminSubmit} className="space-y-4 mt-9">
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-    <div>
-      <label htmlFor="editFirstName" className="block text-sm font-medium text-gray-500 mb-1">
-        First Name
-      </label>
-      <input
-        id="editFirstName"
-        name="firstName"
-        type="text"
-        value={editAdminFormData.firstName}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-        required
-      />
-      {editErrors.firstName && <p className="text-red-500 text-xs mt-1">{editErrors.firstName}</p>}
-    </div>
+              <form onSubmit={handleUpdateAdminSubmit} className="space-y-6">
+                {/* Profile Picture */}
+                <div className="flex flex-col items-center mb-6">
+                  <label htmlFor="editAdminProfilePicture" className="block text-sm font-medium text-gray-500 mb-2">
+                    Profile Picture
+                  </label>
+                  <div className="relative">
+                    <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-[#3674B5]">
+                      {editAdminFormData.profilePicture ? (
+                        <img 
+                          src={URL.createObjectURL(editAdminFormData.profilePicture as Blob)} 
+                          alt="Profile Preview" 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : adminToEdit.profilePicture ? (
+                        <img 
+                          src={adminToEdit.profilePicture} 
+                          alt="Current Profile" 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `${adminToEdit.firstName.charAt(0)}${adminToEdit.lastName.charAt(0)}`;
+                            }
+                          }}
+                        />
+                      ) : (
+                        <UserPlus size={32} className="text-gray-400" />
+                      )}
+                    </div>
+                    <input
+                      id="editAdminProfilePicture"
+                      type="file"
+                      name="profilePicture"
+                      accept="image/*"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setEditAdminFormData({
+                            ...editAdminFormData,
+                            profilePicture: e.target.files[0]
+                          });
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                  </div>
+                </div>
 
-    <div>
-      <label htmlFor="editMiddleName" className="block text-sm font-medium text-gray-500 mb-1">
-        Middle Name
-      </label>
-      <input
-        id="editMiddleName"
-        name="middleName"
-        type="text"
-        value={editAdminFormData.middleName || ''}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-      />
-    </div>
+                {/* Name Fields */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label htmlFor="editAdminFirstName" className="block text-sm font-medium text-gray-700 mb-1">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="editAdminFirstName"
+                      type="text"
+                      name="firstName"
+                      value={editAdminFormData.firstName}
+                      onChange={handleEditAdminChange}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                        editErrors.firstName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="First Name"
+                    />
+                    {editErrors.firstName && (
+                      <p className="mt-1 text-sm text-red-600">{editErrors.firstName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label htmlFor="editAdminMiddleName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Middle Name
+                    </label>
+                    <input
+                      id="editAdminMiddleName"
+                      type="text"
+                      name="middleName"
+                      value={editAdminFormData.middleName}
+                      onChange={handleEditAdminChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                      placeholder="Middle Name"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="editAdminLastName" className="block text-sm font-medium text-gray-700 mb-1">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="editAdminLastName"
+                      type="text"
+                      name="lastName"
+                      value={editAdminFormData.lastName}
+                      onChange={handleEditAdminChange}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                        editErrors.lastName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="Last Name"
+                    />
+                    {editErrors.lastName && (
+                      <p className="mt-1 text-sm text-red-600">{editErrors.lastName}</p>
+                    )}
+                  </div>
+                </div>
 
-    <div>
-      <label htmlFor="editLastName" className="block text-sm font-medium text-gray-500 mb-1">
-        Last Name
-      </label>
-      <input
-        id="editLastName"
-        name="lastName"
-        type="text"
-        value={editAdminFormData.lastName}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-        required
-      />
-      {editErrors.lastName && <p className="text-red-500 text-xs mt-1">{editErrors.lastName}</p>}
-    </div>
+                {/* Email */}
+                <div>
+                  <label htmlFor="editAdminEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="editAdminEmail"
+                    type="email"
+                    name="email"
+                    value={editAdminFormData.email}
+                    onChange={handleEditAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      editErrors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Email"
+                  />
+                  {editErrors.email && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.email}</p>
+                  )}
+                </div>
 
-    <div>
-      <label htmlFor="editEmail" className="block text-sm font-medium text-gray-500 mb-1">
-        Email Address
-      </label>
-      <input
-        id="editEmail"
-        name="email"
-        type="email"
-        value={editAdminFormData.email}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-        required
-      />
-      {editErrors.email && <p className="text-red-500 text-xs mt-1">{editErrors.email}</p>}
-    </div>
+                {/* Password */}
+                <div>
+                  <label htmlFor="editAdminPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    id="editAdminPassword"
+                    type="password"
+                    name="password"
+                    value={editAdminFormData.password}
+                    onChange={handleEditAdminChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    placeholder="Leave blank to keep current password"
+                  />
+                </div>
 
-    <div>
-      <label htmlFor="editContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
-        Phone Number
-      </label>
-      <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
-        <span className="text-gray-700 select-none pr-1">+63</span>
-        <input
-          id="editContactNumber"
-          name="contactNumber"
-          type="tel"
-          value={editAdminFormData.contactNumber.replace('+63 ', '')}
-          onChange={handleEditAdminChange}
-          maxLength={10}
-          className="flex-grow focus:outline-none bg-transparent"
-        />
-      </div>
-      {editErrors.contactNumber && <p className="text-red-500 text-xs mt-1">{editErrors.contactNumber}</p>}
-    </div>
+                {/* Company Name */}
+                <div>
+                  <label htmlFor="editAdminCompanyName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Name
+                  </label>
+                  <input
+                    id="editAdminCompanyName"
+                    type="text"
+                    name="companyName"
+                    value={editAdminFormData.companyName}
+                    onChange={handleEditAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      editErrors.companyName ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Company Name"
+                  />
+                  {editErrors.companyName && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.companyName}</p>
+                  )}
+                </div>
 
-    <div>
-      <label htmlFor="editCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
-        Company Name
-      </label>
-      <input
-        id="editCompanyName"
-        name="companyName"
-        type="text"
-        value={editAdminFormData.companyName}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-      />
-      {editErrors.companyName && <p className="text-red-500 text-xs mt-1">{editErrors.companyName}</p>}
-    </div>
+                {/* Company Address */}
+                <div>
+                  <label htmlFor="editAdminCompanyAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                    Company Address
+                  </label>
+                  <input
+                    id="editAdminCompanyAddress"
+                    type="text"
+                    name="companyAddress"
+                    value={editAdminFormData.companyAddress}
+                    onChange={handleEditAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      editErrors.companyAddress ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="Company Address"
+                  />
+                  {editErrors.companyAddress && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.companyAddress}</p>
+                  )}
+                </div>
 
-    <div>
-      <label htmlFor="editCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
-        Company Address
-      </label>
-      <input
-        id="editCompanyAddress"
-        name="companyAddress"
-        type="text"
-        value={editAdminFormData.companyAddress}
-        onChange={handleEditAdminChange}
-        className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-      />
-      {editErrors.companyAddress && <p className="text-red-500 text-xs mt-1">{editErrors.companyAddress}</p>}
-    </div>
+                {/* Contact Number */}
+                <div>
+                  <label htmlFor="editAdminContactNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                    Contact Number
+                  </label>
+                  <input
+                    id="editAdminContactNumber"
+                    type="text"
+                    name="contactNumber"
+                    value={editAdminFormData.contactNumber}
+                    onChange={handleEditAdminChange}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
+                      editErrors.contactNumber ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="e.g., +63 9123456789"
+                  />
+                  {editErrors.contactNumber && (
+                    <p className="mt-1 text-sm text-red-600">{editErrors.contactNumber}</p>
+                  )}
+                </div>
 
-         <div>
-       <label htmlFor="editPassword" className="block text-sm font-medium text-gray-500 mb-1">
-         New Password <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
-       </label>
-       <input
-         id="editPassword"
-         name="password"
-         type="password"
-         value={editAdminFormData.password || ''}
-         onChange={handleEditAdminChange}
-         className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-       />
-     </div>
-
-     <div>
-       <label htmlFor="editProfilePicture" className="block text-sm font-medium text-gray-500 mb-1">
-         Profile Picture <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
-       </label>
-       <input
-         id="editProfilePicture"
-         name="profilePicture"
-         type="file"
-         accept="image/*"
-         onChange={(e) => {
-           if (e.target.files && e.target.files[0]) {
-             setEditAdminFormData(prev => ({
-               ...prev,
-               profilePicture: e.target.files![0]
-             }));
-           }
-         }}
-         className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-       />
-     </div>
-  </div>
-
-  <div className="flex justify-between pt-4">
-    <button
-      type="button"
-      onClick={handleCancelEdit}
-      className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
-    >
-      Cancel
-    </button>
-    <button
-      type="submit"
-      disabled={Object.values(editErrors).some((error) => error !== '')}
-      className="bg-[#3674B5] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-    >
-      Update Admin
-    </button>
-  </div>
-</form>
-
+                {/* Form Actions */}
+                <div className="flex justify-end space-x-4 pt-4">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-medium text-white bg-[#3674B5] rounded-md hover:bg-[#0E2A47] focus:outline-none focus:ring-2 focus:ring-[#0E2A47]"
+                  >
+                    Update Admin
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
@@ -1373,28 +1437,31 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
 
       {/* Delete Confirmation Modal */}
       {adminToDelete && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-end justify-end">
-          <div className="bg-[#3674B5] p-8 rounded-lg shadow-xl max-w-sm w-full transform transition-transform duration-300 ease-in-out animate-slideIn">
-            <h3 className="text-xl font-semibold text-white mb-4">Confirm Deletion</h3>
-            <p className="text-white mb-6">
-              Are you sure you want to delete admin{' '}
-              <span className="font-bold">
-                {adminToDelete?.firstName || 'this admin'} {adminToDelete?.lastName || ''}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Confirm Deletion</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete the admin account for{' '}
+              <span className="font-semibold">
+                {adminToDelete.firstName} {adminToDelete.lastName}
               </span>
               ? This action cannot be undone.
             </p>
-            <div className="flex justify-between pt-4">
+            <div className="flex justify-end space-x-4">
               <button
                 onClick={() => setAdminToDelete(null)}
-                className="px-5 py-2 rounded-lg hover:bg-gray-400 hover:text-black border border-gray-300 text-white"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500"
               >
                 Cancel
               </button>
               <button
                 onClick={executeDeleteAdmin}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                disabled={deletingAdmin}
+                className={`px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                  deletingAdmin ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                Delete
+                {deletingAdmin ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
@@ -1402,36 +1469,18 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
       )}
 
       {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col space-y-2">
+      <div className="fixed top-4 right-4 z-50 space-y-2">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`px-4 py-2 rounded-lg shadow-md text-white ${
-              toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+            className={`p-4 rounded-md shadow-md text-white ${
+              toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
             }`}
           >
             {toast.message}
           </div>
         ))}
       </div>
-
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
     </div>
   );
 };

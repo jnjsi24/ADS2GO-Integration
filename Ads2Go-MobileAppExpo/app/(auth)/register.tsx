@@ -78,6 +78,22 @@ const RegisterForm = () => {
   const vehicleTypes = ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E-TRIKE'];
   const materialTypes = ['LCD', 'BANNER', 'STICKER', 'HEADDRESS', 'POSTER'];
 
+  // Email validation function
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Password validation function
+  const isValidPassword = (password: string): boolean => {
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    
+    return hasUppercase && hasLowercase && hasNumber && hasSpecialChar;
+  };
+
   const pickImage = async (setImage: React.Dispatch<React.SetStateAction<any>>) => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -134,8 +150,6 @@ const RegisterForm = () => {
       Alert.alert('Error', 'Failed to pick image. Please try again.');
     }
   };
-  
-
 
   const validateStep = (step: number): boolean => {
     // Regex to check for names without numbers or symbols
@@ -161,11 +175,19 @@ const RegisterForm = () => {
           Alert.alert('Validation Error', 'Last Name cannot contain numbers or symbols.');
           return false;
         }
+        if (!address.trim()) {
+          Alert.alert('Validation Error', 'Address is required.');
+          return false;
+        }
         return true;
       
       case 1:
         if (!email.trim()) {
           Alert.alert('Validation Error', 'Email Address is required.');
+          return false;
+        }
+        if (!isValidEmail(email.trim())) {
+          Alert.alert('Validation Error', 'Please enter a valid email address.');
           return false;
         }
         if (!contactNumber.trim()) {
@@ -180,12 +202,19 @@ const RegisterForm = () => {
           Alert.alert('Validation Error', 'Password is required.');
           return false;
         }
-        if (password !== confirmPassword) {
-          Alert.alert('Validation Error', 'Passwords do not match.');
+        if (password.length < 8) {
+          Alert.alert('Validation Error', 'Password must be at least 8 characters long.');
           return false;
         }
-        if (password.length < 6) {
-          Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+        if (!isValidPassword(password)) {
+          Alert.alert(
+            'Validation Error', 
+            'Password must include at least one uppercase letter, one lowercase letter, one number, and one special character.'
+          );
+          return false;
+        }
+        if (password !== confirmPassword) {
+          Alert.alert('Validation Error', 'Passwords do not match.');
           return false;
         }
         return true;
@@ -563,7 +592,8 @@ const RegisterForm = () => {
             {renderInput('Last Name', lastName, setLastName, { required: true, placeholder: 'Enter Last Name' })}
             {renderInput('Address', address, setAddress, { 
               multiline: true, 
-              placeholder: 'Your complete address (optional)' 
+              required: true,
+              placeholder: 'Enter your complete address' 
             })}
 
             <View style={styles.formButtonContainer}>
@@ -625,7 +655,7 @@ const RegisterForm = () => {
             })}
             {renderInput('Password', password, setPassword, {
               secureTextEntry: !showPassword,
-              placeholder: 'At least 6 characters',
+              placeholder: 'Must include uppercase, lowercase, number & special character',
               required: true,
               togglePassword: () => setShowPassword(!showPassword),
               showPassword: showPassword
@@ -728,7 +758,7 @@ const RegisterForm = () => {
               <Text style={styles.reviewItem}>Name: {firstName} {middleName} {lastName}</Text>
               <Text style={styles.reviewItem}>Email: {email}</Text>
               <Text style={styles.reviewItem}>Phone: {contactNumber}</Text>
-              {address && <Text style={styles.reviewItem}>Address: {address}</Text>}
+              <Text style={styles.reviewItem}>Address: {address}</Text>
             </View>
 
             <View style={styles.reviewSection}>
