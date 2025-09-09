@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 const buildPath = path.join(__dirname, 'build');
 
 console.log(`🚀 Starting Express server on port ${port}`);
@@ -48,6 +48,8 @@ app.get('/health', (req, res) => {
 const server = app.listen(port, '0.0.0.0', () => {
   console.log(`✅ Server running on port ${port}`);
   console.log(`🌐 Access your app at: http://localhost:${port}`);
+  console.log(`🔍 Environment PORT: ${process.env.PORT}`);
+  console.log(`🔍 Process PID: ${process.pid}`);
 });
 
 // Handle graceful shutdown
