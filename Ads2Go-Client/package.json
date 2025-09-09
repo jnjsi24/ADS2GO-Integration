@@ -26,6 +26,7 @@
     "react-router-dom": "^7.8.2",
     "react-scripts": "5.0.1",
     "recharts": "^3.1.2",
+    "express": "^4.18.2",
     "serve": "^14.2.1",
     "sonner": "^2.0.7",
     "typescript": "^4.9.5",
@@ -33,7 +34,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "start:prod": "node start-server.js",
+    "start:prod": "node server.js",
     "build": "node build-optimized.js",
     "build:dev": "CI=false node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
     "build:standard": "node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
