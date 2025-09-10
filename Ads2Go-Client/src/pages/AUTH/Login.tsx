@@ -10,10 +10,41 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({
+    email: '',
+    password: ''
+  });
+
+  const validateForm = () => {
+    const errors = {
+      email: '',
+      password: ''
+    };
+
+    if (!email.trim()) {
+      errors.email = 'Please Enter your Email address';
+    }
+
+    if (!password.trim()) {
+      errors.password = 'Please Enter your Password';
+    }
+
+    setValidationErrors(errors);
+    return !errors.email && !errors.password;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Clear previous validation errors
+    setValidationErrors({ email: '', password: '' });
+
+    // Validate form before proceeding
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoggingIn(true);
 
     try {
@@ -29,6 +60,22 @@ const Login: React.FC = () => {
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    // Clear email validation error when user starts typing
+    if (validationErrors.email) {
+      setValidationErrors(prev => ({ ...prev, email: '' }));
+    }
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    // Clear password validation error when user starts typing
+    if (validationErrors.password) {
+      setValidationErrors(prev => ({ ...prev, password: '' }));
     }
   };
 
@@ -93,7 +140,7 @@ const Login: React.FC = () => {
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
                 Email Address
@@ -103,9 +150,14 @@ const Login: React.FC = () => {
                 id="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                onChange={handleEmailChange}
+                className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
+                  validationErrors.email ? 'border-red-400' : 'border-gray-400'
+                }`}
               />
+              {validationErrors.email && (
+                <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -121,10 +173,11 @@ const Login: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
-                  required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                  onChange={handlePasswordChange}
+                  className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
+                    validationErrors.password ? 'border-red-400' : 'border-gray-400'
+                  }`}
                 />
                 <button
                   type="button"
@@ -138,6 +191,9 @@ const Login: React.FC = () => {
                   )}
                 </button>
               </div>
+              {validationErrors.password && (
+                <p className="text-red-500 text-sm mt-1">{validationErrors.password}</p>
+              )}
             </div>
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
