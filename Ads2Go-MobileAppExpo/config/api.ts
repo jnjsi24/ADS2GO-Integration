@@ -9,4 +9,4 @@ const API_CONFIG = {
   // Add other API-related configurations here if needed
 };
 
-export default API_CONFIG;
+  export default API_CONFIG;
