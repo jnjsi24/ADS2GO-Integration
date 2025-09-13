@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Play, 
   Pause, 
@@ -46,14 +46,187 @@ import {
   Upload,
   MoreHorizontal,
   Info,
-  ExternalLink
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
+import { adsPanelService, ScreenData, ComplianceReport, AdAnalytics } from '../../services/adsPanelServiceNew';
+import '../../services/testEndpoints';
 
 const AdminAdsControl: React.FC = () => {
+  // Cache busting - force component reload
+  console.log('🔄 AdminAdsControl NEW VERSION loaded - Cache busted at:', new Date().toISOString());
+  
   const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedScreen, setSelectedScreen] = useState<string | null>(null);
+  
+  // Real data states
+  const [screens, setScreens] = useState<ScreenData[]>([]);
+  const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
+  const [adAnalytics, setAdAnalytics] = useState<AdAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showScreenDetails, setShowScreenDetails] = useState(false);
+
+  // Inline API service to bypass any caching issues
+  const inlineApiService = {
+    async makeRequest(endpoint: string, options: RequestInit = {}) {
+      const url = `http://localhost:5000${endpoint}`;
+      console.log('🚀 INLINE SERVICE - Making API request to:', url);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        console.error('❌ INLINE SERVICE - API request failed:', url, response.status, response.statusText);
+        throw new Error(`API request failed: ${response.statusText}`);
+      }
+
+      console.log('✅ INLINE SERVICE - API request successful:', url);
+      return response.json();
+    },
+
+    async getScreens() {
+      const response = await this.makeRequest('/screenTracking/screens');
+      return response.data;
+    },
+
+    async getComplianceReport() {
+      const response = await this.makeRequest('/screenTracking/compliance');
+      return response.data;
+    },
+
+    async getAdAnalytics() {
+      const response = await this.makeRequest('/screenTracking/adAnalytics');
+      return response.data;
+    }
+  };
+
+  // Data fetching functions
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Using INLINE API service to bypass caching issues...');
+      
+      const [screensData, complianceData, analyticsData] = await Promise.all([
+        inlineApiService.getScreens(),
+        inlineApiService.getComplianceReport(),
+        inlineApiService.getAdAnalytics()
+      ]);
+      
+      setScreens(screensData.screens);
+      setComplianceReport(complianceData);
+      setAdAnalytics(analyticsData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch data');
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data on component mount
+  useEffect(() => {
+    fetchData();
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Action handlers
+  const handleBulkAction = async (action: string) => {
+    try {
+      setActionLoading(action);
+      let result;
+      
+      // For now, simulate the actions since we're focusing on the data fetching issue
+      switch (action) {
+        case 'sync':
+          result = { success: true, message: 'All screens synced successfully' };
+          break;
+        case 'play':
+          result = { success: true, message: 'All screens started playing' };
+          break;
+        case 'pause':
+          result = { success: true, message: 'All screens paused' };
+          break;
+        case 'stop':
+          result = { success: true, message: 'All screens stopped' };
+          break;
+        case 'restart':
+          result = { success: true, message: 'All screens restarted' };
+          break;
+        case 'emergency':
+          result = { success: true, message: 'Emergency stop activated for all screens' };
+          break;
+        case 'lockdown':
+          result = { success: true, message: 'All screens locked down' };
+          break;
+        case 'unlock':
+          result = { success: true, message: 'All screens unlocked' };
+          break;
+        default:
+          throw new Error('Unknown action');
+      }
+      
+      if (result.success) {
+        // Refresh data after successful action
+        await fetchData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleScreenAction = async (deviceId: string, action: string, value?: any) => {
+    try {
+      setActionLoading(`${deviceId}-${action}`);
+      let result;
+      
+      switch (action) {
+        case 'metrics':
+          result = await adsPanelService.updateScreenMetrics(deviceId, value);
+          break;
+        case 'start-session':
+          result = await adsPanelService.startScreenSession(deviceId);
+          break;
+        case 'end-session':
+          result = await adsPanelService.endScreenSession(deviceId);
+          break;
+        case 'track-ad':
+          result = await adsPanelService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
+          break;
+        case 'end-ad':
+          result = await adsPanelService.endAdPlayback(deviceId);
+          break;
+        case 'driver-activity':
+          result = await adsPanelService.updateDriverActivity(deviceId, value);
+          break;
+        default:
+          throw new Error('Unknown action');
+      }
+      
+      if (result.success) {
+        // Refresh data after successful action
+        await fetchData();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // Mock data for demonstration
   const mockScreens = [
@@ -204,7 +377,7 @@ const AdminAdsControl: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    setSelectedScreens(mockScreens.map(screen => screen.id));
+    setSelectedScreens(screens.map(screen => screen.deviceId));
   };
 
   const handleDeselectAll = () => {
@@ -212,16 +385,56 @@ const AdminAdsControl: React.FC = () => {
   };
 
   const handleScreenClick = (screen: any) => {
-    setSelectedScreen(screen.id);
+    setSelectedScreen(screen.deviceId);
     setShowScreenDetails(true);
   };
+
+  if (loading) {
+    return (
+      <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading AdsPanel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchData}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
-        <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
+            <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
+          </div>
+          <button 
+            onClick={fetchData}
+            disabled={loading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Master Controls */}
@@ -231,20 +444,36 @@ const AdminAdsControl: React.FC = () => {
           Master Controls
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <button className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-            <RefreshCw className="w-6 h-6 text-blue-600 mb-2" />
+          <button 
+            onClick={() => handleBulkAction('sync')}
+            disabled={actionLoading === 'sync'}
+            className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'sync' ? <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" /> : <RefreshCw className="w-6 h-6 text-blue-600 mb-2" />}
             <span className="text-sm font-medium text-blue-600">Sync All</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-            <Play className="w-6 h-6 text-green-600 mb-2" />
+          <button 
+            onClick={() => handleBulkAction('play')}
+            disabled={actionLoading === 'play'}
+            className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'play' ? <Loader2 className="w-6 h-6 text-green-600 mb-2 animate-spin" /> : <Play className="w-6 h-6 text-green-600 mb-2" />}
             <span className="text-sm font-medium text-green-600">Play All</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors">
-            <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+          <button 
+            onClick={() => handleBulkAction('pause')}
+            disabled={actionLoading === 'pause'}
+            className="flex flex-col items-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'pause' ? <Loader2 className="w-6 h-6 text-yellow-600 mb-2 animate-spin" /> : <Pause className="w-6 h-6 text-yellow-600 mb-2" />}
             <span className="text-sm font-medium text-yellow-600">Pause All</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
-            <Square className="w-6 h-6 text-red-600 mb-2" />
+          <button 
+            onClick={() => handleBulkAction('stop')}
+            disabled={actionLoading === 'stop'}
+            className="flex flex-col items-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'stop' ? <Loader2 className="w-6 h-6 text-red-600 mb-2 animate-spin" /> : <Square className="w-6 h-6 text-red-600 mb-2" />}
             <span className="text-sm font-medium text-red-600">Stop All</span>
           </button>
           <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
@@ -272,7 +501,7 @@ const AdminAdsControl: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Screens</p>
-              <p className="text-2xl font-bold text-gray-900">{mockAnalytics.totalScreens}</p>
+              <p className="text-2xl font-bold text-gray-900">{screens.length}</p>
             </div>
             <Monitor className="w-8 h-8 text-blue-500" />
           </div>
@@ -281,7 +510,7 @@ const AdminAdsControl: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Online Screens</p>
-              <p className="text-2xl font-bold text-green-600">{mockAnalytics.onlineScreens}</p>
+              <p className="text-2xl font-bold text-green-600">{screens.filter(s => s.isOnline).length}</p>
             </div>
             <Wifi className="w-8 h-8 text-green-500" />
           </div>
@@ -290,7 +519,7 @@ const AdminAdsControl: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Playing Ads</p>
-              <p className="text-2xl font-bold text-blue-600">{mockAnalytics.playingAds}</p>
+              <p className="text-2xl font-bold text-blue-600">{screens.filter(s => s.screenMetrics?.isDisplaying).length}</p>
             </div>
             <PlayCircle className="w-8 h-8 text-blue-500" />
           </div>
@@ -299,7 +528,7 @@ const AdminAdsControl: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Impressions</p>
-              <p className="text-2xl font-bold text-purple-600">{mockAnalytics.totalImpressions.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-purple-600">{adAnalytics?.summary.totalAdsPlayed || 0}</p>
             </div>
             <Eye className="w-8 h-8 text-purple-500" />
           </div>
@@ -375,46 +604,46 @@ const AdminAdsControl: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {mockScreens.map((screen) => (
-                        <tr key={screen.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      {screens.map((screen) => (
+                        <tr key={screen.deviceId} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-3 px-4">
                             <input
                               type="checkbox"
-                              checked={selectedScreens.includes(screen.id)}
-                              onChange={() => handleScreenSelect(screen.id)}
+                              checked={selectedScreens.includes(screen.deviceId)}
+                              onChange={() => handleScreenSelect(screen.deviceId)}
                               className="rounded"
                             />
                           </td>
-                          <td className="py-3 px-4 font-medium">{screen.id}</td>
+                          <td className="py-3 px-4 font-medium">{screen.deviceId}</td>
                           <td className="py-3 px-4 text-sm text-gray-600">{screen.materialId}</td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{screen.slot}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber}</td>
                           <td className="py-3 px-4">
                             <div className="flex items-center space-x-2">
-                              {getStatusIcon(screen.status)}
-                              <span className="text-sm">{getStatusText(screen.status)}</span>
+                              {getStatusIcon(screen.isOnline ? 'online' : 'offline')}
+                              <span className="text-sm">{getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            {screen.currentAd ? (
+                            {screen.screenMetrics?.currentAd ? (
                               <div>
-                                <div className="font-medium text-sm">{screen.currentAd.title}</div>
-                                <div className="text-xs text-gray-500">{screen.currentAd.advertiser}</div>
+                                <div className="font-medium text-sm">{screen.screenMetrics.currentAd.adTitle}</div>
+                                <div className="text-xs text-gray-500">Duration: {screen.screenMetrics.currentAd.adDuration}s</div>
                               </div>
                             ) : (
                               <span className="text-gray-400 text-sm">No ads</span>
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            {screen.currentAd ? (
+                            {screen.screenMetrics?.currentAd ? (
                               <div className="w-32">
                                 <div className="flex justify-between text-xs text-gray-600 mb-1">
-                                  <span>{formatTime(screen.currentAd.progress)}</span>
-                                  <span>{formatTime(screen.currentAd.duration)}</span>
+                                  <span>{formatTime(0)}</span>
+                                  <span>{formatTime(screen.screenMetrics.currentAd.adDuration)}</span>
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
-                                  <div
-                                    className="bg-blue-600 h-2 rounded-full"
-                                    style={{ width: `${screen.currentAd.completion}%` }}
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full" 
+                                    style={{ width: '0%' }}
                                   ></div>
                                 </div>
                               </div>
@@ -422,7 +651,12 @@ const AdminAdsControl: React.FC = () => {
                               <span className="text-gray-400 text-sm">-</span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{screen.location}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {typeof screen.currentLocation === 'string' 
+                              ? screen.currentLocation 
+                              : (screen.currentLocation as any)?.address || 'Unknown Location'
+                            }
+                          </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center space-x-2">
                               <button
@@ -478,29 +712,29 @@ const AdminAdsControl: React.FC = () => {
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Individual Screen Controls</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {mockScreens.map((screen) => (
-                  <div key={screen.id} className="bg-gray-50 p-4 rounded-lg">
+                {screens.map((screen) => (
+                  <div key={screen.deviceId} className="bg-gray-50 p-4 rounded-lg">
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium">{screen.id}</h4>
+                      <h4 className="font-medium">{screen.deviceId}</h4>
                       <div className="flex items-center space-x-2">
-                        {getStatusIcon(screen.status)}
-                        <span className="text-sm">{getStatusText(screen.status)}</span>
+                        {getStatusIcon(screen.isOnline ? 'online' : 'offline')}
+                        <span className="text-sm">{getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
                       </div>
                     </div>
                     
-                    {screen.currentAd && (
+                    {screen.screenMetrics?.currentAd && (
                       <div className="mb-3">
-                        <div className="text-sm font-medium">{screen.currentAd.title}</div>
-                        <div className="text-xs text-gray-500">{screen.currentAd.advertiser}</div>
+                        <div className="text-sm font-medium">{screen.screenMetrics.currentAd.adTitle}</div>
+                        <div className="text-xs text-gray-500">Duration: {screen.screenMetrics.currentAd.adDuration}s</div>
                         <div className="mt-1">
                           <div className="flex justify-between text-xs text-gray-600 mb-1">
-                            <span>{formatTime(screen.currentAd.progress)}</span>
-                            <span>{formatTime(screen.currentAd.duration)}</span>
+                            <span>{formatTime(0)}</span>
+                            <span>{formatTime(screen.screenMetrics.currentAd.adDuration)}</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1">
-                            <div
-                              className="bg-blue-600 h-1 rounded-full"
-                              style={{ width: `${screen.currentAd.completion}%` }}
+                            <div 
+                              className="bg-blue-600 h-1 rounded-full" 
+                              style={{ width: '0%' }}
                             ></div>
                           </div>
                         </div>
@@ -510,23 +744,23 @@ const AdminAdsControl: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span>Brightness</span>
-                        <span>{screen.brightness}%</span>
+                        <span>{screen.screenMetrics?.brightness || 0}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-yellow-500 h-2 rounded-full"
-                          style={{ width: `${screen.brightness}%` }}
+                        <div 
+                          className="bg-yellow-500 h-2 rounded-full" 
+                          style={{ width: `${screen.screenMetrics?.brightness || 0}%` }}
                         ></div>
                       </div>
                       
                       <div className="flex items-center justify-between text-sm">
                         <span>Volume</span>
-                        <span>{screen.volume}%</span>
+                        <span>{screen.screenMetrics?.volume || 0}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-green-500 h-2 rounded-full"
-                          style={{ width: `${screen.volume}%` }}
+                        <div 
+                          className="bg-green-500 h-2 rounded-full" 
+                          style={{ width: `${screen.screenMetrics?.volume || 0}%` }}
                         ></div>
                       </div>
                     </div>
@@ -806,7 +1040,7 @@ const AdminAdsControl: React.FC = () => {
             </div>
             
             {(() => {
-              const screen = mockScreens.find(s => s.id === selectedScreen);
+              const screen = screens.find(s => s.deviceId === selectedScreen);
               if (!screen) return null;
               
               return (
@@ -815,7 +1049,7 @@ const AdminAdsControl: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Device ID</label>
-                      <p className="text-lg font-medium">{screen.id}</p>
+                      <p className="text-lg font-medium">{screen.deviceId}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Material ID</label>
@@ -823,45 +1057,50 @@ const AdminAdsControl: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Slot</label>
-                      <p className="text-lg font-medium">{screen.slot}</p>
+                      <p className="text-lg font-medium">{screen.slotNumber}</p>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Location</label>
-                      <p className="text-lg font-medium">{screen.location}</p>
+                      <p className="text-lg font-medium">
+                        {typeof screen.currentLocation === 'string' 
+                          ? screen.currentLocation 
+                          : (screen.currentLocation as any)?.address || 'Unknown Location'
+                        }
+                      </p>
                     </div>
                   </div>
 
                   {/* Current Ad */}
-                  {screen.currentAd && (
+                  {screen.screenMetrics?.currentAd && (
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <h4 className="font-medium mb-3">Current Ad</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-600">Ad Title</label>
-                          <p className="text-lg font-medium">{screen.currentAd.title}</p>
+                          <p className="text-lg font-medium">{screen.screenMetrics.currentAd.adTitle}</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-600">Advertiser</label>
-                          <p className="text-lg font-medium">{screen.currentAd.advertiser}</p>
+                          <label className="block text-sm font-medium text-gray-600">Ad ID</label>
+                          <p className="text-lg font-medium">{screen.screenMetrics.currentAd.adId}</p>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-600">Duration</label>
-                          <p className="text-lg font-medium">{formatTime(screen.currentAd.duration)}</p>
+                          <p className="text-lg font-medium">{screen.screenMetrics.currentAd.adDuration}s</p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-600">Progress</label>
-                          <p className="text-lg font-medium">{formatTime(screen.currentAd.progress)}</p>
+                          <label className="block text-sm font-medium text-gray-600">Started</label>
+                          <p className="text-lg font-medium">{new Date(screen.screenMetrics.currentAd.startTime).toLocaleTimeString()}</p>
                         </div>
                       </div>
                       <div className="mt-3">
                         <div className="flex justify-between text-sm text-gray-600 mb-1">
-                          <span>Completion: {screen.currentAd.completion}%</span>
-                          <span>Impressions: {screen.currentAd.impressions}</span>
+                          <span>Total Ads Played: {screen.screenMetrics.adPlayCount}</span>
+                          <span>Display Hours: {screen.screenMetrics.displayHours.toFixed(1)}h</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${screen.currentAd.completion}%` }}
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: '0%' }}
                           ></div>
                         </div>
                       </div>
@@ -880,10 +1119,10 @@ const AdminAdsControl: React.FC = () => {
                             type="range"
                             min="0"
                             max="100"
-                            value={screen.brightness}
+                            value={screen.screenMetrics?.brightness || 0}
                             className="flex-1"
                           />
-                          <span className="text-sm font-medium">{screen.brightness}%</span>
+                          <span className="text-sm font-medium">{screen.screenMetrics?.brightness || 0}%</span>
                         </div>
                       </div>
                       <div>
@@ -894,10 +1133,10 @@ const AdminAdsControl: React.FC = () => {
                             type="range"
                             min="0"
                             max="100"
-                            value={screen.volume}
+                            value={screen.screenMetrics?.volume || 0}
                             className="flex-1"
                           />
-                          <span className="text-sm font-medium">{screen.volume}%</span>
+                          <span className="text-sm font-medium">{screen.screenMetrics?.volume || 0}%</span>
                         </div>
                       </div>
                     </div>
