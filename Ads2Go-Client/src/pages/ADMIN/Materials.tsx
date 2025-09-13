@@ -313,6 +313,7 @@ const Materials: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMaterialDetails, setSelectedMaterialDetails] = useState<Material | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateMaterialInput>({
     vehicleType: 'CAR',
     materialType: 'LCD',
@@ -769,6 +770,9 @@ const Materials: React.FC = () => {
   const handleViewDetails = (material: Material) => {
     setSelectedMaterialDetails(material);
     setShowDetailsModal(true);
+    setTimeout(() => {
+      setIsModalOpen(true);
+    }, 10);
   };
 
   const handleDeleteMaterial = async (id: string) => {
@@ -781,6 +785,14 @@ const Materials: React.FC = () => {
         console.error('Error deleting material:', error);
       }
     }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => {
+      setShowDetailsModal(false);
+      setSelectedMaterialDetails(null);
+    }, 300);
   };
 
   const handleRemoveFromDriver = async (id: string) => {
@@ -928,6 +940,10 @@ const Materials: React.FC = () => {
       return '';
     }
   };
+  const handleRowClick = (material: Material) => {
+    handleViewDetails(material);
+    setShowDetailsModal(true);
+  };
 
   if (loading) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">Loading materials...</div>;
   if (error) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center text-red-500">Error: {error.message}</div>;
@@ -935,81 +951,83 @@ const Materials: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
       <div className="bg-gray-100 w-full min-h-screen">
-        {/* Header with Title and Add New Button */}
+        {/* Header with Title*/}
         <div className="flex justify-between items-center mb-6">
-          <h1 className="px-3 py-1 text-3xl font-bold text-gray-800">Materials List</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Materials List</h1>
+          <div className="flex flex-col items-end gap-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+                placeholder="Search materials..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <div className="relative w-40">
+                <select
+                  className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value as typeof selectedType)}
+                >
+                  <option value="All">All Materials</option>
+                  <option value="LCD">LCD</option>
+                  <option value="BANNER">BANNER</option>
+                  <option value="STICKER">STICKER</option>
+                  <option value="HEADDRESS">HEADDRESS</option>
+                  <option value="POSTER">POSTER</option>
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </div>
+              </div>
+
+              <div className="relative w-40">
+                <select
+                  className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                >
+                  <option value="All">All Status</option>
+                  <option value="Used">Used</option>
+                  <option value="Available">Available</option>
+                </select>
+                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Add New Material Button */}
+        <div className="flex justify-end mb-6">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-[#3674B5] text-white rounded-xl w-44 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+            className="py-3 bg-[#3674B5] text-xs text-white rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
           >
             <Plus size={16} />
             Add New Material
           </button>
         </div>
 
-        {/* Search Bar and Filters */}
-        <div className="flex justify-between items-center mb-4">
-          <input
-            type="text"
-            className="text-xs text-black rounded-xl pl-5 py-3 w-60 shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
-            placeholder="Search materials..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="flex space-x-2">
-            <div className="relative w-32">
-              <select
-                className="text-xs text-black rounded-xl pl-5 py-3 pr-8 w-full shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value as typeof selectedType)}
-              >
-                <option value="All">All Materials</option>
-                <option value="LCD">LCD</option>
-                <option value="BANNER">BANNER</option>
-                <option value="STICKER">STICKER</option>
-                <option value="HEADDRESS">HEADDRESS</option>
-                <option value="POSTER">POSTER</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
-            </div>
-            <div className="relative w-32">
-              <select
-                className="text-xs text-black rounded-xl pl-5 py-3 pr-8 w-full shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              >
-                <option value="All">All Status</option>
-                <option value="Used">Used</option>
-                <option value="Available">Available</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Table */}
-        <div className="rounded-xl shadow-md mb-4 overflow-hidden">
+        <div className="rounded-xl mb-4 overflow-hidden">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 bg-[#3674B5] px-4 py-2 text-sm font-semibold text-white">
-            <div className="flex items-center gap-10 col-span-2">
+          <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
+            <div className="flex items-center gap-6 col-span-2">
               <input
                 type="checkbox"
                 className="form-checkbox"
                 onChange={handleSelectAll}
                 checked={isAllSelected}
               />
-              <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
+              <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
             </div>
-            <div className="col-span-1">ID</div>
-            <div className="col-span-2">Type</div>
-            <div className="col-span-2">Status</div>
-            <div className="col-span-2">Driver Name</div>
-            <div className="col-span-2">Vehicle Plate</div>
-            <div className="col-span-1 text-center">Action</div>
+            <div className="col-span-2">ID</div>
+            <div className="col-span-2 pl-16">Status</div>
+            <div className="col-span-2 pl-12">Driver Name</div>
+            <div className="col-span-2 pl-24">Vehicle Plate</div>
+            <div className="col-span-1 ml-28">Action</div>
           </div>
           
           {/* Table Body */}
@@ -1017,12 +1035,12 @@ const Materials: React.FC = () => {
             const status = getStatus(material);
             
             return (
-              <div
-                key={material.id}
-                className="bg-white border-t border-gray-300 hover:bg-gray-50 transition-colors"
-              >
-                <div className="grid grid-cols-12 items-center px-4 py-3 text-sm">
-                  <div className="col-span-2 gap-10 flex items-center">
+              <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
+                <div
+                  className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                  onClick={() => handleRowClick(material)}
+                >
+                  <div className="col-span-2 flex items-center gap-2">
                     <input
                       type="checkbox"
                       className="form-checkbox"
@@ -1032,30 +1050,40 @@ const Materials: React.FC = () => {
                         handleMaterialSelect(material.id);
                       }}
                     />
-                    <div className="flex items-center">
-                      <span className="truncate">{material.materialType}</span>
-                    </div>
+                    <span className="pl-5 truncate">{material.materialType}</span>
                   </div>
-                  <div className="col-span-1 truncate">{material.materialId}</div>
-                  <div className="col-span-2 truncate">{material.materialType}</div>
-                  <div className="col-span-2">
+
+                  <div className="col-span-2 pl-1">{material.materialId}</div>
+
+                  <div className="col-span-2 text-center">
                     <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${
-                        status === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        status === 'Used'
+                          ? 'bg-red-200 text-red-800'
+                          : 'bg-green-200 text-green-800'
                       }`}
                     >
                       {status}
                     </span>
                   </div>
-                  <div className="col-span-2 truncate">{material.driver?.fullName || 'N/A'}</div>
-                  <div className="col-span-2 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
-                  <div className="col-span-1 flex justify-center items-center gap-1">
+
+                  <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
+                  <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+
+                  <div className="col-span-1 flex justify-center gap-1 ml-36">
+                    <button className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors">
+                      <Edit size={16} />
+                      
+                    </button> 
                     <button
-                      onClick={() => handleViewDetails(material)}
-                      className="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600"
-                      title="View Details"
+                      onClick={(e) => {
+                      e.stopPropagation(); // ✅ stop row click
+                      handleDeleteMaterial(material.id); // ✅ delete action
+                    }}
+                      className="flex items-center px-1 py-2 text-red-500 rounded-lg hover:text-red-600 transition-colors"
                     >
-                      <Eye size={12} />
+                      <TrashIcon size={16} />
+                      
                     </button>
                   </div>
                 </div>
@@ -1204,104 +1232,87 @@ const Materials: React.FC = () => {
         </div>
       )}
 
-      {/* Manual Assignment Modal */}
+      {/* Assign Driver Modal */}
       {showAssignModal && selectedMaterialForAssign && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">Assign Material to Driver</h2>
-              <button
-                onClick={closeAssignModal}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          onClick={() => setShowAssignModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-lg w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Target Material Details */}
+            <h2 className="text-lg font-bold text-center text-gray-800 mb-4">
+              Target Material Details
+            </h2>
 
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-800 mb-2">📋 Material Assignment:</h3>
-              <div className="text-sm text-blue-700">
-                The system will assign an available material of the selected type to the chosen driver based on compatibility and preferences.
-              </div>
-            </div>
-
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <h3 className="font-semibold text-gray-700 mb-2">Target Material Details:</h3>
-              <div className="text-sm text-gray-600 space-y-1">
-                <div><span className="font-medium">ID:</span> {selectedMaterialForAssign.materialId}</div>
-                <div><span className="font-medium">Type:</span> {selectedMaterialForAssign.materialType}</div>
-                <div><span className="font-medium">Vehicle Type:</span> {selectedMaterialForAssign.vehicleType}</div>
-                <div><span className="font-medium">Category:</span> {selectedMaterialForAssign.category}</div>
-              </div>
-            </div>
-
-            <form onSubmit={handleAssignSubmit} className="space-y-4">
+            {/* Two-row grid: Row 1 = ID + Type, Row 2 = Vehicle Type + Category */}
+            <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 mb-6">
+              {/* Row 1 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Select Driver <span className="text-red-500">*</span>
-                </label>
-                {driversLoading ? (
-                  <div className="text-sm text-gray-500">Loading drivers...</div>
-                ) : (
-                  <select
-                    value={selectedDriverId}
-                    onChange={(e) => setSelectedDriverId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">Choose a driver...</option>
-                    {getCompatibleDrivers(selectedMaterialForAssign).map((driver) => (
-                      <option key={driver.driverId} value={driver.driverId}>
-                        {driver.fullName} - {driver.vehiclePlateNumber} ({driver.vehicleType})
-                        {driver.preferredMaterialType?.includes(selectedMaterialForAssign.materialType) && 
-                          " ⭐ Preferred"
-                        }
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {!driversLoading && getCompatibleDrivers(selectedMaterialForAssign).length === 0 && (
-                  <div className="text-sm text-amber-600 mt-1">
-                    <div className="font-medium mb-1">No compatible drivers found!</div>
-                    <div className="text-xs">
-                      Reasons could be:
-                      <ul className="list-disc list-inside ml-2 mt-1">
-                        <li>No drivers with {selectedMaterialForAssign.vehicleType} vehicle type</li>
-                        <li>No drivers who prefer {selectedMaterialForAssign.materialType} materials</li>
-                        <li>All compatible drivers already have materials assigned</li>
-                      </ul>
-                    </div>
-                  </div>
-                )}
+                <p className="font-semibold">ID:</p>
+                <p className="text-gray-900">{selectedMaterialForAssign.materialId}</p>
+              </div>
+              <div>
+                <p className="font-semibold">Type:</p>
+                <p className="text-gray-900">{selectedMaterialForAssign.materialType}</p>
               </div>
 
-              {/* Show preference information */}
-              {getCompatibleDrivers(selectedMaterialForAssign).length > 0 && (
-                <div className="text-xs text-gray-500 p-2 bg-gray-50 rounded">
-                  <strong>Note:</strong> The backend will assign an available {selectedMaterialForAssign.materialType} material to the selected driver based on their vehicle type and material preferences.
-                </div>
-              )}
+              {/* Row 2 */}
+              <div>
+                <p className="font-semibold">Vehicle Type:</p>
+                <p className="text-gray-900">{selectedMaterialForAssign.vehicleType}</p>
+              </div>
+              <div>
+                <p className="font-semibold">Category:</p>
+                <p className="text-gray-900">{selectedMaterialForAssign.category}</p>
+              </div>
+            </div>
 
-              <div className="flex gap-3 pt-4">
+            {/* Select Driver */}
+            <form onSubmit={handleAssignSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Select Driver
+                </label>
+                <select
+                  value={selectedDriverId}
+                  onChange={(e) => setSelectedDriverId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">Choose a driver...</option>
+                  {getCompatibleDrivers(selectedMaterialForAssign).map((driver) => (
+                    <option key={driver.driverId} value={driver.driverId}>
+                      {driver.fullName} - {driver.vehiclePlateNumber} ({driver.vehicleType})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={closeAssignModal}
-                  className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  onClick={() => setShowAssignModal(false)}
+                  className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={assigning || !selectedDriverId || getCompatibleDrivers(selectedMaterialForAssign).length === 0}
-                  className="flex-1 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] disabled:bg-gray-400"
+                  disabled={assigning}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50"
                 >
-                  {assigning ? 'Assigning...' : 'Assign Material'}
+                  {assigning ? "Assigning..." : "Assign Driver"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+
 
       {/* Connection Details Modal */}
       {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
@@ -1577,187 +1588,245 @@ const Materials: React.FC = () => {
         </div>
       )}
 
-      {/* Material Details Modal */}
-      {showDetailsModal && selectedMaterialDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4 relative shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Material Details</h2>
-              <button
-                onClick={() => {
-                  setShowDetailsModal(false);
-                  setSelectedMaterialDetails(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
+    {/* Material Details Modal */}  
+    {showDetailsModal && selectedMaterialDetails && (
+      <div
+        className="fixed inset-0 z-50 overflow-hidden"
+        style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        onClick={handleCloseModal}
+      >
+        <div
+          className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
+            isModalOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex justify-between items-center mb-6 border-b pb-4 p-6">
+            <div className="flex items-center gap-2">
+              
+              <h2 className="text-xl font-bold text-gray-800">
+                {selectedMaterialDetails.materialId}
+              </h2>
             </div>
+            <span
+                className={`px-3 py-1 text-xs mr-40 font-medium rounded-full ${
+                  getStatus(selectedMaterialDetails) === "Used"
+                    ? "bg-red-200 text-red-800"
+                    : "bg-green-200 text-green-800"
+                }`}
+              >
+                {getStatus(selectedMaterialDetails)}
+              </span>
+            <button
+              onClick={handleCloseModal}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Section: Basic Details */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Basic Information</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Name:</span>
-                    <span className="text-gray-600">{selectedMaterialDetails.materialType}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">ID:</span>
-                    <span className="text-gray-600 font-mono text-sm">{selectedMaterialDetails.materialId}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Type:</span>
-                    <span className="text-gray-600">{selectedMaterialDetails.materialType}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Category:</span>
-                    <span className="text-gray-600">{selectedMaterialDetails.category}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Vehicle Type:</span>
-                    <span className="text-gray-600">{selectedMaterialDetails.vehicleType}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Status:</span>
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        getStatus(selectedMaterialDetails) === 'Used' ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'
-                      }`}
-                    >
-                      {getStatus(selectedMaterialDetails)}
-                    </span>
-                  </div>
-                  {selectedMaterialDetails.description && (
-                    <div className="mt-3">
-                      <span className="font-semibold text-gray-700">Description:</span>
-                      <p className="text-gray-600 text-sm mt-1">{selectedMaterialDetails.description}</p>
-                    </div>
-                  )}
-                  {selectedMaterialDetails.requirements && (
-                    <div className="mt-3">
-                      <span className="font-semibold text-gray-700">Requirements:</span>
-                      <p className="text-gray-600 text-sm mt-1">{selectedMaterialDetails.requirements}</p>
-                    </div>
-                  )}
+      {/* Body */}
+      <div className="flex-grow overflow-y-auto px-6 pb-6">
+        {/* Material Info */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          {/* Row 1 */}
+          <div>
+            <span className="text-xs font-semibold">Name:</span>
+            <div className="w-full text-xl py-2 font-bold">
+              {selectedMaterialDetails.materialType}
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-semibold">Category:</span>
+            <div className="w-full text-xl py-2 font-bold">
+              {selectedMaterialDetails.category}
+            </div>
+          </div>
+          <div>
+            <span className="text-xs font-semibold">Vehicle Type:</span>
+            <div className="w-full text-xl py-2 font-bold">
+              {selectedMaterialDetails.vehicleType}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 2 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div>
+            <span className="text-sm font-semibold">Description:</span>
+            <textarea
+              value={selectedMaterialDetails.description || "N/A"}
+              readOnly
+              className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none"
+            />
+          </div>
+          <div>
+            <span className="text-sm font-semibold">Requirements:</span>
+            <textarea
+              value={selectedMaterialDetails.requirements || "N/A"}
+              readOnly
+              className="w-full text-sm px-3 mt-2 py-2 border rounded-lg h-20 resize-none focus:ring-1 focus:outline-none ring-gray-200"
+            />
+          </div>
+        </div>
+
+        {/* Driver Details Table */}
+        <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
+          <h3 className="text-sm font-bold text-gray-800 text-center px-4 py-2 bg-gray-50 border-b">
+            Driver Details
+          </h3>
+          <table className="table-auto w-full border-collapse">
+            <tbody className="bg-white text-sm">
+              <tr className="border-b">
+                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Driver Name</td>
+                <td className="px-4 py-2 text-left pl-20 text-gray-900">
+                  {selectedMaterialDetails.driver?.fullName || "N/A"}
+                </td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Plate Number</td>
+                <td className="px-4 py-2 text-left pl-20 text-gray-900">
+                  {selectedMaterialDetails.driver?.vehiclePlateNumber || "N/A"}
+                </td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Car Type</td>
+                <td className="px-4 py-2 text-left pl-20 text-gray-900">
+                  {selectedMaterialDetails.vehicleType || "N/A"}
+                </td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Contact</td>
+                <td className="px-4 py-2 text-left pl-20 text-gray-900">
+                  {selectedMaterialDetails.driver?.contactNumber || "N/A"}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Email</td>
+                <td className="px-4 py-2 text-left pl-20 text-gray-900">
+                  {selectedMaterialDetails.driver?.email || "N/A"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+
+        {/* Dates */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          {/* Mounted Date */}
+          <div>
+            <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
+            {editingDates[selectedMaterialDetails.id] ? (
+              <>
+                <div className="relative mt-1">
+                  <input
+                    type="datetime-local"
+                    value={editingDates[selectedMaterialDetails.id].mountedAt || ""}
+                    onChange={(e) =>
+                      updateEditingDate(
+                        selectedMaterialDetails.id,
+                        "mountedAt",
+                        e.target.value
+                      )
+                    }
+                    className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
+                  />
+                  {/* Custom Calendar Icon */}
+                  <Calendar
+                    size={16}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                  />
                 </div>
-              </div>
 
-              {/* Middle Section: Date Details */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Date Information</h3>
-                <div className="space-y-3">
-                  <div className="flex flex-col space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-gray-700">Mounted Date:</span>
-                      {!editingDates[selectedMaterialDetails.id] && (
-                        <button
-                          onClick={() => startEditingDates(selectedMaterialDetails.id, selectedMaterialDetails)}
-                          className="p-1 text-blue-500 hover:bg-blue-50 rounded transition-colors"
-                          title="Edit dates"
-                        >
-                          <Calendar size={14} />
-                        </button>
-                      )}
-                    </div>
-                    {editingDates[selectedMaterialDetails.id] ? (
-                      <input
-                        type="datetime-local"
-                        value={editingDates[selectedMaterialDetails.id].mountedAt}
-                        onChange={(e) => updateEditingDate(selectedMaterialDetails.id, 'mountedAt', e.target.value)}
-                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.mountedAt)}</span>
+                {/* Save/Cancel Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => saveDateChanges(selectedMaterialDetails.id)}
+                    disabled={savingDates[selectedMaterialDetails.id]}
+                    className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
+                  >
+                    {savingDates[selectedMaterialDetails.id] ? "Saving..." : (
+                      <>
+                        <Check size={12} /> Save
+                      </>
                     )}
-                  </div>
-
-                  <div className="flex flex-col space-y-1">
-                    <span className="font-semibold text-gray-700">Dismounted Date:</span>
-                    {editingDates[selectedMaterialDetails.id] ? (
-                      <input
-                        type="datetime-local"
-                        value={editingDates[selectedMaterialDetails.id].dismountedAt}
-                        onChange={(e) => updateEditingDate(selectedMaterialDetails.id, 'dismountedAt', e.target.value)}
-                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.dismountedAt)}</span>
-                    )}
-                  </div>
-
-                  {editingDates[selectedMaterialDetails.id] && (
-                    <div className="flex gap-2 pt-2">
-                      <button
-                        onClick={() => saveDateChanges(selectedMaterialDetails.id)}
-                        disabled={savingDates[selectedMaterialDetails.id]}
-                        className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
-                      >
-                        {savingDates[selectedMaterialDetails.id] ? 'Saving...' : <><Check size={12} /> Save</>}
-                      </button>
-                      <button
-                        onClick={() => cancelEditingDates(selectedMaterialDetails.id)}
-                        disabled={savingDates[selectedMaterialDetails.id]}
-                        className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
-                      >
-                        <X size={12} /> Cancel
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Created:</span>
-                    <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.createdAt)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Updated:</span>
-                    <span className="text-gray-600 text-sm">{formatDate(selectedMaterialDetails.updatedAt)}</span>
-                  </div>
+                  </button>
+                  <button
+                    onClick={() => cancelEditingDates(selectedMaterialDetails.id)}
+                    disabled={savingDates[selectedMaterialDetails.id]}
+                    className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
+                  >
+                    <X size={12} /> Cancel
+                  </button>
                 </div>
+              </>
+            ) : (
+              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
+                {formatDate(selectedMaterialDetails.mountedAt)}
               </div>
+            )}
+          </div>
 
-              {/* Right Section: Driver Details and Actions */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Driver Information</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Driver Name:</span>
-                    <span className="text-gray-600 text-right max-w-32 truncate">
-                      {selectedMaterialDetails.driver?.fullName || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Vehicle Plate:</span>
-                    <span className="text-gray-600 text-right max-w-32 truncate">
-                      {selectedMaterialDetails.driver?.vehiclePlateNumber || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Car Type:</span>
-                    <span className="text-gray-600">{selectedMaterialDetails.vehicleType || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Driver Contact:</span>
-                    <span className="text-gray-600 text-right max-w-32 truncate">
-                      {selectedMaterialDetails.driver?.contactNumber || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">Driver Email:</span>
-                    <span className="text-gray-600 text-right max-w-32 truncate">
-                      {selectedMaterialDetails.driver?.email || (selectedMaterialDetails.driverId ? 'Loading...' : 'N/A')}
-                    </span>
-                  </div>
-                </div>
+          {/* Dismounted Date */}
+          <div>
+            <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
+            {editingDates[selectedMaterialDetails.id] ? (
+              <div className="relative mt-1">
+                <input
+                  type="datetime-local"
+                  value={editingDates[selectedMaterialDetails.id].dismountedAt || ""}
+                  onChange={(e) =>
+                    updateEditingDate(
+                      selectedMaterialDetails.id,
+                      "dismountedAt",
+                      e.target.value
+                    )
+                  }
+                  className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
+                />
+                {/* Custom Calendar Icon */}
+                <Calendar
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                />
+              </div>
+            ) : (
+              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
+                {formatDate(selectedMaterialDetails.dismountedAt)}
+              </div>
+            )}
+          </div>
+
+          {/* Created */}
+          <div>
+            <span className="text-sm font-semibold text-gray-700">Created:</span>
+            <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
+              {formatDate(selectedMaterialDetails.createdAt)}
+            </div>
+          </div>
+
+          {/* Updated */}
+          <div>
+            <span className="text-sm font-semibold text-gray-700">Updated:</span>
+            <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
+              {formatDate(selectedMaterialDetails.updatedAt)}
+            </div>
+          </div>
+        </div>
 
                 {/* QR Code Section for HEADDRESS materials */}
-                {selectedMaterialDetails.materialType === 'HEADDRESS' && (
+                {selectedMaterialDetails.materialType === "HEADDRESS" && (
                   <div className="mt-6 space-y-4">
-                    <h4 className="text-md font-semibold text-gray-800 border-b pb-2">QR Codes</h4>
+                    <h4 className="text-md font-semibold text-gray-800 border-b pb-2">
+                      QR Codes
+                    </h4>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => showConnectionDetails(selectedMaterialDetails.materialId, 1)}
+                        onClick={() =>
+                          showConnectionDetails(selectedMaterialDetails.materialId, 1)
+                        }
                         className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
                         title="View tablet connection details for Slot 1"
                       >
@@ -1765,7 +1834,9 @@ const Materials: React.FC = () => {
                         Slot 1
                       </button>
                       <button
-                        onClick={() => showConnectionDetails(selectedMaterialDetails.materialId, 2)}
+                        onClick={() =>
+                          showConnectionDetails(selectedMaterialDetails.materialId, 2)
+                        }
                         className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
                         title="View tablet connection details for Slot 2"
                       >
@@ -1776,60 +1847,35 @@ const Materials: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-between items-center mt-6 pt-4 border-t">
-              <div className="flex gap-2">
-                {!selectedMaterialDetails.driverId && (
-                  <button
-                    onClick={() => {
-                      setShowDetailsModal(false);
-                      openAssignModal(selectedMaterialDetails);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                  >
-                    <UserPlus size={16} />
-                    Assign to Driver
-                  </button>
-                )}
-                {selectedMaterialDetails.driverId && (
-                  <button
-                    onClick={() => {
-                      setShowDetailsModal(false);
-                      handleRemoveFromDriver(selectedMaterialDetails.id);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-                  >
-                    <UserX size={16} />
-                    Remove from Driver
-                  </button>
-                )}
-                <button className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
-                  <Edit size={16} />
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDeleteMaterial(selectedMaterialDetails.id)}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                >
-                  <TrashIcon size={16} />
-                  Delete
-                </button>
+              {/* Footer */}
+              <div className="p-6 border-t mt-auto">
+                <div className="flex justify-end">
+                  {getStatus(selectedMaterialDetails) === "Available" ? (
+                    <button
+                      onClick={() => {
+                        setSelectedMaterialForAssign(selectedMaterialDetails);
+                        setShowAssignModal(true);
+                      }}
+                      className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                    >
+                      <UserPlus size={16} />
+                      Assign Driver
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleRemoveFromDriver(selectedMaterialDetails.id)}
+                      className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                    >
+                      <UserX size={16} />
+                      Remove Driver
+                    </button>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  setShowDetailsModal(false);
-                  setSelectedMaterialDetails(null);
-                }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Close
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };

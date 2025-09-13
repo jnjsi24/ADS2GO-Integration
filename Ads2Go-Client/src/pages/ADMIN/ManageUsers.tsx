@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, X, Eye } from 'lucide-react';
+import { Mail, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import AdminLayout from '../../components/AdminLayout';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -168,6 +168,7 @@ const ManageUsers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false); // New state for animation
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,6 +292,19 @@ const ManageUsers: React.FC = () => {
   const handleViewDetails = (user: User) => {
     setSelectedUser(user);
     setShowDetailsModal(true);
+    // Trigger animation after the modal is rendered
+    setTimeout(() => {
+      setIsModalOpen(true);
+    }, 10);
+  };
+  
+  // Close modal with animation
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => {
+      setShowDetailsModal(false);
+      setSelectedUser(null);
+    }, 300); // Duration matches the transition duration
   };
 
   // Handle individual user selection
@@ -368,27 +382,23 @@ const ManageUsers: React.FC = () => {
 
   return (
     <AdminLayout>
-      <div className="pr-5 p-10">
-        <div className="bg-gray-100 w-full min-h-screen">
-        {/* Header with Title and Add New Button */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="px-3 py-1 text-3xl font-bold text-gray-800">User List</h1>
-        </div>
-
-        {/* Search Bar and Filters */}
-        <div className="flex justify-between items-center mb-4">
+      <div className="min-h-screen bg-gray-100 pr-5 p-10">
+      {/* Header with Title and Filters */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Users Management</h1>
+        <div className="flex gap-4">
           <input
             type="text"
-            className="text-xs text-black rounded-xl pl-5 py-3 w-60 shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
+            className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
             placeholder="Search by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           <div className="flex space-x-2">
             {/* Status Filter with SVG */}
-            <div className="relative w-32">
+            <div className="relative w-40">
               <select
-                className="text-sm text-black rounded-xl pl-5 py-3 pr-8 w-full shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
+                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
               >
@@ -396,17 +406,22 @@ const ManageUsers: React.FC = () => {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg
+                className="w-4 h-4 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
             </div>
-
-            {/* City Filter with SVG */}
-            <div className="relative w-36">
+          </div>
+          {/* City Filter with SVG */}
+            <div className="relative w-40">
               <select
-                className="text-sm text-black rounded-xl pl-5 py-3 pr-8 w-full shadow-md border border-gray-400 focus:outline-none appearance-none bg-white"
+              className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={selectedCity || ''}
                 onChange={(e) => setSelectedCity(e.target.value || null)}
               >
@@ -417,20 +432,29 @@ const ManageUsers: React.FC = () => {
                   </option>
                 ))}
               </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                <svg
+                  className="w-4 h-4 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
             </div>
           </div>
+
+            
+          </div>
         </div>
 
         {/* User List */}
-        <div className="rounded-xl shadow-md mb-4 overflow-hidden">
+        <div className="rounded-xl mb-4 overflow-hidden">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 bg-[#3674B5] px-4 py-2 text-sm font-semibold text-white">
-            <div className="flex items-center gap-10 col-span-3">
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+            <div className="flex items-center gap-2 ml-1 col-span-3">
               <input
                 type="checkbox"
                 className="form-checkbox"
@@ -438,12 +462,16 @@ const ManageUsers: React.FC = () => {
                 onClick={handleSelectAll}
                 checked={isAllSelected}
               />
-              <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
+              <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
             </div>
-            <div className="col-span-3">Email</div>
+            <div className="col-span-3 ml-16">Email</div>
             <div className="col-span-2">Company</div>
-            <div className="col-span-1">Status</div>
-            <div className="col-span-2">Last Access</div>
+            <div className="col-span-1 flex items-center gap-1 ml-7">
+              <span>Status</span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            </div>
+            <div className="col-span-2 ml-20">Last Access</div>
             <div className="col-span-1 text-center">Action</div>
           </div>
 
@@ -451,12 +479,13 @@ const ManageUsers: React.FC = () => {
           {filteredUsers.map((user) => (
             <div
               key={user.id}
-              className="bg-white border-t border-gray-300"
+              className="bg-white mb-3 rounded-lg shadow-md"
+              onClick={() => handleViewDetails(user)}
             >
               <div
-                className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors"
+                className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm transition-colors cursor-pointer rounded-lg group hover:bg-[#3674B5]"
               >
-                <div className="col-span-3 gap-7 flex items-center">
+                <div className="col-span-3 gap-4 flex items-center">
                   <input
                     type="checkbox"
                     className="form-checkbox"
@@ -468,32 +497,41 @@ const ManageUsers: React.FC = () => {
                     <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
                       {getInitials(user.firstName, user.lastName)}
                     </div>
-                    <span className="truncate">
+                    <span className="truncate font-semibold group-hover:text-white">
                       {user.firstName} {user.middleName} {user.lastName}
                     </span>
                   </div>
                 </div>
-                <div className="col-span-3 truncate">{user.email}</div>
-                <div className="col-span-2 truncate">{user.company}</div>
-                <div className="col-span-1">
+
+                <div className="col-span-3 truncate group-hover:text-white">{user.email}</div>
+                <div className="col-span-2 truncate group-hover:text-white">{user.company}</div>
+
+                <div className="col-span-1 ml-8">
                   <span
                     className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                    }`}
+                      user.status === 'active'
+                        ? 'bg-green-200 text-green-800'
+                        : 'bg-red-200 text-red-800'
+                    } `}
                   >
                     {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                   </span>
                 </div>
-                <div className="col-span-2 truncate">
+
+                <div className="col-span-2 truncate ml-10 text-center group-hover:text-white">
                   {formatLastAccess(user.lastLogin)}
                 </div>
-                <div className="col-span-1 flex items-center justify-center gap-2">
+
+                <div
+                  className="col-span-1 flex items-center justify-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
-                    className="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600"
-                    onClick={() => handleViewDetails(user)}
-                    title="View Details"
+                    className="text-red-500 text-md hover:text-red-700"
+                    onClick={() => handleDelete(user.id)}
+                    title="Delete User"
                   >
-                    <Eye size={12} />
+                    <Trash size={16} />
                   </button>
                 </div>
               </div>
@@ -508,56 +546,174 @@ const ManageUsers: React.FC = () => {
 
         {/* Details Modal */}
         {showDetailsModal && selectedUser && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto m-4 relative">
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white bg-[#FF9D3D] shadow-md">
+          <div
+            className="fixed inset-0 z-50 overflow-hidden"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={handleCloseModal} // This closes the modal on outside click
+          >
+            <div
+              className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              onClick={(e) => e.stopPropagation()} // This stops the click from bubbling up and closing the modal
+            >
+              
+              {/* Modal Content */}
+              <div className="h-full p-6 overflow-y-auto">
+                {/* User Info Section */}
+                <div className="flex items-center mb-6">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white bg-[#FF9D3D] mr-4 shadow-md">
                     {getInitials(selectedUser.firstName, selectedUser.lastName)}
                   </div>
-                  <h2 className="text-2xl font-bold">User Details</h2>
-                </div>
-                <button onClick={() => setShowDetailsModal(false)} className="text-gray-500 hover:text-gray-700">
-                  <X size={24} />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Personal & Account</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center"><span className="font-semibold">ID:</span><span>{selectedUser.id}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">City:</span><span>{selectedUser.city}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Company:</span><span>{selectedUser.company}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Status:</span>
-                      <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                  <div>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <h2 className="text-2xl font-bold text-gray-800">
+                        {selectedUser.firstName} {selectedUser.lastName}
+                      </h2>
+                      <span className={`px-2 py-1 text-xs ml-3 font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
                         {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
                       </span>
+                      <span className="text-xs bg-gray-200 rounded-full px-2 py-1 text-gray-500">Last Access: {formatLastAccess(selectedUser.lastLogin)}</span>
                     </div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Email Verified:</span><span>{selectedUser.isEmailVerified ? 'Yes' : 'No'}</span></div>
+                    <p className="text-sm text-gray-500">{selectedUser.company}</p>
                   </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">System</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center"><span className="font-semibold">Ads Count:</span><span>{selectedUser.adsCount}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Riders Count:</span><span>{selectedUser.ridersCount}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Last Login:</span><span>{formatDate(selectedUser.lastLogin)}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Created At:</span><span>{formatDate(selectedUser.createdAt)}</span></div>
-                    <div className="flex justify-between items-center"><span className="font-semibold">Updated At:</span><span>{formatDate(selectedUser.updatedAt)}</span></div>
+
+                {/* Counts Section (Ads/Riders) */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-gray-100 p-4 rounded-lg text-center">
+                    <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
+                    <p className="text-3xl font-bold text-gray-800">{selectedUser.adsCount}</p>
+                  </div>
+                  <div className="bg-gray-100 p-4 rounded-lg text-center">
+                    <p className="text-sm font-semibold text-gray-600">Riders Count:</p>
+                    <p className="text-3xl font-bold text-gray-800">{selectedUser.ridersCount}</p>
                   </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 text-sm">
-                <div className="flex items-center gap-2 text-gray-600"><Mail size={16} /><span>{selectedUser.email}</span></div>
-                <div className="flex items-center gap-2 text-gray-600"><Phone size={16} /><span>{selectedUser.contact}</span></div>
-                <div className="flex items-center gap-2 text-gray-600"><MapPin size={16} /><p>{selectedUser.address}, {selectedUser.city}</p></div>
-                {selectedUser.houseAddress && (
-                  <div className="flex items-center gap-2 text-gray-600"><MapPin size={16} /><p>House: {selectedUser.houseAddress}</p></div>
-                )}
-              </div>
-              <div className="flex gap-3 justify-end mt-6">
-                <button className="px-4 py-2 text-red-600 border border-red-600 rounded hover:bg-red-50" onClick={() => { setShowDetailsModal(false); handleDelete(selectedUser.id); }}>Delete User</button>
-                <button className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50" onClick={() => setShowDetailsModal(false)}>Close</button>
+
+                {/* Account Details - Now a table */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3">Account Details:</h3>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr>
+                        {/* Left side */}
+                        <td className="w-1/2 align-top pr-4">
+                          <table className="w-full border-separate border-spacing-y-3">
+                            <tbody>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">ID:</td>
+                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.id}</td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">City:</td>
+                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.city}</td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2">Email Verified:</td>
+                                <td className="text-black text-right py-1">
+                                  {selectedUser.isEmailVerified ? "✔" : "✘"}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+
+                        {/* Right side */}
+                        <td className="w-1/2 align-top pl-4">
+                          <table className="w-full border-separate border-spacing-y-3">
+                            <tbody>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Last Login:</td>
+                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
+                                  {formatDate(selectedUser.lastLogin)}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Created At:</td>
+                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
+                                  {formatDate(selectedUser.createdAt)}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2">Updated At:</td>
+                                <td className="text-gray-600 py-1 text-right">
+                                  {formatDate(selectedUser.updatedAt)}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* User Details */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3">User Details:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Mail size={16} />
+                      <span>{selectedUser.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Phone size={16} />
+                      <span>{selectedUser.contact}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <MapPin size={16} />
+                      <p>{selectedUser.address}</p>
+                    </div>
+                    {selectedUser.houseAddress && (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <MapPin size={16} />
+                        <p>House: {selectedUser.houseAddress}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Activity Section */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3 mt-10">Activity:</h3>
+                  <div className="relative pl-6">
+
+                    {/* Timeline Item 1 */}
+                    <div className="flex items-start mb-6">
+                      <div className="relative z-10 w-5 h-5 rounded-full bg-green-500 flex-shrink-0 flex items-center justify-center -ml-2.5">
+                        <span className="text-white pb-1 text-lg">+</span>
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm text-gray-800">
+                          <span className="font-semibold">User</span> has added a new <span className="font-semibold">ads</span>
+                        </p>
+                        <span className="text-xs text-gray-500">11:12 AM- May 17, 2023</span>
+                      </div>
+                    </div>
+
+                    {/* Timeline Item 2 */}
+                    <div className="flex items-start">
+                      <div className="relative z-10 w-5 h-5 rounded-full bg-gray-500 flex-shrink-0 flex items-center justify-center -ml-2.5">
+                        <span className="text-white pb-1 text-lg">+</span>
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm text-gray-800">
+                          <span className="font-semibold">Santi Cazoria</span> was created by <span className="font-semibold">Fikri Studio</span>
+                        </p>
+                        <span className="text-xs text-gray-500">11:12 AM- May 17, 2023</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Button group */}
+                <div className="flex gap-3 justify-end mt-10">
+                  <button 
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50" 
+                    onClick={handleCloseModal}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -575,8 +731,7 @@ const ManageUsers: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
-      </div>
+      </div>      
     </AdminLayout>
   );
 };

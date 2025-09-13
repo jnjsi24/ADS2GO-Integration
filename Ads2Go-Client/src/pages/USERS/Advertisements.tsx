@@ -435,7 +435,7 @@ const Advertisements: React.FC = () => {
           currentAds.map((ad) => (
             <div
               key={ad.id}
-              className="rounded-2xl shadow-lg overflow-hidden cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className=" overflow-hidden rounded-lg shadow-md cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
               <div className="w-full h-48 flex-shrink-0 relative">
                 {/* Fixed media display based on ManageAds.tsx */}
@@ -511,7 +511,7 @@ const Advertisements: React.FC = () => {
                       // Corrected navigation to user ad details page
                       navigate(`/ad-details/${ad.id}`);
                     }}
-                    className="text-white text-sm bg-[#3674B5] font-semibold rounded-xl px-4 py-2 flex items-center justify-between w-full hover:bg-[#0E2A47] hover:text-white transition-colors"
+                    className="text-gray-500 text-xs font-semibold rounded-xl px-4 py-2 flex items-center justify-between w-full hover:bg-[#1B5087] hover:text-white transition-colors"
                   >
                     View Details <span>→</span>
                   </button>
