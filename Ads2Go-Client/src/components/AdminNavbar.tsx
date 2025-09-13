@@ -39,7 +39,7 @@ const AdminSidebar: React.FC = () => {
   ];
 
   return (
-    <div className="w-60 bg-[#C9E6F0] fixed top-0 left-0 bottom-0 shadow-lg flex flex-col justify-start p-5 text-white overflow-hidden">
+    <div className="h-screen w-60 text-gray-300 flex flex-col justify-between fixed p-6">
       <div>
         <div className="flex items-center space-x-3 mb-10">
           <img src="/image/blue-logo.png" alt="Logo" className="w-8 h-8" />
@@ -61,7 +61,7 @@ const AdminSidebar: React.FC = () => {
           ))}
         </nav>
       </div>
-      <div className="mt-44 pt-5 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
+      <div className="pt-5 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
         {/* Profile Section - FIXED: Navigate to admin settings */}
         <div
           className="flex items-center space-x-3 mb-4 cursor-pointer"
