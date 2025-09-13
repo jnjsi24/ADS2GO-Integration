@@ -1,8 +1,945 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { 
+  Play, 
+  Pause, 
+  Square, 
+  RotateCcw, 
+  RefreshCw, 
+  AlertTriangle, 
+  Lock, 
+  Unlock,
+  Settings,
+  BarChart3,
+  Eye,
+  Volume2,
+  VolumeX,
+  SkipForward,
+  SkipBack,
+  Monitor,
+  Smartphone,
+  MapPin,
+  Clock,
+  TrendingUp,
+  Users,
+  DollarSign,
+  Activity,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  PauseCircle,
+  PlayCircle,
+  Zap,
+  Wifi,
+  WifiOff,
+  Battery,
+  BatteryLow,
+  Sun,
+  Moon,
+  Volume1,
+  Volume2 as Volume2Icon,
+  VolumeX as VolumeXIcon,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Search,
+  Download,
+  Upload,
+  MoreHorizontal,
+  Info,
+  ExternalLink
+} from 'lucide-react';
 
 const AdminAdsControl: React.FC = () => {
+  const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedScreen, setSelectedScreen] = useState<string | null>(null);
+  const [showScreenDetails, setShowScreenDetails] = useState(false);
+
+  // Mock data for demonstration
+  const mockScreens = [
+    {
+      id: 'TABLET-001',
+      materialId: 'DGL-HEADDRESS-CAR-001',
+      slot: 1,
+      status: 'online',
+      currentAd: {
+        id: 'AD-001',
+        title: 'Sample Ad #1',
+        duration: 180,
+        progress: 150,
+        completion: 83,
+        impressions: 15,
+        advertiser: 'ABC Company'
+      },
+      location: 'Makati',
+      brightness: 85,
+      volume: 60,
+      isPlaying: true,
+      lastSeen: '2 minutes ago'
+    },
+    {
+      id: 'TABLET-002',
+      materialId: 'DGL-HEADDRESS-CAR-001',
+      slot: 2,
+      status: 'online',
+      currentAd: {
+        id: 'AD-002',
+        title: 'Product Demo',
+        duration: 150,
+        progress: 105,
+        completion: 70,
+        impressions: 12,
+        advertiser: 'XYZ Corp'
+      },
+      location: 'Makati',
+      brightness: 80,
+      volume: 55,
+      isPlaying: true,
+      lastSeen: '1 minute ago'
+    },
+    {
+      id: 'TABLET-003',
+      materialId: 'DGL-HEADDRESS-CAR-002',
+      slot: 1,
+      status: 'offline',
+      currentAd: null,
+      location: 'Quezon City',
+      brightness: 0,
+      volume: 0,
+      isPlaying: false,
+      lastSeen: '15 minutes ago'
+    },
+    {
+      id: 'TABLET-004',
+      materialId: 'DGL-HEADDRESS-CAR-003',
+      slot: 1,
+      status: 'maintenance',
+      currentAd: null,
+      location: 'Taguig',
+      brightness: 50,
+      volume: 30,
+      isPlaying: false,
+      lastSeen: '5 minutes ago'
+    },
+    {
+      id: 'TABLET-005',
+      materialId: 'DGL-HEADDRESS-CAR-004',
+      slot: 1,
+      status: 'online',
+      currentAd: {
+        id: 'AD-003',
+        title: 'Brand Story',
+        duration: 240,
+        progress: 240,
+        completion: 100,
+        impressions: 8,
+        advertiser: 'Brand Co'
+      },
+      location: 'Pasig',
+      brightness: 90,
+      volume: 70,
+      isPlaying: false,
+      lastSeen: '30 seconds ago'
+    }
+  ];
+
+  const mockAlerts = [
+    { id: 1, type: 'critical', message: 'TABLET-003 offline for 15 minutes', timestamp: '2 min ago' },
+    { id: 2, type: 'high', message: 'TABLET-004 low brightness (50%)', timestamp: '5 min ago' },
+    { id: 3, type: 'medium', message: 'TABLET-002 ad completion rate low (70%)', timestamp: '8 min ago' },
+    { id: 4, type: 'low', message: 'TABLET-001 ad completed successfully', timestamp: '10 min ago' }
+  ];
+
+  const mockAnalytics = {
+    totalScreens: 25,
+    onlineScreens: 23,
+    playingAds: 20,
+    pausedAds: 3,
+    totalViewTime: '45:30',
+    totalImpressions: 1250,
+    avgCompletionRate: 87,
+    totalRevenue: 3125
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'online': return <div className="w-3 h-3 bg-green-500 rounded-full"></div>;
+      case 'offline': return <div className="w-3 h-3 bg-red-500 rounded-full"></div>;
+      case 'maintenance': return <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>;
+      default: return <div className="w-3 h-3 bg-gray-500 rounded-full"></div>;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'online': return 'Online';
+      case 'offline': return 'Offline';
+      case 'maintenance': return 'Maintenance';
+      default: return 'Unknown';
+    }
+  };
+
+  const getAlertIcon = (type: string) => {
+    switch (type) {
+      case 'critical': return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'high': return <AlertCircle className="w-4 h-4 text-orange-500" />;
+      case 'medium': return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+      case 'low': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      default: return <Info className="w-4 h-4 text-blue-500" />;
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleScreenSelect = (screenId: string) => {
+    setSelectedScreens(prev => 
+      prev.includes(screenId) 
+        ? prev.filter(id => id !== screenId)
+        : [...prev, screenId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedScreens(mockScreens.map(screen => screen.id));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedScreens([]);
+  };
+
+  const handleScreenClick = (screen: any) => {
+    setSelectedScreen(screen.id);
+    setShowScreenDetails(true);
+  };
+
   return (
-    <div>
+    <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
+        <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
+      </div>
+
+      {/* Master Controls */}
+      <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Monitor className="w-5 h-5 mr-2" />
+          Master Controls
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <button className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+            <RefreshCw className="w-6 h-6 text-blue-600 mb-2" />
+            <span className="text-sm font-medium text-blue-600">Sync All</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+            <Play className="w-6 h-6 text-green-600 mb-2" />
+            <span className="text-sm font-medium text-green-600">Play All</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors">
+            <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+            <span className="text-sm font-medium text-yellow-600">Pause All</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+            <Square className="w-6 h-6 text-red-600 mb-2" />
+            <span className="text-sm font-medium text-red-600">Stop All</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+            <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
+            <span className="text-sm font-medium text-purple-600">Restart All</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
+            <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
+            <span className="text-sm font-medium text-orange-600">Emergency</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <Lock className="w-6 h-6 text-gray-600 mb-2" />
+            <span className="text-sm font-medium text-gray-600">Lockdown</span>
+          </button>
+          <button className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
+            <Unlock className="w-6 h-6 text-green-600 mb-2" />
+            <span className="text-sm font-medium text-green-600">Unlock</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Status Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Screens</p>
+              <p className="text-2xl font-bold text-gray-900">{mockAnalytics.totalScreens}</p>
+            </div>
+            <Monitor className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Online Screens</p>
+              <p className="text-2xl font-bold text-green-600">{mockAnalytics.onlineScreens}</p>
+            </div>
+            <Wifi className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Playing Ads</p>
+              <p className="text-2xl font-bold text-blue-600">{mockAnalytics.playingAds}</p>
+            </div>
+            <PlayCircle className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Impressions</p>
+              <p className="text-2xl font-bold text-purple-600">{mockAnalytics.totalImpressions.toLocaleString()}</p>
+            </div>
+            <Eye className="w-8 h-8 text-purple-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-2xl shadow-sm mb-8">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+              { id: 'screens', label: 'Screen Control', icon: Monitor },
+              { id: 'content', label: 'Content Management', icon: Upload },
+              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4 mr-2" />
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-6">
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Screen Status Grid */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Live Screen Status</h3>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={handleSelectAll}
+                      className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={handleDeselectAll}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded-md hover:bg-gray-200"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4">
+                          <input type="checkbox" className="rounded" />
+                        </th>
+                        <th className="text-left py-3 px-4">Device ID</th>
+                        <th className="text-left py-3 px-4">Material</th>
+                        <th className="text-left py-3 px-4">Slot</th>
+                        <th className="text-left py-3 px-4">Status</th>
+                        <th className="text-left py-3 px-4">Current Ad</th>
+                        <th className="text-left py-3 px-4">Progress</th>
+                        <th className="text-left py-3 px-4">Location</th>
+                        <th className="text-left py-3 px-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockScreens.map((screen) => (
+                        <tr key={screen.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedScreens.includes(screen.id)}
+                              onChange={() => handleScreenSelect(screen.id)}
+                              className="rounded"
+                            />
+                          </td>
+                          <td className="py-3 px-4 font-medium">{screen.id}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{screen.materialId}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{screen.slot}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-2">
+                              {getStatusIcon(screen.status)}
+                              <span className="text-sm">{getStatusText(screen.status)}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {screen.currentAd ? (
+                              <div>
+                                <div className="font-medium text-sm">{screen.currentAd.title}</div>
+                                <div className="text-xs text-gray-500">{screen.currentAd.advertiser}</div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">No ads</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {screen.currentAd ? (
+                              <div className="w-32">
+                                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                  <span>{formatTime(screen.currentAd.progress)}</span>
+                                  <span>{formatTime(screen.currentAd.duration)}</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-blue-600 h-2 rounded-full"
+                                    style={{ width: `${screen.currentAd.completion}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{screen.location}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleScreenClick(screen)}
+                                className="p-1 text-gray-400 hover:text-gray-600"
+                                title="View Details"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                className="p-1 text-gray-400 hover:text-gray-600"
+                                title="Settings"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Bulk Operations */}
+              {selectedScreens.length > 0 && (
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="font-medium mb-3">Bulk Operations ({selectedScreens.length} selected)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200">
+                      <Play className="w-4 h-4 inline mr-1" />
+                      Play Selected
+                    </button>
+                    <button className="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-md text-sm hover:bg-yellow-200">
+                      <Pause className="w-4 h-4 inline mr-1" />
+                      Pause Selected
+                    </button>
+                    <button className="px-3 py-1 bg-red-100 text-red-600 rounded-md text-sm hover:bg-red-200">
+                      <Square className="w-4 h-4 inline mr-1" />
+                      Stop Selected
+                    </button>
+                    <button className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200">
+                      <RefreshCw className="w-4 h-4 inline mr-1" />
+                      Sync Selected
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'screens' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Individual Screen Controls</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {mockScreens.map((screen) => (
+                  <div key={screen.id} className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-medium">{screen.id}</h4>
+                      <div className="flex items-center space-x-2">
+                        {getStatusIcon(screen.status)}
+                        <span className="text-sm">{getStatusText(screen.status)}</span>
+                      </div>
+                    </div>
+                    
+                    {screen.currentAd && (
+                      <div className="mb-3">
+                        <div className="text-sm font-medium">{screen.currentAd.title}</div>
+                        <div className="text-xs text-gray-500">{screen.currentAd.advertiser}</div>
+                        <div className="mt-1">
+                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>{formatTime(screen.currentAd.progress)}</span>
+                            <span>{formatTime(screen.currentAd.duration)}</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1">
+                            <div
+                              className="bg-blue-600 h-1 rounded-full"
+                              style={{ width: `${screen.currentAd.completion}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Brightness</span>
+                        <span>{screen.brightness}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-yellow-500 h-2 rounded-full"
+                          style={{ width: `${screen.brightness}%` }}
+                        ></div>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Volume</span>
+                        <span>{screen.volume}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-500 h-2 rounded-full"
+                          style={{ width: `${screen.volume}%` }}
+                        ></div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex space-x-1">
+                        <button className="p-2 bg-green-100 text-green-600 rounded hover:bg-green-200">
+                          <Play className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200">
+                          <Pause className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200">
+                          <Square className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <button className="p-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+                        <Settings className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'content' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Content Management</h3>
+              
+              {/* Content Library */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Content Library</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    { id: 1, title: 'Sample Ad #1', duration: '3:00', size: '15.2 MB', advertiser: 'ABC Company' },
+                    { id: 2, title: 'Product Demo', duration: '2:30', size: '12.8 MB', advertiser: 'XYZ Corp' },
+                    { id: 3, title: 'Brand Story', duration: '4:00', size: '20.1 MB', advertiser: 'Brand Co' },
+                    { id: 4, title: 'Company Intro', duration: '1:30', size: '8.5 MB', advertiser: 'Intro Inc' },
+                    { id: 5, title: 'Call to Action', duration: '2:00', size: '10.3 MB', advertiser: 'Action Ltd' }
+                  ].map((ad) => (
+                    <div key={ad.id} className="bg-white p-4 rounded-lg border">
+                      <h5 className="font-medium mb-2">{ad.title}</h5>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div>Duration: {ad.duration}</div>
+                        <div>Size: {ad.size}</div>
+                        <div>Advertiser: {ad.advertiser}</div>
+                      </div>
+                      <div className="flex space-x-2 mt-3">
+                        <button className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200">
+                          Preview
+                        </button>
+                        <button className="px-3 py-1 bg-green-100 text-green-600 rounded text-sm hover:bg-green-200">
+                          Deploy
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Content Deployment */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Content Deployment</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Select Content</label>
+                    <select className="w-full p-2 border border-gray-300 rounded-md">
+                      <option>Sample Ad #1</option>
+                      <option>Product Demo</option>
+                      <option>Brand Story</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Target Screens</label>
+                    <select className="w-full p-2 border border-gray-300 rounded-md">
+                      <option>All Screens</option>
+                      <option>Selected Screens</option>
+                      <option>By Location</option>
+                      <option>By Material</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Schedule</label>
+                    <select className="w-full p-2 border border-gray-300 rounded-md">
+                      <option>Immediate</option>
+                      <option>Scheduled</option>
+                      <option>Recurring</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Priority</label>
+                    <select className="w-full p-2 border border-gray-300 rounded-md">
+                      <option>Normal</option>
+                      <option>High</option>
+                      <option>Emergency</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex space-x-2 mt-4">
+                  <button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                    Deploy Now
+                  </button>
+                  <button className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                    Schedule
+                  </button>
+                  <button className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                    Save Draft
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Analytics & Performance</h3>
+              
+              {/* Performance Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-blue-600">Total View Time</p>
+                      <p className="text-2xl font-bold text-blue-700">{mockAnalytics.totalViewTime}</p>
+                    </div>
+                    <Clock className="w-8 h-8 text-blue-500" />
+                  </div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-green-600">Completion Rate</p>
+                      <p className="text-2xl font-bold text-green-700">{mockAnalytics.avgCompletionRate}%</p>
+                    </div>
+                    <TrendingUp className="w-8 h-8 text-green-500" />
+                  </div>
+                </div>
+                <div className="bg-purple-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-purple-600">Total Impressions</p>
+                      <p className="text-2xl font-bold text-purple-700">{mockAnalytics.totalImpressions.toLocaleString()}</p>
+                    </div>
+                    <Eye className="w-8 h-8 text-purple-500" />
+                  </div>
+                </div>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-yellow-600">Revenue Generated</p>
+                      <p className="text-2xl font-bold text-yellow-700">₱{mockAnalytics.totalRevenue.toLocaleString()}</p>
+                    </div>
+                    <DollarSign className="w-8 h-8 text-yellow-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Performing Ads */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Top Performing Ads</h4>
+                <div className="space-y-3">
+                  {[
+                    { title: 'Sample Ad #1', views: 450, completion: 95, revenue: 1125 },
+                    { title: 'Product Demo', views: 380, completion: 89, revenue: 950 },
+                    { title: 'Brand Story', views: 320, completion: 82, revenue: 800 },
+                    { title: 'Company Intro', views: 280, completion: 78, revenue: 700 },
+                    { title: 'Call to Action', views: 250, completion: 75, revenue: 625 }
+                  ].map((ad, index) => (
+                    <div key={index} className="flex items-center justify-between bg-white p-3 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <div className="font-medium">{ad.title}</div>
+                          <div className="text-sm text-gray-500">{ad.views} views</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium text-green-600">{ad.completion}%</div>
+                        <div className="text-sm text-gray-500">₱{ad.revenue}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'alerts' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Alert Center</h3>
+              
+              {/* Alert Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-red-600">Critical</p>
+                      <p className="text-2xl font-bold text-red-700">1</p>
+                    </div>
+                    <AlertTriangle className="w-8 h-8 text-red-500" />
+                  </div>
+                </div>
+                <div className="bg-orange-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-orange-600">High</p>
+                      <p className="text-2xl font-bold text-orange-700">1</p>
+                    </div>
+                    <AlertCircle className="w-8 h-8 text-orange-500" />
+                  </div>
+                </div>
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-yellow-600">Medium</p>
+                      <p className="text-2xl font-bold text-yellow-700">1</p>
+                    </div>
+                    <AlertCircle className="w-8 h-8 text-yellow-500" />
+                  </div>
+                </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-green-600">Low</p>
+                      <p className="text-2xl font-bold text-green-700">1</p>
+                    </div>
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Alert List */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-3">Active Alerts</h4>
+                <div className="space-y-3">
+                  {mockAlerts.map((alert) => (
+                    <div key={alert.id} className="flex items-center justify-between bg-white p-3 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        {getAlertIcon(alert.type)}
+                        <div>
+                          <div className="font-medium">{alert.message}</div>
+                          <div className="text-sm text-gray-500">{alert.timestamp}</div>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button className="px-3 py-1 bg-blue-100 text-blue-600 rounded text-sm hover:bg-blue-200">
+                          View
+                        </button>
+                        <button className="px-3 py-1 bg-green-100 text-green-600 rounded text-sm hover:bg-green-200">
+                          Resolve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Screen Details Modal */}
+      {showScreenDetails && selectedScreen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-semibold">Screen Details - {selectedScreen}</h3>
+              <button
+                onClick={() => setShowScreenDetails(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            
+            {(() => {
+              const screen = mockScreens.find(s => s.id === selectedScreen);
+              if (!screen) return null;
+              
+              return (
+                <div className="space-y-6">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Device ID</label>
+                      <p className="text-lg font-medium">{screen.id}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Material ID</label>
+                      <p className="text-lg font-medium">{screen.materialId}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Slot</label>
+                      <p className="text-lg font-medium">{screen.slot}</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Location</label>
+                      <p className="text-lg font-medium">{screen.location}</p>
+                    </div>
+                  </div>
+
+                  {/* Current Ad */}
+                  {screen.currentAd && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="font-medium mb-3">Current Ad</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Ad Title</label>
+                          <p className="text-lg font-medium">{screen.currentAd.title}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Advertiser</label>
+                          <p className="text-lg font-medium">{screen.currentAd.advertiser}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Duration</label>
+                          <p className="text-lg font-medium">{formatTime(screen.currentAd.duration)}</p>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Progress</label>
+                          <p className="text-lg font-medium">{formatTime(screen.currentAd.progress)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex justify-between text-sm text-gray-600 mb-1">
+                          <span>Completion: {screen.currentAd.completion}%</span>
+                          <span>Impressions: {screen.currentAd.impressions}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${screen.currentAd.completion}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Controls */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium mb-3">Screen Controls</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-2">Brightness</label>
+                        <div className="flex items-center space-x-2">
+                          <Sun className="w-4 h-4 text-yellow-500" />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={screen.brightness}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium">{screen.brightness}%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-2">Volume</label>
+                        <div className="flex items-center space-x-2">
+                          <Volume2 className="w-4 h-4 text-green-500" />
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={screen.volume}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium">{screen.volume}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-center space-x-4 mt-4">
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200">
+                        <Play className="w-4 h-4" />
+                        <span>Play</span>
+                      </button>
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-600 rounded-lg hover:bg-yellow-200">
+                        <Pause className="w-4 h-4" />
+                        <span>Pause</span>
+                      </button>
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200">
+                        <Square className="w-4 h-4" />
+                        <span>Stop</span>
+                      </button>
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
+                        <SkipForward className="w-4 h-4" />
+                        <span>Next</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={() => setShowScreenDetails(false)}
+                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                    >
+                      Close
+                    </button>
+                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
