@@ -19,7 +19,6 @@ const Login: React.FC = () => {
     try {
       const user = await login(email, password);
       if (user) {
-        // Login successful - the UserAuthContext will handle navigation
         console.log('Login successful, user:', user);
       } else {
         setError('Login failed. Please check your credentials.');
@@ -37,65 +36,25 @@ const Login: React.FC = () => {
   }, [navigateToRegister]);
 
   return (
-    <div className="relative flex min-h-screen bg-[#fdfdfd]">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover"
-      >
-        <source src="/image/login.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0"></div>
+    <div className="relative flex min-h-screen items-center justify-center bg-[#fdfdfd]">
+      {/* Background Image */}
+      <img
+        src="/image/login.png"
+        alt="Login background"
+        className="absolute top-0 left-0 w-1/2 h-full object-cover hidden md:block"
+      />
 
-      {/* Form Container */}
-      <div className="relative z-10 w-full max-w-xl ml-auto mr-12 flex flex-col justify-center px-10">
-        <div className="p-8 rounded-xl shadow-2xl bg-[#fdfdfd]">
-          <div className="flex items-center space-x-2 mb-6">
-            <h1 className="text-5xl font-extrabold text-black">Log in</h1>
-          </div>
-
-          {/* Social Sign-in Buttons */}
-          <div className="flex space-x-2 mb-6">
-            <button
-              type="button"
-              className="flex-1 flex items-center justify-center py-2 px-4 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img
-                src="/image/g.png"
-                alt="Google logo"
-                className="h-5 w-5 mr-2"
-              />
-
-              <span>Sign in with Google</span>
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-             <img
-                src="/image/f.png"
-                alt="Facebook logo"
-                className="h-5 w-5"
-              />
-
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-5 w-5" />
-            </button>
-          </div>
-
+      {/* Form Container (in front) */}
+      <div className="relative z-10 w-full md:w-1/2 h-screen flex flex-col justify-center items-center">
+        <div className="p-20 rounded-2xl shadow-2xl bg-white h-full w-[85%] md:w-[790px] translate-x-56 ml-72">
+        
+          {/* Form */}
           <form className="space-y-6" onSubmit={handleSubmit}>
+            <h1 className="text-4xl font-extrabold text-black mb-6 mt-16">Log in</h1>
+
+            {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
+              <label htmlFor="email" className="block text-md font-bold text-gray-700 mb-1">
                 Email Address
               </label>
               <input
@@ -104,19 +63,15 @@ const Login: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
               />
             </div>
 
+            {/* Password */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="password" className="block text-md text-gray-700 font-semibold">
-                  Password
-                </label>
-                <Link to="/forgot-password" className="text-blue-500 hover:underline text-sm font-semibold">
-                  Forgot Password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="block text-md font-bold text-gray-700 mb-1">
+                Password
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -124,11 +79,11 @@ const Login: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                  className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-3 flex items-center"
+                  className="absolute inset-y-0 right-0 flex items-center pr-2"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
@@ -139,15 +94,27 @@ const Login: React.FC = () => {
                 </button>
               </div>
             </div>
-
+            
+            {/* Error */}
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
+            {/* Terms & Privacy */}
+            <div className="flex items-center space-x-2 text-sm">
+              <input type="checkbox" id="terms" className="h-4 w-4 text-blue-500" />
+              <label htmlFor="terms" className="text-gray-600">
+                I agree to the{' '}
+                <a href="#" className="text-blue-500 hover:underline">terms of service</a> and{' '}
+                <a href="#" className="text-blue-500 hover:underline">privacy policy</a>.
+              </label>
+            </div>
+
+            {/* Login Button */}
             <button
               type="submit"
               disabled={isLoggingIn}
-              className={`w-full py-3 px-4 rounded-lg shadow-md transition-colors ${
-                isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#FF9800] hover:bg-[#FF9B45]'
-              } text-white font-semibold text-lg`}
+              className={`w-full py-3 px-4 rounded-full transition-colors ${
+                isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              } text-white font-semibold`}
             >
               {isLoggingIn ? (
                 <div className="flex items-center justify-center">
@@ -158,11 +125,23 @@ const Login: React.FC = () => {
                 'Log in'
               )}
             </button>
-            <div className="text-center mt-6">
-              <span className="text-gray-800">Don't have an account?</span>
-              <a href="/register" className="text-blue-600 ml-1 hover:underline">
-                Sign up
-              </a>
+
+            {/* Social Sign-in */}
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mb-5 mt-10">or Log in With</p>
+              <div className="flex justify-center space-x-6">
+                <img src="/image/g.png" alt="Google" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/f.png" alt="Facebook" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/i.png" alt="Instagram" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/t.png" alt="Twitter" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/l.png" alt="LinkedIn" className="h-6 w-6 cursor-pointer" />
+              </div>
+            </div>
+
+            {/* Sign Up Link */}
+            <div className="text-center mt-6 text-sm">
+              <span className="text-gray-700">Don't have an account?</span>{' '}
+              <a href="/register" className="text-blue-600 hover:underline">Sign up</a>
             </div>
           </form>
         </div>

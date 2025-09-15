@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
@@ -366,67 +366,64 @@ const Advertisements: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5">
-      <div className="bg-gray-100 p-6 flex justify-between items-center">
-        <h1 className="text-4xl mt-8 font-semibold">Advertisements</h1>
-        <div className="flex space-x-3">
-          <span className="pt-1 mt-10 text-gray-500 ">{filteredAds.length} Ads found</span>
-          <button
-            onClick={() => navigate('/create-advertisement')}
-            className="px-4 py-2 bg-[#FADA7A] mt-10 text-gray-600 text-sm font-semibold w-32 rounded-2xl hover:bg-[#F5F0CD] hover:scale-105 transition-all duration-300"
-          >
-            Add New Ads
-          </button>
+      <div className="bg-gray-100 w-full min-h-screen">
+      {/* Header with Title*/}
+      <div className="flex justify-between items-center mb-6 pt-10">
+        <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              placeholder="Search Advertisements"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="relative w-40">
+              <select
+                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All Status">All Status</option>
+                <option value="Pending">PENDING</option>
+                <option value="Approved">APPROVED</option>
+                <option value="Running">RUNNING</option>
+                <option value="Completed">COMPLETED</option>
+              </select>
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="relative w-40">
+              <select
+                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All Plans">All Plans</option>
+                <option value="Monthly">Monthly</option>
+                <option value="Weekly">Weekly</option>
+              </select>
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-        {/* Filters */}
-        <div className="p-6 flex space-x-4">
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
-            >
-              <option value="All Status">All Status</option>
-              <option value="Pending">PENDING</option>
-              <option value="Approved">APPROVED</option>
-              <option value="Running">RUNNING</option>
-              <option value="Completed">COMPLETED</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="relative">
-            <select
-              value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value)}
-              className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
-            >
-              <option value="All Plans">All Plans</option>
-              <option value="Monthly">Monthly</option>
-              <option value="Weekly">Weekly</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-        <div className="relative w-96">
-          <input
-            type="text"
-            placeholder="Search Ads"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-              className="text-xs text-black rounded-xl pl-10 py-3 w-full shadow-md border border-black focus:outline-none appearance-none bg-white"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-        </div>
-        </div>
+      {/* Add New Material Button */}
+      <div className="flex justify-end mb-6">
+        <button
+          onClick={() => navigate('/create-advertisement')}
+          className="py-3 bg-[#FF9800] text-xs text-[#2E2E2E] rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+        >
+          <Plus size={16} />
+          Add New Ads
+        </button>
+      </div>
       
 
       {/* Ad Cards */}
@@ -567,6 +564,7 @@ const Advertisements: React.FC = () => {
             »
           </button>
         </div>
+      </div>
       </div>
 
       {/* Toast Notifications */}

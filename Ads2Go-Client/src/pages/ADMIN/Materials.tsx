@@ -1134,13 +1134,13 @@ const Materials: React.FC = () => {
 
             <form onSubmit={handleCreateSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Category <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={createForm.category}
                   onChange={(e) => setCreateForm({...createForm, category: e.target.value as 'DIGITAL' | 'NON_DIGITAL'})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
                   required
                 >
                   <option value="DIGITAL">Digital</option>
@@ -1149,13 +1149,13 @@ const Materials: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Vehicle Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={createForm.vehicleType}
                   onChange={(e) => setCreateForm({...createForm, vehicleType: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
                   required
                 >
                   <option value="CAR">Car</option>
@@ -1167,13 +1167,13 @@ const Materials: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Material Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={createForm.materialType}
                   onChange={(e) => setCreateForm({...createForm, materialType: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
                   required
                 >
                   {getAvailableMaterialTypes(createForm.vehicleType, createForm.category).map((type) => (
@@ -1185,26 +1185,26 @@ const Materials: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Description
                 </label>
                 <textarea
                   value={createForm.description}
                   onChange={(e) => setCreateForm({...createForm, description: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
                   placeholder="Enter description"
                   rows={3}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1">
                   Requirements <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={createForm.requirements}
                   onChange={(e) => setCreateForm({...createForm, requirements: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
                   placeholder="Enter material requirements"
                   rows={3}
                   required
@@ -1235,11 +1235,11 @@ const Materials: React.FC = () => {
       {/* Assign Driver Modal */}
       {showAssignModal && selectedMaterialForAssign && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          className="fixed inset-0 z-[51] flex items-end justify-center mr-11 p-6"
           onClick={() => setShowAssignModal(false)}
         >
           <div
-            className="bg-white rounded-lg shadow-lg w-full max-w-md p-6"
+            className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100" 
             onClick={(e) => e.stopPropagation()}
           >
             {/* Target Material Details */}
@@ -1247,27 +1247,28 @@ const Materials: React.FC = () => {
               Target Material Details
             </h2>
 
-            {/* Two-row grid: Row 1 = ID + Type, Row 2 = Vehicle Type + Category */}
-            <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 mb-6">
-              {/* Row 1 */}
-              <div>
-                <p className="font-semibold">ID:</p>
-                <p className="text-gray-900">{selectedMaterialForAssign.materialId}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Type:</p>
-                <p className="text-gray-900">{selectedMaterialForAssign.materialType}</p>
-              </div>
-
-              {/* Row 2 */}
-              <div>
-                <p className="font-semibold">Vehicle Type:</p>
-                <p className="text-gray-900">{selectedMaterialForAssign.vehicleType}</p>
-              </div>
-              <div>
-                <p className="font-semibold">Category:</p>
-                <p className="text-gray-900">{selectedMaterialForAssign.category}</p>
-              </div>
+            {/* Table for Material Info */}
+            <div className="rounded-lg overflow-hidden  mb-6">
+              <table className="table-auto w-full border-collapse text-sm">
+                <tbody className="bg-white text-gray-700">
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-bold w-1/3">ID:</td>
+                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.materialId}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-bold">Type:</td>
+                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.materialType}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 font-bold whitespace-nowrap">Vehicle Type:</td>
+                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.vehicleType}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold">Category:</td>
+                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.category}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
             {/* Select Driver */}
@@ -1279,7 +1280,7 @@ const Materials: React.FC = () => {
                 <select
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline focus:outline-gray-300"
                 >
                   <option value="">Choose a driver...</option>
                   {getCompatibleDrivers(selectedMaterialForAssign).map((driver) => (
@@ -1291,7 +1292,7 @@ const Materials: React.FC = () => {
               </div>
 
               {/* Buttons */}
-              <div className="flex justify-end gap-3">
+              <div className="flex justify-between gap-3">
                 <button
                   type="button"
                   onClick={() => setShowAssignModal(false)}
@@ -1311,9 +1312,6 @@ const Materials: React.FC = () => {
           </div>
         </div>
       )}
-
-
-
       {/* Connection Details Modal */}
       {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
         <div 

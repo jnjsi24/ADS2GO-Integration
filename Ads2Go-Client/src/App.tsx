@@ -22,7 +22,7 @@ import Payment from './pages/USERS/Payment';
 import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
 import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
-import History from './pages/USERS/PaymentHistory';
+import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 
@@ -44,7 +44,7 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
-import PaymentHistory from './pages/USERS/PaymentHistory';
+import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -174,6 +174,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+         <Route
+          path="/sadmin-admin"
+          element={
+            <ProtectedRoute>
+              <SadminAdmin />
+            </ProtectedRoute>
+          }
+        /> 
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -266,7 +274,7 @@ const UserAppContent: React.FC = () => {
           path="/history"
           element={
             <ProtectedRoute>
-              <History />
+              <PaymentHistory />
             </ProtectedRoute>
           }
         />
