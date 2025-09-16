@@ -279,8 +279,8 @@ const Advertisements: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPlan;
   });
 
-  if (loading) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 pt-10">Loading ads...</div>;
-  if (error) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 pt-10 text-red-600">Error loading ads: {error.message}</div>;
+  if (loading) return <div className="min-h-screen bg-white pl-64 pr-5 pt-10">Loading ads...</div>;
+  if (error) return <div className="min-h-screen bg-white pl-64 pr-5 pt-10 text-red-600">Error loading ads: {error.message}</div>;
   const currentAds = filteredAds.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
 
@@ -365,8 +365,8 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5">
-      <div className="bg-gray-100 w-full min-h-screen">
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
       {/* Header with Title*/}
       <div className="flex justify-between items-center mb-6 pt-10">
         <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
@@ -374,14 +374,14 @@ const Advertisements: React.FC = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             <div className="relative w-40">
               <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -398,7 +398,7 @@ const Advertisements: React.FC = () => {
 
             <div className="relative w-40">
               <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -418,7 +418,7 @@ const Advertisements: React.FC = () => {
       <div className="flex justify-end mb-6">
         <button
           onClick={() => navigate('/create-advertisement')}
-          className="py-3 bg-[#FF9800] text-xs text-[#2E2E2E] rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+          className="py-3 bg-[#FF9800] text-xs text-[#2E2E2E] rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
         >
           <Plus size={16} />
           Add New Ads
@@ -427,7 +427,7 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className=" bg-gray-100 p-6 grid grid-cols-4 gap-6">
+      <div className=" bg-white p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
@@ -480,7 +480,7 @@ const Advertisements: React.FC = () => {
                 )}
               </div>
 
-              <div className="p-4 bg-gray-100 flex-grow flex flex-col">
+              <div className="p-4 bg-white flex-grow flex flex-col">
                 <div
                   className="flex-grow cursor-pointer"
                   // Corrected navigation to user ad details page
@@ -488,10 +488,9 @@ const Advertisements: React.FC = () => {
                 >
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
-                  <p className="text-sm text-gray-500 mt-2">Created: {formatDate(ad.createdAt)}</p>
                   {/* Display campaign duration */}
                   {ad.startTime && ad.endTime ? (
-                    <p className="text-sm text-blue-600 mt-1 font-medium">
+                    <p className="text-sm text-blue-600 mt-5 font-medium">
                       Campaign: {formatDateRange(ad.startTime, ad.endTime)}
                     </p>
                   ) : (
@@ -508,14 +507,14 @@ const Advertisements: React.FC = () => {
                       // Corrected navigation to user ad details page
                       navigate(`/ad-details/${ad.id}`);
                     }}
-                    className="text-gray-500 text-xs font-semibold rounded-xl px-4 py-2 flex items-center justify-between w-full hover:bg-[#1B5087] hover:text-white transition-colors"
+                    className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-between w-full hover:bg-[#1B5087] hover:text-white transition-colors"
                   >
                     View Details <span>→</span>
                   </button>
                 </div>
               </div>
 
-              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-xl ${
+              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
                 ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
                 ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
                 ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :

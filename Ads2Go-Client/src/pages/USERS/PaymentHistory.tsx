@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import Payment from "./Payment";
@@ -219,105 +219,51 @@ const PaymentHistory: React.FC = () => {
   return (
     <div className="min-h-screen bg-white pl-72 p-10">
       {/* Header with Search and Profile */}
-      <div className="flex flex-col md:flex-row items-center justify-between mb-6 space-y-4 md:space-y-0">
-        {/* Search Bar */}
-        <div className="relative w-full md:w-1/2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search payments..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
-          />
-        </div>
-        {/* Profile */}
-        <div
-          className="flex items-center space-x-3 cursor-pointer md:ml-auto"
-          onClick={() => navigate("/account")}
-        >
-          <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-            <span className="text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : "..."}
-            </span>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-          </div>
-          <div>
-            {user ? (
-              <p className="font-semibold text-gray-800">
-                {`${user.firstName} ${user.lastName}`}
-              </p>
-            ) : (
-              <p className="font-semibold text-gray-800">Loading...</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800 whitespace-nowrap">
-          Payment History
-        </h1>
-        <div className="flex space-x-4">
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as Status | "All Status")
-              }
-              className="text-xs text-black border-gray-400 rounded-xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none"
-            >
-              <option value="All Status">All Status</option>
-              <option value="Paid">Paid</option>
-              <option value="Pending">Pending</option>
-              <option value="Failed">Failed</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg
-                className="w-4 h-4 text-black"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+      <div className="flex justify-between items-center mb-6 pt-10">
+        <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex gap-2">
+            <input type="text" 
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white" 
+              placeholder="Search Advertisements" 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+            <div className="relative w-40">
+              <select
+                value={statusFilter}
+                onChange={(e) =>
+                  setStatusFilter(e.target.value as Status | "All Status")
+                }
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+                <option value="All Status">All Status</option>
+                <option value="Paid">Paid</option>
+                <option value="Pending">Pending</option>
+                <option value="Failed">Failed</option>
+              </select>
+              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="relative w-40">
+              <select
+                value={planFilter}
+                onChange={(e) => setPlanFilter(e.target.value)}
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+              >
+                <option>All Plans</option>
+                <option>30 Days</option>
+                <option>60 Days</option>
+                <option>90 Days</option>
+                <option>120 Days</option>
+              </select>
+              <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
             </div>
           </div>
-
-          <div className="relative">
-            <select
-              value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value)}
-              className="text-xs text-black  border-gray-400 rounded-xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none"
-            >
-              <option>All Plans</option>
-              <option>30 Days</option>
-              <option>60 Days</option>
-              <option>90 Days</option>
-              <option>120 Days</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg
-                className="w-4 h-4 text-black"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </div>
-          </div>
-          </div>
+        </div>
       </div>
 
       {/* Payment Cards */}
@@ -326,7 +272,7 @@ const PaymentHistory: React.FC = () => {
     currentPayments.map((item) => (
       <div
         key={item.id}
-         className="rounded-xl shadow-md bg-white overflow-hidden cursor-pointer relative"
+         className="rounded-lg shadow-md bg-white overflow-hidden cursor-pointer relative"
         onClick={() => setSelectedPayment(item)}
       >
               {/* Main Product Info Section */}
@@ -343,7 +289,7 @@ const PaymentHistory: React.FC = () => {
             <p className="text-sm text-gray-600 mt-1">
               {item.paymentType || "N/A"}
             </p>
-            <p className="text-xs text-gray-500 mt-5 font-semibold">
+            <p className="text-xs text-red-500 mt-5 font-semibold">
               Please pay before October 25, 2023
             </p>
           </div>
@@ -417,7 +363,7 @@ const PaymentHistory: React.FC = () => {
 
       {/* Drawer */}
       <div
-        className={`fixed top-2 right-2 h-[97%] bottom-1 w-full max-w-sm bg-white shadow-lg rounded-xl transform transition-transform duration-500 ease-in-out z-50 overflow-y-auto
+        className={`fixed top-2 right-2 h-[97%] bottom-1 w-full max-w-sm bg-white shadow-lg rounded-lg transform transition-transform duration-500 ease-in-out z-50 overflow-y-auto
           ${selectedPayment ? "translate-x-0" : "translate-x-full"}`}
       >
         {selectedPayment && (
