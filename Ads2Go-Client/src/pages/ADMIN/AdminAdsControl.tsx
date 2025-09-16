@@ -49,6 +49,7 @@ import {
   ExternalLink,
   Loader2
 } from 'lucide-react';
+// Icons are imported individually to avoid unused imports
 import { adsPanelService, ScreenData, ComplianceReport, AdAnalytics } from '../../services/adsPanelServiceNew';
 import '../../services/testEndpoints';
 
@@ -114,17 +115,48 @@ const AdminAdsControl: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      console.log('🔄 Using INLINE API service to bypass caching issues...');
+      console.log('🔄 Fetching data from server...');
       
-      const [screensData, complianceData, analyticsData] = await Promise.all([
-        inlineApiService.getScreens(),
-        inlineApiService.getComplianceReport(),
-        inlineApiService.getAdAnalytics()
-      ]);
+      // First, try to fetch screens data separately to debug
+      try {
+        console.log('🔍 Fetching screens data...');
+        const screensResponse = await inlineApiService.getScreens();
+        console.log('📊 Screens data received:', screensResponse);
+        
+        if (screensResponse && Array.isArray(screensResponse.screens)) {
+          console.log(`✅ Found ${screensResponse.screens.length} screens`);
+          setScreens(screensResponse.screens);
+          
+          // Log all device IDs for debugging
+          console.log('📋 Device IDs:', screensResponse.screens.map((s: any) => ({
+            deviceId: s.deviceId,
+            materialId: s.materialId,
+            isOnline: s.isOnline,
+            lastSeen: s.lastSeen
+          })));
+        } else {
+          console.warn('⚠️ Unexpected screens data format:', screensResponse);
+          setScreens([]);
+        }
+      } catch (screensError) {
+        console.error('❌ Error fetching screens:', screensError);
+        setScreens([]);
+      }
       
-      setScreens(screensData.screens);
-      setComplianceReport(complianceData);
-      setAdAnalytics(analyticsData);
+      // Then fetch other data in parallel
+      try {
+        console.log('🔄 Fetching additional data...');
+        const [complianceData, analyticsData] = await Promise.all([
+          inlineApiService.getComplianceReport(),
+          inlineApiService.getAdAnalytics()
+        ]);
+        
+        setComplianceReport(complianceData);
+        setAdAnalytics(analyticsData);
+      } catch (otherError) {
+        console.error('❌ Error fetching additional data:', otherError);
+        // We can continue with partial data
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
       console.error('Error fetching data:', err);
@@ -228,111 +260,9 @@ const AdminAdsControl: React.FC = () => {
     }
   };
 
-  // Mock data for demonstration
-  const mockScreens = [
-    {
-      id: 'TABLET-001',
-      materialId: 'DGL-HEADDRESS-CAR-001',
-      slot: 1,
-      status: 'online',
-      currentAd: {
-        id: 'AD-001',
-        title: 'Sample Ad #1',
-        duration: 180,
-        progress: 150,
-        completion: 83,
-        impressions: 15,
-        advertiser: 'ABC Company'
-      },
-      location: 'Makati',
-      brightness: 85,
-      volume: 60,
-      isPlaying: true,
-      lastSeen: '2 minutes ago'
-    },
-    {
-      id: 'TABLET-002',
-      materialId: 'DGL-HEADDRESS-CAR-001',
-      slot: 2,
-      status: 'online',
-      currentAd: {
-        id: 'AD-002',
-        title: 'Product Demo',
-        duration: 150,
-        progress: 105,
-        completion: 70,
-        impressions: 12,
-        advertiser: 'XYZ Corp'
-      },
-      location: 'Makati',
-      brightness: 80,
-      volume: 55,
-      isPlaying: true,
-      lastSeen: '1 minute ago'
-    },
-    {
-      id: 'TABLET-003',
-      materialId: 'DGL-HEADDRESS-CAR-002',
-      slot: 1,
-      status: 'offline',
-      currentAd: null,
-      location: 'Quezon City',
-      brightness: 0,
-      volume: 0,
-      isPlaying: false,
-      lastSeen: '15 minutes ago'
-    },
-    {
-      id: 'TABLET-004',
-      materialId: 'DGL-HEADDRESS-CAR-003',
-      slot: 1,
-      status: 'maintenance',
-      currentAd: null,
-      location: 'Taguig',
-      brightness: 50,
-      volume: 30,
-      isPlaying: false,
-      lastSeen: '5 minutes ago'
-    },
-    {
-      id: 'TABLET-005',
-      materialId: 'DGL-HEADDRESS-CAR-004',
-      slot: 1,
-      status: 'online',
-      currentAd: {
-        id: 'AD-003',
-        title: 'Brand Story',
-        duration: 240,
-        progress: 240,
-        completion: 100,
-        impressions: 8,
-        advertiser: 'Brand Co'
-      },
-      location: 'Pasig',
-      brightness: 90,
-      volume: 70,
-      isPlaying: false,
-      lastSeen: '30 seconds ago'
-    }
-  ];
-
-  const mockAlerts = [
-    { id: 1, type: 'critical', message: 'TABLET-003 offline for 15 minutes', timestamp: '2 min ago' },
-    { id: 2, type: 'high', message: 'TABLET-004 low brightness (50%)', timestamp: '5 min ago' },
-    { id: 3, type: 'medium', message: 'TABLET-002 ad completion rate low (70%)', timestamp: '8 min ago' },
-    { id: 4, type: 'low', message: 'TABLET-001 ad completed successfully', timestamp: '10 min ago' }
-  ];
-
-  const mockAnalytics = {
-    totalScreens: 25,
-    onlineScreens: 23,
-    playingAds: 20,
-    pausedAds: 3,
-    totalViewTime: '45:30',
-    totalImpressions: 1250,
-    avgCompletionRate: 87,
-    totalRevenue: 3125
-  };
+  // Real data will be loaded from the API via the fetchData function
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState<any>({});
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -587,24 +517,31 @@ const AdminAdsControl: React.FC = () => {
                 </div>
                 
                 <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4">
-                          <input type="checkbox" className="rounded" />
-                        </th>
-                        <th className="text-left py-3 px-4">Device ID</th>
-                        <th className="text-left py-3 px-4">Material</th>
-                        <th className="text-left py-3 px-4">Slot</th>
-                        <th className="text-left py-3 px-4">Status</th>
-                        <th className="text-left py-3 px-4">Current Ad</th>
-                        <th className="text-left py-3 px-4">Progress</th>
-                        <th className="text-left py-3 px-4">Location</th>
-                        <th className="text-left py-3 px-4">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {screens.map((screen) => (
+                  {screens.filter(screen => screen.isOnline).length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg">
+                      <WifiOff className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">No active devices</h3>
+                      <p className="mt-1 text-sm text-gray-500">No devices are currently online and playing ads.</p>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4">
+                            <input type="checkbox" className="rounded" />
+                          </th>
+                          <th className="text-left py-3 px-4">Device ID</th>
+                          <th className="text-left py-3 px-4">Material</th>
+                          <th className="text-left py-3 px-4">Slot</th>
+                          <th className="text-left py-3 px-4">Status</th>
+                          <th className="text-left py-3 px-4">Current Ad</th>
+                          <th className="text-left py-3 px-4">Progress</th>
+                          <th className="text-left py-3 px-4">Location</th>
+                          <th className="text-left py-3 px-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {screens.filter(screen => screen.isOnline).map((screen) => (
                         <tr key={screen.deviceId} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="py-3 px-4">
                             <input
@@ -678,6 +615,7 @@ const AdminAdsControl: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </div>
 
@@ -790,6 +728,8 @@ const AdminAdsControl: React.FC = () => {
           {activeTab === 'content' && (
             <div className="space-y-6">
               <h3 className="text-lg font-semibold">Content Management</h3>
+              
+
               
               {/* Content Library */}
               <div className="bg-gray-50 p-4 rounded-lg">

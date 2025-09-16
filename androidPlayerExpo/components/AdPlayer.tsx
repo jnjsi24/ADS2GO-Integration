@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+// Using expo-av for compatibility with Expo SDK 49
+// TODO: Migrate to expo-video when upgrading to Expo SDK 54+
 import { Video, ResizeMode } from 'expo-av';
+
+// Suppress expo-av deprecation warning
+const originalWarn = console.warn;
+console.warn = function filterWarnings(warning) {
+  if (warning.includes('expo-av') && warning.includes('deprecated')) {
+    return;
+  }
+  originalWarn.apply(console, arguments);
+};
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';

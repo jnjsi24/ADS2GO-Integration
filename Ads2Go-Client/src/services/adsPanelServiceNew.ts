@@ -100,14 +100,45 @@ class AdsPanelServiceNew {
     status?: string;
     materialId?: string;
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
-    const queryParams = new URLSearchParams();
-    if (filters?.screenType) queryParams.append('screenType', filters.screenType);
-    if (filters?.status) queryParams.append('status', filters.status);
-    if (filters?.materialId) queryParams.append('materialId', filters.materialId);
+    try {
+      const queryParams = new URLSearchParams();
+      if (filters?.screenType) queryParams.append('screenType', filters.screenType);
+      if (filters?.status) queryParams.append('status', filters.status);
+      if (filters?.materialId) queryParams.append('materialId', filters.materialId);
 
-    const endpoint = `/screenTracking/screens${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await this.makeRequest(endpoint);
-    return response.data;
+      const endpoint = `/screenTracking/screens${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      console.log('📡 Fetching screens from:', endpoint);
+      
+      const response = await this.makeRequest(endpoint);
+      console.log('📡 Screens API response:', response);
+      
+      if (!response || !response.data) {
+        console.error('❌ Invalid response format from server:', response);
+        throw new Error('Invalid response format from server');
+      }
+      
+      // Log the screens data for debugging
+      console.log('📋 Screens data from server:', response.data);
+      
+      // Return the data with proper typing
+      return {
+        screens: response.data.screens || [],
+        totalScreens: response.data.totalScreens || 0,
+        onlineScreens: response.data.onlineScreens || 0,
+        displayingScreens: response.data.displayingScreens || 0,
+        maintenanceScreens: response.data.maintenanceScreens || 0
+      };
+    } catch (error) {
+      console.error('❌ Error in getScreens:', error);
+      // Return empty data in case of error to prevent UI crash
+      return {
+        screens: [],
+        totalScreens: 0,
+        onlineScreens: 0,
+        displayingScreens: 0,
+        maintenanceScreens: 0
+      };
+    }
   }
 
   // Get compliance report

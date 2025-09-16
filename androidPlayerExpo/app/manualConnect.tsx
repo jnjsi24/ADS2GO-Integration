@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDeviceStatus } from '@/contexts/DeviceStatusContext';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import tabletRegistrationService, { ConnectionDetails } from '../services/tablet
 import QRCodeScanner from '../components/QRCodeScanner';
 
 export default function ManualConnectScreen() {
+  const { setMaterialId: setMaterialIdInContext } = useDeviceStatus();
   const [loading, setLoading] = useState(false);
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [existingConnection, setExistingConnection] = useState<any>(null);
@@ -70,6 +72,9 @@ export default function ManualConnectScreen() {
       const result = await tabletRegistrationService.registerTablet(connectionDetails);
       
       if (result.success) {
+        // Set the material ID in the device status context
+        await setMaterialIdInContext(materialId.trim());
+        
         Alert.alert(
           'Success!',
           'Tablet registered successfully. You will now be redirected to the main screen.',
