@@ -289,7 +289,7 @@ const UserAppContent: React.FC = () => {
         />
 
         {/* Default redirects */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
@@ -321,7 +321,7 @@ const AppContent: React.FC = () => {
         <Route path="/forgot-password" element={<ForgotPass />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/landing" element={<Landing />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/landing" replace />} />
       </Routes>
     );
   }
