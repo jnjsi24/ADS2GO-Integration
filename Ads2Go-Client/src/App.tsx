@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
+import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 
@@ -359,11 +360,18 @@ const App: React.FC = () => {
                      location.pathname === '/register' ||
                      location.pathname === '/verify-email';
   
+  // Wrap all routes with DeviceStatusProvider
+  const content = (
+    <DeviceStatusProvider>
+      <AppContent />
+    </DeviceStatusProvider>
+  );
+
   // If we're on admin routes, only provide AdminAuthProvider
   if (isAdminRoute) {
     return (
       <AdminAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </AdminAuthProvider>
     );
   }
@@ -372,7 +380,7 @@ const App: React.FC = () => {
   if (isUserRoute) {
     return (
       <UserAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </UserAuthProvider>
     );
   }
@@ -381,7 +389,7 @@ const App: React.FC = () => {
   return (
     <UserAuthProvider navigate={navigate}>
       <AdminAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </AdminAuthProvider>
     </UserAuthProvider>
   );

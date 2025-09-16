@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
+const adDeploymentService = require('../services/adDeploymentService');
 
 const adResolvers = {
   Query: {
@@ -103,6 +104,20 @@ const adResolvers = {
       });
 
       const savedAd = await ad.save();
+
+      // If ad is paid, deploy it immediately
+      if (savedAd.status === 'PAID') {
+        try {
+          const deploymentResult = await adDeploymentService.deployAd(savedAd._id);
+          if (!deploymentResult.success) {
+            console.error('Failed to auto-deploy ad:', deploymentResult.message);
+            // Don't fail the ad creation if deployment fails
+          }
+        } catch (deployError) {
+          console.error('Error during ad deployment:', deployError);
+          // Continue with ad creation even if deployment fails
+        }
+      }
 
       return await Ad.findById(savedAd._id)
         .populate('planId')
@@ -214,15 +229,10 @@ const adResolvers = {
           }
           ad.mediaFile = input.mediaFile;
         }
-
-        if (input.materialId !== undefined) ad.materialId = input.materialId;
       }
 
       await ad.save();
-      return await Ad.findById(ad._id)
-        .populate('materialId')
-        .populate('planId')
-        .populate('userId');
+      return ad;
     },
 
     deleteAd: async (_, { id }, { user }) => {

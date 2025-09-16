@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { useQuery } from '@apollo/client';
 import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
+import DeviceStatus from '../../components/DeviceStatus';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -68,7 +69,7 @@ const Dashboard = () => {
 
   if (loading) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-md h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
     </div>
   );
 
@@ -92,7 +93,7 @@ const Dashboard = () => {
         </div>
         <div className="flex items-center gap-3">
           {/* Calendar icon and 'This month' button - Removed profile section */}
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-md text-gray-700 text-sm cursor-pointer">
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 mr-2 text-gray-500"
@@ -127,7 +128,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1  sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
           { label: "Total Advertisements", value: "$15,700.00", change: "12.1%", up: true },
           { label: "Active Advertisements", value: "$8,500.00", change: "6.3%", up: true },
@@ -136,7 +137,7 @@ const Dashboard = () => {
         ].map((stat, i) => (
           <div
             key={i}
-            className="bg-white p-5 rounded-lg shadow-md flex flex-col justify-between"
+            className="bg-white p-5 rounded-2xl shadow-sm flex flex-col justify-between"
           >
             <div className="flex justify-between items-center mb-2">
               <p className="text-sm text-gray-500">{stat.label}</p>
@@ -170,18 +171,18 @@ const Dashboard = () => {
       </div>
 
       {/* Ad Impressions & QR Scans Chart (now spans full width below stat cards) */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-800">
             Ad Impressions & QR Scans
           </h3>
           <div className="flex items-center space-x-4 text-sm">
             <span className="flex items-center text-gray-600">
-              <span className="w-2 h-2 rounded-md bg-blue-500 mr-1"></span>
+              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
               Impressions
             </span>
             <span className="flex items-center text-gray-600">
-              <span className="w-2 h-2 rounded-md bg-green-500 mr-1"></span>
+              <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
               qrScans
             </span>
             <div className="relative">
@@ -228,12 +229,15 @@ const Dashboard = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* Vehicle Status Overview Table */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Vehicle Status Overview
-          </h3>
+      {/* Device Status */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <DeviceStatus />
+      </div>
+
+      {/* Vehicle Status Overview */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Vehicle Status Overview</h3>
+        <div className="space-y-4">
           <div className="flex items-center space-x-4">
             <div className="relative">
               <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 text-sm leading-tight focus:outline-none focus:border-blue-500">
