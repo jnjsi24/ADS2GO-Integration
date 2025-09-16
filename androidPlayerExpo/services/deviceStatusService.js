@@ -16,41 +16,116 @@ class DeviceStatusService {
     this.isConnected = false;
   }
 
-  initialize({ materialId, onStatusChange }) {
+  initialize = ({ materialId, onStatusChange }) => {
+    // Store the previous materialId to check if it changed
+    const previousMaterialId = this.materialId;
     this.materialId = materialId;
     this.onStatusChange = onStatusChange;
     
     // Get device ID
     this.deviceId = Application.androidId || Device.modelName || 'unknown-device';
     
-    // Initialize WebSocket connection
-    this.connect();
+    // Only connect if we have a materialId and it's different from the previous one
+    if (materialId && materialId !== previousMaterialId) {
+      console.log('Initializing WebSocket with materialId:', materialId);
+      this.connect();
+    } else if (!materialId) {
+      console.warn('No materialId provided, cannot initialize WebSocket');
+      if (this.onStatusChange) {
+        this.onStatusChange({ 
+          isOnline: false, 
+          error: 'Material ID is required for connection' 
+        });
+      }
+    }
     
-    // Listen to app state changes
-    AppState.addEventListener('change', this.handleAppStateChange);
+    // Listen to app state changes if not already listening
+    if (!this.appStateListener) {
+      this.appStateListener = AppState.addEventListener('change', this.handleAppStateChange);
+    }
   }
 
   connect = () => {
+    // Clear any existing connection and timeouts
     if (this.ws) {
       this.ws.close();
+      this.ws = null;
+    }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    
+    // Don't proceed if materialId is not set
+    if (!this.materialId) {
+      console.warn('Cannot connect: materialId is not set');
+      if (this.onStatusChange) {
+        this.onStatusChange({ 
+          isOnline: false, 
+          error: 'Material ID is required for connection' 
+        });
+      }
+      return;
     }
 
-    // Use the same host as the API URL but with WebSocket protocol
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
-    const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
-    const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
-    console.log('Connecting to WebSocket:', wsUrl);
-
-    this.ws = new WebSocket(wsUrl);
-
-    this.ws.onopen = () => {
-      console.log('WebSocket connected');
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
+    try {
+      // Use the same host as the API URL but with WebSocket protocol
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+      const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
+      const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
       
-      // Start ping interval
-      this.startPing();
+      console.log('[WebSocket] Connecting to:', wsUrl);
+      this.ws = new WebSocket(wsUrl);
+      this.ws.binaryType = 'arraybuffer';
+
+      this.ws.onopen = () => {
+        console.log('[WebSocket] Connected successfully');
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        
+        // Notify status change
+        if (this.onStatusChange) {
+          this.onStatusChange({ isConnected: true });
+        }
+        
+        // Start ping to keep connection alive
+        this.startPing();
+        
+        // Send initial status update
+        this.sendStatusUpdate();
+      };
+      
+      this.ws.onclose = (e) => {
+        console.log('WebSocket disconnected:', e.code, e.reason);
+        this.isConnected = false;
+        this.stopPing();
+        
+        // Notify status change
+        if (this.onStatusChange) {
+          this.onStatusChange({ isOnline: false });
+        }
+      };
+      
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        this.handleDisconnect(error);
+      };
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'pong') {
+            this.lastPong = Date.now();
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
       
       // Send initial ping to establish connection
       this.sendPing();
@@ -59,80 +134,23 @@ class DeviceStatusService {
       if (this.onStatusChange) {
         this.onStatusChange({ isOnline: true });
       }
-    };
-
-    this.ws.onclose = (e) => {
-      console.log('WebSocket disconnected:', e.code, e.reason);
-      this.isConnected = false;
-      this.stopPing();
-      
-      // Notify status change
-      if (this.onStatusChange) {
-        this.onStatusChange({ isOnline: false });
-      }
-      
-      // Attempt to reconnect
-      this.handleReconnect();
-    };
-
-    this.ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      this.isConnected = false;
-      this.stopPing();
-      
-      // Notify status change
-      if (this.onStatusChange) {
-        this.onStatusChange({ isOnline: false, error });
-      }
-      
-      // Attempt to reconnect
-      this.handleReconnect();
-    };
-  };
-
-  handleReconnect = () => {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++;
-      const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
-      
-      console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
-      this.reconnectTimeout = setTimeout(() => {
-        this.connect();
-      }, delay);
-    } else {
-      console.error('Max reconnection attempts reached');
+    } catch (error) {
+      console.error('Error in WebSocket connection:', error);
+      this.handleDisconnect(error);
     }
-  };
-
-  // Handle incoming pings from server
-  handlePing = () => {
-    if (this.ws && this.isConnected) {
-      // Respond to server pings with pong
-      this.ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-    }
-  };
-
-  // Send ping to server
-  sendPing = () => {
-    if (this.ws && this.isConnected) {
-      this.ws.send(JSON.stringify({ 
-        type: 'ping', 
-        timestamp: Date.now() 
-      }));
-    }
-  };
+  }
 
   startPing = () => {
-    // Clear any existing interval
-    this.stopPing();
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+    }
     
-    // Send ping every 20 seconds to keep the connection alive
+    this.lastPong = Date.now();
+    
+    // Send ping every 25 seconds (server has 30s timeout)
     this.pingInterval = setInterval(() => {
-      if (this.ws && this.isConnected) {
-        this.sendPing();
-      }
-    }, 20000);
+      this.sendPing();
+    }, 25000);
   };
 
   stopPing = () => {
@@ -142,21 +160,111 @@ class DeviceStatusService {
     }
   };
 
-  handleAppStateChange = (nextAppState) => {
-    console.log('App state changed to:', nextAppState);
-    if (nextAppState === 'active') {
-      // App came to foreground, ensure connection is active
-      if (!this.isConnected) {
-        console.log('App in foreground, reconnecting WebSocket...');
-        this.connect();
-      } else {
-        // If already connected, send a ping to verify
-        this.sendPing();
+  sendPing = () => {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    
+    try {
+      // Check if we've received a pong recently
+      if (this.lastPong) {
+        const timeSinceLastPong = Date.now() - this.lastPong;
+        if (timeSinceLastPong > 60000) { // 60 seconds without pong
+          console.warn('[WebSocket] No pong received recently, reconnecting...');
+          this.handleDisconnect(new Error('No pong received'));
+          return;
+        }
       }
-    } else if (nextAppState.match(/inactive|background/)) {
-      // App went to background, clean up
-      console.log('App in background, cleaning up WebSocket...');
-      this.stopPing();
+      
+      // Send ping
+      this.ws.send(JSON.stringify({ type: 'ping' }));
+    } catch (error) {
+      console.error('[WebSocket] Error sending ping:', error);
+      this.handleDisconnect(error);
+    }
+  }
+
+  sendStatusUpdate = () => {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        const statusUpdate = {
+          type: 'statusUpdate',
+          deviceId: this.deviceId,
+          materialId: this.materialId,
+          timestamp: new Date().toISOString(),
+          platform: Platform.OS,
+          appVersion: Application.nativeApplicationVersion || 'unknown',
+          deviceName: Device.modelName || 'unknown',
+          osVersion: Device.osVersion || 'unknown'
+        };
+        
+        this.ws.send(JSON.stringify(statusUpdate));
+      } catch (error) {
+        console.error('[WebSocket] Error sending status update:', error);
+      }
+    }
+  }
+
+  handleDisconnect = (error) => {
+    this.isConnected = false;
+    
+    // Clear ping interval
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    
+    // Close existing connection
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {
+        console.error('[WebSocket] Error closing connection:', e);
+      }
+      this.ws = null;
+    }
+    
+    // Notify status change
+    if (this.onStatusChange) {
+      this.onStatusChange({ 
+        isConnected: false,
+        error: error?.message || 'Disconnected',
+        reconnectAttempts: this.reconnectAttempts,
+        maxReconnectAttempts: this.maxReconnectAttempts
+      });
+    }
+    
+    // Try to reconnect if we haven't exceeded max attempts
+    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+      const baseDelay = 1000; // Start with 1 second
+      const maxDelay = 30000; // Max 30 seconds
+      const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+      const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts), maxDelay) + jitter;
+      
+      console.log(`[WebSocket] Attempting to reconnect in ${Math.round(delay/1000)}s (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+      
+      this.reconnectTimeout = setTimeout(() => {
+        this.reconnectAttempts++;
+        this.connect();
+      }, delay);
+    } else {
+      console.error('[WebSocket] Max reconnection attempts reached');
+    }
+  };
+
+  handleAppStateChange = (nextAppState) => {
+    console.log(`[AppState] Changed to: ${nextAppState}`);
+    
+    if (nextAppState === 'active') {
+      // App came to foreground
+      if (!this.isConnected) {
+        console.log('[AppState] App is active, reconnecting WebSocket...');
+        this.reconnectAttempts = 0;
+        this.connect();
+      }
+    } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+      // App went to background or is inactive
+      console.log('[AppState] App is in background, cleaning up WebSocket...');
       if (this.ws) {
         this.ws.close();
       }
@@ -164,22 +272,38 @@ class DeviceStatusService {
   };
 
   cleanup = () => {
-    // Clean up event listeners and timeouts
-    AppState.removeEventListener('change', this.handleAppStateChange);
+    // Clean up event listeners
+    if (this.appStateListener) {
+      this.appStateListener.remove();
+      this.appStateListener = null;
+    }
     
+    // Clear timeouts
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
     
+    // Stop ping interval
     this.stopPing();
     
+    // Close WebSocket connection
     if (this.ws) {
-      this.ws.close();
+      try {
+        this.ws.close();
+      } catch (error) {
+        console.error('Error closing WebSocket:', error);
+      }
       this.ws = null;
     }
     
+    // Reset connection state
     this.isConnected = false;
+    
+    // Notify status change
+    if (this.onStatusChange) {
+      this.onStatusChange({ isOnline: false, error: 'Connection closed' });
+    }
   };
 }
 

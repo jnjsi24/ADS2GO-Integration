@@ -61,6 +61,15 @@ class DeviceStatusService {
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId;
           if (materialId) ws.materialId = materialId;
+          ws.isAlive = true;
+          ws.lastPong = Date.now();
+          
+          // Set up ping-pong handler
+          ws.on('pong', () => {
+            ws.isAlive = true;
+            ws.lastPong = Date.now();
+          });
+          
           this.handleConnection(ws, request);
         });
       } else {
@@ -92,8 +101,13 @@ class DeviceStatusService {
       existingConnection.terminate();
     }
 
-    // Store the connection with its device ID
+    // Store the connection with its device ID and material ID
+    ws.deviceId = deviceId;
+    ws.materialId = materialId;
     this.activeConnections.set(deviceId, ws);
+    
+    // Broadcast updated device list to all clients
+    this.broadcastDeviceList();
     console.log(`Device connected: ${deviceId}`);
     console.log(`Active connections: ${this.activeConnections.size}`);
     
@@ -136,68 +150,37 @@ class DeviceStatusService {
     }
   }
 
-  async updateDeviceStatus(deviceId, isOnline) {
+  async updateDeviceStatus(deviceId, status) {
     try {
       const now = new Date();
-      const update = {
-        isOnline,
+      const updateData = {
+        isOnline: status,
         lastSeen: now,
-        ...(isOnline ? { lastOnline: now } : {})
-      };
-      
-      // Update the screen tracking document
-      await ScreenTracking.findOneAndUpdate(
-        { deviceId },
-        { 
-          $set: update,
-          $push: { 
-            statusHistory: {
-              status: isOnline ? 'online' : 'offline',
-              timestamp: now
-            }
+        $push: {
+          statusHistory: {
+            status: status ? 'online' : 'offline',
+            timestamp: now
           }
-        },
+        }
+      };
+
+      // Update the device status in the database
+      const updatedDevice = await ScreenTracking.findOneAndUpdate(
+        { deviceId },
+        updateData,
         { upsert: true, new: true }
       );
+
+      console.log(`Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
       
-      console.log(`✅ Updated status for device ${deviceId}: ${isOnline ? 'online' : 'offline'}`);
-      return true;
+      // Broadcast the status update to all connected clients
+      this.broadcastDeviceUpdate(updatedDevice);
+      
+      // Also update the device list
+      this.broadcastDeviceList();
     } catch (error) {
       console.error(`❌ Error updating status for device ${deviceId}:`, error);
-      throw error;
     }
-  }
-
-  startPingInterval() {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-    }
-
-    this.pingInterval = setInterval(() => {
-      const now = new Date();
-      console.log(`[${now.toISOString()}] Pinging ${this.activeConnections.size} active connections...`);
-      
-      // Check for and clean up dead connections
-      this.activeConnections.forEach((ws, deviceId) => {
-        if (ws.isAlive === false) {
-          console.log(`Terminating dead connection for device: ${deviceId}`);
-          ws.terminate();
-          this.activeConnections.delete(deviceId);
-          // Update status in database
-          this.updateDeviceStatus(deviceId, false).catch(console.error);
-          return;
-        }
-
-        ws.isAlive = false;
-        ws.ping(() => {});
-      });
-      
-      // Log connection status
-      console.log(`Active WebSocket connections: ${this.activeConnections.size}`);
-      if (this.activeConnections.size > 0) {
-        console.log('Connected devices:', Array.from(this.activeConnections.keys()));
-      }
-    }, 10000); // Ping every 10 seconds
   }
 
   async handleDisconnect(deviceId) {
@@ -213,18 +196,76 @@ class DeviceStatusService {
   }
 
   async broadcast(message) {
-    if (typeof message !== 'string') {
-      message = JSON.stringify(message);
-    }
-
+    const jsonMessage = typeof message === 'string' ? message : JSON.stringify(message);
     this.activeConnections.forEach((ws) => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(message);
+        ws.send(jsonMessage);
       }
     });
   }
 
-  // Clean up resources when the server is shutting down
+  broadcastDeviceList() {
+    const deviceList = Array.from(this.activeConnections.entries()).map(([deviceId, ws]) => ({
+      deviceId,
+      materialId: ws.materialId,
+      isConnected: ws.readyState === WebSocket.OPEN
+    }));
+    
+    this.broadcast({
+      type: 'deviceList',
+      devices: deviceList
+    });
+  }
+
+  startPingInterval() {
+    // Clear any existing interval
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+    }
+
+    // Set up a new ping interval (every 30 seconds)
+    this.pingInterval = setInterval(() => {
+      const now = Date.now();
+      const deadConnections = [];
+
+      // Check all active connections
+      this.activeConnections.forEach((ws, deviceId) => {
+        // If we haven't received a pong in the last 60 seconds, mark as dead
+        if (ws.lastPong && (now - ws.lastPong) > 60000) {
+          console.log(`Device ${deviceId} connection timed out`);
+          deadConnections.push(deviceId);
+          ws.terminate();
+          return;
+        }
+
+        // Mark as waiting for pong
+        if (ws.isAlive === false) {
+          console.log(`Device ${deviceId} did not respond to last ping, terminating connection`);
+          deadConnections.push(deviceId);
+          ws.terminate();
+          return;
+        }
+
+        // Send ping
+        try {
+          ws.isAlive = false;
+          ws.ping(() => {});
+        } catch (error) {
+          console.error(`Error sending ping to device ${deviceId}:`, error);
+          deadConnections.push(deviceId);
+        }
+      });
+
+      // Clean up dead connections
+      deadConnections.forEach(deviceId => {
+        this.activeConnections.delete(deviceId);
+        this.updateDeviceStatus(deviceId, false);
+      });
+
+      console.log(`Active WebSocket connections: ${this.activeConnections.size}`);
+    }, 30000); // 30 seconds
+  }
+
   async cleanup() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);

@@ -19,6 +19,7 @@
     "@react-navigation/native": "^7.1.6",
     "eslint-config-expo": "~10.0.0",
     "expo": "~54.0.0",
+    "expo-application": "~7.0.7",
     "expo-av": "~16.0.7",
     "expo-barcode-scanner": "~12.9.3",
     "expo-blur": "~15.0.7",
@@ -31,6 +32,7 @@
     "expo-linking": "~8.0.8",
     "expo-location": "~19.0.7",
     "expo-router": "~6.0.5",
+    "expo-secure-store": "~15.0.7",
     "expo-splash-screen": "~31.0.10",
     "expo-status-bar": "~3.0.8",
     "expo-symbols": "~1.0.7",
@@ -47,13 +49,14 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
     "react-native-webview": "13.15.0",
-    "typescript": "~5.9.2",
-    "expo-secure-store": "~15.0.7",
-    "expo-application": "~7.0.7"
+    "typescript": "~5.9.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "^19.1.13",
+    "@types/react-native": "^0.72.8",
+    "@types/react-native-vector-icons": "^6.4.18",
+    "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"

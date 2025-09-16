@@ -102,26 +102,59 @@ const paymentResolvers = {
       }
 
       const newPayment = new Payment({
-        adsId,
-        planID: ad.planId,
+        ...input,
         userId: user.id,
-        paymentType,
+        planID: ad.planId, // Add planID from the ad
         receiptId,
-        paymentDate: paymentDate || new Date().toISOString(),
-        amount: ad.price,
-        paymentStatus: 'PAID'
+        paymentStatus: 'PAID', // Use 'PAID' instead of 'COMPLETED'
+        paymentDate: paymentDate || new Date(),
+        amount: ad.totalPrice,
       });
 
-      await newPayment.save();
+      // Start a transaction to ensure both payment and ad update succeed or fail together
+      const session = await mongoose.startSession();
+      session.startTransaction();
 
-      ad.paymentStatus = 'PAID';
-      await ad.save();
+      try {
+        // Save the payment
+        await newPayment.save({ session });
 
-      return {
-        success: true,
-        message: 'Payment created successfully',
-        payment: newPayment
-      };
+        // Update the ad status to RUNNING and mark as PAID
+        ad.status = 'RUNNING';
+        ad.adStatus = 'ACTIVE';
+        ad.paymentStatus = 'PAID';
+        ad.paymentDate = new Date();
+        await ad.save({ session });
+
+        // Commit the transaction
+        await session.commitTransaction();
+        session.endSession();
+
+        // Deploy the ad after successful payment
+        try {
+          const adDeploymentService = require('../services/adDeploymentService');
+          const deploymentResult = await adDeploymentService.deployAd(ad._id);
+          if (!deploymentResult.success) {
+            console.error('Failed to deploy ad after payment:', deploymentResult.message);
+            // Log the error but don't fail the payment
+          }
+        } catch (deployError) {
+          console.error('Error deploying ad after payment:', deployError);
+          // Log the error but don't fail the payment
+        }
+
+        return {
+          success: true,
+          message: 'Payment created and ad deployed successfully',
+          payment: newPayment
+        };
+      } catch (error) {
+        // If anything fails, abort the transaction
+        await session.abortTransaction();
+        session.endSession();
+        console.error('Payment transaction failed:', error);
+        throw new Error('Payment processing failed. Please try again.');
+      }
     },
 
     deletePayment: async (_, { id }, { user }) => {

@@ -39,8 +39,14 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Initialize WebSocket when materialId changes
   useEffect(() => {
-    if (!materialId) return;
+    if (!materialId) {
+      console.log('No materialId set, skipping WebSocket initialization');
+      setStatus({ isOnline: false, error: 'No material ID set' });
+      return;
+    }
 
+    console.log('Initializing WebSocket with materialId:', materialId);
+    
     const handleStatusChange = (newStatus: DeviceStatus) => {
       console.log('Device status changed:', newStatus);
       setStatus(prev => ({
@@ -50,24 +56,54 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }));
     };
 
-    // Initialize WebSocket connection
-    deviceStatusService.initialize({
-      materialId,
-      onStatusChange: handleStatusChange
-    });
+    try {
+      // Initialize WebSocket connection
+      deviceStatusService.initialize({
+        materialId,
+        onStatusChange: handleStatusChange
+      });
+    } catch (error) {
+      console.error('Failed to initialize WebSocket:', error);
+      setStatus({
+        isOnline: false,
+        error: error instanceof Error ? error.message : 'Failed to connect'
+      });
+    }
 
-    // Clean up on unmount
+    // Clean up on unmount or when materialId changes
     return () => {
+      console.log('Cleaning up WebSocket connection');
       deviceStatusService.cleanup();
     };
   }, [materialId]);
 
   const setMaterialId = async (id: string) => {
     try {
+      console.log('Setting material ID:', id);
       await SecureStore.setItemAsync('device_material_id', id);
-      setMaterialIdState(id);
+      
+      // Only update state if the ID has changed
+      if (id !== materialId) {
+        // Clean up existing connection before updating the ID
+        deviceStatusService.cleanup();
+        
+        // Update the state which will trigger the effect to reconnect
+        setMaterialIdState(id);
+        
+        // Force a status update
+        setStatus(prev => ({
+          ...prev,
+          isOnline: false,
+          error: 'Connecting...'
+        }));
+      }
     } catch (error) {
       console.error('Failed to save material ID:', error);
+      setStatus(prev => ({
+        ...prev,
+        isOnline: false,
+        error: 'Failed to save material ID'
+      }));
       throw error;
     }
   };

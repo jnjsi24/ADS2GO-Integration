@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { useQuery } from '@apollo/client';
 import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
+import DeviceStatus from '../../components/DeviceStatus';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -228,12 +229,15 @@ const Dashboard = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* Vehicle Status Overview Table */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Vehicle Status Overview
-          </h3>
+      {/* Device Status */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <DeviceStatus />
+      </div>
+
+      {/* Vehicle Status Overview */}
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Vehicle Status Overview</h3>
+        <div className="space-y-4">
           <div className="flex items-center space-x-4">
             <div className="relative">
               <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 text-sm leading-tight focus:outline-none focus:border-blue-500">
