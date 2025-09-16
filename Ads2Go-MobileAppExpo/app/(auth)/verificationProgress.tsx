@@ -1,17 +1,13 @@
-
-//VERIFICATIOBPROGRESS
-
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import API_CONFIG from "../../config/api";
+import { MaterialIcons } from '@expo/vector-icons';
+import API_CONFIG from '../../config/api';
 import { RootStackParamList } from '../../types/navigation';
 
 type VerificationProgressRouteProp = RouteProp<RootStackParamList, '(auth)/verificationProgress'>;
-
 type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
 
 const VerificationProgress = () => {
@@ -19,180 +15,214 @@ const VerificationProgress = () => {
   const navigation = useNavigation<NavigationProps>();
   
   // Get params from route
-  const { email, driverId, token, firstName, isPending } = route.params || {};
+  console.log('Route params:', route.params);
+  const { 
+    email = '', 
+    verificationCode = '',
+    firstName = '',
+    driverId = '',
+    token = ''
+  } = route.params || {};
   
-  console.log('Verification Progress - Route params:', route.params);
-  console.log('Verification Progress - Resolved values:', { email, driverId, token, firstName, isPending });
+  // Log the extracted values
+  console.log('Extracted values:', { email, verificationCode, firstName, driverId, token });
   
-  if (!email) {
-    console.error('Missing required parameter: email');
-    Alert.alert('Error', 'Missing required information. Please try logging in again.');
-    navigation.navigate('(auth)/login' as any);
-    return null;
-  }
+  // State for UI
+  type StatusType = 'pending' | 'approved' | 'active' | 'rejected' | 'not_found';
+  const [status, setStatus] = useState<StatusType>('pending');
+  const [checkingStatus, setCheckingStatus] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [status, setStatus] = useState('pending'); // 'pending', 'approved', 'rejected'
-  const [checkingStatus, setCheckingStatus] = useState(false); // only true when manually refreshing
+  // Check verification status on mount
+  useEffect(() => {
+    console.log('Component mounted with driverId:', driverId);
+    
+    if (driverId) {
+      console.log('Checking verification status on mount...');
+      checkVerificationStatus();
+    } else {
+      const errorMsg = 'Missing driver ID. Please try the verification link again.';
+      console.error(errorMsg);
+      setError(errorMsg);
+    }
+  }, [driverId]);
 
-  // Only check verification status when manually triggered
   const checkVerificationStatus = async () => {
+    console.log('checkVerificationStatus called for driverId:', driverId);
+    
     if (!driverId) {
-      console.log('No driverId available for verification check');
-      Alert.alert('Error', 'Unable to check status. Please log in again.');
-      navigation.navigate('(auth)/login' as any);
+      const errorMsg = 'Missing driver ID. Cannot check verification status.';
+      console.error(errorMsg);
+      setError(errorMsg);
       return;
     }
-    
+
     setCheckingStatus(true);
+    setError(null);
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const query = `
+        query CheckDriverVerificationStatus($driverId: ID!) {
+          checkDriverVerificationStatus(driverId: $driverId) {
+            status
+            isEmailVerified
+            message
+          }
+        }
+      `;
 
+      const variables = { 
+        driverId: driverId
+      };
+
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+
+      console.log('Sending request to:', API_CONFIG.API_URL);
+      console.log('Query:', query);
+      console.log('Variables:', variables);
+      
       const response = await fetch(API_CONFIG.API_URL, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          query: `
-            query GetDriverStatus($driverId: ID!) {
-              getDriver(driverId: $driverId) {
-                id
-                email
-                firstName
-                lastName
-                accountStatus
-                isEmailVerified
-                phoneNumber
-                createdAt
-                updatedAt
-              }
-            }
-          `,
-          variables: { driverId },
-        }),
+        body: JSON.stringify({ query, variables }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const result = await response.json();
-      console.log('Verification status response:', JSON.stringify(result, null, 2));
       
       if (result.errors) {
+        console.error('GraphQL errors:', result.errors);
         throw new Error(result.errors[0]?.message || 'Failed to check verification status');
       }
       
-      if (result.data?.getDriver) {
-        const { accountStatus, isEmailVerified } = result.data.getDriver;
-        
-        if (!isEmailVerified && !isPending) {
-          navigation.navigate('(auth)/emailVerification' as any, { 
-            email, 
-            driverId, 
-            token: token || '',
-            firstName: route.params?.firstName || ''
-          } as any);
-          return;
-        }
-
-        const newStatus = accountStatus?.toLowerCase() || 'pending';
-        setStatus(newStatus);
-        
-        // If approved, redirect to home
-        if (newStatus === 'approved') {
-          if (result.data.getDriver) {
-            await AsyncStorage.setItem('driverInfo', JSON.stringify(result.data.getDriver));
-          }
-          
-          setTimeout(() => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: '(tabs)' as any }],
-            });
-          }, 2000);
-        }
+      // Get status from verification check
+      const statusData = result.data?.checkDriverVerificationStatus as {
+        status: StatusType;
+        isEmailVerified: boolean;
+        message?: string;
+      } | undefined;
+      
+      console.log('Verification status response:', statusData);
+      
+      if (!statusData?.status) {
+        throw new Error(statusData?.message || 'Invalid response from server');
       }
-    } catch (error) {
+
+      // Update the status in state
+      setStatus(statusData.status);
+
+      // If account is approved/active and email is verified, navigate to login
+      if ((statusData.status === 'approved' || statusData.status === 'active') && statusData.isEmailVerified) {
+        // Navigate to login screen with success message
+        navigation.reset({
+          index: 0,
+          routes: [{
+            name: '(auth)/login' as never,
+            params: {
+              message: 'Your account has been verified! Please log in to continue.'
+            }
+          }],
+        });
+      } else if (statusData.status === 'not_found') {
+        setError('Account not found. Please check your information and try again.');
+      }
+    } catch (error: unknown) {
       console.error('Error checking verification status:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check status. Please try again.';
+      setError(errorMessage);
     } finally {
       setCheckingStatus(false);
     }
   };
 
-  const handleLogout = () => {
-    navigation.navigate('(auth)/login' as any);
+  const handleLogout = async () => {
+    try {
+      // Clear any stored user data
+      await AsyncStorage.multiRemove(['user', 'token', 'driverId']);
+      
+      // Navigate back to login screen
+      navigation.reset({
+        index: 0,
+        routes: [{ name: '(auth)/login' as never }],
+      });
+    } catch (error: unknown) {
+      console.error('Error during logout:', error);
+      // Still navigate to login even if clearing storage fails
+      navigation.reset({
+        index: 0,
+        routes: [{ name: '(auth)/login' as never }],
+      });
+    }
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.cardContainer}>
-        <Ionicons name="sparkles-sharp" size={30} color="#FF9800" style={styles.sparkleIcon} />
-        {status === 'pending' && (
-          <>
-            <MaterialIcons name="pending-actions" size={80} color="#FFB600" />
-            <Text style={styles.title}>
-              Your current status is{' '}
-              <Text style={styles.pendingText}>PENDING</Text>
-            </Text>
-            <Text style={styles.subtitle}>
-              Your account is currently under review by our admin team. This usually takes 24-48 hours.
-            </Text>
-          </>
+      <View style={styles.content}>
+        <MaterialIcons name="verified-user" size={64} color="#3f51b5" style={styles.icon} />
+        
+        <Text style={styles.title}>Account Verification</Text>
+        
+        {checkingStatus ? (
+          <View style={styles.statusContainer}>
+            <ActivityIndicator size="large" color="#3f51b5" />
+            <Text style={styles.statusText}>Checking your verification status...</Text>
+          </View>
+        ) : status === 'approved' ? (
+          <View style={styles.statusContainer}>
+            <MaterialIcons name="check-circle" size={48} color="#4caf50" style={styles.statusIcon} />
+            <Text style={[styles.statusText, styles.successText]}>Your account has been approved!</Text>
+            <Text style={styles.subText}>Please log in to continue.</Text>
+          </View>
+        ) : status === 'rejected' ? (
+          <View style={styles.statusContainer}>
+            <MaterialIcons name="cancel" size={48} color="#f44336" style={styles.statusIcon} />
+            <Text style={[styles.statusText, styles.errorText]}>Account Not Approved</Text>
+            <Text style={styles.subText}>Your account has been rejected. Please contact support for more information.</Text>
+          </View>
+        ) : status === 'not_found' ? (
+          <View style={styles.statusContainer}>
+            <MaterialIcons name="error" size={48} color="#ff9800" style={styles.statusIcon} />
+            <Text style={[styles.statusText, styles.errorText]}>Verification Failed</Text>
+            <Text style={styles.subText}>The verification link is invalid or has expired.</Text>
+          </View>
+        ) : (
+          <View style={styles.statusContainer}>
+            <ActivityIndicator size="large" color="#3f51b5" />
+            <Text style={styles.statusText}>Your account is pending approval</Text>
+            <Text style={styles.subText}>We'll notify you once your account is reviewed.</Text>
+          </View>
         )}
-
-        {status === 'approved' && (
-          <>
-            <MaterialIcons name="check-circle" size={80} color="#2ecc71" />
-            <Text style={styles.title}>
-              Your account has been{' '}
-              <Text style={styles.approvedText}>APPROVED</Text>
-            </Text>
-            <Text style={styles.subtitle}>
-              Your account has been approved. Redirecting you to the app...
-            </Text>
-          </>
+        
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
         )}
-
-        {status === 'rejected' && (
-          <>
-            <MaterialIcons name="cancel" size={80} color="#e74c3c" />
-            <Text style={styles.title}>
-              Your account has been{' '}
-              <Text style={styles.rejectedText}>REJECTED</Text>
+        
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.button, styles.primaryButton]}
+            onPress={() => {
+              console.log('Check Status button pressed');
+              console.log('Current checkingStatus:', checkingStatus);
+              checkVerificationStatus();
+            }}
+            disabled={checkingStatus}
+          >
+            <Text style={styles.buttonText}>
+              {checkingStatus ? 'Checking...' : 'Check Status'}
             </Text>
-            <Text style={styles.subtitle}>
-              We're sorry, but your account verification was not approved.
-            </Text>
-            <Text style={styles.note}>
-              Please contact support for more information.
-            </Text>
-          </>
-        )}
-
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={checkVerificationStatus}
-          disabled={checkingStatus}
-        >
-          {checkingStatus ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.refreshButtonText}>Refresh</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.button, styles.secondaryButton]}
+            onPress={handleLogout}
+            disabled={checkingStatus}
+          >
+            <Text style={[styles.buttonText, styles.secondaryButtonText]}>Back to Login</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -201,94 +231,88 @@ const VerificationProgress = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f5f5f5',
     justifyContent: 'center',
     padding: 20,
   },
-  cardContainer: {
+  content: {
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  sparkleIcon: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
+  icon: {
+    marginBottom: 20,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 10,
-    textAlign: 'center',
-    color: '#2c3e50',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#7f8c8d',
-    textAlign: 'center',
-    marginBottom: 10,
-    lineHeight: 22,
-  },
-  pendingText: {
-    color: '#FFB600', // This is the color for "PENDING"
-  },
-  approvedText: {
-    color: '#2ecc71', // This is the color for "APPROVED"
-  },
-  rejectedText: {
-    color: '#e74c3c', // This is the color for "REJECTED"
-  },
-  note: {
-    fontSize: 14,
-    color: '#95a5a6',
-    textAlign: 'center',
     marginBottom: 20,
-    fontStyle: 'italic',
+    textAlign: 'center',
+    color: '#333',
   },
   statusContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginBottom: 30,
   },
-  statusTitle: {
-    fontSize: 16,
-    color: '#2c3e50',
-    marginRight: 10,
+  statusIcon: {
+    marginBottom: 15,
   },
-  statusValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#f39c12',
+  statusText: {
+    fontSize: 18,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 10,
   },
-  statusApproved: {
-    color: '#2ecc71',
+  subText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 5,
   },
-  statusRejected: {
-    color: '#e74c3c',
+  successText: {
+    color: '#4caf50',
   },
-  refreshButton: {
-    backgroundColor: '#1B5087',
-    padding: 15,
-    borderRadius: 8,
+  errorText: {
+    color: '#f44336',
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 20,
+    alignSelf: 'stretch',
+  },
+  buttonContainer: {
     width: '100%',
-    alignItems: 'center',
     marginTop: 10,
   },
-  refreshButtonText: {
+  button: {
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  primaryButton: {
+    backgroundColor: '#3f51b5',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#3f51b5',
+  },
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  logoutButton: {
-    marginTop: 50,
-    padding: 10,
-  },
-  logoutButtonText: {
-    color: '#e74c3c',
-    fontSize: 16,
-    fontWeight: '600',
+  secondaryButtonText: {
+    color: '#3f51b5',
   },
 });
 

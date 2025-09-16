@@ -1,12 +1,13 @@
 // API configuration
 const API_CONFIG = {
-  // For physical device or iOS simulator
-  API_URL: "http://192.168.100.22:5000/graphql",
+  // For development on physical device (using computer's IP)
+  API_URL: "http://192.168.1.7:5000/graphql",
 
-  // For Android emulator
-  // API_URL: "http://10.0.2.2:5000/graphql",
-
-  // Add other API-related configurations here if needed
+  // For iOS simulator or Android emulator on the same machine
+  // API_URL: "http://localhost:5000/graphql",
+  
+  // For Android emulator alternative
+  // API_URL: "http://10.0.2.2:5000/graphql"
 };
 
   export default API_CONFIG;
