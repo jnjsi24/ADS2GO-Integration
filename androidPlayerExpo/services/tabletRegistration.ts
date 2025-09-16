@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
+import { AppState } from 'react-native';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -86,13 +87,14 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http://172.31.113.163:5000'; // Update with your server URL
+const API_BASE_URL = 'http://192.168.1.7:5000'; // Updated to match your local IP
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
   private registration: TabletRegistration | null = null;
-  private locationUpdateInterval: number | null = null;
+  private locationUpdateInterval: ReturnType<typeof setInterval> | null = null;
   private isTracking = false;
+  private appStateListener: any = null;
 
   static getInstance(): TabletRegistrationService {
     if (!TabletRegistrationService.instance) {
@@ -373,6 +375,28 @@ export class TabletRegistrationService {
       return;
     }
 
+    // Setup app state change listener if not already set
+    if (!this.appStateListener) {
+      this.appStateListener = AppState.addEventListener('change', async (nextAppState) => {
+        console.log('App state changed to:', nextAppState);
+        if (nextAppState === 'background' || nextAppState === 'inactive') {
+          console.log('App is going to background, stopping location tracking');
+          await this.stopLocationTracking();
+          
+          // Update server that we're going offline
+          if (this.registration) {
+            await this.updateTabletStatus(false);
+          }
+        } else if (nextAppState === 'active') {
+          console.log('App is active, restarting location tracking if needed');
+          if (this.registration) {
+            await this.updateTabletStatus(true);
+            await this.startLocationTracking();
+          }
+        }
+      });
+    }
+
     try {
       // Request location permissions
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -432,6 +456,15 @@ export class TabletRegistrationService {
     
     this.isTracking = false;
     console.log('Location tracking stopped');
+    
+    // Update server that we're no longer tracking
+    if (this.registration) {
+      try {
+        await this.updateTabletStatus(false);
+      } catch (error) {
+        console.error('Error updating tablet status to offline:', error);
+      }
+    }
   }
 
   isLocationTrackingActive(): boolean {
@@ -508,12 +541,17 @@ export class TabletRegistrationService {
   }
 
   async clearRegistration(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem('tabletRegistration');
-      this.registration = null;
-    } catch (error) {
-      console.error('Error clearing registration:', error);
+    // Stop any active tracking
+    await this.stopLocationTracking();
+    
+    // Remove app state listener
+    if (this.appStateListener) {
+      this.appStateListener.remove();
+      this.appStateListener = null;
     }
+    
+    this.registration = null;
+    await AsyncStorage.removeItem('tabletRegistration');
   }
 
   async unregisterTablet(): Promise<{ success: boolean; message: string }> {

@@ -78,15 +78,27 @@ MaterialSchema.pre('save', async function() {
       const prefix = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
       const baseId = `${prefix}-${this.materialType}-${this.vehicleType}`;
       
-      // Find the count of existing materials with the same type and vehicle
-      const count = await this.constructor.countDocuments({
+      // Find all existing material IDs with the same base
+      const existingMaterials = await this.constructor.find({
         materialType: this.materialType,
         vehicleType: this.vehicleType,
         category: this.category
+      }, 'materialId');
+      
+      // Extract the numeric parts and find the highest number
+      const numbers = existingMaterials.map(material => {
+        const match = material.materialId.match(/-([0-9]+)$/);
+        return match ? parseInt(match[1], 10) : 0;
       });
       
+      // Find the next available number
+      let nextNumber = 1;
+      while (numbers.includes(nextNumber)) {
+        nextNumber++;
+      }
+      
       // Generate the new ID with 3-digit padding
-      this.materialId = `${baseId}-${String(count + 1).padStart(3, '0')}`;
+      this.materialId = `${baseId}-${String(nextNumber).padStart(3, '0')}`;
       console.log(`🔧 Generated materialId: ${this.materialId} for ${this.materialType} ${this.vehicleType}`);
     } catch (error) {
       console.error(`❌ Error in pre-save hook:`, error);
