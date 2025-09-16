@@ -51,7 +51,7 @@ const AdminSidebar: React.FC = () => {
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-3xl hover:bg-[#3674B5] hover:text-white ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#3674B5] hover:text-white ${
                 location.pathname === item.path ? 'bg-[#3674B5] text-white font-semibold' : ''
               }`}
             >

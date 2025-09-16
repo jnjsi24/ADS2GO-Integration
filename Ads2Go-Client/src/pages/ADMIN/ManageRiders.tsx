@@ -677,7 +677,7 @@ const ManageRiders: React.FC = () => {
               {/* Vehicle & Material Information */}
               <div className="mb-6">
                 <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Vehicle & Material Information</h3>
-                <div className="overflow-x-auto rounded-lg border-b border-gray-200">
+                <div className="overflow-x-auto rounded-lg">
                   <table className="w-96 mx-auto divide-y divide-gray-200">
                     <tbody className="bg-white divide-y divide-gray-200">
                       <tr>
@@ -703,7 +703,7 @@ const ManageRiders: React.FC = () => {
 
               {/* Rider Details */}
               <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Rider Details:</h3>
+                <h3 className="text-xl font-bold text-center text-gray-800 mb-4">Rider Details:</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
                   <div className="flex items-center space-x-3">
                     <IdCard size={20} className="text-gray-500" />

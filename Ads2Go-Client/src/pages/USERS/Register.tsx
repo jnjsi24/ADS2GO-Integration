@@ -156,57 +156,17 @@ const Register: React.FC = () => {
   };
 
   return (
-    <>
-      {isLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black opacity-80">
-          <video
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-            onLoadedData={() => setIsLoading(false)}
-          >
-            <source src="/image/loading.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-        </div>
-      )}
-      <div className="relative min-h-screen flex items-center justify-start bg-[#fdfdfd]">
-        {/* Video Background */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-           className="fixed top-1/2 left-1 -translate-y-1/2 w-[100vw] h-auto object-cover"
-        >
-          <source src="/image/signup.mp4" type="video/mp4" />
-        </video>
-
-        {/* Overlay to darken the video */}
-        <div className="absolute inset-0"></div>
-
-        {/* Form Container */}
-        <div className="relative z-10 w-full max-w-lg mx-auto sm:mx-0 sm:ml-32 p-8 rounded-xl shadow-2xl">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-5xl font-extrabold" style={{ color: '#000000' }}>
-              Sign up
-            </h2>
-            <div className="flex items-center space-x-2">
-              <span className="text-gray-600 font-semibold">Sign with</span>
-              <button
-                type="button"
-                className="bg-none rounded-full p-2 shadow-md hover:bg-gray-100"
-              >
-                <img
-                src="/image/g.png"
-                alt="Google logo"
-                className="h-5 w-5 "
-                />
-              </button>
-            </div>
-          </div>
+    <div className="relative flex min-h-screen bg-[#fdfdfd]">
+      {/* Background Image on the Right */}
+      <img
+        src="/image/signup.png"
+        alt="Signup background"
+        className="absolute top-0 right-0 w-1/2 h-full object-cover hidden md:block"
+      />
+      {/* Form Container on the Left */}
+      <div className="relative z-10 w-full md:w-1/2 h-screen flex flex-col justify-center items-center">
+        <div className="p-20 rounded-3xl shadow-2xl bg-white h-full w-[85%] md:w-[790px] ml-4">
+          <h2 className="text-4xl font-extrabold text-black mb-8 mt-8">Sign up</h2>
 
           {registrationError && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
@@ -236,7 +196,7 @@ const Register: React.FC = () => {
             {step === 1 && (
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm text-black">
+                  <label htmlFor="firstName" className="block text-md font-bold text-gray-700 mb-1">
                     First Name
                   </label>
                   <input
@@ -245,13 +205,12 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400  rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                 </div>
                 <div>
-                  <label htmlFor="middleName" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
+                  <label htmlFor="middleName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
                     Middle Name
                   </label>
                   <input
@@ -260,12 +219,11 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.middleName}
                     onChange={handleChange}
-                    className="mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none"
-                    
+                    className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
                   />
                 </div>
                 <div>
-                  <label htmlFor="lastName" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
+                  <label htmlFor="lastName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
                     Last Name
                   </label>
                   <input
@@ -274,14 +232,14 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none`}
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.lastName && <p className="mt-1 text-red-600">{errors.lastName}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-60 py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-md hover:bg-[#FF9B45] focus:outline-none"
+                  className="w-full py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
                 >
                   Next
                 </button>
@@ -291,8 +249,8 @@ const Register: React.FC = () => {
             {step === 2 && (
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="companyName" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
-                    Company/Business Name *
+                  <label htmlFor="companyName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
+                    Company/Business Name
                   </label>
                   <input
                     id="companyName"
@@ -300,14 +258,13 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.companyName}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
                 </div>
                 <div>
-                  <label htmlFor="companyAddress" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
-                    Company/Business Address *
+                  <label htmlFor="companyAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
+                    Company/Business Address
                   </label>
                   <input
                     id="companyAddress"
@@ -315,14 +272,13 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.companyAddress}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.companyAddress && <p className="mt-1 text-sm text-red-600">{errors.companyAddress}</p>}
                 </div>
                 <div>
-                  <label htmlFor="houseAddress" className="block text-sm text-[#2E2E2E]" style={{ color: '#000000' }}>
-                    House Address *
+                  <label htmlFor="houseAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
+                    House Address
                   </label>
                   <input
                     id="houseAddress"
@@ -330,8 +286,7 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.houseAddress}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-md focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
                 </div>
@@ -339,16 +294,14 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="w-1/2 mr-2 px-3 border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
-                    
+                    className="w-40 mr-2 px-3 border justify-start text-gray-800 font-semibold rounded-full hover:bg-gray-100 focus:outline-none"
                   >
                     Back
                   </button>
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-md hover:bg-[#FF9B45] focus:outline-none"
-           
+                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] justify-end text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
                   >
                     Next
                   </button>
@@ -359,8 +312,12 @@ const Register: React.FC = () => {
             {step === 3 && (
               <div className="space-y-6">
                 <div>
-                  <label htmlFor="contactNumber" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
-                    Contact Number *
+                  <label
+                    htmlFor="contactNumber"
+                    className="block text-md font-bold text-gray-700 mb-1"
+                    style={{ color: '#000000' }}
+                  >
+                    Contact Number
                   </label>
                   <input
                     id="contactNumber"
@@ -368,14 +325,20 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.contactNumber}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
-                  {errors.contactNumber && <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>}
+                  {errors.contactNumber && (
+                    <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>
+                  )}
                 </div>
+
                 <div>
-                  <label htmlFor="email" className="block text-md text-[#2E2E2E]" style={{ color: '#000000' }}>
-                    Email Address *
+                  <label
+                    htmlFor="email"
+                    className="block text-md font-bold text-gray-700 mb-1"
+                    style={{ color: '#000000' }}
+                  >
+                    Email Address
                   </label>
                   <input
                     id="email"
@@ -383,73 +346,88 @@ const Register: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className={`mt-1 block w-full border border-gray-400   rounded-xl  shadow-lg py-2 px-4 text-lg focus:outline-none`}
-                    
+                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
                   />
                   {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
-                <div>
-                  <label htmlFor="password" className="block text-md text-[#2E2E2E]">
-                    Password
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
-                      
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(prev => !prev)}
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-                    </button>
+
+                {/* Password + Confirm Password side by side */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Password */}
+                  <div>
+                    <label htmlFor="password" className="block text-md font-bold text-gray-700 mb-1">
+                      Password
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(prev => !prev)}
+                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeSlashIcon className="h-5 w-5" />
+                        ) : (
+                          <EyeIcon className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                   </div>
-                  {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                </div>
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-md text-[#2E2E2E]">
-                    Confirm Password
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      className="block w-full border border-gray-400 rounded-xl shadow-lg py-2 px-4 text-lg focus:outline-none"
-                      
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(prev => !prev)}
-                      className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                      tabIndex={-1}
-                    >
-                      {showConfirmPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
-                    </button>
+
+                  {/* Confirm Password */}
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-md font-bold text-gray-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative mt-1">
+                      <input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(prev => !prev)}
+                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeSlashIcon className="h-5 w-5" />
+                        ) : (
+                          <EyeIcon className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
+                    )}
                   </div>
-                  {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                 </div>
+
                 <div className="flex justify-between">
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="w-1/2 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-md hover:bg-gray-100 focus:outline-none"
+                    className="w-40 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-full hover:bg-gray-100 focus:outline-none"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting} // Disable the button while submitting
-                    className={`w-full py-3 px-4 text-white font-semibold rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    disabled={isSubmitting}
+                    className={`w-full py-3 px-4 text-white font-semibold rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                       isSubmitting
                         ? 'bg-gray-500 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-[#FF9B45]'
@@ -461,16 +439,28 @@ const Register: React.FC = () => {
                 </div>
               </div>
             )}
-            <div className="text-center mt-6">
-              <span className="text-gray-800">Already have an account?</span>
-              <a href="/login" className="text-blue-600 ml-1 hover:underline">
-                Log in
-              </a>
+
+            {/* Social Sign-in */}
+            <div className="text-center">
+              <p className="text-gray-500 text-sm mb-5 mt-10">or Log in With</p>
+              <div className="flex justify-center space-x-6">
+                <img src="/image/g.png" alt="Google" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/f.png" alt="Facebook" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/i.png" alt="Instagram" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/t.png" alt="Twitter" className="h-6 w-6 cursor-pointer" />
+                <img src="/image/l.png" alt="LinkedIn" className="h-6 w-6 cursor-pointer" />
+              </div>
+            </div>
+
+            {/* Sign Up Link */}
+            <div className="text-center mt-6 text-sm">
+              <span className="text-gray-700">Already have an account?</span>{' '}
+              <a href="/login" className="text-blue-600 hover:underline">Login</a>
             </div>
           </form>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

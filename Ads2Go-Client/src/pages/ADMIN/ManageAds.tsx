@@ -458,14 +458,14 @@ const ManageAds: React.FC = () => {
                   {ad.status === 'PENDING' && (
                     <>
                       <button
-                        className="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 transition-colors"
+                        className="border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white"
                         onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
                         title="Approve"
                       >
                         Approve
                       </button>
                       <button
-                        className="bg-red-500 text-white text-xs px-3 py-1 rounded hover:bg-red-600 transition-colors"
+                        className="border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white"
                         onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
                         title="Reject"
                       >
