@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Ads2Go-MobileAppExpo",
-    "slug": "Ads2Go-MobileAppExpo",
+    "name": "Ads2Go-DriverMobileApp",
+    "slug": "Ads2Go-DriverMobileApp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "ads2gomobileappexpo",
+    "scheme": "ads2godrivermobileapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

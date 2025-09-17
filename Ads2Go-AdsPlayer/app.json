@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "androidPlayereExpo",
-    "slug": "androidPlayereExpo",
+    "name": "Ads2Go-AdsPlayer",
+    "slug": "Ads2Go-AdsPlayer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "androidplayereexpo",
+    "scheme": "ads2goadsplayer",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
