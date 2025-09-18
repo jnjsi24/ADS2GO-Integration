@@ -519,4 +519,42 @@ router.post('/unregisterTablet', async (req, res) => {
   }
 });
 
+// GET /tablet/configuration/:materialId
+router.get('/configuration/:materialId', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+
+    // Find the tablet document for this material
+    const tablet = await Tablet.findOne({ materialId });
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'No tablet configuration found for this material'
+      });
+    }
+
+    res.json({
+      success: true,
+      tablet: {
+        materialId: tablet.materialId,
+        carGroupId: tablet.carGroupId,
+        tablets: tablet.tablets.map(t => ({
+          tabletNumber: t.tabletNumber,
+          deviceId: t.deviceId,
+          status: t.status,
+          lastSeen: t.lastSeen,
+          gps: t.gps
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting tablet configuration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
  module.exports = router;

@@ -10,47 +10,15 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [validationErrors, setValidationErrors] = useState({
-    email: '',
-    password: ''
-  });
-
-  const validateForm = () => {
-    const errors = {
-      email: '',
-      password: ''
-    };
-
-    if (!email.trim()) {
-      errors.email = 'Please Enter your Email address';
-    }
-
-    if (!password.trim()) {
-      errors.password = 'Please Enter your Password';
-    }
-
-    setValidationErrors(errors);
-    return !errors.email && !errors.password;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    // Clear previous validation errors
-    setValidationErrors({ email: '', password: '' });
-
-    // Validate form before proceeding
-    if (!validateForm()) {
-      return;
-    }
-
     setIsLoggingIn(true);
 
     try {
       const user = await login(email, password);
       if (user) {
-        // Login successful - the UserAuthContext will handle navigation
         console.log('Login successful, user:', user);
       } else {
         setError('Login failed. Please check your credentials.');
@@ -63,86 +31,64 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
-    // Clear email validation error when user starts typing
-    if (validationErrors.email) {
-      setValidationErrors(prev => ({ ...prev, email: '' }));
-    }
-  };
-
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    // Clear password validation error when user starts typing
-    if (validationErrors.password) {
-      setValidationErrors(prev => ({ ...prev, password: '' }));
-    }
-  };
-
   const handleRegisterClick = useCallback(() => {
     navigateToRegister();
   }, [navigateToRegister]);
 
   return (
-    <div className="relative flex min-h-screen bg-[#fdfdfd]">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover"
-      >
-        <source src="/image/login.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0"></div>
+    <div className="min-h-screen flex flex-col md:flex-row">
+      {/* Mobile Hero Section */}
+      <div className="md:hidden bg-gradient-to-r from-blue-500 to-purple-600 text-white py-8 px-6 text-center">
+        <h2 className="text-2xl font-bold mb-2">Turn Every Road Into Your Billboard</h2>
+        <p className="text-blue-100">Connect with your audience wherever they go</p>
+      </div>
 
-      {/* Form Container */}
-      <div className="relative z-10 w-full max-w-xl ml-auto mr-12 flex flex-col justify-center px-10">
-        <div className="p-8 rounded-xl shadow-2xl bg-[#fdfdfd]">
-          <div className="flex items-center space-x-2 mb-6">
-            <h1 className="text-5xl font-extrabold text-black">Log in</h1>
+      {/* Left Panel - Visual/Promotional */}
+      <div className="hidden md:flex md:w-1/2 relative bg-gradient-to-br from-blue-400 via-blue-500 to-purple-600 overflow-hidden">
+        {/* Background Image */}
+        <img
+          src="/image/login.png"
+          alt="Login background"
+          className="absolute inset-0 w-full h-full object-cover opacity-80"
+        />
+        
+        {/* Overlay with hero text */}
+        <div className="relative z-10 flex flex-col justify-center items-center w-full h-full px-12">
+          <div className="text-center">
+            <h2 className="text-5xl md:text-6xl font-bold text-white mb-8 leading-tight">
+              Turn Every Road<br />
+              Into Your Billboard
+            </h2>
+            {/* Location pins overlay */}
+            <div className="absolute top-20 left-16 w-8 h-8 text-blue-300">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+            </div>
+            <div className="absolute top-32 right-20 w-6 h-6 text-blue-200">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+            </div>
+            <div className="absolute bottom-32 left-24 w-7 h-7 text-blue-400">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+            </div>
           </div>
+        </div>
+      </div>
 
-          {/* Social Sign-in Buttons */}
-          <div className="flex space-x-2 mb-6">
-            <button
-              type="button"
-              className="flex-1 flex items-center justify-center py-2 px-4 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img
-                src="/image/g.png"
-                alt="Google logo"
-                className="h-5 w-5 mr-2"
-              />
+      {/* Right Panel - Form */}
+      <div className="w-full md:w-1/2 flex flex-col justify-center items-center bg-white px-4 sm:px-8 py-8 sm:py-12 flex-1">
+        <div className="w-full max-w-md">
+          {/* Form */}
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Log in</h1>
 
-              <span>Sign in with Google</span>
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-             <img
-                src="/image/f.png"
-                alt="Facebook logo"
-                className="h-5 w-5"
-              />
-
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-5 w-5" />
-            </button>
-          </div>
-
-          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+            {/* Email */}
             <div>
-              <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
               </label>
               <input
@@ -150,75 +96,113 @@ const Login: React.FC = () => {
                 id="email"
                 required
                 value={email}
-                onChange={handleEmailChange}
-                className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
-                  validationErrors.email ? 'border-red-400' : 'border-gray-400'
-                }`}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                placeholder="Enter your email"
               />
-              {validationErrors.email && (
-                <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
-              )}
             </div>
 
+            {/* Password */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="password" className="block text-md text-gray-700 font-semibold">
-                  Password
-                </label>
-                <Link to="/forgot-password" className="text-blue-500 hover:underline text-sm font-semibold">
-                  Forgot Password?
-                </Link>
-              </div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
+                  required
                   value={password}
-                  onChange={handlePasswordChange}
-                  className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
-                    validationErrors.password ? 'border-red-400' : 'border-gray-400'
-                  }`}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder="Enter your password"
                 />
                 <button
                   type="button"
-                  className="absolute inset-y-0 right-3 flex items-center"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-500" />
+                    <EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                   ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-500" />
+                    <EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
                   )}
                 </button>
               </div>
-              {validationErrors.password && (
-                <p className="text-red-500 text-sm mt-1">{validationErrors.password}</p>
-              )}
             </div>
-
+            
+            {/* Error */}
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
+            {/* Terms & Privacy */}
+            <div className="flex items-start space-x-3 text-sm">
+              <input 
+                type="checkbox" 
+                id="terms" 
+                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-0.5" 
+              />
+              <label htmlFor="terms" className="text-gray-600 leading-relaxed">
+                I agree to the{' '}
+                <a href="#" className="text-blue-600 hover:underline font-medium">terms of service</a> and{' '}
+                <a href="#" className="text-blue-600 hover:underline font-medium">privacy policy</a>.
+              </label>
+            </div>
+
+            {/* Login Button */}
             <button
               type="submit"
               disabled={isLoggingIn}
-              className={`w-full py-3 px-4 rounded-lg shadow-md transition-colors ${
-                isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#FF9800] hover:bg-[#FF9B45]'
-              } text-white font-semibold text-lg`}
+              className={`w-full py-3 px-4 rounded-lg transition-all duration-200 ${
+                isLoggingIn 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg transform hover:-translate-y-0.5'
+              } text-white font-semibold text-base`}
             >
               {isLoggingIn ? (
                 <div className="flex items-center justify-center">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                   Logging in...
                 </div>
               ) : (
                 'Log in'
               )}
             </button>
-            <div className="text-center mt-6">
-              <span className="text-gray-800">Don't have an account?</span>
-              <a href="/register" className="text-blue-600 ml-1 hover:underline">
+
+            {/* Social Sign-in */}
+            <div className="text-center">
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">or Log in With</span>
+                </div>
+              </div>
+              <div className="flex justify-center space-x-3 sm:space-x-4 flex-wrap">
+                <button className="p-2 sm:p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">
+                  <img src="/image/g.png" alt="Google" className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+                <button className="p-2 sm:p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">
+                  <img src="/image/f.png" alt="Facebook" className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+                <button className="p-2 sm:p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">
+                  <img src="/image/i.png" alt="Instagram" className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+                <button className="p-2 sm:p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">
+                  <img src="/image/t.png" alt="Twitter" className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+                <button className="p-2 sm:p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex-shrink-0">
+                  <img src="/image/l.png" alt="LinkedIn" className="h-4 w-4 sm:h-5 sm:w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Sign Up Link */}
+            <div className="text-center text-sm">
+              <span className="text-gray-600">Don't have an account? </span>
+              <Link to="/register" className="text-blue-600 hover:underline font-medium">
                 Sign up
-              </a>
+              </Link>
             </div>
           </form>
         </div>

@@ -165,8 +165,8 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
       throw new Error('startTime and endTime are required');
     }
 
-    // Find existing deployment for this material-driver
-    let deployment = await this.findOne({ materialId, driverId });
+    // Find existing deployment for this material (regardless of driver)
+    let deployment = await this.findOne({ materialId });
     
     // If no deployment exists, create a new one
     if (!deployment) {
@@ -176,6 +176,12 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
         driverId,
         lcdSlots: []
       });
+    } else {
+      // If deployment exists but has different driverId, update it
+      if (deployment.driverId.toString() !== driverId.toString()) {
+        console.log(`ℹ️  Updating driverId from ${deployment.driverId} to ${driverId} for material ${materialId}`);
+        deployment.driverId = driverId;
+      }
     }
 
     // Convert adId to string for comparison
@@ -274,8 +280,8 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
       throw new Error('startTime and endTime are required');
     }
 
-    // Find existing deployment for this material-driver
-    let deployment = await this.findOne({ materialId, driverId });
+    // Find existing deployment for this material (regardless of driver)
+    let deployment = await this.findOne({ materialId });
     
     // If no deployment exists, create a new one
     if (!deployment) {
@@ -285,6 +291,12 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
         driverId,
         lcdSlots: []
       });
+    } else {
+      // If deployment exists but has different driverId, update it
+      if (deployment.driverId.toString() !== driverId.toString()) {
+        console.log(`ℹ️  Updating driverId from ${deployment.driverId} to ${driverId} for material ${materialId}`);
+        deployment.driverId = driverId;
+      }
     }
 
     // Convert adId to string for comparison

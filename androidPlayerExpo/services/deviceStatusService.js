@@ -74,14 +74,20 @@ class DeviceStatusService {
 
     try {
       // Use the same host as the API URL but with WebSocket protocol
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.22:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
       
       console.log('[WebSocket] Connecting to:', wsUrl);
+      console.log('[WebSocket] Device ID:', this.deviceId);
+      console.log('[WebSocket] Material ID:', this.materialId);
+      console.log('[WebSocket] WebSocket ready state before connection:', this.ws ? this.ws.readyState : 'null');
+      
       this.ws = new WebSocket(wsUrl);
       this.ws.binaryType = 'arraybuffer';
+      
+      console.log('[WebSocket] WebSocket created, ready state:', this.ws.readyState);
 
       this.ws.onopen = () => {
         console.log('[WebSocket] Connected successfully');
@@ -90,7 +96,11 @@ class DeviceStatusService {
         
         // Notify status change
         if (this.onStatusChange) {
-          this.onStatusChange({ isConnected: true });
+          this.onStatusChange({ 
+            isOnline: true, 
+            isConnected: true,
+            error: null 
+          });
         }
         
         // Start ping to keep connection alive
@@ -101,18 +111,64 @@ class DeviceStatusService {
       };
       
       this.ws.onclose = (e) => {
-        console.log('WebSocket disconnected:', e.code, e.reason);
+        console.log('[WebSocket] Disconnected - Code:', e.code, 'Reason:', e.reason, 'WasClean:', e.wasClean);
         this.isConnected = false;
         this.stopPing();
         
         // Notify status change
         if (this.onStatusChange) {
-          this.onStatusChange({ isOnline: false });
+          let errorMessage = 'Disconnected';
+          if (e.code === 1006) {
+            errorMessage = 'Connection lost';
+          } else if (e.code === 1000) {
+            errorMessage = 'Connection closed normally';
+          } else if (e.code === 1001) {
+            errorMessage = 'Connection going away';
+          } else if (e.code === 1002) {
+            errorMessage = 'Protocol error';
+          } else if (e.code === 1003) {
+            errorMessage = 'Unsupported data';
+          } else if (e.code === 1004) {
+            errorMessage = 'Reserved';
+          } else if (e.code === 1005) {
+            errorMessage = 'No status code';
+          } else if (e.code === 1007) {
+            errorMessage = 'Invalid frame payload data';
+          } else if (e.code === 1008) {
+            errorMessage = 'Policy violation';
+          } else if (e.code === 1009) {
+            errorMessage = 'Message too big';
+          } else if (e.code === 1010) {
+            errorMessage = 'Missing extension';
+          } else if (e.code === 1011) {
+            errorMessage = 'Internal error';
+          } else if (e.code === 1012) {
+            errorMessage = 'Service restart';
+          } else if (e.code === 1013) {
+            errorMessage = 'Try again later';
+          } else if (e.code === 1014) {
+            errorMessage = 'Bad gateway';
+          } else if (e.code === 1015) {
+            errorMessage = 'TLS handshake';
+          }
+          
+          this.onStatusChange({ 
+            isOnline: false, 
+            isConnected: false,
+            error: errorMessage
+          });
         }
       };
       
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (this.onStatusChange) {
+          this.onStatusChange({ 
+            isOnline: false, 
+            isConnected: false,
+            error: 'Connection failed'
+          });
+        }
         this.handleDisconnect(error);
       };
       
@@ -129,11 +185,6 @@ class DeviceStatusService {
       
       // Send initial ping to establish connection
       this.sendPing();
-      
-      // Notify status change
-      if (this.onStatusChange) {
-        this.onStatusChange({ isOnline: true });
-      }
     } catch (error) {
       console.error('Error in WebSocket connection:', error);
       this.handleDisconnect(error);
@@ -147,10 +198,10 @@ class DeviceStatusService {
     
     this.lastPong = Date.now();
     
-    // Send ping every 25 seconds (server has 30s timeout)
+    // Send ping every 30 seconds (server has 30s timeout)
     this.pingInterval = setInterval(() => {
       this.sendPing();
-    }, 25000);
+    }, 30000);
   };
 
   stopPing = () => {

@@ -18,8 +18,8 @@ interface DeviceStatus {
   maxReconnectAttempts: number;
 }
 
-const PING_INTERVAL = 25000; // 25 seconds
-const PONG_TIMEOUT = 60000;  // 60 seconds
+const PING_INTERVAL = 30000; // 30 seconds
+const PONG_TIMEOUT = 90000;  // 90 seconds
 const MAX_RECONNECT_ATTEMPTS = 5;
 const BASE_RECONNECT_DELAY = 1000; // 1 second
 const MAX_RECONNECT_DELAY = 30000; // 30 seconds
@@ -124,7 +124,7 @@ const useDeviceStatus = (materialId: string) => {
     isConnectingRef.current = true;
     
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.22:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${encodeURIComponent(deviceIdRef.current)}&materialId=${encodeURIComponent(currentMaterialId)}`;
@@ -153,10 +153,10 @@ const useDeviceStatus = (materialId: string) => {
         // Send initial status update
         sendStatusUpdate(ws);
         
-        // Set up ping interval (25 seconds)
+        // Set up ping interval (30 seconds)
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            // Check last pong time (60s timeout)
+            // Check last pong time (90s timeout)
             if (Date.now() - lastPongRef.current > PONG_TIMEOUT) {
               console.warn('[useDeviceStatus] No pong received, reconnecting...');
               ws.close();
@@ -166,6 +166,7 @@ const useDeviceStatus = (materialId: string) => {
             // Send ping
             try {
               ws.send(JSON.stringify({ type: 'ping' }));
+              console.log('[useDeviceStatus] Ping sent');
             } catch (error) {
               console.error('[useDeviceStatus] Error sending ping:', error);
               ws.close();

@@ -47,6 +47,15 @@ class DeviceStatusService {
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
         
+        console.log('WebSocket upgrade request details:');
+        console.log('- Pathname:', pathname);
+        console.log('- Device ID from query:', url.searchParams.get('deviceId'));
+        console.log('- Material ID from query:', url.searchParams.get('materialId'));
+        console.log('- Device ID from headers:', request.headers['device-id']);
+        console.log('- Material ID from headers:', request.headers['material-id']);
+        console.log('- Final device ID:', deviceId);
+        console.log('- Final material ID:', materialId);
+        
         if (!deviceId) {
           console.error('No device ID provided in WebSocket upgrade request');
           console.log('Available headers:', request.headers);
@@ -86,6 +95,14 @@ class DeviceStatusService {
     const deviceId = ws.deviceId || request.headers['device-id'];
     const materialId = ws.materialId || request.headers['material-id'];
     
+    console.log('handleConnection called with:');
+    console.log('- ws.deviceId:', ws.deviceId);
+    console.log('- ws.materialId:', ws.materialId);
+    console.log('- request.headers[device-id]:', request.headers['device-id']);
+    console.log('- request.headers[material-id]:', request.headers['material-id']);
+    console.log('- Final deviceId:', deviceId);
+    console.log('- Final materialId:', materialId);
+    
     if (!deviceId) {
       console.error('No device ID provided in WebSocket connection');
       ws.close(4001, 'Device ID is required');
@@ -116,8 +133,8 @@ class DeviceStatusService {
       console.error(`Failed to update status for device ${deviceId}:`, err);
     });
 
-    ws.on('close', () => {
-      console.log(`Device disconnected: ${deviceId}`);
+    ws.on('close', (code, reason) => {
+      console.log(`Device disconnected: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
         this.removeConnection(deviceId);
         this.handleDisconnect(deviceId).catch(err => {
@@ -131,6 +148,20 @@ class DeviceStatusService {
     ws.isAlive = true;
     ws.on('pong', () => {
       ws.isAlive = true;
+    });
+    
+    // Handle incoming messages (including ping)
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === 'ping') {
+          // Respond to ping with pong
+          ws.send(JSON.stringify({ type: 'pong' }));
+          ws.isAlive = true;
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
+      }
     });
   }
 
@@ -214,6 +245,13 @@ class DeviceStatusService {
     this.broadcast({
       type: 'deviceList',
       devices: deviceList
+    });
+  }
+
+  broadcastDeviceUpdate(device) {
+    this.broadcast({
+      type: 'deviceUpdate',
+      device: device
     });
   }
 
