@@ -130,18 +130,8 @@ const paymentResolvers = {
         await session.commitTransaction();
         session.endSession();
 
-        // Deploy the ad after successful payment
-        try {
-          const adDeploymentService = require('../services/adDeploymentService');
-          const deploymentResult = await adDeploymentService.deployAd(ad._id);
-          if (!deploymentResult.success) {
-            console.error('Failed to deploy ad after payment:', deploymentResult.message);
-            // Log the error but don't fail the payment
-          }
-        } catch (deployError) {
-          console.error('Error deploying ad after payment:', deployError);
-          // Log the error but don't fail the payment
-        }
+        // Note: Ad deployment is handled by the Ad model's post-save hook
+        // when the ad status is updated to ACTIVE and PAID
 
         return {
           success: true,

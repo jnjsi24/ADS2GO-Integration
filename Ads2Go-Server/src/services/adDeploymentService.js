@@ -4,6 +4,25 @@ const Material = require('../models/Material');
 
 class AdDeploymentService {
   /**
+   * Get the next available slot number
+   * @param {Array} lcdSlots - Array of existing LCD slots
+   * @returns {number|null} Next available slot number or null if all slots are occupied
+   */
+  getNextAvailableSlot(lcdSlots) {
+    const activeSlots = lcdSlots
+      .filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status))
+      .map(slot => slot.slotNumber);
+
+    for (let slot = 1; slot <= 5; slot++) {
+      if (!activeSlots.includes(slot)) {
+        return slot;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
    * Deploy an ad to its assigned material
    * @param {string} adId - The ID of the ad to deploy
    * @returns {Promise<Object>} The created deployment
@@ -33,20 +52,48 @@ class AdDeploymentService {
         };
       }
 
-      // Create a new deployment
-      const deployment = new AdsDeployment({
+      // Check if there's already a deployment for this material
+      let deployment = await AdsDeployment.findOne({
         materialId: ad.materialId._id,
-        driverId: ad.userId,
-        status: 'ACTIVE',
-        lcdSlots: [{
-          slotNumber: 1, // Default slot number, can be made configurable
+        status: 'ACTIVE'
+      });
+
+      if (deployment) {
+        // Add to existing deployment
+        const nextSlot = this.getNextAvailableSlot(deployment.lcdSlots);
+        if (!nextSlot) {
+          throw new Error('All LCD slots are occupied');
+        }
+
+        deployment.lcdSlots.push({
+          slotNumber: nextSlot,
           adId: ad._id,
           mediaFile: ad.mediaFile,
           status: 'RUNNING',
           startTime: ad.startTime,
           endTime: ad.endTime
-        }]
-      });
+        });
+
+        // Update driverId if different
+        if (deployment.driverId.toString() !== ad.userId.toString()) {
+          deployment.driverId = ad.userId;
+        }
+      } else {
+        // Create a new deployment
+        deployment = new AdsDeployment({
+          materialId: ad.materialId._id,
+          driverId: ad.userId,
+          status: 'ACTIVE',
+          lcdSlots: [{
+            slotNumber: 1, // Default slot number, can be made configurable
+            adId: ad._id,
+            mediaFile: ad.mediaFile,
+            status: 'RUNNING',
+            startTime: ad.startTime,
+            endTime: ad.endTime
+          }]
+        });
+      }
 
       await deployment.save();
 

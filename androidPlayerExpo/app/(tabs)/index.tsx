@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import QRCode from "react-native-qrcode-svg";
@@ -7,6 +7,8 @@ import { router } from "expo-router/build/imperative-api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
 import AdPlayer from '../../components/AdPlayer';
+import DebugMaterialId from '../../debug-material-id';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen() {
 
@@ -36,6 +38,34 @@ export default function HomeScreen() {
       }
     };
   }, []);
+
+  // Refresh registration data when screen becomes active
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused, refreshing registration data...');
+      refreshRegistrationData();
+    }, [])
+  );
+
+  const refreshRegistrationData = async () => {
+    try {
+      console.log('Refreshing registration data...');
+      const registration = await tabletRegistrationService.getRegistrationData();
+      console.log('Refreshed registration data:', registration);
+      setRegistrationData(registration);
+      
+      // If we have registration data, update online status
+      if (registration) {
+        const online = await tabletRegistrationService.updateTabletStatus(true, {
+          lat: location?.coords.latitude || 0,
+          lng: location?.coords.longitude || 0
+        });
+        setIsOnline(online);
+      }
+    } catch (error) {
+      console.error('Error refreshing registration data:', error);
+    }
+  };
 
   const initializeApp = async () => {
     try {
@@ -180,13 +210,24 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.unregisterTablet();
               if (result.success) {
+                // Clear local registration data and material ID before redirect
+                await tabletRegistrationService.clearRegistration();
+                await tabletRegistrationService.clearMaterialId();
+                
                 Alert.alert(
                   'Success',
                   'Tablet unregistered successfully. You will be redirected to the registration screen.',
                   [
                     {
                       text: 'OK',
-                      onPress: () => router.push('/registration')
+                      onPress: () => {
+                        // Force refresh the app state before redirect
+                        setRegistrationData(null);
+                        // Add a small delay to ensure cleanup is complete
+                        setTimeout(() => {
+                          router.push('/registration?force=true');
+                        }, 500);
+                      }
                     }
                   ]
                 );
@@ -204,13 +245,24 @@ export default function HomeScreen() {
                         try {
                           const forceResult = await tabletRegistrationService.forceUnregisterTablet();
                           if (forceResult.success) {
+                            // Clear local registration data and material ID before redirect
+                            await tabletRegistrationService.clearRegistration();
+                            await tabletRegistrationService.clearMaterialId();
+                            
                             Alert.alert(
                               'Success',
                               'Tablet unregistered locally. You will be redirected to the registration screen.',
                               [
                                 {
                                   text: 'OK',
-                                  onPress: () => router.push('/registration')
+                                  onPress: () => {
+                                    // Force refresh the app state before redirect
+                                    setRegistrationData(null);
+                                    // Add a small delay to ensure cleanup is complete
+                                    setTimeout(() => {
+                                      router.push('/registration?force=true');
+                                    }, 500);
+                                  }
                                 }
                               ]
                             );
@@ -254,13 +306,24 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.forceUnregisterTablet();
               if (result.success) {
+                // Clear local registration data and material ID before redirect
+                await tabletRegistrationService.clearRegistration();
+                await tabletRegistrationService.clearMaterialId();
+                
                 Alert.alert(
                   'Success',
                   'Local registration cleared. You will be redirected to the registration screen.',
                   [
                     {
                       text: 'OK',
-                      onPress: () => router.push('/registration')
+                      onPress: () => {
+                        // Force refresh the app state before redirect
+                        setRegistrationData(null);
+                        // Add a small delay to ensure cleanup is complete
+                        setTimeout(() => {
+                          router.push('/registration?force=true');
+                        }, 500);
+                      }
                     }
                   ]
                 );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, TextInput, ScrollView } from "react-native";
-import { router } from "expo-router/build/imperative-api";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import tabletRegistrationService, { ConnectionDetails } from '../services/tabletRegistration';
 import QRCodeScanner from '../components/QRCodeScanner';
@@ -8,6 +8,7 @@ import { useDeviceStatus } from '@/contexts/DeviceStatusContext';
 
 export default function RegistrationScreen() {
   const { setMaterialId: setMaterialIdInContext } = useDeviceStatus();
+  const { force } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [materialId, setMaterialId] = useState('');
   const [slotNumber, setSlotNumber] = useState('');
@@ -17,8 +18,13 @@ export default function RegistrationScreen() {
   const [showQRScanner, setShowQRScanner] = useState(false);
 
   useEffect(() => {
-    checkExistingRegistration();
-  }, []);
+    // Skip registration check if coming from unregister (force=true)
+    if (!force) {
+      checkExistingRegistration();
+    } else {
+      console.log('Skipping registration check - coming from unregister');
+    }
+  }, [force]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -30,8 +36,14 @@ export default function RegistrationScreen() {
 
   const checkExistingRegistration = async () => {
     try {
+      // Add a small delay to ensure any previous cleanup operations are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const registration = await tabletRegistrationService.getRegistrationData();
-      if (registration) {
+      console.log('Registration check - found registration:', registration);
+      
+      if (registration && registration.materialId && registration.deviceId) {
+        // Only redirect if we have a complete registration
         Alert.alert(
           'Already Registered',
           'This tablet is already registered. You will be redirected to the main screen.',
@@ -42,6 +54,10 @@ export default function RegistrationScreen() {
             }
           ]
         );
+      } else if (registration) {
+        // If we have partial registration data, clear it and continue
+        console.log('Found incomplete registration data, clearing it');
+        await tabletRegistrationService.clearRegistration();
       }
     } catch (error) {
       console.error('Error checking registration:', error);
@@ -124,7 +140,11 @@ export default function RegistrationScreen() {
       
       if (result.success) {
         // Set the material ID in the device status context
+        console.log('Registration successful, setting material ID:', materialId.trim());
         await setMaterialIdInContext(materialId.trim());
+        
+        // Add a small delay to ensure the material ID is properly set
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         Alert.alert(
           'Success!',
