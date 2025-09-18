@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { gql, useMutation } from "@apollo/client";
+import { Eye, EyeOff } from "lucide-react";
 
 const REQUEST_PASSWORD_RESET = gql`
   mutation RequestPasswordReset($email: String!) {
@@ -18,18 +19,25 @@ const ForgotPass: React.FC = () => {
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👈 toggle state
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const [requestPasswordReset, { loading: requesting }] = useMutation(REQUEST_PASSWORD_RESET, {
-    onCompleted: () => setStep("reset"),
-    onError: () => setError("Failed to send reset email. Please try again."),
-  });
+  const [requestPasswordReset, { loading: requesting }] = useMutation(
+    REQUEST_PASSWORD_RESET,
+    {
+      onCompleted: () => setStep("reset"),
+      onError: () =>
+        setError("Failed to send reset email. Please try again."),
+    }
+  );
 
   const [resetPassword, { loading: resetting }] = useMutation(RESET_PASSWORD, {
-    onCompleted: () => setSuccessMessage("Password reset successful! You can now log in."),
-    onError: () => setError("Failed to reset password. Please check your token and try again."),
+    onCompleted: () =>
+      setSuccessMessage("Password reset successful! You can now log in."),
+    onError: () =>
+      setError("Failed to reset password. Please check your token and try again."),
   });
 
   const handleRequestSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -57,10 +65,7 @@ const ForgotPass: React.FC = () => {
         <source src="/image/forgot.mp4" type="video/mp4" />
         Your browser does not support the video tag.
       </video>
-      
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0 "></div>
-      
+
       {/* Form Container */}
       <div className="absolute top-44 mr-44 z-10 max-w-md w-full p-6 text-center bg-none">
         <h2 className="text-4xl font-semibold text-gray-200 mb-4 mt-2">
@@ -103,14 +108,26 @@ const ForgotPass: React.FC = () => {
               onChange={(e) => setToken(e.target.value)}
               required
             />
-            <input
-              type="password"
-              placeholder="New Password"
-              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
+            
+            {/* Password input with toggle */}
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="New Password"
+                className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none pr-12"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-600"
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
