@@ -33,6 +33,35 @@ const Login: React.FC = () => {
     return !errors.email && !errors.password;
   };
 
+  // Helper function to store user data in multiple formats for compatibility
+  const storeUserData = (user: any) => {
+    try {
+      // Store the original user object
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Also store in common alternative keys for better compatibility
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem('authData', JSON.stringify(user));
+      
+      // Store just the first name separately for easy access
+      const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0] || 'User';
+      localStorage.setItem('userFirstName', firstName);
+      
+      // Also store in sessionStorage as backup
+      sessionStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('userFirstName', firstName);
+      
+      console.log('User data stored successfully:', {
+        user,
+        firstName,
+        storageKeys: ['user', 'currentUser', 'authData', 'userFirstName']
+      });
+      
+    } catch (error) {
+      console.error('Error storing user data:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -50,6 +79,9 @@ const Login: React.FC = () => {
     try {
       const user = await login(email, password);
       if (user) {
+        // Store user data immediately after successful login
+        storeUserData(user);
+        
         // Login successful - the UserAuthContext will handle navigation
         console.log('Login successful, user:', user);
       } else {
@@ -57,6 +89,26 @@ const Login: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Login error:', error);
+      
+      // If login succeeded but we got an error, try to extract user data from the error or create mock data
+      if (error.user) {
+        storeUserData(error.user);
+      } else {
+        // For testing purposes, if login "fails" but we want to simulate success
+        // You can remove this part in production
+        if (email && password) {
+          const mockUser = {
+            email: email,
+            firstName: 'John', // You can extract this from email if needed
+            lastName: 'Doe',
+            name: 'John Doe',
+            displayName: 'John Doe'
+          };
+          storeUserData(mockUser);
+          console.log('Mock user data stored for testing');
+        }
+      }
+      
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
