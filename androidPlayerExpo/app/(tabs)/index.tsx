@@ -6,6 +6,7 @@ import { router } from "expo-router/build/imperative-api";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
+import deviceStatusService from '../../services/deviceStatusService';
 import AdPlayer from '../../components/AdPlayer';
 import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
@@ -20,6 +21,7 @@ export default function HomeScreen() {
   const [unregistering, setUnregistering] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
+  const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -36,8 +38,25 @@ export default function HomeScreen() {
         clearInterval((window as any).adTrackingInterval);
         (window as any).adTrackingInterval = null;
       }
+      
+      // Cleanup device status service
+      deviceStatusService.cleanup();
     };
   }, []);
+
+  // Initialize device status service when registration data is available
+  useEffect(() => {
+    if (registrationData) {
+      (deviceStatusService as any).initialize({
+        materialId: registrationData.materialId,
+        forceReconnect: false, // Don't force reconnect on initial load
+        onStatusChange: (status: any) => {
+          console.log('Device status changed:', status);
+          setIsOnline(status.isOnline);
+        }
+      });
+    }
+  }, [registrationData]);
 
   // Refresh registration data when screen becomes active
   useFocusEffect(
@@ -193,6 +212,76 @@ export default function HomeScreen() {
     } catch (error) {
       console.error('Error stopping tracking:', error);
       setTrackingStatus('Error stopping tracking');
+    }
+  };
+
+  const handleGoOffline = async () => {
+    try {
+      // Simulate offline
+      setIsSimulatingOffline(true);
+      setIsOnline(false);
+      setTrackingStatus('Simulating Offline');
+      
+      // Set offline simulation flag in tablet registration service
+      tabletRegistrationService.setSimulatingOffline(true);
+      
+      // Stop location tracking
+      await tabletRegistrationService.stopLocationTracking();
+      
+      // Disconnect WebSocket connection
+      (deviceStatusService as any).disconnect();
+      
+      // Send offline status to server
+      if (registrationData) {
+        await tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 });
+      }
+      
+      // Ad playback will be stopped by the AdPlayer component when isSimulatingOffline is true
+      
+      // Clear any existing location tracking state
+      setIsTracking(false);
+      
+      console.log('Device simulation: Offline');
+    } catch (error) {
+      console.error('Error going offline:', error);
+    }
+  };
+
+  const handleGoOnline = async () => {
+    try {
+      // Go back online
+      setIsSimulatingOffline(false);
+      setIsOnline(true);
+      setTrackingStatus('Back Online');
+      
+      // Clear offline simulation flag in tablet registration service
+      tabletRegistrationService.setSimulatingOffline(false);
+      
+      // Reconnect WebSocket connection
+      if (registrationData) {
+        (deviceStatusService as any).initialize({
+          materialId: registrationData.materialId,
+          forceReconnect: true, // Force reconnect when going back online
+          onStatusChange: (status: any) => {
+            console.log('Device status changed:', status);
+            setIsOnline(status.isOnline);
+          }
+        });
+      }
+      
+      // Don't automatically restart location tracking - let user control it
+      // Location tracking will be started manually if needed
+      
+      // Send online status to server
+      if (registrationData) {
+        await tabletRegistrationService.updateTabletStatus(true, { lat: 0, lng: 0 });
+      }
+      
+      // Ad playback will be restarted by the AdPlayer component when isSimulatingOffline is false
+      
+      console.log('Device simulation: Back online');
+    } catch (error) {
+      console.error('Error going online:', error);
     }
   };
 
@@ -465,6 +554,32 @@ export default function HomeScreen() {
                   <Text style={styles.trackingButtonText}>⏹️ Stop Tracking</Text>
                 </TouchableOpacity>
               )}
+              
+              <TouchableOpacity 
+                style={[
+                  styles.trackingButton, 
+                  isSimulatingOffline ? styles.disabledButton : styles.offlineButton
+                ]}
+                onPress={handleGoOffline}
+                disabled={isSimulatingOffline}
+              >
+                <Text style={[styles.trackingButtonText, isSimulatingOffline && styles.disabledButtonText]}>
+                  🔴 Go Offline
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.trackingButton, 
+                  !isSimulatingOffline ? styles.disabledButton : styles.onlineButton
+                ]}
+                onPress={handleGoOnline}
+                disabled={!isSimulatingOffline}
+              >
+                <Text style={[styles.trackingButtonText, !isSimulatingOffline && styles.disabledButtonText]}>
+                  🟢 Go Online
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -477,6 +592,7 @@ export default function HomeScreen() {
           <AdPlayer
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
+            isOffline={isSimulatingOffline}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -673,6 +789,10 @@ const styles = StyleSheet.create({
   trackingControls: {
     marginTop: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   trackingButton: {
     paddingHorizontal: 20,
@@ -687,10 +807,24 @@ const styles = StyleSheet.create({
   stopButton: {
     backgroundColor: '#e74c3c',
   },
+  onlineButton: {
+    backgroundColor: '#3498db',
+  },
+  offlineButton: {
+    backgroundColor: '#e67e22',
+  },
+  disabledButton: {
+    backgroundColor: '#95a5a6',
+    opacity: 0.6,
+  },
   trackingButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  disabledButtonText: {
+    color: '#bdc3c7',
+    opacity: 0.6,
   },
   adSection: {
     backgroundColor: '#fff',

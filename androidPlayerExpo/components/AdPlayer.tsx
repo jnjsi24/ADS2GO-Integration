@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'rea
 // Using expo-av for compatibility with Expo SDK 49
 // TODO: Migrate to expo-video when upgrading to Expo SDK 54+
 import { Video, ResizeMode } from 'expo-av';
+import tabletRegistrationService from '../services/tabletRegistration';
 
 // Suppress expo-av deprecation warning
 const originalWarn = console.warn;
@@ -21,20 +22,61 @@ interface AdPlayerProps {
   materialId: string;
   slotNumber: number;
   onAdError?: (error: string) => void;
+  isOffline?: boolean;
 }
 
-const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }) => {
+const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false }) => {
   const [ads, setAds] = useState<Ad[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
+  const [isDeviceOffline, setIsDeviceOffline] = useState(false);
   const [networkStatus, setNetworkStatus] = useState<boolean>(true);
+  const [adStartTime, setAdStartTime] = useState<Date | null>(null);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
   const getCacheKey = () => `ads_${materialId}_${slotNumber}`;
+
+  // Track ad playback
+  const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number) => {
+    try {
+      // Don't track ad playback if offline
+      if (isOffline) {
+        console.log(`Skipping ad tracking - device is offline: ${adTitle}`);
+        return;
+      }
+      
+      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s)`);
+      const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
+      if (success) {
+        console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track ad playback: ${adTitle}`);
+      }
+    } catch (error) {
+      console.error('Error tracking ad playback:', error);
+    }
+  };
+
+  // End ad playback tracking
+  const endAdPlayback = async () => {
+    try {
+      if (adStartTime && currentAd) {
+        const viewTime = (Date.now() - adStartTime.getTime()) / 1000; // in seconds
+        console.log(`🏁 Ending ad playback: ${currentAd.adTitle} (viewed for ${viewTime.toFixed(1)}s)`);
+        await tabletRegistrationService.trackAdPlayback(
+          currentAd.adId,
+          currentAd.adTitle,
+          currentAd.duration,
+          viewTime
+        );
+      }
+    } catch (error) {
+      console.error('Error ending ad playback:', error);
+    }
+  };
 
   // Check network connectivity
   const checkNetworkStatus = async () => {
@@ -128,7 +170,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
     try {
       setLoading(true);
       setError(null);
-      setIsOffline(false);
+      setIsDeviceOffline(false);
       
       // Check network status first
       const isConnected = await checkNetworkStatus();
@@ -136,7 +178,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
         console.log('Network is offline, loading cached ads');
         const hasCached = await loadCachedAds();
         if (hasCached) {
-          setIsOffline(true);
+          setIsDeviceOffline(true);
           setLoading(false);
           return;
         } else {
@@ -187,7 +229,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
       // Network error - try to load cached ads
       const hasCached = await loadCachedAds();
       if (hasCached) {
-        setIsOffline(true);
+        setIsDeviceOffline(true);
         console.log('Using cached ads in offline mode');
       } else {
         const errorMessage = 'Failed to fetch ads and no cached ads available';
@@ -221,6 +263,24 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
     fetchAds();
   }, [materialId, slotNumber]);
 
+  // Track ad playback when current ad changes
+  useEffect(() => {
+    if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
+      console.log(`🎬 Starting ad playback tracking: ${currentAd.adTitle}`);
+      setAdStartTime(new Date());
+      trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+    }
+  }, [currentAdIndex, currentAd?.adTitle, currentAd?.adId]);
+
+  // Stop video playback when going offline
+  useEffect(() => {
+    if (isOffline && videoRef.current) {
+      console.log('Stopping video playback - device is offline');
+      videoRef.current.pauseAsync();
+      setIsPlaying(false);
+    }
+  }, [isOffline]);
+
   // Company ad data (Ads2Go branding)
   const companyAd = {
     adId: 'company-ad',
@@ -237,13 +297,22 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
     currentAdIndex,
     isCompanyAd: currentAdIndex === -1,
     adTitle: currentAd?.adTitle || 'No ad',
+    adId: currentAd?.adId || 'No ID',
+    duration: currentAd?.duration || 0,
     mediaFile: currentAd?.mediaFile || 'No media',
     totalAds: ads.length,
     isOffline,
-    networkStatus
+    networkStatus,
+    adStartTime: adStartTime ? 'Set' : 'Not set'
   });
 
-  const handleVideoEnd = () => {
+  const handleVideoEnd = async () => {
+    // End tracking for current ad
+    await endAdPlayback();
+    
+    // Reset ad start time for next ad
+    setAdStartTime(null);
+    
     // If slots are not full (less than 5 ads), include company ads in rotation
     if (ads.length < 5) {
       // If currently showing a user ad
@@ -364,6 +433,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError }
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
               setIsPlaying(status.isPlaying || false);
+              
+              // Track ad playback when video starts playing
+              if (status.isPlaying && currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad' && !adStartTime) {
+                console.log(`🎬 Video started playing, tracking ad: ${currentAd.adTitle}`);
+                setAdStartTime(new Date());
+                trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+              }
+              
               if (status.didJustFinish) {
                 handleVideoEnd();
               }

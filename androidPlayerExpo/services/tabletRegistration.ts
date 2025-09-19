@@ -96,6 +96,7 @@ export class TabletRegistrationService {
   private registration: TabletRegistration | null = null;
   private locationUpdateInterval: ReturnType<typeof setInterval> | null = null;
   private isTracking = false;
+  private isSimulatingOffline = false;
   private appStateListener: any = null;
 
   static getInstance(): TabletRegistrationService {
@@ -467,6 +468,12 @@ export class TabletRegistrationService {
       // Start periodic location updates (every 30 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
+          // Skip location updates if simulating offline
+          if (this.isSimulatingOffline) {
+            console.log('Skipping location update - simulating offline');
+            return;
+          }
+
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
             timeInterval: 30000,
@@ -515,6 +522,15 @@ export class TabletRegistrationService {
         console.error('Error updating tablet status to offline:', error);
       }
     }
+  }
+
+  setSimulatingOffline(isOffline: boolean): void {
+    this.isSimulatingOffline = isOffline;
+    console.log(`Simulating offline: ${isOffline}`);
+  }
+
+  isSimulatingOfflineMode(): boolean {
+    return this.isSimulatingOffline;
   }
 
   isLocationTrackingActive(): boolean {

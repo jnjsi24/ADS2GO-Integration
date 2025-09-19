@@ -16,7 +16,7 @@ class DeviceStatusService {
     this.isConnected = false;
   }
 
-  initialize = ({ materialId, onStatusChange }) => {
+  initialize = ({ materialId, onStatusChange, forceReconnect = false }) => {
     // Store the previous materialId to check if it changed
     const previousMaterialId = this.materialId;
     this.materialId = materialId;
@@ -25,9 +25,11 @@ class DeviceStatusService {
     // Get device ID
     this.deviceId = Application.androidId || Device.modelName || 'unknown-device';
     
-    // Only connect if we have a materialId and it's different from the previous one
-    if (materialId && materialId !== previousMaterialId) {
-      console.log('Initializing WebSocket with materialId:', materialId);
+    // Connect if we have a materialId and either:
+    // 1. It's different from the previous one, OR
+    // 2. Force reconnect is requested (for going back online)
+    if (materialId && (materialId !== previousMaterialId || forceReconnect)) {
+      console.log('Initializing WebSocket with materialId:', materialId, forceReconnect ? '(force reconnect)' : '');
       this.connect();
     } else if (!materialId) {
       console.warn('No materialId provided, cannot initialize WebSocket');
@@ -118,10 +120,14 @@ class DeviceStatusService {
         // Notify status change
         if (this.onStatusChange) {
           let errorMessage = 'Disconnected';
+          let shouldReconnect = true;
+          
           if (e.code === 1006) {
             errorMessage = 'Connection lost';
           } else if (e.code === 1000) {
             errorMessage = 'Connection closed normally';
+            // Don't auto-reconnect for normal closures unless it's unexpected
+            shouldReconnect = false;
           } else if (e.code === 1001) {
             errorMessage = 'Connection going away';
           } else if (e.code === 1002) {
@@ -155,7 +161,10 @@ class DeviceStatusService {
           this.onStatusChange({ 
             isOnline: false, 
             isConnected: false,
-            error: errorMessage
+            error: errorMessage,
+            shouldReconnect: shouldReconnect,
+            closeCode: e.code,
+            closeReason: e.reason
           });
         }
       };
@@ -300,6 +309,44 @@ class DeviceStatusService {
       }, delay);
     } else {
       console.error('[WebSocket] Max reconnection attempts reached');
+    }
+  };
+
+  disconnect = () => {
+    console.log('[WebSocket] Manually disconnecting...');
+    
+    // Clear ping interval
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    
+    // Clear reconnect timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    // Close WebSocket connection
+    if (this.ws) {
+      try {
+        this.ws.close(1000, 'Manual disconnect');
+      } catch (e) {
+        console.error('[WebSocket] Error closing connection:', e);
+      }
+      this.ws = null;
+    }
+    
+    this.isConnected = false;
+    this.reconnectAttempts = 0;
+    
+    // Notify status change
+    if (this.onStatusChange) {
+      this.onStatusChange({ 
+        isConnected: false,
+        isOnline: false,
+        error: 'Manually disconnected'
+      });
     }
   };
 

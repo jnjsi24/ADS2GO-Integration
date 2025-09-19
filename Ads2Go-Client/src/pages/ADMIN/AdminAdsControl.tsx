@@ -69,6 +69,11 @@ const AdminAdsControl: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showScreenDetails, setShowScreenDetails] = useState(false);
+  const [showDeviceModal, setShowDeviceModal] = useState(false);
+  const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
+  const [selectedDeviceForModal, setSelectedDeviceForModal] = useState<ScreenData | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Inline API service to bypass any caching issues
   const inlineApiService = {
@@ -110,10 +115,20 @@ const AdminAdsControl: React.FC = () => {
   };
 
   // Data fetching functions
-  const fetchData = async () => {
+  const fetchData = async (isManualRefresh = false) => {
+    const isInitialLoad = screens.length === 0;
+    
     try {
-      setLoading(true);
-      setError(null);
+      if (isManualRefresh) {
+        setIsRefreshing(true);
+      } else if (isInitialLoad) {
+        // Only show loading on initial load, not on auto-refresh
+        setLoading(true);
+      }
+      // Don't clear error on auto-refresh to avoid flickering
+      if (isManualRefresh) {
+        setError(null);
+      }
       
       console.log('🔄 Fetching data from server...');
       
@@ -125,14 +140,23 @@ const AdminAdsControl: React.FC = () => {
         
         if (screensResponse && Array.isArray(screensResponse.screens)) {
           console.log(`✅ Found ${screensResponse.screens.length} screens`);
-          setScreens(screensResponse.screens);
+          // Only update if data has actually changed to prevent unnecessary re-renders
+          setScreens(prevScreens => {
+            const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
+            if (hasChanged) {
+              console.log('📊 Screen data updated');
+            }
+            return screensResponse.screens;
+          });
           
           // Log all device IDs for debugging
           console.log('📋 Device IDs:', screensResponse.screens.map((s: any) => ({
             deviceId: s.deviceId,
             materialId: s.materialId,
             isOnline: s.isOnline,
-            lastSeen: s.lastSeen
+            lastSeen: s.lastSeen,
+            screenMetrics: s.screenMetrics,
+            currentAd: s.screenMetrics?.currentAd
           })));
         } else {
           console.warn('⚠️ Unexpected screens data format:', screensResponse);
@@ -161,7 +185,13 @@ const AdminAdsControl: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
       console.error('Error fetching data:', err);
     } finally {
-      setLoading(false);
+      // Only set loading to false on initial load or manual refresh
+      if (isInitialLoad || isManualRefresh) {
+        setLoading(false);
+      }
+      // Always reset refreshing state
+      setIsRefreshing(false);
+      setLastRefresh(new Date());
     }
   };
 
@@ -169,8 +199,8 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // Set up auto-refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000);
+    // Set up auto-refresh every 5 seconds for real-time updates
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -292,9 +322,12 @@ const AdminAdsControl: React.FC = () => {
     }
   };
 
-  const formatTime = (seconds: number) => {
+  const formatTime = (seconds: number | undefined) => {
+    if (!seconds || isNaN(seconds) || seconds < 0) {
+      return '0:00';
+    }
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -319,6 +352,20 @@ const AdminAdsControl: React.FC = () => {
     setShowScreenDetails(true);
   };
 
+  const handleMaterialClick = (screen: ScreenData) => {
+    setSelectedDeviceForModal(screen);
+    setShowDeviceModal(true);
+    setIsDeviceModalOpen(true);
+  };
+
+  const handleCloseDeviceModal = () => {
+    setIsDeviceModalOpen(false);
+    setTimeout(() => {
+      setShowDeviceModal(false);
+      setSelectedDeviceForModal(null);
+    }, 300);
+  };
+
   if (loading) {
     return (
       <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
@@ -337,7 +384,7 @@ const AdminAdsControl: React.FC = () => {
           <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{error}</p>
           <button 
-            onClick={fetchData}
+            onClick={() => fetchData(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             Retry
@@ -357,7 +404,7 @@ const AdminAdsControl: React.FC = () => {
             <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
           </div>
           <button 
-            onClick={fetchData}
+            onClick={() => fetchData(true)}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
           >
@@ -499,8 +546,20 @@ const AdminAdsControl: React.FC = () => {
               {/* Screen Status Grid */}
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Live Screen Status</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold">Live Screen Status</h3>
+                    <p className="text-xs text-gray-500">
+                      Last updated: {lastRefresh.toLocaleTimeString()}
+                    </p>
+                  </div>
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => fetchData(true)}
+                      disabled={isRefreshing}
+                      className="px-3 py-1 text-sm bg-green-100 text-green-600 rounded-md hover:bg-green-200 disabled:opacity-50"
+                    >
+                      Refresh
+                    </button>
                     <button
                       onClick={handleSelectAll}
                       className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200"
@@ -530,7 +589,6 @@ const AdminAdsControl: React.FC = () => {
                           <th className="text-left py-3 px-4">
                             <input type="checkbox" className="rounded" />
                           </th>
-                          <th className="text-left py-3 px-4">Device ID</th>
                           <th className="text-left py-3 px-4">Material</th>
                           <th className="text-left py-3 px-4">Slot</th>
                           <th className="text-left py-3 px-4">Status</th>
@@ -551,8 +609,15 @@ const AdminAdsControl: React.FC = () => {
                               className="rounded"
                             />
                           </td>
-                          <td className="py-3 px-4 font-medium">{screen.deviceId}</td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{screen.materialId}</td>
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => handleMaterialClick(screen)}
+                              className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer"
+                              title="Click to view device details"
+                            >
+                              {screen.materialId}
+                            </button>
+                          </td>
                           <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber}</td>
                           <td className="py-3 px-4">
                             <div className="flex items-center space-x-2">
@@ -561,17 +626,19 @@ const AdminAdsControl: React.FC = () => {
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            {screen.screenMetrics?.currentAd ? (
+                            {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adTitle ? (
                               <div>
                                 <div className="font-medium text-sm">{screen.screenMetrics.currentAd.adTitle}</div>
-                                <div className="text-xs text-gray-500">Duration: {screen.screenMetrics.currentAd.adDuration}s</div>
+                                <div className="text-xs text-gray-500">
+                                  Duration: {screen.screenMetrics.currentAd.adDuration ? `${screen.screenMetrics.currentAd.adDuration}s` : 'Unknown'}
+                                </div>
                               </div>
                             ) : (
-                              <span className="text-gray-400 text-sm">No ads</span>
+                              <span className="text-gray-400 text-sm">No ads playing</span>
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            {screen.screenMetrics?.currentAd ? (
+                            {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adDuration ? (
                               <div className="w-32">
                                 <div className="flex justify-between text-xs text-gray-600 mb-1">
                                   <span>{formatTime(0)}</span>
@@ -579,9 +646,12 @@ const AdminAdsControl: React.FC = () => {
                                 </div>
                                 <div className="w-full bg-gray-200 rounded-full h-2">
                                   <div 
-                                    className="bg-blue-600 h-2 rounded-full" 
+                                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
                                     style={{ width: '0%' }}
                                   ></div>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1 text-center">
+                                  Ready to play
                                 </div>
                               </div>
                             ) : (
@@ -660,10 +730,12 @@ const AdminAdsControl: React.FC = () => {
                       </div>
                     </div>
                     
-                    {screen.screenMetrics?.currentAd && (
+                    {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adTitle ? (
                       <div className="mb-3">
                         <div className="text-sm font-medium">{screen.screenMetrics.currentAd.adTitle}</div>
-                        <div className="text-xs text-gray-500">Duration: {screen.screenMetrics.currentAd.adDuration}s</div>
+                        <div className="text-xs text-gray-500">
+                          Duration: {screen.screenMetrics.currentAd.adDuration ? `${screen.screenMetrics.currentAd.adDuration}s` : 'Unknown'}
+                        </div>
                         <div className="mt-1">
                           <div className="flex justify-between text-xs text-gray-600 mb-1">
                             <span>{formatTime(0)}</span>
@@ -671,11 +743,18 @@ const AdminAdsControl: React.FC = () => {
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1">
                             <div 
-                              className="bg-blue-600 h-1 rounded-full" 
+                              className="bg-blue-600 h-1 rounded-full transition-all duration-300" 
                               style={{ width: '0%' }}
                             ></div>
                           </div>
+                          <div className="text-xs text-gray-500 mt-1 text-center">
+                            Ready to play
+                          </div>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="mb-3 text-gray-400 text-sm">
+                        No ads currently playing
                       </div>
                     )}
 
@@ -1116,6 +1195,99 @@ const AdminAdsControl: React.FC = () => {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Device Details Modal */}
+      {showDeviceModal && selectedDeviceForModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={handleCloseDeviceModal}
+        >
+          <div
+            className={`bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-transform duration-300 ease-in-out ${
+              isDeviceModalOpen ? 'scale-100' : 'scale-95'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Device Details</h3>
+                <button
+                  onClick={handleCloseDeviceModal}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Device ID</label>
+                <div className="p-3 bg-gray-50 rounded-lg font-mono text-sm text-gray-900 break-all">
+                  {selectedDeviceForModal.deviceId}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Material ID</label>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
+                  {selectedDeviceForModal.materialId}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Screen Type</label>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
+                  {selectedDeviceForModal.screenType}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Slot Number</label>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
+                  {selectedDeviceForModal.slotNumber}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <div className="flex items-center space-x-2">
+                  {getStatusIcon(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
+                  <span className="text-sm font-medium">
+                    {getStatusText(selectedDeviceForModal.isOnline ? 'online' : 'offline')}
+                  </span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Last Seen</label>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
+                  {new Date(selectedDeviceForModal.lastSeen).toLocaleString()}
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
+                  {typeof selectedDeviceForModal.currentLocation === 'string' 
+                    ? selectedDeviceForModal.currentLocation 
+                    : (selectedDeviceForModal.currentLocation as any)?.address || 'Unknown Location'
+                  }
+                </div>
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={handleCloseDeviceModal}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
