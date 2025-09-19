@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
+import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
 export interface ConnectionDetails {
@@ -87,13 +89,14 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http://192.168.1.7:5000'; // Updated to match your local IP
+const API_BASE_URL = 'http://192.168.100.22:5000'; // Updated to match your local IP
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
   private registration: TabletRegistration | null = null;
   private locationUpdateInterval: ReturnType<typeof setInterval> | null = null;
   private isTracking = false;
+  private isSimulatingOffline = false;
   private appStateListener: any = null;
 
   static getInstance(): TabletRegistrationService {
@@ -156,6 +159,54 @@ export class TabletRegistrationService {
         this.registration = JSON.parse(registrationData);
         return this.registration;
       }
+      
+      // If no registration data found, try to create from environment variables
+      const envMaterialId = process.env.EXPO_PUBLIC_MATERIAL_ID || Constants.expoConfig?.extra?.EXPO_PUBLIC_MATERIAL_ID || 'DGL-HEADDRESS-CAR-001';
+      const envTabletId = process.env.EXPO_PUBLIC_TABLET_ID || Constants.expoConfig?.extra?.EXPO_PUBLIC_TABLET_ID || 'HEY2-W09';
+      
+      console.log('🔍 Environment variables in tabletRegistration:', {
+        EXPO_PUBLIC_MATERIAL_ID: process.env.EXPO_PUBLIC_MATERIAL_ID,
+        EXPO_PUBLIC_TABLET_ID: process.env.EXPO_PUBLIC_TABLET_ID,
+        EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+        ConstantsExtra: Constants.expoConfig?.extra,
+        finalMaterialId: envMaterialId,
+        finalTabletId: envTabletId
+      });
+      
+      if (envMaterialId && envTabletId) {
+        console.log('No registration data found, attempting to get tablet configuration from server');
+        
+        try {
+          // Try to get the tablet configuration from the server first
+          const response = await fetch(`${API_BASE_URL}/tablet/configuration/${envMaterialId}`);
+          if (response.ok) {
+            const config = await response.json();
+            if (config.success && config.tablet) {
+              console.log('Found tablet configuration on server:', config.tablet);
+              const fallbackRegistration: TabletRegistration = {
+                deviceId: envTabletId,
+                materialId: envMaterialId,
+                slotNumber: 1, // Default slot number
+                carGroupId: config.tablet.carGroupId,
+                isRegistered: true,
+                lastReportedAt: new Date().toISOString()
+              };
+              
+              // Save the fallback registration
+              await AsyncStorage.setItem('tabletRegistration', JSON.stringify(fallbackRegistration));
+              this.registration = fallbackRegistration;
+              return fallbackRegistration;
+            }
+          }
+        } catch (error) {
+          console.error('Error getting tablet configuration from server:', error);
+        }
+        
+        console.warn('Could not get tablet configuration from server, skipping fallback registration');
+      } else {
+        console.warn('Environment variables not available:', { envMaterialId, envTabletId });
+      }
+      
       return null;
     } catch (error) {
       console.error('Error getting registration data:', error);
@@ -417,6 +468,12 @@ export class TabletRegistrationService {
       // Start periodic location updates (every 30 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
+          // Skip location updates if simulating offline
+          if (this.isSimulatingOffline) {
+            console.log('Skipping location update - simulating offline');
+            return;
+          }
+
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
             timeInterval: 30000,
@@ -465,6 +522,15 @@ export class TabletRegistrationService {
         console.error('Error updating tablet status to offline:', error);
       }
     }
+  }
+
+  setSimulatingOffline(isOffline: boolean): void {
+    this.isSimulatingOffline = isOffline;
+    console.log(`Simulating offline: ${isOffline}`);
+  }
+
+  isSimulatingOfflineMode(): boolean {
+    return this.isSimulatingOffline;
   }
 
   isLocationTrackingActive(): boolean {
@@ -541,6 +607,8 @@ export class TabletRegistrationService {
   }
 
   async clearRegistration(): Promise<void> {
+    console.log('Clearing registration data...');
+    
     // Stop any active tracking
     await this.stopLocationTracking();
     
@@ -550,8 +618,33 @@ export class TabletRegistrationService {
       this.appStateListener = null;
     }
     
+    // Clear registration data
     this.registration = null;
-    await AsyncStorage.removeItem('tabletRegistration');
+    
+    try {
+      await AsyncStorage.removeItem('tabletRegistration');
+      console.log('Registration data cleared from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing registration from AsyncStorage:', error);
+    }
+    
+    // Also clear any cached data
+    try {
+      await AsyncStorage.multiRemove(['tabletRegistration', 'device_material_id']);
+      console.log('All registration-related data cleared');
+    } catch (error) {
+      console.error('Error clearing all registration data:', error);
+    }
+  }
+
+  async clearMaterialId(): Promise<void> {
+    try {
+      // Clear material ID from SecureStore
+      await SecureStore.deleteItemAsync('device_material_id');
+      console.log('Material ID cleared from SecureStore');
+    } catch (error) {
+      console.error('Error clearing material ID from SecureStore:', error);
+    }
   }
 
   async unregisterTablet(): Promise<{ success: boolean; message: string }> {

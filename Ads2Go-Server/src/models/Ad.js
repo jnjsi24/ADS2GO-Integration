@@ -84,6 +84,43 @@ const AdSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 /**
+ * Pre-validate: business validations that are not covered by simple schema types
+ */
+AdSchema.pre('validate', function (next) {
+  try {
+    // Validate media file extension (simple whitelist based on URL/filename)
+    if (this.mediaFile) {
+      const allowed = ['jpg', 'jpeg', 'png', 'mp4', 'mov', 'webm', 'avi'];
+      const match = String(this.mediaFile).toLowerCase().match(/\.([a-z0-9]+)(?:\?|#|$)/);
+      const ext = match ? match[1] : '';
+      if (!allowed.includes(ext)) {
+        return next(new Error('Unsupported media file type. Allowed: JPG, JPEG, PNG, MP4, MOV, WEBM, AVI'));
+      }
+    }
+
+    // Validate start and end times
+    if (this.startTime && this.endTime) {
+      const now = new Date();
+      // Normalize to date-only compare for start >= today (allow same-day start)
+      const today = new Date(now.toISOString().split('T')[0]);
+      const start = new Date(this.startTime);
+      const end = new Date(this.endTime);
+
+      if (start < today) {
+        return next(new Error('Start time must be today or later'));
+      }
+      if (end <= start) {
+        return next(new Error('End time must be after start time'));
+      }
+    }
+
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
  * Pre-save validation: ensure referenced docs exist
  */
 AdSchema.pre('save', async function (next) {

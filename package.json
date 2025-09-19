@@ -1,22 +1,19 @@
 {
-  "name": "ads2go-integ",
+  "name": "ads2go-integration",
   "version": "1.0.0",
-  "description": "Root Package for ADS2GO System",
+  "description": "Ads2Go Full-Stack Application",
+  "main": "index.js",
   "scripts": {
-    "start": "concurrently \"npm run dev --workspace=Ads2Go-Server\" \"npm start --workspace=Ads2Go-Client\""
+    "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
+    "start:client": "npm start --prefix Ads2Go-Client",
+    "start:server": "npm run dev --prefix Ads2Go-Server",
+    "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",
+    "install:all": "npm install && npm install --prefix Ads2Go-Client && npm install --prefix Ads2Go-Server && npm install --prefix Ads2Go-MobileAppExpo && npm install --prefix androidPlayerExpo",
+    "build": "npm run build --prefix Ads2Go-Client",
+    "test": "npm test --prefix Ads2Go-Client"
   },
-  "scripts:docs": {
-    "start": "Start the Ads2Go-Server & Ads2Go-Client",
-    "npm install": "Install the Ads2Go-Server & Ads2Go-Client Dependencies"
+  "dependencies": {
+    "concurrently": "^8.2.2"
   },
-  "devDependencies": {
-    "concurrently": "^9.1.2",
-    "nodemon": "^3.1.0",
-    "typescript": "~5.8.3"
-  },
-  "private": true,
-  "workspaces": [
-    "Ads2Go-Client",
-    "Ads2Go-Server"
-  ]
+  "private": true
 }

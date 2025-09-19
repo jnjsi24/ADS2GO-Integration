@@ -43,7 +43,7 @@ const DriverSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
     middleName: { type: String, trim: true, maxlength: 50 },
     lastName: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
-    contactNumber: { type: String, required: true, trim: true, match: [/^\+?[0-9]{10,15}$/, 'Invalid phone number'] },
+    contactNumber: { type: String, required: true, trim: true, match: [/^(09\d{9}|\+639\d{9})$/, 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)'] },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: [/^\S+@\S+\.\S+$/, 'Invalid email'] },
     password: { type: String, required: true, minlength: 6, select: false },
     address: { type: String, required: true, trim: true, minlength: 10 },

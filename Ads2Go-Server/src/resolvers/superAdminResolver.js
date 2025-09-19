@@ -67,10 +67,11 @@ const resolvers = {
         password, companyName, companyAddress, contactNumber
       } = input;
 
-      if (await SuperAdmin.findOne({ email })) throw new Error('Email already exists');
+      const normalizedEmail = email.toLowerCase().trim();
+      if (await SuperAdmin.findOne({ email: normalizedEmail })) throw new Error('Email already exists');
 
       let normalizedNumber = contactNumber.replace(/\s/g, '');
-      const phoneRegex = /^(\+63|0)?\d{10}$/;
+      const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
       if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
       if (!normalizedNumber.startsWith('+63')) {
         normalizedNumber = normalizedNumber.startsWith('0')
@@ -78,13 +79,17 @@ const resolvers = {
           : '+63' + normalizedNumber;
       }
 
+      // Enforce password strength
+      const strength = checkPasswordStrength(password);
+      if (!strength.strong) throw new Error('Password too weak');
+
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const newSuperAdmin = new SuperAdmin({
         firstName: firstName.trim(),
         middleName: middleName?.trim() || null,
         lastName: lastName.trim(),
-        email: email.toLowerCase(),
+        email: normalizedEmail,
         password: hashedPassword,
         role: 'SUPERADMIN',
         isEmailVerified: true,
@@ -105,7 +110,7 @@ const resolvers = {
     loginSuperAdmin: async (_, { email, password, deviceInfo }) => {
       console.log(`SuperAdmin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
-      const superAdmin = await SuperAdmin.findOne({ email });
+      const superAdmin = await SuperAdmin.findOne({ email: email.toLowerCase().trim() });
       if (!superAdmin || superAdmin.role !== 'SUPERADMIN')
         throw new Error('No superadmin found with this email');
 
@@ -161,7 +166,7 @@ const resolvers = {
       // Validate contact number if provided
       let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
       if (normalizedNumber) {
-        const phoneRegex = /^(\+63|0)?\d{10}$/;
+        const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
         if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
         if (!normalizedNumber.startsWith('+63')) {
           normalizedNumber = normalizedNumber.startsWith('0')

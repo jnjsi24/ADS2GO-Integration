@@ -105,19 +105,8 @@ const adResolvers = {
 
       const savedAd = await ad.save();
 
-      // If ad is paid, deploy it immediately
-      if (savedAd.status === 'PAID') {
-        try {
-          const deploymentResult = await adDeploymentService.deployAd(savedAd._id);
-          if (!deploymentResult.success) {
-            console.error('Failed to auto-deploy ad:', deploymentResult.message);
-            // Don't fail the ad creation if deployment fails
-          }
-        } catch (deployError) {
-          console.error('Error during ad deployment:', deployError);
-          // Continue with ad creation even if deployment fails
-        }
-      }
+      // Note: Ad deployment is handled by the Ad model's post-save hook
+      // when the ad status is PAID and adStatus is ACTIVE
 
       return await Ad.findById(savedAd._id)
         .populate('planId')

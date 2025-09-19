@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Contact number is required'],
     trim: true,
-    match: [/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/, 'Please provide a valid phone number']
+    match: [/^(09\d{9}|\+639\d{9})$/, 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)']
   },
   email: {
     type: String,

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Popup, Polyline, CircleMarker } from 'react-leaflet';
+import { Popup, Polyline, CircleMarker, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
-import { LatLngTuple, Map } from 'leaflet';
+import { LatLngTuple, Map, Icon } from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
 
 // Import MapView directly since we're not using Next.js
@@ -134,14 +134,25 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const response = await fetch('/material');
+      const materialsUrl = `${window.location.protocol}//${window.location.hostname}:5000/material`;
+      console.log('Fetching materials from:', materialsUrl);
+      
+      const response = await fetch(materialsUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Materials response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
         console.log('Materials fetched:', data);
         setMaterials(data.materials || []);
       } else {
+        const errorText = await response.text();
         console.error('Failed to fetch materials:', response.status, response.statusText);
+        console.error('Error response:', errorText);
       }
     } catch (error) {
       console.error('Error fetching materials:', error);
@@ -156,28 +167,39 @@ const ScreenTracking: React.FC = () => {
       setRefreshing(true);
       setConnectionStatus('connecting');
       
-      // Fetch compliance report
-      const complianceResponse = await fetch(`/screenTracking/compliance?date=${selectedDate}`, {
+      // Fetch compliance report (no auth required for this endpoint)
+      const apiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/compliance?date=${selectedDate}`;
+      console.log('Making request to:', apiUrl);
+      
+      const complianceResponse = await fetch(apiUrl, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         }
       });
       
-             if (complianceResponse.ok) {
-         const complianceData = await complianceResponse.json();
-         setComplianceReport(complianceData.data);
-         setScreens(complianceData.data?.screens || []);
-         setConnectionStatus('connected');
+      console.log('Compliance response status:', complianceResponse.status);
+      
+      if (complianceResponse.ok) {
+        const complianceData = await complianceResponse.json();
+        console.log('Compliance data received:', complianceData);
+        console.log('Screens in response:', complianceData.data?.screens);
+        console.log('Number of screens:', complianceData.data?.screens?.length || 0);
+        
+        setComplianceReport(complianceData.data);
+        setScreens(complianceData.data?.screens || []);
+        setConnectionStatus('connected');
 
-         // Auto-center map on first screen if available
-         if (complianceData.data?.screens?.length > 0 && 
-             complianceData.data.screens[0].currentLocation &&
-             isValidCoordinate(complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng)) {
-           setMapCenter([complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng]);
-         }
-       } else {
-         setConnectionStatus('disconnected');
-       }
+        // Auto-center map on first screen if available
+        if (complianceData.data?.screens?.length > 0 && 
+            complianceData.data.screens[0].currentLocation &&
+            isValidCoordinate(complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng)) {
+          setMapCenter([complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng]);
+        }
+      } else {
+        const errorData = await complianceResponse.json();
+        console.error('API Error:', errorData);
+        setConnectionStatus('disconnected');
+      }
 
      } catch (error) {
        console.error('Error fetching data:', error);
@@ -191,15 +213,24 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const response = await fetch(`/screenTracking/path/${deviceId}?date=${selectedDate}`, {
+      const pathApiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      console.log('Making path request to:', pathApiUrl);
+      
+      const response = await fetch(pathApiUrl, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         }
       });
       
+      console.log('Path data response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Path data received:', data);
         setPathData(data.data);
+      } else {
+        const errorData = await response.json();
+        console.error('Path data API Error:', errorData);
       }
     } catch (error) {
       console.error('Error fetching path data:', error);
@@ -208,15 +239,21 @@ const ScreenTracking: React.FC = () => {
 
   // Filter screens based on selected material
   useEffect(() => {
+    console.log('Filtering screens - screens:', screens, 'selectedMaterial:', selectedMaterial);
+    
     if (!screens) {
+      console.log('No screens data available');
       setFilteredScreens([]);
       return;
     }
     
     if (selectedMaterial === 'all') {
+      console.log('Showing all screens:', screens.length);
       setFilteredScreens(screens);
     } else {
-      setFilteredScreens(screens.filter(screen => screen.materialId === selectedMaterial));
+      const filtered = screens.filter(screen => screen.materialId === selectedMaterial);
+      console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
+      setFilteredScreens(filtered);
     }
   }, [screens, selectedMaterial]);
 
@@ -270,6 +307,22 @@ const ScreenTracking: React.FC = () => {
     if (!screen.isOnline) return '#ef4444'; // red
     if (screen.isCompliant) return '#22c55e'; // green
     return '#eab308'; // yellow
+  };
+
+  // Create custom PIN icon
+  const createPinIcon = (color: string) => {
+    return new Icon({
+      iconUrl: `data:image/svg+xml;base64,${btoa(`
+        <svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 20 12 20s12-12.5 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="12" cy="12" r="6" fill="#ffffff"/>
+        </svg>
+      `)}`,
+      iconSize: [24, 32],
+      iconAnchor: [12, 32],
+      popupAnchor: [0, -32],
+      className: 'custom-pin-icon'
+    });
   };
 
   if (loading || materialsLoading) {
@@ -461,16 +514,10 @@ const ScreenTracking: React.FC = () => {
                     screen.currentLocation && 
                     isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
                   ).map((screen) => (
-                    <CircleMarker
+                    <Marker
                       key={screen.deviceId}
-                      center={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
-                      radius={8}
-                      pathOptions={{
-                        color: getMarkerColor(screen),
-                        fillColor: getMarkerColor(screen),
-                        fillOpacity: 0.7,
-                        weight: 2
-                      }}
+                      position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                      icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
                       }}
@@ -485,7 +532,7 @@ const ScreenTracking: React.FC = () => {
                           <p className="text-sm">Address: {screen.currentLocation.address}</p>
                         </div>
                       </Popup>
-                    </CircleMarker>
+                    </Marker>
                   ))}
                   
                   {/* Path for selected tablet */}

@@ -15,6 +15,7 @@ export const GET_ALL_ADS_PLANS = gql`
       totalPlaysPerDay
       dailyRevenue
       totalPrice
+      adLengthSeconds
       createdAt
     }
   }

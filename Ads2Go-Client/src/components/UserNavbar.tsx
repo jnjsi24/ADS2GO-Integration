@@ -34,22 +34,22 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-60 bg-[#1B5087] text-gray-300 flex flex-col justify-between fixed">
+    <div className="h-screen w-64 bg-white text-gray-500 flex flex-col justify-between fixed">
       <div className="p-6">
         {/* Logo */}
         <div className="flex items-center pl-3 space-x-3 mb-10">
           <img src="/image/blue-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-gray-300 font-bold">Ads2Go</span>
+          <span className="text-2xl text-black font-bold">Ads2Go</span>
         </div>
 
         {/* Navigation */}
-        <ul className="space-y-2">
+        <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
             <li key={link.label}>
               <Link
                 to={link.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-md hover:text-white transition ${
-                  location.pathname === link.path ? 'text-white border-l-4 border-white font-semibold' : ''
+                className={`flex items-center space-x-3 px-5 py-2 hover:text-[#1B5087] transition ${
+                  location.pathname === link.path ? 'text-[#1B5087] border-l-4 border-[#3674B5] font-semibold' : ''
                 }`}
               >
                 {link.icon}
@@ -74,7 +74,7 @@ const SideNavbar: React.FC = () => {
           </div>
           <div>
             {user ? (
-              <p className="font-semibold text-white">
+              <p className="font-semibold text-black">
                 {`${user.firstName} ${user.lastName}`}
               </p>
             ) : (

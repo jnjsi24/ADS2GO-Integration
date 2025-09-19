@@ -31,11 +31,19 @@ const storage = getStorage(app);
 let analytics;
 isSupported().then((analyticsSupported) => {
   if (analyticsSupported) {
-    analytics = getAnalytics(app);
-    console.log("📊 Firebase Analytics initialized");
+    try {
+      analytics = getAnalytics(app);
+      console.log("📊 Firebase Analytics initialized");
+    } catch (error) {
+      console.warn("⚠️ Firebase Analytics initialization failed:", error.message);
+      analytics = null;
+    }
   } else {
     console.log("ℹ️ Firebase Analytics not supported in this environment");
   }
+}).catch((error) => {
+  console.warn("⚠️ Firebase Analytics check failed:", error.message);
+  analytics = null;
 });
 
 // --- Google Auth ---

@@ -355,9 +355,13 @@ export const AdminAuthProvider: React.FC<{
 
       throw new Error('Login failed');
     } catch (error: any) {
-      console.error('Admin login error:', error.message || error);
-      alert(error.message || 'Login failed');
-      return null;
+      // Extract GraphQL or network error message for UI
+      const graphQLError = error?.graphQLErrors?.[0]?.message;
+      const networkError = error?.networkError?.message;
+      const message = graphQLError || networkError || error?.message || 'Login failed';
+      console.error('Admin login error:', message);
+      // Throw so the component can display the specific backend error
+      throw new Error(message);
     }
   };
 
