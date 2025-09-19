@@ -211,9 +211,13 @@ export const UserAuthProvider: React.FC<{
         throw new Error('Invalid login response or user type');
       }
     } catch (error: any) {
-      console.error('User login error:', error.message || error);
-      // Let the Login component handle error display instead of using alert()
-      return null;
+      // Extract GraphQL or network error message for UI
+      const graphQLError = error?.graphQLErrors?.[0]?.message;
+      const networkError = error?.networkError?.message;
+      const message = graphQLError || networkError || error?.message || 'Login failed';
+      console.error('User login error:', message);
+      // Throw so the component can display the specific backend error
+      throw new Error(message);
     }
   };
 

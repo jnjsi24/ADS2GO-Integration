@@ -295,12 +295,12 @@ const PaymentHistory: React.FC = () => {
           </div>
         </div>
         <span
-          className={`absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full ${getStatusStyle(
+          className={`absolute top-2 right-2 inline-flex items-center justify-center px-2 py-1 rounded-full ${getStatusStyle(
             item.status
           )}`}
         >
-           <span className="text-xs font-medium text-white">
-            {item.status.charAt(0)}
+           <span className="text-xs font-semibold text-white">
+            {item.status}
           </span>
         </span>
         <button
