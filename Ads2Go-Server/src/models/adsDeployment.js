@@ -90,6 +90,46 @@ const AdsDeploymentSchema = new mongoose.Schema({
       return this.lcdSlots.length === 0;
     }
   },
+
+  // Deployment status and timing
+  startTime: {
+    type: Date,
+    default: null
+  },
+  endTime: {
+    type: Date,
+    default: null
+  },
+  currentStatus: {
+    type: String,
+    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED', 'PAID'],
+    default: 'SCHEDULED'
+  },
+  lastFrameUpdate: {
+    type: Date,
+    default: null
+  },
+  deployedAt: {
+    type: Date,
+    default: null
+  },
+  completedAt: {
+    type: Date,
+    default: null
+  },
+  removedAt: {
+    type: Date,
+    default: null
+  },
+  removedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  removalReason: {
+    type: String,
+    default: null
+  }
 }, { timestamps: true });
 
 // Indexes for efficient queries

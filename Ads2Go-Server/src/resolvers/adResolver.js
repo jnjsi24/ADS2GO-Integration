@@ -232,10 +232,47 @@ const adResolvers = {
   },
 
   Ad: {
-    id: (parent) => parent._id.toString(),
+    id: (parent) => {
+      if (parent && parent._id) return parent._id.toString();
+      if (parent && parent.id) return parent.id.toString();
+      return '';
+    },
     userId: async (parent) => await User.findById(parent.userId),
     materialId: async (parent) => await Material.findById(parent.materialId),
     planId: async (parent) => await Plan.findById(parent.planId),
+    // Ensure date fields are consistent ISO strings to avoid client-side Invalid Date
+    startTime: (parent) => {
+      try {
+        return parent.startTime ? new Date(parent.startTime).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing startTime:', e, 'value:', parent.startTime);
+        return '';
+      }
+    },
+    endTime: (parent) => {
+      try {
+        return parent.endTime ? new Date(parent.endTime).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing endTime:', e, 'value:', parent.endTime);
+        return '';
+      }
+    },
+    createdAt: (parent) => {
+      try {
+        return parent.createdAt ? new Date(parent.createdAt).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing createdAt:', e, 'value:', parent.createdAt);
+        return '';
+      }
+    },
+    updatedAt: (parent) => {
+      try {
+        return parent.updatedAt ? new Date(parent.updatedAt).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing updatedAt:', e, 'value:', parent.updatedAt);
+        return '';
+      }
+    },
   },
 
   AdsPlan: {
