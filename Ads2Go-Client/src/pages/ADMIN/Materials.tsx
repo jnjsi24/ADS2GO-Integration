@@ -817,7 +817,7 @@ const Materials: React.FC = () => {
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.requirements.trim()) {
-      alert('Requirements field is required');
+      alert('Please fill out this field');
       return;
     }
 
@@ -1281,6 +1281,7 @@ const Materials: React.FC = () => {
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline focus:outline-gray-300"
+                  disabled={getCompatibleDrivers(selectedMaterialForAssign).length === 0}
                 >
                   <option value="">Choose a driver...</option>
                   {getCompatibleDrivers(selectedMaterialForAssign).map((driver) => (
@@ -1289,6 +1290,9 @@ const Materials: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {getCompatibleDrivers(selectedMaterialForAssign).length === 0 && (
+                  <p className="text-red-600 text-sm mt-2">No compatible drivers found!</p>
+                )}
               </div>
 
               {/* Buttons */}
@@ -1302,7 +1306,7 @@ const Materials: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={assigning}
+                  disabled={assigning || getCompatibleDrivers(selectedMaterialForAssign).length === 0}
                   className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50"
                 >
                   {assigning ? "Assigning..." : "Assign Driver"}

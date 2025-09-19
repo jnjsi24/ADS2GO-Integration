@@ -103,6 +103,15 @@ const nextMonth = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [errors, setErrors] = useState<{ 
+    plan?: string; 
+    material?: string; 
+    title?: string; 
+    description?: string; 
+    startDate?: string; 
+    mediaFile?: string; 
+  }>({});
+  const [mediaDurationSec, setMediaDurationSec] = useState<number | null>(null);
 
   // Function to calculate end date based on start date and duration
   const calculateEndDate = (startDate: string, durationDays: number): string => {
@@ -212,12 +221,80 @@ const nextMonth = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Require plan selected first to know allowed ad length for videos
+      if (!selectedPlan) {
+        setErrors(prev => ({ ...prev, mediaFile: 'Please select a plan first' }));
+        return;
+      }
+
+      // Validate file type by extension
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'mp4', 'mov', 'webm', 'avi'];
+      const extension = (file.name.split('.').pop() || '').toLowerCase();
+      if (!allowedExtensions.includes(extension)) {
+        setErrors(prev => ({ ...prev, mediaFile: 'Unsupported file type. Allowed types: JPG, JPEG, PNG, MP4, MOV, WEBM, AVI.' }));
+        return;
+      }
+
+      // Dynamic file size limit
+      let maxSizeMB = 50; // default for images and as baseline
+      if (file.type.startsWith('video/')) {
+        const adLen = selectedPlan?.adLengthSeconds || 30;
+        // Heuristic limits by ad length
+        if (adLen <= 20) maxSizeMB = 150;
+        else if (adLen <= 30) maxSizeMB = 250;
+        else if (adLen <= 60) maxSizeMB = 400;
+        else maxSizeMB = 500;
+      }
+      const maxSizeBytes = maxSizeMB * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        setErrors(prev => ({ ...prev, mediaFile: `File is too large. Maximum allowed size for this plan is ${maxSizeMB} MB.` }));
+        return;
+      }
+
       const previewUrl = URL.createObjectURL(file);
+
+      // If video, check duration <= plan's adLengthSeconds
+      if (file.type.startsWith('video/')) {
+        const videoEl = document.createElement('video');
+        videoEl.preload = 'metadata';
+        videoEl.src = previewUrl;
+        videoEl.onloadedmetadata = () => {
+          const duration = videoEl.duration; // in seconds
+          setMediaDurationSec(duration);
+          const maxAllowed = selectedPlan?.adLengthSeconds || 0;
+          if (duration > maxAllowed + 0.2) { // small tolerance ~200ms
+            setErrors(prev => ({ 
+              ...prev, 
+              mediaFile: `Video is too long. Maximum allowed length for this plan is ${maxAllowed} seconds.` 
+            }));
+            // Do not set the invalid file
+            URL.revokeObjectURL(previewUrl);
+            return;
+          }
+
+          // Valid video: set state
+          setFormData({
+            ...formData,
+            mediaFile: file,
+            mediaPreview: previewUrl
+          });
+          setErrors(prev => ({ ...prev, mediaFile: undefined }));
+        };
+        videoEl.onerror = () => {
+          setErrors(prev => ({ ...prev, mediaFile: 'Could not load video metadata. Please try a different file.' }));
+          URL.revokeObjectURL(previewUrl);
+        };
+        return; // wait for metadata before setting state
+      }
+
+      // Non-video: set immediately
+      setMediaDurationSec(null);
       setFormData({
         ...formData,
         mediaFile: file,
         mediaPreview: previewUrl
       });
+      setErrors(prev => ({ ...prev, mediaFile: undefined }));
     }
   };
 
@@ -257,38 +334,60 @@ const nextMonth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const newErrors: typeof errors = {};
     if (!selectedPlan) {
-      alert('Please select a plan first');
-      return;
+      newErrors.plan = 'Please select a plan first';
+    }
+    if (!formData.materialId) {
+      newErrors.material = 'No suitable material found for the selected plan';
     }
 
-    if (!formData.materialId) {
-      alert('No suitable material found for the selected plan');
-      return;
+    // Trimmed checks for text fields
+    if (!formData.title || !formData.title.trim()) {
+      newErrors.title = 'Please fill out this field';
+    }
+    if (!formData.description || !formData.description.trim()) {
+      newErrors.description = 'Please fill out this field';
     }
 
     if (!formData.mediaFile) {
-      alert('Please upload a media file');
-      return;
+      newErrors.mediaFile = 'Please upload a media file';
     }
 
     if (!formData.startDate) {
-      alert('Please select a start date');
-      return;
+      newErrors.startDate = 'Please select a start date';
     }
+
+    // Ensure start date is not in the past
+    const startDateOnly = new Date(formData.startDate);
+    const todayDateOnly = new Date(new Date().toISOString().split('T')[0]);
+    if (startDateOnly < todayDateOnly) {
+      newErrors.startDate = 'Please select a start date that is today or later';
+    }
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
 
     try {
       // Upload media file to Firebase Storage
-      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile);
+      if (!formData.mediaFile) {
+        setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
+        return;
+      }
+      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
 
       // Determine ad format based on file type
-      const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
+      const fileExtension = (formData.mediaFile.name.split('.').pop() || '').toLowerCase();
       const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
       
       // Calculate start and end times
       const startTime = new Date(formData.startDate).toISOString();
+      if (!selectedPlan) {
+        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
+        return;
+      }
       const endTime = new Date(
-        new Date(formData.startDate).getTime() + selectedPlan.durationDays * 24 * 60 * 60 * 1000
+        new Date(formData.startDate).getTime() + selectedPlan!.durationDays * 24 * 60 * 60 * 1000
       ).toISOString();
       
       // Prepare the input for createAd mutation
@@ -299,7 +398,7 @@ const nextMonth = () => {
         planId: selectedPlan._id,
         adType: selectedPlan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL',
         adFormat: isVideo ? 'VIDEO' : 'IMAGE',
-        price: selectedPlan.totalPrice,
+        price: selectedPlan!.totalPrice,
         status: 'PENDING',
         startTime: startTime,
         endTime: endTime,
@@ -549,6 +648,9 @@ useEffect(() => {
             placeholder="Enter advertisement title"
             required
           />
+          {errors.title && (
+            <p className="text-sm text-red-600 mt-1">{errors.title}</p>
+          )}
         </div>
         
         <div>
@@ -563,6 +665,9 @@ useEffect(() => {
             placeholder="Describe your advertisement"
             required
           />
+          {errors.description && (
+            <p className="text-sm text-red-600 mt-1">{errors.description}</p>
+          )}
         </div>
 
         <div>
@@ -663,6 +768,9 @@ useEffect(() => {
               </span>
             </p>
           )}
+          {errors.startDate && (
+            <p className="text-sm text-red-600 mt-2">{errors.startDate}</p>
+          )}
         </div>
 
         {selectedPlan && (
@@ -692,7 +800,7 @@ useEffect(() => {
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <input
             type="file"
-            accept="image/*,video/mp4"
+            accept="image/*,video/mp4,video/quicktime,video/webm,video/x-msvideo"
             onChange={handleFileUpload}
             className="hidden"
             id="media-upload"
@@ -706,9 +814,18 @@ useEffect(() => {
               Click to upload media file
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              Supports: JPG, PNG, MP4 (Max file size: 50MB)
+              Supports: JPG, PNG, MP4. Max image size: 50MB. Max video size: {
+                selectedPlan ? (
+                  selectedPlan.adLengthSeconds <= 20 ? '150MB' :
+                  selectedPlan.adLengthSeconds <= 30 ? '250MB' :
+                  selectedPlan.adLengthSeconds <= 60 ? '400MB' : '500MB'
+                ) : 'based on plan'
+              }.
             </p>
           </label>
+          {errors.mediaFile && (
+            <p className="text-sm text-red-600 mt-3">{errors.mediaFile}</p>
+          )}
         </div>
 
         {/* Upload Progress Indicator */}

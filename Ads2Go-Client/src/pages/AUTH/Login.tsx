@@ -22,11 +22,11 @@ const Login: React.FC = () => {
     };
 
     if (!email.trim()) {
-      errors.email = 'Please Enter your Email address';
+      errors.email = 'Please enter your email address';
     }
 
     if (!password.trim()) {
-      errors.password = 'Please Enter your Password';
+      errors.password = 'Please enter your password';
     }
 
     setValidationErrors(errors);
@@ -90,25 +90,7 @@ const Login: React.FC = () => {
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // If login succeeded but we got an error, try to extract user data from the error or create mock data
-      if (error.user) {
-        storeUserData(error.user);
-      } else {
-        // For testing purposes, if login "fails" but we want to simulate success
-        // You can remove this part in production
-        if (email && password) {
-          const mockUser = {
-            email: email,
-            firstName: 'John', // You can extract this from email if needed
-            lastName: 'Doe',
-            name: 'John Doe',
-            displayName: 'John Doe'
-          };
-          storeUserData(mockUser);
-          console.log('Mock user data stored for testing');
-        }
-      }
-      
+      // If backend returns a user in error (unlikely), ignore storing and show error instead
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
