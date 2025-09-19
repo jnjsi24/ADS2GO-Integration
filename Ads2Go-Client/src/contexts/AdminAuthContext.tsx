@@ -356,7 +356,7 @@ export const AdminAuthProvider: React.FC<{
       throw new Error('Login failed');
     } catch (error: any) {
       console.error('Admin login error:', error.message || error);
-      alert(error.message || 'Login failed');
+      // Let the Login component handle error display instead of using alert()
       return null;
     }
   };

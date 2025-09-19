@@ -212,7 +212,7 @@ export const UserAuthProvider: React.FC<{
       }
     } catch (error: any) {
       console.error('User login error:', error.message || error);
-      alert(error.message || 'Login failed');
+      // Let the Login component handle error display instead of using alert()
       return null;
     }
   };
