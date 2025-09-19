@@ -289,9 +289,11 @@ const PaymentHistory: React.FC = () => {
             <p className="text-sm text-gray-600 mt-1">
               {item.paymentType || "N/A"}
             </p>
-            <p className="text-xs text-red-500 mt-5 font-semibold">
-              Please pay before October 25, 2023
-            </p>
+            {item.status === 'Pending' && (
+              <p className="text-xs text-red-500 mt-5 font-semibold">
+                Please pay before October 25, 2023
+              </p>
+            )}
           </div>
         </div>
         <span
