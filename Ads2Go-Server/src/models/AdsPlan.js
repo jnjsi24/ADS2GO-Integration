@@ -40,6 +40,13 @@ const adsPlanSchema = new mongoose.Schema({
   
   description: { type: String, required: true }, 
 
+  // Materials assigned to this plan
+  materials: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Material',
+    required: true 
+  }],
+
   // Status and scheduling
   status: { 
     type: String, 

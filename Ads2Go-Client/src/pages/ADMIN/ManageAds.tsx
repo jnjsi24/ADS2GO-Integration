@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   X, 
   Trash, 
@@ -20,20 +20,18 @@ import {
   UPDATE_AD,
   DELETE_AD,
   type Ad,
-  type User,
-  type Material,
-  type AdsPlan,
-  type UpdateAdInput
+  type User
 } from '../../graphql/admin/ads';
 import ScheduleTab from './tabs/ScheduleTab';
 import DeploymentTab from './tabs/DeploymentTab';
 import AnalyticsTab from './tabs/AnalyticsTab';
+import PlanAvailabilityTab from './tabs/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
   
   // Tab management
-  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics' | 'availability'>('ads');
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
@@ -215,7 +213,8 @@ const ManageAds: React.FC = () => {
     { id: 'ads', label: 'All Ads', icon: Monitor },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'deployment', label: 'Deployment', icon: PlayCircle },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 }
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'availability', label: 'Plan Availability', icon: CalendarRange }
   ];
 
   // Filter functions
@@ -450,6 +449,9 @@ const ManageAds: React.FC = () => {
 
         {/* Analytics Tab */}
         {activeTab === 'analytics' && <AnalyticsTab />}
+
+        {/* Plan Availability Tab */}
+        {activeTab === 'availability' && <PlanAvailabilityTab />}
       </div>
 
       {/* Ad Details Modal */}

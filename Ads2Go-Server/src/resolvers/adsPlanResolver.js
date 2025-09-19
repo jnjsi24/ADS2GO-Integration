@@ -1,4 +1,5 @@
 const AdsPlan = require('../models/AdsPlan');
+const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 
 // Helper function to get pricePerPlay rules
 const getPricePerPlay = (vehicleType, materialType, override = null) => {
@@ -81,28 +82,6 @@ const calculatePricing = (
 };
 
 module.exports = {
-  Query: {
-    getAllAdsPlans: async () => {
-      return await AdsPlan.find().sort({ createdAt: -1 });
-    },
-
-    getAdsPlanById: async (_, { id }) => {
-      return await AdsPlan.findById(id);
-    },
-
-    getAdsPlansByFilter: async (
-      _,
-      { category, materialType, vehicleType, numberOfDevices, status }
-    ) => {
-      const filter = {};
-      if (category) filter.category = category.toUpperCase();
-      if (materialType) filter.materialType = materialType.toUpperCase();
-      if (vehicleType) filter.vehicleType = vehicleType.toUpperCase();
-      if (numberOfDevices) filter.numberOfDevices = numberOfDevices;
-      if (status) filter.status = status.toUpperCase();
-      return await AdsPlan.find(filter);
-    },
-  },
 
   Mutation: {
     createAdsPlan: async (_, { input }, { user }) => {
@@ -231,6 +210,79 @@ module.exports = {
         { status: 'ENDED', endDate: new Date() },
         { new: true }
       );
+    },
+  },
+
+  Query: {
+    getAllAdsPlans: async () => {
+      return await AdsPlan.find().sort({ createdAt: -1 });
+    },
+
+    getAdsPlanById: async (_, { id }) => {
+      return await AdsPlan.findById(id);
+    },
+
+    getAdsPlansByFilter: async (
+      _,
+      { category, materialType, vehicleType, numberOfDevices, status }
+    ) => {
+      const filter = {};
+      if (category) filter.category = category.toUpperCase();
+      if (materialType) filter.materialType = materialType.toUpperCase();
+      if (vehicleType) filter.vehicleType = vehicleType.toUpperCase();
+      if (numberOfDevices) filter.numberOfDevices = numberOfDevices;
+      if (status) filter.status = status.toUpperCase();
+      return await AdsPlan.find(filter);
+    },
+
+    getPlanAvailability: async (_, { planId, desiredStartDate }, { user }) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+      
+      try {
+        const availability = await MaterialAvailabilityService.validatePlanAvailability(
+          planId, 
+          desiredStartDate
+        );
+        
+        return {
+          canCreate: availability.canCreate,
+          plan: availability.plan,
+          materialAvailabilities: availability.materialAvailabilities,
+          totalAvailableSlots: availability.totalAvailableSlots,
+          availableMaterialsCount: availability.availableMaterialsCount,
+          nextAvailableDate: availability.nextAvailableDate ? 
+            new Date(availability.nextAvailableDate).toISOString() : null
+        };
+      } catch (error) {
+        throw new Error(`Error checking plan availability: ${error.message}`);
+      }
+    },
+
+    getMaterialsAvailability: async (_, { materialIds }, { user }) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+      
+      try {
+        return await MaterialAvailabilityService.getMaterialsAvailability(materialIds);
+      } catch (error) {
+        throw new Error(`Error getting materials availability: ${error.message}`);
+      }
+    },
+
+    getAvailabilitySummary: async (_, __, { user }) => {
+      if (!user || !['ADMIN', 'SUPERADMIN'].includes(user.role)) {
+        throw new Error('Unauthorized: Admin access required');
+      }
+      
+      try {
+        const summary = await MaterialAvailabilityService.getAvailabilitySummary();
+        return JSON.stringify(summary);
+      } catch (error) {
+        throw new Error(`Error getting availability summary: ${error.message}`);
+      }
     },
   },
 };

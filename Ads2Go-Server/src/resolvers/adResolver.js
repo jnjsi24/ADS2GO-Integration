@@ -4,6 +4,7 @@ const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
+const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 
 const adResolvers = {
   Query: {
@@ -58,7 +59,7 @@ const adResolvers = {
         throw new Error('Please verify your email before creating an advertisement');
       }
 
-      const plan = await Plan.findById(input.planId);
+      const plan = await Plan.findById(input.planId).populate('materials');
       if (!plan) throw new Error('Invalid plan selected');
 
       if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
@@ -67,25 +68,40 @@ const adResolvers = {
 
       if (!input.adFormat) throw new Error('adFormat is required');
 
-      const material = await Material.findById(input.materialId);
-      if (!material) throw new Error('Material not found');
-
       // IMPORTANT: Ensure mediaFile is a Firebase Storage URL
       if (!input.mediaFile || !input.mediaFile.startsWith('http')) {
         throw new Error('Media file must be uploaded to Firebase first');
+      }
+
+      // Validate plan availability
+      const userDesiredStartDate = new Date(input.startTime);
+      const availability = await MaterialAvailabilityService.validatePlanAvailability(
+        input.planId, 
+        userDesiredStartDate
+      );
+
+      if (!availability.canCreate) {
+        const nextAvailable = availability.nextAvailableDate ? 
+          new Date(availability.nextAvailableDate).toLocaleDateString() : 'Unknown';
+        throw new Error(`No available materials or slots for selected plan. Next available: ${nextAvailable}`);
       }
 
       // Calculate total price
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
 
-      const startTime = new Date(input.startTime);
-      const endTime = new Date(startTime);
-      endTime.setDate(startTime.getDate() + plan.durationDays);
+      // 7-day admin buffer: Set start time 7 days earlier for admin review
+      const adminReviewStartTime = new Date(userDesiredStartDate);
+      adminReviewStartTime.setDate(adminReviewStartTime.getDate() - 7);
+
+      const endTime = new Date(userDesiredStartDate);
+      endTime.setDate(endTime.getDate() + plan.durationDays);
 
       const ad = new Ad({
         ...input,
         userId: user.id,
+        // Remove materialId from input since it will be assigned from plan
+        materialId: plan.materials[0]._id, // Assign first material from plan
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
         adLengthSeconds: plan.adLengthSeconds,
@@ -94,9 +110,11 @@ const adResolvers = {
         pricePerPlay: plan.pricePerPlay,
         totalPrice,
         price: totalPrice,
-        startTime,
+        startTime: adminReviewStartTime, // Admin review time (7 days earlier)
         endTime,
+        userDesiredStartTime: userDesiredStartDate, // Store user's desired start time
         status: 'PENDING',
+        adStatus: 'INACTIVE', // Will be activated after admin approval
         impressions: 0,
         reasonForReject: null,
         approveTime: null,

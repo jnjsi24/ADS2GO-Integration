@@ -78,6 +78,7 @@ const AdSchema = new mongoose.Schema({
   impressions: { type: Number, default: 0 },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true }, // calculated based on startTime + plan duration
+  userDesiredStartTime: { type: Date, default: null }, // User's desired start time (7 days after admin review)
   reasonForReject: { type: String, default: null },
   approveTime: { type: Date, default: null },
   rejectTime: { type: Date, default: null }
