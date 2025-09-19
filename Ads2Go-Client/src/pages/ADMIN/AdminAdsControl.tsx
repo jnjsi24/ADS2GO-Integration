@@ -66,6 +66,11 @@ const AdminAdsControl: React.FC = () => {
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [adAnalytics, setAdAnalytics] = useState<AdAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Debug loading state changes
+  useEffect(() => {
+    console.log('🔄 Loading state changed to:', loading);
+  }, [loading]);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showScreenDetails, setShowScreenDetails] = useState(false);
@@ -74,6 +79,7 @@ const AdminAdsControl: React.FC = () => {
   const [selectedDeviceForModal, setSelectedDeviceForModal] = useState<ScreenData | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
   // Inline API service to bypass any caching issues
   const inlineApiService = {
@@ -114,23 +120,23 @@ const AdminAdsControl: React.FC = () => {
     }
   };
 
-  // Data fetching functions
+  // Data fetching functions - only for initial load and manual refresh
   const fetchData = async (isManualRefresh = false) => {
-    const isInitialLoad = screens.length === 0;
+    const isInitialLoad = !hasInitiallyLoaded;
     
     try {
       if (isManualRefresh) {
+        console.log('🔄 Manual refresh - setting refreshing state');
         setIsRefreshing(true);
         setError(null);
       } else if (isInitialLoad) {
-        // Only show loading on initial load, not on auto-refresh
+        console.log('🔄 Initial load - setting loading state');
         setLoading(true);
       }
-      // Don't clear error on auto-refresh to avoid flickering
       
       console.log('🔄 Fetching data from server...');
       
-      // First, try to fetch screens data separately to debug
+      // Fetch screens data
       try {
         console.log('🔍 Fetching screens data...');
         const screensResponse = await inlineApiService.getScreens();
@@ -138,14 +144,7 @@ const AdminAdsControl: React.FC = () => {
         
         if (screensResponse && Array.isArray(screensResponse.screens)) {
           console.log(`✅ Found ${screensResponse.screens.length} screens`);
-          // Only update if data has actually changed to prevent unnecessary re-renders
-          setScreens(prevScreens => {
-            const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
-            if (hasChanged) {
-              console.log('📊 Screen data updated');
-            }
-            return screensResponse.screens;
-          });
+          setScreens(screensResponse.screens);
           
           // Log all device IDs for debugging
           console.log('📋 Device IDs:', screensResponse.screens.map((s: any) => ({
@@ -165,7 +164,7 @@ const AdminAdsControl: React.FC = () => {
         setScreens([]);
       }
       
-      // Then fetch other data in parallel
+      // Fetch other data in parallel
       try {
         console.log('🔄 Fetching additional data...');
         const [complianceData, analyticsData] = await Promise.all([
@@ -177,7 +176,6 @@ const AdminAdsControl: React.FC = () => {
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data:', otherError);
-        // We can continue with partial data
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -185,11 +183,56 @@ const AdminAdsControl: React.FC = () => {
     } finally {
       // Only set loading to false on initial load or manual refresh
       if (isInitialLoad || isManualRefresh) {
+        console.log('🔄 Setting loading to false - isInitialLoad:', isInitialLoad, 'isManualRefresh:', isManualRefresh);
         setLoading(false);
+      }
+      // Mark as initially loaded after first successful load
+      if (isInitialLoad) {
+        setHasInitiallyLoaded(true);
       }
       // Always reset refreshing state
       setIsRefreshing(false);
       setLastRefresh(new Date());
+    }
+  };
+
+  // Auto-refresh function that never shows loading
+  const autoRefreshData = async () => {
+    try {
+      console.log('🔄 Auto-refresh - fetching data silently...');
+      
+      // Fetch screens data
+      try {
+        const screensResponse = await inlineApiService.getScreens();
+        if (screensResponse && Array.isArray(screensResponse.screens)) {
+          setScreens(prevScreens => {
+            const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
+            if (hasChanged) {
+              console.log('📊 Screen data updated via auto-refresh');
+            }
+            return screensResponse.screens;
+          });
+        }
+      } catch (screensError) {
+        console.error('❌ Error fetching screens during auto-refresh:', screensError);
+      }
+      
+      // Fetch other data in parallel
+      try {
+        const [complianceData, analyticsData] = await Promise.all([
+          inlineApiService.getComplianceReport(),
+          inlineApiService.getAdAnalytics()
+        ]);
+        
+        setComplianceReport(complianceData);
+        setAdAnalytics(analyticsData);
+      } catch (otherError) {
+        console.error('❌ Error fetching additional data during auto-refresh:', otherError);
+      }
+      
+      setLastRefresh(new Date());
+    } catch (err) {
+      console.error('Error during auto-refresh:', err);
     }
   };
 
@@ -198,7 +241,7 @@ const AdminAdsControl: React.FC = () => {
     fetchData();
     
     // Set up auto-refresh every 5 seconds for real-time updates
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(autoRefreshData, 5000);
     return () => clearInterval(interval);
   }, []);
 
