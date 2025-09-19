@@ -121,14 +121,12 @@ const AdminAdsControl: React.FC = () => {
     try {
       if (isManualRefresh) {
         setIsRefreshing(true);
+        setError(null);
       } else if (isInitialLoad) {
         // Only show loading on initial load, not on auto-refresh
         setLoading(true);
       }
       // Don't clear error on auto-refresh to avoid flickering
-      if (isManualRefresh) {
-        setError(null);
-      }
       
       console.log('🔄 Fetching data from server...');
       
@@ -293,6 +291,21 @@ const AdminAdsControl: React.FC = () => {
   // Real data will be loaded from the API via the fetchData function
   const [alerts, setAlerts] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>({});
+
+  // Mock data for analytics and alerts (fallback)
+  const mockAnalytics = {
+    totalViewTime: '2h 45m',
+    avgCompletionRate: 87,
+    totalImpressions: 1250,
+    totalRevenue: 3125
+  };
+
+  const mockAlerts = [
+    { id: 1, type: 'critical', message: 'Device ABC123 offline for 2+ hours', timestamp: '2 minutes ago' },
+    { id: 2, type: 'high', message: 'Low battery on device XYZ789', timestamp: '15 minutes ago' },
+    { id: 3, type: 'medium', message: 'Ad playback error on device DEF456', timestamp: '1 hour ago' },
+    { id: 4, type: 'low', message: 'Scheduled maintenance completed', timestamp: '2 hours ago' }
+  ];
 
   const getStatusIcon = (status: string) => {
     switch (status) {
