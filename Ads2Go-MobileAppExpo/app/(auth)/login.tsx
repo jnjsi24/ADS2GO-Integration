@@ -1,6 +1,4 @@
-//LOGIN
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,11 +8,12 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams, type Router } from "expo-router";
+import { useAuth } from '../../contexts/AuthContext';
 import { request, gql } from "graphql-request";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
-import { Ionicons } from "@expo/vector-icons"; // icons for password toggle + socials
+import { Ionicons } from "@expo/vector-icons";
 
 import API_CONFIG from "../../config/api";
 const API_URL = API_CONFIG.API_URL;
@@ -60,21 +59,59 @@ type LoginResponse = {
   };
 };
 
+type LoginFormState = {
+  email: string;
+  password: string;
+  showPassword: boolean;
+  loading: boolean;
+  rememberMe: boolean;
+  successMessage: string | null;
+};
+
 export default function Login() {
+  const { signIn } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false); // New state for the checkbox
+  const params = useLocalSearchParams<{ message?: string }>();
+  
+  const [formState, setFormState] = useState<LoginFormState>({
+    email: "",
+    password: "",
+    showPassword: false,
+    loading: false,
+    rememberMe: false,
+    successMessage: null,
+  });
+  
+  // Handle success messages from navigation
+  useEffect(() => {
+    const message = Array.isArray(params?.message) 
+      ? params.message[0] 
+      : params?.message;
+      
+    if (message) {
+      setFormState(prev => ({
+        ...prev,
+        successMessage: message.toString()
+      }));
+      
+      const timer = setTimeout(() => {
+        setFormState(prev => ({
+          ...prev,
+          successMessage: null
+        }));
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [params?.message]);
 
   const handleLogin = async () => {
     try {
-      setLoading(true);
+      setFormState(prev => ({ ...prev, loading: true }));
 
       const variables = {
-        email,
-        password,
+        email: formState.email,
+        password: formState.password,
         deviceInfo: {
           deviceId: Device.osBuildId || "unknown_device",
           deviceType: Device.osName || "unknown_os",
@@ -82,109 +119,70 @@ export default function Login() {
         },
       };
 
-      const data = await request<LoginResponse>(
+      const response = await request<LoginResponse>(
         API_URL,
         LOGIN_MUTATION,
         variables
       );
 
-      console.log("Login response:", JSON.stringify(data, null, 2));
-      console.log("Driver data:", data.loginDriver?.driver);
-      console.log("Driver ID:", data.loginDriver?.driver?.driverId);
-      console.log("Driver _id:", data.loginDriver?.driver?.id);
+      if (response.loginDriver?.success && response.loginDriver.token) {
+        // Sign in using our auth context which will handle token storage
+        await signIn(response.loginDriver.token);
 
-      if (data.loginDriver?.message?.includes("PENDING")) {
-        const pendingDriver = data.loginDriver.driver || {
-          email: variables.email,
-          driverId: "",
-          firstName: "",
-          accountStatus: "PENDING",
-          isEmailVerified: false,
-        };
-
-        await AsyncStorage.setItem(
-          "pendingDriver",
-          JSON.stringify(pendingDriver)
-        );
-
-        router.push({
-          pathname: "/(auth)/verificationProgress",
-          params: {
-            email: pendingDriver.email,
-            driverId: pendingDriver.driverId,
-            token: "",
-            firstName: pendingDriver.firstName,
-            isPending: true,
-          },
-        } as any);
-        return;
-      }
-
-      if (data.loginDriver?.success && data.loginDriver.token) {
-        // Here's where you would add the logic to save the token if 'rememberMe' is true
-        // For example: if (rememberMe) { await AsyncStorage.setItem("token", data.loginDriver.token); }
-
-        await AsyncStorage.setItem("token", data.loginDriver.token);
-
-        if (data.loginDriver.driver) {
-          console.log("📱 Storing driver data in AsyncStorage...");
-          
-          // Store driver info
+        if (response.loginDriver.driver) {
+          // Store driver info in AsyncStorage
           await AsyncStorage.setItem(
             "driverInfo",
-            JSON.stringify(data.loginDriver.driver)
+            JSON.stringify(response.loginDriver.driver)
           );
-          console.log("✅ Stored driverInfo");
           
           // Store driver ID separately for easy access
-          const driverId = data.loginDriver.driver.driverId || data.loginDriver.driver.id;
-          console.log("🔑 Extracted driverId:", driverId);
-          
+          const driverId = response.loginDriver.driver.driverId || 
+                         response.loginDriver.driver.id;
           if (driverId) {
             await AsyncStorage.setItem("driverId", driverId);
-            console.log("✅ Stored driverId in AsyncStorage:", driverId);
-          } else {
-            console.log("❌ No driverId found in driver data");
           }
-          
-          // Debug: Verify what was stored
-          const storedDriverId = await AsyncStorage.getItem("driverId");
-          const storedDriverInfo = await AsyncStorage.getItem("driverInfo");
-          console.log("🔍 Verification - stored driverId:", storedDriverId);
-          console.log("🔍 Verification - stored driverInfo:", storedDriverInfo);
         }
 
-        const shouldRedirect =
-          data.loginDriver.driver?.accountStatus?.toLowerCase() === "pending" ||
-          !data.loginDriver.driver?.isEmailVerified;
+        // Check if the account needs verification
+        const needsVerification = 
+          response.loginDriver.driver?.accountStatus?.toLowerCase() === "pending" ||
+          !response.loginDriver.driver?.isEmailVerified;
 
-        if (shouldRedirect) {
-          const params = {
-            email: data.loginDriver.driver?.email || "",
-            driverId:
-              data.loginDriver.driver?.driverId ||
-              data.loginDriver.driver?.id ||
-              "",
-            token: data.loginDriver.token,
-            firstName: data.loginDriver.driver?.firstName || "",
+        if (needsVerification && response.loginDriver.driver) {
+          // Navigate to verification screen if needed
+          const navParams = {
+            email: response.loginDriver.driver.email || "",
+            driverId: response.loginDriver.driver.driverId || 
+                     response.loginDriver.driver.id || "",
+            firstName: response.loginDriver.driver.firstName || "",
+            token: response.loginDriver.token,
           };
-
+        
+          // Type assertion to handle Expo Router's navigation params
           router.push({
             pathname: "/(auth)/verificationProgress",
-            params,
-          } as any);
+            params: navParams as Record<string, string>,
+          });
         } else {
-          Alert.alert(
-            "Login Success",
-            `Welcome ${data.loginDriver.driver?.firstName || ""}!`
-          );
+          // Navigate to main app if no verification needed
           router.replace("/(tabs)");
         }
       } else {
-        Alert.alert(
-          "Login Failed",
-          data.loginDriver?.message || "Something went wrong"
-        );
+        // Show error message if login failed
+        setFormState(prev => ({
+          ...prev,
+          loading: false,
+          successMessage: response.loginDriver?.message || "Login failed. Please try again."
+        }));
+        
+        // Clear the error message after 5 seconds
+        setTimeout(() => {
+          setFormState(prev => ({
+            ...prev,
+            successMessage: null
+          }));
+        }, 5000);
       }
     } catch (err: any) {
       console.error("Login error:", err);
@@ -193,7 +191,7 @@ export default function Login() {
         err.response?.errors?.[0]?.message || "Network error"
       );
     } finally {
-      setLoading(false);
+      setFormState(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -202,8 +200,14 @@ export default function Login() {
       {/* Logo / Brand */}
       <View style={styles.header}>
         <Text style={styles.logo}>✨</Text>
-        <Text style={styles.title}>Ads2go</Text>
+        <Text style={styles.subtitle}>Sign in to continue</Text>
       </View>
+
+      {formState.successMessage && (
+        <View style={styles.successContainer}>
+          <Text style={styles.successText}>{formState.successMessage}</Text>
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabContainer}>
@@ -226,8 +230,8 @@ export default function Login() {
           placeholder="Your email"
           placeholderTextColor="#aaa"
           autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
+          value={formState.email}
+          onChangeText={(email) => setFormState(prev => ({ ...prev, email }))}
         />
 
         <Text style={styles.label}>Password</Text>
@@ -236,14 +240,14 @@ export default function Login() {
             style={[styles.input, { flex: 5, marginBottom: 0, borderWidth: 0 }]}
             placeholder="Password"
             placeholderTextColor="#aaa"
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
+            secureTextEntry={!formState.showPassword}
+            value={formState.password}
+            onChangeText={(password) => setFormState(prev => ({ ...prev, password }))}
           />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.passwordToggle}>
+          <TouchableOpacity onPress={() => setFormState(prev => ({ ...prev, showPassword: !prev.showPassword }))} style={styles.passwordToggle}>
               <Ionicons
-                name={showPassword ? "eye-off-outline" : "eye-outline"}
-                size={22}
+                name={formState.showPassword ? "eye-off" : "eye"}
+                size={20}
                 color="#666"
               />
             </TouchableOpacity>
@@ -252,14 +256,17 @@ export default function Login() {
         {/* New container for the remember me and forgot password links */}
         <View style={styles.formLinksContainer}>
           {/* Remember Me Checkbox */}
-          <TouchableOpacity style={styles.rememberMeContainer} onPress={() => setRememberMe(!rememberMe)}>
-            <Ionicons
-              name={rememberMe ? "checkbox-outline" : "square-outline"}
-              size={20}
-              color={rememberMe ? "#38b2ac" : "#666"}
-            />
-            <Text style={styles.rememberMeText}>Remember me</Text>
-          </TouchableOpacity>
+          <TouchableOpacity 
+          style={styles.rememberMeContainer} 
+          onPress={() => setFormState(prev => ({ ...prev, rememberMe: !prev.rememberMe }))}
+        >
+          <Ionicons
+            name={formState.rememberMe ? "checkbox-outline" : "square-outline"}
+            size={20}
+            color={formState.rememberMe ? "#38b2ac" : "#666"}
+          />
+          <Text style={styles.rememberMeText}>Remember me</Text>
+        </TouchableOpacity>
 
           {/* Forgot Password Link */}
           <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/(auth)/forgotPass")}>
@@ -271,9 +278,9 @@ export default function Login() {
         <TouchableOpacity
           style={styles.loginBtn}
           onPress={handleLogin}
-          disabled={loading}
+          disabled={formState.loading}
         >
-          {loading ? (
+          {formState.loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.loginBtnText}>Log In</Text>
@@ -302,6 +309,23 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", justifyContent: "center", padding: 20 },
+  successContainer: {
+    backgroundColor: '#e8f5e9',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+  },
+  successText: {
+    color: '#2e7d32',
+    fontSize: 14,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 8,
+  },
   header: { alignItems: "center", marginBottom: 30 },
   logo: { fontSize: 30 },
   title: { fontSize: 22, fontWeight: "700", marginTop: 8 },

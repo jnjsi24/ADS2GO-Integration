@@ -121,6 +121,50 @@ const resolvers = {
 Upload: GraphQLUpload,
 
   Query: {
+    checkDriverVerificationStatus: async (_, { driverId }) => {
+      try {
+        console.log('Checking verification status for driverId:', driverId);
+        const driver = await Driver.findOne({ driverId });
+
+        if (!driver) {
+          console.log('Driver not found with driverId:', driverId);
+          return { 
+            status: 'not_found',
+            isEmailVerified: false,
+            message: 'Driver not found'
+          };
+        }
+
+        console.log('Found driver with status:', driver.accountStatus);
+        return {
+          status: driver.accountStatus?.toLowerCase() || 'pending',
+          isEmailVerified: driver.isEmailVerified || false,
+          message: 'Status retrieved successfully'
+        };
+      } catch (error) {
+        console.error('Error checking driver verification status:', error);
+        throw new Error('Failed to check verification status');
+      }
+    },
+    
+    getDriverByVerificationCode: async (_, { email, verificationCode }) => {
+      try {
+        const normalizedEmail = email.toLowerCase().trim();
+        const driver = await Driver.findOne({ 
+          email: normalizedEmail,
+          emailVerificationCode: verificationCode
+        });
+
+        if (!driver) {
+          throw new Error('Driver not found with the provided credentials');
+        }
+
+        return driver;
+      } catch (error) {
+        console.error('Error getting driver by verification code:', error);
+        throw new Error('Failed to retrieve driver information');
+      }
+    },
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
       return Driver.find({})

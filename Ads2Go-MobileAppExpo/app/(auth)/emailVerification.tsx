@@ -130,15 +130,24 @@ const EmailVerification = () => {
       });
 
       const result = await response.json();
+      console.log('Verification response:', result);
 
       if (result.data?.verifyDriverEmail?.success) {
-        // Navigate to verification progress screen
-        navigation.navigate('(auth)/verificationProgress' as any, {
+        // Navigate to verification progress screen with the verification code
+        const verificationCodeString = codeToVerify;
+        console.log('Navigating with verification code:', verificationCodeString);
+        
+        // Create params object with correct typing
+        const params = {
           email,
+          verificationCode: verificationCodeString,
           driverId,
           token,
           firstName: firstName || ''
-        } as any);
+        };
+        
+        console.log('Navigation params:', params);
+        navigation.navigate('(auth)/verificationProgress', params);
       } else {
         const errorMessage = result.data?.verifyDriverEmail?.message || 
                            result.errors?.[0]?.message || 

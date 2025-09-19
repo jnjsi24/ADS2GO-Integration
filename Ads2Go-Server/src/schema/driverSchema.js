@@ -295,10 +295,18 @@ const typeDefs = gql`
   """
   QUERIES
   """
+  type DriverVerificationStatus {
+    status: String!
+    isEmailVerified: Boolean!
+    message: String
+  }
+
   type Query {
     getAllDrivers: [Driver!]!
     getDriverById(driverId: ID!): Driver
     getDriver(driverId: ID!): DriverResponse!
+    checkDriverVerificationStatus(driverId: ID!): DriverVerificationStatus
+    getDriverByVerificationCode(email: String!, verificationCode: String!): Driver
     getPendingDrivers: [Driver!]!
     getDriversWithPendingEdits: [Driver!]!
     getDriverWithMaterial(driverId: ID!): DriverWithMaterial
