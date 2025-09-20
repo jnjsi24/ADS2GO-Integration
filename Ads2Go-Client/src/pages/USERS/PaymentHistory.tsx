@@ -4,6 +4,8 @@ import { Search, ChevronDown } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import Payment from "./Payment";
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 
 type Status = "Paid" | "Pending" | "Failed";
@@ -61,16 +63,21 @@ const getInitials = (firstName?: string, lastName?: string) => {
   return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
 };
 
+const planFilterOptions = ['All Plans', '30 Days', '60 Days', '90 Days', '120 Days'];
+const statusFilterOptions = ['All Status', 'Paid', 'Pending', 'Failed'];
+
+
 const PaymentHistory: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<Status | "All Status">(
-    "All Status"
-  );
-  const [planFilter, setPlanFilter] = useState("All Plans");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const navigate = useNavigate();
   const { user } = useUserAuth();
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+
   const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(
     null
   );
@@ -143,7 +150,6 @@ const PaymentHistory: React.FC = () => {
   useEffect(() => {
     refetch();
   }, [refetch]);
-  
   const mapStatus = (status?: string): Status => {
     if (!status) return "Pending";
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() as Status;
@@ -158,9 +164,9 @@ const PaymentHistory: React.FC = () => {
         .toLowerCase()
         .includes(searchTerm.toLowerCase().trim()) ||
       item.id.toString().includes(searchTerm.trim());
-    const matchesStatus =
-      statusFilter === "All Status" || item.status === statusFilter;
-    const matchesPlan = planFilter === "All Plans" || item.plan === planFilter;
+      
+    const matchesPlan = selectedPlanFilter === 'All Plans' || item.plan === selectedPlanFilter;
+    const matchesStatus = selectedStatusFilter === 'All Status' || item.status === selectedStatusFilter;
 
     return matchesSearchTerm && matchesStatus && matchesPlan;
   });
@@ -183,9 +189,9 @@ const PaymentHistory: React.FC = () => {
   const getStatusStyle = (status: Status) => {
     switch (status) {
       case "Paid":
-        return "bg-green-300 text-green-800";
+        return "bg-green-200 text-green-700";
       case "Pending":
-        return "bg-yellow-300 text-yellow-800";
+        return "bg-yellow-200 text-yellow-700";
       case "Failed":
         return "bg-red-300 text-red-800";
       default:
@@ -206,6 +212,16 @@ const PaymentHistory: React.FC = () => {
       }
     };
 
+  const handlePlanFilterChange = (plan: string) => {
+    setSelectedPlanFilter(plan);
+    setShowPlanDropdown(false);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
+
   const handlePaymentClick = (type: string) => {
     setSelectedPaymentType(type);
     setIsModalOpen(true);
@@ -214,18 +230,15 @@ const PaymentHistory: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedPaymentType("");
-    refetch(); // Refresh data after payment
-  };
-
-  const handlePaymentSuccess = () => {
-    refetch(); // Refresh data on successful payment
+    refetch();
   };
 
   return (
-    <div className="min-h-screen bg-white pl-72 p-10">
-      {/* Header with Search and Profile */}
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
+      {/* Header with Title*/}
       <div className="flex justify-between items-center mb-6 pt-10">
-        <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
+        <h1 className="text-3xl ml-5 font-bold text-gray-800">Payment History</h1>
         <div className="flex flex-col items-end gap-3">
           <div className="flex gap-2">
             <input type="text" 
@@ -233,93 +246,128 @@ const PaymentHistory: React.FC = () => {
               placeholder="Search Advertisements" 
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
             />
-            <div className="relative w-40">
-              <select
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as Status | "All Status")
-                }
-                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-              >
-                <option value="All Status">All Status</option>
-                <option value="Paid">Paid</option>
-                <option value="Pending">Pending</option>
-                <option value="Failed">Failed</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
+
+            {/* Filter for Plans */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedPlanFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showPlanDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {planFilterOptions.map((plan) => (
+                      <button
+                        key={plan}
+                        onClick={() => handlePlanFilterChange(plan)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {plan}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="relative w-40">
-              <select
-                value={planFilter}
-                onChange={(e) => setPlanFilter(e.target.value)}
-                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-              >
-                <option>All Plans</option>
-                <option>30 Days</option>
-                <option>60 Days</option>
-                <option>90 Days</option>
-                <option>120 Days</option>
-              </select>
-              <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
+            {/* Filter for Status */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedStatusFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
       </div>
 
       {/* Payment Cards */}
-      <div className="bg-white pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-  {currentPayments.length > 0 ? (
-    currentPayments.map((item) => (
-      <div
-        key={item.id}
-         className="rounded-lg shadow-md bg-white overflow-hidden cursor-pointer relative"
-        onClick={() => setSelectedPayment(item)}
-      >
+      <div className="bg-white pt-6 ml-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {currentPayments.length > 0 ? (
+          currentPayments.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-lg shadow-md bg-white overflow-hidden relative flex flex-col cursor-pointer"
+              onClick={() => setSelectedPayment(item)}
+            >
               {/* Main Product Info Section */}
-        <div className="p-4 flex items-center space-x-4">
-          <div className="flex-grow">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-bold text-black">{item.productName}</h3>
+              <div className="p-4 flex-grow flex items-start space-x-4">
+                <div className="flex-grow">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <span className="font-bold">{item.productName}</span>
+                      </p>
+                      <h3 className="text-2xl font-bold text-[#FF9B45]">{item.totalPrice}</h3>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {item.paymentType || "N/A"}
+                  </p>
+                  {item.status === "Pending" && (
+                    <p className="text-xs text-red-500 mt-5 font-semibold">
+                      Please pay before October 25, 2023
+                    </p>
+                  )}
+
+                </div>
+              </div>
+              <span
+                className={`absolute top-2 right-2 inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                  item.status
+                )}`}
+              >
+                {item.status} {/* Changed to display the full status text */}
+              </span>
+
+              {/* Footer for the button */}
+              <div className="p-1 bg-gray-100 hover:bg-gray-200 mt-auto transition-colors">
+                <button
+                  onClick={() => setSelectedPayment(item)}
+                  className="text-gray-500 text-xs font-semibold px-4 py-2 flex justify-center items-center text-center w-full"
+                  >
+                    View Details →
+                </button>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              {item.paymentType || "NONE"}
-            </p>
-            {item.status === 'Pending' && (
-              <p className="text-xs text-red-500 mt-5 font-semibold">
-                No Payment has been made yet
-              </p>
-            )}
+          ))
+        ) : (
+          <div className="col-span-full text-center text-gray-500 py-8">
+            No payments found for the selected filters.
           </div>
-        </div>
-        <span
-          className={`absolute top-2 right-2 inline-flex items-center justify-center px-2 py-1 rounded-full ${getStatusStyle(
-            item.status
-          )}`}
-        >
-           <span className="text-xs font-semibold text-white">
-            {item.status}
-          </span>
-        </span>
-        <button
-        className="absolute bottom-2 right-2 border border-gray-200 rounded-lg p-2 text-xs text-gray-600 hover:bg-[#FF9800] hover:text-white font-medium"
-        >
-           View Details
-        </button>
-        </div>
-    ))
-  ) : (
-    <div className="col-span-full text-center text-gray-500 py-8">
-      No payments found for the selected filters.
-    </div>
-  )}
-</div>
+        )}
+      </div>
 
       {/* Pagination */}
       <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
@@ -374,7 +422,10 @@ const PaymentHistory: React.FC = () => {
           <div className="p-6">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-gray-300">
-              <span className="text-xs text-gray-600">Payment Details</span>
+              <span className="text-xs text-gray-600">Payment ID</span>
+              <span className="text-sm font-semibold pr-14 text-gray-800">
+                {selectedPayment.id || "N/A"}
+              </span>
               <button
                 onClick={() => setSelectedPayment(null)}
                 className="text-gray-500 hover:text-gray-700"
@@ -478,83 +529,58 @@ const PaymentHistory: React.FC = () => {
               </div>
             </div>
 
-            {/* Payment methods - Only show if status is not "Paid" */}
-            {selectedPayment.status !== "Paid" && (
-              <div className="mt-6 border-t pt-4">
-                <div className="flex items-center mb-4 text-sm text-[#8ABB6C]">
+            {/* Payment methods */}
+            <div className="mt-6 border-t pt-4">
+              <div className="flex items-center mb-4 text-sm text-[#8ABB6C]">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-1"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>All your transactions are secure and fast.</span>
+              </div>
+              <p className="text-sm font-semibold text-gray-800 mb-2">
+                SELECT A PAYMENT METHOD
+              </p>
+
+              {[
+                { type: "CASH", label: "Cash" },
+                { type: "CREDIT_CARD", label: "Credit Card" },
+                { type: "DEBIT_CARD", label: "Debit Card" },
+                { type: "GCASH", label: "GCash" },
+                { type: "PAYPAL", label: "PayPal" },
+                { type: "BANK_TRANSFER", label: "Bank Transfer" },
+              ].map((method) => (
+                <div
+                  key={method.type}
+                  className="bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center cursor-pointer"
+                  onClick={() => handlePaymentClick(method.type)}
+                >
+                  <span>{method.label}</span>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-1"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
+                    className="h-4 w-4 text-gray-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
                     <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
                     />
                   </svg>
-                  <span>All your transactions are secure and fast.</span>
                 </div>
-                <p className="text-sm font-semibold text-gray-800 mb-2">
-                  SELECT A PAYMENT METHOD
-                </p>
-
-                {[
-                  { type: "CASH", label: "Cash" },
-                  { type: "CREDIT_CARD", label: "Credit Card" },
-                  { type: "DEBIT_CARD", label: "Debit Card" },
-                  { type: "GCASH", label: "GCash" },
-                  { type: "PAYPAL", label: "PayPal" },
-                  { type: "BANK_TRANSFER", label: "Bank Transfer" },
-                ].map((method) => (
-                  <div
-                    key={method.type}
-                    className="bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center cursor-pointer hover:bg-gray-200 transition-colors"
-                    onClick={() => handlePaymentClick(method.type)}
-                  >
-                    <span>{method.label}</span>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-4 w-4 text-gray-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Show message for paid ads */}
-            {selectedPayment.status === "Paid" && (
-              <div className="mt-6 border-t pt-4">
-                <div className="flex items-center justify-center p-4 bg-green-50 rounded-lg">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5 mr-2 text-green-600"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  <span className="text-sm font-semibold text-green-800">
-                    This advertisement has been paid successfully!
-                  </span>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -565,9 +591,9 @@ const PaymentHistory: React.FC = () => {
           paymentItem={selectedPayment}
           paymentType={selectedPaymentType}
           onClose={closeModal}
-          onSuccess={handlePaymentSuccess}
         />
       )}
+      </div>
     </div>
   );
 };

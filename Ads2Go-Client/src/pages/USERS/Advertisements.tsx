@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 // Form data type
 type FormData = {
@@ -59,6 +61,9 @@ type Ad = {
   };
 };
 
+const planFilterOptions = ['All Plans', 'Basic Plan', 'Premium Plan'];
+const statusFilterOptions = ['All Status', 'PENDING', 'APPROVED', 'REJECTED', 'RUNNING'];
+
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
   const navigate = useNavigate();
@@ -66,8 +71,10 @@ const Advertisements: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All Status');
-  const [planFilter, setPlanFilter] = useState('All Plans');
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
   // Date filter state removed as per request
   const [dateFilter, setDateFilter] = useState('');
   const [showCreateAdPopup, setShowCreateAdPopup] = useState(false);
@@ -267,14 +274,8 @@ const Advertisements: React.FC = () => {
       ad.title.toLowerCase().includes(searchLower) ||
       ad.description.toLowerCase().includes(searchLower);
     
-    const matchesStatus = statusFilter === 'All Status' || 
-      (statusFilter === 'Pending' && ad.status === 'PENDING') ||
-      (statusFilter === 'Approved' && ad.status === 'APPROVED') ||
-      (statusFilter === 'Rejected' && ad.status === 'REJECTED') ||
-      (statusFilter === 'Running' && ad.status === 'RUNNING');
-      
-    const matchesPlan = planFilter === 'All Plans' || 
-      (ad.planId?.name && ad.planId.name === planFilter);
+    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name === selectedPlanFilter;
+    const matchesStatus = selectedStatusFilter === 'All Status' || ad.status === selectedStatusFilter;
     
     return matchesSearch && matchesStatus && matchesPlan;
   });
@@ -293,14 +294,14 @@ const Advertisements: React.FC = () => {
     }
   };
 
-  const handleStatusFilterChange = (status: string) => {
-    setStatusFilter(status);
-    setCurrentPage(1);
+  const handlePlanFilterChange = (plan: string) => {
+    setSelectedPlanFilter(plan);
+    setShowPlanDropdown(false);
   };
 
-  const handlePlanFilterChange = (plan: string) => {
-    setPlanFilter(plan);
-    setCurrentPage(1);
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
   };
 
   const formatStatus = (status: string): string => {
@@ -379,36 +380,67 @@ const Advertisements: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <div className="relative w-40">
-              <select
-                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="All Status">All Status</option>
-                <option value="Pending">PENDING</option>
-                <option value="Approved">APPROVED</option>
-                <option value="Running">RUNNING</option>
-                <option value="Completed">COMPLETED</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
+
+            {/* Filter for Plans */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedPlanFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showPlanDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {planFilterOptions.map((plan) => (
+                      <button
+                        key={plan}
+                        onClick={() => handlePlanFilterChange(plan)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {plan}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="relative w-40">
-              <select
-                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="All Plans">All Plans</option>
-                <option value="Monthly">Monthly</option>
-                <option value="Weekly">Weekly</option>
-              </select>
-              <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </div>
+            {/* Filter for Status */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedStatusFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>
@@ -418,7 +450,7 @@ const Advertisements: React.FC = () => {
       <div className="flex justify-end mb-6">
         <button
           onClick={() => navigate('/create-advertisement')}
-          className="py-3 bg-[#FF9800] text-xs text-[#2E2E2E] rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+          className="py-3 bg-[#feb011] text-xs text-white rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
         >
           <Plus size={16} />
           Add New Ads
@@ -483,36 +515,36 @@ const Advertisements: React.FC = () => {
               <div className="p-4 bg-white flex-grow flex flex-col">
                 <div
                   className="flex-grow cursor-pointer"
-                  // Corrected navigation to user ad details page
                   onClick={() => navigate(`/ad-details/${ad.id}`)}
                 >
                   <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
-                  {/* Display campaign duration */}
-                  {ad.startTime && ad.endTime ? (
-                    <p className="text-sm text-blue-600 mt-5 font-medium">
-                      Campaign: {formatDateRange(ad.startTime, ad.endTime)}
-                    </p>
-                  ) : (
-                    <p className="text-sm text-gray-400 mt-1">
-                      Campaign dates: Not available
-                    </p>
-                  )}
                 </div>
 
-                <div className="mt-4 pt-5 border-t border-gray-200">
+                {/* Campaign info fixed above button */}
+                {ad.startTime && ad.endTime ? (
+                  <p className="text-sm text-blue-600 mt-5 mb-2 font-medium">
+                    Campaign: {formatDateRange(ad.startTime, ad.endTime)}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400 mt-5 mb-2">
+                    Campaign dates: Not available
+                  </p>
+                )}
+
+                <div className="mt-2 pt-2 border-t border-gray-200">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Corrected navigation to user ad details page
                       navigate(`/ad-details/${ad.id}`);
                     }}
-                    className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-between w-full hover:bg-[#1B5087] hover:text-white transition-colors"
+                    className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center w-full hover:bg-[#1B5087] hover:text-white transition-colors"
                   >
-                    View Details <span>→</span>
+                    View Details →
                   </button>
                 </div>
               </div>
+
 
               <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
                 ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
