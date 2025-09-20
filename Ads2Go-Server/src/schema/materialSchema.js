@@ -122,6 +122,7 @@ extend type Query {
   getMaterialsByCategory(category: MaterialCategory!): [Material!]!
   getMaterialsByVehicleType(vehicleType: VehicleType!): [Material!]!
   getMaterialsByCategoryAndVehicle(category: MaterialCategory!, vehicleType: VehicleType!): [Material!]!
+  getMaterialsByCategoryVehicleAndType(category: MaterialCategory!, vehicleType: VehicleType!, materialType: MaterialTypeEnum!): [Material!]!
 
   getMaterialWithDriver(materialId: ID!): MaterialWithDriver
   

@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } fro
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
-import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/admin';
+import { GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
@@ -135,26 +135,24 @@ const nextMonth = () => {
 
 
   // Automatically fetch and select material based on selected plan
-  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
+  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE, {
     variables: { 
-      category: selectedPlan?.category as any,
-      vehicleType: selectedPlan?.vehicleType as any
+      category: selectedPlan?.category?.replace('-', '_') as any,
+      vehicleType: selectedPlan?.vehicleType as any,
+      materialType: selectedPlan?.materialType as any
     },
     skip: !selectedPlan,
     onCompleted: (data) => {
-      if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
-        setMaterials(data.getMaterialsByCategoryAndVehicle);
+      if (data?.getMaterialsByCategoryVehicleAndType?.length > 0) {
+        setMaterials(data.getMaterialsByCategoryVehicleAndType);
     
-        // Try to find a material that matches the plan's materialType
-        const matchingMaterial = data.getMaterialsByCategoryAndVehicle.find(
-          (m: any) => m.materialType === selectedPlan?.materialType
-        );
+        // Since we're filtering by materialType in the query, we can directly select the first result
+        const matchingMaterial = data.getMaterialsByCategoryVehicleAndType[0];
     
         if (matchingMaterial) {
           setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
         } else {
-          // fallback: pick first material if exact match not found
-          setFormData(prev => ({ ...prev, materialId: data.getMaterialsByCategoryAndVehicle[0]?.id || '' }));
+          setFormData(prev => ({ ...prev, materialId: '' }));
         }
       } else {
         setMaterials([]);
