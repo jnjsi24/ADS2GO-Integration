@@ -83,8 +83,34 @@ export const GET_DRIVERS_FOR_MATERIALS = gql`
 `;
 
 export const GET_MATERIALS_BY_CATEGORY_AND_VEHICLE = gql`
-  query GetMaterialsByCategoryAndVehicle($category: String!, $vehicleType: String!) {
+  query GetMaterialsByCategoryAndVehicle($category: MaterialCategory!, $vehicleType: VehicleType!) {
     getMaterialsByCategoryAndVehicle(category: $category, vehicleType: $vehicleType) {
+      id
+      materialId
+      vehicleType
+      materialType
+      description
+      requirements
+      category
+      driverId
+      driver {
+        driverId
+        fullName
+        email
+        contactNumber
+        vehiclePlateNumber
+      }
+      mountedAt
+      dismountedAt
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE = gql`
+  query GetMaterialsByCategoryVehicleAndType($category: MaterialCategory!, $vehicleType: VehicleType!, $materialType: MaterialTypeEnum!) {
+    getMaterialsByCategoryVehicleAndType(category: $category, vehicleType: $vehicleType, materialType: $materialType) {
       id
       materialId
       vehicleType

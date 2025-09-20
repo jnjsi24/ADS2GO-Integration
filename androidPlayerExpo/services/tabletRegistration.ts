@@ -89,7 +89,7 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http://192.168.100.22:5000'; // Updated to match your local IP
+const API_BASE_URL = 'http:// 192.168.100.5:5000'; // Updated to match your local IP
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;

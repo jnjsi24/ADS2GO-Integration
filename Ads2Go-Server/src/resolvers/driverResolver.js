@@ -293,13 +293,30 @@ createDriver: async (_, { input }) => {
       throw new Error("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character");
     }
 
-    // Validate contact number (exactly 10 digits)
-    const contactNumberRegex = /^\d{10}$/;
+    // Validate and normalize contact number
     if (!input.contactNumber || !input.contactNumber.trim()) {
       throw new Error("Contact number is required");
     }
-    if (!contactNumberRegex.test(input.contactNumber.trim())) {
-      throw new Error("Contact number must be exactly 10 digits");
+    
+    let normalizedContactNumber = input.contactNumber.trim().replace(/\s/g, '');
+    
+    // Handle different phone number formats
+    if (normalizedContactNumber.startsWith('+63')) {
+      // Already in +63 format
+      if (!/^\+639\d{9}$/.test(normalizedContactNumber)) {
+        throw new Error("Invalid Philippine mobile number format");
+      }
+    } else if (normalizedContactNumber.startsWith('09')) {
+      // Convert 09 format to +63 format
+      if (!/^09\d{9}$/.test(normalizedContactNumber)) {
+        throw new Error("Invalid Philippine mobile number format");
+      }
+      normalizedContactNumber = '+63' + normalizedContactNumber.substring(1);
+    } else if (/^\d{10}$/.test(normalizedContactNumber)) {
+      // Convert 10-digit format (9174675839) to +63 format
+      normalizedContactNumber = '+63' + normalizedContactNumber;
+    } else {
+      throw new Error("Please use a valid Philippine mobile number (e.g., 09123456789, +639123456789, or 9123456789)");
     }
 
     // Validate vehicle type
@@ -343,7 +360,7 @@ createDriver: async (_, { input }) => {
       firstName: input.firstName.trim(),
       middleName: input.middleName?.trim() || null,
       lastName: input.lastName.trim(),
-      contactNumber: input.contactNumber.trim(),
+      contactNumber: normalizedContactNumber,
       email: normalizedEmail,
       password: input.password.trim(),
       address: input.address.trim(), // Now required
