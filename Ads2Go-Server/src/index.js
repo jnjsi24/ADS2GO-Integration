@@ -59,7 +59,7 @@ const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 
 // Import services
-const syncService = require('./services/syncService');
+// const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -258,9 +258,9 @@ async function startServer() {
     });
   });  
     // Start sync service in production (no longer needed - using MongoDB only)
-  if (process.env.NODE_ENV === 'production') {
-    syncService.start();
-  }
+  // if (process.env.NODE_ENV === 'production') {
+  //   syncService.start();
+  // }
   
   // Handle server errors
   httpServer.on('error', (error) => {
