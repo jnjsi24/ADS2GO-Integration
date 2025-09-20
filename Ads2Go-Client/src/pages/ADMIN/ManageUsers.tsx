@@ -640,38 +640,6 @@ const ManageUsers: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Activity Section */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-3 mt-10">Activity:</h3>
-                  <div className="relative pl-6">
-
-                    {/* Timeline Item 1 */}
-                    <div className="flex items-start mb-6">
-                      <div className="relative z-10 w-5 h-5 rounded-full bg-green-500 flex-shrink-0 flex items-center justify-center -ml-2.5">
-                        <span className="text-white pb-1 text-lg">+</span>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm text-gray-800">
-                          <span className="font-semibold">User</span> has added a new <span className="font-semibold">ads</span>
-                        </p>
-                        <span className="text-xs text-gray-500">11:12 AM- May 17, 2023</span>
-                      </div>
-                    </div>
-
-                    {/* Timeline Item 2 */}
-                    <div className="flex items-start">
-                      <div className="relative z-10 w-5 h-5 rounded-full bg-gray-500 flex-shrink-0 flex items-center justify-center -ml-2.5">
-                        <span className="text-white pb-1 text-lg">+</span>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm text-gray-800">
-                          <span className="font-semibold">Santi Cazoria</span> was created by <span className="font-semibold">Fikri Studio</span>
-                        </p>
-                        <span className="text-xs text-gray-500">11:12 AM- May 17, 2023</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Button group */}
                 <div className="flex gap-3 justify-end mt-10">
