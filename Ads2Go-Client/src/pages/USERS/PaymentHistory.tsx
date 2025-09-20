@@ -289,11 +289,11 @@ const PaymentHistory: React.FC = () => {
               </div>
             </div>
             <p className="text-sm text-gray-600 mt-1">
-              {item.paymentType || "No Payment has been made yet"}
+              {item.paymentType || "NONE"}
             </p>
             {item.status === 'Pending' && (
               <p className="text-xs text-red-500 mt-5 font-semibold">
-                Please pay before October 25, 2023
+                No Payment has been made yet
               </p>
             )}
           </div>
