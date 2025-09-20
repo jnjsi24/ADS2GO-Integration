@@ -42,6 +42,7 @@ const CreateAdvertisement: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
   const [activePlanIndex, setActivePlanIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
+  const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false); // New state to track submission
 
   // State for custom calendar
   const [currentDate, setCurrentDate] = useState(new Date()); // Initialize with today's date (September 5, 2025)
@@ -179,10 +180,12 @@ const nextMonth = () => {
 
   const [createAd, { loading: isSubmitting }] = useMutation(CREATE_AD, {
     onCompleted: () => {
+      setIsSubmissionInProgress(false); // Reset submission state on success
       navigate('/advertisements');
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
+      setIsSubmissionInProgress(false); // Reset submission state on error
     }
   });
 
@@ -334,6 +337,13 @@ const nextMonth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent multiple submissions
+    if (isSubmissionInProgress || isSubmitting) {
+      return;
+    }
+    
+    setIsSubmissionInProgress(true);
+    
     const newErrors: typeof errors = {};
     if (!selectedPlan) {
       newErrors.plan = 'Please select a plan first';
@@ -366,12 +376,16 @@ const nextMonth = () => {
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+    if (Object.keys(newErrors).length > 0) {
+      setIsSubmissionInProgress(false); // Reset submission state if validation fails
+      return;
+    }
 
     try {
       // Upload media file to Firebase Storage
       if (!formData.mediaFile) {
         setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
+        setIsSubmissionInProgress(false);
         return;
       }
       const mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
@@ -384,6 +398,7 @@ const nextMonth = () => {
       const startTime = new Date(formData.startDate).toISOString();
       if (!selectedPlan) {
         setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
+        setIsSubmissionInProgress(false);
         return;
       }
       const endTime = new Date(
@@ -406,23 +421,24 @@ const nextMonth = () => {
       };
 
       // Create the ad with the Firebase media URL
-       await createAd({
-    variables: { input },
-  });
+      await createAd({
+        variables: { input },
+      });
 
-  // Show toast instead of alert
-  setShowToast(true);
+      // Show toast instead of alert
+      setShowToast(true);
 
-  // Auto-hide after 3 seconds
-  setTimeout(() => {
-    setShowToast(false);
-    navigate('/advertisements'); // navigate after toast disappears
-  }, 3000);
+      // Auto-hide after 3 seconds
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/advertisements'); // navigate after toast disappears
+      }, 3000);
 
-} catch (error) {
-  console.error('Error creating advertisement:', error);
-  alert('Failed to create advertisement. Please try again.');
-}
+    } catch (error) {
+      console.error('Error creating advertisement:', error);
+      setIsSubmissionInProgress(false); // Reset submission state on error
+      alert('Failed to create advertisement. Please try again.');
+    }
   };
 
   const canProceedToStep = (step: number) => {
@@ -519,7 +535,7 @@ useEffect(() => {
               <div
                 key={plan._id}
                 className={`absolute mb-8 w-full max-w-md h-[480px] transform transition-all duration-500 ${transformClass}`}
-                onClick={() => setActivePlanIndex(index)} // 🆕 click side card to bring it front
+                onClick={() => setActivePlanIndex(index)} // ðŸ†• click side card to bring it front
               >
                 <div
                   className={`border-2 rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
@@ -1092,14 +1108,14 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!canProceedToStep(currentStep) || isSubmitting}
+                disabled={!canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress}
                 className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep) || isSubmitting
+                  !canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
                 }`}
               >
-                {isSubmitting ? (
+                {isSubmitting || isSubmissionInProgress ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Submitting...

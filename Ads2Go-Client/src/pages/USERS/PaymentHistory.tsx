@@ -143,6 +143,7 @@ const PaymentHistory: React.FC = () => {
   useEffect(() => {
     refetch();
   }, [refetch]);
+  
   const mapStatus = (status?: string): Status => {
     if (!status) return "Pending";
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() as Status;
@@ -213,7 +214,11 @@ const PaymentHistory: React.FC = () => {
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedPaymentType("");
-    refetch();
+    refetch(); // Refresh data after payment
+  };
+
+  const handlePaymentSuccess = () => {
+    refetch(); // Refresh data on successful payment
   };
 
   return (
@@ -280,14 +285,11 @@ const PaymentHistory: React.FC = () => {
           <div className="flex-grow">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-sm text-gray-600 mt-1">
-                  Plan ID: <span className="font-bold">{item.id}</span>
-                </p>
                 <h3 className="text-lg font-bold text-black">{item.productName}</h3>
               </div>
             </div>
             <p className="text-sm text-gray-600 mt-1">
-              {item.paymentType || "N/A"}
+              {item.paymentType || "No Payment has been made yet"}
             </p>
             {item.status === 'Pending' && (
               <p className="text-xs text-red-500 mt-5 font-semibold">
@@ -372,10 +374,7 @@ const PaymentHistory: React.FC = () => {
           <div className="p-6">
             {/* Header */}
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-gray-300">
-              <span className="text-xs text-gray-600">Payment ID</span>
-              <span className="text-sm font-semibold pr-14 text-gray-800">
-                {selectedPayment.id || "N/A"}
-              </span>
+              <span className="text-xs text-gray-600">Payment Details</span>
               <button
                 onClick={() => setSelectedPayment(null)}
                 className="text-gray-500 hover:text-gray-700"
@@ -479,58 +478,83 @@ const PaymentHistory: React.FC = () => {
               </div>
             </div>
 
-            {/* Payment methods */}
-            <div className="mt-6 border-t pt-4">
-              <div className="flex items-center mb-4 text-sm text-[#8ABB6C]">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-4 w-4 mr-1"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>All your transactions are secure and fast.</span>
-              </div>
-              <p className="text-sm font-semibold text-gray-800 mb-2">
-                SELECT A PAYMENT METHOD
-              </p>
-
-              {[
-                { type: "CASH", label: "Cash" },
-                { type: "CREDIT_CARD", label: "Credit Card" },
-                { type: "DEBIT_CARD", label: "Debit Card" },
-                { type: "GCASH", label: "GCash" },
-                { type: "PAYPAL", label: "PayPal" },
-                { type: "BANK_TRANSFER", label: "Bank Transfer" },
-              ].map((method) => (
-                <div
-                  key={method.type}
-                  className="bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center cursor-pointer"
-                  onClick={() => handlePaymentClick(method.type)}
-                >
-                  <span>{method.label}</span>
+            {/* Payment methods - Only show if status is not "Paid" */}
+            {selectedPayment.status !== "Paid" && (
+              <div className="mt-6 border-t pt-4">
+                <div className="flex items-center mb-4 text-sm text-[#8ABB6C]">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 text-gray-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                    className="h-4 w-4 mr-1"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
                   >
                     <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
                     />
                   </svg>
+                  <span>All your transactions are secure and fast.</span>
                 </div>
-              ))}
-            </div>
+                <p className="text-sm font-semibold text-gray-800 mb-2">
+                  SELECT A PAYMENT METHOD
+                </p>
+
+                {[
+                  { type: "CASH", label: "Cash" },
+                  { type: "CREDIT_CARD", label: "Credit Card" },
+                  { type: "DEBIT_CARD", label: "Debit Card" },
+                  { type: "GCASH", label: "GCash" },
+                  { type: "PAYPAL", label: "PayPal" },
+                  { type: "BANK_TRANSFER", label: "Bank Transfer" },
+                ].map((method) => (
+                  <div
+                    key={method.type}
+                    className="bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center cursor-pointer hover:bg-gray-200 transition-colors"
+                    onClick={() => handlePaymentClick(method.type)}
+                  >
+                    <span>{method.label}</span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4 text-gray-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Show message for paid ads */}
+            {selectedPayment.status === "Paid" && (
+              <div className="mt-6 border-t pt-4">
+                <div className="flex items-center justify-center p-4 bg-green-50 rounded-lg">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-2 text-green-600"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  <span className="text-sm font-semibold text-green-800">
+                    This advertisement has been paid successfully!
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -541,6 +565,7 @@ const PaymentHistory: React.FC = () => {
           paymentItem={selectedPayment}
           paymentType={selectedPaymentType}
           onClose={closeModal}
+          onSuccess={handlePaymentSuccess}
         />
       )}
     </div>

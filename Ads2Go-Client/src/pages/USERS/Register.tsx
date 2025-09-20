@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useUserAuth } from '../../contexts/UserAuthContext';
@@ -11,7 +11,7 @@ const Register: React.FC = () => {
     lastName: '',
     companyName: '',
     companyAddress: '',
-    houseAddress: '',         // <-- Added this field
+    houseAddress: '',
     contactNumber: '',
     email: '',
     password: '',
@@ -24,7 +24,12 @@ const Register: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [registrationError, setRegistrationError] = useState('');
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false); 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Add refs to track submission state and prevent multiple submissions
+  const isSubmittingRef = useRef(false);
+  const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const { register } = useUserAuth();
 
   const validateField = (name: string, value: string): string => {
@@ -42,16 +47,15 @@ const Register: React.FC = () => {
         if (!value.trim()) return 'Company/Business address is required';
         if (value.length < 5) return 'Address must be at least 5 characters';
         return '';
-      case 'houseAddress':               // <-- Validate houseAddress too
+      case 'houseAddress':
         if (!value.trim()) return 'House address is required';
         if (value.length < 5) return 'House address must be at least 5 characters';
         return '';
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-  return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
-}
-
+          return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
+        }
         return '';
       case 'email':
         if (!value.trim()) return 'Email is required';
@@ -121,11 +125,31 @@ const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isSubmittingRef.current || isSubmitting) {
+      console.log('Registration already in progress, ignoring duplicate submission');
+      return;
+    }
+    
     setRegistrationError('');
 
     if (!validateStep()) return;
 
-    setIsSubmitting(true); // Start submitting state
+    // Set both state and ref to prevent any race conditions
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+
+    // Clear any existing timeout
+    if (submissionTimeoutRef.current) {
+      clearTimeout(submissionTimeoutRef.current);
+    }
+
+    // Set a timeout to reset submission state after 30 seconds as a failsafe
+    submissionTimeoutRef.current = setTimeout(() => {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }, 30000);
 
     try {
       const registrationData = {
@@ -142,6 +166,10 @@ const Register: React.FC = () => {
 
       const success = await register(registrationData);
       if (success) {
+        // Clear the timeout since we're navigating away
+        if (submissionTimeoutRef.current) {
+          clearTimeout(submissionTimeoutRef.current);
+        }
         navigate('/verify-email');
       } else {
         setRegistrationError('Registration failed. Please try again.');
@@ -151,9 +179,26 @@ const Register: React.FC = () => {
         err instanceof Error ? err.message : 'An unexpected error occurred'
       );
     } finally {
-      setIsSubmitting(false); // End submitting state
+      // Reset submission state
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      
+      // Clear the timeout
+      if (submissionTimeoutRef.current) {
+        clearTimeout(submissionTimeoutRef.current);
+        submissionTimeoutRef.current = null;
+      }
     }
   };
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (submissionTimeoutRef.current) {
+        clearTimeout(submissionTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="relative flex min-h-screen bg-[#fdfdfd]">
@@ -420,7 +465,12 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handlePrevious}
-                    className="w-40 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-full hover:bg-gray-100 focus:outline-none"
+                    disabled={isSubmitting}
+                    className={`w-40 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-full focus:outline-none ${
+                      isSubmitting 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : 'hover:bg-gray-100'
+                    }`}
                   >
                     Back
                   </button>
