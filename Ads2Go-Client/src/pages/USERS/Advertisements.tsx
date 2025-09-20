@@ -325,40 +325,41 @@ const Advertisements: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.title.trim()) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a title', type: 'error' }]);
+      return;
+    }
+    if (!formData.description.trim()) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a description', type: 'error' }]);
+      return;
+    }
+    if (!formData.materialsUsed) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a material', type: 'error' }]);
+      return;
+    }
+    if (!formData.plan) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a plan', type: 'error' }]);
+      return;
+    }
+    if (!formData.adFormat) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select an ad format', type: 'error' }]);
+      return;
+    }
+    if (!formData.media) {
+      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please upload a media file', type: 'error' }]);
+      return;
+    }
+    
     try {
-      const { data } = await createAd({
-        variables: {
-          input: {
-            title: formData.title.trim(),
-            description: formData.description.trim(),
-            vehicleType: formData.vehicleType,
-            materialId: formData.materialsUsed,
-            planId: formData.plan,
-            adFormat: formData.adFormat,
-            status: formData.status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING',
-            price: 0, // This should be calculated based on the plan and material
-          },
-        },
-      });
-      
-      if (data?.createAd) {
-        setShowCreateAdPopup(false);
-        setFormData({
-          title: '',
-          description: '',
-          vehicleType: '',
-          materialsUsed: '',
-          adFormat: '',
-          plan: '',
-          media: null,
-          status: 'PENDING',
-        });
-        setToasts((prev: Toast[]) => [...prev, { 
-          id: Date.now(), 
-          message: 'Ad created successfully!', 
-          type: 'success' as const 
-        }]);
-      }
+      // For now, redirect to the proper create advertisement page
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Please use the "Create Advertisement" page for full functionality', 
+        type: 'error' 
+      }]);
+      setShowCreateAdPopup(false);
     } catch (error) {
       console.error('Error creating ad:', error);
       setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Failed to create ad', type: 'error' }]);

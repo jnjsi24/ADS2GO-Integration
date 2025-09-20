@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
+import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
 import { GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
+import { GET_PLAN_AVAILABILITY } from '../../graphql/admin/planAvailability';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
@@ -38,6 +39,7 @@ type AdvertisementForm = {
 
 const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
+  const apolloClient = useApolloClient();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
   const [activePlanIndex, setActivePlanIndex] = useState(0);
@@ -179,11 +181,17 @@ const nextMonth = () => {
   const [createAd, { loading: isSubmitting }] = useMutation(CREATE_AD, {
     onCompleted: () => {
       setIsSubmissionInProgress(false); // Reset submission state on success
-      navigate('/advertisements');
+      setShowToast(true);
+      // Auto-hide after 3 seconds and navigate
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/advertisements');
+      }, 3000);
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
       setIsSubmissionInProgress(false); // Reset submission state on error
+      alert('Failed to create advertisement. Please try again.');
     }
   });
 
@@ -335,8 +343,11 @@ const nextMonth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Form submission started', { formData, selectedPlan, isSubmissionInProgress, isSubmitting });
+    
     // Prevent multiple submissions
     if (isSubmissionInProgress || isSubmitting) {
+      console.log('Submission already in progress, returning');
       return;
     }
     
@@ -373,13 +384,41 @@ const nextMonth = () => {
       newErrors.startDate = 'Please select a start date that is today or later';
     }
 
+    console.log('Validation errors:', newErrors);
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
+      console.log('Validation failed, resetting submission state');
       setIsSubmissionInProgress(false); // Reset submission state if validation fails
       return;
     }
 
     try {
+      // Check plan availability before uploading media to avoid wasted uploads
+      if (!selectedPlan) {
+        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+
+      const desiredStartIso = new Date(formData.startDate).toISOString();
+      const { data: availabilityData } = await apolloClient.query({
+        query: GET_PLAN_AVAILABILITY,
+        variables: { planId: selectedPlan._id, desiredStartDate: desiredStartIso },
+        fetchPolicy: 'network-only',
+      });
+
+      const canCreate = availabilityData?.getPlanAvailability?.canCreate;
+      if (!canCreate) {
+        const nextAvailable = availabilityData?.getPlanAvailability?.nextAvailableDate;
+        const nextMsg = nextAvailable ? new Date(nextAvailable).toLocaleDateString() : 'Unknown';
+        setErrors(prev => ({
+          ...prev,
+          plan: `No available materials or slots for selected plan. Next available: ${nextMsg}`,
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+
       // Upload media file to Firebase Storage
       if (!formData.mediaFile) {
         setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
@@ -393,15 +432,25 @@ const nextMonth = () => {
       const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
       
       // Calculate start and end times
-      const startTime = new Date(formData.startDate).toISOString();
+      // Create date in UTC to avoid timezone conversion issues
+      const startDateStr = formData.startDate; // YYYY-MM-DD format
+      const [year, month, day] = startDateStr.split('-').map(Number);
+      
+      // Create date in UTC at midnight
+      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const startTime = startDate.toISOString();
+      
       if (!selectedPlan) {
         setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
         setIsSubmissionInProgress(false);
         return;
       }
-      const endTime = new Date(
-        new Date(formData.startDate).getTime() + selectedPlan!.durationDays * 24 * 60 * 60 * 1000
-      ).toISOString();
+      
+      // Calculate end date in UTC
+      const endDate = new Date(startDate);
+      endDate.setUTCDate(endDate.getUTCDate() + selectedPlan!.durationDays);
+      endDate.setUTCHours(23, 59, 59, 999); // Set to end of day in UTC
+      const endTime = endDate.toISOString();
       
       // Prepare the input for createAd mutation
       const input = {
@@ -417,29 +466,33 @@ const nextMonth = () => {
         endTime: endTime,
         mediaFile: mediaFileURL // Use Firebase download URL instead of local path
       };
+      
+      console.log('Date debugging:', {
+        formDataStartDate: formData.startDate,
+        startDate: startDate,
+        startTime: startTime,
+        endTime: endTime,
+        now: new Date().toISOString(),
+        today: new Date().toISOString().split('T')[0],
+        startDateUTC: startDate.toISOString(),
+        endDateUTC: endDate.toISOString()
+      });
 
       // Create the ad with the Firebase media URL
+      console.log('Calling createAd mutation with input:', input);
       await createAd({
         variables: { input },
       });
-
-      // Show toast instead of alert
-      setShowToast(true);
-
-      // Auto-hide after 3 seconds
-      setTimeout(() => {
-        setShowToast(false);
-        navigate('/advertisements'); // navigate after toast disappears
-      }, 3000);
+      console.log('createAd mutation completed successfully');
 
     } catch (error) {
       console.error('Error creating advertisement:', error);
       setIsSubmissionInProgress(false); // Reset submission state on error
-      alert('Failed to create advertisement. Please try again.');
+      // Error handling is done in the mutation's onError callback
     }
   };
 
-  const canProceedToStep = (step: number) => {
+    const canProceedToStep = (step: number) => {
     switch (step) {
       case 2:
         return selectedPlan !== null && formData.materialId !== '';
