@@ -5,12 +5,19 @@ import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } fro
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
-import { GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
 import { GET_PLAN_AVAILABILITY } from '../../graphql/admin/planAvailability';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
+
+type Material = {
+  id: string;
+  materialId: string;
+  materialType: string;
+  vehicleType: VehicleType;
+  category: MaterialCategory;
+};
 
 type AdsPlan = {
   _id: string;
@@ -24,6 +31,7 @@ type AdsPlan = {
   adLengthSeconds: number;
   category: MaterialCategory;
   status: string;
+  materials: Material[];
 };
 
 type AdvertisementForm = {
@@ -139,39 +147,19 @@ const nextMonth = () => {
   
 
 
-  // Automatically fetch and select material based on selected plan
-  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE, {
-    variables: { 
-      category: selectedPlan?.category?.replace('-', '_') as any,
-      vehicleType: selectedPlan?.vehicleType as any,
-      materialType: selectedPlan?.materialType as any
-    },
-    skip: !selectedPlan,
-    onCompleted: (data) => {
-      if (data?.getMaterialsByCategoryVehicleAndType?.length > 0) {
-        setMaterials(data.getMaterialsByCategoryVehicleAndType);
-    
-        // Select the first material from the query results (newest first due to createdAt: -1 sort)
-        // This matches what the server will use: plan.materials[0]
-        const matchingMaterial = data.getMaterialsByCategoryVehicleAndType[0];
-    
-        if (matchingMaterial) {
-          setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
-          console.log(`🎯 Selected material for ad: ${matchingMaterial.materialId} (${matchingMaterial.materialType} ${matchingMaterial.vehicleType})`);
-        } else {
-          setFormData(prev => ({ ...prev, materialId: '' }));
-        }
-      } else {
-        setMaterials([]);
-        setFormData(prev => ({ ...prev, materialId: '' }));
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching materials:', error);
+  // Automatically select material from the selected plan's materials
+  useEffect(() => {
+    if (selectedPlan && selectedPlan.materials && selectedPlan.materials.length > 0) {
+      // Use the first material from the plan's materials array (same as server logic)
+      const selectedMaterial = selectedPlan.materials[0];
+      setMaterials(selectedPlan.materials);
+      setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
+      console.log(`🎯 Selected material from plan: ${selectedMaterial.materialId} (${selectedMaterial.materialType} ${selectedMaterial.vehicleType})`);
+    } else {
       setMaterials([]);
       setFormData(prev => ({ ...prev, materialId: '' }));
     }
-  });
+  }, [selectedPlan]);
 
   // Fetch ads plans
   const { data, loading, error } = useQuery(GET_ALL_ADS_PLANS, {
@@ -208,6 +196,9 @@ const nextMonth = () => {
     
     return data.getAllAdsPlans
       .filter((plan: any) => {
+        // Add null check to prevent errors
+        if (!plan) return false;
+        
         const isRunning = plan.status === 'RUNNING';
         console.log(`Plan ${plan.id} (${plan.name}):`, { 
           status: plan.status, 
@@ -218,17 +209,18 @@ const nextMonth = () => {
         return isRunning;
       })
       .map((plan: any) => ({
-        _id: plan.id,
-        name: plan.name,
-        description: plan.description,
-        durationDays: plan.durationDays || 30,
-        totalPrice: plan.totalPrice || 0,
-        materialType: plan.materialType,
-        vehicleType: plan.vehicleType,
-        numberOfDevices: plan.numberOfDevices || 1,
-        adLengthSeconds: plan.adLengthSeconds || 30,
-        category: plan.category || 'STANDARD',
-        status: plan.status || 'ACTIVE'
+        _id: plan?.id || '',
+        name: plan?.name || '',
+        description: plan?.description || '',
+        durationDays: plan?.durationDays || 30,
+        totalPrice: plan?.totalPrice || 0,
+        materialType: plan?.materialType || '',
+        vehicleType: plan?.vehicleType || 'CAR',
+        numberOfDevices: plan?.numberOfDevices || 1,
+        adLengthSeconds: plan?.adLengthSeconds || 30,
+        category: plan?.category || 'DIGITAL',
+        status: plan?.status || 'ACTIVE',
+        materials: plan?.materials || []
       }));
   }, [data]);
 
@@ -725,12 +717,7 @@ useEffect(() => {
     {selectedPlan && (
       <div className="mt-8 p-4 bg-blue-50 max-w-2xl mx-auto rounded-lg">
         <h3 className="font-medium text-[#1B5087] mb-2">Automatic Material Selection</h3>
-        {loadingMaterials ? (
-          <div className="flex items-center text-blue-700">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Finding compatible materials...
-          </div>
-        ) : formData.materialId ? (
+        {formData.materialId ? (
           <div className="text-[#1B5087]">
             <p className="text-sm">
               ✓ Compatible material automatically selected for your {selectedPlan.category} plan

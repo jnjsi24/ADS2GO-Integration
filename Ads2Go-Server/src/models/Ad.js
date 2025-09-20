@@ -81,7 +81,16 @@ const AdSchema = new mongoose.Schema({
   userDesiredStartTime: { type: Date, default: null }, // User's desired start time (7 days after admin review)
   reasonForReject: { type: String, default: null },
   approveTime: { type: Date, default: null },
-  rejectTime: { type: Date, default: null }
+  rejectTime: { type: Date, default: null },
+  
+  // Deployment tracking
+  deploymentStatus: { 
+    type: String, 
+    enum: ['PENDING', 'DEPLOYING', 'DEPLOYED', 'FAILED'], 
+    default: 'PENDING' 
+  },
+  deploymentAttempts: { type: Number, default: 0 },
+  lastDeploymentAttempt: { type: Date, default: null }
 }, { timestamps: true });
 
 /**
@@ -180,6 +189,36 @@ AdSchema.post('save', async function (doc) {
     try {
       console.log(`🔄 Starting deployment for Ad ${doc._id}`);
       
+      // Check deployment status to prevent race conditions
+      if (doc.deploymentStatus === 'DEPLOYING' || doc.deploymentStatus === 'DEPLOYED') {
+        console.log(`ℹ️ Ad ${doc._id} deployment already in progress or completed (status: ${doc.deploymentStatus}), skipping`);
+        return;
+      }
+      
+      // Check if this ad is already deployed to prevent duplicate deployments
+      const existingDeployment = await AdsDeployment.findOne({
+        $or: [
+          { 'lcdSlots.adId': doc._id },
+          { 'headressSlots.adId': doc._id }
+        ]
+      });
+      
+      if (existingDeployment) {
+        console.log(`ℹ️ Ad ${doc._id} is already deployed, updating status to DEPLOYED`);
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'DEPLOYED',
+          lastDeploymentAttempt: new Date()
+        });
+        return;
+      }
+      
+      // Mark as deploying to prevent race conditions
+      await Ad.findByIdAndUpdate(doc._id, { 
+        deploymentStatus: 'DEPLOYING',
+        deploymentAttempts: (doc.deploymentAttempts || 0) + 1,
+        lastDeploymentAttempt: new Date()
+      });
+      
       const material = await Material.findById(doc.materialId);
       if (!material) {
         console.error(`❌ Cannot deploy Ad ${doc._id}: Material not found`);
@@ -219,8 +258,19 @@ AdSchema.post('save', async function (doc) {
               status: s.status
             }))
           });
+          
+          // Mark deployment as successful
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'DEPLOYED',
+            lastDeploymentAttempt: new Date()
+          });
         } catch (error) {
           console.error(`❌ Error deploying HEADDRESS Ad ${doc._id}:`, error.message);
+          // Mark deployment as failed
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'FAILED',
+            lastDeploymentAttempt: new Date()
+          });
         }
         return;
       }
@@ -252,27 +302,58 @@ AdSchema.post('save', async function (doc) {
               status: s.status
             }))
           });
+          
+          // Mark deployment as successful
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'DEPLOYED',
+            lastDeploymentAttempt: new Date()
+          });
         } catch (error) {
           console.error(`❌ Error deploying LCD Ad ${doc._id}:`, error.message);
+          // Mark deployment as failed
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'FAILED',
+            lastDeploymentAttempt: new Date()
+          });
         }
         return;
       }
       
       // Standard non-LCD ads → create new deployment directly
       console.log(`🔄 Deploying non-LCD Ad ${doc._id}`);
-      await AdsDeployment.create({
-        adId: doc._id,
-        materialId: material.materialId, // Use string materialId, not ObjectId _id
-        driverId: material.driverId,
-        startTime: doc.startTime,
-        endTime: doc.endTime,
-        deployedAt: new Date(),
-        currentStatus: 'DEPLOYED'
-      });
-      console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+      try {
+        await AdsDeployment.create({
+          adId: doc._id,
+          materialId: material.materialId, // Use string materialId, not ObjectId _id
+          driverId: material.driverId,
+          startTime: doc.startTime,
+          endTime: doc.endTime,
+          deployedAt: new Date(),
+          currentStatus: 'DEPLOYED'
+        });
+        console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+        
+        // Mark deployment as successful
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'DEPLOYED',
+          lastDeploymentAttempt: new Date()
+        });
+      } catch (error) {
+        console.error(`❌ Error deploying non-LCD Ad ${doc._id}:`, error.message);
+        // Mark deployment as failed
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'FAILED',
+          lastDeploymentAttempt: new Date()
+        });
+      }
 
     } catch (err) {
       console.error(`❌ Failed to deploy Ad ${doc._id}: ${err.message}`);
+      // Mark deployment as failed
+      await Ad.findByIdAndUpdate(doc._id, { 
+        deploymentStatus: 'FAILED',
+        lastDeploymentAttempt: new Date()
+      });
     }
   }
 });
