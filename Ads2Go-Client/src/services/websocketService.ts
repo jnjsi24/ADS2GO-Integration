@@ -19,9 +19,27 @@ class WebSocketService {
   }
 
   private getWebSocketUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.REACT_APP_API_HOST || window.location.host;
-    return `${protocol}//${host}/ws/status`;
+    // Prefer server origin from REACT_APP_API_URL (e.g., https://server.up.railway.app/graphql)
+    const apiUrl = process.env.REACT_APP_API_URL;
+    let origin = '';
+    try {
+      if (apiUrl) {
+        const url = new URL(apiUrl);
+        // Strip trailing /graphql if present
+        origin = `${url.protocol}//${url.host}`.replace(/\/$/, '');
+      }
+    } catch (_) {
+      // ignore parse errors and fall back
+    }
+
+    // Fallback to client origin if env not provided
+    if (!origin) {
+      origin = `${window.location.protocol}//${window.location.host}`;
+    }
+
+    const wsProtocol = origin.startsWith('https:') ? 'wss:' : (origin.startsWith('http:') ? 'ws:' : (window.location.protocol === 'https:' ? 'wss:' : 'ws:'));
+    const host = origin.replace(/^https?:\/\//, '');
+    return `${wsProtocol}//${host}/ws/status`;
   }
 
   private connect(): void {

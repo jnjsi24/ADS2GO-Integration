@@ -130,11 +130,18 @@ const ScreenTracking: React.FC = () => {
 
   const mapRef = useRef<Map | null>(null);
 
+  // Derive API base from environment (REACT_APP_API_URL ends with /graphql)
+  const apiBase = (process.env.REACT_APP_API_URL || '').replace(/\/graphql$/, '');
+  // Fallback to same-origin; only add :5000 when running on localhost
+  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  const sameOrigin = `${window.location.protocol}//${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`;
+  const resolvedApiBase = apiBase || (isLocalHost ? `${window.location.protocol}//${window.location.hostname}:5000` : sameOrigin);
+
   // Fetch materials list
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const materialsUrl = `${window.location.protocol}//${window.location.hostname}:5000/material`;
+      const materialsUrl = `${resolvedApiBase}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
@@ -168,7 +175,7 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/compliance?date=${selectedDate}`;
+      const apiUrl = `${resolvedApiBase}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
       const complianceResponse = await fetch(apiUrl, {
@@ -213,7 +220,7 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const pathApiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      const pathApiUrl = `${resolvedApiBase}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       
       const response = await fetch(pathApiUrl, {
