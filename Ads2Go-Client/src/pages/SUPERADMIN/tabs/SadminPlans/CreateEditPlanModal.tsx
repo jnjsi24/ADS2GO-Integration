@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { Plan, PlanFormData, getMaterialTypeOptions, getMaxDevices, calculatePlanPricing } from './utils';
+import { Plan, getMaterialTypeOptions, getMaxDevices, calculatePlanPricing } from './utils';
+
+interface PlanFormData {
+  planName: string;
+  planDescription: string;
+  durationDays: number;
+  category: string;
+  materialType: string;
+  vehicleType: string;
+  numberOfDevices: number;
+  adLengthSeconds: number;
+  playsPerDayPerDevice: number;
+  pricePerPlayOverride: string | number;
+  deviceCostOverride: string | number;
+  durationCostOverride: string | number;
+  adLengthCostOverride: string | number;
+}
 
 interface CreateEditPlanModalProps {
   isOpen: boolean;
@@ -94,16 +110,16 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
       formData.playsPerDayPerDevice,
       formData.adLengthSeconds,
       formData.durationDays,
-      formData.pricePerPlayOverride,
-      formData.deviceCostOverride,
-      formData.durationCostOverride,
-      formData.adLengthCostOverride
+      typeof formData.pricePerPlayOverride === 'number' ? formData.pricePerPlayOverride : undefined,
+      typeof formData.deviceCostOverride === 'number' ? formData.deviceCostOverride : undefined,
+      typeof formData.durationCostOverride === 'number' ? formData.durationCostOverride : undefined,
+      typeof formData.adLengthCostOverride === 'number' ? formData.adLengthCostOverride : undefined
     );
     setCalculatedPricing(pricing);
   }, [formData]);
 
   const handleInputChange = (field: keyof PlanFormData, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev: PlanFormData) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
