@@ -137,7 +137,7 @@ extend type Query {
     deleteMaterial(id: ID!): String
 
     # Material Assignment (Admin-only)
-    assignMaterialToDriver(driverId: String!): MaterialAssignmentResult
+    assignMaterialToDriver(driverId: String!, materialId: ID): MaterialAssignmentResult
     unassignMaterialFromDriver(materialId: ID!): MaterialAssignmentResult
   }
 `;
