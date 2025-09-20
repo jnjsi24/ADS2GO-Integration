@@ -710,9 +710,14 @@ const Materials: React.FC = () => {
                   <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
                   <div className="col-span-1 flex justify-center gap-1 ml-36">
-                    <button className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewDetails(material);
+                      }}
+                      className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors"
+                    >
                       <Edit size={16} />
-                      
                     </button> 
                     <button
                       onClick={(e) => {
