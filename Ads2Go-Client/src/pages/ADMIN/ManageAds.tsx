@@ -130,6 +130,32 @@ const ManageAds: React.FC = () => {
   const [adToReject, setAdToReject] = useState<string | null>(null);
   const [showRejectionNotification, setShowRejectionNotification] = useState(true);
 
+  const [animatingAdId, setAnimatingAdId] = useState<string | null>(null);
+
+  
+  // Helper function to trigger animation
+  const triggerButtonAnimation = (adId: string, callback: () => void) => {
+    setAnimatingAdId(adId);
+    setTimeout(() => {
+      callback();
+      setAnimatingAdId(null); // Reset animation
+    }, 300); // duration of animation
+  };
+
+  // Update handlers to use animation
+  const handleApproveWithAnimation = (adId: string) => {
+    triggerButtonAnimation(adId, () => handleApprove(adId));
+  };
+
+  const handleRejectWithAnimation = (adId: string) => {
+    triggerButtonAnimation(adId, () => handleReject(adId));
+  };
+
+  const handleDeleteWithAnimation = (adId: string) => {
+    triggerButtonAnimation(adId, () => handleDelete(adId));
+  };
+
+
 
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
@@ -455,32 +481,39 @@ const ManageAds: React.FC = () => {
                   </span>
                 </div>
                 <div className="col-span-2 flex items-center justify-center gap-1">
-                  {ad.status === 'PENDING' && (
-                    <>
-                      <button
-                        className="border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white"
-                        onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                        title="Approve"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white"
-                        onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                        title="Reject"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="text-red-500 text-md hover:text-red-700"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
-                    title="Delete"
-                  >
-                    <Trash className="w-4 h-4" />
-                  </button>
-                </div>
+  {ad.status === 'PENDING' && (
+    <>
+      <button
+        className={`border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white transform transition-all duration-300 ${
+          animatingAdId === ad.id ? 'scale-105 bg-green-600 text-white' : ''
+        }`}
+        onClick={(e) => { e.stopPropagation(); handleApproveWithAnimation(ad.id); }}
+        title="Approve"
+      >
+        Approve
+      </button>
+      <button
+        className={`border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white transform transition-all duration-300 ${
+          animatingAdId === ad.id ? 'scale-105 bg-red-600 text-white' : ''
+        }`}
+        onClick={(e) => { e.stopPropagation(); handleRejectWithAnimation(ad.id); }}
+        title="Reject"
+      >
+        Reject
+      </button>
+    </>
+  )}
+  <button
+    className={`text-red-500 text-md hover:text-red-700 transform transition-all duration-300 ${
+      animatingAdId === ad.id ? 'scale-105 text-red-700' : ''
+    }`}
+    onClick={(e) => { e.stopPropagation(); handleDeleteWithAnimation(ad.id); }}
+    title="Delete"
+  >
+    <Trash className="w-4 h-4" />
+  </button>
+</div>
+
               </div>
             </div>
           ))}

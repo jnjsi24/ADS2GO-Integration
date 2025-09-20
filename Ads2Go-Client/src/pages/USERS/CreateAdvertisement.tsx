@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Car, TabletSmartphone, Hourglass, QrCode, FileType, View, ChevronRight, Upload, Play, CalendarCheck2, CalendarX2, Pause, Loader2 } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
 import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
+import { motion, AnimatePresence } from "framer-motion";
+
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
@@ -42,10 +44,14 @@ const CreateAdvertisement: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
   const [activePlanIndex, setActivePlanIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
+  
+  // Move these here from renderStep2
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
 
   // State for custom calendar
-  const [currentDate, setCurrentDate] = useState(new Date()); // Initialize with today's date (September 5, 2025)
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Initialize with today's date
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
 // Function to generate days for the current month
 const getDaysInMonth = (date: Date) => {
@@ -347,7 +353,7 @@ const nextMonth = () => {
             <div
               className={`w-11 h-11 rounded-full flex items-center justify-center ${
                 currentStep > index + 1 || (currentStep === index + 1 && canProceedToStep(currentStep))
-                  ? 'bg-[#FF9800] text-white font-bold'
+                  ? 'bg-[#feb011] text-white border border-[#feb011] font-bold'
                   : 'bg-gray-200 text-gray-600 '
               }`}
             >
@@ -359,7 +365,7 @@ const nextMonth = () => {
             <div className="w-16 h-1 bg-gray-200 mx-2 mb-5">
               <div
                 className={`h-full ${
-                  currentStep > index + 1 ? 'bg-[#FF9B45]' : 'bg-gray-200'
+                  currentStep > index + 1 ? 'bg-gray-300' : 'bg-gray-200'
                 }`}
                 style={{
                   width: currentStep > index + 1 ? '100%' : '0%',
@@ -404,7 +410,7 @@ useEffect(() => {
         No active plans available at the moment.
       </div>
     ) : (
-      <div className="relative h-[550px] flex items-center justify-center overflow-hidden">
+      <div className="relative h-[560px] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           {plans.map((plan, index) => {
             let transformClass = "scale-90 opacity-0";
@@ -419,46 +425,70 @@ useEffect(() => {
             return (
               <div
                 key={plan._id}
-                className={`absolute mb-8 w-full max-w-md h-[480px] transform transition-all duration-500 ${transformClass}`}
-                onClick={() => setActivePlanIndex(index)} // 🆕 click side card to bring it front
+                className={`absolute mb-8 w-full max-w-md h-[490px] transform transition-all duration-500 ${transformClass}`}
+                onClick={() => setActivePlanIndex(index)}
               >
                 <div
-                  className={`border-2 rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
+                  className={`border rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
                     selectedPlan?._id === plan._id
-                      ? "shadow-xl bg-white border-gray-400"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? 'shadow-xl bg-white border-gray-400'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                 >
-                  <h3 className="text-xl mt-4 font-semibold mb-2">{plan.name}</h3>
-                  <p className="text-gray-600 mb-4">{plan.description}</p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Duration:</span>
-                      <span className="font-medium">{plan.durationDays} days</span>
+                  <h3 className="text-xl text-[#1B4F9C] font-bold">
+                    {plan.name}
+                  </h3>
+                  <p className="text-sm">{plan.description}</p>
+
+                  {/* Total Price */}
+                    <div className="text-3xl mt-5 font-bold items-center">
+                      <span className="text-[#1B4F9C]">
+                        ₱{plan.totalPrice.toLocaleString()}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Vehicles:</span>
-                      <span className="font-medium">{plan.vehicleType}</span>
+                    <p className='text-sm'>on this advertisement</p>
+
+
+                    <p className="text-sm text-gray-500 mt-7"> What's in the plan:</p>
+                  <div className="space-y-4 mt-2 text-sm">
+                    {/* Duration */}
+                    <div className="flex items-center space-x-2">
+                      <Hourglass className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.durationDays} Days Advertisement
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Material:</span>
-                      <span className="font-medium">{plan.materialType}</span>
+
+                    {/* Vehicles */}
+                    <div className="flex items-center space-x-2">
+                      <Car className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.vehicleType} Usage
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Devices:</span>
-                      <span className="font-medium">{plan.numberOfDevices}</span>
+
+                    {/* Material */}
+                    <div className="flex items-center space-x-2">
+                      <QrCode className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.materialType}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Ad Length:</span>
-                      <span className="font-medium">{plan.adLengthSeconds}s</span>
+
+                    {/* Devices */}
+                    <div className="flex items-center space-x-2">
+                      <TabletSmartphone className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.numberOfDevices} Devices
+                      </span>
                     </div>
-                    <div className="border-t pt-2 mt-4">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total Price:</span>
-                        <span className="text-[#251f70]">
-                          ₱{plan.totalPrice.toLocaleString()}
-                        </span>
-                      </div>
+
+                    {/* Ad Length */}
+                    <div className="flex items-center space-x-2">
+                      <View className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.adLengthSeconds} Seconds
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -533,13 +563,38 @@ useEffect(() => {
 
 
   // Step 2: Advertisement Details (previously step 3)
-  const renderStep2 = () => (
+  const renderStep2 = (
+  showMonthDropdown: boolean,
+  setShowMonthDropdown: React.Dispatch<React.SetStateAction<boolean>>,
+  showYearDropdown: boolean,
+  setShowYearDropdown: React.Dispatch<React.SetStateAction<boolean>>
+) => {
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const years = Array.from({ length: 5 }, (_, i) => 2025 + i);
+
+  const handleMonthChange = (index: number) => {
+    if (currentDate.getFullYear() === today.getFullYear() && index < today.getMonth()) return;
+    setCurrentDate(new Date(currentDate.getFullYear(), index, 1));
+    setShowMonthDropdown(false);
+  };
+
+  const handleYearChange = (year: number) => {
+    if (year < today.getFullYear()) return;
+    setCurrentDate(new Date(year, currentDate.getMonth(), 1));
+    setShowYearDropdown(false);
+  };
+
+  return (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
       <div className="space-y-6">
+        {/* Advertisement Title */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Advertisement Title *
+            Advertisement Title 
           </label>
           <input
             type="text"
@@ -550,140 +605,173 @@ useEffect(() => {
             required
           />
         </div>
-        
+
+        {/* Description */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Description *
+            Description 
           </label>
           <textarea
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400 h-32"
-
             placeholder="Describe your advertisement"
             required
           />
         </div>
 
+        {/* Calendar */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Campaign Start Date *
+            Campaign Start Date 
           </label>
           <div className="relative">
-            <div className="bg-white border border-gray-300 rounded-md shadow-sm p-14">
-              <div className="flex justify-between items-center mb-3">
-                <button onClick={prevMonth} className="text-black pl-6 mb-7 hover:text-[#FF9B45]">
-                  <ChevronLeft size={20} />
-                </button>
-                <select
-                  value={currentDate.getMonth()}
-                  onChange={(e) => {
-                    const newMonth = parseInt(e.target.value);
-                    const newDate = new Date(currentDate.getFullYear(), newMonth, 1);
+            <div className="bg-white rounded-md p-14">
+              <div className="flex justify-center items-center mb-3">
+                {/* Month Dropdown */}
+                <div className="relative w-32 text-center mb-7">
+                  <button
+                    onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                    className="flex items-center justify-center gap-2 w-full text-[#1B5087] text-lg font-bold bg-transparent focus:outline-none"
+                  >
+                    {months[currentDate.getMonth()]}
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform duration-200 ${
+                        showMonthDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showMonthDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {months.map((m, idx) => {
+                          const isDisabled =
+                            currentDate.getFullYear() === today.getFullYear() &&
+                            idx < today.getMonth();
+                          return (
+                            <button
+                              key={m}
+                              disabled={isDisabled}
+                              onClick={() => handleMonthChange(idx)}
+                              className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                                isDisabled
+                                  ? "text-gray-300 cursor-not-allowed"
+                                  : "text-gray-700 hover:bg-gray-100"
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                    // Prevent selecting past month in the current year
-                    if (currentDate.getFullYear() === today.getFullYear() && newMonth < today.getMonth()) {
-                      return;
-                    }
-                    setCurrentDate(newDate);
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {[
-                    'January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'
-                  ].map((month, index) => {
-                    const isDisabled = currentDate.getFullYear() === today.getFullYear() && index < today.getMonth();
-                    return (
-                      <option key={month} value={index} disabled={isDisabled}>
-                        {month}
-                      </option>
-                    );
-                  })}
-                </select>
-                <select
-                  value={currentDate.getFullYear()}
-                  onChange={(e) => {
-                    const newYear = parseInt(e.target.value);
-                    if (newYear < today.getFullYear()) return; // prevent past years
-                    setCurrentDate(new Date(newYear, currentDate.getMonth(), 1));
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {Array.from({ length: 10 }, (_, i) => today.getFullYear() - 5 + i).map(year => (
-                    <option key={year} value={year} disabled={year < today.getFullYear()}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-
-                <button onClick={nextMonth} className="text-black mb-7 pr-8 hover:text-[#FF9B45]">
-                  <ChevronRight size={20} />
-                </button>
+                {/* Year Dropdown */}
+                <div className="relative w-24 text-center mb-7">
+                  <button
+                    onClick={() => setShowYearDropdown(!showYearDropdown)}
+                    className="flex items-center justify-center gap-2 w-full text-[#1B5087] text-lg font-bold bg-transparent focus:outline-none"
+                  >
+                    {currentDate.getFullYear()}
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform duration-200 ${
+                        showYearDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showYearDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {years.map((year) => (
+                          <button
+                            key={year}
+                            disabled={year < today.getFullYear()}
+                            onClick={() => handleYearChange(year)}
+                            className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                              year < today.getFullYear()
+                                ? "text-gray-300 cursor-not-allowed"
+                                : "text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-              {/* This container holds the days of the week and the horizontal line */}
-              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 border-b-2 pb-4 border-gray-300 pb-2">
-                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
+
+              {/* Days Header */}
+              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 border-b-2 pb-4 border-gray-300">
+                {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map(day => (
                   <div key={day} className="font-semibold text-sm">{day}</div>
                 ))}
               </div>
+
+              {/* Calendar Days */}
               <div className="grid grid-cols-7 gap-1 text-center text-gray-700 pt-2">
-  {getDaysInMonth(currentDate).map((day, index) => {
-    const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
-    const isPast = dayDate ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
-
-    return (
-      <div
-        key={index}
-        onClick={() => !isPast && handleDateClick(day)}
-        className={`cursor-pointer p-2 rounded-lg ${
-          day
-            ? isPast
-              ? 'text-gray-300 cursor-not-allowed'
-              : selectedDate.getDate() === day &&
-                selectedDate.getMonth() === currentDate.getMonth() &&
-                selectedDate.getFullYear() === currentDate.getFullYear()
-              ? 'bg-[#1B5087] text-white'
-              : 'text-gray-800 hover:bg-gray-200 hover:text-black'
-            : 'text-gray-300'
-        }`}
-      >
-        {day || ''}
-      </div>
-    );
-  })}
-</div>
-
+                {getDaysInMonth(currentDate).map((day, index) => {
+                  const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
+                  const isPast = dayDate
+                    ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                    : false;
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => !isPast && handleDateClick(day)}
+                      className={`cursor-pointer p-2 rounded-lg ${
+                        day
+                          ? isPast
+                            ? "text-gray-300 cursor-not-allowed"
+                            : selectedDate.getDate() === day &&
+                              selectedDate.getMonth() === currentDate.getMonth() &&
+                              selectedDate.getFullYear() === currentDate.getFullYear()
+                            ? "bg-[#1B5087] text-white"
+                            : "text-gray-800 hover:bg-gray-200 hover:text-black"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      {day || ""}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
+
           {selectedPlan && formData.startDate && (
             <p className="text-sm text-gray-600 mt-2">
-              Campaign will end on: <span className="font-bold">
-                {formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays))}
+              Campaign will end on:{" "}
+              <span className="font-bold">
+                {formatDateForDisplay(
+                  calculateEndDate(formData.startDate, selectedPlan.durationDays)
+                )}
               </span>
             </p>
           )}
         </div>
-
-        {selectedPlan && (
-          <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="font-semibold mb-2">Selected Plan: {selectedPlan.name}</h3>
-            <p className="text-sm text-gray-600">
-              Duration: {selectedPlan.durationDays} days | 
-              Price: ₱{selectedPlan.totalPrice.toLocaleString()} | 
-              Ad Length: {selectedPlan.adLengthSeconds} seconds
-            </p>
-            {materials.length > 0 && formData.materialId && (
-              <p className="text-sm text-gray-600 mt-2">
-                Material: {materials.find(m => m.id === formData.materialId)?.materialType} 
-                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
-              </p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
+};
+
   // Step 3: Upload Media (previously step 4)
   const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
@@ -787,142 +875,178 @@ useEffect(() => {
 
   // Step 4: Review & Submit (previously step 5)
   const renderStep4 = () => (
-  <div className="max-w-4xl mx-auto">
-    <h2 className="text-xl text-center font-medium mb-4 text-gray-800">Review & Submit</h2>
+    <div className="max-w-4xl mx-auto">
+      <h2 className="text-xl text-center font-medium mb-4 text-gray-800">Review & Submit</h2>
 
-    {/* Top Row: Media Preview + Title/Description/Duration */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
-
-      {/* Media Preview */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <h3 className="text-xl font-medium text-gray-600 mb-7">Media Preview</h3>
-        {formData.mediaPreview && (
-          <div className="mb-1">
-            <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
-              {formData.mediaFile?.type.startsWith('video/') ? (
-                <video
-                  src={formData.mediaPreview}
-                  className="w-full h-60 object-cover"
-                  controls
-                />
-              ) : (
-                <img
-                  src={formData.mediaPreview}
-                  alt="Media preview"
-                  className="w-full h-32 object-cover"
-                />
-              )}
-            </div>
-            <p className="text-md text-center mt-2 text-black">
-              File: {formData.mediaFile?.name}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Title/Description/Duration */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Advertisement Information</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Title:</span>
-            <p className="text-lg text-gray-600">{formData.title}</p>
-          </div>
-          <div>
-            <span className="font-medium">Description:</span>
-            <p className="text-lg text-gray-600">{formData.description}</p>
-          </div>
-          <div>
-            <span className="font-medium">Campaign Duration:</span>
-            <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-        </div>
-
-        {/* Agreement / Notice */}
-    <div className="bg-blue-50 rounded-lg p-4 mt-10 text-sm text-blue-800">
-      <p>
-        By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString() }
-        for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}.
-        Your advertisement will be submitted for review and you'll be notified once it's approved.
-      </p>
-    </div>
-
-      </div>
-    </div>
-
-    {/* Second Row: Campaign Schedule + Selected Plan & Material */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
-
-      {/* Campaign Schedule */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Campaign Schedule</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Start Date:</span>
-            <p className="text-lg text-gray-600">{formatDateForDisplay(formData.startDate)}</p>
-          </div>
-          <div>
-            <span className="font-medium">End Date:</span>
-           <p className="text-lg text-gray-600">
-              {selectedPlan ? formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays)) : 'N/A'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Selected Plan & Material */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Selected Plan & Material</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-700">Plan:</span>
-            <p className="text-blue-600">{selectedPlan?.name}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Duration:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Vehicle Type:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.vehicleType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Material:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.materialType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Devices:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.numberOfDevices}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Total Price:</span>
-            <p className="text-blue-600 text-lg font-medium">P{selectedPlan?.totalPrice.toLocaleString()}</p>
-          </div>
-          {materials.length > 0 && formData.materialId && (
-            <div className="col-span-2">
-              <span className="font-medium text-gray-700">Auto-selected Material:</span>
-             <p className="text-lg text-gray-600">
-                {materials.find(m => m.id === formData.materialId)?.materialType}
-                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
+      {/* === Single grid row with Media + Info === */}
+      <div className="grid grid-cols-1 md:grid-cols-[1.7fr_2fr] gap-4 mb-4">
+        
+        {/* LEFT COLUMN : Media + Campaign Schedule BELOW */}
+        <div className="bg-white p-4">
+          {formData.mediaPreview && (
+            <div className="mb-1">
+              <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
+                {formData.mediaFile?.type.startsWith("video/") ? (
+                  <video src={formData.mediaPreview} className="w-full h-60 object-cover" controls />
+                ) : (
+                  <img
+                    src={formData.mediaPreview}
+                    alt="Media preview"
+                    className="w-full h-52 object-cover"
+                  />
+                )}
+              </div>
+              <p className="text-md text-center mt-2 text-black">
+                File: {formData.mediaFile?.name}
               </p>
             </div>
           )}
+
+          <div className="mt-6 rounded-lg p-4">
+            <h3 className="text-lg font-medium text-gray-700 mb-4">Campaign Schedule</h3>
+
+            <div className="flex items-center justify-between gap-4 text-gray-800">
+              {/* Start Date */}
+              <div className="flex items-center gap-2">
+                <CalendarCheck2 className="w-5 h-5 text-green-500" />
+                <span className="text-base ">
+                  {formatDateForDisplay(formData.startDate)}
+                </span>
+              </div>
+
+              {/* End Date */}
+              <div className="flex items-center gap-2">
+                <CalendarX2 className="w-5 h-5 text-red-500" />
+                <span className="text-base">
+                  {selectedPlan
+                    ? formatDateForDisplay(
+                        calculateEndDate(formData.startDate, selectedPlan.durationDays)
+                      )
+                    : "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Title/Description/Duration */}
+        <div className="bg-white rounded-lg">
+          <div className="mb-4">
+          </div>
+          <div className="space-y-2 text-sm text-gray-700">
+            <div>
+              <p className="text-xl font-bold mb-3 text-gray-600">{formData.title}</p>
+            </div>
+            <div>
+              <p className="text-md mb-3 text-gray-600">{formData.description}</p>
+            </div>
+          </div>
+
+
+        {/* Selected Plan & Material */}
+        <div className="bg-white">
+          {/* === Selected Plan & Material (Updated UI) === */}
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8 mt-10 bg-white">
+            {/* Left: Plan Details */}
+            <div className="space-y-4 text-gray-800">
+              {/* Plan */}
+              <div className="flex items-center gap-2">
+                <FileType className="w-6 h-6 text-gray-500" /> {/* Plan Icon */}
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Plan:</span>
+                  <span className="font-bold text-lg">{selectedPlan?.name}</span>
+                </div>
+              </div>
+
+              {/* Vehicle Type */}
+              <div className="flex items-center gap-2">
+                <Car className="w-6 h-6 text-gray-500" /> {/* Vehicle Icon */}
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Vehicle Type:</span>
+                  <span className="font-bold text-lg">{selectedPlan?.vehicleType}</span>
+                </div>
+              </div>
+
+              {/* Material */}
+              <div className="flex items-center gap-2">
+                <View className="w-6 h-6 text-gray-500" /> {/* Material Icon */}
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Material:</span>
+                  <span className="font-bold text-lg">
+                    {materials.find(m => m.id === formData.materialId)?.materialType}
+                  </span>
+                </div>
+              </div>
+
+              {/* Devices */}
+              <div className="flex items-center gap-2">
+                <TabletSmartphone className="w-6 h-6 text-gray-500" /> {/* Devices Icon */}
+                <div className="flex flex-col">
+                  <span className="font-semibold text-xs">Devices:</span>
+                  <span className="font-bold text-lg">{selectedPlan?.numberOfDevices}</span>
+                </div>
+              </div>
+            </div>
+
+
+            {/* Right: Duration & Price */}
+            <div className="flex flex-col items-center">
+              {(() => {
+                const duration = selectedPlan?.durationDays ?? 0;
+                const maxDays = 120; // 🔵 Maximum days
+                const percent = Math.min(duration / maxDays, 1);
+                const radius = 46;
+                const circumference = 2 * Math.PI * radius;
+                const dashOffset = circumference * (1 - percent);
+
+                return (
+                  <div className="relative mr-16 w-32 h-32">
+                    <svg className="w-full h-full transform -rotate-90">
+                      {/* Background circle */}
+                      <circle
+                        cx="50%" cy="50%" r={radius}
+                        className="stroke-gray-200"
+                        strokeWidth="8"
+                        fill="transparent"
+                      />
+                      {/* Progress circle */}
+                      <circle
+                        cx="50%" cy="50%" r={radius}
+                        className="stroke-[#1B4F9C] transition-all duration-700"
+                        strokeWidth="7"
+                        fill="transparent"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={dashOffset}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col justify-center items-center">
+                      <span className="text-xs text-gray-500">Duration</span>
+                      <span className="text-lg font-bold text-gray-900">
+                        {duration} days
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <p className="text-2xl mr-16 font-extrabold text-[#1B4F9C]">
+                ₱{selectedPlan?.totalPrice.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
+      {/* Agreement / Notice */}
+      <div className="bg-blue-50 rounded-lg p-4 mt-10 text-sm w-auto text-blue-800">
+        <p>
+          By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString() + " "}
+          for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}.
+          Your advertisement will be submitted for review and you'll be notified once it's approved.
+        </p>
+      </div>
     </div>
-
-    
-  </div>
-);
+  );
 
   
   return (
@@ -943,10 +1067,15 @@ useEffect(() => {
           
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
-          </div>
+        {currentStep === 2 && renderStep2(
+          showMonthDropdown,
+          setShowMonthDropdown,
+          showYearDropdown,
+          setShowYearDropdown
+        )}
+        {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && renderStep4()}
+      </div>
           
           <div className="flex justify-between">
             <button
@@ -966,7 +1095,7 @@ useEffect(() => {
                 onClick={() => setCurrentStep(prev => prev + 1)}
                 disabled={!canProceedToStep(currentStep + 1)}
                 className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#feb011] text-white hover:bg-[#FF9B45]'
                 }`}
               >
                 Next
@@ -976,10 +1105,10 @@ useEffect(() => {
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canProceedToStep(currentStep) || isSubmitting}
-                className={`px-4 py-2 rounded-md mr-44 w-60 ${
+                className={`px-4 py-2 rounded-md mr-16 w-60 ${
                   !canProceedToStep(currentStep) || isSubmitting
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                    : 'bg-[#feb011] text-white hover:bg-[#FF9B45]'
                 }`}
               >
                 {isSubmitting ? (

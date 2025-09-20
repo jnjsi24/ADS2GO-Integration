@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { ChevronLeft, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 // Ad type (updated to include startTime and endTime)
 type Ad = {
@@ -44,6 +46,8 @@ type Ad = {
   format?: string;
   imagePath?: string;
 };
+
+
 
 // Type for notifications
 type Notification = {
@@ -108,6 +112,9 @@ const getNotificationText = (notification: Notification) => {
 const AdDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const adOptions = ["Material 1", "Material 2", "Material 3"];
+  const [selectedAd, setSelectedAd] = useState(adOptions[0]);
+  const [showAdDropdown, setShowAdDropdown] = useState(false);
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
@@ -121,12 +128,12 @@ const AdDetailsPage: React.FC = () => {
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
 
   const tabletActivities = [
-    { id: 1, ad: 'Ads 1', gps: '14.5995° N, 120.9842° E', timestamp: '2025-09-16 09:30 AM', lastSeen: '3 mins ago', kmTraveled: 12.4 },
-    { id: 2, ad: 'Ads 1', gps: '10.6000° N, 120.9850° K', timestamp: '2025-09-16 09:40 AM', lastSeen: '10 mins ago', kmTraveled: 6.7 },
-    { id: 3, ad: 'Ads 2', gps: '14.6760° N, 121.0437° E', timestamp: '2025-09-16 09:45 AM', lastSeen: '10 mins ago', kmTraveled: 8.9 },
-    { id: 4, ad: 'Ads 3', gps: '14.5547° N, 121.0244° E', timestamp: '2025-09-16 10:00 AM', lastSeen: '2 mins ago', kmTraveled: 15.2 },
+    { id: 1, ad: 'Material 1', gps: '14.5995° N, 120.9842° E', timestamp: '2025-09-16 09:30 AM', lastSeen: '3 mins ago', kmTraveled: 12.4 },
+    { id: 2, ad: 'Material 1', gps: '10.6000° N, 120.9850° K', timestamp: '2025-09-16 09:40 AM', lastSeen: '10 mins ago', kmTraveled: 6.7 },
+    { id: 3, ad: 'Material 2', gps: '82.4630° S, 121.0437° G', timestamp: '2025-09-16 09:45 AM', lastSeen: '10 mins ago', kmTraveled: 8.9 },
+    { id: 4, ad: 'Material 3', gps: '92.4377° W, 121.0244° M', timestamp: '2025-09-16 10:00 AM', lastSeen: '2 mins ago', kmTraveled: 15.2 },
   ];
-  const [selectedAd, setSelectedAd] = useState<string>('Ads 1');
+  
 
   // State for selected period filter (for chart)
   const [selectedPeriod, setSelectedPeriod] = useState<'Weekly' | 'Daily'>('Daily');
@@ -262,7 +269,7 @@ const AdDetailsPage: React.FC = () => {
           {/* Back button moved here, above the status and title */}
           <button
             onClick={() => navigate('/advertisements')}
-            className="py-2 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center" // Added mb-4 for spacing
+            className="py-2 w-60 text-gray-800 rounded-lg hover:text-gray-500 transition-colors flex items-center" // Added mb-4 for spacing
           >
             <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
           </button>
@@ -272,48 +279,43 @@ const AdDetailsPage: React.FC = () => {
               {ad.status}
             </span>
             <h2 className="text-5xl font-bold mt-4 mb-2">{ad.title}</h2>
-            <p className="text-xl text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
-            <p className="text-gray-700 mt-6 mb-5 text-lg leading-relaxed">{ad.description}</p>
+            <p className="text-3xl mt-3 text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
+            <p className="text-gray-700 mt-6 mb-5 text-md leading-relaxed">{ad.description}</p>
           </div>
 
           {/* Tabs - simplified for ad details */}
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex items-center mt-4" aria-label="Tabs">
-              {/* Tabs Group */}
-              <div className="flex space-x-8">
-                <button
-                  onClick={() => setActiveTab('Details')}
-                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'Details'
-                      ? 'border-[#1b5087] text-[#1b5087]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Details
-                </button>
-                <button
-                  onClick={() => setActiveTab('AdActivity')}
-                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'AdActivity'
-                      ? 'border-[#1b5087] text-[#1b5087]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Ad Activity
-                </button>
-                <button
-                  onClick={() => setActiveTab('TabletActivity')}
-                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'TabletActivity'
-                      ? 'border-[#1b5087] text-[#1b5087]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  Tablet Activity
-                </button>
+              <div className="flex space-x-8 relative">
+                {['Details', 'AdActivity', 'TabletActivity'].map((tab) => (
+                  <div key={tab} className="relative">
+                    <button
+                      onClick={() =>
+                        setActiveTab(tab as 'Details' | 'AdActivity' | 'TabletActivity')
+                      }
+                      className={`whitespace-nowrap py-4 px-1 font-medium text-sm ${
+                        activeTab === tab ? 'text-orange-600' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {tab === 'AdActivity'
+                        ? 'Ad Activity'
+                        : tab === 'TabletActivity'
+                        ? 'Tablet Activity'
+                        : tab}
+                    </button>
+
+                    {/* Underline animation */}
+                    <motion.div
+                      layoutId="underline"
+                      className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                      animate={{ width: activeTab === tab ? '100%' : 0 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+
+                  </div>
+                ))}
               </div>
 
-              {/* Delete Ad button pushed to the far right */}
               <button
                 onClick={() => {
                   alert(`Deleting ad ${ad.id}`);
@@ -362,7 +364,7 @@ const AdDetailsPage: React.FC = () => {
           {activeTab === 'AdActivity' && (
             // Ad Activity Notifications
             <div className="bg-none rounded-lg">
-              <div className="space-y-2 max-h-80 p-3 overflow-y-auto custom-scrollbar">
+              <div className="space-y-2 max-h-80 rounded-lg shadow-md overflow-y-auto custom-scrollbar">
                 {sampleNotifications.map(notif => (
                   <div key={notif.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg shadow-md">
                     {/* Icon based on notification type */}
@@ -384,60 +386,92 @@ const AdDetailsPage: React.FC = () => {
             </div>
           )}
 
+          {/* Tablet Activity Tab */}
           {activeTab === 'TabletActivity' && (
-          <div className="bg-none rounded-lg">
+            <div className="bg-none rounded-lg">
+              {/* Filter Dropdown */}
+              <div className="relative mb-4 w-60">
+                <button
+                  onClick={() => setShowAdDropdown(!showAdDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  {selectedAd}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showAdDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
 
-            {/* Filter Dropdown */}
-            <div className="mb-4">
-              <select
-                value={selectedAd}
-                onChange={(e) => setSelectedAd(e.target.value)}
-                className="w-60 px-3 py-2 border border-gray-300 font-semibold rounded-lg text-sm focus:outline-none"
-              >
-                <option value="Ads 1">Example Advertisement 1</option>
-                <option value="Ads 2">Example Advertisement 2</option>
-                <option value="Ads 3">Example Advertisement 3</option>
-              </select>
-            </div>
-
-            {/* Map + Activity in one row */}
-            <div className="flex items-start space-x-6">
-              {/* Map */}
-              <div className="rounded-lg overflow-hidden shadow border border-gray-200">
-                <img 
-                  src="/image/gps.jpg" 
-                  alt="Map preview" 
-                  className="w-96 h-64 object-cover"
-                />
+                <AnimatePresence>
+                  {showAdDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-1 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {adOptions.map((ad) => (
+                        <button
+                          key={ad}
+                          onClick={() => {
+                            setSelectedAd(ad);
+                            setShowAdDropdown(false);
+                          }}
+                          className="block w-full text-left pl-6 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {ad}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
-              {/* Activity List */}
-              <div className="flex flex-col space-y-4 flex-1">
-                {tabletActivities
-                  .filter((activity) => activity.ad === selectedAd)
-                  .map((activity, index) => (
-                    <div key={activity.id} className="flex items-start space-x-2">
-                      {/* Number Circle */}
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3674B5] text-white flex items-center justify-center font-bold text-xs">
-                        {index + 1}
-                      </div>
+              {/* Map + Activity List */}
+              <div className="flex items-start space-x-6">
+                {/* Map */}
+                <div className="rounded-lg overflow-hidden shadow border border-gray-200">
+                  <img
+                    src="/image/gps.jpg"
+                    alt="Map preview"
+                    className="w-96 h-64 object-cover"
+                  />
+                </div>
 
-                      {/* Two-line format */}
-                      <div className="flex flex-col">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {activity.gps}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {activity.lastSeen} | {activity.kmTraveled} km
-                        </p>
+                {/* Activity List */}
+                <div className="flex flex-col space-y-4 flex-1 max-h-64 overflow-y-auto">
+                  {tabletActivities
+                    .filter((activity) => activity.ad === selectedAd)
+                    .map((activity, index) => (
+                      <div key={activity.id} className="flex items-start space-x-2">
+                        {/* Number Circle */}
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3674B5] text-white flex items-center justify-center font-bold text-xs">
+                          {index + 1}
+                        </div>
+
+                        {/* GPS and timestamp */}
+                        <div className="flex flex-col">
+                          <p className="text-sm font-semibold text-gray-900">{activity.gps}</p>
+                          <p className="text-xs text-gray-500">
+                            {activity.lastSeen} | {activity.kmTraveled} km
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            {activity.timestamp}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+
+                  {tabletActivities.filter((activity) => activity.ad === selectedAd).length === 0 && (
+                    <p className="text-center text-gray-500 py-10">
+                      No activity found for this ad.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
+          )}
         </div>
 
         {/* RIGHT Section (Media, Properties, Levels, Stats) */}
@@ -488,38 +522,37 @@ const AdDetailsPage: React.FC = () => {
 
           {/* Properties Section */}
           <div className="bg-white">
-            <h3 className="text-xl font-semibold mb-6">Properties</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Vehicle */}
-              <div className="border rounded-lg p-4 flex flex-col items-center justify-center text-center">
-                <p className="text-md font-semibold text-gray-900">
+              {/* HEADDRESS */}
+              <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
+                <p className="text-sm font-semibold text-gray-900">
                   {ad.vehicleType || 'N/A'}
                 </p>
-                <p className="text-sm text-gray-500">Vehicle</p>
+                <p className="text-xs text-gray-500">HEADDRESS</p>
               </div>
 
-              {/* Material */}
-              <div className="border rounded-lg p-4 flex flex-col items-center justify-center text-center">
-                <p className="text-md font-semibold text-gray-900">
+              {/* Drive & Dazzle */}
+              <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
+                <p className="text-sm font-semibold text-gray-900">
                   {ad.materialId?.materialType || 'N/A'}
                 </p>
-                <p className="text-sm text-gray-500">Material</p>
+                <p className="text-xs text-gray-500">Drive & Dazzle</p>
               </div>
 
-              {/* Plan */}
-              <div className="border rounded-lg p-4 flex flex-col items-center justify-center text-center">
-                <p className="text-md font-semibold text-gray-900">
+              {/* VIDEO */}
+              <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
+                <p className="text-sm font-semibold text-gray-900">
                   {ad.planId?.name || 'N/A'}
                 </p>
-                <p className="text-sm text-gray-500">Plan</p>
+                <p className="text-xs text-gray-500">VIDEO</p>
               </div>
 
               {/* Format */}
-              <div className="border rounded-lg p-4 flex flex-col items-center justify-center text-center">
-                <p className="text-md font-semibold text-gray-900">
+              <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
+                <p className="text-sm font-semibold text-gray-900">
                   {ad.adFormat || 'N/A'}
                 </p>
-                <p className="text-sm text-gray-500">Format</p>
+                <p className="text-xs text-gray-500">Format</p>
               </div>
             </div>
           </div>
