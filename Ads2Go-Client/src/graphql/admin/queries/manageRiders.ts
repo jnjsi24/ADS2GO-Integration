@@ -25,6 +25,8 @@ export const GET_ALL_DRIVERS = gql`
       dateJoined
       approvalDate
       rejectedReason
+      createdAt
+      lastLogin
       material {
         materialId
         materialType

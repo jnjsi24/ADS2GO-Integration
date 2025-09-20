@@ -39,6 +39,8 @@ interface Driver {
   dateJoined: string;
   approvalDate?: string;
   rejectedReason?: string;
+  createdAt: string;
+  lastLogin?: string;
   material?: {
     materialId: string;
     materialType: string;
@@ -350,9 +352,23 @@ const ManageRiders: React.FC = () => {
   const isAllSelected =
     selectedRiders.length === filteredRiders.length && filteredRiders.length > 0;
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   return (
@@ -640,7 +656,7 @@ const ManageRiders: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <CalendarClock size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedDriverDetails.dateJoined)}</p>
+                    <p>{formatDate(selectedDriverDetails.createdAt)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
@@ -648,15 +664,9 @@ const ManageRiders: React.FC = () => {
                     <p>{selectedDriverDetails.address || 'N/A'}</p>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    {selectedDriverDetails.approvalDate && (
-                      <>
-                        <CalendarCheck2 size={20} className="text-gray-500" />
-                        <span className="text-gray-700">
-                          {formatDate(selectedDriverDetails.approvalDate)}
-                        </span>
-                      </>
-                    )}
+                  <div className="flex items-center space-x-3">
+                    <CalendarCheck2 size={20} className="text-gray-500" />
+                    <p>{formatDate(selectedDriverDetails.lastLogin)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
