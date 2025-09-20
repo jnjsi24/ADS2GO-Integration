@@ -74,9 +74,11 @@ const today = new Date(); // Current date
 const handleDateClick = (day: number | null) => {
   if (day) {
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
 
     // Prevent selecting past dates
-    if (newDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+    if (newDate < todayDate) {
       return;
     }
 
@@ -113,6 +115,7 @@ const nextMonth = () => {
     description?: string; 
     startDate?: string; 
     mediaFile?: string; 
+    general?: string;
   }>({});
   const [mediaDurationSec, setMediaDurationSec] = useState<number | null>(null);
 
@@ -378,8 +381,9 @@ const nextMonth = () => {
     }
 
     // Ensure start date is not in the past
-    const startDateOnly = new Date(formData.startDate);
-    const todayDateOnly = new Date(new Date().toISOString().split('T')[0]);
+    const startDateOnly = new Date(formData.startDate + 'T00:00:00.000Z');
+    const todayDateOnly = new Date();
+    todayDateOnly.setUTCHours(0, 0, 0, 0);
     if (startDateOnly < todayDateOnly) {
       newErrors.startDate = 'Please select a start date that is today or later';
     }
@@ -393,24 +397,46 @@ const nextMonth = () => {
     }
 
     try {
+      console.log('Starting submission process...');
+      
       // Check plan availability before uploading media to avoid wasted uploads
       if (!selectedPlan) {
+        console.log('No selected plan, setting error');
         setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
         setIsSubmissionInProgress(false);
         return;
       }
 
+      console.log('Checking plan availability for plan:', selectedPlan._id);
       const desiredStartIso = new Date(formData.startDate).toISOString();
-      const { data: availabilityData } = await apolloClient.query({
-        query: GET_PLAN_AVAILABILITY,
-        variables: { planId: selectedPlan._id, desiredStartDate: desiredStartIso },
-        fetchPolicy: 'network-only',
-      });
+      console.log('Desired start date ISO:', desiredStartIso);
+      
+      let availabilityData;
+      try {
+        const result = await apolloClient.query({
+          query: GET_PLAN_AVAILABILITY,
+          variables: { planId: selectedPlan._id, desiredStartDate: desiredStartIso },
+          fetchPolicy: 'network-only',
+        });
+        availabilityData = result.data;
+        console.log('Plan availability response:', availabilityData);
+      } catch (availabilityError) {
+        console.error('Error checking plan availability:', availabilityError);
+        setErrors(prev => ({
+          ...prev,
+          plan: 'Failed to check plan availability. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
 
       const canCreate = availabilityData?.getPlanAvailability?.canCreate;
+      console.log('Can create ad?', canCreate);
+      
       if (!canCreate) {
         const nextAvailable = availabilityData?.getPlanAvailability?.nextAvailableDate;
         const nextMsg = nextAvailable ? new Date(nextAvailable).toLocaleDateString() : 'Unknown';
+        console.log('Plan not available, next available:', nextMsg);
         setErrors(prev => ({
           ...prev,
           plan: `No available materials or slots for selected plan. Next available: ${nextMsg}`,
@@ -419,13 +445,30 @@ const nextMonth = () => {
         return;
       }
 
+      console.log('Plan is available, proceeding with media upload...');
+      
       // Upload media file to Firebase Storage
       if (!formData.mediaFile) {
+        console.log('No media file found');
         setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
         setIsSubmissionInProgress(false);
         return;
       }
-      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
+      
+      console.log('Uploading media file to Firebase...');
+      let mediaFileURL;
+      try {
+        mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
+        console.log('Media uploaded successfully, URL:', mediaFileURL);
+      } catch (uploadError) {
+        console.error('Error uploading media file:', uploadError);
+        setErrors(prev => ({
+          ...prev,
+          mediaFile: 'Failed to upload media file. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
 
       // Determine ad format based on file type
       const fileExtension = (formData.mediaFile.name.split('.').pop() || '').toLowerCase();
@@ -480,10 +523,22 @@ const nextMonth = () => {
 
       // Create the ad with the Firebase media URL
       console.log('Calling createAd mutation with input:', input);
-      await createAd({
-        variables: { input },
-      });
-      console.log('createAd mutation completed successfully');
+      console.log('Mutation variables:', { input });
+      
+      try {
+        const result = await createAd({
+          variables: { input },
+        });
+        console.log('createAd mutation completed successfully, result:', result);
+      } catch (mutationError) {
+        console.error('Error in createAd mutation:', mutationError);
+        setErrors(prev => ({
+          ...prev,
+          general: 'Failed to create advertisement. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
 
     } catch (error) {
       console.error('Error creating advertisement:', error);
@@ -802,7 +857,9 @@ useEffect(() => {
               <div className="grid grid-cols-7 gap-1 text-center text-gray-700 pt-2">
   {getDaysInMonth(currentDate).map((day, index) => {
     const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
-    const isPast = dayDate ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const isPast = dayDate ? dayDate < todayDate : false;
 
     return (
       <div
@@ -1124,6 +1181,12 @@ useEffect(() => {
         
         <div className="max-w-5xl mx-auto bg-white">
           {renderStepIndicator()}
+          
+          {errors.general && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm">{errors.general}</p>
+            </div>
+          )}
           
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}

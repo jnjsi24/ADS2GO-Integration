@@ -17,6 +17,26 @@ const validateMaterialAssignment = function(next) {
   next();
 };
 
+// Pre-save hook to normalize contact number
+const normalizeContactNumber = function(next) {
+  if (this.contactNumber) {
+    // Remove all non-digit characters except +
+    let normalized = this.contactNumber.replace(/[^\d+]/g, '');
+    
+    // If it starts with 9 and has 10 digits, add 0 prefix
+    if (/^9\d{9}$/.test(normalized)) {
+      normalized = '0' + normalized;
+    }
+    // If it starts with 639 and has 12 digits, add + prefix
+    else if (/^639\d{9}$/.test(normalized)) {
+      normalized = '+' + normalized;
+    }
+    
+    this.contactNumber = normalized;
+  }
+  next();
+};
+
 // Pre-save hook to validate required fields based on status
 const validateRequiredFields = function(next) {
   // Skip validation for new documents
@@ -43,7 +63,19 @@ const DriverSchema = new mongoose.Schema(
     firstName: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
     middleName: { type: String, trim: true, maxlength: 50 },
     lastName: { type: String, required: true, trim: true, minlength: 2, maxlength: 50 },
-    contactNumber: { type: String, required: true, trim: true, match: [/^(09\d{9}|\+639\d{9})$/, 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)'] },
+    contactNumber: { type: String, required: true, trim: true, validate: {
+      validator: function(v) {
+        // Normalize the contact number before validation
+        let normalized = v.replace(/[^\d+]/g, '');
+        if (/^9\d{9}$/.test(normalized)) {
+          normalized = '0' + normalized;
+        } else if (/^639\d{9}$/.test(normalized)) {
+          normalized = '+' + normalized;
+        }
+        return /^(09\d{9}|\+639\d{9})$/.test(normalized);
+      },
+      message: 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)'
+    }},
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: [/^\S+@\S+\.\S+$/, 'Invalid email'] },
     password: { type: String, required: true, minlength: 6, select: false },
     address: { type: String, required: true, trim: true, minlength: 10 },
@@ -126,6 +158,7 @@ const DriverSchema = new mongoose.Schema(
     timestamps: true,
     // Add pre-save hooks
     pre: [
+      { method: 'save', fn: normalizeContactNumber, parallel: false },
       { method: 'save', fn: validateMaterialAssignment, parallel: false },
       { method: 'save', fn: validateRequiredFields, parallel: false },
     ],

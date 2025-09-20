@@ -293,13 +293,13 @@ createDriver: async (_, { input }) => {
       throw new Error("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character");
     }
 
-    // Validate contact number (exactly 10 digits)
-    const contactNumberRegex = /^\d{10}$/;
+    // Validate contact number (Philippine format: 09XXXXXXXXX or +639XXXXXXXXX)
+    const contactNumberRegex = /^(09\d{9}|\+639\d{9})$/;
     if (!input.contactNumber || !input.contactNumber.trim()) {
       throw new Error("Contact number is required");
     }
     if (!contactNumberRegex.test(input.contactNumber.trim())) {
-      throw new Error("Contact number must be exactly 10 digits");
+      throw new Error("Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)");
     }
 
     // Validate vehicle type
