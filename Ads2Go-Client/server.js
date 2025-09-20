@@ -30,18 +30,18 @@ console.log('✅ Build directory and files found');
 // Serve static files from the build directory
 app.use(express.static(buildPath));
 
-// Handle React routing - return index.html for all non-API routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(buildPath, 'index.html'));
-});
-
-// Health check endpoint
+// Health check endpoint (must be before the catch-all route)
 app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     port: port 
   });
+});
+
+// Handle React routing - return index.html for all non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 // Start the server
