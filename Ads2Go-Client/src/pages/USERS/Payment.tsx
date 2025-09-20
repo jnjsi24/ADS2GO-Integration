@@ -9,6 +9,7 @@ interface PaymentProps {
     };
   paymentType: string;
   onClose: () => void;
+  onSuccess?: () => void; // Add callback for successful payment
 }
 
 const CREATE_PAYMENT = gql`
@@ -27,10 +28,15 @@ const CREATE_PAYMENT = gql`
   }
 `;
 
-const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) => {
+const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose, onSuccess }) => {
   const [createPayment, { loading }] = useMutation(CREATE_PAYMENT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false); // Prevent double clicks
+
   const handlePayNow = async () => {
+    if (isProcessing || loading) return; // Prevent double clicks
+    
+    setIsProcessing(true);
     const input = {
       adsId: paymentItem.id,
       paymentType,
@@ -42,6 +48,9 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
       const { data } = await createPayment({ variables: { input } });
       if (data?.createPayment?.success) {
         alert(`✅ Payment for ${paymentItem.productName} is now PAID!`);
+        if (onSuccess) {
+          onSuccess(); // Call success callback to refresh data
+        }
         onClose();
       } else {
         showError(data?.createPayment?.message || "Payment failed.");
@@ -52,12 +61,14 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
       if (msg.includes("Ad is not approved")) {
         showError("⚠️ This ad is not yet approved. You can only pay for approved ads.");
       } else if (msg.includes("Ad not found")) {
-        showError("❌ The ad you’re trying to pay for was not found.");
+        showError("❌ The ad you're trying to pay for was not found.");
       } else if (msg.includes("A payment already exists")) {
         showError("⚠️ A payment already exists for this ad.");
       } else {
         showError("❌ Unexpected error: " + msg);
       }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -65,6 +76,8 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
     setErrorMessage(msg);
     setTimeout(() => setErrorMessage(null), 5000); // auto-hide after 5s
   };
+
+  const isButtonDisabled = loading || isProcessing;
 
   const renderPaymentDetails = () => {
     switch (paymentType) {
@@ -84,11 +97,15 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
               </div>
               </div>
             <button
-              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors"
+              className={`w-full py-3 text-white rounded-xl font-semibold transition-colors ${
+                isButtonDisabled 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              }`}
               onClick={handlePayNow}
-              disabled={loading}
+              disabled={isButtonDisabled}
             >
-              {loading ? "Processing..." : "Pay"}
+              {isProcessing ? "Processing..." : "Pay"}
             </button>
           </div>
         );
@@ -113,11 +130,15 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
               </div>
             </div>
             <button
-              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              className={`w-full py-3 text-white rounded-xl font-semibold transition-colors mt-6 ${
+                isButtonDisabled 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              }`}
               onClick={handlePayNow}
-              disabled={loading}
+              disabled={isButtonDisabled}
             >
-            {loading ? "Processing..." : "Pay with Card"}
+            {isProcessing ? "Processing..." : "Pay with Card"}
             </button>
             </div>
         );
@@ -135,11 +156,15 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
             <p className="text-sm text-gray-600 mb-4">Please enter your GCash mobile number to proceed.</p>
             <input type="text" placeholder="GCash Mobile Number" className="w-full border p-2 rounded" />
             <button
-              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              className={`w-full py-3 text-white rounded-xl font-semibold transition-colors mt-6 ${
+                isButtonDisabled 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              }`}
               onClick={handlePayNow}
-              disabled={loading}
+              disabled={isButtonDisabled}
             >
-              {loading ? "Processing..." : "Pay with GCash"}
+              {isProcessing ? "Processing..." : "Pay with GCash"}
             </button>
           </div>
           );
@@ -158,11 +183,15 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
               You will be redirected to PayPal to complete your payment.
             </p>
             <button
-              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              className={`w-full py-3 text-white rounded-xl font-semibold transition-colors mt-6 ${
+                isButtonDisabled 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              }`}
               onClick={handlePayNow}
-              disabled={loading}
+              disabled={isButtonDisabled}
             >
-              {loading ? "Processing..." : "Continue to PayPal"}
+              {isProcessing ? "Processing..." : "Continue to PayPal"}
             </button>
           </div>
         );
@@ -189,11 +218,15 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
               Please transfer the exact amount and send a screenshot of the transaction to our support team for confirmation.
             </p>
             <button
-              className="w-full py-3 bg-[#FF9800] text-white rounded-xl font-semibold hover:bg-[#FF9B45] transition-colors mt-6"
+              className={`w-full py-3 text-white rounded-xl font-semibold transition-colors mt-6 ${
+                isButtonDisabled 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-[#FF9800] hover:bg-[#FF9B45]'
+              }`}
               onClick={handlePayNow}
-              disabled={loading}
+              disabled={isButtonDisabled}
             >
-              {loading ? "Processing..." : "I have Paid"}
+              {isProcessing ? "Processing..." : "I have Paid"}
             </button>
           </div>
         );
@@ -233,4 +266,3 @@ const Payment: React.FC<PaymentProps> = ({ paymentItem, paymentType, onClose }) 
 };
 
 export default Payment;
-
