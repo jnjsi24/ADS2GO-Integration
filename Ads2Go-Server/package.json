@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@apollo/server": "^4.11.2",
+    "@google-cloud/storage": "^7.7.0",
     "@graphql-tools/merge": "^9.0.24",
     "apollo-server-express": "^3.13.0",
     "bcryptjs": "^2.4.3",
@@ -19,7 +20,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.0",
-    "firebase": "^12.2.1",
+    "firebase": "^12.3.0",
     "firebase-admin": "^12.7.0",
     "graphql": "^16.9.0",
     "graphql-tag": "^2.12.6",
@@ -33,7 +34,7 @@
     "node-osrm": "^1.0.3",
     "nodemailer": "^6.9.7",
     "uuid": "^9.0.1",
-    "ws": "^8.18.3"
+    "ws": "8.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
