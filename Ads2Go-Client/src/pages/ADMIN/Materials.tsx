@@ -458,7 +458,8 @@ const Materials: React.FC = () => {
     try {
       await assignMaterialToDriver({
         variables: {
-          driverId: driverId
+          driverId: driverId,
+          materialId: selectedMaterialForAssign?.id
         }
       });
     } catch (error) {

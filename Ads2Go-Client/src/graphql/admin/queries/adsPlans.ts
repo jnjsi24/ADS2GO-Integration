@@ -16,6 +16,13 @@ export const GET_ALL_ADS_PLANS = gql`
       dailyRevenue
       totalPrice
       adLengthSeconds
+      materials {
+        id
+        materialId
+        materialType
+        vehicleType
+        category
+      }
       createdAt
     }
   }

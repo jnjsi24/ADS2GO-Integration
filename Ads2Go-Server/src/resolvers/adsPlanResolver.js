@@ -215,7 +215,7 @@ module.exports = {
 
   Query: {
     getAllAdsPlans: async () => {
-      return await AdsPlan.find().sort({ createdAt: -1 });
+      return await AdsPlan.find().populate('materials').sort({ createdAt: -1 });
     },
 
     getAdsPlanById: async (_, { id }) => {

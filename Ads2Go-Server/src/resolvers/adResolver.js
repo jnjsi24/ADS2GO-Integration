@@ -2,6 +2,7 @@ const Ad = require('../models/Ad');
 const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
+const MaterialAvailability = require('../models/MaterialAvailability');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
@@ -95,11 +96,33 @@ const adResolvers = {
       const endTime = new Date(userDesiredStartDate);
       endTime.setDate(endTime.getDate() + plan.durationDays);
 
+      // Select the first available material from the plan's materials array
+      // This ensures consistency with the client-side material selection
+      let selectedMaterial = null;
+      if (plan.materials && plan.materials.length > 0) {
+        // Find the first material that has availability for the desired time period
+        for (const material of plan.materials) {
+          const availability = await MaterialAvailability.findOne({ materialId: material._id });
+          if (availability && availability.canAcceptAd(startTime, endTime)) {
+            selectedMaterial = material;
+            console.log(`🎯 Selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType})`);
+            break;
+          }
+        }
+        
+        // If no available material found, use the first material (fallback)
+        if (!selectedMaterial) {
+          selectedMaterial = plan.materials[0];
+          console.log(`⚠️ No available material found, using first material: ${selectedMaterial.materialId}`);
+        }
+      } else {
+        throw new Error('No materials assigned to this plan');
+      }
+
       const ad = new Ad({
         ...input,
         userId: user.id,
-        // Remove materialId from input since it will be assigned from plan
-        materialId: plan.materials[0]._id, // Assign first material from plan
+        materialId: selectedMaterial._id, // Use the selected material
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
         adLengthSeconds: plan.adLengthSeconds,
