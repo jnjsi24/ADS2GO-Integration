@@ -294,11 +294,19 @@ createDriver: async (_, { input }) => {
     }
 
     // Validate contact number (Philippine format: 09XXXXXXXXX or +639XXXXXXXXX)
+    // Normalize the contact number before validation (same as Driver model)
+    let normalizedContact = input.contactNumber.replace(/[^\d+]/g, '');
+    if (/^9\d{9}$/.test(normalizedContact)) {
+      normalizedContact = '0' + normalizedContact;
+    } else if (/^639\d{9}$/.test(normalizedContact)) {
+      normalizedContact = '+' + normalizedContact;
+    }
+    
     const contactNumberRegex = /^(09\d{9}|\+639\d{9})$/;
     if (!input.contactNumber || !input.contactNumber.trim()) {
       throw new Error("Contact number is required");
     }
-    if (!contactNumberRegex.test(input.contactNumber.trim())) {
+    if (!contactNumberRegex.test(normalizedContact)) {
       throw new Error("Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)");
     }
 
