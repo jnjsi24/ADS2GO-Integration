@@ -1,210 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { gql } from '@apollo/client';
-import { ChevronDown, TrashIcon, Edit, X, Plus, UserX, Check, Calendar, UserPlus, QrCode, Copy, Eye } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-
-// GraphQL Queries
-const GET_ALL_MATERIALS = gql`
-  query GetAllMaterials {
-    getAllMaterials {
-      id
-      materialId
-      vehicleType
-      materialType
-      description
-      requirements
-      category
-      driverId
-      driver {
-        driverId
-        fullName
-        email
-        contactNumber
-        vehiclePlateNumber
-      }
-      mountedAt
-      dismountedAt
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const GET_TABLETS_BY_MATERIAL = gql`
-  query GetTabletsByMaterial($materialId: String!) {
-    getTabletsByMaterial(materialId: $materialId) {
-      id
-      materialId
-      carGroupId
-      tablets {
-        tabletNumber
-        deviceId
-        status
-        gps {
-          lat
-          lng
-        }
-        lastSeen
-      }
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const GET_TABLET_CONNECTION_STATUS = gql`
-  query GetTabletConnectionStatus($materialId: String!, $slotNumber: Int!) {
-    getTabletConnectionStatus(materialId: $materialId, slotNumber: $slotNumber) {
-      isConnected
-      connectedDevice {
-        deviceId
-        status
-        lastSeen
-        gps {
-          lat
-          lng
-        }
-      }
-      materialId
-      slotNumber
-      carGroupId
-    }
-  }
-`;
-
-// GraphQL Mutations
-const CREATE_MATERIAL = gql`
-  mutation CreateMaterial($input: CreateMaterialInput!) {
-    createMaterial(input: $input) {
-      id
-      materialId
-      vehicleType
-      materialType
-      description
-      requirements
-      category
-      driverId
-      mountedAt
-      dismountedAt
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const DELETE_MATERIAL = gql`
-  mutation DeleteMaterial($id: ID!) {
-    deleteMaterial(id: $id)
-  }
-`;
-
-const ASSIGN_MATERIAL_TO_DRIVER = gql`
-  mutation AssignMaterialToDriver($driverId: String!) {
-    assignMaterialToDriver(driverId: $driverId) {
-      success
-      message
-      material {
-        id
-        materialId
-        vehicleType
-        materialType
-        driverId
-        driver {
-          driverId
-          fullName
-          email
-          contactNumber
-          vehiclePlateNumber
-        }
-        mountedAt
-        dismountedAt
-      }
-      driver {
-        driverId
-        fullName
-        email
-        contactNumber
-        vehiclePlateNumber
-      }
-    }
-  }
-`;
-
-const GET_ALL_DRIVERS = gql`
-  query GetAllDrivers {
-    getAllDrivers {
-      driverId
-      fullName
-      email
-      contactNumber
-      vehiclePlateNumber
-      vehicleType
-      preferredMaterialType
-    }
-  }
-`;
-
-const UPDATE_MATERIAL = gql`
-  mutation UpdateMaterial($id: ID!, $input: UpdateMaterialInput!) {
-    updateMaterial(id: $id, input: $input) {
-      id
-      materialId
-      vehicleType
-      materialType
-      description
-      requirements
-      category
-      driverId
-      driver {
-        driverId
-        fullName
-        email
-        contactNumber
-        vehiclePlateNumber
-      }
-      mountedAt
-      dismountedAt
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-const UNREGISTER_TABLET = gql`
-  mutation UnregisterTablet($input: UnregisterTabletInput!) {
-    unregisterTablet(input: $input) {
-      success
-      message
-    }
-  }
-`;
-
-const CREATE_TABLET_CONFIGURATION = gql`
-  mutation CreateTabletConfiguration($input: CreateTabletConfigurationInput!) {
-    createTabletConfiguration(input: $input) {
-      success
-      message
-      tablet {
-        id
-        materialId
-        carGroupId
-        tablets {
-          tabletNumber
-          deviceId
-          status
-          gps {
-            lat
-            lng
-          }
-          lastSeen
-        }
-        createdAt
-        updatedAt
-      }
-    }
-  }
-`;
+import { TrashIcon, Edit } from 'lucide-react';
+import { 
+  GET_ALL_MATERIALS, 
+  GET_TABLETS_BY_MATERIAL, 
+  GET_TABLET_CONNECTION_STATUS, 
+  GET_DRIVERS_FOR_MATERIALS 
+} from '../../graphql/admin/queries/materials';
+import { 
+  CREATE_MATERIAL, 
+  DELETE_MATERIAL, 
+  ASSIGN_MATERIAL_TO_DRIVER, 
+  UPDATE_MATERIAL, 
+  UNREGISTER_TABLET, 
+  CREATE_TABLET_CONFIGURATION 
+} from '../../graphql/admin/mutations/materials';
+import CreateMaterialModal from './tabs/materials/CreateMaterialModal';
+import MaterialDetailsModal from './tabs/materials/MaterialDetailsModal';
+import TabletConnectionModal from './tabs/materials/TabletConnectionModal';
+import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
+import MaterialFilters from './tabs/materials/MaterialFilters';
 
 interface Driver {
   driverId: string;
@@ -287,23 +102,6 @@ interface TabletConnectionStatus {
   carGroupId: string;
 }
 
-// Vehicle-Material mapping based on your requirements
-const VEHICLE_MATERIAL_MAP = {
-  DIGITAL: {
-    CAR: ['HEADDRESS', 'LCD'],
-    MOTORCYCLE: ['LCD'],
-    BUS: ['LCD'],
-    JEEP: ['LCD'],
-    E_TRIKE: ['LCD']
-  },
-  NON_DIGITAL: {
-    CAR: ['BANNER', 'STICKER'],
-    MOTORCYCLE: ['BANNER', 'STICKER'],
-    BUS: ['BANNER', 'STICKER'],
-    JEEP: ['BANNER', 'STICKER'],
-    E_TRIKE: ['BANNER', 'STICKER']
-  }
-};
 
 const Materials: React.FC = () => {
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
@@ -313,14 +111,6 @@ const Materials: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMaterialDetails, setSelectedMaterialDetails] = useState<Material | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateMaterialInput>({
-    vehicleType: 'CAR',
-    materialType: 'LCD',
-    description: '',
-    requirements: '',
-    category: 'DIGITAL'
-  });
 
   // State for date editing
   const [editingDates, setEditingDates] = useState<{[key: string]: {mountedAt: string, dismountedAt: string}}>({});
@@ -329,7 +119,6 @@ const Materials: React.FC = () => {
   // State for manual assignment
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedMaterialForAssign, setSelectedMaterialForAssign] = useState<Material | null>(null);
-  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
 
   // State for Tablet interface and connection details
   const [showTabletInterface, setShowTabletInterface] = useState(false);
@@ -338,21 +127,6 @@ const Materials: React.FC = () => {
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
 
-  // Get available material types based on vehicle and category
-  const getAvailableMaterialTypes = (vehicleType: string, category: string) => {
-    return VEHICLE_MATERIAL_MAP[category as keyof typeof VEHICLE_MATERIAL_MAP]?.[vehicleType as keyof typeof VEHICLE_MATERIAL_MAP.DIGITAL] || [];
-  };
-
-  // Update material type when vehicle type or category changes
-  useEffect(() => {
-    const availableTypes = getAvailableMaterialTypes(createForm.vehicleType, createForm.category);
-    if (availableTypes.length > 0 && !availableTypes.includes(createForm.materialType)) {
-      setCreateForm(prev => ({
-        ...prev,
-        materialType: availableTypes[0] as any
-      }));
-    }
-  }, [createForm.vehicleType, createForm.category]);
 
   // GraphQL hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_MATERIALS, {
@@ -370,7 +144,7 @@ const Materials: React.FC = () => {
     }
   });
 
-  const { data: driversData, loading: driversLoading } = useQuery(GET_ALL_DRIVERS, {
+  const { data: driversData, loading: driversLoading } = useQuery(GET_DRIVERS_FOR_MATERIALS, {
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -390,13 +164,6 @@ const Materials: React.FC = () => {
     },
     onCompleted: () => {
       setShowCreateModal(false);
-      setCreateForm({
-        vehicleType: 'CAR',
-        materialType: 'LCD',
-        description: '',
-        requirements: '',
-        category: 'DIGITAL'
-      });
       refetch();
     },
     onError: (error) => {
@@ -582,7 +349,6 @@ const Materials: React.FC = () => {
         alert(data.assignMaterialToDriver.message);
         setShowAssignModal(false);
         setSelectedMaterialForAssign(null);
-        setSelectedDriverId('');
         refetch();
       } else {
         alert(`Assignment failed: ${data.assignMaterialToDriver.message}`);
@@ -688,30 +454,11 @@ const Materials: React.FC = () => {
     }
   };
 
-  // Manual assignment functions
-  const openAssignModal = (material: Material) => {
-    if (material.driverId) {
-      alert('This material is already assigned to a driver. Please remove it first before reassigning.');
-      return;
-    }
-    setSelectedMaterialForAssign(material);
-    setShowAssignModal(true);
-  };
-
-  const handleAssignSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDriverId || !selectedMaterialForAssign) {
-      alert('Please select a driver');
-      return;
-    }
-
+  const handleAssignSubmit = async (driverId: string) => {
     try {
-      // Note: The backend logic will automatically find and assign an available material
-      // of the appropriate type for this driver. Since we're selecting a specific material
-      // through the UI, we inform the user about this behavior.
       await assignMaterialToDriver({
         variables: {
-          driverId: selectedDriverId
+          driverId: driverId
         }
       });
     } catch (error) {
@@ -719,60 +466,9 @@ const Materials: React.FC = () => {
     }
   };
 
-  const closeAssignModal = () => {
-    setShowAssignModal(false);
-    setSelectedMaterialForAssign(null);
-    setSelectedDriverId('');
-  };
-
-  // Filter available drivers based on material requirements AND preferences
-  const getCompatibleDrivers = (material: Material): DriverWithVehicleType[] => {
-    console.log('Filtering drivers for material:', material);
-    console.log('All drivers:', drivers);
-    
-    // Get all driver IDs that currently have materials assigned
-    const assignedDriverIds = materials
-      .filter(mat => mat.driverId)
-      .map(mat => mat.driverId);
-
-    console.log('Assigned driver IDs:', assignedDriverIds);
-
-    // Filter drivers by vehicle type compatibility, availability, and material preferences
-    const compatibleDrivers = drivers.filter((driver: DriverWithVehicleType) => {
-      const isVehicleTypeCompatible = driver.vehicleType === material.vehicleType;
-      const isDriverAvailable = !assignedDriverIds.includes(driver.driverId);
-      
-      // Check if driver has material preferences
-      const hasPreferences = driver.preferredMaterialType && driver.preferredMaterialType.length > 0;
-      
-      // If driver has preferences, check if the material type matches their preferences
-      const matchesPreferences = hasPreferences 
-        ? driver.preferredMaterialType!.includes(material.materialType)
-        : true; // If no preferences set, accept all compatible material types
-      
-      console.log(`Driver ${driver.fullName}:`, {
-        vehicleType: driver.vehicleType,
-        isVehicleTypeCompatible,
-        isDriverAvailable,
-        hasPreferences,
-        preferredMaterialType: driver.preferredMaterialType,
-        materialType: material.materialType,
-        matchesPreferences
-      });
-
-      return isVehicleTypeCompatible && isDriverAvailable && matchesPreferences;
-    });
-
-    console.log('Compatible drivers found:', compatibleDrivers);
-    return compatibleDrivers;
-  };
-
   const handleViewDetails = (material: Material) => {
     setSelectedMaterialDetails(material);
     setShowDetailsModal(true);
-    setTimeout(() => {
-      setIsModalOpen(true);
-    }, 10);
   };
 
   const handleDeleteMaterial = async (id: string) => {
@@ -788,11 +484,8 @@ const Materials: React.FC = () => {
   };
 
   const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setTimeout(() => {
-      setShowDetailsModal(false);
-      setSelectedMaterialDetails(null);
-    }, 300);
+    setShowDetailsModal(false);
+    setSelectedMaterialDetails(null);
   };
 
   const handleRemoveFromDriver = async (id: string) => {
@@ -814,19 +507,13 @@ const Materials: React.FC = () => {
     }
   };
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.requirements.trim()) {
-      alert('Please fill out this field');
-      return;
-    }
-
+  const handleCreateSubmit = async (formData: CreateMaterialInput) => {
     try {
       await createMaterial({
         variables: {
           input: {
-            ...createForm,
-            description: createForm.description.trim() || ""
+            ...formData,
+            description: formData.description.trim() || ""
           }
         }
       });
@@ -951,64 +638,16 @@ const Materials: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
       <div className="bg-gray-100 w-full min-h-screen">
-        {/* Header with Title*/}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">Materials List</h1>
-          <div className="flex flex-col items-end gap-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-                placeholder="Search materials..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              <div className="relative w-40">
-                <select
-                  className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value as typeof selectedType)}
-                >
-                  <option value="All">All Materials</option>
-                  <option value="LCD">LCD</option>
-                  <option value="BANNER">BANNER</option>
-                  <option value="STICKER">STICKER</option>
-                  <option value="HEADDRESS">HEADDRESS</option>
-                  <option value="POSTER">POSTER</option>
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-
-              <div className="relative w-40">
-                <select
-                  className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                >
-                  <option value="All">All Status</option>
-                  <option value="Used">Used</option>
-                  <option value="Available">Available</option>
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Add New Material Button */}
-        <div className="flex justify-end mb-6">
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="py-3 bg-[#3674B5] text-xs text-white rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
-          >
-            <Plus size={16} />
-            Add New Material
-          </button>
-        </div>
+        {/* Header with Filters */}
+        <MaterialFilters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedType={selectedType}
+          onTypeChange={setSelectedType}
+          statusFilter={statusFilter}
+          onStatusChange={setStatusFilter}
+          onCreateClick={() => setShowCreateModal(true)}
+        />
 
         {/* Table */}
         <div className="rounded-xl mb-4 overflow-hidden">
@@ -1119,765 +758,66 @@ const Materials: React.FC = () => {
       </div>
 
       {/* Create Material Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">Create New Material</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={createForm.category}
-                  onChange={(e) => setCreateForm({...createForm, category: e.target.value as 'DIGITAL' | 'NON_DIGITAL'})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
-                  required
-                >
-                  <option value="DIGITAL">Digital</option>
-                  <option value="NON_DIGITAL">Non-Digital</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Vehicle Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={createForm.vehicleType}
-                  onChange={(e) => setCreateForm({...createForm, vehicleType: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
-                  required
-                >
-                  <option value="CAR">Car</option>
-                  <option value="MOTORCYCLE">Motorcycle</option>
-                  <option value="BUS">Bus</option>
-                  <option value="JEEP">Jeep</option>
-                  <option value="E_TRIKE">E-Trike</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Material Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={createForm.materialType}
-                  onChange={(e) => setCreateForm({...createForm, materialType: e.target.value as any})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
-                  required
-                >
-                  {getAvailableMaterialTypes(createForm.vehicleType, createForm.category).map((type) => (
-                    <option key={type} value={type}>
-                      {type.charAt(0) + type.slice(1).toLowerCase()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm({...createForm, description: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
-                  placeholder="Enter description"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Requirements <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={createForm.requirements}
-                  onChange={(e) => setCreateForm({...createForm, requirements: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline focus:outline-gray-300"
-                  placeholder="Enter material requirements"
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] disabled:bg-gray-400"
-                >
-                  {creating ? 'Creating...' : 'Create Material'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateMaterialModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateSubmit}
+        creating={creating}
+      />
 
       {/* Assign Driver Modal */}
-      {showAssignModal && selectedMaterialForAssign && (
-        <div
-          className="fixed inset-0 z-[51] flex items-end justify-center mr-11 p-6"
-          onClick={() => setShowAssignModal(false)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-lg w-full max-w-sm p-6 translate-y-[1rem] transform transition-transform duration-300 ease-in-out scale-100" 
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Target Material Details */}
-            <h2 className="text-lg font-bold text-center text-gray-800 mb-4">
-              Target Material Details
-            </h2>
-
-            {/* Table for Material Info */}
-            <div className="rounded-lg overflow-hidden  mb-6">
-              <table className="table-auto w-full border-collapse text-sm">
-                <tbody className="bg-white text-gray-700">
-                  <tr className="border-b">
-                    <td className="px-4 py-2 font-bold w-1/3">ID:</td>
-                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.materialId}</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="px-4 py-2 font-bold">Type:</td>
-                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.materialType}</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="px-4 py-2 font-bold whitespace-nowrap">Vehicle Type:</td>
-                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.vehicleType}</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-2 font-bold">Category:</td>
-                    <td className="px-4 py-2 text-right text-gray-900">{selectedMaterialForAssign.category}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Select Driver */}
-            <form onSubmit={handleAssignSubmit} className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Select Driver
-                </label>
-                <select
-                  value={selectedDriverId}
-                  onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline focus:outline-gray-300"
-                  disabled={getCompatibleDrivers(selectedMaterialForAssign).length === 0}
-                >
-                  <option value="">Choose a driver...</option>
-                  {getCompatibleDrivers(selectedMaterialForAssign).map((driver) => (
-                    <option key={driver.driverId} value={driver.driverId}>
-                      {driver.fullName} - {driver.vehiclePlateNumber} ({driver.vehicleType})
-                    </option>
-                  ))}
-                </select>
-                {getCompatibleDrivers(selectedMaterialForAssign).length === 0 && (
-                  <p className="text-red-600 text-sm mt-2">No compatible drivers found!</p>
-                )}
-              </div>
-
-              {/* Buttons */}
-              <div className="flex justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAssignModal(false)}
-                  className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={assigning || getCompatibleDrivers(selectedMaterialForAssign).length === 0}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50"
-                >
-                  {assigning ? "Assigning..." : "Assign Driver"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <DriverAssignmentModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        material={selectedMaterialForAssign}
+        drivers={drivers}
+        materials={materials}
+        onAssign={handleAssignSubmit}
+        assigning={assigning}
+      />
       {/* Connection Details Modal */}
-      {showTabletInterface && selectedTabletMaterialId && selectedTabletSlotNumber && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowTabletInterface(false);
-              setSelectedTabletMaterialId(null);
-              setSelectedTabletSlotNumber(null);
-            }
-          }}
-        >
-          <div className="bg-white rounded-2xl p-6 w-full max-w-4xl mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
-                Tablet Connection Details - Slot {selectedTabletSlotNumber}
-              </h2>
-              <button
-                onClick={() => {
-                  setShowTabletInterface(false);
-                  setSelectedTabletMaterialId(null);
-                  setSelectedTabletSlotNumber(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {tabletLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Loading tablet data...</span>
-              </div>
-            ) : tabletError ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-center">
-                  <div className="text-red-500 mb-2">❌</div>
-                  <span className="text-gray-600">Error loading tablet data.</span>
-                  <br />
-                  <span className="text-sm text-gray-500 mb-4">{tabletError.message}</span>
-                  <button
-                    onClick={() => refetchTabletData()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto"
-                  >
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Retry
-                  </button>
-                </div>
-              </div>
-            ) : !tabletData?.getTabletsByMaterial?.[0] ? (
-               <div className="flex items-center justify-center py-8">
-                 <div className="text-center">
-                   <div className="text-red-500 mb-2">⚠️</div>
-                   <span className="text-gray-600">No tablet configuration found for this material.</span>
-                   <br />
-                   <span className="text-sm text-gray-500 mb-4">Please ensure this is a HEADDRESS material.</span>
-                   <button
-                     onClick={handleCreateTabletConfiguration}
-                     disabled={creatingTabletConfig}
-                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 flex items-center gap-2 mx-auto"
-                   >
-                     {creatingTabletConfig ? (
-                       <>
-                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                         Creating...
-                       </>
-                     ) : (
-                       <>
-                         <QrCode size={16} />
-                         Create Tablet Configuration
-                       </>
-                     )}
-                   </button>
-                 </div>
-               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Column */}
-                <div className="space-y-6">
-                  {/* Connection Details */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Material ID:</span>
-                        <span className="text-gray-600 font-mono">{selectedTabletMaterialId}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Slot Number:</span>
-                        <span className="text-gray-600 font-mono">{selectedTabletSlotNumber}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-700">Car Group ID:</span>
-                        <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Connection Status */}
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h3 className="font-semibold text-gray-800">Connection Status</h3>
-                    <button
-                      onClick={() => refetchConnectionStatus()}
-                      disabled={connectionStatusLoading}
-                      className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-                    >
-                      <div className={`w-3 h-3 border border-white rounded-full ${connectionStatusLoading ? 'animate-spin' : ''}`}></div>
-                      Refresh
-                    </button>
-                  </div>
-                  {connectionStatusLoading ? (
-                    <div className="flex items-center justify-center py-4">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                      <span className="ml-2 text-gray-600">Checking connection status...</span>
-                    </div>
-                  ) : connectionStatusError ? (
-                    <div className="text-center py-4">
-                      <div className="text-red-500 mb-2">❌</div>
-                      <span className="text-gray-600">Error loading connection status</span>
-                      <br />
-                      <span className="text-sm text-gray-500 mb-2">{connectionStatusError.message}</span>
-                      <button
-                        onClick={() => refetchConnectionStatus()}
-                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  ) : connectionStatusData?.getTabletConnectionStatus ? (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-700">Status:</span>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-full ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                          <span className={`font-semibold ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`}>
-                            {connectionStatusData.getTabletConnectionStatus.isConnected ? 'Connected' : 'Not Connected'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {connectionStatusData.getTabletConnectionStatus.isConnected && connectionStatusData.getTabletConnectionStatus.connectedDevice && (
-                        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
-                          <h4 className="font-medium text-gray-800">Connected Device Details:</h4>
-                          <div className="text-sm space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Device ID:</span>
-                              <span className="font-mono text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.deviceId}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Status:</span>
-                              <span className="text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.status}</span>
-                            </div>
-                            {connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Last Seen:</span>
-                                <span className="text-gray-800">{new Date(connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen).toLocaleString()}</span>
-                              </div>
-                            )}
-                            {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">GPS:</span>
-                                <span className="text-gray-800">
-                                  {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lat?.toFixed(6)}, {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lng?.toFixed(6)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {connectionStatusData.getTabletConnectionStatus.isConnected && (
-                        <button
-                          onClick={handleUnregisterTablet}
-                          disabled={unregistering}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400"
-                        >
-                          {unregistering ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              Unregistering...
-                            </>
-                          ) : (
-                            <>
-                              <UserX size={16} />
-                              Unregister Tablet
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <span className="text-gray-600">Unable to load connection status</span>
-                    </div>
-                  )}
-                </div>
-                </div>
-
-                {/* Right Column */}
-                <div className="space-y-6">
-                  {/* QR Code */}
-                  <div className="flex flex-col items-center space-y-4">
-                    <h3 className="font-semibold text-gray-800">QR Code</h3>
-                    <div className="bg-white p-3 border border-gray-200 rounded-lg">
-                      {(() => {
-                        const qrData = {
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        };
-                        console.log('QR Code data:', qrData);
-                        return (
-                          <QRCodeSVG 
-                            value={JSON.stringify(qrData)}
-                            size={150}
-                            level="M"
-                            includeMargin={true}
-                          />
-                        );
-                      })()}
-                    </div>
-                    <p className="text-xs text-gray-500 text-center">
-                      Scan this QR code with the AndroidPlayer app to connect
-                    </p>
-                  </div>
-
-                  {/* Manual Code */}
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-gray-800">Manual Code</h3>
-                    <div className="bg-gray-100 p-3 rounded-lg">
-                      <code className="text-sm text-gray-800 break-all">
-                        {JSON.stringify({
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        }, null, 2)}
-                      </code>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const connectionData = {
-                          materialId: selectedTabletMaterialId,
-                          slotNumber: selectedTabletSlotNumber,
-                          carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                        };
-                        console.log('Copying connection data:', connectionData);
-                        copyToClipboard(JSON.stringify(connectionData, null, 2));
-                      }}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <Copy size={16} />
-                      Copy to Clipboard
-                    </button>
-                  </div>
-
-                  {/* Instructions */}
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
-                    <div className="text-sm text-yellow-700 space-y-1">
-                      <p>1. Scan the QR code or copy the manual code</p>
-                      <p>2. Open the AndroidPlayer app on your tablet</p>
-                      <p>3. Enter the connection details</p>
-                      <p>4. The tablet will connect to the system</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <TabletConnectionModal
+        isOpen={showTabletInterface}
+        onClose={() => {
+          setShowTabletInterface(false);
+          setSelectedTabletMaterialId(null);
+          setSelectedTabletSlotNumber(null);
+        }}
+        materialId={selectedTabletMaterialId}
+        slotNumber={selectedTabletSlotNumber}
+        tabletData={tabletData}
+        connectionStatusData={connectionStatusData}
+        tabletLoading={tabletLoading}
+        tabletError={tabletError}
+        connectionStatusLoading={connectionStatusLoading}
+        connectionStatusError={connectionStatusError}
+        unregistering={unregistering}
+        creatingTabletConfig={creatingTabletConfig}
+        onRefetchTabletData={refetchTabletData}
+        onRefetchConnectionStatus={refetchConnectionStatus}
+        onCreateTabletConfiguration={handleCreateTabletConfiguration}
+        onUnregisterTablet={handleUnregisterTablet}
+        onCopyToClipboard={copyToClipboard}
+      />
 
     {/* Material Details Modal */}  
-    {showDetailsModal && selectedMaterialDetails && (
-      <div
-        className="fixed inset-0 z-50 overflow-hidden"
-        style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
-        onClick={handleCloseModal}
-      >
-        <div
-          className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
-            isModalOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex justify-between items-center mb-6 border-b pb-4 p-6">
-            <div className="flex items-center gap-2">
-              
-              <h2 className="text-xl font-bold text-gray-800">
-                {selectedMaterialDetails.materialId}
-              </h2>
-            </div>
-            <span
-                className={`px-3 py-1 text-xs mr-40 font-medium rounded-full ${
-                  getStatus(selectedMaterialDetails) === "Used"
-                    ? "bg-red-200 text-red-800"
-                    : "bg-green-200 text-green-800"
-                }`}
-              >
-                {getStatus(selectedMaterialDetails)}
-              </span>
-            <button
-              onClick={handleCloseModal}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-      {/* Body */}
-      <div className="flex-grow overflow-y-auto px-6 pb-6">
-        {/* Material Info */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {/* Row 1 */}
-          <div>
-            <span className="text-xs font-semibold">Name:</span>
-            <div className="w-full text-xl py-2 font-bold">
-              {selectedMaterialDetails.materialType}
-            </div>
-          </div>
-          <div>
-            <span className="text-xs font-semibold">Category:</span>
-            <div className="w-full text-xl py-2 font-bold">
-              {selectedMaterialDetails.category}
-            </div>
-          </div>
-          <div>
-            <span className="text-xs font-semibold">Vehicle Type:</span>
-            <div className="w-full text-xl py-2 font-bold">
-              {selectedMaterialDetails.vehicleType}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <div>
-            <span className="text-sm font-semibold">Description:</span>
-            <textarea
-              value={selectedMaterialDetails.description || "N/A"}
-              readOnly
-              className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none"
-            />
-          </div>
-          <div>
-            <span className="text-sm font-semibold">Requirements:</span>
-            <textarea
-              value={selectedMaterialDetails.requirements || "N/A"}
-              readOnly
-              className="w-full text-sm px-3 mt-2 py-2 border rounded-lg h-20 resize-none focus:ring-1 focus:outline-none ring-gray-200"
-            />
-          </div>
-        </div>
-
-        {/* Driver Details Table */}
-        <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
-          <h3 className="text-sm font-bold text-gray-800 text-center px-4 py-2 bg-gray-50 border-b">
-            Driver Details
-          </h3>
-          <table className="table-auto w-full border-collapse">
-            <tbody className="bg-white text-sm">
-              <tr className="border-b">
-                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Driver Name</td>
-                <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                  {selectedMaterialDetails.driver?.fullName || "N/A"}
-                </td>
-              </tr>
-              <tr className="border-b">
-                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Plate Number</td>
-                <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                  {selectedMaterialDetails.driver?.vehiclePlateNumber || "N/A"}
-                </td>
-              </tr>
-              <tr className="border-b">
-                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Car Type</td>
-                <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                  {selectedMaterialDetails.vehicleType || "N/A"}
-                </td>
-              </tr>
-              <tr className="border-b">
-                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Contact</td>
-                <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                  {selectedMaterialDetails.driver?.contactNumber || "N/A"}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-4 py-2 text-left text-gray-700 font-semibold">Email</td>
-                <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                  {selectedMaterialDetails.driver?.email || "N/A"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-
-        {/* Dates */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {/* Mounted Date */}
-          <div>
-            <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
-            {editingDates[selectedMaterialDetails.id] ? (
-              <>
-                <div className="relative mt-1">
-                  <input
-                    type="datetime-local"
-                    value={editingDates[selectedMaterialDetails.id].mountedAt || ""}
-                    onChange={(e) =>
-                      updateEditingDate(
-                        selectedMaterialDetails.id,
-                        "mountedAt",
-                        e.target.value
-                      )
-                    }
-                    className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
-                  />
-                  {/* Custom Calendar Icon */}
-                  <Calendar
-                    size={16}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
-                  />
-                </div>
-
-                {/* Save/Cancel Buttons */}
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={() => saveDateChanges(selectedMaterialDetails.id)}
-                    disabled={savingDates[selectedMaterialDetails.id]}
-                    className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
-                  >
-                    {savingDates[selectedMaterialDetails.id] ? "Saving..." : (
-                      <>
-                        <Check size={12} /> Save
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => cancelEditingDates(selectedMaterialDetails.id)}
-                    disabled={savingDates[selectedMaterialDetails.id]}
-                    className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
-                  >
-                    <X size={12} /> Cancel
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
-                {formatDate(selectedMaterialDetails.mountedAt)}
-              </div>
-            )}
-          </div>
-
-          {/* Dismounted Date */}
-          <div>
-            <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
-            {editingDates[selectedMaterialDetails.id] ? (
-              <div className="relative mt-1">
-                <input
-                  type="datetime-local"
-                  value={editingDates[selectedMaterialDetails.id].dismountedAt || ""}
-                  onChange={(e) =>
-                    updateEditingDate(
-                      selectedMaterialDetails.id,
-                      "dismountedAt",
-                      e.target.value
-                    )
-                  }
-                  className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
-                />
-                {/* Custom Calendar Icon */}
-                <Calendar
-                  size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
-                />
-              </div>
-            ) : (
-              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
-                {formatDate(selectedMaterialDetails.dismountedAt)}
-              </div>
-            )}
-          </div>
-
-          {/* Created */}
-          <div>
-            <span className="text-sm font-semibold text-gray-700">Created:</span>
-            <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
-              {formatDate(selectedMaterialDetails.createdAt)}
-            </div>
-          </div>
-
-          {/* Updated */}
-          <div>
-            <span className="text-sm font-semibold text-gray-700">Updated:</span>
-            <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
-              {formatDate(selectedMaterialDetails.updatedAt)}
-            </div>
-          </div>
-        </div>
-
-                {/* QR Code Section for HEADDRESS materials */}
-                {selectedMaterialDetails.materialType === "HEADDRESS" && (
-                  <div className="mt-6 space-y-4">
-                    <h4 className="text-md font-semibold text-gray-800 border-b pb-2">
-                      QR Codes
-                    </h4>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() =>
-                          showConnectionDetails(selectedMaterialDetails.materialId, 1)
-                        }
-                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-                        title="View tablet connection details for Slot 1"
-                      >
-                        <QrCode size={16} />
-                        Slot 1
-                      </button>
-                      <button
-                        onClick={() =>
-                          showConnectionDetails(selectedMaterialDetails.materialId, 2)
-                        }
-                        className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
-                        title="View tablet connection details for Slot 2"
-                      >
-                        <QrCode size={16} />
-                        Slot 2
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="p-6 border-t mt-auto">
-                <div className="flex justify-end">
-                  {getStatus(selectedMaterialDetails) === "Available" ? (
-                    <button
-                      onClick={() => {
-                        setSelectedMaterialForAssign(selectedMaterialDetails);
-                        setShowAssignModal(true);
-                      }}
-                      className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                    >
-                      <UserPlus size={16} />
-                      Assign Driver
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRemoveFromDriver(selectedMaterialDetails.id)}
-                      className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                    >
-                      <UserX size={16} />
-                      Remove Driver
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+    <MaterialDetailsModal
+      isOpen={showDetailsModal}
+      onClose={handleCloseModal}
+      material={selectedMaterialDetails}
+      onRemoveFromDriver={handleRemoveFromDriver}
+      onAssignDriver={(material) => {
+        setSelectedMaterialForAssign(material);
+        setShowAssignModal(true);
+      }}
+      onShowConnectionDetails={showConnectionDetails}
+      editingDates={editingDates}
+      savingDates={savingDates}
+      onStartEditingDates={startEditingDates}
+      onCancelEditingDates={cancelEditingDates}
+      onSaveDateChanges={saveDateChanges}
+      onUpdateEditingDate={updateEditingDate}
+    />
     </div>
   );
 };

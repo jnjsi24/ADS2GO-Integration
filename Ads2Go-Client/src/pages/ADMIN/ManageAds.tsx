@@ -22,10 +22,10 @@ import {
   type Ad,
   type User
 } from '../../graphql/admin/ads';
-import ScheduleTab from './tabs/ScheduleTab';
-import DeploymentTab from './tabs/DeploymentTab';
-import AnalyticsTab from './tabs/AnalyticsTab';
-import PlanAvailabilityTab from './tabs/PlanAvailabilityTab';
+import ScheduleTab from './tabs/manageAds/ScheduleTab';
+import DeploymentTab from './tabs/manageAds/DeploymentTab';
+import AnalyticsTab from './tabs/dashboard/AnalyticsTab';
+import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();

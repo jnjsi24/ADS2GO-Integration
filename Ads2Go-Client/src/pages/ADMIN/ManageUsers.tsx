@@ -1,42 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import AdminLayout from '../../components/AdminLayout';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-
-// GraphQL queries - UPDATED to match exact schema fields
-const GET_ALL_USERS = gql`
-  query GetAllUsers {
-    getAllUsers {
-      id
-      firstName
-      middleName
-      lastName
-      email
-      companyName
-      companyAddress
-      houseAddress
-      contactNumber
-      profilePicture
-      role
-      isEmailVerified
-      lastLogin
-      createdAt
-      updatedAt
-    }
-  }
-`;
-
-// Removed unused GET_USER_ADS_COUNT query
-
-const DELETE_USER = gql`
-  mutation DeleteUser($id: ID!) {
-    deleteUser(id: $id) {
-      success
-      message
-    }
-  }
-`;
+import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
+import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
 
 interface User {
   id: string;

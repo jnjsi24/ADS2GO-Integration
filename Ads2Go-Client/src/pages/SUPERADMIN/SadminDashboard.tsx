@@ -9,10 +9,10 @@ import {
   PieLabelRenderProps,
 } from "recharts";
 import { useQuery } from '@apollo/client';
-import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
+import { GET_OWN_SUPERADMIN_DETAILS } from '../../graphql/superadmin';
 
-// GraphQL query to get admin details
-const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
+// GraphQL query to get superadmin details
+const GET_SUPERADMIN_DETAILS = GET_OWN_SUPERADMIN_DETAILS;
 
 // Dummy data for the Ad Impressions & QR Scans chart
 const adPerformanceData = [
@@ -51,18 +51,18 @@ const vehicles = [
 ];
 
 const Dashboard = () => {
-  const [adminName, setAdminName] = useState("Admin");
+  const [adminName, setAdminName] = useState("SuperAdmin");
   
-  // Fetch admin details from the backend
-  const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
+  // Fetch superadmin details from the backend
+  const { loading, error, data } = useQuery(GET_SUPERADMIN_DETAILS, {
     onCompleted: (data) => {
-      if (data && data.getOwnAdminDetails) {
-        const admin = data.getOwnAdminDetails;
-        setAdminName(`${admin.firstName} ${admin.lastName}`);
+      if (data && data.getOwnSuperAdminDetails) {
+        const superadmin = data.getOwnSuperAdminDetails;
+        setAdminName(`${superadmin.firstName} ${superadmin.lastName}`);
       }
     },
     onError: (error) => {
-      console.error("Error fetching admin details:", error);
+      console.error("Error fetching superadmin details:", error);
     }
   });
 
@@ -74,7 +74,7 @@ const Dashboard = () => {
 
   if (error) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="text-red-500">Error loading admin details: {error.message}</div>
+      <div className="text-red-500">Error loading superadmin details: {error.message}</div>
     </div>
   );
 

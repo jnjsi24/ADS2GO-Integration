@@ -15,7 +15,6 @@ import {
   Monitor,
   TrendingUp,
   AlertCircle,
-  CheckCircle,
   XCircle,
   PlayCircle,
   Wifi,
@@ -24,15 +23,15 @@ import {
   Loader2
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
-import { adsPanelGraphQLService, ScreenData, ComplianceReport, AdAnalytics } from '../../services/adsPanelGraphQLService';
+import { adsPanelGraphQLService, ScreenData, AdAnalytics } from '../../services/adsPanelGraphQLService';
 import '../../services/testEndpoints';
 
 // Import tab components
-import Dashboard from './tabs/Dashboard';
-import ScreenControl from './tabs/ScreenControl';
-import ContentManagement from './tabs/ContentManagement';
-import Analytics from './tabs/Analytics';
-import Alerts from './tabs/Alerts';
+import Dashboard from './tabs/dashboard/Dashboard';
+import ScreenControl from './tabs/adminAdsControl/ScreenControl';
+import ContentManagement from './tabs/manageAds/ContentManagement';
+import Analytics from './tabs/dashboard/Analytics';
+import Alerts from './tabs/adminAdsControl/Alerts';
 
 const AdminAdsControl: React.FC = () => {
   // Cache busting - force component reload
@@ -177,7 +176,7 @@ const AdminAdsControl: React.FC = () => {
     // Set up auto-refresh every 5 seconds for real-time updates
     const interval = setInterval(autoRefreshData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchData, autoRefreshData]);
 
   // Action handlers
   const handleBulkAction = async (action: string) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { 
   X, 
   Trash,
@@ -12,83 +12,8 @@ import {
   Phone, 
   MapPin, 
   } from 'lucide-react';
-
-// === GraphQL ===
-const GET_ALL_DRIVERS = gql`
-  query GetAllDrivers {
-    getAllDrivers {
-      id
-      driverId
-      firstName
-      middleName
-      lastName
-      email
-      contactNumber
-      vehicleType
-      vehicleModel
-      vehiclePlateNumber
-      accountStatus
-      reviewStatus
-      installedMaterialType
-      address
-      licenseNumber
-      licensePictureURL
-      orCrPictureURL
-      vehiclePhotoURL
-      profilePicture
-      dateJoined
-      approvalDate
-      rejectedReason
-      material {
-        materialId
-        materialType
-        category
-        description
-      }
-    }
-  }
-`;
-
-const APPROVE_DRIVER = gql`
-  mutation ApproveDriver($driverId: ID!, $materialTypeOverride: [MaterialTypeEnum!]) {
-    approveDriver(driverId: $driverId, materialTypeOverride: $materialTypeOverride) {
-      success
-      message
-      driver {
-        id
-        driverId
-        accountStatus
-        reviewStatus
-        installedMaterialType
-      }
-    }
-  }
-`;
-
-const REJECT_DRIVER = gql`
-  mutation RejectDriver($driverId: ID!, $reason: String!) {
-    rejectDriver(driverId: $driverId, reason: $reason) {
-      success
-      message
-      driver {
-        id
-        driverId
-        accountStatus
-        reviewStatus
-        rejectedReason
-      }
-    }
-  }
-`;
-
-const DELETE_DRIVER = gql`
-  mutation DeleteDriver($driverId: ID!) {
-    deleteDriver(driverId: $driverId) {
-      success
-      message
-    }
-  }
-`;
+import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
+import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
 
 // === Types ===
 interface Driver {
