@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ScreenTracking = require('../models/screenTracking');
+const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 
 // POST /updateLocation - Update tablet location and start/continue daily session
@@ -13,6 +14,21 @@ router.post('/updateLocation', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields: deviceId, lat, lng'
+      });
+    }
+
+    // Check if device has active WebSocket connection (new source of truth)
+    const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
+    if (deviceStatus.source === 'websocket' && !deviceStatus.isOnline) {
+      console.log(`🚫 [LOCATION UPDATE] Skipping location update for ${deviceId} - WebSocket disconnected`);
+      return res.json({
+        success: true,
+        message: 'Location update skipped - device offline',
+        data: {
+          deviceId,
+          isOnline: false,
+          reason: 'WebSocket disconnected'
+        }
       });
     }
 
@@ -51,13 +67,24 @@ router.post('/updateLocation', async (req, res) => {
       await screenTracking.startDailySession();
     }
 
-    // Update location
+    // Update location and online status
     try {
       await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
       console.log('Location updated successfully for device:', deviceId);
+      
+      // Explicitly update online status and lastSeen
+      await ScreenTracking.updateOne(
+        { 'devices.deviceId': deviceId },
+        { 
+          $set: { 
+            'devices.$.isOnline': true,
+            'devices.$.lastSeen': new Date()
+          } 
+        }
+      );
     } catch (error) {
-      console.error('Error updating location:', error);
-      // Continue processing even if location update fails
+      console.error('Error updating location and status:', error);
+      // Continue processing even if update fails
     }
 
     // Check for alerts (optional - don't fail if alerts fail)
@@ -760,37 +787,434 @@ router.post('/updateScreenMetrics', async (req, res) => {
 });
 
 // GET /screens - Get all screens with filtering
+// POST /syncStatus - Sync root isOnline with devices array
+router.post('/syncStatus', async (req, res) => {
+  try {
+    console.log('🔄 Syncing root isOnline status with devices array...');
+    
+    // Find all screens and sync their root isOnline with devices array
+    const screens = await ScreenTracking.find({});
+    let syncedCount = 0;
+    
+    for (const screen of screens) {
+      if (screen.devices && screen.devices.length > 0) {
+        // Check if any device in the array is online
+        const hasOnlineDevice = screen.devices.some(device => device.isOnline);
+        
+        // Update root level isOnline to match the devices array
+        if (screen.isOnline !== hasOnlineDevice) {
+          console.log(`🔄 Syncing ${screen.deviceId}: ${screen.isOnline} -> ${hasOnlineDevice}`);
+          await ScreenTracking.findByIdAndUpdate(
+            screen._id,
+            { 
+              $set: { 
+                isOnline: hasOnlineDevice,
+                lastSeen: new Date()
+              }
+            }
+          );
+          syncedCount++;
+        }
+      }
+    }
+    
+    console.log(`✅ Synced ${syncedCount} screens`);
+    
+    res.json({
+      success: true,
+      message: `Synced ${syncedCount} screens`,
+      syncedCount
+    });
+  } catch (error) {
+    console.error('Error syncing status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /deviceStatus/:deviceId - Get device status using DeviceStatusManager
+router.get('/deviceStatus/:deviceId', (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const status = deviceStatusService.getDeviceStatus(deviceId);
+    
+    res.json({
+      success: true,
+      data: {
+        deviceId,
+        ...status
+      }
+    });
+  } catch (error) {
+    console.error('Error getting device status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /deviceStatuses - Get all device statuses using DeviceStatusManager
+router.get('/deviceStatuses', (req, res) => {
+  try {
+    const allStatuses = deviceStatusService.getAllDeviceStatuses();
+    const summary = deviceStatusService.getStatusSummary();
+    
+    res.json({
+      success: true,
+      data: {
+        devices: allStatuses,
+        summary
+      }
+    });
+  } catch (error) {
+    console.error('Error getting device statuses:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /statusDebug - Debug endpoint to see all status sources
+router.get('/statusDebug', (req, res) => {
+  try {
+    const allStatuses = deviceStatusService.getAllDeviceStatuses();
+    const summary = deviceStatusService.getStatusSummary();
+    
+    // Get WebSocket connections from deviceStatusService
+    const webSocketConnections = Array.from(deviceStatusService.activeConnections.entries()).map(([deviceId, ws]) => ({
+      deviceId,
+      readyState: ws.readyState,
+      isAlive: ws.isAlive
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        deviceStatuses: allStatuses,
+        summary,
+        webSocketConnections,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error getting status debug info:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /forceOffline/:deviceId - Force a device to be marked as offline
+router.post('/forceOffline/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    console.log(`🔄 [FORCE OFFLINE] Manually marking device ${deviceId} as offline`);
+    
+    // Update DeviceStatusManager
+    deviceStatusService.getDeviceStatus(deviceId); // This will trigger the status calculation
+    
+    // Force update the database
+    await ScreenTracking.updateMany(
+      { 
+        $or: [
+          { deviceId: deviceId },
+          { 'devices.deviceId': deviceId }
+        ]
+      },
+      { 
+        $set: { 
+          isOnline: false,
+          'devices.$.isOnline': false
+        } 
+      }
+    );
+    
+    console.log(`✅ [FORCE OFFLINE] Device ${deviceId} marked as offline`);
+    
+    res.json({
+      success: true,
+      message: `Device ${deviceId} marked as offline`,
+      deviceId
+    });
+  } catch (error) {
+    console.error('Error forcing device offline:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /syncDeviceStatus/:deviceId - Sync device status from DeviceStatusManager
+router.post('/syncDeviceStatus/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    console.log(`🔄 [SYNC DEVICE STATUS] Syncing device status for ${deviceId}`);
+    
+    // Get all device statuses from DeviceStatusManager
+    const allStatuses = deviceStatusService.getAllDeviceStatuses();
+    console.log(`📊 [SYNC DEVICE STATUS] Available statuses:`, allStatuses.map(s => ({ deviceId: s.deviceId, isOnline: s.isOnline, source: s.source })));
+    
+    // Find matching status by device ID or material ID
+    const foundStatus = allStatuses.find(status => {
+      return status.deviceId === deviceId || 
+             status.deviceId.includes(deviceId) ||
+             deviceId.includes(status.deviceId);
+    });
+    
+    if (foundStatus) {
+      console.log(`✅ [SYNC DEVICE STATUS] Found matching status: ${foundStatus.deviceId} -> ${foundStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      
+      // Update the DeviceStatusManager with the full device ID
+      deviceStatusService.updateDeviceStatus(deviceId, foundStatus.isOnline, new Date());
+      
+      // Update the database
+      await ScreenTracking.updateMany(
+        { 
+          $or: [
+            { deviceId: deviceId },
+            { 'devices.deviceId': deviceId }
+          ]
+        },
+        { 
+          $set: { 
+            isOnline: foundStatus.isOnline,
+            'devices.$.isOnline': foundStatus.isOnline
+          } 
+        }
+      );
+      
+      res.json({
+        success: true,
+        message: `Device ${deviceId} synced with status: ${foundStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`,
+        deviceId,
+        isOnline: foundStatus.isOnline,
+        source: foundStatus.source
+      });
+    } else {
+      console.log(`⚠️ [SYNC DEVICE STATUS] No matching status found for ${deviceId}`);
+      res.json({
+        success: false,
+        message: `No matching status found for device ${deviceId}`,
+        deviceId
+      });
+    }
+  } catch (error) {
+    console.error('Error syncing device status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 router.get('/screens', async (req, res) => {
   try {
     const { screenType, status, materialId } = req.query;
+    const now = new Date();
+    
+    // Update any devices that should be marked as offline
+    const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
+    const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+    const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
+    
+    // Mark devices as offline if lastSeen is older than 2 minutes (less aggressive)
+    await ScreenTracking.updateMany(
+      { 
+        'devices.isOnline': true,
+        'devices.lastSeen': { $lt: twoMinutesAgo }
+      },
+      { 
+        $set: { 
+          'devices.$.isOnline': false,
+          isOnline: false
+        } 
+      },
+      { multi: true }
+    );
+    
+    // Clean up any stale sessions (older than 5 minutes)
+    await ScreenTracking.updateMany(
+      { 
+        'devices.lastSeen': { $lt: fiveMinutesAgo },
+        'currentSession.isActive': true
+      },
+      { 
+        $set: { 
+          'currentSession.isActive': false,
+          'currentSession.endTime': new Date()
+        } 
+      },
+      { multi: true }
+    );
     
     let query = {};
     
     if (screenType) query.screenType = screenType;
     if (materialId) query.materialId = materialId;
-    if (status === 'online') query.isOnline = true;
-    if (status === 'offline') query.isOnline = false;
+    
+    // Update status query to check lastSeen for online status (less aggressive)
+    if (status === 'online') {
+      query['devices.isOnline'] = true;
+      query['devices.lastSeen'] = { $gte: twoMinutesAgo };
+      query.isOnline = true;
+      
+      console.log('🔍 Online devices query:', JSON.stringify({
+        'devices.isOnline': true,
+        'devices.lastSeen': { $gte: twoMinutesAgo },
+        isOnline: true
+      }, null, 2));
+    }
+    if (status === 'offline') {
+      query['$or'] = [
+        { 'devices.isOnline': false },
+        { 'devices.lastSeen': { $lt: twoMinutesAgo } },
+        { 'devices': { $exists: false } },
+        { isOnline: false }
+      ];
+    }
     if (status === 'displaying') query['screenMetrics.isDisplaying'] = true;
     if (status === 'maintenance') query['screenMetrics.maintenanceMode'] = true;
 
+    console.log('🔍 Running query:', JSON.stringify(query, null, 2));
     const screens = await ScreenTracking.find(query);
     
-    const screensData = screens.map(screen => ({
-      deviceId: screen.deviceId,
-      materialId: screen.materialId,
-      screenType: screen.screenType,
-      carGroupId: screen.carGroupId,
-      slotNumber: screen.slotNumber,
-      isOnline: screen.isOnline,
-      currentLocation: screen.getFormattedLocation(),
-      lastSeen: screen.lastSeen,
-      currentHours: screen.currentHoursToday,
-      hoursRemaining: screen.hoursRemaining,
-      isCompliant: screen.isCompliantToday,
-      totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-      displayStatus: screen.displayStatus,
-      screenMetrics: screen.screenMetrics
-    }));
+    // Auto-sync root isOnline with devices array before processing
+    for (const screen of screens) {
+      if (screen.devices && screen.devices.length > 0) {
+        const hasOnlineDevice = screen.devices.some(device => device.isOnline);
+        if (screen.isOnline !== hasOnlineDevice) {
+          console.log(`🔄 Auto-syncing ${screen.deviceId}: ${screen.isOnline} -> ${hasOnlineDevice}`);
+          screen.isOnline = hasOnlineDevice;
+          await screen.save();
+        }
+      }
+      
+      // Sync with DeviceStatusManager - check if we have a WebSocket connection for this materialId
+      const allStatuses = deviceStatusService.getAllDeviceStatuses();
+      const materialStatus = allStatuses.find(status => {
+        // Check if this device ID matches the materialId pattern
+        return status.deviceId === screen.materialId || 
+               status.deviceId.includes(screen.materialId) ||
+               screen.materialId.includes(status.deviceId);
+      });
+      
+      if (materialStatus) {
+        console.log(`🔄 [AUTO-SYNC] Found WebSocket status for material ${screen.materialId}: ${materialStatus.deviceId} -> ${materialStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`);
+        // Update the DeviceStatusManager with the full device ID
+        deviceStatusService.updateDeviceStatus(screen.deviceId, materialStatus.isOnline, new Date());
+      }
+    }
+    
+    // Log the raw data for debugging
+    console.log('📋 Raw screens data from database:');
+    screens.forEach(screen => {
+      const lastSeen = new Date(screen.lastSeen);
+      const secondsAgo = (now - lastSeen) / 1000;
+      console.log(`  - ${screen.deviceId} (${screen.materialId}):`);
+      console.log(`    isOnline: ${screen.isOnline}`);
+      console.log(`    lastSeen: ${lastSeen} (${secondsAgo}s ago)`);
+      console.log('    devices:', screen.devices?.map(d => ({
+        deviceId: d.deviceId,
+        isOnline: d.isOnline,
+        lastSeen: d.lastSeen,
+        secondsAgo: d.lastSeen ? (now - new Date(d.lastSeen)) / 1000 : 'N/A'
+      })));
+    });
+    
+    // Update the isOnline status based on lastSeen
+    const THIRTY_SECONDS = 30 * 1000; // 30 seconds in milliseconds
+    
+    const screensData = screens.map(screen => {
+      // Use DeviceStatusManager as the new source of truth
+      let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
+      let isActuallyOnline = deviceStatus.isOnline;
+      
+      // If DeviceStatusManager doesn't have this device, try to find it by materialId
+      if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
+        console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${screen.deviceId}, checking by materialId: ${screen.materialId}`);
+        
+        // Try to find the device by materialId in the DeviceStatusManager
+        const allStatuses = deviceStatusService.getAllDeviceStatuses();
+        const foundStatus = allStatuses.find(status => {
+          // Check if this device ID matches the materialId pattern
+          return status.deviceId === screen.materialId || 
+                 status.deviceId.includes(screen.materialId) ||
+                 screen.materialId.includes(status.deviceId);
+        });
+        
+        if (foundStatus) {
+          console.log(`🔍 [SCREEN TRACKING] Found matching device in DeviceStatusManager: ${foundStatus.deviceId} -> ${foundStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`);
+          // Update the DeviceStatusManager with the full device ID
+          deviceStatusService.updateDeviceStatus(screen.deviceId, foundStatus.isOnline, new Date());
+          // Re-get the status after updating
+          deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
+          isActuallyOnline = deviceStatus.isOnline;
+        }
+      }
+      
+      // Log the status source for debugging
+      console.log(`🎯 [SCREEN TRACKING] Device ${screen.deviceId} (${screen.materialId}):`);
+      console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
+      console.log(`  - Source: ${deviceStatus.source}`);
+      console.log(`  - Confidence: ${deviceStatus.confidence}`);
+      console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
+      
+      // Legacy fallback logic (kept for compatibility)
+      const hasOnlineDevice = screen.devices && screen.devices.some(device => {
+        const deviceLastSeen = new Date(device.lastSeen);
+        const deviceTimeSinceLastSeen = (now - deviceLastSeen) / 1000;
+        return device.isOnline && deviceTimeSinceLastSeen <= 120; // 2 minutes timeout
+      });
+      
+      const lastSeen = new Date(screen.lastSeen);
+      const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
+      
+      // Log the status for debugging
+      console.log(`🔍 [SCREEN TRACKING DEBUG] Device ${screen.deviceId} (${screen.materialId}):`);
+      console.log(`  - Last seen: ${lastSeen.toISOString()}`);
+      console.log(`  - Time since last seen: ${timeSinceLastSeen} seconds`);
+      console.log(`  - Database isOnline: ${screen.isOnline}`);
+      console.log(`  - Devices array:`, screen.devices);
+      console.log(`  - Has online device: ${hasOnlineDevice}`);
+      console.log(`  - Final isOnline: ${isActuallyOnline}`);
+      console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
+      
+      // Determine display status based on actual online status
+      let displayStatus;
+      if (isActuallyOnline) {
+        displayStatus = 'ONLINE';
+      } else {
+        displayStatus = 'OFFLINE';
+      }
+      
+      return {
+        deviceId: screen.deviceId,
+        materialId: screen.materialId,
+        screenType: screen.screenType,
+        carGroupId: screen.carGroupId,
+        slotNumber: screen.slotNumber,
+        isOnline: isActuallyOnline,
+        currentLocation: screen.getFormattedLocation(),
+        lastSeen: screen.lastSeen,
+        currentHours: screen.currentHoursToday,
+        hoursRemaining: screen.hoursRemaining,
+        totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+        displayStatus: displayStatus, // Use the determined status instead of screen.displayStatus
+        screenMetrics: screen.screenMetrics
+      };
+    });
+    
+    console.log('Screens data mapping result:', screensData);
+    console.log('Screens data mapping result length:', screensData.length);
+    
+    // Debug: Log the processed screens data
+    console.log('Processed screens data:', JSON.stringify(screensData, null, 2));
 
     res.json({
       success: true,
@@ -808,6 +1232,48 @@ router.get('/screens', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error'
+    });
+  }
+});
+
+// Debug endpoint to check device status
+router.get('/debug/device/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    
+    // Find the device in the database
+    const device = await ScreenTracking.findOne({ 'devices.deviceId': deviceId });
+    
+    if (!device) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found in database'
+      });
+    }
+    
+    // Find the specific device in the devices array
+    const deviceInfo = device.devices.find(d => d.deviceId === deviceId);
+    
+    res.json({
+      success: true,
+      data: {
+        deviceId: deviceInfo?.deviceId,
+        materialId: device.materialId,
+        isOnline: deviceInfo?.isOnline,
+        lastSeen: deviceInfo?.lastSeen,
+        isActive: device.currentSession?.isActive,
+        screenType: device.screenType,
+        displayStatus: device.displayStatus,
+        screenMetrics: device.screenMetrics
+      }
+    });
+    
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error checking device status',
+      error: error.message
     });
   }
 });

@@ -25,18 +25,77 @@ const Dashboard = () => {
 
   // Get user's first name from localStorage on component mount
   useEffect(() => {
-    try {
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        const user = JSON.parse(userData);
-        if (user && user.firstName) {
-          setUserFirstName(user.firstName);
+    const fetchUserData = () => {
+      try {
+        // First, try to get user data from localStorage
+        const userData = localStorage.getItem('user');
+        if (userData) {
+          const user = JSON.parse(userData);
+          console.log('User data from localStorage:', user);
+          
+          // Check various possible property names for first name
+          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
+          
+          if (firstName) {
+            setUserFirstName(firstName);
+            console.log('First name found:', firstName);
+            return;
+          }
         }
+
+        // Alternative: Try to get from sessionStorage
+        const sessionUserData = sessionStorage.getItem('user');
+        if (sessionUserData) {
+          const user = JSON.parse(sessionUserData);
+          console.log('User data from sessionStorage:', user);
+          
+          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
+          
+          if (firstName) {
+            setUserFirstName(firstName);
+            console.log('First name found in session:', firstName);
+            return;
+          }
+        }
+
+        // Alternative: Try to get from other common storage keys
+        const authData = localStorage.getItem('authData') || localStorage.getItem('currentUser') || localStorage.getItem('userInfo');
+        if (authData) {
+          const user = JSON.parse(authData);
+          console.log('User data from alternative storage:', user);
+          
+          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
+          
+          if (firstName) {
+            setUserFirstName(firstName);
+            console.log('First name found in alternative storage:', firstName);
+            return;
+          }
+        }
+
+        console.log('No user data found in any storage, keeping default "User"');
+        
+      } catch (error) {
+        console.error('Error parsing user data from storage:', error);
+        // Keep default 'User' if there's an error
       }
-    } catch (error) {
-      console.error('Error parsing user data from localStorage:', error);
-      // Keep default 'User' if there's an error
-    }
+    };
+
+    // Call immediately
+    fetchUserData();
+
+    // Set up an interval to check periodically in case data is loaded after component mount
+    const interval = setInterval(fetchUserData, 1000);
+
+    // Clean up interval after 5 seconds (5 checks)
+    setTimeout(() => {
+      clearInterval(interval);
+    }, 5000);
+
+    // Cleanup function
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   const barData = [
@@ -225,7 +284,7 @@ const Dashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-72 pr-5 p-10">
+    <div className="min-h-screen bg-white pl-72 pr-5 p-10">
       {/* Header Section */}
       <div className="flex justify-between items-center mb-6">
         <div>
@@ -237,18 +296,18 @@ const Dashboard = () => {
       {/* Metrics Section - Adjusted Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* Profit & Loss Overview - Now spans 2 columns */}
-        <div className="bg-[#1b5087] p-6 rounded-3xl shadow col-span-2 text-white">
+        <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white">
           <div className="flex justify-between items-center mb-4">
             <span className="text-lg font-semibold">Profit & Loss Overview</span>
             <div className="relative">
               <select
-                className="text-xs text-white bg-[#1b5087] rounded-3xl pl-5 pr-10 py-3 border border-white focus:outline-none appearance-none"
+                className="text-xs text-white bg-[#1b5087] rounded-md pl-5 pr-10 py-3 border border-white focus:outline-none appearance-none"
                 value={selectedPeriod}
                 onChange={handlePeriodChange}
               >
-                <option className="rounded-3xl" value="Monthly">Monthly</option>
-                <option className="rounded-3xl" value="Weekly">Weekly</option>
-                <option className="rounded-3xl" value="Daily">Daily</option>
+                <option className="rounded-lg" value="Monthly">Monthly</option>
+                <option className="rounded-lg" value="Weekly">Weekly</option>
+                <option className="rounded-lg" value="Daily">Daily</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -312,7 +371,7 @@ const Dashboard = () => {
         </div>
 
         {/* Total Advertisements */}
-        <div className="bg-white p-4 rounded-3xl shadow-md">
+        <div className="bg-white p-4 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mt-8 pl-4">
             <span className="text-gray-500 text-lg">Total Advertisements</span>
           </div>
@@ -325,15 +384,15 @@ const Dashboard = () => {
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
             <Link
               to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-xl px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
             >
-              View Report <span>â†'</span>
+              View Report <span>→</span>
             </Link>
           </div>
         </div>
 
         {/* Total Riders */}
-        <div className="bg-white p-4 rounded-3xl shadow-md">
+        <div className="bg-white p-4 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mt-8 pl-4">
             <span className="text-gray-500 text-lg">Total Riders</span>
           </div>
@@ -346,9 +405,9 @@ const Dashboard = () => {
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
             <Link
               to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-xl px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
             >
-              View Report <span>â†'</span>
+              View Report <span>→</span>
             </Link>
           </div>
         </div>
@@ -357,12 +416,12 @@ const Dashboard = () => {
       {/* Recent Activity and QR Impressions Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Order - Now spans 2 columns */}
-        <div className="bg-white p-4 rounded-3xl shadow-md lg:col-span-2">
+        <div className="bg-white p-4 rounded-lg shadow-lg lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold pt-3 text-gray-800">Recent Activity</h2>
             <div className="relative pt-3"> {/* Wrap select and icon for relative positioning */}
               <select
-        className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 border border-black focus:outline-none appearance-none"
+              className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
         >
           <option value="This Week">This Week</option>
           {/* Add other options if desired */}
@@ -425,12 +484,12 @@ const Dashboard = () => {
         </div>
 
         {/* QR Impressions - Now spans 1 column */}
-        <div className="bg-white p-4 rounded-3xl shadow-lg">
+        <div className="bg-white p-4 rounded-lg shadow-lg">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
             <div className="relative pt-3">
               <select
-                className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 border border-black focus:outline-none appearance-none"
+                className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
                 value={qrSelectedPeriod}
                 onChange={handleQrPeriodChange}
               >

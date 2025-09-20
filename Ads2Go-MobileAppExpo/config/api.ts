@@ -1,11 +1,13 @@
 // API configuration
 const API_CONFIG = {
-  // Production server on Railway
-  API_URL: "https://ads2go-integration-production.up.railway.app/graphql",
+  // For development on physical device (using computer's IP)
+  API_URL: "http://192.168.1.59:5000/graphql",
 
-  // Local development URLs (uncomment when needed)
-  // For physical device or iOS simulator: "http://YOUR_LOCAL_IP:5000/graphql"
-  // For Android emulator: "http://10.0.2.2:5000/graphql"
+  // For iOS simulator or Android emulator on the same machine
+  // API_URL: "http://localhost:5000/graphql",
+  
+  // For Android emulator alternative
+  // API_URL: "http://10.0.2.2:5000/graphql"
 };
 
-export default API_CONFIG;
+  export default API_CONFIG;

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, TextInput, ScrollView } from "react-native";
-import { router } from "expo-router/build/imperative-api";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from '@expo/vector-icons';
 import tabletRegistrationService, { ConnectionDetails } from '../services/tabletRegistration';
 import QRCodeScanner from '../components/QRCodeScanner';
+import { useDeviceStatus } from '@/contexts/DeviceStatusContext';
 
 export default function RegistrationScreen() {
+  const { setMaterialId: setMaterialIdInContext } = useDeviceStatus();
+  const { force } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
   const [materialId, setMaterialId] = useState('');
   const [slotNumber, setSlotNumber] = useState('');
@@ -15,8 +18,13 @@ export default function RegistrationScreen() {
   const [showQRScanner, setShowQRScanner] = useState(false);
 
   useEffect(() => {
-    checkExistingRegistration();
-  }, []);
+    // Skip registration check if coming from unregister (force=true)
+    if (!force) {
+      checkExistingRegistration();
+    } else {
+      console.log('Skipping registration check - coming from unregister');
+    }
+  }, [force]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -28,8 +36,14 @@ export default function RegistrationScreen() {
 
   const checkExistingRegistration = async () => {
     try {
+      // Add a small delay to ensure any previous cleanup operations are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const registration = await tabletRegistrationService.getRegistrationData();
-      if (registration) {
+      console.log('Registration check - found registration:', registration);
+      
+      if (registration && registration.materialId && registration.deviceId) {
+        // Only redirect if we have a complete registration
         Alert.alert(
           'Already Registered',
           'This tablet is already registered. You will be redirected to the main screen.',
@@ -40,6 +54,10 @@ export default function RegistrationScreen() {
             }
           ]
         );
+      } else if (registration) {
+        // If we have partial registration data, clear it and continue
+        console.log('Found incomplete registration data, clearing it');
+        await tabletRegistrationService.clearRegistration();
       }
     } catch (error) {
       console.error('Error checking registration:', error);
@@ -81,8 +99,14 @@ export default function RegistrationScreen() {
       Alert.alert('Error', 'Please enter Slot Number');
       return false;
     }
+    
+    // If carGroupId is empty, generate a default one
     if (!carGroupId.trim()) {
-      Alert.alert('Error', 'Please enter Car Group ID');
+      const defaultCarGroupId = `GRP-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      setCarGroupId(defaultCarGroupId);
+      Alert.alert('Info', `Using generated Car Group ID: ${defaultCarGroupId}`);
+    } else if (!/^GRP-[A-Z0-9]{8}$/.test(carGroupId.trim())) {
+      Alert.alert('Error', 'Car Group ID must be in the format GRP-XXXXXXXX where X is an uppercase letter or number');
       return false;
     }
     
@@ -115,6 +139,13 @@ export default function RegistrationScreen() {
       const result = await tabletRegistrationService.registerTablet(connectionDetails);
       
       if (result.success) {
+        // Set the material ID in the device status context
+        console.log('Registration successful, setting material ID:', materialId.trim());
+        await setMaterialIdInContext(materialId.trim());
+        
+        // Add a small delay to ensure the material ID is properly set
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
         Alert.alert(
           'Success!',
           'Tablet registered successfully. You will be redirected to the main screen.',
@@ -204,10 +235,11 @@ export default function RegistrationScreen() {
               style={styles.input}
               value={carGroupId}
               onChangeText={setCarGroupId}
-              placeholder="e.g., GRP-E522A5CC"
-              autoCapitalize="characters"
-              autoCorrect={false}
+              placeholder="Leave empty to auto-generate (GRP-XXXXXXXX)"
+              placeholderTextColor="#999"
+              editable={!loading}
             />
+            <Text style={styles.hint}>Format: GRP-XXXXXXXX (8 uppercase alphanumeric characters)</Text>
           </View>
 
           {/* Connection Status */}
@@ -260,10 +292,10 @@ export default function RegistrationScreen() {
               onPress={handleScanQR}
               disabled={loading}
             >
-                             <View style={styles.buttonContent}>
-                 <Ionicons name="qr-code" size={20} color="white" />
-                 <Text style={styles.buttonText}>📷 Enter QR Data</Text>
-               </View>
+              <View style={styles.buttonContent}>
+                <Ionicons name="qr-code" size={20} color="white" />
+                <Text style={styles.buttonText}>📷 Enter QR Data</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -285,12 +317,12 @@ export default function RegistrationScreen() {
         {/* Instructions */}
         <View style={styles.instructionsContainer}>
           <Text style={styles.instructionsTitle}>📋 Instructions:</Text>
-                     <View style={styles.instructionSteps}>
-             <Text style={styles.instructionStep}>1. Get QR code data from the admin dashboard</Text>
-             <Text style={styles.instructionStep}>2. Enter QR data or input details manually</Text>
-             <Text style={styles.instructionStep}>3. Click "Connect Tablet" to register</Text>
-             <Text style={styles.instructionStep}>4. Once registered, the tablet will auto-connect on startup</Text>
-           </View>
+          <View style={styles.instructionSteps}>
+            <Text style={styles.instructionStep}>1. Get QR code data from the admin dashboard</Text>
+            <Text style={styles.instructionStep}>2. Enter QR data or input details manually</Text>
+            <Text style={styles.instructionStep}>3. Click "Connect Tablet" to register</Text>
+            <Text style={styles.instructionStep}>4. Once registered, the tablet will auto-connect on startup</Text>
+          </View>
         </View>
 
         {/* Help Section */}
@@ -389,13 +421,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    borderWidth: 2,
-    borderColor: '#e1e8ed',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
-    color: '#2c3e50',
+    marginBottom: 5,
+    color: '#333',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 15,
+    marginTop: -10,
   },
   buttonGroup: {
     marginTop: 10,

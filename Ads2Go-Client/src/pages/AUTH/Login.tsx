@@ -10,15 +10,78 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({
+    email: '',
+    password: ''
+  });
+
+  const validateForm = () => {
+    const errors = {
+      email: '',
+      password: ''
+    };
+
+    if (!email.trim()) {
+      errors.email = 'Please enter your email address';
+    }
+
+    if (!password.trim()) {
+      errors.password = 'Please enter your password';
+    }
+
+    setValidationErrors(errors);
+    return !errors.email && !errors.password;
+  };
+
+  // Helper function to store user data in multiple formats for compatibility
+  const storeUserData = (user: any) => {
+    try {
+      // Store the original user object
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Also store in common alternative keys for better compatibility
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      localStorage.setItem('authData', JSON.stringify(user));
+      
+      // Store just the first name separately for easy access
+      const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0] || 'User';
+      localStorage.setItem('userFirstName', firstName);
+      
+      // Also store in sessionStorage as backup
+      sessionStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('userFirstName', firstName);
+      
+      console.log('User data stored successfully:', {
+        user,
+        firstName,
+        storageKeys: ['user', 'currentUser', 'authData', 'userFirstName']
+      });
+      
+    } catch (error) {
+      console.error('Error storing user data:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
+    // Clear previous validation errors
+    setValidationErrors({ email: '', password: '' });
+
+    // Validate form before proceeding
+    if (!validateForm()) {
+      return;
+    }
+
     setIsLoggingIn(true);
 
     try {
       const user = await login(email, password);
       if (user) {
+        // Store user data immediately after successful login
+        storeUserData(user);
+        
         // Login successful - the UserAuthContext will handle navigation
         console.log('Login successful, user:', user);
       } else {
@@ -26,9 +89,27 @@ const Login: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Login error:', error);
+      
+      // If backend returns a user in error (unlikely), ignore storing and show error instead
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    // Clear email validation error when user starts typing
+    if (validationErrors.email) {
+      setValidationErrors(prev => ({ ...prev, email: '' }));
+    }
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    // Clear password validation error when user starts typing
+    if (validationErrors.password) {
+      setValidationErrors(prev => ({ ...prev, password: '' }));
     }
   };
 
@@ -93,7 +174,7 @@ const Login: React.FC = () => {
             </button>
           </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
                 Email Address
@@ -103,9 +184,14 @@ const Login: React.FC = () => {
                 id="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                onChange={handleEmailChange}
+                className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
+                  validationErrors.email ? 'border-red-400' : 'border-gray-400'
+                }`}
               />
+              {validationErrors.email && (
+                <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -121,10 +207,11 @@ const Login: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   id="password"
-                  required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
+                  onChange={handlePasswordChange}
+                  className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
+                    validationErrors.password ? 'border-red-400' : 'border-gray-400'
+                  }`}
                 />
                 <button
                   type="button"
@@ -138,6 +225,9 @@ const Login: React.FC = () => {
                   )}
                 </button>
               </div>
+              {validationErrors.password && (
+                <p className="text-red-500 text-sm mt-1">{validationErrors.password}</p>
+              )}
             </div>
 
             {error && <p className="text-red-500 text-sm">{error}</p>}

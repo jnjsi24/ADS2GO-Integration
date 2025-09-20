@@ -28,9 +28,28 @@ const LocationPointSchema = new mongoose.Schema({
     }
   },
   timestamp: { type: Date, default: Date.now },
-  speed: { type: Number, min: 0 }, // km/h
-  heading: { type: Number, min: 0, max: 360 }, // degrees
-  accuracy: { type: Number, min: 0 }, // meters
+  speed: { 
+    type: Number, 
+    default: 0,
+    set: function(v) { 
+      // Convert negative values to 0
+      return Math.max(0, v); 
+    } 
+  }, // km/h
+  heading: { 
+    type: Number, 
+    default: 0,
+    set: function(v) { 
+      // Convert negative values to 0 and ensure it's within 0-360
+      const normalized = Math.max(0, v);
+      return normalized % 360; 
+    }
+  }, // degrees
+  accuracy: { 
+    type: Number, 
+    min: 0,
+    default: 0 
+  }, // meters
   address: { type: String, trim: true }
 }, { _id: false });
 
@@ -592,8 +611,30 @@ ScreenTrackingSchema.methods.updateDriverActivity = function(isActive = true) {
 
 // Static methods
 ScreenTrackingSchema.statics.findByDeviceId = function(deviceId) {
-  return this.findOne({ deviceId });
-};
+  return this.findOne({ 'devices.deviceId': deviceId });
+}
+
+// Update offline status for devices that haven't sent updates in a while
+ScreenTrackingSchema.statics.updateOfflineStatus = async function() {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  // Find all devices that are marked as online but haven't been seen in the last 5 minutes
+  const result = await this.updateMany(
+    { 
+      'devices.isOnline': true,
+      'devices.lastSeen': { $lt: fiveMinutesAgo }
+    },
+    { 
+      $set: { 'devices.$[elem].isOnline': false } 
+    },
+    {
+      arrayFilters: [{ 'elem.lastSeen': { $lt: fiveMinutesAgo } }],
+      multi: true
+    }
+  );
+  
+  return result;
+}
 
 // SHARED TRACKING: Find by materialId only (shared across slots)
 ScreenTrackingSchema.statics.findByMaterial = function(materialId) {

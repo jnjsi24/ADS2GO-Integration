@@ -276,12 +276,14 @@ const materialResolvers = {
       // Handle material dismounting (when driverId is set to null)
       if (input.driverId === null && material.driverId) {
         // Find and update the driver to clear the material reference
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.materialId = null;
-          driver.installedMaterialType = null;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            materialId: null,
+            installedMaterialType: null
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
         
         // Update material fields
         material.driverId = null;
@@ -295,12 +297,14 @@ const materialResolvers = {
         material.mountedAt = input.mountedAt;
         
         // Update the driver's installedMaterialType
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.installedMaterialType = material.materialType;
-          driver.materialId = material.id;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            installedMaterialType: material.materialType,
+            materialId: material.id
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
       }
       // Handle dismounting (when dismountedAt is set)
       else if (input.dismountedAt) {
@@ -310,12 +314,14 @@ const materialResolvers = {
         material.dismountedAt = input.dismountedAt;
         
         // Clear the driver's installedMaterialType
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.installedMaterialType = null;
-          driver.materialId = null;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            installedMaterialType: null,
+            materialId: null
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
       }
       else if (input.driverId !== undefined) {
         throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');

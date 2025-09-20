@@ -5,6 +5,7 @@
   "dependencies": {
     "@apollo/client": "^3.8.8",
     "@heroicons/react": "^2.2.0",
+    "@radix-ui/react-accordion": "^1.2.12",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -13,12 +14,15 @@
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
     "apollo-server-express": "^3.12.1",
+    "date-fns": "^4.1.0",
+    "express": "^4.18.2",
     "firebase": "^12.2.1",
+    "framer-motion": "^12.23.16",
     "graphql": "^16.8.1",
     "jwt-decode": "^4.0.0",
     "leaflet": "^1.9.4",
     "leaflet-defaulticon-compatibility": "^0.1.2",
-    "lucide-react": "^0.542.0",
+    "lucide-react": "^0.544.0",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -32,8 +36,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "serve -s build -l 3000",
-    "build": "CI=false react-scripts build",
+    "start": "react-scripts start",
+    "start:prod": "node server.js",
+    "build": "node build-optimized.js",
+    "build:dev": "CI=false node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
+    "build:standard": "node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

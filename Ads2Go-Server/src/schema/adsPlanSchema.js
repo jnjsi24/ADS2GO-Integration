@@ -20,6 +20,7 @@ module.exports = gql`
     endDate: String
     description: String!
     currentDurationDays: Int!
+    materials: [Material!]!
     createdAt: String
     updatedAt: String
   }
@@ -57,6 +58,27 @@ module.exports = gql`
     adLengthCostOverride: Int
   }
 
+  type MaterialAvailability {
+    materialId: ID!
+    materialInfo: Material!
+    totalSlots: Int!
+    occupiedSlots: Int!
+    availableSlots: Int!
+    nextAvailableDate: String
+    allSlotsFreeDate: String
+    status: String!
+    canAcceptAd: Boolean!
+  }
+
+  type PlanAvailability {
+    canCreate: Boolean!
+    plan: AdsPlan!
+    materialAvailabilities: [MaterialAvailability!]!
+    totalAvailableSlots: Int!
+    availableMaterialsCount: Int!
+    nextAvailableDate: String
+  }
+
   type Query {
     getAllAdsPlans: [AdsPlan]
     getAdsPlanById(id: ID!): AdsPlan
@@ -67,6 +89,9 @@ module.exports = gql`
       numberOfDevices: Int, 
       status: String
     ): [AdsPlan]
+    getPlanAvailability(planId: ID!, desiredStartDate: String!): PlanAvailability!
+    getMaterialsAvailability(materialIds: [ID!]!): [MaterialAvailability!]!
+    getAvailabilitySummary: String!
   }
 
   type Mutation {

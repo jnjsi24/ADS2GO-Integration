@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { gql, useMutation } from "@apollo/client";
+import { Eye, EyeOff } from "lucide-react";
 
 const REQUEST_PASSWORD_RESET = gql`
   mutation RequestPasswordReset($email: String!) {
@@ -18,18 +19,25 @@ const ForgotPass: React.FC = () => {
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👈 toggle state
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  const [requestPasswordReset, { loading: requesting }] = useMutation(REQUEST_PASSWORD_RESET, {
-    onCompleted: () => setStep("reset"),
-    onError: () => setError("Failed to send reset email. Please try again."),
-  });
+  const [requestPasswordReset, { loading: requesting }] = useMutation(
+    REQUEST_PASSWORD_RESET,
+    {
+      onCompleted: () => setStep("reset"),
+      onError: () =>
+        setError("Failed to send reset email. Please try again."),
+    }
+  );
 
   const [resetPassword, { loading: resetting }] = useMutation(RESET_PASSWORD, {
-    onCompleted: () => setSuccessMessage("Password reset successful! You can now log in."),
-    onError: () => setError("Failed to reset password. Please check your token and try again."),
+    onCompleted: () =>
+      setSuccessMessage("Password reset successful! You can now log in."),
+    onError: () =>
+      setError("Failed to reset password. Please check your token and try again."),
   });
 
   const handleRequestSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -45,10 +53,22 @@ const ForgotPass: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-100 px-4">
-      <div className="max-w-md w-full p-6 text-center">
-        <img src="/image/blue-logo.png" alt="Logo" className="mx-auto mb-4 w-20 h-auto" />
-        <h2 className="text-3xl font-semibold text-gray-800 mb-4">
+    <div className="relative min-h-screen flex items-center bg-[#fdfdfd] justify-center">
+      {/* Video Background */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70vw] h-auto object-cover"
+      >
+        <source src="/image/forgot.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+
+      {/* Form Container */}
+      <div className="absolute top-44 mr-44 z-10 max-w-md w-full p-6 text-center bg-none">
+        <h2 className="text-4xl font-semibold text-gray-200 mb-4 mt-2">
           {step === "request" ? "Forgot Password" : "Reset Password"}
         </h2>
         <p className="text-gray-500 mb-6">
@@ -64,7 +84,7 @@ const ForgotPass: React.FC = () => {
             <input
               type="email"
               placeholder="Email"
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -72,7 +92,7 @@ const ForgotPass: React.FC = () => {
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              className="w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-400 transition"
+              className="w-full bg-[#FF9800] text-white py-3 rounded-lg hover:bg-[#FF9B45] transition"
               disabled={requesting}
             >
               {requesting ? "Sending..." : "Send Reset Token"}
@@ -83,23 +103,35 @@ const ForgotPass: React.FC = () => {
             <input
               type="text"
               placeholder="Reset Token"
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               required
             />
-            <input
-              type="password"
-              placeholder="New Password"
-              className="w-full px-4 py-3 border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
+            
+            {/* Password input with toggle */}
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="New Password"
+                className="w-full px-4 py-3 border border-gray-800 rounded-xl shadow-lg focus:outline-none pr-12"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="absolute inset-y-0 right-3 flex items-center text-gray-600"
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               type="submit"
-              className="w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-400 transition"
+              className="w-full bg-[#FF9800] text-white py-3 rounded-lg hover:bg-[#FF9B45] transition"
               disabled={resetting}
             >
               {resetting ? "Resetting..." : "Reset Password"}
@@ -109,7 +141,7 @@ const ForgotPass: React.FC = () => {
 
         <a
           href="/login"
-          className="mt-6 inline-block text-gray-500 hover:text-gray-700 text-sm"
+          className="mt-6 inline-block text-blue-600 ml-1 hover:underline text-sm"
         >
           ← Go back to login
         </a>

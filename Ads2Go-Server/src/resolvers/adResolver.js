@@ -3,6 +3,8 @@ const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
+const adDeploymentService = require('../services/adDeploymentService');
+const MaterialAvailabilityService = require('../services/materialAvailabilityService');
 
 const adResolvers = {
   Query: {
@@ -57,7 +59,7 @@ const adResolvers = {
         throw new Error('Please verify your email before creating an advertisement');
       }
 
-      const plan = await Plan.findById(input.planId);
+      const plan = await Plan.findById(input.planId).populate('materials');
       if (!plan) throw new Error('Invalid plan selected');
 
       if (!['DIGITAL', 'NON_DIGITAL'].includes(input.adType)) {
@@ -66,25 +68,40 @@ const adResolvers = {
 
       if (!input.adFormat) throw new Error('adFormat is required');
 
-      const material = await Material.findById(input.materialId);
-      if (!material) throw new Error('Material not found');
-
       // IMPORTANT: Ensure mediaFile is a Firebase Storage URL
       if (!input.mediaFile || !input.mediaFile.startsWith('http')) {
         throw new Error('Media file must be uploaded to Firebase first');
+      }
+
+      // Validate plan availability
+      const userDesiredStartDate = new Date(input.startTime);
+      const availability = await MaterialAvailabilityService.validatePlanAvailability(
+        input.planId, 
+        userDesiredStartDate
+      );
+
+      if (!availability.canCreate) {
+        const nextAvailable = availability.nextAvailableDate ? 
+          new Date(availability.nextAvailableDate).toLocaleDateString() : 'Unknown';
+        throw new Error(`No available materials or slots for selected plan. Next available: ${nextAvailable}`);
       }
 
       // Calculate total price
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
 
-      const startTime = new Date(input.startTime);
-      const endTime = new Date(startTime);
-      endTime.setDate(startTime.getDate() + plan.durationDays);
+      // 7-day admin buffer: Set start time 7 days earlier for admin review
+      const adminReviewStartTime = new Date(userDesiredStartDate);
+      adminReviewStartTime.setDate(adminReviewStartTime.getDate() - 7);
+
+      const endTime = new Date(userDesiredStartDate);
+      endTime.setDate(endTime.getDate() + plan.durationDays);
 
       const ad = new Ad({
         ...input,
         userId: user.id,
+        // Remove materialId from input since it will be assigned from plan
+        materialId: plan.materials[0]._id, // Assign first material from plan
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
         adLengthSeconds: plan.adLengthSeconds,
@@ -93,9 +110,11 @@ const adResolvers = {
         pricePerPlay: plan.pricePerPlay,
         totalPrice,
         price: totalPrice,
-        startTime,
+        startTime: adminReviewStartTime, // Admin review time (7 days earlier)
         endTime,
+        userDesiredStartTime: userDesiredStartDate, // Store user's desired start time
         status: 'PENDING',
+        adStatus: 'INACTIVE', // Will be activated after admin approval
         impressions: 0,
         reasonForReject: null,
         approveTime: null,
@@ -103,6 +122,9 @@ const adResolvers = {
       });
 
       const savedAd = await ad.save();
+
+      // Note: Ad deployment is handled by the Ad model's post-save hook
+      // when the ad status is PAID and adStatus is ACTIVE
 
       return await Ad.findById(savedAd._id)
         .populate('planId')
@@ -214,15 +236,10 @@ const adResolvers = {
           }
           ad.mediaFile = input.mediaFile;
         }
-
-        if (input.materialId !== undefined) ad.materialId = input.materialId;
       }
 
       await ad.save();
-      return await Ad.findById(ad._id)
-        .populate('materialId')
-        .populate('planId')
-        .populate('userId');
+      return ad;
     },
 
     deleteAd: async (_, { id }, { user }) => {
@@ -233,10 +250,47 @@ const adResolvers = {
   },
 
   Ad: {
-    id: (parent) => parent._id.toString(),
+    id: (parent) => {
+      if (parent && parent._id) return parent._id.toString();
+      if (parent && parent.id) return parent.id.toString();
+      return '';
+    },
     userId: async (parent) => await User.findById(parent.userId),
     materialId: async (parent) => await Material.findById(parent.materialId),
     planId: async (parent) => await Plan.findById(parent.planId),
+    // Ensure date fields are consistent ISO strings to avoid client-side Invalid Date
+    startTime: (parent) => {
+      try {
+        return parent.startTime ? new Date(parent.startTime).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing startTime:', e, 'value:', parent.startTime);
+        return '';
+      }
+    },
+    endTime: (parent) => {
+      try {
+        return parent.endTime ? new Date(parent.endTime).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing endTime:', e, 'value:', parent.endTime);
+        return '';
+      }
+    },
+    createdAt: (parent) => {
+      try {
+        return parent.createdAt ? new Date(parent.createdAt).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing createdAt:', e, 'value:', parent.createdAt);
+        return '';
+      }
+    },
+    updatedAt: (parent) => {
+      try {
+        return parent.updatedAt ? new Date(parent.updatedAt).toISOString() : '';
+      } catch (e) {
+        console.error('Error parsing updatedAt:', e, 'value:', parent.updatedAt);
+        return '';
+      }
+    },
   },
 
   AdsPlan: {

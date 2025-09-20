@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from 'lucide-react';
-import { useQuery, gql } from '@apollo/client';
+import { Search, ChevronDown } from "lucide-react";
+import { useQuery, gql } from "@apollo/client";
+import { useUserAuth } from '../../contexts/UserAuthContext';
+import Payment from "./Payment";
+import { motion, AnimatePresence } from 'framer-motion';
+
+
 
 type Status = "Paid" | "Pending" | "Failed";
 
@@ -53,137 +58,90 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
   }
 `;
 
-// Media display component to handle both images and videos
-const MediaDisplay: React.FC<{ mediaFile: string; adFormat: string; productName: string }> = ({ 
-  mediaFile, 
-  adFormat, 
-  productName 
-}) => {
-  const [mediaError, setMediaError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const handleError = () => {
-    setMediaError(true);
-    setIsLoading(false);
-  };
-
-  const handleLoad = () => {
-    setIsLoading(false);
-  };
-
-  if (mediaError) {
-    return (
-      <div className="w-24 h-24 bg-gray-200 rounded-lg flex items-center justify-center">
-        <span className="text-xs text-gray-500 text-center">No Media</span>
-      </div>
-    );
-  }
-
-  if (adFormat === 'VIDEO') {
-    return (
-      <div className="w-24 h-24 rounded-lg overflow-hidden bg-black flex items-center justify-center relative">
-        {isLoading && (
-          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-            <span className="text-xs text-gray-500">Loading...</span>
-          </div>
-        )}
-        <video
-          src={mediaFile}
-          className="max-w-full max-h-full object-cover"
-          muted
-          preload="metadata"
-          onError={handleError}
-          onLoadedData={handleLoad}
-          onLoadStart={() => setIsLoading(false)}
-        />
-        <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
-          <div className="w-6 h-6 bg-white bg-opacity-80 rounded-full flex items-center justify-center">
-            <div className="w-0 h-0 border-l-[6px] border-l-gray-700 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent ml-1"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center relative">
-      {isLoading && (
-        <div className="absolute inset-0 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center">
-          <span className="text-xs text-gray-500">Loading...</span>
-        </div>
-      )}
-      <img
-        src={mediaFile || "https://via.placeholder.com/80"}
-        alt={`${productName} preview`}
-        className="max-w-full max-h-full object-cover"
-        onError={handleError}
-        onLoad={handleLoad}
-      />
-    </div>
-  );
+const getInitials = (firstName?: string, lastName?: string) => {
+  if (!firstName && !lastName) return "?";
+  return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
 };
 
+const planFilterOptions = ['All Plans', '30 Days', '60 Days', '90 Days', '120 Days'];
+const statusFilterOptions = ['All Status', 'Paid', 'Pending', 'Failed'];
+
+
 const PaymentHistory: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<Status | "All Status">("All Status");
-  const [planFilter, setPlanFilter] = useState("All Plans");
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const navigate = useNavigate();
+  const { user } = useUserAuth();
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
 
-  const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
-    fetchPolicy: 'network-only',
-  });
+  const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(
+    null
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedPaymentType, setSelectedPaymentType] = useState("");
+
+  const { loading, error, data, refetch } = useQuery(
+    GET_USER_ADS_WITH_PAYMENTS,
+    {
+      fetchPolicy: "network-only",
+    }
+  );
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
   useEffect(() => {
     if (data) {
-      console.log('Raw data from GET_USER_ADS_WITH_PAYMENTS:', data.getUserAdsWithPayments);
-      const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
-        console.log('Ad:', ad.id, 'Payment:', payment);
-        const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
-        let plan: string;
-        switch (durationDays) {
-          case 30:
-            plan = "30 Days";
-            break;
-          case 60:
-            plan = "60 Days";
-            break;
-          case 90:
-            plan = "90 Days";
-            break;
-          case 120:
-            plan = "120 Days";
-            break;
-          default:
-            plan = `${durationDays} Days`;
-        }
-        const status = mapStatus(payment?.paymentStatus);
-        const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
-        const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
+      const mappedPayments = data.getUserAdsWithPayments.map(
+        ({ ad, payment }: any) => {
+          const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
+          let plan: string;
+          switch (durationDays) {
+            case 30:
+              plan = "30 Days";
+              break;
+            case 60:
+              plan = "60 Days";
+              break;
+            case 90:
+              plan = "90 Days";
+              break;
+            case 120:
+              plan = "120 Days";
+              break;
+            default:
+              plan = `${durationDays} Days`;
+          }
+          const status = mapStatus(payment?.paymentStatus);
+          const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(
+            2
+          )}`;
+          const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
 
-        return {
-          id: ad.id,
-          productName: ad.title,
-          imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
-          plan,
-          amount,
-          status,
-          userName: "",
-          companyName: "",
-          bankNumber: "",
-          adType: ad.adType,
-          address: "",
-          durationDays,
-          paymentType: payment?.paymentType || "",
-          adFormat: ad.adFormat || "",
-          adLengthSeconds: ad.adLengthSeconds || 0,
-          totalPrice,
-          receiptId: payment?.receiptId || "",
-        };
-      });
+          return {
+            id: ad.id,
+            productName: ad.title,
+            imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
+            plan,
+            amount,
+            status,
+            userName: "",
+            companyName: "",
+            bankNumber: "",
+            adType: ad.adType,
+            address: "",
+            durationDays,
+            paymentType: payment?.paymentType || "",
+            adFormat: ad.adFormat || "",
+            adLengthSeconds: ad.adLengthSeconds || 0,
+            totalPrice,
+            receiptId: payment?.receiptId || "",
+          };
+        }
+      );
       setPayments(mappedPayments);
     }
   }, [data]);
@@ -192,7 +150,6 @@ const PaymentHistory: React.FC = () => {
   useEffect(() => {
     refetch();
   }, [refetch]);
-
   const mapStatus = (status?: string): Status => {
     if (!status) return "Pending";
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() as Status;
@@ -202,18 +159,23 @@ const PaymentHistory: React.FC = () => {
   if (error) return <p>Error loading payments: {error.message}</p>;
 
   const filteredPayments = payments.filter((item) => {
-    const matchesSearchTerm = item.productName.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-                             item.id.toString().includes(searchTerm.trim());
-    const matchesStatus = statusFilter === "All Status" || item.status === statusFilter;
-    const matchesPlan = planFilter === "All Plans" || item.plan === planFilter;
+    const matchesSearchTerm =
+      item.productName
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase().trim()) ||
+      item.id.toString().includes(searchTerm.trim());
+      
+    const matchesPlan = selectedPlanFilter === 'All Plans' || item.plan === selectedPlanFilter;
+    const matchesStatus = selectedStatusFilter === 'All Status' || item.status === selectedStatusFilter;
 
     return matchesSearchTerm && matchesStatus && matchesPlan;
   });
-
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentPayments = filteredPayments.slice(indexOfFirstItem, indexOfLastItem);
-  console.log('Current Payments:', currentPayments);
+  const currentPayments = filteredPayments.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
   const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
   const startItem = indexOfFirstItem + 1;
   const endItem = Math.min(indexOfLastItem, filteredPayments.length);
@@ -227,152 +189,176 @@ const PaymentHistory: React.FC = () => {
   const getStatusStyle = (status: Status) => {
     switch (status) {
       case "Paid":
-        return "bg-green-200 text-green-800";
+        return "bg-green-200 text-green-700";
       case "Pending":
-        return "bg-yellow-200 text-yellow-800";
+        return "bg-yellow-200 text-yellow-700";
       case "Failed":
-        return "bg-red-200 text-red-800";
+        return "bg-red-300 text-red-800";
       default:
         return "";
     }
   };
 
-  const handlePayBills = (item: PaymentItem) => {
-    // Navigate to payment page with the payment item data
-    navigate('/payment', { 
-      state: { 
-        paymentItem: item,
-        returnTo: '/history' // So we know where to return after payment
-      } 
-    });
+  const getStatusColor = (status: Status) => {
+    switch (status) {
+      case "Paid":
+        return "border-l-green-500";
+      case "Pending":
+        return "border-l-yellow-400";
+      case "Failed":
+        return "border-l-red-400";
+      default:
+        return "border-l-gray-400";
+      }
+    };
+
+  const handlePlanFilterChange = (plan: string) => {
+    setSelectedPlanFilter(plan);
+    setShowPlanDropdown(false);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
+
+  const handlePaymentClick = (type: string) => {
+    setSelectedPaymentType(type);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedPaymentType("");
+    refetch();
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5">
-      <div className="bg-gray-100 p-6 flex justify-between items-center">
-        <h1 className="text-4xl mt-8 font-semibold">Payment</h1>
-      </div>
-      {/* Filters */}
-      <div className="p-6 flex space-x-4">
-        <div className="relative">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as Status | "All Status")}
-            className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
-          >
-            <option value="All Status">All Status</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Failed">Failed</option>
-          </select>
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
+      {/* Header with Title*/}
+      <div className="flex justify-between items-center mb-6 pt-10">
+        <h1 className="text-3xl ml-5 font-bold text-gray-800">Payment History</h1>
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex gap-2">
+            <input type="text" 
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white" 
+              placeholder="Search Advertisements" 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+
+            {/* Filter for Plans */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedPlanFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showPlanDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {planFilterOptions.map((plan) => (
+                      <button
+                        key={plan}
+                        onClick={() => handlePlanFilterChange(plan)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {plan}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Filter for Status */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedStatusFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
-        </div>
-        
-        <div className="relative">
-          <select
-            value={planFilter}
-            onChange={(e) => setPlanFilter(e.target.value)}
-            className="text-xs text-black rounded-3xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none bg-gray-100"
-          >
-            <option>All Plans</option>
-            <option>30 Days</option>
-            <option>60 Days</option>
-            <option>90 Days</option>
-            <option>120 Days</option>
-          </select>
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-        <div className="relative flex-grow">
-          <input
-            type="text"
-            placeholder="Search Ads"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="text-xs text-black rounded-3xl pl-10 pr-4 py-3 w-full shadow-md border border-black focus:outline-none bg-gray-100"
-          />
-          <Search className="absolute left-3 top-3 text-gray-500" size={18} />
         </div>
       </div>
 
       {/* Payment Cards */}
-      <div className="bg-gray-100 p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="bg-white pt-6 ml-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
               key={item.id}
-              className={`rounded-xl shadow-md bg-white overflow-hidden border border-gray-200`}
+              className="rounded-lg shadow-md bg-white overflow-hidden relative flex flex-col cursor-pointer"
+              onClick={() => setSelectedPayment(item)}
             >
               {/* Main Product Info Section */}
-              <div className="p-4 flex items-center space-x-4">
-                <div className="flex-shrink-0">
-                  <MediaDisplay 
-                    mediaFile={item.imageUrl} 
-                    adFormat={item.adFormat} 
-                    productName={item.productName}
-                  />
-                </div>
+              <div className="p-4 flex-grow flex items-start space-x-4">
                 <div className="flex-grow">
-                  {/* Status aligned on the right of the product name/title */}
                   <div className="flex justify-between items-start">
-                    <h3 className="text-lg font-semibold text-black">{item.productName}</h3>
-                    <span className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1 ${getStatusStyle(item.status)}`}>
-                      <span>{item.status}</span>
-                    </span>
+                    <div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <span className="font-bold">{item.productName}</span>
+                      </p>
+                      <h3 className="text-2xl font-bold text-[#FF9B45]">{item.totalPrice}</h3>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">{item.plan} Plan</p>
-                  <p className="text-xs text-gray-500 mt-1">Format: {item.adFormat}</p>
-                </div>
-              </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {item.paymentType || "N/A"}
+                  </p>
+                  {item.status === "Pending" && (
+                    <p className="text-xs text-red-500 mt-5 font-semibold">
+                      Please pay before October 25, 2023
+                    </p>
+                  )}
 
-              {/* Additional Details Section */}
-              <div className="px-4 pb-4 text-sm text-gray-700 grid grid-cols-2 gap-y-2">
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>Ads ID:</strong> <span>{item.id}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>Mode of Payment:</strong> <span>{item.paymentType || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>Ad Type:</strong> <span>{item.adType || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>adLengthSeconds:</strong> <span>{item.adLengthSeconds || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center col-span-2">
-                  <strong>receiptId:</strong> <span>{item.receiptId || 'N/A'}</span>
                 </div>
               </div>
-              
-              {/* Total and Amount Section (above buttons) */}
-              <div className="border-t border-gray-200 p-4 flex justify-between items-center">
-                <p className="text-base font-semibold text-gray-700">Total:</p>
-                <p className="text-xl font-bold text-[#3674B5]">P {parseFloat(item.amount.replace('$', '')).toFixed(2)}</p>
-              </div>
+              <span
+                className={`absolute top-2 right-2 inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                  item.status
+                )}`}
+              >
+                {item.status} {/* Changed to display the full status text */}
+              </span>
 
-              {/* Action Buttons */}
-              <div className="px-4 pb-4 flex justify-end space-x-3">
+              {/* Footer for the button */}
+              <div className="p-1 bg-gray-100 hover:bg-gray-200 mt-auto transition-colors">
                 <button
-                  onClick={() => navigate(`/payment-details/${item.id}`)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  See Details
-                </button>
-                {(item.status === "Pending" || item.status === "Failed") && (
-                  <button
-                    onClick={() => handlePayBills(item)}
-                    className="px-4 py-2 text-sm bg-[#3674B5] text-white rounded-lg hover:bg-[#2a5b91] transition-colors"
+                  onClick={() => setSelectedPayment(item)}
+                  className="text-gray-500 text-xs font-semibold px-4 py-2 flex justify-center items-center text-center w-full"
                   >
-                    Pay Bills
-                  </button>
-                )}
+                    View Details →
+                </button>
               </div>
             </div>
           ))
@@ -401,7 +387,7 @@ const PaymentHistory: React.FC = () => {
               key={page}
               onClick={() => handlePageChange(page)}
               className={`px-2 py-1 border border-gray-300 rounded ${
-                currentPage === page ? 'bg-[#3674B5] text-white' : ''
+                currentPage === page ? "bg-[#3674B5] text-white" : ""
               }`}
             >
               {page}
@@ -415,6 +401,198 @@ const PaymentHistory: React.FC = () => {
             »
           </button>
         </div>
+      </div>
+
+      {/* Overlay */}
+      {selectedPayment && (
+        <div className="fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black opacity-20"
+            onClick={() => setSelectedPayment(null)}
+          ></div>
+        </div>
+      )}
+
+      {/* Drawer */}
+      <div
+        className={`fixed top-2 right-2 h-[97%] bottom-1 w-full max-w-sm bg-white shadow-lg rounded-lg transform transition-transform duration-500 ease-in-out z-50 overflow-y-auto
+          ${selectedPayment ? "translate-x-0" : "translate-x-full"}`}
+      >
+        {selectedPayment && (
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex justify-between items-center pb-4 mb-4 border-b border-gray-300">
+              <span className="text-xs text-gray-600">Payment ID</span>
+              <span className="text-sm font-semibold pr-14 text-gray-800">
+                {selectedPayment.id || "N/A"}
+              </span>
+              <button
+                onClick={() => setSelectedPayment(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Details */}
+            <div className="mb-6">
+              <div className="flex justify-between items-baseline mb-2">
+                <span className="text-sm text-gray-600">Payment for</span>
+                <span className="text-sm text-gray-600">Plan</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-[#1B5087]">
+                  {selectedPayment.productName || "N/A"}
+                </h3>
+                <span className="font-semibold text-gray-900">
+                  {selectedPayment.plan}
+                </span>
+              </div>
+              {selectedPayment.status && (
+                <div className="mt-2 text-right">
+                  <span
+                    className={`px-3 py-2 rounded-full text-xs font-semibold ${getStatusStyle(
+                      selectedPayment.status
+                    )}`}
+                  >
+                    {selectedPayment.status}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Info Table */}
+            <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
+              <table className="table-auto w-full border-collapse">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-sm text-gray-800">
+                      Name
+                    </th>
+                    <th className="px-4 py-2 text-right text-sm text-gray-800">
+                      Details
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  <tr className="border-b">
+                    <td className="px-4 py-2 text-gray-700">Mode of payment</td>
+                    <td className="px-4 py-2 text-right text-gray-900">
+                      {selectedPayment.paymentType || "N/A"}
+                    </td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="px-4 py-2 text-gray-700">Ad Type</td>
+                    <td className="px-4 py-2 text-right text-gray-900">
+                      {selectedPayment.adType || "N/A"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 text-gray-700">Ad Length</td>
+                    <td className="px-4 py-2 text-right text-gray-900">
+                      {selectedPayment.adLengthSeconds || "N/A"} seconds
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Receipt + Total */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <strong className="text-gray-700">Receipt ID</strong>
+                <span className="text-gray-900">
+                  {selectedPayment.receiptId || "N/A"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <strong className="text-gray-700">Total</strong>
+                <span className="text-lg font-bold text-[#FF9800]">
+                  P{" "}
+                  {parseFloat(
+                    selectedPayment.amount.replace("$", "")
+                  ).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            {/* Payment methods */}
+            <div className="mt-6 border-t pt-4">
+              <div className="flex items-center mb-4 text-sm text-[#8ABB6C]">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 mr-1"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                <span>All your transactions are secure and fast.</span>
+              </div>
+              <p className="text-sm font-semibold text-gray-800 mb-2">
+                SELECT A PAYMENT METHOD
+              </p>
+
+              {[
+                { type: "CASH", label: "Cash" },
+                { type: "CREDIT_CARD", label: "Credit Card" },
+                { type: "DEBIT_CARD", label: "Debit Card" },
+                { type: "GCASH", label: "GCash" },
+                { type: "PAYPAL", label: "PayPal" },
+                { type: "BANK_TRANSFER", label: "Bank Transfer" },
+              ].map((method) => (
+                <div
+                  key={method.type}
+                  className="bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center cursor-pointer"
+                  onClick={() => handlePaymentClick(method.type)}
+                >
+                  <span>{method.label}</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4 text-gray-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Payment modal */}
+      {isModalOpen && selectedPayment && (
+        <Payment
+          paymentItem={selectedPayment}
+          paymentType={selectedPaymentType}
+          onClose={closeModal}
+        />
+      )}
       </div>
     </div>
   );

@@ -1,10 +1,14 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const http = require('http');
 const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+
+// WebSocket service for real-time device status
+const deviceStatusService = require('./services/deviceStatusService');
 
 // ✅ For handling GraphQL file uploads
 const { graphqlUploadExpress } = require('graphql-upload');
@@ -24,6 +28,7 @@ const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
+const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -36,10 +41,14 @@ const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
+const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
 const { driverMiddleware } = require('./middleware/driverAuth');
+
+// Import jobs
+const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
@@ -50,7 +59,7 @@ const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 
 // Import services
-const syncService = require('./services/syncService');
+// const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -81,6 +90,7 @@ const server = new ApolloServer({
     adsPlanTypeDefs,
     materialTrackingTypeDefs,
     tabletTypeDefs,
+    adsDeploymentTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -93,6 +103,7 @@ const server = new ApolloServer({
     adsPlanResolvers,
     materialTrackingResolvers,
     tabletResolvers,
+    adsDeploymentResolvers,
   ]),
 });
 
@@ -222,15 +233,36 @@ async function startServer() {
   });
 
   const PORT = process.env.PORT || 5000;
-  const httpServer = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Server ready at http://localhost:${PORT}/graphql`);
-    
-    // Start sync service in production (no longer needed - using MongoDB only)
-    if (process.env.NODE_ENV === 'production') {
-      syncService.start();
-    }
-  });
+  
+  // Create HTTP server
+  const httpServer = http.createServer(app);
+  
+  // Initialize WebSocket server
+  deviceStatusService.initializeWebSocketServer(httpServer);
 
+  // Start the server
+  httpServer.listen(PORT, () => {
+    console.log(`\n🚀 Server ready at http://localhost:${PORT}`);
+    console.log(`\n🚀 GraphQL server ready at http://localhost:${PORT}/graphql`);
+    
+    // Start the device status monitoring job
+    startDeviceStatusJob();
+  });
+  
+  // Handle server shutdown gracefully
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully');
+    httpServer.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+  });  
+    // Start sync service in production (no longer needed - using MongoDB only)
+  // if (process.env.NODE_ENV === 'production') {
+  //   syncService.start();
+  // }
+  
+  // Handle server errors
   httpServer.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
       console.error(`\n❌ Port ${PORT} is already in use. Please kill the process using this port.`);

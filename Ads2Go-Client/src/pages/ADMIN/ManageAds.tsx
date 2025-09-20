@@ -1,138 +1,80 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import React, { useState } from 'react';
+import { 
+  X, 
+  Trash, 
+  Tablet, 
+  CalendarPlus, 
+  CalendarMinus, 
+  Mail, 
+  CalendarRange, 
+  Coins,
+  Monitor,
+  Calendar,
+  PlayCircle,
+  BarChart3
+} from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { gql } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-
-// GraphQL Queries and Mutations
-const GET_ALL_ADS = gql`
-  query GetAllAds {
-    getAllAds {
-      id
-      title
-      description
-      adType
-      adFormat
-      status
-      startTime
-      endTime
-      mediaFile
-      reasonForReject
-      approveTime
-      rejectTime
-      price
-      totalPrice
-      durationDays
-      numberOfDevices
-      adLengthSeconds
-      playsPerDayPerDevice
-      totalPlaysPerDay
-      pricePerPlay
-      createdAt
-      updatedAt
-      userId {
-        id
-        firstName
-        lastName
-        email
-      }
-      materialId {
-        id
-      }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
-      }
-    }
-  }
-`;
-
-const UPDATE_AD = gql`
-  mutation UpdateAd($id: ID!, $input: UpdateAdInput!) {
-    updateAd(id: $id, input: $input) {
-      id
-      status
-      reasonForReject
-      approveTime
-      rejectTime
-    }
-  }
-`;
-
-const DELETE_AD = gql`
-  mutation DeleteAd($id: ID!) {
-    deleteAd(id: $id)
-  }
-`;
-
-// === Types ===
-interface User {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-}
-
-interface Material {
-  id: string;
-}
-
-interface AdsPlan {
-  id: string;
-  durationDays: number;
-  numberOfDevices: number;
-  adLengthSeconds: number;
-  playsPerDayPerDevice: number;
-  pricePerPlay: number;
-}
-
-interface Ad {
-  id: string;
-  title: string;
-  description: string;
-  adType: 'DIGITAL' | 'NON_DIGITAL';
-  adFormat: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'ENDED';
-  startTime: string;
-  endTime: string;
-  mediaFile: string;
-  reasonForReject?: string;
-  approveTime?: string;
-  rejectTime?: string;
-  price: number;
-  totalPrice: number;
-  durationDays: number;
-  numberOfDevices: number;
-  adLengthSeconds: number;
-  playsPerDayPerDevice: number;
-  totalPlaysPerDay: number;
-  pricePerPlay: number;
-  createdAt: string;
-  updatedAt: string;
-  userId: User;
-  materialId: Material;
-  planId: AdsPlan;
-}
+import {
+  GET_ALL_ADS,
+  UPDATE_AD,
+  DELETE_AD,
+  type Ad,
+  type User
+} from '../../graphql/admin/ads';
+import ScheduleTab from './tabs/manageAds/ScheduleTab';
+import DeploymentTab from './tabs/manageAds/DeploymentTab';
+import AnalyticsTab from './tabs/dashboard/AnalyticsTab';
+import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
+  
+  // Tab management
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics' | 'availability'>('ads');
+  
+  // Existing state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'APPROVED' | 'PENDING' | 'REJECTED'>('all');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAdDetailsModal, setShowAdDetailsModal] = useState(false);
+  const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
+  const [isAdModalOpen, setIsAdModalOpen] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
+  const [showRejectionNotification, setShowRejectionNotification] = useState(true);
+  
+
 
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
   });
+
+  const handleViewAdDetails = (ad: Ad) => {
+  setSelectedAd(ad);
+  setShowAdDetailsModal(true);
+
+  // Trigger slide-in animation after modal is rendered
+  setTimeout(() => {
+    setIsAdModalOpen(true);
+  }, 10);
+  if (ad.status === 'REJECTED') {
+    setShowRejectionNotification(true);
+  }
+};
+
+
+  const handleCloseAdModal = () => {
+  setIsAdModalOpen(false); // trigger slide-out
+  setTimeout(() => {
+    setShowAdDetailsModal(false);
+    setSelectedAd(null);
+  }, 300); // match the duration of your transition
+};
+
+
 
   const [updateAd] = useMutation(UPDATE_AD, {
     onCompleted: (data) => {
@@ -176,16 +118,6 @@ const ManageAds: React.FC = () => {
     );
   }
 
-  // Filtered ads
-  const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
-    const matchesSearch =
-      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ad.userId.firstName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      ad.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }) || [];
 
   const formatDate = (date: string) => {
     if (!date) return 'N/A';
@@ -205,9 +137,10 @@ const ManageAds: React.FC = () => {
     }).format(amount);
   };
 
-  const getAdvertiserName = (user: User) => {
+  const getAdvertiserName = (user: User | null) => {
+    if (!user) return 'N/A';
     if (user.firstName && user.lastName) return `${user.firstName} ${user.lastName}`;
-    return user.email;
+    return user.email || 'N/A';
   };
 
   // Actions
@@ -271,8 +204,29 @@ const ManageAds: React.FC = () => {
   };
 
   const handleRowClick = (ad: Ad) => {
-    setExpandedId(expandedId === ad.id ? null : ad.id);
+    handleViewAdDetails(ad);
+    setShowAdDetailsModal(true);
   };
+
+  // Tab management functions
+  const tabs = [
+    { id: 'ads', label: 'All Ads', icon: Monitor },
+    { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'deployment', label: 'Deployment', icon: PlayCircle },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'availability', label: 'Plan Availability', icon: CalendarRange }
+  ];
+
+  // Filter functions
+  const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
+    const matchesSearch =
+      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      ad.id.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
 
   if (loading) {
     return (
@@ -306,240 +260,345 @@ const ManageAds: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Advertisements Management</h1>
+      {/* Header with Title and Filters */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>
+        {activeTab === 'ads' && (
+          <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Search by title, advertiser, or Ad ID..."
+              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
 
-      {/* Search + Filter */}
-      <div className="flex justify-between items-center mb-4">
-        <input
-          type="text"
-          placeholder="Search by title, advertiser, or Ad ID..."
-          className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md border border-gray-400 focus:outline-none bg-white"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-        />
-        <select
-          className="text-sm text-black rounded-xl pl-5 py-3 pr-8 w-48 shadow-md border border-gray-400 focus:outline-none bg-white"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as 'all' | 'APPROVED' | 'PENDING' | 'REJECTED')}
-        >
-          <option value="all">All Status</option>
-          <option value="APPROVED">Approved</option>
-          <option value="PENDING">Pending</option>
-          <option value="REJECTED">Rejected</option>
-        </select>
-      </div>
-
-      {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Ads</h3>
-          <p className="text-2xl font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Pending</h3>
-          <p className="text-2xl font-bold text-yellow-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Approved</h3>
-          <p className="text-2xl font-bold text-green-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Rejected</h3>
-          <p className="text-2xl font-bold text-red-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
-          </p>
-        </div>
-      </div>
-
-      {/* Table */}
-      {filteredAds.length === 0 ? (
-        <div className="text-center py-10 text-gray-500 bg-white rounded-lg shadow">
-          {searchTerm || statusFilter !== 'all' ? 'No ads match your search criteria' : 'No ads found'}
-        </div>
-      ) : (
-        <div className="rounded-md shadow-md mb-4 overflow-hidden">
-          <div className="grid grid-cols-12 bg-[#3674B5] px-4 py-3 text-sm font-semibold text-white">
-            <div className="col-span-3">Title</div>
-            <div className="col-span-3">Advertiser</div>
-            <div className="col-span-2">Ad Type</div>
-            <div className="col-span-2">Status</div>
-            <div className="col-span-2 text-center">Actions</div>
-          </div>
-
-          {filteredAds.map((ad: Ad) => (
-            <div key={ad.id} className="bg-white border-t border-gray-300">
-              <div
-                className="grid grid-cols-12 items-center px-4 py-3 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                onClick={() => handleRowClick(ad)}
+            {/* Custom Dropdown with SVG */}
+            <div className="relative w-40">
+              <select
+                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                value={statusFilter}
+                onChange={e =>
+                  setStatusFilter(e.target.value as 'all' | 'APPROVED' | 'PENDING' | 'REJECTED')
+                }
               >
-                <div className="col-span-3 truncate" title={ad.title}>{ad.title}</div>
-                <div className="col-span-3 truncate" title={getAdvertiserName(ad.userId)}>
-                  {getAdvertiserName(ad.userId)}
-                </div>
-                <div className="col-span-2">
-                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                    {ad.adType}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      ad.status === 'APPROVED'
-                        ? 'bg-green-200 text-green-800'
-                        : ad.status === 'PENDING'
-                        ? 'bg-yellow-200 text-yellow-800'
-                        : ad.status === 'REJECTED'
-                        ? 'bg-red-200 text-red-800'
-                        : ad.status === 'RUNNING'
-                        ? 'bg-blue-200 text-blue-800'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    {ad.status}
-                  </span>
-                </div>
-                <div className="col-span-2 flex items-center justify-center gap-1">
-                  {ad.status === 'PENDING' && (
-                    <>
-                      <button
-                        className="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                        title="Approve"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="bg-red-500 text-white text-xs px-3 py-1 rounded hover:bg-red-600 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                        title="Reject"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
-                    title="Delete"
-                  >
-                    <TrashIcon className="w-3 h-3" />
-                  </button>
-                </div>
+                <option value="all">All Status</option>
+                <option value="APPROVED">Approved</option>
+                <option value="PENDING">Pending</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+
+              {/* SVG Arrow */}
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                <svg
+                  className="w-4 h-4 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-              {expandedId === ad.id && (
-                <div className="bg-gray-50 p-6 transition-all duration-300 border-t">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                    {/* Column 1: Ad Information */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-gray-800">Ad Information</h3>
-                      <div className="space-y-2">
-                        <div><strong className="text-gray-600">Ad ID:</strong> <span className="text-gray-800">{ad.id}</span></div>
-                        <div><strong className="text-gray-600">Title:</strong> <span className="text-gray-800">{ad.title}</span></div>
-                        <div><strong className="text-gray-600">Advertiser:</strong> <span className="text-gray-800">{getAdvertiserName(ad.userId)}</span></div>
-                        <div><strong className="text-gray-600">Email:</strong> <span className="text-gray-800">{ad.userId.email}</span></div>
-                        <div><strong className="text-gray-600">Ad Type:</strong> <span className="text-gray-800">{ad.adType}</span></div>
-                        <div><strong className="text-gray-600">Format:</strong> <span className="text-gray-800">{ad.adFormat}</span></div>
-                        <div><strong className="text-gray-600">Material ID:</strong> <span className="text-gray-800">{ad.materialId.id}</span></div>
-                      </div>
-                    </div>
-                    
-                    {/* Column 2: Details & Status */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-gray-800">Campaign Details</h3>
-                      <div className="space-y-2">
-                        <div><strong className="text-gray-600">Status:</strong> 
-                          <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full ${
-                            ad.status === 'APPROVED' ? 'bg-green-200 text-green-800' :
-                            ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' :
-                            ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
-                            ad.status === 'RUNNING' ? 'bg-blue-200 text-blue-800' :
-                            'bg-gray-200 text-gray-800'
-                          }`}>{ad.status}</span>
-                        </div>
-                        <div><strong className="text-gray-600">Start Date:</strong> <span className="text-gray-800">{formatDate(ad.startTime)}</span></div>
-                        <div><strong className="text-gray-600">End Date:</strong> <span className="text-gray-800">{formatDate(ad.endTime)}</span></div>
-                        <div><strong className="text-gray-600">Duration:</strong> <span className="text-gray-800">{ad.durationDays} days</span></div>
-                        <div><strong className="text-gray-600">Price:</strong> <span className="text-gray-800 font-semibold">{formatCurrency(ad.totalPrice)}</span></div>
-                        <div><strong className="text-gray-600">Devices:</strong> <span className="text-gray-800">{ad.numberOfDevices}</span></div>
-                        <div><strong className="text-gray-600">Plays/Day:</strong> <span className="text-gray-800">{ad.totalPlaysPerDay}</span></div>
-                        {ad.status === 'APPROVED' && ad.approveTime && (
-                          <div><strong className="text-green-600">Approved:</strong> <span className="text-gray-800">{formatDate(ad.approveTime)}</span></div>
-                        )}
-                        {ad.status === 'REJECTED' && ad.rejectTime && (
-                          <div><strong className="text-red-600">Rejected:</strong> <span className="text-gray-800">{formatDate(ad.rejectTime)}</span></div>
-                        )}
-                        {ad.reasonForReject && (
-                          <div><strong className="text-red-600">Reason:</strong> <span className="text-red-800">{ad.reasonForReject}</span></div>
-                        )}
-                      </div>
-                    </div>
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-lg shadow-sm mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4 mr-2" />
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
 
-                    {/* Column 3: Description & Media */}
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3 text-gray-800">Description & Media</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <strong className="text-gray-600">Description:</strong>
-                          <p className="text-justify mt-1 text-gray-800">{ad.description || 'No description provided'}</p>
-                        </div>
-                        {ad.mediaFile && (
-                          <div>
-                            <strong className="text-gray-600">Media Preview:</strong>
-                            <div className="mt-2">
-                              {ad.adFormat === 'IMAGE' ? (
-                                <img 
-                                  src={ad.mediaFile} 
-                                  alt="Ad media"
-                                  className="w-full h-48 object-contain border rounded bg-gray-100"
-                                  onError={(e) => {
-                                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
-                                  }}
-                                />
-                              ) : ad.adFormat === 'VIDEO' ? (
-                                <video 
-                                  controls 
-                                  className="w-full h-48 border rounded bg-gray-100"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    const errorDiv = document.createElement('div');
-                                    errorDiv.className = 'w-full h-48 border rounded bg-gray-100 flex items-center justify-center';
-                                    errorDiv.innerHTML = '<span class="text-gray-500">Video not available</span>';
-                                    e.currentTarget.parentNode?.appendChild(errorDiv);
-                                  }}
-                                >
-                                  <source src={ad.mediaFile} />
-                                  Your browser does not support the video tag.
-                                </video>
-                              ) : (
-                                <div className="w-full h-48 border rounded bg-gray-100 flex items-center justify-center">
-                                  <a 
-                                    href={ad.mediaFile} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="text-blue-500 hover:text-blue-700 underline"
-                                  >
-                                    View Media File
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          </div>
+
+      {/* Tab Content */}
+      <div className="bg-white rounded-lg shadow-sm">
+        {/* All Ads Tab */}
+        {activeTab === 'ads' && (
+          <div className="p-6">
+            {/* Stats Summary */}
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Total Ads</h3>
+                <p className="text-2xl font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Pending</h3>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Approved</h3>
+                <p className="text-2xl font-bold text-green-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Rejected</h3>
+                <p className="text-2xl font-bold text-red-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Table */}
+            {filteredAds.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                {searchTerm || statusFilter !== 'all' ? 'No ads match your search criteria' : 'No ads found'}
+              </div>
+            ) : (
+              <div className="rounded-md mb-4 overflow-hidden">
+                <div className="grid grid-cols-12 px-4 py-3 text-sm font-semibold text-gray-600 bg-gray-50">
+                  <div className="col-span-3">Title</div>
+                  <div className="col-span-3">Advertiser</div>
+                  <div className="col-span-2">Ad Type</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-2 text-center">Actions</div>
+                </div>
+
+                {filteredAds.map((ad: Ad) => (
+                  <div key={ad.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                    <div
+                      className="grid grid-cols-12 items-center px-4 py-4 text-sm cursor-pointer"
+                      onClick={() => handleRowClick(ad)}
+                    >
+                      <div className="col-span-3 truncate" title={ad.title}>{ad.title}</div>
+                      <div className="col-span-3 truncate" title={getAdvertiserName(ad.userId)}>
+                        {getAdvertiserName(ad.userId)}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                          {ad.adType}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            ad.status === 'APPROVED'
+                              ? 'bg-green-200 text-green-800'
+                              : ad.status === 'PENDING'
+                              ? 'bg-yellow-200 text-yellow-800'
+                              : ad.status === 'REJECTED'
+                              ? 'bg-red-200 text-red-800'
+                              : ad.status === 'RUNNING'
+                              ? 'bg-blue-200 text-blue-800'
+                              : 'bg-gray-200 text-gray-800'
+                          }`}
+                        >
+                          {ad.status}
+                        </span>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-center gap-1">
+                        {ad.status === 'PENDING' && (
+                          <>
+                            <button
+                              className="border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white"
+                              onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
+                              title="Approve"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white"
+                              onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
+                              title="Reject"
+                            >
+                              Reject
+                            </button>
+                          </>
                         )}
+                        <button
+                          className="text-red-500 text-md hover:text-red-700"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
+                          title="Delete"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Schedule Tab */}
+        {activeTab === 'schedule' && <ScheduleTab />}
+
+        {/* Deployment Tab */}
+        {activeTab === 'deployment' && <DeploymentTab />}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && <AnalyticsTab />}
+
+        {/* Plan Availability Tab */}
+        {activeTab === 'availability' && <PlanAvailabilityTab />}
+      </div>
+
+      {/* Ad Details Modal */}
+      {showAdDetailsModal && selectedAd && (
+        <div
+          className="fixed inset-0 z-50 overflow-hidden"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+          onClick={handleCloseAdModal} // closes the modal on outside click
+        >
+          <div
+            className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${
+              isAdModalOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
+            onClick={(e) => e.stopPropagation()} // stops click from closing modal
+          >
+            <div className="h-full p-6 overflow-y-auto">
+
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white bg-[#FF9D3D] mr-4 shadow-md">
+                    {selectedAd.userId?.firstName ? selectedAd.userId.firstName[0] : 'U'}
+                    {selectedAd.userId?.lastName ? selectedAd.userId.lastName[0] : 'N'}
+                  </div>
+                  <div>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <h2 className="text-2xl font-bold text-gray-800">{getAdvertiserName(selectedAd.userId)}</h2>
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          selectedAd.status === 'APPROVED'
+                            ? 'bg-green-200 text-green-800'
+                            : selectedAd.status === 'PENDING'
+                            ? 'bg-yellow-200 text-yellow-800'
+                            : selectedAd.status === 'REJECTED'
+                            ? 'bg-red-200 text-red-800'
+                            : selectedAd.status === 'RUNNING'
+                            ? 'bg-blue-200 text-blue-800'
+                            : 'bg-gray-200 text-gray-800'
+                        }`}
+                      >  
+                        {selectedAd.status}
+                      </span>
+
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-200 text-blue-800">{selectedAd.adType}</span>
+                    </div>
+                    <p className="text-sm text-gray-500">{selectedAd.id}</p>
+                  </div>
                 </div>
-              )}
+              </div>
+
+              {/* Main Content */}
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                {/* Media Preview */}
+                <div className="flex flex-col space-y-4">
+                  {selectedAd.mediaFile ? (
+                    selectedAd.adFormat === 'IMAGE' ? (
+                      <img
+                        src={selectedAd.mediaFile}
+                        alt="Ad media"
+                        className="w-full h-64 object-contain bg-gray-100 rounded-lg shadow-md"
+                        onError={(e) => { e.currentTarget.src = 'data:image/svg+xml;base64,...'; }}
+                      />
+                    ) : selectedAd.adFormat === 'VIDEO' ? (
+                      <video controls className="w-full h-64 bg-gray-100 rounded-lg shadow-md">
+                        <source src={selectedAd.mediaFile} />
+                        Your browser does not support the video tag.
+                      </video>
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-lg">Media not available</div>
+                    )
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 bg-gray-100 rounded-lg">Media not available</div>
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="flex flex-col space-y-4">
+                  <h3 className="text-3xl mt-2 font-bold text-[#1B5087]">{selectedAd.title || 'N/A'}</h3>
+                  <p className="text-gray-600 pb-16 text-sm">{selectedAd.description || 'No description provided'}</p>
+                  <div className="flex items-center space-x-3">
+                  <Tablet size={24} className="text-gray-500" />
+                    <span className="truncate">{selectedAd.materialId?.id || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <Coins size={24} className="text-gray-500" />
+                    <span className="font-semibold text-lg text-[#FF9B45]">{formatCurrency(selectedAd.price)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Campaign Details */}
+              <div className="mt-10">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Campaign Details</h4>
+                <div className="mt-4 pt-4 grid grid-cols-1 md:grid-cols-2 gap-y-4 md:gap-x-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                    <CalendarRange size={20} className="text-gray-500" />
+                    <p>{selectedAd.durationDays} Days</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                    <CalendarPlus size={20} className="text-gray-500" />
+                    <p>{formatDate(selectedAd.startTime)} Days</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                    <CalendarMinus size={20} className="text-gray-500" />
+                    <p>{formatDate(selectedAd.endTime)} Days</p>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                    <Mail size={20} className="text-gray-500" />
+                    <p>{selectedAd.userId?.email}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 border-l border-gray-300 md:border-none md:pr-10 md:pt-0 pt-4">
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-gray-800">Devices:</span>
+                      <span>{selectedAd.numberOfDevices}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="font-semibold text-gray-800">Plays/Day:</span>
+                      <span>{selectedAd.totalPlaysPerDay}</span>
+                    </div>
+                    <div className="flex justify-between border-t pt-2">
+                      <span className="font-semibold text-gray-800">Format:</span>
+                      <span>{selectedAd.adFormat}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          ))}
+            {/* Rejection Notification */}
+            {selectedAd.status === 'REJECTED' && showRejectionNotification && (
+              <div className="fixed bottom-2 right-2 bg-red-600 text-white text-xs p-3 rounded-md shadow-lg max-w-sm z-50 flex justify-between items-start">
+                <div>
+                  <div className="font-bold mb-1">Advertisemnet has been rejected.</div>
+                  <p className="text-lg">Reason: {selectedAd.reasonForReject || 'No reason provided.'}</p>
+                </div>
+                <button
+                  onClick={() => setShowRejectionNotification(false)} // closes the notification
+                  className="text-white hover:text-gray-200 pl-5"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
-
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

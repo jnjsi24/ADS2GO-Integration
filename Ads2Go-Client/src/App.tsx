@@ -2,7 +2,9 @@ import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
+import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
 import ProtectedRoute from './components/ProtectedRoute';
+
 
 // Import Navbars
 import UserNavbar from './components/UserNavbar';
@@ -21,7 +23,7 @@ import Payment from './pages/USERS/Payment';
 import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
 import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
-import History from './pages/USERS/PaymentHistory';
+import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 
@@ -43,6 +45,7 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -172,6 +175,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+         <Route
+          path="/sadmin-admin"
+          element={
+            <ProtectedRoute>
+              <SadminAdmin />
+            </ProtectedRoute>
+          }
+        /> 
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -213,10 +224,10 @@ const UserAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/payment"
+          path="/paymentHistory"
           element={
             <ProtectedRoute>
-              <Payment />
+              <PaymentHistory />
             </ProtectedRoute>
           }
         />
@@ -264,7 +275,7 @@ const UserAppContent: React.FC = () => {
           path="/history"
           element={
             <ProtectedRoute>
-              <History />
+              <PaymentHistory />
             </ProtectedRoute>
           }
         />
@@ -278,7 +289,7 @@ const UserAppContent: React.FC = () => {
         />
 
         {/* Default redirects */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
@@ -310,7 +321,7 @@ const AppContent: React.FC = () => {
         <Route path="/forgot-password" element={<ForgotPass />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/landing" element={<Landing />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/landing" replace />} />
       </Routes>
     );
   }
@@ -343,15 +354,24 @@ const App: React.FC = () => {
                      location.pathname.startsWith('/advertisements') ||
                      location.pathname.startsWith('/account') ||
                      location.pathname.startsWith('/settings') ||
+                     location.pathname.startsWith('/payment') || // ✅ covers /payment
+                     location.pathname.startsWith('/paymentHistory') || 
                      location.pathname === '/login' ||
                      location.pathname === '/register' ||
                      location.pathname === '/verify-email';
   
+  // Wrap all routes with DeviceStatusProvider
+  const content = (
+    <DeviceStatusProvider>
+      <AppContent />
+    </DeviceStatusProvider>
+  );
+
   // If we're on admin routes, only provide AdminAuthProvider
   if (isAdminRoute) {
     return (
       <AdminAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </AdminAuthProvider>
     );
   }
@@ -360,7 +380,7 @@ const App: React.FC = () => {
   if (isUserRoute) {
     return (
       <UserAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </UserAuthProvider>
     );
   }
@@ -369,7 +389,7 @@ const App: React.FC = () => {
   return (
     <UserAuthProvider navigate={navigate}>
       <AdminAuthProvider navigate={navigate}>
-        <AppContent />
+        {content}
       </AdminAuthProvider>
     </UserAuthProvider>
   );

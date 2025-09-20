@@ -90,6 +90,46 @@ const AdsDeploymentSchema = new mongoose.Schema({
       return this.lcdSlots.length === 0;
     }
   },
+
+  // Deployment status and timing
+  startTime: {
+    type: Date,
+    default: null
+  },
+  endTime: {
+    type: Date,
+    default: null
+  },
+  currentStatus: {
+    type: String,
+    enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED', 'PAID'],
+    default: 'SCHEDULED'
+  },
+  lastFrameUpdate: {
+    type: Date,
+    default: null
+  },
+  deployedAt: {
+    type: Date,
+    default: null
+  },
+  completedAt: {
+    type: Date,
+    default: null
+  },
+  removedAt: {
+    type: Date,
+    default: null
+  },
+  removedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  removalReason: {
+    type: String,
+    default: null
+  }
 }, { timestamps: true });
 
 // Indexes for efficient queries
@@ -165,8 +205,8 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
       throw new Error('startTime and endTime are required');
     }
 
-    // Find existing deployment for this material-driver
-    let deployment = await this.findOne({ materialId, driverId });
+    // Find existing deployment for this material (regardless of driver)
+    let deployment = await this.findOne({ materialId });
     
     // If no deployment exists, create a new one
     if (!deployment) {
@@ -176,6 +216,12 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
         driverId,
         lcdSlots: []
       });
+    } else {
+      // If deployment exists but has different driverId, update it
+      if (deployment.driverId.toString() !== driverId.toString()) {
+        console.log(`ℹ️  Updating driverId from ${deployment.driverId} to ${driverId} for material ${materialId}`);
+        deployment.driverId = driverId;
+      }
     }
 
     // Convert adId to string for comparison
@@ -274,8 +320,8 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
       throw new Error('startTime and endTime are required');
     }
 
-    // Find existing deployment for this material-driver
-    let deployment = await this.findOne({ materialId, driverId });
+    // Find existing deployment for this material (regardless of driver)
+    let deployment = await this.findOne({ materialId });
     
     // If no deployment exists, create a new one
     if (!deployment) {
@@ -285,6 +331,12 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
         driverId,
         lcdSlots: []
       });
+    } else {
+      // If deployment exists but has different driverId, update it
+      if (deployment.driverId.toString() !== driverId.toString()) {
+        console.log(`ℹ️  Updating driverId from ${deployment.driverId} to ${driverId} for material ${materialId}`);
+        deployment.driverId = driverId;
+      }
     }
 
     // Convert adId to string for comparison

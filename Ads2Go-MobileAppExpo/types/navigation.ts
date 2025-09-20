@@ -2,7 +2,7 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootStackParamList = {
   // Auth Stack
-  '(auth)/login': undefined;
+  '(auth)/login': { message?: string };
   '(auth)/register': undefined;
   '(auth)/emailVerification': {
     email: string;
@@ -12,6 +12,7 @@ export type RootStackParamList = {
   };
   '(auth)/verificationProgress': {
     email: string;
+    verificationCode: string;
     driverId?: string;
     token?: string;
     firstName?: string;

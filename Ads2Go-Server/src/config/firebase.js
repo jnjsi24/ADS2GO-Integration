@@ -32,11 +32,16 @@ try {
   });
 } catch (error) {
   // App might already be initialized
-  adminApp = admin.app();
+  try {
+    adminApp = admin.app();
+  } catch (appError) {
+    console.error('Failed to initialize Firebase Admin:', appError.message);
+    adminApp = null;
+  }
 }
 
 // Admin services for storage operations
-const adminStorage = admin.storage(adminApp);
+const adminStorage = adminApp ? admin.storage(adminApp) : null;
 
 // Connect to emulators in development
 if (process.env.NODE_ENV === 'development') {
