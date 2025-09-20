@@ -2,6 +2,9 @@
   "name": "ads2go-client",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@apollo/client": "^3.8.8",
     "@heroicons/react": "^2.2.0",
