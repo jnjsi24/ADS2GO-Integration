@@ -136,7 +136,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
         } as any);
       });
 
-      const response = await fetch('http://localhost:5000/material-photos/upload', {
+      const response = await fetch('https://ads2go-integration-production.up.railway.app/material-photos/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',

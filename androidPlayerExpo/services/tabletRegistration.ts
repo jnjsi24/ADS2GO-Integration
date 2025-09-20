@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { AppState } from 'react-native';
+import { generateConsistentDeviceId, clearPersistentDeviceId } from './deviceIdUtils';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -89,7 +90,7 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http:// 192.168.100.5:5000'; // Updated to match your local IP
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-integration-production.up.railway.app'; // Updated to use Railway hosting
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
@@ -98,6 +99,8 @@ export class TabletRegistrationService {
   private isTracking = false;
   private isSimulatingOffline = false;
   private appStateListener: any = null;
+  private isRegistering = false; // Add registration lock
+  private isReRegistering = false; // Add re-registration lock
 
   static getInstance(): TabletRegistrationService {
     if (!TabletRegistrationService.instance) {
@@ -134,8 +137,7 @@ export class TabletRegistrationService {
   }
 
   async generateDeviceId(): Promise<string> {
-    const deviceId = Device.osInternalBuildId || Device.deviceName || 'unknown';
-    return `TABLET-${deviceId}-${Date.now()}`;
+    return await generateConsistentDeviceId();
   }
 
   async checkRegistrationStatus(): Promise<boolean> {
@@ -215,9 +217,20 @@ export class TabletRegistrationService {
   }
 
   async registerTablet(connectionDetails: ConnectionDetails): Promise<RegistrationResponse> {
+    // Prevent multiple concurrent registration attempts
+    if (this.isRegistering) {
+      console.log('Registration already in progress, skipping...');
+      return {
+        success: false,
+        message: 'Registration already in progress'
+      };
+    }
+
+    this.isRegistering = true;
+
     try {
       const deviceId = await this.generateDeviceId();
-      
+
       const requestBody = {
         deviceId,
         materialId: connectionDetails.materialId,
@@ -259,6 +272,8 @@ export class TabletRegistrationService {
         success: false,
         message: 'Network error: Unable to connect to server'
       };
+    } finally {
+      this.isRegistering = false;
     }
   }
 
@@ -290,34 +305,40 @@ export class TabletRegistrationService {
 
       if (result.success) {
         console.log('Tablet status updated successfully');
-        
+
         // If GPS data is provided, also update location tracking
         if (gps) {
           await this.updateLocationTracking(gps.lat, gps.lng);
         }
-        
+
         return true;
       } else {
         console.error('Failed to update tablet status:', result.message);
-        
-        // If tablet not found, try to re-register
-        if (result.message === 'Tablet not found') {
+
+        // If tablet not found, try to re-register (but only if not already re-registering)
+        if (result.message === 'Tablet not found' && !this.isReRegistering) {
           console.log('Tablet not found, attempting to re-register...');
-          const reRegisterResult = await this.registerTablet({
-            materialId: this.registration.materialId,
-            slotNumber: this.registration.slotNumber,
-            carGroupId: this.registration.carGroupId
-          });
-          
-          if (reRegisterResult.success) {
-            console.log('Tablet re-registered successfully, retrying status update...');
-            // Retry the status update
-            return await this.updateTabletStatus(isOnline, gps);
-          } else {
-            console.error('Failed to re-register tablet:', reRegisterResult.message);
+
+          this.isReRegistering = true;
+          try {
+            const reRegisterResult = await this.registerTablet({
+              materialId: this.registration.materialId,
+              slotNumber: this.registration.slotNumber,
+              carGroupId: this.registration.carGroupId
+            });
+
+            if (reRegisterResult.success) {
+              console.log('Tablet re-registered successfully, retrying status update...');
+              // Retry the status update with new registration
+              return await this.updateTabletStatus(isOnline, gps);
+            } else {
+              console.error('Failed to re-register tablet:', reRegisterResult.message);
+            }
+          } finally {
+            this.isReRegistering = false;
           }
         }
-        
+
         return false;
       }
     } catch (error) {
@@ -608,32 +629,24 @@ export class TabletRegistrationService {
 
   async clearRegistration(): Promise<void> {
     console.log('Clearing registration data...');
-    
+
     // Stop any active tracking
     await this.stopLocationTracking();
-    
+
     // Remove app state listener
     if (this.appStateListener) {
       this.appStateListener.remove();
       this.appStateListener = null;
     }
-    
+
     // Clear registration data
     this.registration = null;
-    
+
     try {
-      await AsyncStorage.removeItem('tabletRegistration');
-      console.log('Registration data cleared from AsyncStorage');
+      await AsyncStorage.multiRemove(['tabletRegistration', 'persistentDeviceId']);
+      console.log('Registration data and persistent device ID cleared from AsyncStorage');
     } catch (error) {
       console.error('Error clearing registration from AsyncStorage:', error);
-    }
-    
-    // Also clear any cached data
-    try {
-      await AsyncStorage.multiRemove(['tabletRegistration', 'device_material_id']);
-      console.log('All registration-related data cleared');
-    } catch (error) {
-      console.error('Error clearing all registration data:', error);
     }
   }
 

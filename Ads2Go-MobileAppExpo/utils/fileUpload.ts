@@ -12,7 +12,7 @@ const auth = {
 
 type UploadProgressCallback = (progress: number) => void;
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://your-api-url.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-integration-production.up.railway.app';
 
 interface UploadOptions {
   onProgress?: (progress: number) => void;

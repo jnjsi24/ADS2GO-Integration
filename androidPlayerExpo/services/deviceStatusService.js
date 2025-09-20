@@ -1,3 +1,4 @@
+import { generateConsistentDeviceId } from './deviceIdUtils';
 import { Platform } from 'react-native';
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
@@ -16,14 +17,14 @@ class DeviceStatusService {
     this.isConnected = false;
   }
 
-  initialize = ({ materialId, onStatusChange, forceReconnect = false }) => {
+  initialize = async ({ materialId, onStatusChange, forceReconnect = false }) => {
     // Store the previous materialId to check if it changed
     const previousMaterialId = this.materialId;
     this.materialId = materialId;
     this.onStatusChange = onStatusChange;
     
-    // Get device ID
-    this.deviceId = Application.androidId || Device.modelName || 'unknown-device';
+    // Get device ID using consistent method
+    this.deviceId = await generateConsistentDeviceId();
     
     // Connect if we have a materialId and either:
     // 1. It's different from the previous one, OR
@@ -76,7 +77,7 @@ class DeviceStatusService {
 
     try {
       // Use the same host as the API URL but with WebSocket protocol
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.22:5000';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-integration-production.up.railway.app';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
