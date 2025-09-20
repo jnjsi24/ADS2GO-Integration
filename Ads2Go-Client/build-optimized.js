@@ -7,8 +7,11 @@ const path = require('path');
 
 console.log('🚀 Starting optimized build for Railway...');
 
-// Set memory limit
-process.env.NODE_OPTIONS = '--max-old-space-size=4096';
+// Set memory limit conservatively if not already provided by the platform
+if (!process.env.NODE_OPTIONS) {
+  // 768MB tends to work on 1GB containers; adjust if needed
+  process.env.NODE_OPTIONS = '--max-old-space-size=768';
+}
 
 // Set production environment
 process.env.NODE_ENV = 'production';
@@ -22,12 +25,13 @@ try {
   }
 
   // Run build with memory optimization
-  console.log('🔨 Building with memory optimization...');
+  console.log(`🔨 Building with memory optimization (NODE_OPTIONS=${process.env.NODE_OPTIONS})...`);
   execSync('npx react-scripts build', {
     stdio: 'inherit',
     env: {
       ...process.env,
-      NODE_OPTIONS: '--max-old-space-size=4096',
+      // Respect existing NODE_OPTIONS set above or by the platform
+      NODE_OPTIONS: process.env.NODE_OPTIONS,
       GENERATE_SOURCEMAP: 'false', // Disable source maps to save memory
       INLINE_RUNTIME_CHUNK: 'false' // Disable inline runtime chunk
     }

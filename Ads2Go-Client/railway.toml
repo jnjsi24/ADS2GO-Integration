@@ -1,5 +1,6 @@
 [build]
 builder = "NIXPACKS"
+buildCommand = "npm ci --omit=dev --no-audit --fund=false && npm run build"
 
 [deploy]
 startCommand = "npm run start:prod"
@@ -9,5 +10,10 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [env]
-NODE_OPTIONS = "--max-old-space-size=4096"
+NODE_OPTIONS = "--max-old-space-size=768"
 NODE_ENV = "production"
+GENERATE_SOURCEMAP = "false"
+INLINE_RUNTIME_CHUNK = "false"
+DISABLE_ESLINT_PLUGIN = "true"
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_FUND = "false"
