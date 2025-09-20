@@ -179,6 +179,11 @@ async function startServer() {
   app.use('/ads', adsRoutes);
   app.use('/material-photos', materialPhotoUploadRoutes);
   
+  // Health check endpoint for deployment platforms (e.g., Railway)
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
 
