@@ -48,6 +48,11 @@ const materialResolvers = {
       return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
     },
 
+    getMaterialsByCategoryVehicleAndType: async (_, { category, vehicleType, materialType }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+      return await Material.find({ category, vehicleType, materialType }).sort({ createdAt: -1 });
+    },
+
     getMaterialById: async (_, { id }, { user }) => {
       checkAdmin(user); // admin-only
       const material = await Material.findById(id);

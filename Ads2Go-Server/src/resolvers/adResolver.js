@@ -90,10 +90,8 @@ const adResolvers = {
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
 
-      // 7-day admin buffer: Set start time 7 days earlier for admin review
-      const adminReviewStartTime = new Date(userDesiredStartDate);
-      adminReviewStartTime.setDate(adminReviewStartTime.getDate() - 7);
-
+      // Use the user's desired start date directly (no 7-day buffer for testing)
+      const startTime = new Date(userDesiredStartDate);
       const endTime = new Date(userDesiredStartDate);
       endTime.setDate(endTime.getDate() + plan.durationDays);
 
@@ -110,7 +108,7 @@ const adResolvers = {
         pricePerPlay: plan.pricePerPlay,
         totalPrice,
         price: totalPrice,
-        startTime: adminReviewStartTime, // Admin review time (7 days earlier)
+        startTime: startTime, // Use user's desired start time directly
         endTime,
         userDesiredStartTime: userDesiredStartDate, // Store user's desired start time
         status: 'PENDING',

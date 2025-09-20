@@ -99,20 +99,43 @@ AdSchema.pre('validate', function (next) {
       }
     }
 
-    // Validate start and end times
-    if (this.startTime && this.endTime) {
+    // Validate start and end times only if startTime was modified
+    if (this.startTime && this.endTime && this.isModified('startTime')) {
       const now = new Date();
-      // Normalize to date-only compare for start >= today (allow same-day start)
-      const today = new Date(now.toISOString().split('T')[0]);
-      const start = new Date(this.startTime);
       const end = new Date(this.endTime);
+      
+      // Get today's date in UTC to avoid timezone issues
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      
+      // Use startTime for validation (no 7-day buffer, so startTime = userDesiredStartTime)
+      const start = new Date(this.startTime);
+      const startDate = new Date(start);
+      startDate.setUTCHours(0, 0, 0, 0);
 
-      if (start < today) {
+      console.log('Date validation (startTime modified):', {
+        now: now.toISOString(),
+        today: today.toISOString(),
+        startTime: this.startTime ? new Date(this.startTime).toISOString() : 'null',
+        userDesiredStartTime: this.userDesiredStartTime ? new Date(this.userDesiredStartTime).toISOString() : 'null',
+        start: start.toISOString(),
+        startDate: startDate.toISOString(),
+        end: end.toISOString(),
+        startDateLessThanToday: startDate < today,
+        isModified: this.isModified('startTime')
+      });
+
+      if (startDate < today) {
         return next(new Error('Start time must be today or later'));
       }
       if (end <= start) {
         return next(new Error('End time must be after start time'));
       }
+    } else if (this.startTime && this.endTime) {
+      console.log('Date validation skipped (startTime not modified):', {
+        isModified: this.isModified('startTime'),
+        startTime: this.startTime ? new Date(this.startTime).toISOString() : 'null'
+      });
     }
 
     next();
