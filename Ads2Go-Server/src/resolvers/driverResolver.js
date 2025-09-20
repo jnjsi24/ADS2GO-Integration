@@ -168,6 +168,7 @@ Upload: GraphQLUpload,
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
       return Driver.find({})
+        .select('+createdAt +updatedAt +lastLogin +dateJoined +approvalDate')
         .populate({
           path: 'material',
           model: 'Material',
@@ -980,6 +981,26 @@ createDriver: async (_, { input }) => {
         console.error('Error fetching material:', error);
         return null;
       }
+    },
+    createdAt: (driver) => {
+      if (!driver.createdAt) return null;
+      return driver.createdAt.toISOString();
+    },
+    updatedAt: (driver) => {
+      if (!driver.updatedAt) return null;
+      return driver.updatedAt.toISOString();
+    },
+    lastLogin: (driver) => {
+      if (!driver.lastLogin) return null;
+      return driver.lastLogin.toISOString();
+    },
+    dateJoined: (driver) => {
+      if (!driver.dateJoined) return null;
+      return driver.dateJoined.toISOString();
+    },
+    approvalDate: (driver) => {
+      if (!driver.approvalDate) return null;
+      return driver.approvalDate.toISOString();
     }
   },
 };

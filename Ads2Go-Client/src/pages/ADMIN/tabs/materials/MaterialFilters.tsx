@@ -65,6 +65,15 @@ const MaterialFilters: React.FC<MaterialFiltersProps> = ({
             </div>
           </div>
         </div>
+        
+        {/* Create Material Button */}
+        <button
+          onClick={onCreateClick}
+          className="flex items-center gap-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+        >
+          <Plus size={16} />
+          Create Material
+        </button>
       </div>
     </div>
   );

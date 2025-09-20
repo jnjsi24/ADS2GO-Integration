@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, Calendar, UserPlus, UserX, QrCode } from 'lucide-react';
+import { X, Check, Calendar, UserPlus, UserX, QrCode, Edit } from 'lucide-react';
 
 interface Driver {
   driverId: string;
@@ -225,7 +225,18 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
             {/* Mounted Date */}
             <div>
-              <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
+                {!editingDates[material.id] && (
+                  <button
+                    onClick={() => onStartEditingDates(material.id, material)}
+                    className="text-blue-500 hover:text-blue-600 text-xs flex items-center gap-1"
+                  >
+                    <Edit size={12} />
+                    Edit
+                  </button>
+                )}
+              </div>
               {editingDates[material.id] ? (
                 <>
                   <div className="relative mt-1">
