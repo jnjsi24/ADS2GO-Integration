@@ -151,11 +151,13 @@ const nextMonth = () => {
       if (data?.getMaterialsByCategoryVehicleAndType?.length > 0) {
         setMaterials(data.getMaterialsByCategoryVehicleAndType);
     
-        // Since we're filtering by materialType in the query, we can directly select the first result
+        // Select the first material from the query results (newest first due to createdAt: -1 sort)
+        // This matches what the server will use: plan.materials[0]
         const matchingMaterial = data.getMaterialsByCategoryVehicleAndType[0];
     
         if (matchingMaterial) {
           setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
+          console.log(`🎯 Selected material for ad: ${matchingMaterial.materialId} (${matchingMaterial.materialType} ${matchingMaterial.vehicleType})`);
         } else {
           setFormData(prev => ({ ...prev, materialId: '' }));
         }
