@@ -81,9 +81,9 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
   // Auto-determine category based on material type
   useEffect(() => {
     if (formData.materialType === 'LCD') {
-      setFormData(prev => ({ ...prev, category: 'DIGITAL' }));
+      setFormData((prev: PlanFormData) => ({ ...prev, category: 'DIGITAL' }));
     } else if (formData.materialType === 'HEADDRESS') {
-      setFormData(prev => ({ ...prev, category: 'DIGITAL' }));
+      setFormData((prev: PlanFormData) => ({ ...prev, category: 'DIGITAL' }));
     }
   }, [formData.materialType]);
 
