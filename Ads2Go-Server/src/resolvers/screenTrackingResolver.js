@@ -128,32 +128,19 @@ const resolvers = {
             }
           }
 
-          return {
-            deviceId: screen.deviceId,
-            materialId: screen.materialId,
-            screenType: screen.screenType,
-            carGroupId: screen.carGroupId,
-            slotNumber: screen.slotNumber,
-            isOnline: isActuallyOnline,
-            currentLocation: locationData,
-            lastSeen: screen.lastSeen,
-            currentHours: screen.currentHoursToday || 0,
-            hoursRemaining: screen.hoursRemaining || 0,
-            totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-            displayStatus: displayStatus,
-            screenMetrics: {
-              isDisplaying: screen.screenMetrics?.isDisplaying || false,
-              brightness: screen.screenMetrics?.brightness || 50,
-              volume: screen.screenMetrics?.volume || 50,
-              adPlayCount: screen.screenMetrics?.adPlayCount || 0,
-              maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
-              currentAd: screen.screenMetrics?.currentAd || null,
-              dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
-              adPerformance: screen.screenMetrics?.adPerformance || [],
-              displayHours: screen.screenMetrics?.displayHours || 0,
-              lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
+          // Parse adPerformance if it's a string
+          let adPerformance = [];
+          if (screen.screenMetrics?.adPerformance) {
+            if (typeof screen.screenMetrics.adPerformance === 'string') {
+              try {
+                adPerformance = JSON.parse(screen.screenMetrics.adPerformance);
+              } catch (e) {
+                adPerformance = [];
+              }
+            } else if (Array.isArray(screen.screenMetrics.adPerformance)) {
+              adPerformance = screen.screenMetrics.adPerformance;
             }
-          };
+          }
         });
         
         return {
@@ -183,6 +170,58 @@ const resolvers = {
         const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
         const isActuallyOnline = deviceStatus ? deviceStatus.isOnline : screen.isOnline;
 
+        let locationData = null;
+        if (screen.currentLocation) {
+          if (typeof screen.currentLocation === 'string') {
+            try {
+              locationData = JSON.parse(screen.currentLocation);
+            } catch (e) {
+              locationData = { address: screen.currentLocation };
+            }
+          } else if (typeof screen.currentLocation === 'object') {
+            locationData = screen.currentLocation;
+          }
+        }
+
+        let displayStatus = 'OFFLINE';
+        if (isActuallyOnline) {
+          if (screen.screenMetrics?.maintenanceMode) {
+            displayStatus = 'MAINTENANCE';
+          } else if (screen.screenMetrics?.isDisplaying) {
+            displayStatus = 'PLAYING';
+          } else {
+            displayStatus = 'ONLINE';
+          }
+        }
+
+        // Parse daily ad stats if it's a string
+        let dailyAdStats = null;
+        if (screen.screenMetrics?.dailyAdStats) {
+          if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+            try {
+              dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+            } catch (e) {
+              dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+            }
+          } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+            dailyAdStats = screen.screenMetrics.dailyAdStats;
+          }
+        }
+
+        // Parse adPerformance if it's a string
+        let adPerformance = [];
+        if (screen.screenMetrics?.adPerformance) {
+          if (typeof screen.screenMetrics.adPerformance === 'string') {
+            try {
+              adPerformance = JSON.parse(screen.screenMetrics.adPerformance);
+            } catch (e) {
+              adPerformance = [];
+            }
+          } else if (Array.isArray(screen.screenMetrics.adPerformance)) {
+            adPerformance = screen.screenMetrics.adPerformance;
+          }
+        }
+
         return {
           deviceId: screen.deviceId,
           materialId: screen.materialId,
@@ -190,23 +229,23 @@ const resolvers = {
           carGroupId: screen.carGroupId,
           slotNumber: screen.slotNumber,
           isOnline: isActuallyOnline,
-          currentLocation: screen.getFormattedLocation ? screen.getFormattedLocation() : screen.currentLocation,
+          currentLocation: locationData,
           lastSeen: screen.lastSeen,
           currentHours: screen.currentHoursToday || 0,
           hoursRemaining: screen.hoursRemaining || 0,
           totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-          displayStatus: isActuallyOnline ? 'ONLINE' : 'OFFLINE',
-          screenMetrics: screen.screenMetrics || {
-            isDisplaying: false,
-            brightness: 50,
-            volume: 50,
-            adPlayCount: 0,
-            maintenanceMode: false,
-            currentAd: null,
-            dailyAdStats: "{}",
-            adPerformance: [],
-            displayHours: 0,
-            lastAdPlayed: null
+          displayStatus: displayStatus,
+          screenMetrics: {
+            isDisplaying: screen.screenMetrics?.isDisplaying || false,
+            brightness: screen.screenMetrics?.brightness || 50,
+            volume: screen.screenMetrics?.volume || 50,
+            adPlayCount: screen.screenMetrics?.adPlayCount || 0,
+            maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
+            currentAd: screen.screenMetrics?.currentAd || null,
+            dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
+            adPerformance: adPerformance,
+            displayHours: screen.screenMetrics?.displayHours || 0,
+            lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
           }
         };
       } catch (error) {
@@ -274,7 +313,19 @@ const resolvers = {
             adPerformance: screen.screenMetrics?.adPerformance || [],
             lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null,
             isOnline: screen.isOnline,
-            lastSeen: screen.lastSeen
+            lastSeen: screen.lastSeen,
+            screenMetrics: screen.screenMetrics || {
+              isDisplaying: false,
+              brightness: 50,
+              volume: 50,
+              adPlayCount: 0,
+              maintenanceMode: false,
+              currentAd: null,
+              dailyAdStats: "{}",
+              adPerformance: [],
+              displayHours: 0,
+              lastAdPlayed: null
+            }
           };
         });
 
