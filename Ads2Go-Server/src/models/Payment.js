@@ -21,7 +21,7 @@ const PaymentSchema = new mongoose.Schema(
     paymentType: {
       type: String,
       required: true,
-      enum: ['CREDIT_CARD', 'DEBIT_CARD', 'GCASH', 'PAYPAL', 'BANK_TRANSFER'],
+      enum: ['CREDIT_CARD', 'DEBIT_CARD', 'GCASH', 'PAYPAL', 'BANK_TRANSFER', 'CASH'],
     },
     amount: {
       type: Number,
@@ -45,7 +45,15 @@ const PaymentSchema = new mongoose.Schema(
 );
 
 // 🔹 Auto-activate Ad after payment is PAID
+// Note: This hook is disabled during transactions to prevent conflicts
+// The ad activation is now handled directly in the payment resolver
 PaymentSchema.post('save', async function (doc) {
+  // Skip this hook if we're in a transaction (session exists)
+  if (this.$session) {
+    console.log('Skipping payment post-save hook during transaction');
+    return;
+  }
+
   if (doc.paymentStatus === 'PAID') {
     try {
       const Ad = require('./Ad');

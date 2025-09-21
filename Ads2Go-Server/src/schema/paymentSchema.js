@@ -13,6 +13,7 @@ const paymentTypeDefs = gql`
     GCASH
     PAYPAL
     BANK_TRANSFER
+    CASH
   }
 
   type Ad {

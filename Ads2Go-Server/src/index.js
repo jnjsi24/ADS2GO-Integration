@@ -29,6 +29,7 @@ const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
+const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -42,6 +43,7 @@ const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
+const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -91,6 +93,7 @@ const server = new ApolloServer({
     materialTrackingTypeDefs,
     tabletTypeDefs,
     adsDeploymentTypeDefs,
+    screenTrackingTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -104,6 +107,7 @@ const server = new ApolloServer({
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
+    screenTrackingResolvers,
   ]),
 });
 
@@ -192,6 +196,11 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
+        // Debug GraphQL context
+        console.log('🔍 GraphQL Context Debug:');
+        console.log('  - Authorization header:', req.headers.authorization);
+        console.log('  - User-Agent:', req.headers['user-agent']);
+        
         // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
@@ -216,6 +225,14 @@ async function startServer() {
             console.log('✅ Set admin context for SUPERADMIN user');
           }
         }
+        
+        // Debug final context
+        console.log('🔧 Final GraphQL context:', {
+          hasDriver: !!context.driver,
+          hasUser: !!context.user,
+          hasAdmin: !!context.admin,
+          hasSuperAdmin: !!context.superAdmin
+        });
         
         if (!driver && !user) {
           console.log('❌ No authentication context found');

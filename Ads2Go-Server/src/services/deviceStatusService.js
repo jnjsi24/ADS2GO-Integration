@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const ScreenTracking = require('../models/screenTracking');
+const ScreenTracking = require('../models/ScreenTracking');
 const deviceStatusManager = require('./deviceStatusManager');
 
 class DeviceStatusService {
