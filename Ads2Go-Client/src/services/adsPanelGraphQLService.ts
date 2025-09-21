@@ -1,5 +1,6 @@
 // AdsPanel GraphQL Service - Using Apollo Client for GraphQL operations
-import { ApolloClient, InMemoryCache } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
 import { 
   GET_ALL_SCREENS,
   GET_SCREEN_STATUS,
@@ -39,6 +40,24 @@ import {
 // Cache busting - force browser to reload this file
 console.log('🔄 AdsPanelGraphQLService loaded - Cache busted at:', new Date().toISOString());
 
+export interface LocationData {
+  lat: number;
+  lng: number;
+  timestamp: string;
+  speed: number;
+  heading: number;
+  accuracy: number;
+  address: string;
+}
+
+export interface DailyAdStats {
+  totalAdsPlayed: number;
+  totalDisplayTime: number;
+  uniqueAdsPlayed: number;
+  averageAdDuration: number;
+  adCompletionRate: number;
+}
+
 export interface ScreenData {
   deviceId: string;
   materialId: string;
@@ -46,7 +65,7 @@ export interface ScreenData {
   carGroupId: string;
   slotNumber: number;
   isOnline: boolean;
-  currentLocation: string;
+  currentLocation: LocationData | null;
   lastSeen: string;
   currentHours: number;
   hoursRemaining: number;
@@ -65,7 +84,7 @@ export interface ScreenData {
       adDuration: number;
       startTime: string;
     };
-    dailyAdStats: any;
+    dailyAdStats: DailyAdStats;
     adPerformance: any[];
     displayHours: number;
     lastAdPlayed: string;
@@ -97,7 +116,7 @@ export interface AdAnalytics {
     materialId: string;
     screenType: string;
     currentAd?: any;
-    dailyStats: any;
+    dailyStats: DailyAdStats;
     totalAdsPlayed: number;
     displayHours: number;
     adPerformance: any[];
@@ -124,12 +143,37 @@ class AdsPanelGraphQLService {
   private client: ApolloClient<any>;
 
   constructor() {
-    this.client = new ApolloClient({
+    // Create HTTP link
+    const httpLink = createHttpLink({
       uri: process.env.REACT_APP_GRAPHQL_URL || 'http://localhost:5000/graphql',
+    });
+
+    // Create auth link that adds the token to every request
+    const authLink = setContext((_, { headers }) => {
+      // Get the authentication token from local storage
+      const adminToken = localStorage.getItem('adminToken');
+      const userToken = localStorage.getItem('token');
+      const token = adminToken || userToken;
+      
+      // Debug token retrieval
+      console.log('🔍 Apollo Client Auth Debug:');
+      console.log('  - adminToken:', adminToken ? `Found (${adminToken.substring(0, 20)}...)` : 'Not found');
+      console.log('  - userToken:', userToken ? `Found (${userToken.substring(0, 20)}...)` : 'Not found');
+      console.log('  - selected token:', token ? `Found (${token.substring(0, 20)}...)` : 'Not found');
+      console.log('  - Authorization header:', token ? `Bearer ${token.substring(0, 20)}...` : 'None');
+      
+      // Return the headers to the context so httpLink can read them
+      return {
+        headers: {
+          ...headers,
+          authorization: token ? `Bearer ${token}` : "",
+        }
+      }
+    });
+
+    this.client = new ApolloClient({
+      link: authLink.concat(httpLink),
       cache: new InMemoryCache(),
-      headers: {
-        'Content-Type': 'application/json',
-      },
     });
   }
 
