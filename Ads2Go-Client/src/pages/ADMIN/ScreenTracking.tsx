@@ -7,16 +7,21 @@ import 'leaflet-defaulticon-compatibility';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
-import { 
-  Clock, 
-  Car, 
-  AlertTriangle, 
-  CheckCircle, 
+import {
+  Clock,
+  Car,
+  AlertTriangle,
+  CheckCircle,
   XCircle,
   RefreshCw,
   Users,
   Activity
 } from 'lucide-react';
+
+// GraphQL imports
+import { useQuery } from '@apollo/client';
+import { GET_ALL_SCREENS } from '../../graphql/admin/queries/screenTracking';
+import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
 
 
 interface ScreenStatus {
@@ -61,6 +66,7 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
+  alertCount?: number; // Add alertCount field
 }
 
 interface ComplianceReport {
@@ -112,7 +118,7 @@ const ScreenTracking: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
-  
+
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
     return typeof lat === 'number' && typeof lng === 'number' &&
@@ -130,36 +136,76 @@ const ScreenTracking: React.FC = () => {
 
   const mapRef = useRef<Map | null>(null);
 
-  // Derive API base from environment (REACT_APP_API_URL ends with /graphql)
-  const apiBase = (process.env.REACT_APP_API_URL || '').replace(/\/graphql$/, '');
-  // Fallback to same-origin; only add :5000 when running on localhost
-  const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  const sameOrigin = `${window.location.protocol}//${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`;
-  const resolvedApiBase = apiBase || (isLocalHost ? `${window.location.protocol}//${window.location.hostname}:5000` : sameOrigin);
+  // GraphQL query for real-time screen data
+  const { data: screensData, loading: screensLoading, error: screensError, refetch: refetchScreens } = useQuery(GET_ALL_SCREENS, {
+    variables: {
+      filters: selectedMaterial !== 'all' ? { materialId: selectedMaterial } : null
+    },
+    pollInterval: 3000, // Poll every 3 seconds for faster real-time updates
+    notifyOnNetworkStatusChange: true,
+    fetchPolicy: 'network-only' // Always fetch from network for real-time data
+  });
 
-  // Fetch materials list
+  // WebSocket real-time status
+  const { devices: wsDevices, isConnected: wsConnected } = useDeviceStatus();
+
+  // Update screens when GraphQL data changes
+  useEffect(() => {
+    if (screensData?.getAllScreens) {
+      const screensFromGraphQL = screensData.getAllScreens.screens || [];
+
+      // Enhance with WebSocket real-time status
+      const enhancedScreens = screensFromGraphQL.map((screen: any) => {
+        // Find WebSocket status for this device
+        const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
+
+        return {
+          ...screen,
+          // Override with WebSocket status if available
+          isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
+          alertCount: screen.alerts?.length || 0
+        };
+      });
+
+      setScreens(enhancedScreens);
+      setConnectionStatus('connected');
+    }
+  }, [screensData, wsDevices]);
+
+  // Fetch materials list using GraphQL
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const materialsUrl = `${resolvedApiBase}/material`;
-      console.log('Fetching materials from:', materialsUrl);
-      
-      const response = await fetch(materialsUrl, {
+
+      // Use GraphQL query to get materials
+      const materialsResponse = await fetch(`${window.location.origin}/graphql`, {
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query GetMaterials {
+              getMaterials {
+                _id
+                materialId
+                materialType
+                title
+                description
+                isActive
+                createdAt
+                updatedAt
+                screenCount
+              }
+            }
+          `
+        })
       });
-      
-      console.log('Materials response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Materials fetched:', data);
-        setMaterials(data.materials || []);
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to fetch materials:', response.status, response.statusText);
-        console.error('Error response:', errorText);
+
+      const materialsResult = await materialsResponse.json();
+
+      if (materialsResult.data?.getMaterials) {
+        setMaterials(materialsResult.data.getMaterials);
       }
     } catch (error) {
       console.error('Error fetching materials:', error);
@@ -168,92 +214,27 @@ const ScreenTracking: React.FC = () => {
     }
   };
 
-    // Fetch compliance report and tablet data
+  // Legacy functions - replaced by GraphQL polling
   const fetchData = useCallback(async () => {
-    try {
-      setRefreshing(true);
-      setConnectionStatus('connecting');
-      
-      // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = `${resolvedApiBase}/screenTracking/compliance?date=${selectedDate}`;
-      console.log('Making request to:', apiUrl);
-      
-      const complianceResponse = await fetch(apiUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('Compliance response status:', complianceResponse.status);
-      
-      if (complianceResponse.ok) {
-        const complianceData = await complianceResponse.json();
-        console.log('Compliance data received:', complianceData);
-        console.log('Screens in response:', complianceData.data?.screens);
-        console.log('Number of screens:', complianceData.data?.screens?.length || 0);
-        
-        setComplianceReport(complianceData.data);
-        setScreens(complianceData.data?.screens || []);
-        setConnectionStatus('connected');
+    // This function is no longer needed since we're using GraphQL polling
+    console.log('fetchData called - using GraphQL polling instead');
+  }, []);
 
-        // Auto-center map on first screen if available
-        if (complianceData.data?.screens?.length > 0 && 
-            complianceData.data.screens[0].currentLocation &&
-            isValidCoordinate(complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng)) {
-          setMapCenter([complianceData.data.screens[0].currentLocation.lat, complianceData.data.screens[0].currentLocation.lng]);
-        }
-      } else {
-        const errorData = await complianceResponse.json();
-        console.error('API Error:', errorData);
-        setConnectionStatus('disconnected');
-      }
-
-     } catch (error) {
-       console.error('Error fetching data:', error);
-       setConnectionStatus('disconnected');
-     } finally {
-       setLoading(false);
-       setRefreshing(false);
-     }
-   }, [selectedDate]);
-
-  // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
-    try {
-      const pathApiUrl = `${resolvedApiBase}/screenTracking/path/${deviceId}?date=${selectedDate}`;
-      console.log('Making path request to:', pathApiUrl);
-      
-      const response = await fetch(pathApiUrl, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('Path data response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Path data received:', data);
-        setPathData(data.data);
-      } else {
-        const errorData = await response.json();
-        console.error('Path data API Error:', errorData);
-      }
-    } catch (error) {
-      console.error('Error fetching path data:', error);
-    }
-  }, [selectedDate]);
+    // This function is no longer needed since we're using GraphQL polling
+    console.log('fetchPathData called - using GraphQL polling instead');
+  }, []);
 
   // Filter screens based on selected material
   useEffect(() => {
     console.log('Filtering screens - screens:', screens, 'selectedMaterial:', selectedMaterial);
-    
+
     if (!screens) {
       console.log('No screens data available');
       setFilteredScreens([]);
       return;
     }
-    
+
     if (selectedMaterial === 'all') {
       console.log('Showing all screens:', screens.length);
       setFilteredScreens(screens);
@@ -264,25 +245,15 @@ const ScreenTracking: React.FC = () => {
     }
   }, [screens, selectedMaterial]);
 
-  // Auto-refresh data every 30 seconds
+  // Initialize data on component mount
   useEffect(() => {
-    fetchData();
     fetchMaterials();
-    
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [selectedDate, fetchData]);
-
-  // Fetch path when screen is selected
-  useEffect(() => {
-    if (selectedScreen) {
-      fetchPathData(selectedScreen.deviceId);
-    }
-  }, [selectedScreen, selectedDate, fetchPathData]);
+  }, []);
 
   const handleScreenSelect = (screen: ScreenStatus) => {
     setSelectedScreen(screen);
-    if (screen.currentLocation && isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+    if (screen.currentLocation?.lat && screen.currentLocation?.lng &&
+        isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
       setMapCenter([screen.currentLocation.lat, screen.currentLocation.lng]);
       setZoom(15);
     }
@@ -510,20 +481,18 @@ const ScreenTracking: React.FC = () => {
                   onMapLoad={(map: Map) => {
                     if (mapRef) {
                       (mapRef as React.MutableRefObject<Map | null>).current = map;
-                    }
-                    // Any map initialization code can go here
-                  }}
+                    }}
                 >
-                  
                   {/* Screen markers - only show markers for screens with valid location data */}
-                  {filteredScreens?.filter(screen => 
-                    screen && 
-                    screen.currentLocation && 
+                  {filteredScreens?.filter(screen =>
+                    screen &&
+                    screen.currentLocation?.lat &&
+                    screen.currentLocation?.lng &&
                     isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
                   ).map((screen) => (
                     <Marker
                       key={screen.deviceId}
-                      position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                      position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
                       icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
@@ -536,12 +505,12 @@ const ScreenTracking: React.FC = () => {
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Address: {screen.currentLocation.address}</p>
+                          <p className="text-sm">Address: {screen.currentLocation?.address}</p>
                         </div>
                       </Popup>
                     </Marker>
                   ))}
-                  
+
                   {/* Path for selected tablet */}
                   {pathData && pathData.locationHistory?.length > 1 && (
                     <Polyline
@@ -551,12 +520,12 @@ const ScreenTracking: React.FC = () => {
                       opacity={0.7}
                     />
                   )}
-                </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter(screen => 
-                  screen && 
-                  screen.currentLocation && 
+                {filteredScreens && filteredScreens.filter(screen =>
+                  screen &&
+                  screen.currentLocation?.lat &&
+                  screen.currentLocation?.lng &&
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
                 ).length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
@@ -576,8 +545,7 @@ const ScreenTracking: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                )}
-              </div>
+                </MapView>
             </div>
           </div>
                        {/* Screen List */}
@@ -631,11 +599,11 @@ const ScreenTracking: React.FC = () => {
                        </div>
 
                        {/* Alerts */}
-                       {screen.alerts?.length > 0 && (
+                       {screen.alertCount && screen.alertCount > 0 && (
                          <div className="mt-2">
                            <div className="flex items-center space-x-1 text-red-600">
                              <AlertTriangle className="w-3 h-3" />
-                             <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
+                             <span className="text-xs">{screen.alertCount} alert(s)</span>
                            </div>
                          </div>
                        )}

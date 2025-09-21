@@ -365,56 +365,121 @@ router.get('/path/:deviceId', async (req, res) => {
   }
 });
 
-// GET /compliance - Get compliance report
+// GET /compliance - Get compliance report with real-time status
 router.get('/compliance', async (req, res) => {
   try {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
     const allTablets = await ScreenTracking.find({ isActive: true });
-    
+
+    // Get real-time status from DeviceStatusManager
+    const realTimeStatuses = deviceStatusService.getAllDeviceStatuses();
+
+    console.log('🔄 [COMPLIANCE] Real-time statuses from DeviceStatusManager:');
+    realTimeStatuses.forEach(status => {
+      console.log(`  - ${status.deviceId}: ${status.isOnline ? 'ONLINE' : 'OFFLINE'} (${status.source}, ${status.confidence})`);
+    });
+
     const complianceReport = {
       date: targetDate,
       totalTablets: allTablets.length,
-      onlineTablets: allTablets.filter(t => t.isOnline).length,
-      compliantTablets: allTablets.filter(t => t.isCompliantToday).length,
-      nonCompliantTablets: allTablets.filter(t => !t.isCompliantToday).length,
+      onlineTablets: 0,
+      compliantTablets: 0,
+      nonCompliantTablets: 0,
       averageHours: 0,
       averageDistance: 0,
-      tablets: []
+      screens: []
     };
 
     if (allTablets.length > 0) {
       const totalHours = allTablets.reduce((sum, t) => sum + t.currentHoursToday, 0);
-      const totalDistance = allTablets.reduce((sum, t) => 
+      const totalDistance = allTablets.reduce((sum, t) =>
         sum + (t.currentSession?.totalDistanceTraveled || 0), 0
       );
-      
+
       complianceReport.averageHours = Math.round((totalHours / allTablets.length) * 100) / 100;
       complianceReport.averageDistance = Math.round((totalDistance / allTablets.length) * 100) / 100;
     }
 
-    complianceReport.screens = allTablets.map(tablet => ({
-      deviceId: tablet.deviceId,
-      materialId: tablet.materialId,
-      screenType: tablet.screenType,
-      carGroupId: tablet.carGroupId,
-      slotNumber: tablet.slotNumber,
-      isOnline: tablet.isOnline,
-      currentLocation: tablet.getFormattedLocation(),
-      lastSeen: tablet.lastSeen,
-      currentHours: tablet.currentHoursToday,
-      hoursRemaining: tablet.hoursRemaining,
-      isCompliant: tablet.isCompliantToday,
-      totalDistanceToday: tablet.currentSession?.totalDistanceTraveled || 0,
-      averageDailyHours: tablet.averageDailyHours,
-      complianceRate: tablet.complianceRate,
-      totalHoursOnline: tablet.totalHoursOnline,
-      totalDistanceTraveled: tablet.totalDistanceTraveled,
-      displayStatus: tablet.displayStatus,
-      screenMetrics: tablet.screenMetrics,
-      alerts: tablet.alerts
-    }));
+    // Process each tablet with real-time status
+    complianceReport.screens = allTablets.map(tablet => {
+      // Find real-time status for this device
+      let realTimeStatus = realTimeStatuses.find(status => {
+        return status.deviceId === tablet.deviceId ||
+               status.deviceId.includes(tablet.deviceId) ||
+               tablet.deviceId.includes(status.deviceId);
+      });
+
+      // If not found, try to find by materialId
+      if (!realTimeStatus) {
+        realTimeStatus = realTimeStatuses.find(status => {
+          return status.deviceId === tablet.materialId ||
+                 status.deviceId.includes(tablet.materialId) ||
+                 tablet.materialId.includes(status.deviceId);
+        });
+      }
+
+      // Use real-time status if available, otherwise fall back to database status
+      const isOnline = realTimeStatus ? realTimeStatus.isOnline : tablet.isOnline;
+
+      // Update online count
+      if (isOnline) {
+        complianceReport.onlineTablets++;
+      }
+
+      // Update compliance count
+      if (tablet.isCompliantToday) {
+        complianceReport.compliantTablets++;
+      } else {
+        complianceReport.nonCompliantTablets++;
+      }
+
+      let displayStatus = 'OFFLINE';
+      if (isOnline) {
+        if (tablet.screenMetrics?.maintenanceMode) {
+          displayStatus = 'MAINTENANCE';
+        } else if (tablet.screenMetrics?.isDisplaying) {
+          displayStatus = 'PLAYING';
+        } else {
+          displayStatus = 'ONLINE';
+        }
+      }
+
+      return {
+        deviceId: tablet.deviceId,
+        materialId: tablet.materialId,
+        screenType: tablet.screenType,
+        carGroupId: tablet.carGroupId,
+        slotNumber: tablet.slotNumber,
+        isOnline: isOnline,
+        currentLocation: tablet.getFormattedLocation(),
+        lastSeen: tablet.lastSeen,
+        currentHours: tablet.currentHoursToday,
+        hoursRemaining: tablet.hoursRemaining,
+        isCompliant: tablet.isCompliantToday,
+        totalDistanceToday: tablet.currentSession?.totalDistanceTraveled || 0,
+        averageDailyHours: tablet.averageDailyHours,
+        complianceRate: tablet.complianceRate,
+        totalHoursOnline: tablet.totalHoursOnline,
+        totalDistanceTraveled: tablet.totalDistanceTraveled,
+        displayStatus: displayStatus,
+        screenMetrics: tablet.screenMetrics,
+        alerts: tablet.alerts.filter(alert => !alert.isResolved), // Only return unresolved alerts
+        alertCount: tablet.alerts.filter(alert => !alert.isResolved).length, // Add alert count
+        // Add real-time status info for debugging
+        realTimeStatus: realTimeStatus ? {
+          source: realTimeStatus.source,
+          confidence: realTimeStatus.confidence,
+          statusDeviceId: realTimeStatus.deviceId
+        } : null
+      };
+    });
+
+    console.log('✅ [COMPLIANCE] Processed screens with real-time status:');
+    complianceReport.screens.forEach(screen => {
+      console.log(`  - ${screen.deviceId}: ${screen.isOnline ? 'ONLINE' : 'OFFLINE'} (${screen.displayStatus})`);
+    });
 
     res.json({
       success: true,
