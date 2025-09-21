@@ -46,18 +46,7 @@ export const GET_ALL_SCREENS = gql`
             averageAdDuration
             adCompletionRate
           }
-          adPerformance {
-            adId
-            adTitle
-            playCount
-            totalViewTime
-            averageViewTime
-            completionRate
-            firstPlayed
-            lastPlayed
-            impressions
-            revenue
-          }
+          adPerformance
           displayHours
           lastAdPlayed
         }
@@ -112,18 +101,9 @@ export const GET_SCREEN_STATUS = gql`
           uniqueAdsPlayed
           averageAdDuration
           adCompletionRate
-        adPerformance {
-          adId
-          adTitle
-          playCount
-          totalViewTime
-          averageViewTime
-          completionRate
-          firstPlayed
-          lastPlayed
-          impressions
-          revenue
         }
+        adPerformance
+        displayHours
         lastAdPlayed
       }
     }
@@ -181,18 +161,7 @@ export const GET_COMPLIANCE_REPORT = gql`
             averageAdDuration
             adCompletionRate
           }
-          adPerformance {
-            adId
-            adTitle
-            playCount
-            totalViewTime
-            averageViewTime
-            completionRate
-            firstPlayed
-            lastPlayed
-            impressions
-            revenue
-          }
+          adPerformance
           displayHours
           lastAdPlayed
         }
@@ -224,18 +193,10 @@ export const GET_AD_ANALYTICS = gql`
           averageAdDuration
           adCompletionRate
         }
-        adPerformance {
-          adId
-          adTitle
-          playCount
-          totalViewTime
-          averageViewTime
-          completionRate
-          firstPlayed
-          lastPlayed
-          impressions
-          revenue
-        }
+        totalAdsPlayed
+        displayHours
+        adPerformance
+        lastAdPlayed
         isOnline
         lastSeen
       }

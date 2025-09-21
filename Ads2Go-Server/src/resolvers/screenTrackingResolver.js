@@ -369,7 +369,12 @@ const resolvers = {
           totalAdsPlayed: screen.screenMetrics?.adPlayCount || 0,
           totalDisplayHours: screen.screenMetrics?.displayHours || 0,
           adPerformance: screen.screenMetrics?.adPerformance || [],
-          dailyStats: screen.screenMetrics?.dailyAdStats || "{}"
+          dailyStats: [{
+            date: date || new Date().toISOString().split('T')[0],
+            adsPlayed: screen.screenMetrics?.adPlayCount || 0,
+            displayHours: screen.screenMetrics?.displayHours || 0,
+            revenue: 0 // Placeholder for revenue calculation
+          }]
         };
       } catch (error) {
         console.error('Error in getDeviceAdAnalytics:', error);

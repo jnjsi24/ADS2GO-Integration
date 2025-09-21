@@ -36,6 +36,7 @@ const typeDefs = gql`
     firstPlayed: String
     lastPlayed: String
     impressions: Int
+    revenue: Float
   }
 
   """
@@ -57,6 +58,16 @@ const typeDefs = gql`
     uniqueAdsPlayed: Int
     averageAdDuration: Float
     adCompletionRate: Float
+  }
+
+  """
+  Daily device stats structure
+  """
+  type DailyDeviceStats {
+    date: String
+    adsPlayed: Int
+    displayHours: Float
+    revenue: Float
   }
 
   """
@@ -177,7 +188,7 @@ const typeDefs = gql`
     totalAdsPlayed: Int
     totalDisplayHours: Float
     adPerformance: [AdPerformance]
-    dailyStats: [String]
+    dailyStats: [DailyDeviceStats]
   }
 
   type Query {
