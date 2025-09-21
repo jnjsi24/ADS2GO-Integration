@@ -483,7 +483,7 @@ const ScreenTracking: React.FC = () => {
                       (mapRef as React.MutableRefObject<Map | null>).current = map;
                     }
                   }}
-                >
+                >  
                   {/* Screen markers - only show markers for screens with valid location data */}
                   {filteredScreens?.filter(screen =>
                     screen &&
@@ -546,7 +546,7 @@ const ScreenTracking: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                </MapView>)
+                </MapView>
             </div>
           </div>
                        {/* Screen List */}
