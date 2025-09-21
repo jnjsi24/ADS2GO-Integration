@@ -7,11 +7,11 @@ import 'leaflet-defaulticon-compatibility';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
-import {
-  Clock,
-  Car,
-  AlertTriangle,
-  CheckCircle,
+import { 
+  Clock, 
+  Car, 
+  AlertTriangle, 
+  CheckCircle, 
   XCircle,
   RefreshCw,
   Users,
@@ -22,7 +22,6 @@ import {
 import { useQuery } from '@apollo/client';
 import { GET_ALL_SCREENS } from '../../graphql/admin/queries/screenTracking';
 import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
-
 
 interface ScreenStatus {
   deviceId: string;
@@ -66,7 +65,7 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
-  alertCount?: number; // Add alertCount field
+  alertCount?: number;
 }
 
 interface ComplianceReport {
@@ -117,9 +116,8 @@ const ScreenTracking: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
+  const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]);
 
-  // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
     return typeof lat === 'number' && typeof lng === 'number' &&
            !isNaN(lat) && !isNaN(lng) &&
@@ -127,6 +125,7 @@ const ScreenTracking: React.FC = () => {
            lng >= -180 && lng <= 180 &&
            lat !== 0 && lng !== 0;
   };
+  
   const [zoom, setZoom] = useState(12);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -141,9 +140,9 @@ const ScreenTracking: React.FC = () => {
     variables: {
       filters: selectedMaterial !== 'all' ? { materialId: selectedMaterial } : null
     },
-    pollInterval: 3000, // Poll every 3 seconds for faster real-time updates
+    pollInterval: 3000,
     notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'network-only' // Always fetch from network for real-time data
+    fetchPolicy: 'network-only'
   });
 
   // WebSocket real-time status
@@ -156,12 +155,10 @@ const ScreenTracking: React.FC = () => {
 
       // Enhance with WebSocket real-time status
       const enhancedScreens = screensFromGraphQL.map((screen: any) => {
-        // Find WebSocket status for this device
         const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
 
         return {
           ...screen,
-          // Override with WebSocket status if available
           isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
           alertCount: screen.alerts?.length || 0
         };
@@ -177,7 +174,6 @@ const ScreenTracking: React.FC = () => {
     try {
       setMaterialsLoading(true);
 
-      // Use GraphQL query to get materials
       const materialsResponse = await fetch(`${window.location.origin}/graphql`, {
         method: 'POST',
         headers: {
@@ -216,31 +212,24 @@ const ScreenTracking: React.FC = () => {
 
   // Legacy functions - replaced by GraphQL polling
   const fetchData = useCallback(async () => {
-    // This function is no longer needed since we're using GraphQL polling
     console.log('fetchData called - using GraphQL polling instead');
   }, []);
 
   const fetchPathData = useCallback(async (deviceId: string) => {
-    // This function is no longer needed since we're using GraphQL polling
     console.log('fetchPathData called - using GraphQL polling instead');
   }, []);
 
   // Filter screens based on selected material
   useEffect(() => {
-    console.log('Filtering screens - screens:', screens, 'selectedMaterial:', selectedMaterial);
-
     if (!screens) {
-      console.log('No screens data available');
       setFilteredScreens([]);
       return;
     }
 
     if (selectedMaterial === 'all') {
-      console.log('Showing all screens:', screens.length);
       setFilteredScreens(screens);
     } else {
       const filtered = screens.filter(screen => screen.materialId === selectedMaterial);
-      console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
       setFilteredScreens(filtered);
     }
   }, [screens, selectedMaterial]);
@@ -282,12 +271,11 @@ const ScreenTracking: React.FC = () => {
   };
 
   const getMarkerColor = (screen: ScreenStatus) => {
-    if (!screen.isOnline) return '#ef4444'; // red
-    if (screen.isCompliant) return '#22c55e'; // green
-    return '#eab308'; // yellow
+    if (!screen.isOnline) return '#ef4444';
+    if (screen.isCompliant) return '#22c55e';
+    return '#eab308';
   };
 
-  // Create custom PIN icon
   const createPinIcon = (color: string) => {
     return new Icon({
       iconUrl: `data:image/svg+xml;base64,${btoa(`
@@ -335,21 +323,21 @@ const ScreenTracking: React.FC = () => {
                    connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
-                             <select
-                 value={selectedMaterial}
-                 onChange={(e) => setSelectedMaterial(e.target.value)}
-                 className="border border-gray-300 rounded-md px-3 py-2 bg-white"
-                 disabled={materialsLoading}
-               >
-                 <option value="all">
-                   {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
-                 </option>
-                 {materials?.map((material) => (
-                   <option key={material._id} value={material.materialId}>
-                     {material.title} - {material.materialId} ({material.materialType})
-                   </option>
-                 ))}
-               </select>
+              <select
+                value={selectedMaterial}
+                onChange={(e) => setSelectedMaterial(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+                disabled={materialsLoading}
+              >
+                <option value="all">
+                  {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
+                </option>
+                {materials?.map((material) => (
+                  <option key={material._id} value={material.materialId}>
+                    {material.title} - {material.materialId} ({material.materialType})
+                  </option>
+                ))}
+              </select>
               <input
                 type="date"
                 value={selectedDate}
@@ -369,26 +357,26 @@ const ScreenTracking: React.FC = () => {
         </div>
       </div>
 
-             {/* Debug Info */}
-       {process.env.NODE_ENV === 'development' && (
-         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                            <p className="text-xs text-yellow-800">
-                 Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
-               </p>
-           </div>
-         </div>
-       )}
+      {/* Debug Info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+            <p className="text-xs text-yellow-800">
+              Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
+            </p>
+          </div>
+        </div>
+      )}
 
-       {/* Material Summary */}
-       {selectedMaterial !== 'all' && (
+      {/* Material Summary */}
+      {selectedMaterial !== 'all' && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div>
-                                 <h3 className="text-lg font-semibold text-blue-900">
-                   Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
-                 </h3>
+                <h3 className="text-lg font-semibold text-blue-900">
+                  Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
+                </h3>
                 <p className="text-sm text-blue-700">
                   {filteredScreens?.length || 0} screen(s) found for this material
                 </p>
@@ -413,36 +401,36 @@ const ScreenTracking: React.FC = () => {
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Users className="w-6 h-6 text-blue-600" />
                 </div>
-                               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Total Screens</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.length || 0}</p>
-               </div>
-             </div>
-           </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Screens</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredScreens?.length || 0}</p>
+                </div>
+              </div>
+            </div>
 
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <Activity className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Online</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isOnline).length || 0}</p>
-               </div>
-             </div>
-           </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Activity className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Online</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isOnline).length || 0}</p>
+                </div>
+              </div>
+            </div>
 
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <CheckCircle className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isCompliant).length || 0}</p>
-               </div>
-             </div>
-           </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isCompliant).length || 0}</p>
+                </div>
+              </div>
+            </div>
 
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center">
@@ -452,11 +440,11 @@ const ScreenTracking: React.FC = () => {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Avg Hours</p>
                   <p className="text-2xl font-bold text-gray-900">
-                   {filteredScreens && filteredScreens.length > 0 
-                     ? (filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) / filteredScreens.length).toFixed(1)
-                     : '0.0'
-                   }h
-                 </p>
+                    {filteredScreens && filteredScreens.length > 0 
+                      ? (filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) / filteredScreens.length).toFixed(1)
+                      : '0.0'
+                    }h
+                  </p>
                 </div>
               </div>
             </div>
@@ -475,7 +463,6 @@ const ScreenTracking: React.FC = () => {
                 <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
               </div>
               <div className="h-96 relative">
-                (
                 <MapView 
                   center={mapCenter}
                   zoom={zoom}
@@ -486,15 +473,14 @@ const ScreenTracking: React.FC = () => {
                   }}
                 >
                   {/* Screen markers - only show markers for screens with valid location data */}
-                  {filteredScreens?.filter(screen =>
-                    screen &&
-                    screen.currentLocation?.lat &&
-                    screen.currentLocation?.lng &&
+                  {filteredScreens?.filter(screen => 
+                    screen && 
+                    screen.currentLocation && 
                     isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
                   ).map((screen) => (
                     <Marker
                       key={screen.deviceId}
-                      position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
+                      position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
                       icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
@@ -507,12 +493,12 @@ const ScreenTracking: React.FC = () => {
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Address: {screen.currentLocation?.address}</p>
+                          <p className="text-sm">Address: {screen.currentLocation.address}</p>
                         </div>
                       </Popup>
                     </Marker>
                   ))}
-
+                  
                   {/* Path for selected tablet */}
                   {pathData && pathData.locationHistory?.length > 1 && (
                     <Polyline
@@ -522,12 +508,12 @@ const ScreenTracking: React.FC = () => {
                       opacity={0.7}
                     />
                   )}
+                </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter(screen =>
-                  screen &&
-                  screen.currentLocation?.lat &&
-                  screen.currentLocation?.lng &&
+                {filteredScreens && filteredScreens.filter(screen => 
+                  screen && 
+                  screen.currentLocation && 
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
                 ).length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
@@ -547,137 +533,139 @@ const ScreenTracking: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                </MapView>
+                )}
               </div>
+            </div>
           </div>
-                       {/* Screen List */}
-             <div className="lg:col-span-1">
-               <div className="bg-white rounded-lg shadow">
-                 <div className="p-4 border-b">
-                   <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
-                   <p className="text-sm text-gray-600">Click to view details</p>
-                 </div>
-                 <div className="max-h-96 overflow-y-auto">
-                   {filteredScreens?.map((screen) => (
-                     <div
-                       key={screen.deviceId}
-                       onClick={() => handleScreenSelect(screen)}
-                       className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                         selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
-                       }`}
-                     >
-                       <div className="flex items-center justify-between mb-2">
-                         <div className="flex items-center space-x-2">
-                           <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.screenType} {screen.slotNumber || ''}</span>
-                         </div>
-                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
-                           {getStatusIcon(screen.isOnline, screen.isCompliant)}
-                           <span className="text-xs">
-                             {screen.displayStatus}
-                           </span>
-                         </div>
-                       </div>
-                       
-                       <div className="space-y-1 text-sm text-gray-600">
-                         <div className="flex justify-between">
-                           <span>Hours Today:</span>
-                           <span className="font-medium">{formatTime(screen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Remaining:</span>
-                           <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Distance:</span>
-                           <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Last Seen:</span>
-                           <span className="font-medium">
-                             {new Date(screen.lastSeen).toLocaleTimeString()}
-                           </span>
-                         </div>
-                       </div>
 
-                       {/* Alerts */}
-                       {screen.alertCount && screen.alertCount > 0 && (
-                         <div className="mt-2">
-                           <div className="flex items-center space-x-1 text-red-600">
-                             <AlertTriangle className="w-3 h-3" />
-                             <span className="text-xs">{screen.alertCount} alert(s)</span>
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   ))}
-                 </div>
-               </div>
+          {/* Screen List */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg shadow">
+              <div className="p-4 border-b">
+                <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
+                <p className="text-sm text-gray-600">Click to view details</p>
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                {filteredScreens?.map((screen) => (
+                  <div
+                    key={screen.deviceId}
+                    onClick={() => handleScreenSelect(screen)}
+                    className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
+                      selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <Car className="w-4 h-4 text-gray-500" />
+                        <span className="font-medium">{screen.screenType} {screen.slotNumber || ''}</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
+                        {getStatusIcon(screen.isOnline, screen.isCompliant)}
+                        <span className="text-xs">
+                          {screen.displayStatus}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Hours Today:</span>
+                        <span className="font-medium">{formatTime(screen.currentHours)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Remaining:</span>
+                        <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Distance:</span>
+                        <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Seen:</span>
+                        <span className="font-medium">
+                          {new Date(screen.lastSeen).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
 
-               {/* Selected Screen Details */}
-               {selectedScreen && (
-                 <div className="mt-6 bg-white rounded-lg shadow">
-                   <div className="p-4 border-b">
-                     <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
-                   </div>
-                   <div className="p-4 space-y-4">
-                     <div>
-                       <h4 className="font-medium text-gray-900">Device Info</h4>
-                       <div className="mt-2 space-y-1 text-sm text-gray-600">
-                         <p>Device ID: {selectedScreen.deviceId}</p>
-                         <p>Material: {selectedScreen.materialId}</p>
-                         <p>Screen Type: {selectedScreen.screenType}</p>
-                         {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
-                         {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
-                       </div>
-                     </div>
+                    {/* Alerts */}
+                    {screen.alerts?.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center space-x-1 text-red-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-                     <div>
-                       <h4 className="font-medium text-gray-900">Today's Progress</h4>
-                       <div className="mt-2 space-y-2">
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Online:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Remaining:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Distance Traveled:</span>
-                           <span className="font-medium">{formatDistance(selectedScreen.totalDistanceToday)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Compliance Rate:</span>
-                           <span className="font-medium">{selectedScreen.complianceRate}%</span>
-                         </div>
-                       </div>
-                     </div>
+            {/* Selected Screen Details */}
+            {selectedScreen && (
+              <div className="mt-6 bg-white rounded-lg shadow">
+                <div className="p-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900">Device Info</h4>
+                    <div className="mt-2 space-y-1 text-sm text-gray-600">
+                      <p>Device ID: {selectedScreen.deviceId}</p>
+                      <p>Material: {selectedScreen.materialId}</p>
+                      <p>Screen Type: {selectedScreen.screenType}</p>
+                      {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
+                      {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
+                    </div>
+                  </div>
 
-                     {selectedScreen.currentLocation && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Current Location</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Address: {selectedScreen.currentLocation.address}</p>
-                           <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
-                           <p>Heading: {selectedScreen.currentLocation.heading}°</p>
-                           <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
-                         </div>
-                       </div>
-                     )}
+                  <div>
+                    <h4 className="font-medium text-gray-900">Today's Progress</h4>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Hours Online:</span>
+                        <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Hours Remaining:</span>
+                        <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Distance Traveled:</span>
+                        <span className="font-medium">{formatDistance(selectedScreen.totalDistanceToday)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Compliance Rate:</span>
+                        <span className="font-medium">{selectedScreen.complianceRate}%</span>
+                      </div>
+                    </div>
+                  </div>
 
-                     {pathData && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Path Information</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Total Points: {pathData.totalPoints}</p>
-                           <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 </div>
-               )}
+                  {selectedScreen.currentLocation && (
+                    <div>
+                      <h4 className="font-medium text-gray-900">Current Location</h4>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        <p>Address: {selectedScreen.currentLocation.address}</p>
+                        <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
+                        <p>Heading: {selectedScreen.currentLocation.heading}°</p>
+                        <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {pathData && (
+                    <div>
+                      <h4 className="font-medium text-gray-900">Path Information</h4>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        <p>Total Points: {pathData.totalPoints}</p>
+                        <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
