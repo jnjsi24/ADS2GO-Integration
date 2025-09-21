@@ -1,4 +1,4 @@
-const ScreenTracking = require('../models/ScreenTracking');
+const ScreenTracking = require('../models/screenTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const { checkAuth } = require('../middleware/auth');
 
