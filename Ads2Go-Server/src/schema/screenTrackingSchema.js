@@ -2,13 +2,12 @@ const gql = require('graphql-tag');
 
 const typeDefs = gql`
   """
-  Current ad information
+  Screen filters input for querying screens
   """
-  type CurrentAd {
-    adId: String
-    adTitle: String
-    adDuration: Int
-    startTime: String
+  input ScreenFiltersInput {
+    screenType: String
+    status: String
+    materialId: String
   }
 
   """
@@ -25,6 +24,42 @@ const typeDefs = gql`
   }
 
   """
+  Ad performance tracking data
+  """
+  type AdPerformance {
+    adId: String
+    adTitle: String
+    playCount: Int
+    totalViewTime: Float
+    averageViewTime: Float
+    completionRate: Float
+    firstPlayed: String
+    lastPlayed: String
+    impressions: Int
+  }
+
+  """
+  Current ad information
+  """
+  type CurrentAd {
+    adId: String
+    adTitle: String
+    adDuration: Int
+    startTime: String
+  }
+
+  """
+  Daily ad stats structure
+  """
+  type DailyAdStats {
+    totalAdsPlayed: Int
+    totalDisplayTime: Float
+    uniqueAdsPlayed: Int
+    averageAdDuration: Float
+    adCompletionRate: Float
+  }
+
+  """
   Screen metrics data
   """
   type ScreenMetrics {
@@ -38,17 +73,6 @@ const typeDefs = gql`
     adPerformance: [AdPerformance]
     displayHours: Float
     lastAdPlayed: String
-  }
-
-  """
-  Daily ad stats structure
-  """
-  type DailyAdStats {
-    totalAdsPlayed: Int
-    totalDisplayTime: Float
-    uniqueAdsPlayed: Int
-    averageAdDuration: Float
-    adCompletionRate: Float
   }
 
   """
