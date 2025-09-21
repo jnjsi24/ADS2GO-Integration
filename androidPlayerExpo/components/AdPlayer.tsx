@@ -1,17 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform } from 'react-native';
 // Using expo-av for compatibility with Expo SDK 49
 // TODO: Migrate to expo-video when upgrading to Expo SDK 54+
 import { Video, ResizeMode } from 'expo-av';
+import QRCode from 'react-native-qrcode-svg';
+import * as Location from 'expo-location';
+import * as Device from 'expo-device';
 import tabletRegistrationService from '../services/tabletRegistration';
+
+// API Base URL - should match the one in tabletRegistration service
+const API_BASE_URL = 'http://192.168.100.22:5000';
 
 // Suppress expo-av deprecation warning
 const originalWarn = console.warn;
-console.warn = function filterWarnings(warning) {
-  if (warning.includes('expo-av') && warning.includes('deprecated')) {
+console.warn = function filterWarnings(...args: any[]) {
+  const warning = args[0];
+  if (typeof warning === 'string' && warning.includes('expo-av') && warning.includes('deprecated')) {
     return;
   }
-  originalWarn.apply(console, arguments);
+  originalWarn.apply(console, args);
 };
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,6 +41,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isDeviceOffline, setIsDeviceOffline] = useState(false);
   const [networkStatus, setNetworkStatus] = useState<boolean>(true);
   const [adStartTime, setAdStartTime] = useState<Date | null>(null);
+  const [tapCount, setTapCount] = useState(0);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [lastTapTime, setLastTapTime] = useState<number>(0);
+  const [showControls, setShowControls] = useState(false);
+  const [screenData, setScreenData] = useState(Dimensions.get('window'));
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -49,6 +61,58 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       }
       
       console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s)`);
+      
+      // Get registration data for analytics
+      const registrationData = await tabletRegistrationService.getRegistrationData();
+      
+      // Send to analytics service
+      const analyticsData = {
+        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+        materialId: materialId,
+        slotNumber: slotNumber,
+        adId: adId,
+        adTitle: adTitle,
+        adDuration: adDuration,
+        viewTime: 0,
+        timestamp: new Date().toISOString(),
+        // Note: userId and adDeploymentId would need to be fetched from the ad data
+        // For now, we'll use the adId as a string reference
+        userId: null, // This should be populated from ad data
+        adDeploymentId: null, // This should be populated from ad data
+        deviceInfo: {
+          deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+          deviceName: Device.deviceName || 'Unknown',
+          deviceType: Device.deviceType === 2 ? 'tablet' : Device.deviceType === 1 ? 'mobile' : 'unknown',
+          osName: Device.osName || 'Unknown',
+          osVersion: Device.osVersion || 'Unknown',
+          platform: Platform.OS || 'Unknown',
+          brand: Device.brand || 'Unknown',
+          modelName: Device.modelName || 'Unknown',
+          screenWidth: screenData.width,
+          screenHeight: screenData.height,
+          screenScale: screenData.scale
+        },
+        gpsData: null, // Will be updated when location is available
+        networkStatus: networkStatus,
+        isOffline: isOffline
+      };
+      
+      // Send to analytics endpoint
+      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(analyticsData),
+      });
+      
+      if (analyticsResponse.ok) {
+        console.log(`✅ Ad playback tracked in analytics: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
+      }
+      
+      // Also send to existing screen tracking
       const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
       if (success) {
         console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
@@ -58,6 +122,399 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     } catch (error) {
       console.error('Error tracking ad playback:', error);
     }
+  };
+
+  // Track QR code scan with GPS and device data
+  const trackQRScan = async (adId: string, adTitle: string) => {
+    try {
+      if (isOffline) {
+        console.log(`Skipping QR scan tracking - device is offline: ${adTitle}`);
+        return;
+      }
+      
+      console.log(`📱 Tracking QR scan: ${adTitle}`);
+      
+      // Get current GPS location
+      let gpsData = null;
+      try {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 1,
+        });
+        gpsData = {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+          speed: location.coords.speed || 0,
+          heading: location.coords.heading || 0,
+          accuracy: location.coords.accuracy || 0,
+          altitude: location.coords.altitude || 0
+        };
+        console.log('GPS data for QR scan:', gpsData);
+      } catch (locationError) {
+        console.warn('Could not get GPS location for QR scan:', locationError);
+      }
+
+      // Get device information
+      const rawDeviceType = Device.deviceType;
+      // Handle both string and number types
+      const deviceTypeNum = typeof rawDeviceType === 'string' ? parseInt(rawDeviceType) : rawDeviceType;
+      const mappedDeviceType = deviceTypeNum === 2 ? 'tablet' : deviceTypeNum === 1 ? 'mobile' : 'unknown';
+      
+      console.log('🔧 QR Scan Device Type Mapping:', {
+        raw: rawDeviceType,
+        parsed: deviceTypeNum,
+        mapped: mappedDeviceType,
+        type: typeof rawDeviceType
+      });
+      
+      // Force device type to tablet for testing
+      const finalDeviceType = 'tablet';
+      console.log('🔧 FORCED Device Type:', finalDeviceType);
+      console.log('🔧 DEVICE TYPE DEBUG - Raw:', rawDeviceType, 'Type:', typeof rawDeviceType);
+      
+      const deviceInfo = {
+        deviceId: await tabletRegistrationService.generateDeviceId(),
+        deviceName: Device.deviceName || 'Unknown',
+        deviceType: finalDeviceType,
+        osName: Device.osName || 'Unknown',
+        osVersion: Device.osVersion || 'Unknown',
+        platform: Platform.OS || 'Unknown',
+        brand: Device.brand || 'Unknown',
+        modelName: Device.modelName || 'Unknown'
+      };
+
+      // Get registration data
+      const registrationData = await tabletRegistrationService.getRegistrationData();
+      
+      // Send QR scan data to server with GPS and device info
+      const qrScanData = {
+        adId,
+        adTitle,
+        materialId: materialId || 'unknown',
+        slotNumber: slotNumber || 1,
+        timestamp: new Date().toISOString(),
+        qrCodeUrl: generateQRData(),
+        deviceInfo,
+        gpsData,
+        registrationData: registrationData ? {
+          deviceId: registrationData.deviceId,
+          carGroupId: registrationData.carGroupId,
+          isRegistered: registrationData.isRegistered
+        } : null,
+        networkStatus,
+        isOffline,
+        screenData: {
+          width: screenData.width,
+          height: screenData.height,
+          scale: screenData.scale
+        }
+      };
+
+      console.log('QR scan data to send:', qrScanData);
+
+      // Send to QR scan tracking endpoint
+      const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(qrScanData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ QR scan tracked successfully: ${adTitle}`, result);
+      } else {
+        console.error(`❌ Failed to track QR scan: ${response.status} ${response.statusText}`);
+      }
+      
+      // Also send to analytics service
+      const analyticsQRData = {
+        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+        materialId: materialId || 'unknown',
+        slotNumber: slotNumber || 1,
+        qrScanData: {
+          adId: adId,
+          adTitle: adTitle,
+          scanTimestamp: new Date().toISOString(),
+          qrCodeUrl: generateQRData(),
+          userAgent: 'Android App',
+          deviceType: deviceInfo.deviceType,
+          browser: 'Android App',
+          operatingSystem: deviceInfo.osName,
+          ipAddress: null,
+          country: null,
+          city: null,
+          location: gpsData ? {
+            type: 'Point',
+            coordinates: [gpsData.lng, gpsData.lat]
+          } : null,
+          timeOnPage: 0,
+          converted: false,
+          conversionType: null,
+          conversionValue: 0
+        }
+      };
+      
+      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(analyticsQRData),
+      });
+      
+      if (analyticsResponse.ok) {
+        console.log(`✅ QR scan tracked in analytics: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track QR scan in analytics: ${adTitle}`);
+      }
+    } catch (error) {
+      console.error('Error tracking QR scan:', error);
+    }
+  };
+
+  // Track QR code display (when QR code is shown to user)
+  const trackQRDisplay = async (adId: string, adTitle: string) => {
+    try {
+      if (isOffline) {
+        console.log(`Skipping QR display tracking - device is offline: ${adTitle}`);
+        return;
+      }
+      
+      console.log(`📱 Tracking QR code display: ${adTitle}`);
+      
+      // Get current GPS location
+      let gpsData = null;
+      try {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 1,
+        });
+        gpsData = {
+          lat: location.coords.latitude,
+          lng: location.coords.longitude,
+          speed: location.coords.speed || 0,
+          heading: location.coords.heading || 0,
+          accuracy: location.coords.accuracy || 0,
+          altitude: location.coords.altitude || 0
+        };
+        console.log('GPS data for QR display:', gpsData);
+      } catch (locationError) {
+        console.warn('Could not get GPS location for QR display:', locationError);
+      }
+
+      // Get device information
+      const rawDeviceType = Device.deviceType;
+      // Handle both string and number types
+      const deviceTypeNum = typeof rawDeviceType === 'string' ? parseInt(rawDeviceType) : rawDeviceType;
+      const mappedDeviceType = deviceTypeNum === 2 ? 'tablet' : deviceTypeNum === 1 ? 'mobile' : 'unknown';
+      
+      console.log('🔧 QR Display Device Type Mapping:', {
+        raw: rawDeviceType,
+        parsed: deviceTypeNum,
+        mapped: mappedDeviceType,
+        type: typeof rawDeviceType
+      });
+      
+      // Force device type to tablet for testing
+      const finalDeviceType = 'tablet';
+      console.log('🔧 FORCED Display Device Type:', finalDeviceType);
+      console.log('🔧 DISPLAY DEVICE TYPE DEBUG - Raw:', rawDeviceType, 'Type:', typeof rawDeviceType);
+      
+      const deviceInfo = {
+        deviceId: await tabletRegistrationService.generateDeviceId(),
+        deviceName: Device.deviceName || 'Unknown',
+        deviceType: finalDeviceType,
+        osName: Device.osName || 'Unknown',
+        osVersion: Device.osVersion || 'Unknown',
+        platform: Platform.OS || 'Unknown',
+        brand: Device.brand || 'Unknown',
+        modelName: Device.modelName || 'Unknown'
+      };
+
+      // Get registration data
+      const registrationData = await tabletRegistrationService.getRegistrationData();
+      
+      // Send QR display data to server
+      const qrDisplayData = {
+        adId,
+        adTitle,
+        materialId: materialId || 'unknown',
+        slotNumber: slotNumber || 1,
+        timestamp: new Date().toISOString(),
+        qrCodeUrl: generateQRData(),
+        userAgent: 'Android App - QR Display',
+        deviceInfo,
+        gpsData,
+        registrationData: registrationData ? {
+          deviceId: registrationData.deviceId,
+          carGroupId: registrationData.carGroupId,
+          isRegistered: registrationData.isRegistered
+        } : null,
+        networkStatus,
+        isOffline,
+        screenData: {
+          width: screenData.width,
+          height: screenData.height,
+          scale: screenData.scale
+        }
+      };
+
+      console.log('QR display data to send:', qrDisplayData);
+
+      // Send to QR scan tracking endpoint (treating display as a scan)
+      const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(qrDisplayData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`✅ QR display tracked successfully: ${adTitle}`, result);
+      } else {
+        console.error(`❌ Failed to track QR display: ${response.status} ${response.statusText}`);
+      }
+      
+      // Also send to analytics service
+      const analyticsQRData = {
+        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+        materialId: materialId || 'unknown',
+        slotNumber: slotNumber || 1,
+        qrScanData: {
+          adId: adId,
+          adTitle: adTitle,
+          scanTimestamp: new Date().toISOString(),
+          qrCodeUrl: generateQRData(),
+          userAgent: 'Android App - QR Display',
+          deviceType: deviceInfo.deviceType,
+          browser: 'Android App',
+          operatingSystem: deviceInfo.osName,
+          ipAddress: null,
+          country: null,
+          city: null,
+          location: gpsData ? {
+            type: 'Point',
+            coordinates: [gpsData.lng, gpsData.lat]
+          } : null,
+          timeOnPage: 0,
+          converted: false,
+          conversionType: null,
+          conversionValue: 0
+        }
+      };
+      
+      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(analyticsQRData),
+      });
+      
+      if (analyticsResponse.ok) {
+        console.log(`✅ QR display tracked in analytics: ${adTitle}`);
+      } else {
+        const errorText = await analyticsResponse.text();
+        console.log(`❌ Failed to track QR display in analytics: ${adTitle} - ${errorText}`);
+      }
+    } catch (error) {
+      console.error('Error tracking QR display:', error);
+    }
+  };
+
+  // Track QR code display when ad changes (only once per ad)
+  const [trackedAds, setTrackedAds] = useState(new Set());
+  
+  // Company ad fallback
+  const companyAd = {
+    adId: 'company-ad',
+    adTitle: 'Ads2Go',
+    mediaFile: 'https://firebasestorage.googleapis.com/v0/b/ads2go-6ead4.firebasestorage.app/o/advertisements%2Fcomapanyads.mp4?alt=media&token=6beecec9-4f14-42fa-bd08-0815b14cdbed',
+    duration: 15
+  };
+  
+  // Determine which ad to show
+  const currentAd = currentAdIndex === -1 ? companyAd : (ads[currentAdIndex] || null);
+  
+  useEffect(() => {
+    if (currentAd && currentAd.adId !== 'company-ad' && !isOffline && !trackedAds.has(currentAd.adId)) {
+      // Track QR code display with a small delay to ensure ad is fully loaded
+      const timer = setTimeout(() => {
+        trackQRDisplay(currentAd.adId, currentAd.adTitle);
+        setTrackedAds(prev => new Set(prev).add(currentAd.adId));
+      }, 3000); // 3 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentAd?.adId, isOffline, trackedAds]);
+
+  // Handle QR code interaction (when someone scans it)
+  const handleQRInteraction = () => {
+    if (currentAd) {
+      console.log(`QR code scanned for ad: ${currentAd.adTitle}`);
+      trackQRScan(currentAd.adId, currentAd.adTitle);
+    }
+  };
+
+  // Handle screen tap to show controls and debug info
+  const handleScreenTap = () => {
+    const currentTime = Date.now();
+    
+    // Reset tap count if more than 3 seconds have passed since last tap
+    if (currentTime - lastTapTime > 3000) {
+      setTapCount(1);
+    } else {
+      setTapCount(prev => prev + 1);
+    }
+    
+    setLastTapTime(currentTime);
+    
+    // Show debug info and controls after 10 taps
+    if (tapCount >= 9) { // 9 because we increment after this check
+      setShowDebugInfo(true);
+      setShowControls(true);
+      console.log('Debug info and controls activated after 10 taps');
+    }
+    
+    // Reset tap count after 5 seconds of inactivity
+    setTimeout(() => {
+      setTapCount(0);
+    }, 5000);
+  };
+
+  // Generate QR code data for current ad
+  const generateQRData = () => {
+    if (!currentAd) return null;
+    
+    // Create a web URL that will open when scanned
+    // You can replace this with your actual domain
+    const baseUrl = 'https://ads2go.app'; // Replace with your actual domain
+    const qrUrl = `${baseUrl}/ad/${currentAd.adId}?materialId=${materialId}&slotNumber=${slotNumber}&timestamp=${Date.now()}`;
+    
+    return qrUrl;
+  };
+
+  // Generate QR code data for tracking (separate from the URL)
+  const generateQRTrackingData = () => {
+    if (!currentAd) return null;
+    
+    const qrData = {
+      type: 'ad_scan',
+      adId: currentAd.adId,
+      adTitle: currentAd.adTitle,
+      materialId: materialId,
+      slotNumber: slotNumber,
+      timestamp: new Date().toISOString(),
+      action: 'scan'
+    };
+    
+    return JSON.stringify(qrData);
   };
 
   // End ad playback tracking
@@ -263,6 +720,16 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     fetchAds();
   }, [materialId, slotNumber]);
 
+  // Listen for orientation changes
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenData(window);
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
+  // Company ad data (Ads2Go branding)
   // Track ad playback when current ad changes
   useEffect(() => {
     if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
@@ -281,17 +748,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   }, [isOffline]);
 
-  // Company ad data (Ads2Go branding)
-  const companyAd = {
-    adId: 'company-ad',
-    adTitle: 'Ads2Go',
-    mediaFile: 'https://firebasestorage.googleapis.com/v0/b/ads2go-6ead4.firebasestorage.app/o/advertisements%2Fcomapanyads.mp4?alt=media&token=6beecec9-4f14-42fa-bd08-0815b14cdbed',
-    duration: 15
-  };
-
-  // Determine which ad to show
-  const currentAd = currentAdIndex === -1 ? companyAd : (ads[currentAdIndex] || null);
-  
   // Debug logging
   console.log('Current ad:', {
     currentAdIndex,
@@ -420,7 +876,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         </View>
       )}
       
-      <View style={styles.videoContainer}>
+      <TouchableOpacity 
+        style={styles.videoContainer}
+        onPress={handleScreenTap}
+        activeOpacity={1}
+      >
         <Video
           key={currentAd?.adId || 'no-ad'} // Force re-render when switching between user and company ads
           ref={videoRef}
@@ -458,26 +918,82 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           }}
         />
         
-        {/* Minimal Ad Info Overlay */}
+        {/* Minimal Ad Info Overlay - Always visible */}
         <View style={styles.adInfoOverlay}>
           <Text style={styles.adTitle}>{currentAd?.adTitle || 'No Ad'}</Text>
         </View>
 
-        {/* Ad Counter */}
+        {/* Ad Counter - Always visible */}
         <View style={styles.adCounter}>
           <Text style={styles.adCounterText}>
             {currentAdIndex === -1 ? 'Company' : `${currentAdIndex + 1}/${ads.length < 5 ? ads.length + 1 : ads.length}`}
           </Text>
         </View>
-      </View>
 
-      {/* Minimal Controls */}
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.controlButton} onPress={handleRefresh}>
-          <Ionicons name="refresh" size={16} color="#3498db" />
-          <Text style={styles.controlButtonText}>Refresh</Text>
-        </TouchableOpacity>
-      </View>
+        {/* QR Code Overlay - Always visible for user ads */}
+        {currentAd && currentAd.adId !== 'company-ad' && generateQRData() && (
+          <View style={styles.qrOverlay}>
+            <View style={styles.qrContainer}>
+              <QRCode
+                value={generateQRData() || ''}
+                size={80}
+                color="#000000"
+                backgroundColor="#FFFFFF"
+                logoSize={20}
+                logoMargin={2}
+                logoBackgroundColor="transparent"
+              />
+            </View>
+            <Text style={styles.qrLabel}>📱 Scan for more info</Text>
+            <Text style={styles.qrSubLabel}>Tap to learn more</Text>
+          </View>
+        )}
+
+        {/* Debug Info Overlay */}
+        {showDebugInfo && (
+          <View style={styles.debugOverlay}>
+            <View style={styles.debugContainer}>
+              <Text style={styles.debugTitle}>🔧 Debug Information</Text>
+              <Text style={styles.debugText}>Ad ID: {currentAd?.adId || 'N/A'}</Text>
+              <Text style={styles.debugText}>Ad Title: {currentAd?.adTitle || 'N/A'}</Text>
+              <Text style={styles.debugText}>Material ID: {materialId}</Text>
+              <Text style={styles.debugText}>Slot Number: {slotNumber}</Text>
+              <Text style={styles.debugText}>Current Index: {currentAdIndex}</Text>
+              <Text style={styles.debugText}>Total Ads: {ads.length}</Text>
+              <Text style={styles.debugText}>Is Playing: {isPlaying ? 'Yes' : 'No'}</Text>
+              <Text style={styles.debugText}>Network Status: {networkStatus ? 'Online' : 'Offline'}</Text>
+              <Text style={styles.debugText}>Is Offline: {isOffline ? 'Yes' : 'No'}</Text>
+              <Text style={styles.debugText}>Tap Count: {tapCount} (10 taps to activate)</Text>
+              <Text style={styles.debugText}>Controls Visible: {showControls ? 'Yes' : 'No'}</Text>
+              <Text style={styles.debugText}>Ad Start Time: {adStartTime ? adStartTime.toISOString() : 'N/A'}</Text>
+              <Text style={styles.debugText}>Media File: {currentAd?.mediaFile ? 'Present' : 'N/A'}</Text>
+              <Text style={styles.debugText}>Duration: {currentAd?.duration || 'N/A'}s</Text>
+              
+              <TouchableOpacity 
+                style={styles.debugCloseButton}
+                onPress={() => setShowDebugInfo(false)}
+              >
+                <Text style={styles.debugCloseButtonText}>Close Debug Info</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+      </TouchableOpacity>
+
+      {/* Controls */}
+      {showControls && (
+        <View style={styles.controls}>
+          <TouchableOpacity style={styles.controlButton} onPress={handleRefresh}>
+            <Ionicons name="refresh" size={16} color="#3498db" />
+            <Text style={styles.controlButtonText}>Refresh</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={() => setShowControls(false)}>
+            <Ionicons name="eye-off" size={16} color="#3498db" />
+            <Text style={styles.controlButtonText}>Hide Controls</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -609,6 +1125,94 @@ const styles = StyleSheet.create({
   controlButtonText: {
     color: '#3498db',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  qrOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    alignItems: 'center',
+  },
+  qrContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 8,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  qrLabel: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  qrSubLabel: {
+    color: 'white',
+    fontSize: 8,
+    fontWeight: '500',
+    marginTop: 2,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  debugOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  debugContainer: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 20,
+    margin: 20,
+    maxHeight: '80%',
+    width: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  debugTitle: {
+    color: '#3498db',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  debugText: {
+    color: '#ecf0f1',
+    fontSize: 14,
+    marginBottom: 8,
+    fontFamily: 'monospace',
+  },
+  debugCloseButton: {
+    backgroundColor: '#e74c3c',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  debugCloseButtonText: {
+    color: 'white',
+    fontSize: 16,
     fontWeight: '600',
   },
 });

@@ -5,6 +5,7 @@ const Tablet = require('../models/Tablet');
 const Material = require('../models/Material');
 const ScreenTracking = require('../models/screenTracking');
 const AdsDeployment = require('../models/adsDeployment'); // Added AdsDeployment import
+const AnalyticsService = require('../services/analyticsService');
 
 // Test route to verify tablet routes are working
 router.get('/test', (req, res) => {
@@ -241,6 +242,57 @@ router.post('/registerTablet', async (req, res) => {
     }
 
     await tabletTracking.save();
+
+    // Update analytics to link tablet device with deployment analytics
+    try {
+      console.log(`🔄 Updating analytics for tablet device: ${deviceId}`);
+      
+      // Find the deployment for this material
+      const deployment = await AdsDeployment.findOne({ materialId });
+      
+      if (deployment && deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+        // Find the slot that matches the slotNumber
+        const slot = deployment.lcdSlots.find(s => s.slotNumber === slotNumber);
+        
+        if (slot && slot.adId) {
+          // Get the ad details
+          const Ad = require('../models/Ad');
+          const ad = await Ad.findById(slot.adId);
+          
+          if (ad) {
+            // Update analytics with real device data
+            const analyticsData = {
+              carGroupId: material.carGroupId,
+              driverId: material.driverId,
+              adId: slot.adId,
+              userId: ad.userId,
+              adDeploymentId: deployment._id,
+              deviceInfo: {
+                deviceId: deviceId,
+                deviceName: 'Tablet Device',
+                deviceType: 'Tablet',
+                osName: 'Android',
+                osVersion: 'Unknown',
+                platform: 'Android',
+                brand: 'Unknown',
+                modelName: 'Unknown',
+                screenWidth: 0,
+                screenHeight: 0,
+                screenScale: 1
+              },
+              isOnline: true,
+              networkStatus: true
+            };
+            
+            await AnalyticsService.updateAnalytics(deviceId, materialId, slotNumber, analyticsData);
+            console.log(`✅ Analytics updated for tablet device: ${deviceId} -> Slot ${slotNumber} -> Ad ${slot.adId}`);
+          }
+        }
+      }
+    } catch (analyticsError) {
+      console.error('Error updating analytics for tablet:', analyticsError);
+      // Don't fail the registration if analytics update fails
+    }
 
     // Return success response with tablet info
     res.json({

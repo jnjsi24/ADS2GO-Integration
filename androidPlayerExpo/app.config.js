@@ -5,7 +5,7 @@ export default {
     name: "androidPlayereExpo",
     slug: "androidPlayereExpo",
     version: "1.0.0",
-    orientation: "portrait",
+    orientation: "default", // Allow both portrait and landscape
     icon: "./assets/images/icon.png",
     scheme: "androidplayereexpo",
     userInterfaceStyle: "automatic",
