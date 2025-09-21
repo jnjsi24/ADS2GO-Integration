@@ -182,6 +182,12 @@ AdSchema.pre('save', async function (next) {
  * Post-save auto-deployment logic
  */
 AdSchema.post('save', async function (doc) {
+  // Skip deployment if we're in a transaction to prevent conflicts
+  if (this.$session) {
+    console.log('Skipping ad post-save deployment hook during transaction');
+    return;
+  }
+
   if (doc.adStatus === 'ACTIVE' && doc.paymentStatus === 'PAID') {
     const Material = require('./Material');
     const AdsDeployment = require('./adsDeployment');
