@@ -145,7 +145,7 @@ class AdsPanelGraphQLService {
   constructor() {
     // Create HTTP link
     const httpLink = createHttpLink({
-      uri: process.env.REACT_APP_GRAPHQL_URL || 'http://localhost:5000/graphql',
+      uri: process.env.REACT_APP_GRAPHQL_URL || 'https://ads2go-integration-production.up.railway.app/graphql',
     });
 
     // Create auth link that adds the token to every request

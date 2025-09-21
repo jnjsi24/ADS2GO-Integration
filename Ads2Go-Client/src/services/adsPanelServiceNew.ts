@@ -1,5 +1,5 @@
 // AdsPanel API Service - NEW VERSION TO BYPASS CACHE
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ads2go-integration-production.up.railway.app';
 
 // Cache busting - force browser to reload this file
 console.log('🔄 AdsPanelService NEW VERSION loaded - Cache busted at:', new Date().toISOString());
