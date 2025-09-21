@@ -12,7 +12,15 @@ export const GET_ALL_SCREENS = gql`
         carGroupId
         slotNumber
         isOnline
-        currentLocation
+        currentLocation {
+          lat
+          lng
+          timestamp
+          speed
+          heading
+          accuracy
+          address
+        }
         lastSeen
         currentHours
         hoursRemaining
@@ -31,7 +39,13 @@ export const GET_ALL_SCREENS = gql`
             adDuration
             startTime
           }
-          dailyAdStats
+          dailyAdStats {
+            totalAdsPlayed
+            totalDisplayTime
+            uniqueAdsPlayed
+            averageAdDuration
+            adCompletionRate
+          }
           adPerformance
           displayHours
           lastAdPlayed
@@ -54,7 +68,15 @@ export const GET_SCREEN_STATUS = gql`
       carGroupId
       slotNumber
       isOnline
-      currentLocation
+      currentLocation {
+        lat
+        lng
+        timestamp
+        speed
+        heading
+        accuracy
+        address
+      }
       lastSeen
       currentHours
       hoursRemaining
@@ -73,7 +95,13 @@ export const GET_SCREEN_STATUS = gql`
           adDuration
           startTime
         }
-        dailyAdStats
+        dailyAdStats {
+          totalAdsPlayed
+          totalDisplayTime
+          uniqueAdsPlayed
+          averageAdDuration
+          adCompletionRate
+        }
         adPerformance
         displayHours
         lastAdPlayed
@@ -99,7 +127,15 @@ export const GET_COMPLIANCE_REPORT = gql`
         carGroupId
         slotNumber
         isOnline
-        currentLocation
+        currentLocation {
+          lat
+          lng
+          timestamp
+          speed
+          heading
+          accuracy
+          address
+        }
         lastSeen
         currentHours
         hoursRemaining
@@ -118,7 +154,13 @@ export const GET_COMPLIANCE_REPORT = gql`
             adDuration
             startTime
           }
-          dailyAdStats
+          dailyAdStats {
+            totalAdsPlayed
+            totalDisplayTime
+            uniqueAdsPlayed
+            averageAdDuration
+            adCompletionRate
+          }
           adPerformance
           displayHours
           lastAdPlayed
@@ -144,7 +186,13 @@ export const GET_AD_ANALYTICS = gql`
         materialId
         screenType
         currentAd
-        dailyStats
+        dailyStats {
+          totalAdsPlayed
+          totalDisplayTime
+          uniqueAdsPlayed
+          averageAdDuration
+          adCompletionRate
+        }
         totalAdsPlayed
         displayHours
         adPerformance
