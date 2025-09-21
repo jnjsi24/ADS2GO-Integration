@@ -475,6 +475,7 @@ const ScreenTracking: React.FC = () => {
                 <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
               </div>
               <div className="h-96 relative">
+                (
                 <MapView 
                   center={mapCenter}
                   zoom={zoom}
@@ -546,8 +547,8 @@ const ScreenTracking: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                </MapView>)
-            </div>
+                </MapView>
+              </div>
           </div>
                        {/* Screen List */}
              <div className="lg:col-span-1">
