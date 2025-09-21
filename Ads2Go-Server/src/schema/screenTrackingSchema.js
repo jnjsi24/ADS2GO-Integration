@@ -11,18 +11,13 @@ const typeDefs = gql`
   }
 
   """
-  Ad performance data structure
+  Current ad information
   """
-  type AdPerformance {
+  type CurrentAd {
     adId: String
     adTitle: String
-    playCount: Int
-    totalViewTime: Float
-    averageViewTime: Float
-    completionRate: Float
-    firstPlayed: String
-    lastPlayed: String
-    impressions: Int
+    adDuration: Int
+    startTime: String
   }
 
   """
@@ -36,7 +31,7 @@ const typeDefs = gql`
     maintenanceMode: Boolean
     currentAd: CurrentAd
     dailyAdStats: DailyAdStats
-    adPerformance: [AdPerformance]
+    adPerformance: [String]
     displayHours: Float
     lastAdPlayed: String
   }
@@ -119,7 +114,7 @@ const typeDefs = gql`
     dailyStats: DailyAdStats
     totalAdsPlayed: Int
     displayHours: Float
-    adPerformance: [AdPerformance]
+    adPerformance: [String]
     lastAdPlayed: String
     isOnline: Boolean
     lastSeen: String
@@ -166,7 +161,7 @@ const typeDefs = gql`
     date: String
     totalAdsPlayed: Int
     totalDisplayHours: Float
-    adPerformance: [AdPerformance]
+    adPerformance: [String]
     dailyStats: [String]
   }
 
