@@ -2,27 +2,26 @@ const gql = require('graphql-tag');
 
 const typeDefs = gql`
   """
-  Screen filters input for querying screens
+  Current ad information
   """
-  input ScreenFiltersInput {
-    screenType: String
-    status: String
-    materialId: String
+  type CurrentAd {
+    adId: String
+    adTitle: String
+    adDuration: Int
+    startTime: String
   }
 
   """
-  Ad performance tracking data
+  Location data structure
   """
-  type AdPerformance {
-    adId: String
-    adTitle: String
-    playCount: Int
-    totalViewTime: Float
-    averageViewTime: Float
-    completionRate: Float
-    firstPlayed: String
-    lastPlayed: String
-    impressions: Int
+  type LocationData {
+    lat: Float
+    lng: Float
+    timestamp: String
+    speed: Float
+    heading: Float
+    accuracy: Float
+    address: String
   }
 
   """
