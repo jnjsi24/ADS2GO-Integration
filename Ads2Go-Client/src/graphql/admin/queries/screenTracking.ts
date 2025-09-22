@@ -37,6 +37,13 @@ export const GET_ALL_SCREENS = gql`
         isCompliant
         totalDistanceToday
         displayStatus
+        alerts {
+          type
+          message
+          timestamp
+          isResolved
+          severity
+        }
         screenMetrics {
           isDisplaying
           brightness
@@ -101,7 +108,6 @@ export const GET_SCREEN_STATUS = gql`
       lastSeen
       currentHours
       hoursRemaining
-      isCompliant
       totalDistanceToday
       displayStatus
       screenMetrics {
@@ -171,9 +177,15 @@ export const GET_COMPLIANCE_REPORT = gql`
         lastSeen
         currentHours
         hoursRemaining
-        isCompliant
         totalDistanceToday
         displayStatus
+        alerts {
+          type
+          message
+          timestamp
+          isResolved
+          severity
+        }
         screenMetrics {
           isDisplaying
           brightness

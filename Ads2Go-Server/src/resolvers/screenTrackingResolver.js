@@ -172,8 +172,10 @@ const resolvers = {
             lastSeenLocation: lastSeenLocationData, // Virtual field from model
             currentHours: screen.currentHoursToday || 0,
             hoursRemaining: screen.hoursRemaining || 0,
+            isCompliant: screen.isCompliantToday || false,
             totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
             displayStatus: displayStatus,
+            alerts: screen.alerts || [],
             screenMetrics: {
               isDisplaying: screen.screenMetrics?.isDisplaying || false,
               brightness: screen.screenMetrics?.brightness || 50,
@@ -227,8 +229,10 @@ const resolvers = {
           lastSeen: screen.lastSeen,
           currentHours: screen.currentHoursToday || 0,
           hoursRemaining: screen.hoursRemaining || 0,
+          isCompliant: screen.isCompliantToday || false,
           totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
           displayStatus: isActuallyOnline ? 'ONLINE' : 'OFFLINE',
+          alerts: screen.alerts || [],
           screenMetrics: screen.screenMetrics || {
             isDisplaying: false,
             brightness: 50,

@@ -87,6 +87,17 @@ const typeDefs = gql`
   }
 
   """
+  Alert data structure
+  """
+  type Alert {
+    type: String
+    message: String
+    timestamp: String
+    isResolved: Boolean
+    severity: String
+  }
+
+  """
   Screen data structure
   """
   type Screen {
@@ -105,6 +116,7 @@ const typeDefs = gql`
     isCompliant: Boolean
     totalDistanceToday: Float
     displayStatus: String
+    alerts: [Alert]
     screenMetrics: ScreenMetrics
   }
 
