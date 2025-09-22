@@ -6,6 +6,31 @@ interface DeviceStatus {
   materialId?: string;
   isOnline: boolean;
   lastSeen?: string;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
+  lastSeenLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
+  currentHours?: number;
+  hoursRemaining?: number;
+  isCompliant?: boolean;
+  totalDistanceToday?: number;
+  displayStatus?: string;
+  screenMetrics?: any;
+  alerts?: any[];
   [key: string]: any;
 }
 

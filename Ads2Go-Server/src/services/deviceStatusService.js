@@ -82,6 +82,23 @@ class DeviceStatusService {
           
           this.handleConnection(ws, request);
         });
+      } else if (pathname === '/ws/admin-dashboard') {
+        // Admin dashboard WebSocket connection - no device ID required
+        console.log('Admin dashboard WebSocket connection request');
+        
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          ws.isAdmin = true;
+          ws.isAlive = true;
+          ws.lastPong = Date.now();
+          
+          // Set up ping-pong handler
+          ws.on('pong', () => {
+            ws.isAlive = true;
+            ws.lastPong = Date.now();
+          });
+          
+          this.handleAdminConnection(ws, request);
+        });
       } else {
         console.log(`Rejected WebSocket connection to unknown path: ${pathname}`);
         socket.destroy();
@@ -90,6 +107,55 @@ class DeviceStatusService {
     
     this.startPingInterval();
     console.log('WebSocket server initialized');
+  }
+
+  async handleAdminConnection(ws, request) {
+    console.log('🔌 New admin dashboard WebSocket connection');
+    
+    // Store admin connection
+    this.activeConnections.set('admin-dashboard', ws);
+    
+    // Send initial device list to admin
+    try {
+      const allDevices = await this.getAllActiveDevices();
+      ws.send(JSON.stringify({
+        event: 'deviceList',
+        data: { devices: allDevices }
+      }));
+      console.log(`📊 Sent initial device list to admin: ${allDevices.length} devices`);
+    } catch (error) {
+      console.error('Error sending initial device list to admin:', error);
+    }
+    
+    // Handle messages from admin
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message);
+        console.log('Admin message received:', data);
+        
+        // Handle admin-specific messages if needed
+        switch (data.event) {
+          case 'ping':
+            ws.send(JSON.stringify({ event: 'pong', data: { timestamp: Date.now() } }));
+            break;
+          default:
+            console.log('Unknown admin message event:', data.event);
+        }
+      } catch (error) {
+        console.error('Error parsing admin message:', error);
+      }
+    });
+    
+    // Handle admin disconnection
+    ws.on('close', () => {
+      console.log('Admin dashboard WebSocket disconnected');
+      this.activeConnections.delete('admin-dashboard');
+    });
+    
+    ws.on('error', (error) => {
+      console.error('Admin WebSocket error:', error);
+      this.activeConnections.delete('admin-dashboard');
+    });
   }
 
   async handleConnection(ws, request) {
@@ -142,6 +208,19 @@ class DeviceStatusService {
       console.error(`Failed to update session tracking for device ${deviceId}:`, err);
     });
     
+    // Broadcast device update to admin dashboard
+    this.broadcastToAdmin({
+      event: 'deviceUpdate',
+      data: {
+        device: {
+          deviceId,
+          materialId,
+          isOnline: true,
+          lastSeen: new Date().toISOString()
+        }
+      }
+    });
+    
     // Also update with the full device ID if they're different
     if (deviceId !== materialId) {
       // Try to find the full device ID from the database
@@ -166,6 +245,19 @@ class DeviceStatusService {
         // Update DeviceStatusManager with WebSocket disconnection
         console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
+        
+        // Broadcast device disconnection to admin dashboard
+        this.broadcastToAdmin({
+          event: 'deviceUpdate',
+          data: {
+            device: {
+              deviceId,
+              materialId: ws.materialId,
+              isOnline: false,
+              lastSeen: new Date().toISOString()
+            }
+          }
+        });
         
         // Also update with the full device ID if they're different
         if (deviceId !== ws.materialId) {
@@ -437,6 +529,34 @@ class DeviceStatusService {
     });
   }
 
+  async getAllActiveDevices() {
+    try {
+      // Get all screens from database with their current status
+      const screens = await ScreenTracking.find({}).lean();
+      
+      const activeDevices = screens.map(screen => ({
+        deviceId: screen.deviceId,
+        materialId: screen.materialId,
+        isOnline: this.activeConnections.has(screen.deviceId) || this.activeConnections.has(screen.materialId),
+        lastSeen: screen.lastSeen,
+        currentLocation: screen.currentLocation,
+        lastSeenLocation: screen.lastSeenLocation,
+        currentHours: screen.currentHoursToday || 0,
+        hoursRemaining: screen.hoursRemaining || 0,
+        isCompliant: screen.isCompliantToday || false,
+        totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+        displayStatus: screen.screenMetrics?.isDisplaying ? 'ACTIVE' : 'DISPLAY_OFF',
+        screenMetrics: screen.screenMetrics,
+        alerts: screen.alerts || []
+      }));
+      
+      return activeDevices;
+    } catch (error) {
+      console.error('Error getting all active devices:', error);
+      return [];
+    }
+  }
+
   broadcastDeviceList() {
     const deviceList = Array.from(this.activeConnections.entries()).map(([deviceId, ws]) => ({
       deviceId,
@@ -455,6 +575,13 @@ class DeviceStatusService {
       type: 'deviceUpdate',
       device: device
     });
+  }
+
+  broadcastToAdmin(message) {
+    const adminWs = this.activeConnections.get('admin-dashboard');
+    if (adminWs && adminWs.readyState === WebSocket.OPEN) {
+      adminWs.send(JSON.stringify(message));
+    }
   }
 
   startPingInterval() {

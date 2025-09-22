@@ -19,16 +19,17 @@ class WebSocketService {
   }
 
   private getWebSocketUrl(): string {
-    // For now, disable WebSocket connections for admin dashboard
-    // The server's WebSocket endpoint requires a deviceId which admin dashboard doesn't have
-    // Real-time updates should be handled via GraphQL subscriptions instead
-    return '';
+    // Enable WebSocket for admin dashboard
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'wss://ads2go-integration-production.up.railway.app' 
+      : 'ws://localhost:5000';
+    return `${baseUrl}/ws/admin-dashboard`;
   }
 
   private connect(): void {
     const wsUrl = this.getWebSocketUrl();
     if (!wsUrl) {
-      console.log('WebSocket disabled for admin dashboard - using GraphQL polling instead');
+      console.log('WebSocket URL not configured - using GraphQL polling instead');
       return;
     }
     

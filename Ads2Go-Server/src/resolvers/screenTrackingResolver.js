@@ -94,9 +94,9 @@ const resolvers = {
             if (screen.screenMetrics?.maintenanceMode) {
               displayStatus = 'MAINTENANCE';
             } else if (screen.screenMetrics?.isDisplaying) {
-              displayStatus = 'PLAYING';
+              displayStatus = 'ACTIVE';
             } else {
-              displayStatus = 'ONLINE';
+              displayStatus = 'DISPLAY_OFF';
             }
           }
           
@@ -174,6 +174,10 @@ const resolvers = {
             hoursRemaining: screen.hoursRemaining || 0,
             isCompliant: screen.isCompliantToday || false,
             totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+            averageDailyHours: screen.averageDailyHours || 0,
+            complianceRate: screen.complianceRate || 0,
+            totalHoursOnline: screen.totalHoursOnline || 0,
+            totalDistanceTraveled: screen.totalDistanceTraveled || 0,
             displayStatus: displayStatus,
             alerts: screen.alerts || [],
             screenMetrics: {
@@ -227,11 +231,17 @@ const resolvers = {
           isOnline: isActuallyOnline,
           currentLocation: screen.getFormattedLocation ? screen.getFormattedLocation() : screen.currentLocation,
           lastSeen: screen.lastSeen,
+          lastSeenDisplay: screen.lastSeenDisplay,
+          lastSeenLocation: screen.lastSeenLocation,
           currentHours: screen.currentHoursToday || 0,
           hoursRemaining: screen.hoursRemaining || 0,
           isCompliant: screen.isCompliantToday || false,
           totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-          displayStatus: isActuallyOnline ? 'ONLINE' : 'OFFLINE',
+          averageDailyHours: screen.averageDailyHours || 0,
+          complianceRate: screen.complianceRate || 0,
+          totalHoursOnline: screen.totalHoursOnline || 0,
+          totalDistanceTraveled: screen.totalDistanceTraveled || 0,
+          displayStatus: isActuallyOnline ? (screen.screenMetrics?.maintenanceMode ? 'MAINTENANCE' : (screen.screenMetrics?.isDisplaying ? 'ACTIVE' : 'DISPLAY_OFF')) : 'OFFLINE',
           alerts: screen.alerts || [],
           screenMetrics: screen.screenMetrics || {
             isDisplaying: false,

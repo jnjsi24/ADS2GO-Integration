@@ -115,6 +115,10 @@ const typeDefs = gql`
     hoursRemaining: Float
     isCompliant: Boolean
     totalDistanceToday: Float
+    averageDailyHours: Float
+    complianceRate: Float
+    totalHoursOnline: Float
+    totalDistanceTraveled: Float
     displayStatus: String
     alerts: [Alert]
     screenMetrics: ScreenMetrics

@@ -171,12 +171,22 @@ const ScreenTracking: React.FC = () => {
         
         // Enhance with WebSocket real-time status
         const enhancedScreens = screensFromGraphQL.map((screen: any) => {
-          const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
+          const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.materialId === screen.materialId);
 
           return {
             ...screen,
+            // Use WebSocket data if available, otherwise use GraphQL data
             isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
-            alertCount: screen.alerts?.length || 0
+            currentLocation: wsDevice?.currentLocation || screen.currentLocation,
+            lastSeenLocation: wsDevice?.lastSeenLocation || screen.lastSeenLocation,
+            currentHours: wsDevice?.currentHours || screen.currentHours,
+            hoursRemaining: wsDevice?.hoursRemaining || screen.hoursRemaining,
+            isCompliant: wsDevice?.isCompliant || screen.isCompliant,
+            totalDistanceToday: wsDevice?.totalDistanceToday || screen.totalDistanceToday,
+            displayStatus: wsDevice?.displayStatus || screen.displayStatus,
+            screenMetrics: wsDevice?.screenMetrics || screen.screenMetrics,
+            alerts: wsDevice?.alerts || screen.alerts || [],
+            alertCount: (wsDevice?.alerts || screen.alerts || []).length
           };
         });
 
@@ -205,12 +215,22 @@ const ScreenTracking: React.FC = () => {
 
       // Enhance with WebSocket real-time status
       const enhancedScreens = screensFromGraphQL.map((screen: any) => {
-        const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
+        const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.materialId === screen.materialId);
 
         return {
           ...screen,
+          // Use WebSocket data if available, otherwise use GraphQL data
           isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
-          alertCount: screen.alerts?.length || 0
+          currentLocation: wsDevice?.currentLocation || screen.currentLocation,
+          lastSeenLocation: wsDevice?.lastSeenLocation || screen.lastSeenLocation,
+          currentHours: wsDevice?.currentHours || screen.currentHours,
+          hoursRemaining: wsDevice?.hoursRemaining || screen.hoursRemaining,
+          isCompliant: wsDevice?.isCompliant || screen.isCompliant,
+          totalDistanceToday: wsDevice?.totalDistanceToday || screen.totalDistanceToday,
+          displayStatus: wsDevice?.displayStatus || screen.displayStatus,
+          screenMetrics: wsDevice?.screenMetrics || screen.screenMetrics,
+          alerts: wsDevice?.alerts || screen.alerts || [],
+          alertCount: (wsDevice?.alerts || screen.alerts || []).length
         };
       });
 
@@ -727,38 +747,53 @@ const ScreenTracking: React.FC = () => {
                     return false;
                   }).map((screen) => {
                     // Determine which location to use for the marker
-                    const markerLocation = screen.isOnline && screen.currentLocation 
-                      ? screen.currentLocation 
-                      : screen.lastSeenLocation;
+                    let markerLocation = null;
+                    
+                    // Prioritize current location for online devices
+                    if (screen.isOnline && screen.currentLocation && 
+                        isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                      markerLocation = screen.currentLocation;
+                    }
+                    // Fall back to last seen location if current location is not available or invalid
+                    else if (screen.lastSeenLocation && 
+                             isValidCoordinate(screen.lastSeenLocation.lat, screen.lastSeenLocation.lng)) {
+                      markerLocation = screen.lastSeenLocation;
+                    }
+                    
+                    // Skip rendering if no valid location found
+                    if (!markerLocation) {
+                      console.warn(`🔍 No valid location found for screen ${screen.materialId}`);
+                      return null;
+                    }
                     
                     return (
-                    <Marker
-                      key={screen.deviceId}
-                      position={[markerLocation!.lat, markerLocation!.lng] as LatLngTuple}
-                      icon={createPinIcon(getMarkerColor(screen))}
-                      eventHandlers={{
-                        click: () => handleScreenSelect(screen),
-                      }}
-                    >
-                      <Popup>
-                        <div className="p-2">
-                          <h3 className="font-semibold">{screen.materialId}</h3>
-                          <p className="text-sm">Type: {screen.screenType}</p>
-                          <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
-                          <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
-                          <p className="text-sm">
-                            {screen.isOnline ? 'Current Location' : 'Last Known Location'}:
-                          </p>
-                          <p className="text-sm">Address: {markerLocation?.address || 'Unknown'}</p>
-                          {!screen.isOnline && markerLocation?.timestamp && (
-                            <p className="text-sm text-gray-500">
-                              Last seen: {new Date(markerLocation.timestamp).toLocaleString()}
+                      <Marker
+                        key={screen.deviceId}
+                        position={[markerLocation.lat, markerLocation.lng] as LatLngTuple}
+                        icon={createPinIcon(getMarkerColor(screen))}
+                        eventHandlers={{
+                          click: () => handleScreenSelect(screen),
+                        }}
+                      >
+                        <Popup>
+                          <div className="p-2">
+                            <h3 className="font-semibold">{screen.materialId}</h3>
+                            <p className="text-sm">Type: {screen.screenType}</p>
+                            <p className="text-sm">Status: {screen.displayStatus}</p>
+                            <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
+                            <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
+                            <p className="text-sm">
+                              {screen.isOnline ? 'Current Location' : 'Last Known Location'}:
                             </p>
-                          )}
-                        </div>
-                      </Popup>
-                    </Marker>
+                            <p className="text-sm">Address: {markerLocation.address || 'Unknown'}</p>
+                            {!screen.isOnline && markerLocation.timestamp && (
+                              <p className="text-sm text-gray-500">
+                                Last seen: {new Date(markerLocation.timestamp).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                        </Popup>
+                      </Marker>
                     );
                   })}
                   
