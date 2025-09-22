@@ -17,8 +17,7 @@ interface User {
   email: string;
   status: 'active' | 'inactive';
   city: string;
-  adsCount: number;
-  ridersCount: number;
+  ads: { id: string }[];
   isEmailVerified: boolean;
   lastLogin: Date | null;
   createdAt: Date;
@@ -178,8 +177,7 @@ const ManageUsers: React.FC = () => {
           email: user.email || '',
           status: user.isEmailVerified ? 'active' : 'inactive',
           city: city,
-          adsCount: 0,
-          ridersCount: 0,
+          ads: user.ads || [],
           isEmailVerified: user.isEmailVerified || false,
           lastLogin,
           createdAt,
@@ -546,14 +544,10 @@ const ManageUsers: React.FC = () => {
                 </div>
 
                 {/* Counts Section (Ads/Riders) */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="mb-6">
                   <div className="bg-gray-100 p-4 rounded-lg text-center">
                     <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
-                    <p className="text-3xl font-bold text-gray-800">{selectedUser.adsCount}</p>
-                  </div>
-                  <div className="bg-gray-100 p-4 rounded-lg text-center">
-                    <p className="text-sm font-semibold text-gray-600">Riders Count:</p>
-                    <p className="text-3xl font-bold text-gray-800">{selectedUser.ridersCount}</p>
+                    <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
                   </div>
                 </div>
 

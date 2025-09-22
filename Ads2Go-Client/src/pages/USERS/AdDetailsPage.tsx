@@ -19,6 +19,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  reasonForReject?: string;
   createdAt: string;
   startTime: string;  // Campaign start date
   endTime: string;    // Campaign end date
@@ -275,9 +276,17 @@ const AdDetailsPage: React.FC = () => {
           </button>
           
           <div>
-            <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-              {ad.status}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                {ad.status}
+              </span>
+              {ad.status === 'REJECTED' && ad.reasonForReject && (
+                <span className="text-red-600 text-sm flex items-center">
+                  <XCircle size={16} className="mr-1" />
+                  {ad.reasonForReject}
+                </span>
+              )}
+            </div>
             <h2 className="text-5xl font-bold mt-4 mb-2">{ad.title}</h2>
             <p className="text-3xl mt-3 text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
             <p className="text-gray-700 mt-6 mb-5 text-md leading-relaxed">{ad.description}</p>

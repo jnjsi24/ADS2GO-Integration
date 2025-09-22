@@ -547,14 +547,21 @@ const Advertisements: React.FC = () => {
               </div>
 
 
-              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
-                ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
-                ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
-                ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
-                ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
-                'bg-gray-200 text-gray-800'}`}>
-                {formatStatus(ad.status)}
-              </span>
+              <div className="absolute top-2 left-2">
+                <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
+                  ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
+                  ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
+                  ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                  ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
+                  'bg-gray-200 text-gray-800'}`}>
+                  {formatStatus(ad.status)}
+                </span>
+                {ad.status === 'REJECTED' && ad.reasonForReject && (
+                  <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
+                    {ad.reasonForReject}
+                  </div>
+                )}
+              </div>
             </div>
           ))
         ) : (
