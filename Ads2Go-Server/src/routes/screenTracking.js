@@ -310,6 +310,58 @@ router.post('/resetHours', async (req, res) => {
   }
 });
 
+// GET /debug/:deviceId - Debug endpoint to check screen tracking state
+router.get('/debug/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    // Get device status from DeviceStatusManager
+    const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
+
+    res.json({
+      success: true,
+      data: {
+        deviceId: screenTracking.deviceId,
+        materialId: screenTracking.materialId,
+        isOnline: screenTracking.isOnline,
+        currentLocation: screenTracking.currentLocation,
+        lastSeen: screenTracking.lastSeen,
+        lastSeenDisplay: screenTracking.lastSeenDisplay, // Virtual field
+        lastSeenLocation: screenTracking.lastSeenLocation, // Virtual field
+        currentSession: {
+          lastWebSocketStatus: screenTracking.currentSession?.lastWebSocketStatus,
+          lastConnectedAt: screenTracking.currentSession?.lastConnectedAt,
+          lastConnectedLocation: screenTracking.currentSession?.lastConnectedLocation,
+          totalDistanceTraveled: screenTracking.currentSession?.totalDistanceTraveled,
+          totalHoursOnline: screenTracking.currentSession?.totalHoursOnline
+        },
+        deviceStatus: deviceStatus,
+        virtualFields: {
+          currentHoursToday: screenTracking.currentHoursToday,
+          hoursRemaining: screenTracking.hoursRemaining
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
+
   // GET /status/:deviceId - Get current tablet status
   router.get('/status/:deviceId', async (req, res) => {
     try {
@@ -1353,6 +1405,8 @@ router.get('/screens', async (req, res) => {
         isOnline: isActuallyOnline,
         currentLocation: screen.getFormattedLocation(),
         lastSeen: screen.lastSeen,
+        lastSeenDisplay: screen.lastSeenDisplay, // Virtual field from model
+        lastSeenLocation: screen.lastSeenLocation, // Virtual field from model
         currentHours: screen.currentHoursToday,
         hoursRemaining: screen.hoursRemaining,
         totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,

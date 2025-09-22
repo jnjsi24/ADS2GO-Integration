@@ -128,6 +128,20 @@ const resolvers = {
             }
           }
 
+          // Parse last seen location data if it exists
+          let lastSeenLocationData = null;
+          if (screen.lastSeenLocation) {
+            if (typeof screen.lastSeenLocation === 'string') {
+              try {
+                lastSeenLocationData = JSON.parse(screen.lastSeenLocation);
+              } catch (e) {
+                lastSeenLocationData = { address: screen.lastSeenLocation };
+              }
+            } else if (typeof screen.lastSeenLocation === 'object') {
+              lastSeenLocationData = screen.lastSeenLocation;
+            }
+          }
+
           return {
             deviceId: screen.deviceId,
             materialId: screen.materialId,
@@ -137,6 +151,8 @@ const resolvers = {
             isOnline: isActuallyOnline,
             currentLocation: locationData,
             lastSeen: screen.lastSeen,
+            lastSeenDisplay: screen.lastSeenDisplay, // Virtual field from model
+            lastSeenLocation: lastSeenLocationData, // Virtual field from model
             currentHours: screen.currentHoursToday || 0,
             hoursRemaining: screen.hoursRemaining || 0,
             totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
