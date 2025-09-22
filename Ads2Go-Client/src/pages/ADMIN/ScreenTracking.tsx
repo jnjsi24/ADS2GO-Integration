@@ -307,6 +307,20 @@ const ScreenTracking: React.FC = () => {
       });
 
       console.log('📊 Initial screen data loaded from GraphQL:', enhancedScreens);
+      
+      // Debug coordinate validation
+      enhancedScreens.forEach(screen => {
+        if (screen.currentLocation) {
+          console.log(`🔍 Screen ${screen.materialId} coordinates:`, {
+            lat: screen.currentLocation.lat,
+            lng: screen.currentLocation.lng,
+            latType: typeof screen.currentLocation.lat,
+            lngType: typeof screen.currentLocation.lng,
+            isValid: isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+          });
+        }
+      });
+      
       setScreens(enhancedScreens);
     }
   }, [screensData, wsDevices]);
@@ -314,16 +328,36 @@ const ScreenTracking: React.FC = () => {
   // Filter screens based on selected material
   useEffect(() => {
     if (!screens) {
+      console.log('🔍 No screens data available for filtering');
       setFilteredScreens([]);
       return;
     }
 
+    console.log('🔍 Filtering screens:', screens.length, 'screens available');
+    
+    let filtered: ScreenStatus[];
     if (selectedMaterial === 'all') {
-      setFilteredScreens(screens);
+      filtered = screens;
+      console.log('🔍 Showing all screens:', filtered.length);
     } else {
-      const filtered = screens.filter(screen => screen.materialId === selectedMaterial);
-      setFilteredScreens(filtered);
+      filtered = screens.filter(screen => screen.materialId === selectedMaterial);
+      console.log(`🔍 Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
     }
+    
+    // Debug coordinate validation for filtered screens
+    filtered.forEach(screen => {
+      if (screen.currentLocation) {
+        console.log(`🔍 Filtered screen ${screen.materialId} coordinates:`, {
+          lat: screen.currentLocation.lat,
+          lng: screen.currentLocation.lng,
+          latType: typeof screen.currentLocation.lat,
+          lngType: typeof screen.currentLocation.lng,
+          isValid: isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+        });
+      }
+    });
+    
+    setFilteredScreens(filtered);
   }, [screens, selectedMaterial]);
 
   // Initialize data on component mount
@@ -624,20 +658,32 @@ const ScreenTracking: React.FC = () => {
                 >
                   {/* Screen markers - show markers for screens with valid location data (current or last seen) */}
                   {filteredScreens?.filter(screen => {
-                    if (!screen) return false;
+                    if (!screen) {
+                      console.log('🔍 Map marker filter: Screen is null/undefined');
+                      return false;
+                    }
                     
                     // Check current location for online devices
                     if (screen.isOnline && screen.currentLocation && 
                         isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                      console.log(`🔍 Map marker filter: Screen ${screen.materialId} passed online check`);
                       return true;
                     }
                     
                     // Check last seen location for offline devices
                     if (!screen.isOnline && screen.lastSeenLocation && 
                         isValidCoordinate(screen.lastSeenLocation.lat, screen.lastSeenLocation.lng)) {
+                      console.log(`🔍 Map marker filter: Screen ${screen.materialId} passed offline check`);
                       return true;
                     }
                     
+                    console.log(`🔍 Map marker filter: Screen ${screen.materialId} failed all checks`, {
+                      isOnline: screen.isOnline,
+                      hasCurrentLocation: !!screen.currentLocation,
+                      hasLastSeenLocation: !!screen.lastSeenLocation,
+                      currentLocation: screen.currentLocation,
+                      lastSeenLocation: screen.lastSeenLocation
+                    });
                     return false;
                   }).map((screen) => {
                     // Determine which location to use for the marker
