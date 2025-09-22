@@ -630,6 +630,7 @@ const ScreenTracking: React.FC = () => {
               </div>
             </div>
 
+
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center">
                 <div className="p-2 bg-yellow-100 rounded-lg">
