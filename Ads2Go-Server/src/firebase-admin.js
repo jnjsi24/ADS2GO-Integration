@@ -6,12 +6,39 @@ if (!process.env.FIREBASE_PRIVATE_KEY) {
   throw new Error("❌ FIREBASE_PRIVATE_KEY is not defined in .env");
 }
 
-// Build service account object
+// Build service account object with robust private key handling
+let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+// Handle different formatting scenarios
+if (privateKey.includes('\\n')) {
+  // Replace escaped newlines with actual newlines
+  privateKey = privateKey.replace(/\\n/g, '\n');
+} else if (privateKey.includes('\n')) {
+  // Already has actual newlines, keep as is
+  privateKey = privateKey;
+} else {
+  // Try to add newlines at appropriate places (every 64 characters)
+  // This is a fallback for completely mangled keys
+  privateKey = privateKey.replace(/(.{64})/g, '$1\n');
+}
+
+// Remove any duplicate variable assignments
+if (privateKey.includes('FIREBASE_PRIVATE_KEY=')) {
+  privateKey = privateKey.replace(/^FIREBASE_PRIVATE_KEY=/, '');
+}
+
+// Clean up any extra quotes
+privateKey = privateKey.replace(/^"/, '').replace(/"$/, '');
+
+console.log('🔍 Private key length:', privateKey.length);
+console.log('🔍 Private key starts with:', privateKey.substring(0, 30));
+console.log('🔍 Private key ends with:', privateKey.substring(privateKey.length - 30));
+
 const serviceAccount = {
   type: "service_account",
   project_id: process.env.FIREBASE_PROJECT_ID,
   private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  private_key: privateKey,
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
   client_id: process.env.FIREBASE_CLIENT_ID,
   auth_uri: process.env.FIREBASE_AUTH_URI,
