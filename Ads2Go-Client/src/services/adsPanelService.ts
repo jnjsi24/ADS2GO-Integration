@@ -1,5 +1,6 @@
 // AdsPanel API Service
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ads2go-integration-production.up.railway.app';
+import { AdsPanelGraphQLService } from './adsPanelGraphQLService';
 
 // Cache busting - force browser to reload this file
 console.log('🔄 AdsPanelService loaded - Cache busted at:', new Date().toISOString());
@@ -94,20 +95,27 @@ class AdsPanelService {
     return response.json();
   }
 
-  // Get all screens with filtering
+  // Get all screens with filtering using GraphQL
   async getScreens(filters?: {
     screenType?: string;
     status?: string;
     materialId?: string;
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
-    const queryParams = new URLSearchParams();
-    if (filters?.screenType) queryParams.append('screenType', filters.screenType);
-    if (filters?.status) queryParams.append('status', filters.status);
-    if (filters?.materialId) queryParams.append('materialId', filters.materialId);
-
-    const endpoint = `/screenTracking/screens${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await this.makeRequest(endpoint);
-    return response.data;
+    try {
+      // Use the existing GraphQL service instead of REST
+      const graphqlService = new AdsPanelGraphQLService();
+      return await graphqlService.getScreens(filters);
+    } catch (error) {
+      console.error('❌ Error in getScreens:', error);
+      // Return empty data in case of error to prevent UI crash
+      return {
+        screens: [],
+        totalScreens: 0,
+        onlineScreens: 0,
+        displayingScreens: 0,
+        maintenanceScreens: 0
+      };
+    }
   }
 
   // Get compliance report

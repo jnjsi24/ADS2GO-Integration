@@ -307,11 +307,15 @@ ScreenTrackingSchema.virtual('lastSeenDisplay').get(function() {
   
   // If we have a last connected time, use that
   if (this.currentSession && this.currentSession.lastConnectedAt) {
-    return this.currentSession.lastConnectedAt;
+    return new Date(this.currentSession.lastConnectedAt).toISOString();
   }
   
   // Fallback to the general lastSeen
-  return this.lastSeen;
+  if (this.lastSeen) {
+    return new Date(this.lastSeen).toISOString();
+  }
+  
+  return null;
 });
 
 // Virtual for last seen location (only when offline)

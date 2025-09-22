@@ -222,15 +222,15 @@ const ScreenTracking: React.FC = () => {
     }
   }, [screensData, wsDevices, screensError]);
 
-  // Set up auto-refresh interval (every 30 seconds like ads panel)
+  // Set up auto-refresh interval (every 5 seconds for real-time updates)
   useEffect(() => {
     // Initial auto-refresh after component mounts
     const initialTimeout = setTimeout(() => {
       autoRefreshData();
-    }, 5000); // Start auto-refresh after 5 seconds
+    }, 2000); // Start auto-refresh after 2 seconds
 
     // Set up interval for continuous auto-refresh
-    const interval = setInterval(autoRefreshData, 30000); // Every 30 seconds
+    const interval = setInterval(autoRefreshData, 5000); // Every 5 seconds
 
     return () => {
       clearTimeout(initialTimeout);
@@ -317,7 +317,19 @@ const ScreenTracking: React.FC = () => {
           lastSeen: screen.lastSeen,
           lastSeenDisplay: screen.lastSeenDisplay,
           lastSeenDisplayType: typeof screen.lastSeenDisplay,
-          lastSeenDisplayValue: screen.lastSeenDisplay
+          lastSeenDisplayValue: screen.lastSeenDisplay,
+          currentLocationCoords: screen.currentLocation ? {
+            lat: screen.currentLocation.lat,
+            lng: screen.currentLocation.lng,
+            latType: typeof screen.currentLocation.lat,
+            lngType: typeof screen.currentLocation.lng
+          } : null,
+          lastSeenLocationCoords: screen.lastSeenLocation ? {
+            lat: screen.lastSeenLocation.lat,
+            lng: screen.lastSeenLocation.lng,
+            latType: typeof screen.lastSeenLocation.lat,
+            lngType: typeof screen.lastSeenLocation.lng
+          } : null
         });
         
         if (screen.currentLocation) {
@@ -451,7 +463,7 @@ const ScreenTracking: React.FC = () => {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Screen Tracking Dashboard</h1>
-              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
+                <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance - Updates every 5 seconds</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -833,14 +845,39 @@ const ScreenTracking: React.FC = () => {
                       <div className="flex justify-between">
                         <span>Last Seen:</span>
                         <span className="font-medium">
-                          {screen.lastSeenDisplay && screen.lastSeenDisplay !== 'Invalid Date' && new Date(screen.lastSeenDisplay).toString() !== 'Invalid Date' 
-                            ? new Date(screen.lastSeenDisplay).toLocaleTimeString()
-                            : screen.isOnline 
-                              ? 'Now (Online)' 
-                              : screen.lastSeen && screen.lastSeen !== 'Invalid Date' && new Date(screen.lastSeen).toString() !== 'Invalid Date'
-                                ? new Date(screen.lastSeen).toLocaleTimeString()
-                                : 'Never'
-                          }
+                          {(() => {
+                            // Try lastSeenDisplay first
+                            if (screen.lastSeenDisplay) {
+                              try {
+                                const date = new Date(screen.lastSeenDisplay);
+                                if (!isNaN(date.getTime())) {
+                                  return date.toLocaleTimeString();
+                                }
+                              } catch (e) {
+                                console.log('Error parsing lastSeenDisplay:', screen.lastSeenDisplay, e);
+                              }
+                            }
+                            
+                            // If online, show "Now (Online)"
+                            if (screen.isOnline) {
+                              return 'Now (Online)';
+                            }
+                            
+                            // Try lastSeen as fallback
+                            if (screen.lastSeen) {
+                              try {
+                                const date = new Date(screen.lastSeen);
+                                if (!isNaN(date.getTime())) {
+                                  return date.toLocaleTimeString();
+                                }
+                              } catch (e) {
+                                console.log('Error parsing lastSeen:', screen.lastSeen, e);
+                              }
+                            }
+                            
+                            // Default fallback
+                            return 'Never';
+                          })()}
                         </span>
                       </div>
                     </div>

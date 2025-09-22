@@ -102,10 +102,19 @@ const resolvers = {
           
           // Get formatted location data (same as REST API)
           let locationData = null;
-          if (screen.getFormattedLocation) {
-            locationData = screen.getFormattedLocation();
-          } else if (screen.currentLocation) {
-            if (typeof screen.currentLocation === 'string') {
+          if (screen.currentLocation) {
+            // Check if it's a GeoJSON Point format (from database)
+            if (screen.currentLocation.type === 'Point' && screen.currentLocation.coordinates) {
+              locationData = {
+                lat: screen.currentLocation.coordinates[1], // latitude
+                lng: screen.currentLocation.coordinates[0], // longitude
+                timestamp: screen.currentLocation.timestamp,
+                speed: screen.currentLocation.speed,
+                heading: screen.currentLocation.heading,
+                accuracy: screen.currentLocation.accuracy,
+                address: screen.currentLocation.address
+              };
+            } else if (typeof screen.currentLocation === 'string') {
               try {
                 locationData = JSON.parse(screen.currentLocation);
               } catch (e) {
@@ -374,6 +383,53 @@ const resolvers = {
         totalDistance: 0,
         totalHours: 0
       };
+    },
+
+    getAdAnalytics: async (_, { date, materialId }, { admin, superAdmin }) => {
+      if (!admin && !superAdmin) {
+        throw new Error('Not authorized');
+      }
+
+      try {
+        let query = { isActive: true };
+        if (materialId) {
+          query.materialId = materialId;
+        }
+
+        const allTablets = await ScreenTracking.find(query);
+        
+        const analytics = allTablets.map(tablet => ({
+          deviceId: tablet.deviceId,
+          materialId: tablet.materialId,
+          screenType: tablet.screenType,
+          currentAd: tablet.screenMetrics?.currentAd || null,
+          dailyStats: tablet.screenMetrics?.dailyAdStats || null,
+          totalAdsPlayed: tablet.screenMetrics?.adPlayCount || 0,
+          displayHours: tablet.screenMetrics?.displayHours || 0,
+          adPerformance: tablet.screenMetrics?.adPerformance || [],
+          lastAdPlayed: tablet.screenMetrics?.lastAdPlayed || null,
+          isOnline: tablet.isOnline,
+          lastSeen: tablet.lastSeen
+        }));
+
+        // Calculate summary statistics
+        const summary = {
+          totalDevices: analytics.length,
+          onlineDevices: analytics.filter(a => a.isOnline).length,
+          totalAdsPlayed: analytics.reduce((sum, a) => sum + a.totalAdsPlayed, 0),
+          totalDisplayHours: analytics.reduce((sum, a) => sum + a.displayHours, 0),
+          averageAdsPerDevice: analytics.length > 0 ? analytics.reduce((sum, a) => sum + a.totalAdsPlayed, 0) / analytics.length : 0,
+          averageDisplayHours: analytics.length > 0 ? analytics.reduce((sum, a) => sum + a.displayHours, 0) / analytics.length : 0
+        };
+
+        return {
+          summary: summary,
+          devices: analytics
+        };
+      } catch (error) {
+        console.error('Error in getAdAnalytics:', error);
+        throw new Error('Failed to fetch ad analytics');
+      }
     },
 
     getDeviceAdAnalytics: async (_, { deviceId, date }, { admin, superAdmin }) => {

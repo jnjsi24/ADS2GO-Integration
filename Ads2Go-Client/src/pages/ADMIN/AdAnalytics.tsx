@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Play, Pause, Eye, Clock, TrendingUp } from 'lucide-react';
+import { useQuery } from '@apollo/client';
+import { GET_AD_ANALYTICS } from '../../graphql/admin/queries/screenTracking';
 
 interface AdPerformance {
   adId: string;
@@ -65,39 +67,25 @@ interface AdAnalyticsData {
 }
 
 const AdAnalytics: React.FC = () => {
-  const [analytics, setAnalytics] = useState<AdAnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
 
+  // Use GraphQL query instead of REST API
+  const { data: analyticsData, loading, error, refetch } = useQuery(GET_AD_ANALYTICS, {
+    fetchPolicy: 'cache-first'
+  });
+
+  const analytics = analyticsData?.getAdAnalytics || null;
+  const errorMessage = error ? 'Network error: Unable to fetch analytics' : null;
+
   const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch('https://ads2go-integration-production.up.railway.app/screenTracking/adAnalytics');
-      const data = await response.json();
-      
-      if (data.success) {
-        setAnalytics(data.data);
-      } else {
-        setError(data.message || 'Failed to fetch analytics');
-      }
-    } catch (err) {
-      setError('Network error: Unable to fetch analytics');
-      console.error('Error fetching analytics:', err);
-    } finally {
-      setLoading(false);
-    }
+    await refetch();
   };
 
+  // Auto-refresh every 5 seconds for real-time updates
   useEffect(() => {
-    fetchAnalytics();
-    
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchAnalytics, 30000);
+    const interval = setInterval(fetchAnalytics, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAnalytics]);
 
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -138,11 +126,11 @@ const AdAnalytics: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <p className="text-red-500 mb-4">{error}</p>
+          <p className="text-red-500 mb-4">{errorMessage}</p>
           <Button onClick={fetchAnalytics} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry
