@@ -135,6 +135,7 @@ async function startServer() {
         'http://localhost',
         'http://127.0.0.1',
         'http://192.168.1.5:3000',
+        'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
       ];
@@ -173,6 +174,9 @@ async function startServer() {
   
   // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  
+  // Serve public files statically
+  app.use(express.static(path.join(__dirname, '..', 'public')));
   
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);

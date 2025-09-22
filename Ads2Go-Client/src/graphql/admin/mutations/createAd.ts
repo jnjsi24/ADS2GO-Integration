@@ -6,6 +6,7 @@ export const CREATE_AD = gql`
       id
       title
       description
+      website
       adType
       adFormat
       materialId {

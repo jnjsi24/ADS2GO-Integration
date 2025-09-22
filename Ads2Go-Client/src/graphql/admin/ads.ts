@@ -541,6 +541,7 @@ export interface CreateAdInput {
   planId: string;
   title: string;
   description?: string;
+  website?: string;
   adFormat: string;
   mediaFile: string;
   price: number;

@@ -133,6 +133,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       }
       
       console.log(`📱 Tracking QR scan: ${adTitle}`);
+      console.log(`📱 Current ad data:`, {
+        adId: currentAd?.adId,
+        adTitle: currentAd?.adTitle,
+        website: (currentAd as any)?.website,
+        materialId,
+        slotNumber
+      });
       
       // Get current GPS location
       let gpsData = null;
@@ -187,14 +194,22 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Get registration data
       const registrationData = await tabletRegistrationService.getRegistrationData();
       
+      // Generate QR data first
+      const qrData = generateQRData();
+      
+      // Calculate the correct slot number for this ad
+      const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
+      
       // Send QR scan data to server with GPS and device info
       const qrScanData = {
         adId,
         adTitle,
         materialId: materialId || 'unknown',
-        slotNumber: slotNumber || 1,
+        slotNumber: adSlotNumber,
         timestamp: new Date().toISOString(),
-        qrCodeUrl: generateQRData(),
+        qrCodeUrl: qrData, // The QR code URL
+        website: (currentAd as any)?.website || null, // Include advertiser website
+        redirectUrl: qrData, // The actual URL the QR code points to (same as qrCodeUrl)
         deviceInfo,
         gpsData,
         registrationData: registrationData ? {
@@ -211,7 +226,19 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         }
       };
 
-      console.log('QR scan data to send:', qrScanData);
+      // Enhanced QR scan logging
+      console.log('\n🚨 ANDROID APP: QR SCAN INITIATED 🚨');
+      console.log('=====================================');
+      console.log(`📱 Ad: ${adTitle} (${adId})`);
+      console.log(`🏷️  Material: ${materialId} - Slot: ${slotNumber}`);
+      console.log(`🌐 QR URL: ${qrData}`);
+      console.log(`📱 Device: ${deviceInfo.deviceId}`);
+      console.log(`⏰ Time: ${new Date().toLocaleString()}`);
+      console.log('=====================================\n');
+      
+      console.log('📤 QR scan data to send:', qrScanData);
+      console.log('📤 Website in QR scan data:', qrScanData.website);
+      console.log('📤 Redirect URL in QR scan data:', qrScanData.redirectUrl);
 
       // Send to QR scan tracking endpoint
       const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
@@ -224,52 +251,26 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
       if (response.ok) {
         const result = await response.json();
-        console.log(`✅ QR scan tracked successfully: ${adTitle}`, result);
+        console.log('\n🎉 ANDROID APP: QR SCAN SUCCESS! 🎉');
+        console.log('=====================================');
+        console.log(`✅ Ad: ${adTitle}`);
+        console.log(`✅ Material: ${materialId} - Slot: ${slotNumber}`);
+        console.log(`✅ Device: ${deviceInfo.deviceId}`);
+        console.log(`✅ Time: ${new Date().toLocaleString()}`);
+        console.log('=====================================\n');
+        console.log('📊 Server Response:', result);
       } else {
-        console.error(`❌ Failed to track QR scan: ${response.status} ${response.statusText}`);
+        console.error('\n❌ ANDROID APP: QR SCAN FAILED! ❌');
+        console.error('=====================================');
+        console.error(`❌ Ad: ${adTitle}`);
+        console.error(`❌ Status: ${response.status} ${response.statusText}`);
+        console.error(`❌ Time: ${new Date().toLocaleString()}`);
+        console.error('=====================================\n');
       }
       
-      // Also send to analytics service
-      const analyticsQRData = {
-        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-        materialId: materialId || 'unknown',
-        slotNumber: slotNumber || 1,
-        qrScanData: {
-          adId: adId,
-          adTitle: adTitle,
-          scanTimestamp: new Date().toISOString(),
-          qrCodeUrl: generateQRData(),
-          userAgent: 'Android App',
-          deviceType: deviceInfo.deviceType,
-          browser: 'Android App',
-          operatingSystem: deviceInfo.osName,
-          ipAddress: null,
-          country: null,
-          city: null,
-          location: gpsData ? {
-            type: 'Point',
-            coordinates: [gpsData.lng, gpsData.lat]
-          } : null,
-          timeOnPage: 0,
-          converted: false,
-          conversionType: null,
-          conversionValue: 0
-        }
-      };
-      
-      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-qr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(analyticsQRData),
-      });
-      
-      if (analyticsResponse.ok) {
-        console.log(`✅ QR scan tracked in analytics: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track QR scan in analytics: ${adTitle}`);
-      }
+      // QR scan is already tracked in the /ads/qr-scan endpoint above
+      // No need for duplicate analytics call - everything is handled in analytics collection
+      console.log(`✅ QR scan fully tracked via /ads/qr-scan endpoint: ${adTitle}`);
     } catch (error) {
       console.error('Error tracking QR scan:', error);
     }
@@ -338,12 +339,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Get registration data
       const registrationData = await tabletRegistrationService.getRegistrationData();
       
+      // Calculate the correct slot number for this ad
+      const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
+      
       // Send QR display data to server
       const qrDisplayData = {
         adId,
         adTitle,
         materialId: materialId || 'unknown',
-        slotNumber: slotNumber || 1,
+        slotNumber: adSlotNumber,
         timestamp: new Date().toISOString(),
         qrCodeUrl: generateQRData(),
         userAgent: 'Android App - QR Display',
@@ -381,48 +385,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         console.error(`❌ Failed to track QR display: ${response.status} ${response.statusText}`);
       }
       
-      // Also send to analytics service
-      const analyticsQRData = {
-        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-        materialId: materialId || 'unknown',
-        slotNumber: slotNumber || 1,
-        qrScanData: {
-          adId: adId,
-          adTitle: adTitle,
-          scanTimestamp: new Date().toISOString(),
-          qrCodeUrl: generateQRData(),
-          userAgent: 'Android App - QR Display',
-          deviceType: deviceInfo.deviceType,
-          browser: 'Android App',
-          operatingSystem: deviceInfo.osName,
-          ipAddress: null,
-          country: null,
-          city: null,
-          location: gpsData ? {
-            type: 'Point',
-            coordinates: [gpsData.lng, gpsData.lat]
-          } : null,
-          timeOnPage: 0,
-          converted: false,
-          conversionType: null,
-          conversionValue: 0
-        }
-      };
-      
-      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-qr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(analyticsQRData),
-      });
-      
-      if (analyticsResponse.ok) {
-        console.log(`✅ QR display tracked in analytics: ${adTitle}`);
-      } else {
-        const errorText = await analyticsResponse.text();
-        console.log(`❌ Failed to track QR display in analytics: ${adTitle} - ${errorText}`);
-      }
+      // QR display is already tracked in the /ads/qr-scan endpoint above
+      // No need for duplicate analytics call - everything is handled in analytics collection
+      console.log(`✅ QR display fully tracked via /ads/qr-scan endpoint: ${adTitle}`);
     } catch (error) {
       console.error('Error tracking QR display:', error);
     }
@@ -444,23 +409,29 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   
   useEffect(() => {
     if (currentAd && currentAd.adId !== 'company-ad' && !isOffline && !trackedAds.has(currentAd.adId)) {
-      // Track QR code display with a small delay to ensure ad is fully loaded
-      const timer = setTimeout(() => {
-        trackQRDisplay(currentAd.adId, currentAd.adTitle);
-        setTrackedAds(prev => new Set(prev).add(currentAd.adId));
-      }, 3000); // 3 second delay
-
-      return () => clearTimeout(timer);
+      // Note: QR display tracking is now handled by the tracking page when users scan
+      console.log(`📱 QR code displayed for ad: ${currentAd.adTitle}`);
+      setTrackedAds(prev => new Set(prev).add(currentAd.adId));
     }
   }, [currentAd?.adId, isOffline, trackedAds]);
 
-  // Handle QR code interaction (when someone scans it)
+  // Handle QR code interaction (for debugging - simulates when someone scans the QR code)
   const handleQRInteraction = () => {
     if (currentAd) {
-      console.log(`QR code scanned for ad: ${currentAd.adTitle}`);
-      trackQRScan(currentAd.adId, currentAd.adTitle);
+      console.log(`🔍 DEBUG: Simulating QR code scan for ad: ${currentAd.adTitle}`);
+      console.log(`🔍 Ad ID: ${currentAd.adId}`);
+      console.log(`🔍 Material ID: ${materialId}`);
+      console.log(`🔍 Slot Number: ${slotNumber}`);
+      console.log(`🔍 Website: ${(currentAd as any).website}`);
+      console.log(`🔍 QR URL: ${generateQRData()}`);
+      
+      // Note: QR scan tracking is now handled by the tracking page, not the Android app
+      console.log('🔍 QR scan will be tracked when user visits the tracking URL');
+    } else {
+      console.log('🔍 DEBUG: No current ad available for QR scan simulation');
     }
   };
+
 
   // Handle screen tap to show controls and debug info
   const handleScreenTap = () => {
@@ -492,12 +463,32 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const generateQRData = () => {
     if (!currentAd) return null;
     
-    // Create a web URL that will open when scanned
-    // You can replace this with your actual domain
-    const baseUrl = 'https://ads2go.app'; // Replace with your actual domain
-    const qrUrl = `${baseUrl}/ad/${currentAd.adId}?materialId=${materialId}&slotNumber=${slotNumber}&timestamp=${Date.now()}`;
+    // Calculate the correct slot number for this ad
+    const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
     
-    return qrUrl;
+    console.log('🔍 Generating QR data for ad:', {
+      adId: currentAd.adId,
+      adTitle: currentAd.adTitle,
+      website: (currentAd as any).website,
+      hasWebsite: !!(currentAd as any).website,
+      adSlotNumber: adSlotNumber,
+      currentAdIndex: currentAdIndex
+    });
+    
+    // Use the tracking server to track QR scans
+    const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
+      ad_id: currentAd.adId,
+      ad_title: currentAd.adTitle || `Ad ${currentAd.adId}`,
+      material_id: materialId,
+      slot_number: adSlotNumber.toString(),
+      website: (currentAd as any).website || 'https://ads2go.app',
+      redirect_url: (currentAd as any).website || 'https://ads2go.app',
+      scan_time: Date.now().toString()
+    }).toString();
+    
+    console.log('🔍 Using tracking URL:', trackingUrl);
+    
+    return trackingUrl;
   };
 
   // Generate QR code data for tracking (separate from the URL)
@@ -510,6 +501,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       adTitle: currentAd.adTitle,
       materialId: materialId,
       slotNumber: slotNumber,
+      website: (currentAd as any).website || null,
+      redirectUrl: generateQRData(), // The actual URL the QR code points to
       timestamp: new Date().toISOString(),
       action: 'scan'
     };
@@ -936,7 +929,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             <View style={styles.qrContainer}>
               <QRCode
                 value={generateQRData() || ''}
-                size={80}
+                size={100}
                 color="#000000"
                 backgroundColor="#FFFFFF"
                 logoSize={20}
@@ -944,8 +937,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 logoBackgroundColor="transparent"
               />
             </View>
-            <Text style={styles.qrLabel}>📱 Scan for more info</Text>
-            <Text style={styles.qrSubLabel}>Tap to learn more</Text>
+            <Text style={styles.qrLabel}>📱 Scan with your phone</Text>
+            <Text style={styles.qrSubLabel}>Point your camera at this QR code</Text>
           </View>
         )}
 
@@ -957,6 +950,16 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               <Text style={styles.debugText}>Ad ID: {currentAd?.adId || 'N/A'}</Text>
               <Text style={styles.debugText}>Ad Title: {currentAd?.adTitle || 'N/A'}</Text>
               <Text style={styles.debugText}>Material ID: {materialId}</Text>
+              
+              {/* Debug QR Scan Button */}
+              {currentAd && currentAd.adId !== 'company-ad' && (
+                <TouchableOpacity 
+                  style={styles.debugButton} 
+                  onPress={handleQRInteraction}
+                >
+                  <Text style={styles.debugButtonText}>🔍 Test QR Scan Tracking</Text>
+                </TouchableOpacity>
+              )}
               <Text style={styles.debugText}>Slot Number: {slotNumber}</Text>
               <Text style={styles.debugText}>Current Index: {currentAdIndex}</Text>
               <Text style={styles.debugText}>Total Ads: {ads.length}</Text>
@@ -1201,6 +1204,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 8,
     fontFamily: 'monospace',
+  },
+  debugButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginVertical: 10,
+    alignItems: 'center',
+  },
+  debugButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   debugCloseButton: {
     backgroundColor: '#e74c3c',

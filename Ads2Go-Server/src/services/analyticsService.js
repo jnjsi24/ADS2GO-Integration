@@ -1,5 +1,5 @@
+const mongoose = require('mongoose');
 const Analytics = require('../models/analytics');
-const QRScanTracking = require('../models/qrScanTracking');
 const ScreenTracking = require('../models/screenTracking');
 const MaterialTracking = require('../models/materialTracking');
 
@@ -8,24 +8,20 @@ class AnalyticsService {
   // Update analytics when Android player sends data
   static async updateAnalytics(deviceId, materialId, slotNumber, data) {
     try {
-      let analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
+      // Always prioritize active deployment devices for analytics updates
+      let analytics = await Analytics.findOne({ 
+        materialId, 
+        slotNumber, 
+        deviceId: { $regex: '^DEPLOYMENT-' } 
+      });
       
-      if (!analytics) {
-        // Check if there's a deployment placeholder analytics record
-        const deploymentAnalytics = await Analytics.findOne({
-          materialId,
-          slotNumber,
-          'deviceInfo.deviceId': { $regex: `DEPLOYMENT-.*-${slotNumber}$` }
-        });
+      if (analytics) {
+        console.log(`✅ Found active deployment device for analytics update: ${analytics.deviceId}`);
+      } else {
+        // Only create new document if no deployment device exists
+        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
         
-        if (deploymentAnalytics) {
-          // Update the deployment placeholder with real device data
-          console.log(`🔄 Updating deployment placeholder with real device data: ${deviceId}`);
-          analytics = deploymentAnalytics;
-          analytics.deviceId = deviceId;
-          analytics.deviceInfo.deviceId = deviceId;
-        } else {
-          // Create new analytics record
+        if (!analytics) {
           analytics = new Analytics({
             deviceId,
             materialId,
@@ -52,7 +48,9 @@ class AnalyticsService {
             }
           });
         }
-      } else {
+      }
+      
+      if (analytics) {
         // Update existing analytics
         analytics.isOnline = data.isOnline || false;
         analytics.lastUpdated = new Date();
@@ -93,17 +91,29 @@ class AnalyticsService {
   // Track ad playback
   static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
     try {
-      let analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
+      // Always prioritize active deployment devices for ad playback tracking
+      let analytics = await Analytics.findOne({ 
+        materialId, 
+        slotNumber, 
+        deviceId: { $regex: '^DEPLOYMENT-' } 
+      });
       
-      if (!analytics) {
-        analytics = new Analytics({
-          deviceId,
-          materialId,
-          slotNumber,
-          adPlaybacks: [],
-          totalAdPlayTime: 0,
-          totalAdImpressions: 0
-        });
+      if (analytics) {
+        console.log(`✅ Found active deployment device for ad playback: ${analytics.deviceId}`);
+      } else {
+        // Only create new document if no deployment device exists
+        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
+        
+        if (!analytics) {
+          analytics = new Analytics({
+            deviceId,
+            materialId,
+            slotNumber,
+            adPlaybacks: [],
+            totalAdPlayTime: 0,
+            totalAdImpressions: 0
+          });
+        }
       }
       
       await analytics.addAdPlayback(adId, adTitle, adDuration, viewTime);
@@ -145,16 +155,24 @@ class AnalyticsService {
       
       await analytics.addQRScan(qrScanData);
       
-      // Also update QR scan tracking collection
-      const qrScan = new QRScanTracking(qrScanData);
-      await qrScan.save();
+      // QR scan tracking is now handled directly in the ads.js route
+      // No need to create separate QRScanTracking documents here
       
-      // Update material tracking
-      await MaterialTracking.findOneAndUpdate(
-        { materialId },
-        { $inc: { qrCodeScans: 1 } },
-        { upsert: false }
-      );
+      // Update material tracking - skip if materialId is not a valid ObjectId
+      try {
+        // Check if materialId is a valid ObjectId format
+        if (mongoose.Types.ObjectId.isValid(materialId)) {
+          await MaterialTracking.findOneAndUpdate(
+            { materialId },
+            { $inc: { qrCodeScans: 1 } },
+            { upsert: false }
+          );
+        } else {
+          console.log(`Skipping MaterialTracking update - materialId "${materialId}" is not a valid ObjectId`);
+        }
+      } catch (materialTrackingError) {
+        console.log('Could not update material tracking QR count:', materialTrackingError.message);
+      }
       
       return analytics;
     } catch (error) {
@@ -520,19 +538,8 @@ class AnalyticsService {
         }
       }
       
-      // Sync from QRScanTracking
-      const qrScans = await QRScanTracking.find({});
-      for (const scan of qrScans) {
-        await Analytics.findOneAndUpdate(
-          { materialId: scan.materialId },
-          {
-            $push: { qrScans: scan },
-            $inc: { totalQRScans: 1 },
-            $set: { lastQRScan: scan.scanTimestamp }
-          },
-          { upsert: true }
-        );
-      }
+      // QRScanTracking sync removed - QR scans are now handled directly in the ads.js route
+      // No need to sync from QRScanTracking collection as it's deprecated
       
       console.log('Analytics sync completed successfully');
       return { success: true, message: 'Analytics sync completed' };

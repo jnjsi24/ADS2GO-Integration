@@ -59,6 +59,7 @@ export interface Ad {
   adTitle: string;
   adDescription: string;
   duration: number;
+  website?: string; // Optional advertiser website
   createdAt: string;
   updatedAt: string;
 }

@@ -37,6 +37,7 @@ type AdsPlan = {
 type AdvertisementForm = {
   title: string;
   description: string;
+  website?: string; // Optional advertiser website
   adType?: 'DIGITAL' | 'NON_DIGITAL';
   planId: string;
   materialId: string;
@@ -109,6 +110,7 @@ const nextMonth = () => {
   const [formData, setFormData] = useState<AdvertisementForm>({
     title: '',
     description: '',
+    website: '', // Optional advertiser website
     planId: '',
     materialId: '',
     startDate: new Date().toISOString().split('T')[0], // Default to today's date
@@ -121,6 +123,7 @@ const nextMonth = () => {
     material?: string; 
     title?: string; 
     description?: string; 
+    website?: string;
     startDate?: string; 
     mediaFile?: string; 
     general?: string;
@@ -366,6 +369,14 @@ const nextMonth = () => {
       newErrors.description = 'Please fill out this field';
     }
 
+    // Website validation (optional but must be valid URL if provided)
+    if (formData.website && formData.website.trim()) {
+      const urlPattern = /^https?:\/\/.+/;
+      if (!urlPattern.test(formData.website.trim())) {
+        newErrors.website = 'Please enter a valid URL starting with http:// or https://';
+      }
+    }
+
     if (!formData.mediaFile) {
       newErrors.mediaFile = 'Please upload a media file';
     }
@@ -493,6 +504,7 @@ const nextMonth = () => {
       const input = {
         title: formData.title,
         description: formData.description,
+        website: formData.website || null, // Include website if provided
         materialId: formData.materialId,
         planId: selectedPlan._id,
         adType: selectedPlan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL',
@@ -778,6 +790,25 @@ useEffect(() => {
           />
           {errors.description && (
             <p className="text-sm text-red-600 mt-1">{errors.description}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Website URL (Optional)
+          </label>
+          <input
+            type="url"
+            value={formData.website}
+            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400"
+            placeholder="https://your-website.com"
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            If provided, QR codes will redirect to your website. Otherwise, they'll redirect to Ads2Go.
+          </p>
+          {errors.website && (
+            <p className="text-sm text-red-600 mt-1">{errors.website}</p>
           )}
         </div>
 
