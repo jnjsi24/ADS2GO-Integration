@@ -430,8 +430,16 @@ const ScreenTracking: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
             <p className="text-xs text-yellow-800">
-              Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
+              Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial} | Screens: {filteredScreens?.length || 0}
             </p>
+            <p className="text-xs text-yellow-800">
+              Screens with location: {filteredScreens?.filter(s => s.currentLocation && isValidCoordinate(s.currentLocation.lat, s.currentLocation.lng)).length || 0}
+            </p>
+            {filteredScreens && filteredScreens.length > 0 && (
+              <p className="text-xs text-yellow-800">
+                First screen: {filteredScreens[0].materialId} | Location: {filteredScreens[0].currentLocation ? `${filteredScreens[0].currentLocation.lat}, ${filteredScreens[0].currentLocation.lng}` : 'No location'}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -548,7 +556,7 @@ const ScreenTracking: React.FC = () => {
                   ).map((screen) => (
                     <Marker
                       key={screen.deviceId}
-                      position={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
+                      position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
                       icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
@@ -556,8 +564,8 @@ const ScreenTracking: React.FC = () => {
                     >
                       <Popup>
                         <div className="p-2">
-                          <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
-                          <p className="text-sm">Material: {screen.materialId}</p>
+                          <h3 className="font-semibold">{screen.materialId}</h3>
+                          <p className="text-sm">Type: {screen.screenType}</p>
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
@@ -625,7 +633,7 @@ const ScreenTracking: React.FC = () => {
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
                         <Car className="w-4 h-4 text-gray-500" />
-                        <span className="font-medium">{screen.screenType} {screen.slotNumber || ''}</span>
+                        <span className="font-medium">{screen.materialId}</span>
                       </div>
                       <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
                         {getStatusIcon(screen.isOnline, screen.isCompliant)}
@@ -651,7 +659,10 @@ const ScreenTracking: React.FC = () => {
                       <div className="flex justify-between">
                         <span>Last Seen:</span>
                         <span className="font-medium">
-                          {new Date(screen.lastSeen).toLocaleTimeString()}
+                          {screen.lastSeen && screen.lastSeen !== 'Invalid Date' && new Date(screen.lastSeen).toString() !== 'Invalid Date' 
+                            ? new Date(screen.lastSeen).toLocaleTimeString()
+                            : 'Never'
+                          }
                         </span>
                       </div>
                     </div>
