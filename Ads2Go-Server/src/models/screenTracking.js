@@ -315,11 +315,16 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   this.currentLocation = locationPoint;
   this.lastSeen = new Date();
 
-  // Add to current session history
+  // Add to current session history (but limit entries to prevent database bloat)
   if (this.currentSession && this.currentSession.isActive) {
     this.currentSession.locationHistory.push(locationPoint);
     
-    // Calculate distance traveled
+    // Limit location history to last 100 entries to prevent database bloat
+    if (this.currentSession.locationHistory.length > 100) {
+      this.currentSession.locationHistory = this.currentSession.locationHistory.slice(-100);
+    }
+    
+    // Calculate distance traveled only if location actually changed
     if (this.currentSession.locationHistory.length > 1) {
       const prevPoint = this.currentSession.locationHistory[this.currentSession.locationHistory.length - 2];
       
@@ -331,12 +336,23 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         // Extract coordinates from GeoJSON format: [longitude, latitude]
         const prevLng = prevPoint.coordinates[0];
         const prevLat = prevPoint.coordinates[1];
-        const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
         
-        // Only add distance if it's a valid number
-        if (!isNaN(distance) && distance >= 0) {
-          this.currentSession.totalDistanceTraveled += distance;
-          this.totalDistanceTraveled += distance;
+        // Only calculate distance if coordinates are actually different
+        const latDiff = Math.abs(prevLat - lat);
+        const lngDiff = Math.abs(prevLng - lng);
+        const minChangeThreshold = 0.000001; // ~0.1 meters (very small threshold for actual movement)
+        
+        if (latDiff > minChangeThreshold || lngDiff > minChangeThreshold) {
+          const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
+          
+          // Only add distance if it's a valid number and greater than minimum threshold (10 meters)
+          if (!isNaN(distance) && distance >= 0 && distance > 0.01) {
+            this.currentSession.totalDistanceTraveled += distance;
+            this.totalDistanceTraveled += distance;
+            console.log(`📍 Distance calculated: ${distance.toFixed(3)}km (from [${prevLat.toFixed(6)}, ${prevLng.toFixed(6)}] to [${lat.toFixed(6)}, ${lng.toFixed(6)}])`);
+          }
+        } else {
+          console.log(`📍 No significant movement detected (${latDiff.toFixed(8)}, ${lngDiff.toFixed(8)}) - skipping distance calculation`);
         }
       }
     }
@@ -409,6 +425,10 @@ ScreenTrackingSchema.methods.deg2rad = function(deg) {
 };
 
 ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDIUM') {
+  // Clean up old alerts (older than 7 days) before adding new ones
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  this.alerts = this.alerts.filter(alert => alert.timestamp > sevenDaysAgo);
+  
   this.alerts.push({
     type,
     message,

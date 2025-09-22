@@ -21,6 +21,7 @@ import {
 
 interface ScreenStatus {
   deviceId: string;
+  displayId?: string; // Unique display identifier (e.g., "DGL-HEADDRESS-CAR-001-SLOT-1")
   materialId: string;
   screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
   carGroupId?: string;
@@ -61,6 +62,11 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
+  // Additional fields for material-level screens (used in map)
+  totalDevices?: number;
+  onlineDevices?: number;
+  totalHours?: number;
+  totalDistance?: number;
 }
 
 interface ComplianceReport {
@@ -105,6 +111,7 @@ interface Material {
 
 const ScreenTracking: React.FC = () => {
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
+  const [materialScreens, setMaterialScreens] = useState<ScreenStatus[]>([]);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<ScreenStatus | null>(null);
   const [pathData, setPathData] = useState<PathData | null>(null);
@@ -186,7 +193,13 @@ const ScreenTracking: React.FC = () => {
         console.log('Number of screens:', complianceData.data?.screens?.length || 0);
         
         setComplianceReport(complianceData.data);
-        setScreens(complianceData.data?.screens || []);
+        setScreens(complianceData.data?.screens || []); // Individual device records for screen list
+        
+        // Set material screens for map display
+        if (complianceData.data?.materialScreens) {
+          setMaterialScreens(complianceData.data.materialScreens);
+        }
+        
         setConnectionStatus('connected');
 
         // Auto-center map on first screen if available
@@ -508,8 +521,8 @@ const ScreenTracking: React.FC = () => {
                   }}
                 >
                   
-                  {/* Screen markers - only show markers for screens with valid location data */}
-                  {filteredScreens?.filter(screen => 
+                  {/* Material markers - show one marker per material (not per slot) */}
+                  {materialScreens?.filter(screen => 
                     screen && 
                     screen.currentLocation && 
                     isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
@@ -524,10 +537,11 @@ const ScreenTracking: React.FC = () => {
                     >
                       <Popup>
                         <div className="p-2">
-                          <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
-                          <p className="text-sm">Material: {screen.materialId}</p>
-                          <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
-                          <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
+                          <h3 className="font-semibold">{screen.materialId}</h3>
+                          <p className="text-sm">Type: {screen.screenType}</p>
+                          <p className="text-sm">Devices: {screen.onlineDevices || 0}/{screen.totalDevices || 1} online</p>
+                          <p className="text-sm">Total Hours: {formatTime(screen.totalHours || 0)}</p>
+                          <p className="text-sm">Total Distance: {formatDistance(screen.totalDistance || 0)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
                           <p className="text-sm">Address: {screen.currentLocation.address}</p>
                         </div>
@@ -547,7 +561,7 @@ const ScreenTracking: React.FC = () => {
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter(screen => 
+                {materialScreens && materialScreens.filter(screen => 
                   screen && 
                   screen.currentLocation && 
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
@@ -592,7 +606,7 @@ const ScreenTracking: React.FC = () => {
                        <div className="flex items-center justify-between mb-2">
                          <div className="flex items-center space-x-2">
                            <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.screenType} {screen.slotNumber || ''}</span>
+                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
                          </div>
                          <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
                            {getStatusIcon(screen.isOnline, screen.isCompliant)}

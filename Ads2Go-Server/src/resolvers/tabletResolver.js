@@ -39,10 +39,20 @@ module.exports = {
       return await Tablet.find();
     },
     getTabletConnectionStatus: async (_, { materialId, slotNumber }) => {
+      console.log('=== getTabletConnectionStatus called ===');
+      console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
+      console.log('materialId type:', typeof materialId);
+      
+      // Default response
+      const defaultResponse = {
+        isConnected: false,
+        materialId: materialId || '',
+        slotNumber: slotNumber || 1,
+        carGroupId: null,
+        connectedDevice: null
+      };
+      
       try {
-        console.log('=== getTabletConnectionStatus called ===');
-        console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
-        console.log('materialId type:', typeof materialId);
         
         // Find tablet by materialId (as string)
         const tablet = await Tablet.findOne({ materialId });
@@ -57,20 +67,23 @@ module.exports = {
         
         if (!tablet) {
           console.log('No tablet found for materialId:', materialId);
+          return defaultResponse;
+        }
+
+        // Check if tablet has tablets array and the slot exists
+        if (!tablet.tablets || !Array.isArray(tablet.tablets)) {
+          console.log('Tablet has no tablets array or tablets is not an array');
           return {
-            isConnected: false,
-            materialId,
-            slotNumber,
-            carGroupId: null
+            ...defaultResponse,
+            carGroupId: tablet.carGroupId || null
           };
         }
 
         const tabletUnit = tablet.tablets[slotNumber - 1]; // slotNumber is 1-based
         if (!tabletUnit) {
+          console.log('Tablet unit not found for slot:', slotNumber);
           return {
-            isConnected: false,
-            materialId,
-            slotNumber,
+            ...defaultResponse,
             carGroupId: tablet.carGroupId || null
           };
         }
@@ -91,7 +104,8 @@ module.exports = {
         };
       } catch (error) {
         console.error('Error getting tablet connection status:', error);
-        throw new Error('Failed to get tablet connection status');
+        // Return the default response instead of throwing an error
+        return defaultResponse;
       }
     }
   },
