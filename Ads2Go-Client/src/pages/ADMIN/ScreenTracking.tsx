@@ -309,11 +309,13 @@ const ScreenTracking: React.FC = () => {
       console.log('📊 Initial screen data loaded from GraphQL:', enhancedScreens);
       
       // Debug coordinate validation
-      enhancedScreens.forEach(screen => {
+      enhancedScreens.forEach((screen: ScreenStatus) => {
         console.log(`🔍 Screen ${screen.materialId} full data:`, {
           currentLocation: screen.currentLocation,
           lastSeenLocation: screen.lastSeenLocation,
-          isOnline: screen.isOnline
+          isOnline: screen.isOnline,
+          lastSeen: screen.lastSeen,
+          lastSeenDisplay: screen.lastSeenDisplay
         });
         
         if (screen.currentLocation) {
@@ -404,9 +406,13 @@ const ScreenTracking: React.FC = () => {
   };
 
   const getMarkerColor = (screen: ScreenStatus) => {
-    if (!screen.isOnline) return '#ef4444';
-    if (screen.isCompliant) return '#22c55e';
-    return '#eab308';
+    if (!screen.isOnline) {
+      return '#ef4444'; // Red for offline devices
+    }
+    if (screen.isCompliant) {
+      return '#22c55e'; // Green for online and compliant
+    }
+    return '#eab308'; // Yellow for online but not compliant
   };
 
   const createPinIcon = (color: string) => {

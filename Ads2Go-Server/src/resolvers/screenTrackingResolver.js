@@ -133,8 +133,21 @@ const resolvers = {
           // Get last seen location data (virtual field from model)
           let lastSeenLocationData = null;
           if (screen.lastSeenLocation) {
-            // lastSeenLocation is a virtual field, so it should already be properly formatted
-            lastSeenLocationData = screen.lastSeenLocation;
+            // Check if it's a GeoJSON Point format (from database)
+            if (screen.lastSeenLocation.type === 'Point' && screen.lastSeenLocation.coordinates) {
+              lastSeenLocationData = {
+                lat: screen.lastSeenLocation.coordinates[1], // latitude
+                lng: screen.lastSeenLocation.coordinates[0], // longitude
+                timestamp: screen.lastSeenLocation.timestamp,
+                speed: screen.lastSeenLocation.speed,
+                heading: screen.lastSeenLocation.heading,
+                accuracy: screen.lastSeenLocation.accuracy,
+                address: screen.lastSeenLocation.address
+              };
+            } else {
+              // Already properly formatted
+              lastSeenLocationData = screen.lastSeenLocation;
+            }
           }
 
           return {
