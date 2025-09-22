@@ -90,7 +90,32 @@ const adResolvers = {
         throw new Error(`No available materials or slots for selected plan. Next available: ${nextAvailable}`);
       }
 
-      // Calculate total price
+      // Auto-detect video duration from uploaded file
+      const VideoDurationService = require('../services/videoDurationService');
+      let actualVideoDuration = plan.adLengthSeconds; // Default to plan duration
+      
+      try {
+        console.log('🎬 Auto-detecting video duration...');
+        actualVideoDuration = await VideoDurationService.getVideoDuration(input.mediaFile);
+        console.log(`✅ Video duration detected: ${actualVideoDuration}s (plan limit: ${plan.adLengthSeconds}s)`);
+        
+        // Validate video duration against plan limits
+        if (actualVideoDuration > plan.adLengthSeconds) {
+          throw new Error(`Video duration (${actualVideoDuration}s) exceeds plan limit (${plan.adLengthSeconds}s). Please choose a shorter video or upgrade to a plan with longer ad duration.`);
+        }
+        
+        if (actualVideoDuration < 5) {
+          throw new Error(`Video duration (${actualVideoDuration}s) is too short. Minimum duration is 5 seconds.`);
+        }
+        
+      } catch (error) {
+        if (error.message.includes('exceeds plan limit') || error.message.includes('too short')) {
+          throw error; // Re-throw validation errors
+        }
+        console.warn('⚠️ Could not detect video duration, using plan duration:', error.message);
+      }
+
+      // Calculate total price using actual video duration
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
 
@@ -128,7 +153,7 @@ const adResolvers = {
         materialId: selectedMaterial._id, // Use the selected material
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
-        adLengthSeconds: plan.adLengthSeconds,
+        adLengthSeconds: actualVideoDuration, // Use detected video duration instead of plan duration
         playsPerDayPerDevice: plan.playsPerDayPerDevice,
         totalPlaysPerDay,
         pricePerPlay: plan.pricePerPlay,

@@ -27,27 +27,37 @@ export const getMaxDevices = (vehicleType: string, materialType: string): number
   return 1;
 };
 
-// Calculate plan pricing
+// Calculate plays per day based on screen hours and ad slots (matches server logic)
+const calculatePlaysPerDay = (adLengthSeconds: number, screenHoursPerDay: number = 8, adSlotsPerDevice: number = 5): number => {
+  // Convert screen hours to seconds
+  const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
+  
+  // Calculate how many times each ad slot can play in a day
+  // Each slot plays DIFFERENT ads, so we calculate per slot, not total
+  const playsPerSlotPerDay = Math.floor(screenSecondsPerDay / adLengthSeconds);
+  
+  // Each ad gets played in ONE slot, so plays per device = plays per slot
+  // (not multiplied by number of slots since each slot has different ads)
+  return playsPerSlotPerDay;
+};
+
+// Calculate plan pricing (simplified - no overrides needed)
 export const calculatePlanPricing = (
   numberOfDevices: number,
-  playsPerDayPerDevice: number,
+  playsPerDayPerDevice: number, // This parameter is ignored - we calculate it automatically
   adLengthSeconds: number,
   durationDays: number,
-  pricePerPlayOverride?: number | '',
-  deviceCostOverride?: number | '',
-  durationCostOverride?: number | '',
-  adLengthCostOverride?: number | ''
+  pricePerPlayOverride?: number | ''
 ) => {
-  const totalPlaysPerDay = numberOfDevices * playsPerDayPerDevice;
+  // Calculate plays per day automatically based on 8-hour screen time
+  const calculatedPlaysPerDay = calculatePlaysPerDay(adLengthSeconds);
+  const totalPlaysPerDay = numberOfDevices * calculatedPlaysPerDay;
   
-  // Use overrides if provided, otherwise use default calculations
-  const pricePerPlay = pricePerPlayOverride || 0.50; // Default price per play
-  const deviceCost = deviceCostOverride || 100; // Default device cost
-  const durationCost = durationCostOverride || 10; // Default duration cost per day
-  const adLengthCost = adLengthCostOverride || 0.10; // Default cost per second
+  // Use the provided price per play (required field)
+  const pricePerPlay = pricePerPlayOverride || 0;
   
   const dailyRevenue = totalPlaysPerDay * pricePerPlay;
-  const totalPrice = (dailyRevenue + deviceCost + durationCost + (adLengthCost * adLengthSeconds)) * durationDays;
+  const totalPrice = dailyRevenue * durationDays;
   
   return {
     totalPlaysPerDay,

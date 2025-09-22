@@ -35,10 +35,11 @@ module.exports = gql`
     numberOfDevices: Int!
     adLengthSeconds: Int!
     playsPerDayPerDevice: Int
-    pricePerPlay: Float
-    deviceCostOverride: Int
-    durationCostOverride: Int
-    adLengthCostOverride: Int
+    pricePerPlay: Float!  # Required - super admin must set this
+    # Scheduling fields
+    status: String
+    startDate: String
+    endDate: String
   }
 
   # 👇 New: Update input with all optional fields
@@ -53,9 +54,10 @@ module.exports = gql`
     adLengthSeconds: Int
     playsPerDayPerDevice: Int
     pricePerPlay: Float
-    deviceCostOverride: Int
-    durationCostOverride: Int
-    adLengthCostOverride: Int
+    # Scheduling fields
+    status: String
+    startDate: String
+    endDate: String
   }
 
   type MaterialAvailability {

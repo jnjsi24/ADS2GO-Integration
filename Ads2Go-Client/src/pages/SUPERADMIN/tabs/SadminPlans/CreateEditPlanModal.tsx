@@ -13,9 +13,10 @@ interface PlanFormData {
   adLengthSeconds: number;
   playsPerDayPerDevice: number;
   pricePerPlayOverride: string | number;
-  deviceCostOverride: string | number;
-  durationCostOverride: string | number;
-  adLengthCostOverride: string | number;
+  // Scheduling options
+  startType: 'immediate' | 'scheduled';
+  scheduledStartDate: string;
+  scheduledEndDate: string;
 }
 
 interface CreateEditPlanModalProps {
@@ -46,9 +47,10 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
     adLengthSeconds: 20,
     playsPerDayPerDevice: 160,
     pricePerPlayOverride: '',
-    deviceCostOverride: '',
-    durationCostOverride: '',
-    adLengthCostOverride: '',
+    // Scheduling options
+    startType: 'immediate',
+    scheduledStartDate: '',
+    scheduledEndDate: '',
   });
 
   const [calculatedPricing, setCalculatedPricing] = useState({
@@ -71,9 +73,10 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
         adLengthSeconds: editingPlan.adLengthSeconds,
         playsPerDayPerDevice: editingPlan.playsPerDayPerDevice,
         pricePerPlayOverride: '',
-        deviceCostOverride: '',
-        durationCostOverride: '',
-        adLengthCostOverride: '',
+        // Scheduling options
+        startType: 'immediate',
+        scheduledStartDate: '',
+        scheduledEndDate: '',
       });
     } else {
       setFormData({
@@ -87,9 +90,10 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
         adLengthSeconds: 20,
         playsPerDayPerDevice: 160,
         pricePerPlayOverride: '',
-        deviceCostOverride: '',
-        durationCostOverride: '',
-        adLengthCostOverride: '',
+        // Scheduling options
+        startType: 'immediate',
+        scheduledStartDate: '',
+        scheduledEndDate: '',
       });
     }
   }, [editingPlan]);
@@ -110,10 +114,7 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
       formData.playsPerDayPerDevice,
       formData.adLengthSeconds,
       formData.durationDays,
-      typeof formData.pricePerPlayOverride === 'number' ? formData.pricePerPlayOverride : undefined,
-      typeof formData.deviceCostOverride === 'number' ? formData.deviceCostOverride : undefined,
-      typeof formData.durationCostOverride === 'number' ? formData.durationCostOverride : undefined,
-      typeof formData.adLengthCostOverride === 'number' ? formData.adLengthCostOverride : undefined
+      typeof formData.pricePerPlayOverride === 'number' ? formData.pricePerPlayOverride : undefined
     );
     setCalculatedPricing(pricing);
   }, [formData]);
@@ -293,103 +294,172 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
               />
             </div>
 
-            {/* Plays Per Day Per Device */}
+            {/* Plays Per Day Per Device - Auto Calculated */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plays Per Day Per Device *
+                Plays Per Day Per Device (Auto Calculated)
               </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.playsPerDayPerDevice}
-                onChange={(e) => handleInputChange('playsPerDayPerDevice', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+              <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600">
+                {formData.adLengthSeconds > 0 ? 
+                  Math.floor((8 * 60 * 60) / formData.adLengthSeconds) : 
+                  'Enter ad length to calculate'
+                } plays per day
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Calculated based on 8 hours screen time ÷ ad length
+              </p>
             </div>
           </div>
 
-          {/* Pricing Overrides */}
+          {/* Scheduling Options */}
           <div className="mt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Pricing Overrides (Optional)</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Scheduling</h3>
+            <div className="space-y-4">
+              {/* Start Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  When should this plan start?
+                </label>
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="startType"
+                      value="immediate"
+                      checked={formData.startType === 'immediate'}
+                      onChange={(e) => handleInputChange('startType', e.target.value)}
+                      className="mr-3 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Start Immediately</div>
+                      <div className="text-sm text-gray-500">Plan will be active right after creation</div>
+                    </div>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="startType"
+                      value="scheduled"
+                      checked={formData.startType === 'scheduled'}
+                      onChange={(e) => handleInputChange('startType', e.target.value)}
+                      className="mr-3 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Schedule for Later</div>
+                      <div className="text-sm text-gray-500">Set specific start and end dates</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Scheduled Dates */}
+              {formData.startType === 'scheduled' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledStartDate}
+                      onChange={(e) => handleInputChange('scheduledStartDate', e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required={formData.startType === 'scheduled'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      End Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledEndDate}
+                      onChange={(e) => handleInputChange('scheduledEndDate', e.target.value)}
+                      min={formData.scheduledStartDate || new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required={formData.startType === 'scheduled'}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-blue-600">
+                      💡 Scheduled plans will be PENDING until the start date, then automatically become RUNNING.
+                      They will automatically become ENDED after the end date.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Required Pricing */}
+          <div className="mt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Pricing (Required)</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price Per Play Override
+                  Price Per Play *
                 </label>
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
+                  min="0.01"
                   value={formData.pricePerPlayOverride}
                   onChange={(e) => handleInputChange('pricePerPlayOverride', e.target.value ? parseFloat(e.target.value) : '')}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 0.50"
+                  placeholder="Enter price per play (e.g., 1.00)"
+                  required
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Device Cost Override
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.deviceCostOverride}
-                  onChange={(e) => handleInputChange('deviceCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Duration Cost Override
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.durationCostOverride}
-                  onChange={(e) => handleInputChange('durationCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 10"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ad Length Cost Override
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.adLengthCostOverride}
-                  onChange={(e) => handleInputChange('adLengthCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 0.10"
-                />
+                <p className="text-xs text-gray-500 mt-1">
+                  This is the base price per ad play. Total price will be calculated based on this.
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Calculated Pricing */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+          {/* Calculated Pricing Display */}
+          <div className="mt-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Calculated Pricing</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Total Plays Per Day</p>
-                <p className="text-xl font-semibold text-gray-900">{calculatedPricing.totalPlaysPerDay}</p>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Plays Per Day Per Device:</span>
+                <span className="font-medium">
+                  {formData.adLengthSeconds > 0 ? 
+                    Math.floor((8 * 60 * 60) / formData.adLengthSeconds) : 
+                    'Enter ad length to calculate'
+                  } plays
+                </span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Daily Revenue</p>
-                <p className="text-xl font-semibold text-green-600">₱{calculatedPricing.dailyRevenue.toFixed(2)}</p>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Plays Per Day:</span>
+                <span className="font-medium">
+                  {formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 ? 
+                    Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices : 
+                    'Enter details to calculate'
+                  } plays
+                </span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Price</p>
-                <p className="text-xl font-semibold text-blue-600">₱{calculatedPricing.totalPrice.toFixed(2)}</p>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Daily Revenue:</span>
+                <span className="font-medium">
+                  {formData.pricePerPlayOverride && formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 ? 
+                    `₱${(Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices * formData.pricePerPlayOverride).toLocaleString()}` : 
+                    'Enter details to calculate'
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Price:</span>
+                <span className="font-medium text-lg text-blue-600">
+                  {formData.pricePerPlayOverride && formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 && formData.durationDays > 0 ? 
+                    `₱${(Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices * formData.pricePerPlayOverride * formData.durationDays).toLocaleString()}` : 
+                    'Enter details to calculate'
+                  }
+                </span>
               </div>
             </div>
           </div>
+
 
           {/* Form Actions */}
           <div className="flex justify-end gap-4 mt-8">
