@@ -26,6 +26,8 @@ class DeviceStatusManager {
   setWebSocketStatus(deviceId, isConnected, lastSeen = new Date()) {
     console.log(`🔌 [DeviceStatusManager] WebSocket status for ${deviceId}: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
     
+    const wasConnected = this.webSocketConnections.has(deviceId);
+    
     if (isConnected) {
       this.webSocketConnections.set(deviceId, { 
         isConnected: true, 
@@ -36,6 +38,11 @@ class DeviceStatusManager {
     } else {
       this.webSocketConnections.delete(deviceId);
       console.log(`❌ [DeviceStatusManager] Removed WebSocket connection for ${deviceId}`);
+    }
+    
+    // If connection status changed, trigger session tracking update
+    if (wasConnected !== isConnected) {
+      console.log(`🔄 [DeviceStatusManager] Connection status changed for ${deviceId}, session tracking will be updated`);
     }
     
     this.updateCachedStatus(deviceId);

@@ -224,6 +224,92 @@ router.post('/endSession', async (req, res) => {
   }
 });
 
+// POST /resetDistance - Reset current session distance (for testing)
+router.post('/resetDistance', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: deviceId'
+      });
+    }
+
+    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    
+    if (!tabletTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tablet tracking record not found'
+      });
+    }
+
+    const oldDistance = tabletTracking.currentSession?.totalDistanceTraveled || 0;
+    await tabletTracking.resetCurrentSessionDistance();
+
+    res.json({
+      success: true,
+      message: 'Distance reset successfully',
+      data: {
+        deviceId: tabletTracking.deviceId,
+        oldDistance: oldDistance,
+        newDistance: 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error resetting distance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// POST /resetHours - Reset current session hours (for testing)
+router.post('/resetHours', async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: deviceId'
+      });
+    }
+
+    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    
+    if (!tabletTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Tablet tracking record not found'
+      });
+    }
+
+    const oldHours = tabletTracking.currentSession?.totalHoursOnline || 0;
+    await tabletTracking.resetCurrentSessionHours();
+
+    res.json({
+      success: true,
+      message: 'Hours reset successfully',
+      data: {
+        deviceId: tabletTracking.deviceId,
+        oldHours: oldHours,
+        newHours: 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error resetting hours:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
   // GET /status/:deviceId - Get current tablet status
   router.get('/status/:deviceId', async (req, res) => {
     try {

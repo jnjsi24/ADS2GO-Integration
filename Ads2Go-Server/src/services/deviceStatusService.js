@@ -137,6 +137,11 @@ class DeviceStatusService {
     // Update DeviceStatusManager with WebSocket connection
     deviceStatusManager.setWebSocketStatus(deviceId, true, new Date());
     
+    // Update session tracking for time calculation
+    this.updateSessionTracking(deviceId, true).catch(err => {
+      console.error(`Failed to update session tracking for device ${deviceId}:`, err);
+    });
+    
     // Also update with the full device ID if they're different
     if (deviceId !== materialId) {
       // Try to find the full device ID from the database
@@ -319,10 +324,35 @@ class DeviceStatusService {
     }
   }
 
+  async updateSessionTracking(deviceId, isConnected) {
+    try {
+      const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+      
+      if (!screenTracking) {
+        console.warn(`No screen tracking record found for device: ${deviceId}`);
+        return;
+      }
+
+      if (isConnected) {
+        await screenTracking.handleWebSocketConnection();
+        console.log(`🔌 [SESSION] Started session tracking for ${deviceId}`);
+      } else {
+        await screenTracking.handleWebSocketDisconnection();
+        console.log(`🔌 [SESSION] Ended session tracking for ${deviceId}`);
+      }
+    } catch (error) {
+      console.error(`Error updating session tracking for ${deviceId}:`, error);
+    }
+  }
+
   async handleDisconnect(deviceId) {
     this.removeConnection(deviceId);
     try {
       await this.updateDeviceStatus(deviceId, false);
+      
+      // Update session tracking for disconnection
+      await this.updateSessionTracking(deviceId, false);
+      
       console.log(`Successfully handled disconnect for device ${deviceId}`);
       return true;
     } catch (error) {

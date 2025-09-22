@@ -22,6 +22,16 @@ export const GET_ALL_SCREENS = gql`
           address
         }
         lastSeen
+        lastSeenDisplay
+        lastSeenLocation {
+          lat
+          lng
+          timestamp
+          speed
+          heading
+          accuracy
+          address
+        }
         currentHours
         hoursRemaining
         isCompliant

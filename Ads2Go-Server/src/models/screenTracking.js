@@ -66,7 +66,18 @@ const DailySessionSchema = new mongoose.Schema({
     type: String, 
     enum: ['COMPLIANT', 'NON_COMPLIANT', 'PENDING'],
     default: 'PENDING'
-  }
+  },
+  // Session-based time tracking
+  activeSessions: [{
+    sessionStart: { type: Date, required: true },
+    sessionEnd: { type: Date },
+    duration: { type: Number, default: 0 }, // in hours
+    isActive: { type: Boolean, default: true }
+  }],
+  currentSessionStart: { type: Date }, // When current WebSocket session started
+  lastWebSocketStatus: { type: Boolean, default: false }, // Last known WebSocket connection status
+  lastConnectedAt: { type: Date }, // When device was last connected via WebSocket
+  lastConnectedLocation: LocationPointSchema // Last location when device was connected
 }, { _id: false });
 
 const ScreenTrackingSchema = new mongoose.Schema({
@@ -241,15 +252,30 @@ ScreenTrackingSchema.index({ 'currentSession.date': 1 });
 ScreenTrackingSchema.index({ isOnline: 1 });
 ScreenTrackingSchema.index({ 'currentLocation.coordinates': '2dsphere' });
 
-// Virtual for current hours today
+// Virtual for current hours today (based on actual WebSocket session time)
 ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
-  if (!this.currentSession || !this.currentSession.startTime) return 0;
+  if (!this.currentSession) return 0;
   
-  const now = new Date();
-  const startTime = new Date(this.currentSession.startTime);
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+  let totalHours = 0;
   
-  return Math.round(hoursDiff * 100) / 100; // Round to 2 decimal places
+  // Add completed sessions
+  if (this.currentSession.activeSessions && this.currentSession.activeSessions.length > 0) {
+    totalHours += this.currentSession.activeSessions.reduce((sum, session) => {
+      if (!session.isActive && session.duration) {
+        return sum + session.duration;
+      }
+      return sum;
+    }, 0);
+  }
+  
+  // Add current active session if WebSocket is connected
+  if (this.currentSession.currentSessionStart && this.currentSession.lastWebSocketStatus) {
+    const now = new Date();
+    const currentSessionDuration = (now - this.currentSession.currentSessionStart) / (1000 * 60 * 60);
+    totalHours += currentSessionDuration;
+  }
+  
+  return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
 
 // Virtual for hours remaining to meet target
@@ -270,6 +296,38 @@ ScreenTrackingSchema.virtual('displayStatus').get(function() {
   if (this.screenMetrics?.maintenanceMode) return 'MAINTENANCE';
   if (!this.screenMetrics?.isDisplaying) return 'DISPLAY_OFF';
   return 'ACTIVE';
+});
+
+// Virtual for last seen (only when offline)
+ScreenTrackingSchema.virtual('lastSeenDisplay').get(function() {
+  // If currently connected via WebSocket, don't show "last seen"
+  if (this.currentSession && this.currentSession.lastWebSocketStatus) {
+    return null;
+  }
+  
+  // If we have a last connected time, use that
+  if (this.currentSession && this.currentSession.lastConnectedAt) {
+    return this.currentSession.lastConnectedAt;
+  }
+  
+  // Fallback to the general lastSeen
+  return this.lastSeen;
+});
+
+// Virtual for last seen location (only when offline)
+ScreenTrackingSchema.virtual('lastSeenLocation').get(function() {
+  // If currently connected via WebSocket, don't show "last seen location"
+  if (this.currentSession && this.currentSession.lastWebSocketStatus) {
+    return null;
+  }
+  
+  // If we have a last connected location, use that
+  if (this.currentSession && this.currentSession.lastConnectedLocation) {
+    return this.currentSession.lastConnectedLocation;
+  }
+  
+  // Fallback to current location
+  return this.currentLocation;
 });
 
 // Virtual for easy access to current location coordinates
@@ -294,8 +352,85 @@ ScreenTrackingSchema.methods.startDailySession = function() {
     locationHistory: [],
     isActive: true,
     targetHours: 8,
-    complianceStatus: 'PENDING'
+    complianceStatus: 'PENDING',
+    activeSessions: [],
+    currentSessionStart: null,
+    lastWebSocketStatus: false
   };
+  
+  return this.save();
+};
+
+// Method to handle WebSocket connection
+ScreenTrackingSchema.methods.handleWebSocketConnection = function() {
+  if (!this.currentSession) {
+    return Promise.resolve(this);
+  }
+  
+  const now = new Date();
+  
+  // If already connected, do nothing
+  if (this.currentSession.lastWebSocketStatus) {
+    console.log(`🔌 [SESSION] ${this.devices[0]?.deviceId || 'Unknown'} already connected, skipping`);
+    return Promise.resolve(this);
+  }
+  
+  console.log(`🔌 [SESSION] ${this.devices[0]?.deviceId || 'Unknown'} WebSocket connected - starting session timer`);
+  
+  // Mark as connected and start session timer
+  this.currentSession.lastWebSocketStatus = true;
+  this.currentSession.currentSessionStart = now;
+  this.currentSession.lastConnectedAt = now;
+  
+  // Store current location as last connected location
+  if (this.currentLocation) {
+    this.currentSession.lastConnectedLocation = this.currentLocation;
+  }
+  
+  return this.save();
+};
+
+// Method to handle WebSocket disconnection
+ScreenTrackingSchema.methods.handleWebSocketDisconnection = function() {
+  if (!this.currentSession || !this.currentSession.lastWebSocketStatus) {
+    return Promise.resolve(this);
+  }
+  
+  const now = new Date();
+  
+  console.log(`🔌 [SESSION] ${this.devices[0]?.deviceId || 'Unknown'} WebSocket disconnected - ending session`);
+  
+  // Store the last connected location before disconnecting
+  if (this.currentLocation) {
+    this.currentSession.lastConnectedLocation = this.currentLocation;
+    console.log(`📍 [SESSION] ${this.devices[0]?.deviceId || 'Unknown'} stored last connected location: ${this.currentLocation.address || 'Unknown address'}`);
+  }
+  
+  // Calculate session duration
+  if (this.currentSession.currentSessionStart) {
+    const sessionDuration = (now - this.currentSession.currentSessionStart) / (1000 * 60 * 60);
+    
+    // Add completed session to activeSessions
+    if (!this.currentSession.activeSessions) {
+      this.currentSession.activeSessions = [];
+    }
+    
+    this.currentSession.activeSessions.push({
+      sessionStart: this.currentSession.currentSessionStart,
+      sessionEnd: now,
+      duration: sessionDuration,
+      isActive: false
+    });
+    
+    // Update total hours
+    this.currentSession.totalHoursOnline += sessionDuration;
+    
+    console.log(`⏱️ [SESSION] ${this.devices[0]?.deviceId || 'Unknown'} session ended: ${sessionDuration.toFixed(3)} hours`);
+  }
+  
+  // Mark as disconnected
+  this.currentSession.lastWebSocketStatus = false;
+  this.currentSession.currentSessionStart = null;
   
   return this.save();
 };
@@ -313,7 +448,14 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
 
   // Update current location
   this.currentLocation = locationPoint;
-  this.lastSeen = new Date();
+  
+  // Only update lastSeen if WebSocket is connected (real-time tracking)
+  if (this.currentSession && this.currentSession.lastWebSocketStatus) {
+    this.lastSeen = new Date();
+    console.log(`📍 [LOCATION] ${this.devices[0]?.deviceId || 'Unknown'} location updated (WebSocket connected)`);
+  } else {
+    console.log(`📍 [LOCATION] ${this.devices[0]?.deviceId || 'Unknown'} location updated (WebSocket disconnected - not updating lastSeen)`);
+  }
 
   // Add to current session history
   if (this.currentSession && this.currentSession.isActive) {
@@ -333,16 +475,62 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         const prevLat = prevPoint.coordinates[1];
         const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
         
-        // Only add distance if it's a valid number
-        if (!isNaN(distance) && distance >= 0) {
+        // Only add distance if it's a valid number and above movement threshold
+        // Movement threshold: 10 meters (0.01 km) to ignore GPS noise
+        const MOVEMENT_THRESHOLD = 0.01; // 10 meters in kilometers
+        const MAX_ACCURACY = 50; // Maximum GPS accuracy in meters to consider valid movement
+        const MIN_TIME_INTERVAL = 5000; // Minimum 5 seconds between distance calculations (in milliseconds)
+        
+        // Check GPS accuracy - ignore movements if accuracy is too poor
+        const isAccurateEnough = accuracy <= MAX_ACCURACY;
+        
+        // Check time interval - ignore if too frequent
+        const currentTime = new Date();
+        const prevTime = prevPoint.timestamp;
+        const timeDiff = currentTime - prevTime;
+        const isTimeIntervalValid = timeDiff >= MIN_TIME_INTERVAL;
+        
+        if (!isNaN(distance) && distance >= 0 && distance >= MOVEMENT_THRESHOLD && isAccurateEnough && isTimeIntervalValid) {
+          console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} moved ${distance.toFixed(3)}km (accuracy: ${accuracy}m, time: ${timeDiff}ms)`);
           this.currentSession.totalDistanceTraveled += distance;
           this.totalDistanceTraveled += distance;
+        } else if (distance < MOVEMENT_THRESHOLD && distance > 0) {
+          console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} movement too small: ${distance.toFixed(3)}km (ignored)`);
+        } else if (!isAccurateEnough) {
+          console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} GPS accuracy too poor: ${accuracy}m (ignored)`);
+        } else if (!isTimeIntervalValid) {
+          console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} time interval too short: ${timeDiff}ms (ignored)`);
         }
       }
     }
   }
 
   return this.save();
+};
+
+ScreenTrackingSchema.methods.resetCurrentSessionDistance = function() {
+  if (this.currentSession && this.currentSession.isActive) {
+    console.log(`🔄 [DISTANCE RESET] ${this.devices[0]?.deviceId || 'Unknown'} - Resetting distance from ${this.currentSession.totalDistanceTraveled.toFixed(3)}km to 0km`);
+    this.currentSession.totalDistanceTraveled = 0;
+    return this.save();
+  }
+  return Promise.resolve(this);
+};
+
+ScreenTrackingSchema.methods.resetCurrentSessionHours = function() {
+  if (this.currentSession && this.currentSession.isActive) {
+    const oldHours = this.currentSession.totalHoursOnline;
+    console.log(`🔄 [HOURS RESET] ${this.devices[0]?.deviceId || 'Unknown'} - Resetting hours from ${oldHours.toFixed(3)}h to 0h`);
+    
+    // Reset session tracking
+    this.currentSession.totalHoursOnline = 0;
+    this.currentSession.activeSessions = [];
+    this.currentSession.currentSessionStart = null;
+    this.currentSession.lastWebSocketStatus = false;
+    
+    return this.save();
+  }
+  return Promise.resolve(this);
 };
 
 ScreenTrackingSchema.methods.endDailySession = function() {
@@ -576,7 +764,7 @@ ScreenTrackingSchema.methods.endAdPlayback = function() {
   return this.save();
 };
 
-// Method to update driver activity hours
+// Method to update driver activity (removed automatic time tracking)
 ScreenTrackingSchema.methods.updateDriverActivity = function(isActive = true) {
   const now = new Date();
   
@@ -593,18 +781,13 @@ ScreenTrackingSchema.methods.updateDriverActivity = function(isActive = true) {
     };
   }
   
-  // Update display hours based on activity
+  // Update display hours based on activity (only for display metrics, not session time)
   if (isActive) {
     this.screenMetrics.displayHours += 0.5 / 3600; // Add 30 seconds in hours
   }
   
-  // Update current session hours
-  if (this.currentSession && this.currentSession.isActive) {
-    this.currentSession.totalHoursOnline += 0.5 / 3600; // Add 30 seconds in hours
-  }
-  
-  // Update total lifetime hours
-  this.totalHoursOnline += 0.5 / 3600;
+  // NOTE: Session time is now tracked via WebSocket connection status only
+  // No automatic time addition here
   
   return this.save();
 };

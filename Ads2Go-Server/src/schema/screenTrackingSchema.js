@@ -98,6 +98,8 @@ const typeDefs = gql`
     isOnline: Boolean
     currentLocation: LocationData
     lastSeen: String
+    lastSeenDisplay: String
+    lastSeenLocation: LocationData
     currentHours: Float
     hoursRemaining: Float
     isCompliant: Boolean

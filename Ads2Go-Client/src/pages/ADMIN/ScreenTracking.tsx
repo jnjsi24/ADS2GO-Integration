@@ -40,6 +40,16 @@ interface ScreenStatus {
     address: string;
   };
   lastSeen: string;
+  lastSeenDisplay?: string;
+  lastSeenLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
   currentHours: number;
   hoursRemaining: number;
   isCompliant: boolean;
@@ -433,11 +443,32 @@ const ScreenTracking: React.FC = () => {
               Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial} | Screens: {filteredScreens?.length || 0}
             </p>
             <p className="text-xs text-yellow-800">
-              Screens with location: {filteredScreens?.filter(s => s.currentLocation && isValidCoordinate(s.currentLocation.lat, s.currentLocation.lng)).length || 0}
+              Screens with location: {filteredScreens?.filter(s => {
+                if (!s) return false;
+                
+                // Check current location for online devices
+                if (s.isOnline && s.currentLocation && isValidCoordinate(s.currentLocation.lat, s.currentLocation.lng)) {
+                  return true;
+                }
+                
+                // Check last seen location for offline devices
+                if (!s.isOnline && s.lastSeenLocation && isValidCoordinate(s.lastSeenLocation.lat, s.lastSeenLocation.lng)) {
+                  return true;
+                }
+                
+                return false;
+              }).length || 0}
             </p>
             {filteredScreens && filteredScreens.length > 0 && (
               <p className="text-xs text-yellow-800">
-                First screen: {filteredScreens[0].materialId} | Location: {filteredScreens[0].currentLocation ? `${filteredScreens[0].currentLocation.lat}, ${filteredScreens[0].currentLocation.lng}` : 'No location'}
+                First screen: {filteredScreens[0].materialId} | Status: {filteredScreens[0].isOnline ? 'Online' : 'Offline'} | 
+                Location: {
+                  filteredScreens[0].isOnline && filteredScreens[0].currentLocation 
+                    ? `${filteredScreens[0].currentLocation.lat}, ${filteredScreens[0].currentLocation.lng}` 
+                    : filteredScreens[0].lastSeenLocation 
+                      ? `${filteredScreens[0].lastSeenLocation.lat}, ${filteredScreens[0].lastSeenLocation.lng} (last seen)`
+                      : 'No location'
+                }
               </p>
             )}
           </div>
@@ -548,15 +579,33 @@ const ScreenTracking: React.FC = () => {
                     }
                   }}
                 >
-                  {/* Screen markers - only show markers for screens with valid location data */}
-                  {filteredScreens?.filter(screen => 
-                    screen && 
-                    screen.currentLocation && 
-                    isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
-                  ).map((screen) => (
+                  {/* Screen markers - show markers for screens with valid location data (current or last seen) */}
+                  {filteredScreens?.filter(screen => {
+                    if (!screen) return false;
+                    
+                    // Check current location for online devices
+                    if (screen.isOnline && screen.currentLocation && 
+                        isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                      return true;
+                    }
+                    
+                    // Check last seen location for offline devices
+                    if (!screen.isOnline && screen.lastSeenLocation && 
+                        isValidCoordinate(screen.lastSeenLocation.lat, screen.lastSeenLocation.lng)) {
+                      return true;
+                    }
+                    
+                    return false;
+                  }).map((screen) => {
+                    // Determine which location to use for the marker
+                    const markerLocation = screen.isOnline && screen.currentLocation 
+                      ? screen.currentLocation 
+                      : screen.lastSeenLocation;
+                    
+                    return (
                     <Marker
                       key={screen.deviceId}
-                      position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
+                      position={[markerLocation!.lat, markerLocation!.lng] as LatLngTuple}
                       icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
@@ -566,14 +615,23 @@ const ScreenTracking: React.FC = () => {
                         <div className="p-2">
                           <h3 className="font-semibold">{screen.materialId}</h3>
                           <p className="text-sm">Type: {screen.screenType}</p>
+                          <p className="text-sm">Status: {screen.displayStatus}</p>
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
-                          <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Address: {screen.currentLocation?.address || 'Unknown'}</p>
+                          <p className="text-sm">
+                            {screen.isOnline ? 'Current Location' : 'Last Known Location'}:
+                          </p>
+                          <p className="text-sm">Address: {markerLocation?.address || 'Unknown'}</p>
+                          {!screen.isOnline && markerLocation?.timestamp && (
+                            <p className="text-sm text-gray-500">
+                              Last seen: {new Date(markerLocation.timestamp).toLocaleString()}
+                            </p>
+                          )}
                         </div>
                       </Popup>
                     </Marker>
-                  ))}
+                    );
+                  })}
                   
                   {/* Path for selected tablet */}
                   {pathData && pathData.locationHistory?.length > 1 && (
@@ -587,11 +645,23 @@ const ScreenTracking: React.FC = () => {
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter(screen => 
-                  screen && 
-                  screen.currentLocation && 
-                  isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
-                ).length === 0 && (
+                {filteredScreens && filteredScreens.filter(screen => {
+                  if (!screen) return false;
+                  
+                  // Check current location for online devices
+                  if (screen.isOnline && screen.currentLocation && 
+                      isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                    return true;
+                  }
+                  
+                  // Check last seen location for offline devices
+                  if (!screen.isOnline && screen.lastSeenLocation && 
+                      isValidCoordinate(screen.lastSeenLocation.lat, screen.lastSeenLocation.lng)) {
+                    return true;
+                  }
+                  
+                  return false;
+                }).length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
                     <div className="text-center p-6">
                       <div className="text-gray-500 mb-2">
@@ -659,9 +729,11 @@ const ScreenTracking: React.FC = () => {
                       <div className="flex justify-between">
                         <span>Last Seen:</span>
                         <span className="font-medium">
-                          {screen.lastSeen && screen.lastSeen !== 'Invalid Date' && new Date(screen.lastSeen).toString() !== 'Invalid Date' 
-                            ? new Date(screen.lastSeen).toLocaleTimeString()
-                            : 'Never'
+                          {screen.lastSeenDisplay && screen.lastSeenDisplay !== 'Invalid Date' && new Date(screen.lastSeenDisplay).toString() !== 'Invalid Date' 
+                            ? new Date(screen.lastSeenDisplay).toLocaleTimeString()
+                            : screen.isOnline 
+                              ? 'Now (Online)' 
+                              : 'Never'
                           }
                         </span>
                       </div>
@@ -721,14 +793,26 @@ const ScreenTracking: React.FC = () => {
                     </div>
                   </div>
 
-                  {selectedScreen.currentLocation && (
+                  {(selectedScreen.currentLocation || selectedScreen.lastSeenLocation) && (
                     <div>
-                      <h4 className="font-medium text-gray-900">Current Location</h4>
+                      <h4 className="font-medium text-gray-900">
+                        {selectedScreen.isOnline ? 'Current Location' : 'Last Known Location'}
+                      </h4>
                       <div className="mt-2 space-y-1 text-sm text-gray-600">
-                        <p>Address: {selectedScreen.currentLocation.address}</p>
-                        <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
-                        <p>Heading: {selectedScreen.currentLocation.heading}°</p>
-                        <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
+                        {selectedScreen.isOnline ? (
+                          <>
+                            <p>Address: {selectedScreen.currentLocation?.address}</p>
+                            <p>Speed: {selectedScreen.currentLocation?.speed} km/h</p>
+                            <p>Heading: {selectedScreen.currentLocation?.heading}°</p>
+                            <p>Accuracy: {selectedScreen.currentLocation?.accuracy}m</p>
+                          </>
+                        ) : (
+                          <>
+                            <p>Address: {selectedScreen.lastSeenLocation?.address || 'Unknown'}</p>
+                            <p>Last Updated: {selectedScreen.lastSeenLocation?.timestamp ? new Date(selectedScreen.lastSeenLocation.timestamp).toLocaleString() : 'Unknown'}</p>
+                            <p>Accuracy: {selectedScreen.lastSeenLocation?.accuracy || 'Unknown'}m</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
