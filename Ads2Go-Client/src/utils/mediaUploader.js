@@ -1,6 +1,6 @@
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { storage, db } from '../firebase';
+import { storage, db } from '../firebase/init';
 
 // Base URL for server-side uploads
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ads2go-integration-production.up.railway.app/api';

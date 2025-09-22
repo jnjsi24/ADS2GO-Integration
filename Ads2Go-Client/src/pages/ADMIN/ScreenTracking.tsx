@@ -116,7 +116,6 @@ const ScreenTracking: React.FC = () => {
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<ScreenStatus | null>(null);
   const [pathData, setPathData] = useState<PathData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]);
@@ -169,8 +168,11 @@ const ScreenTracking: React.FC = () => {
 
       setScreens(enhancedScreens);
       setConnectionStatus('connected');
+    } else if (screensError) {
+      // If there's an error, set connection status to disconnected
+      setConnectionStatus('disconnected');
     }
-  }, [screensData, wsDevices]);
+  }, [screensData, wsDevices, screensError]);
 
   // Fetch materials list using GraphQL
   const fetchMaterials = async () => {
@@ -244,6 +246,7 @@ const ScreenTracking: React.FC = () => {
     fetchMaterials();
   }, []);
 
+
   const handleScreenSelect = (screen: ScreenStatus) => {
     setSelectedScreen(screen);
     if (screen.currentLocation?.lat && screen.currentLocation?.lng &&
@@ -296,7 +299,7 @@ const ScreenTracking: React.FC = () => {
     });
   };
 
-  if (loading || materialsLoading) {
+  if (screensLoading || materialsLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
@@ -338,8 +341,8 @@ const ScreenTracking: React.FC = () => {
                   {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
                 </option>
                 {materials?.map((material) => (
-                  <option key={material._id} value={material.materialId}>
-                    {material.title} - {material.materialId} ({material.materialType})
+                  <option key={material.id} value={material.materialId}>
+                    {material.materialType} - {material.materialId} ({material.vehicleType})
                   </option>
                 ))}
               </select>
@@ -380,7 +383,7 @@ const ScreenTracking: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-blue-900">
-                  Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
+                  Material: {materials?.find(m => m.materialId === selectedMaterial)?.materialType || selectedMaterial}
                 </h3>
                 <p className="text-sm text-blue-700">
                   {filteredScreens?.length || 0} screen(s) found for this material
@@ -485,7 +488,7 @@ const ScreenTracking: React.FC = () => {
                   ).map((screen) => (
                     <Marker
                       key={screen.deviceId}
-                      position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                      position={[screen.currentLocation?.lat || 0, screen.currentLocation?.lng || 0] as LatLngTuple}
                       icon={createPinIcon(getMarkerColor(screen))}
                       eventHandlers={{
                         click: () => handleScreenSelect(screen),
@@ -498,7 +501,7 @@ const ScreenTracking: React.FC = () => {
                           <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
                           <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
                           <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Address: {screen.currentLocation.address}</p>
+                          <p className="text-sm">Address: {screen.currentLocation?.address || 'Unknown'}</p>
                         </div>
                       </Popup>
                     </Marker>

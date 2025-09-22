@@ -19,7 +19,7 @@ import { GET_OWN_SUPERADMIN_DETAILS, LOGIN_SUPERADMIN_MUTATION } from '../graphq
 import { jwtDecode } from 'jwt-decode';
 
 // 🚨 Firebase imports removed except analytics/storage usage
-import { auth } from '../firebase'; // still available for storage/analytics if needed
+import { auth } from '../firebase/init'; // still available for storage/analytics if needed
 
 // Types
 type UserRole = 'ADMIN' | 'USER' | 'SUPERADMIN';
