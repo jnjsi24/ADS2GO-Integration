@@ -3,7 +3,8 @@ const router = express.Router();
 const Ad = require('../models/Ad');
 const Material = require('../models/Material');
 const AdsDeployment = require('../models/adsDeployment');
-const QRScanTracking = require('../models/qrScanTracking');
+const Analytics = require('../models/analytics');
+// QRScanTracking removed - QR scans are now handled directly in analytics collection
 
 // GET /ads/deployments - Get all deployments (for debugging) - MUST COME FIRST
 router.get('/deployments', async (req, res) => {
@@ -58,9 +59,14 @@ router.get('/qr-scans', async (req, res) => {
       };
     }
 
-    const scans = await QRScanTracking.find(query)
-      .sort({ scanTimestamp: -1 })
-      .limit(parseInt(limit));
+    // QRScanTracking removed - using analytics collection instead
+    const scans = await Analytics.aggregate([
+      { $match: query },
+      { $unwind: '$qrScans' },
+      { $replaceRoot: { newRoot: '$qrScans' } },
+      { $sort: { scanTimestamp: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
 
     res.json({
       success: true,
@@ -95,14 +101,44 @@ router.get('/qr-scans/stats', async (req, res) => {
     }
 
     // Get basic stats without material validation
-    const stats = await QRScanTracking.getScanStats(adId, startDate, endDate);
-    const topAds = await QRScanTracking.getTopPerformingAds(10, startDate, endDate);
+    // QRScanTracking removed - using analytics collection instead
+    const stats = await Analytics.aggregate([
+      { $match: { adId } },
+      { $unwind: '$qrScans' },
+      { $match: { 'qrScans.adId': adId } },
+      {
+        $group: {
+          _id: null,
+          totalScans: { $sum: 1 },
+          totalConversions: { $sum: { $cond: ['$qrScans.converted', 1, 0] } },
+          averageTimeOnPage: { $avg: '$qrScans.timeOnPage' }
+        }
+      }
+    ]);
+    
+    const topAds = await Analytics.aggregate([
+      { $unwind: '$qrScans' },
+      { $group: { _id: '$qrScans.adId', totalScans: { $sum: 1 } } },
+      { $sort: { totalScans: -1 } },
+      { $limit: 10 }
+    ]);
     
     // Only get location stats if materialId is provided and valid
     let locationStats = [];
     if (materialId) {
       try {
-        locationStats = await QRScanTracking.getScansByLocation(materialId, startDate, endDate);
+        // QRScanTracking removed - using analytics collection instead
+        locationStats = await Analytics.aggregate([
+          { $match: { materialId } },
+          { $unwind: '$qrScans' },
+          { $match: { 'qrScans.location.coordinates': { $exists: true } } },
+          {
+            $group: {
+              _id: '$qrScans.location.coordinates',
+              count: { $sum: 1 }
+            }
+          }
+        ]);
       } catch (locationError) {
         console.log('Could not get location stats for materialId:', materialId, locationError.message);
         locationStats = [];
@@ -211,6 +247,7 @@ router.get('/qr-scans/stats', async (req, res) => {
               mediaFile: slot.mediaFile,
               adTitle: slot.adId.title,
               adDescription: slot.adId.description || '',
+              website: slot.adId.website || null, // Include website field
               duration: slot.adId.adLengthSeconds || 30,
               createdAt: slot.createdAt,
               updatedAt: slot.updatedAt
@@ -220,6 +257,16 @@ router.get('/qr-scans/stats', async (req, res) => {
       });
 
       console.log(`Found ${allActiveAds.length} active ads for material ${materialId}, slot ${requestedSlotNumber}`);
+      
+      // Debug: Log the first ad to see if website field is included
+      if (allActiveAds.length > 0) {
+        console.log('🔍 First ad data being sent to Android player:', {
+          adId: allActiveAds[0].adId,
+          adTitle: allActiveAds[0].adTitle,
+          website: allActiveAds[0].website,
+          hasWebsite: !!allActiveAds[0].website
+        });
+      }
 
       res.json({
         success: true,
@@ -240,6 +287,13 @@ router.get('/qr-scans/stats', async (req, res) => {
 // POST /ads/qr-scan - Track QR code scan
 router.post('/qr-scan', async (req, res) => {
   try {
+    // Immediate notification that QR scan endpoint was hit
+    console.log('\n\u001b[43m\u001b[30m🚨 QR SCAN ENDPOINT HIT! 🚨\u001b[0m');
+    console.log('\u001b[43m\u001b[30m' + '='.repeat(50) + '\u001b[0m');
+    console.log(`\u001b[1m\u001b[33mTime: \u001b[0m\u001b[36m${new Date().toLocaleString()}\u001b[0m`);
+    console.log(`\u001b[1m\u001b[33mIP: \u001b[0m\u001b[36m${req.ip || req.connection.remoteAddress}\u001b[0m`);
+    console.log('\u001b[43m\u001b[30m' + '='.repeat(50) + '\u001b[0m\n');
+    
     const { 
       adId, 
       adTitle, 
@@ -248,6 +302,8 @@ router.post('/qr-scan', async (req, res) => {
       timestamp, 
       userAgent, 
       qrCodeUrl, 
+      website,
+      redirectUrl,
       ipAddress, 
       country, 
       city,
@@ -260,20 +316,41 @@ router.post('/qr-scan', async (req, res) => {
       screenData
     } = req.body;
 
-    console.log('QR scan tracked:', {
-      adId,
-      adTitle,
-      materialId,
-      slotNumber,
-      timestamp,
-      userAgent: userAgent ? userAgent.substring(0, 50) + '...' : 'Unknown',
-      qrCodeUrl: qrCodeUrl ? qrCodeUrl.substring(0, 100) + '...' : 'Unknown',
-      ipAddress,
-      location: city && country ? `${city}, ${country}` : 'Unknown',
-      hasGpsData: !!gpsData,
-      hasDeviceInfo: !!deviceInfo,
-      hasRegistrationData: !!registrationData
-    });
+    // Enhanced QR scan logging with sound alert and colors
+    console.log('\n\n\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m');
+    console.log('\u001b[42m\u001b[30m' + ' '.repeat(20) + '🔍 QR CODE SCANNED! 🔍' + ' '.repeat(20) + '\u001b[0m');
+    console.log('\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m\n');
+    
+    // Sound alert (beep)
+    process.stdout.write('\u0007');
+    
+    console.log('\u001b[1m\u001b[33m📱 AD INFORMATION:\u001b[0m');
+    console.log(`   Title: \u001b[36m${adTitle}\u001b[0m`);
+    console.log(`   ID: \u001b[36m${adId}\u001b[0m`);
+    
+    console.log('\u001b[1m\u001b[33m🏷️  MATERIAL INFO:\u001b[0m');
+    console.log(`   Material ID: \u001b[36m${materialId}\u001b[0m`);
+    console.log(`   Slot Number: \u001b[36m${slotNumber}\u001b[0m`);
+    
+    console.log('\u001b[1m\u001b[33m🌐 QR CODE DETAILS:\u001b[0m');
+    console.log(`   QR URL: \u001b[36m${qrCodeUrl}\u001b[0m`);
+    console.log(`   Website: \u001b[36m${website || 'Ads2Go'}\u001b[0m`);
+    
+    console.log('\u001b[1m\u001b[33m📱 DEVICE INFO:\u001b[0m');
+    console.log(`   Device ID: \u001b[36m${registrationData?.deviceId || 'Unknown'}\u001b[0m`);
+    console.log(`   Device Type: \u001b[36m${deviceInfo?.deviceType || 'Unknown'}\u001b[0m`);
+    console.log(`   OS: \u001b[36m${deviceInfo?.osName || 'Unknown'}\u001b[0m`);
+    
+    console.log('\u001b[1m\u001b[33m📍 LOCATION INFO:\u001b[0m');
+    console.log(`   Location: \u001b[36m${city && country ? `${city}, ${country}` : 'Unknown'}\u001b[0m`);
+    if (gpsData && gpsData.lat && gpsData.lng) {
+      console.log(`   GPS: \u001b[36m${gpsData.lat}, ${gpsData.lng}\u001b[0m`);
+    }
+    
+    console.log('\u001b[1m\u001b[33m⏰ TIMESTAMP:\u001b[0m');
+    console.log(`   Time: \u001b[36m${new Date().toLocaleString()}\u001b[0m`);
+    
+    console.log('\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m\n');
 
     // Detect device type from user agent or device info
     let deviceType = 'unknown';
@@ -327,6 +404,8 @@ router.post('/qr-scan', async (req, res) => {
       materialId,
       slotNumber: parseInt(slotNumber),
       qrCodeUrl: qrCodeUrl,
+      website: website || null, // Advertiser website
+      redirectUrl: redirectUrl || qrCodeUrl, // The actual URL the QR code points to
       userAgent: userAgent || 'Android App',
       deviceType,
       browser,
@@ -349,32 +428,158 @@ router.post('/qr-scan', async (req, res) => {
         hasGpsData: !!gpsData,
         hasDeviceInfo: !!deviceInfo,
         hasRegistrationData: !!registrationData,
+        hasAdvertiserWebsite: !!website,
         timestamp: new Date().toISOString()
       }
     };
 
-    // Save to database
-    const qrScan = new QRScanTracking(qrScanData);
-    await qrScan.save();
+    // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
 
-    // Update material tracking QR scan count
+    // Update material tracking QR scan count - handle both ObjectId and string materialIds
     try {
       const MaterialTracking = require('../models/materialTracking');
-      await MaterialTracking.findOneAndUpdate(
+      const mongoose = require('mongoose');
+      
+      // Try to find by materialId (could be ObjectId or string)
+      const materialUpdate = await MaterialTracking.findOneAndUpdate(
         { materialId },
         { $inc: { qrCodeScans: 1 } },
         { upsert: false }
       );
+      
+      if (materialUpdate) {
+        console.log(`✅ Updated material tracking for ${materialId}`);
+      } else {
+        console.log(`⚠️  No material tracking document found for ${materialId}`);
+      }
     } catch (materialTrackingError) {
-      console.log('Could not update material tracking QR count:', materialTrackingError.message);
+      console.log('❌ Could not update material tracking QR count:', materialTrackingError.message);
     }
 
-    // Update screen tracking with QR scan data if registration data is available
-    if (registrationData && registrationData.deviceId) {
+    // Debug registration data
+    console.log('\u001b[33m🔍 DEBUGGING REGISTRATION DATA:\u001b[0m');
+    console.log(`   Registration Data: ${JSON.stringify(registrationData, null, 2)}`);
+    console.log(`   Has Registration Data: ${!!registrationData}`);
+    console.log(`   Has Device ID: ${!!(registrationData && registrationData.deviceId)}`);
+    console.log(`   Device ID Value: ${registrationData?.deviceId || 'undefined'}`);
+    
+    // Always prioritize active deployment devices for QR scans
+    console.log('\u001b[33m🔍 LOOKING FOR ACTIVE DEPLOYMENT DEVICES...\u001b[0m');
+    
+    // Look for existing deployment devices for this material and slot
+    const existingDeployment = await Analytics.findOne({
+      materialId: materialId,
+      slotNumber: parseInt(slotNumber),
+      deviceId: { $regex: '^DEPLOYMENT-' }
+    });
+    
+    let deviceIdToUse;
+    
+    if (existingDeployment) {
+      deviceIdToUse = existingDeployment.deviceId;
+      console.log(`\u001b[32m✅ FOUND ACTIVE DEPLOYMENT DEVICE: ${deviceIdToUse}\u001b[0m`);
+      console.log(`\u001b[32m✅ QR scan will be added to existing active deployment\u001b[0m`);
+    } else {
+      // Only use device info if no deployment device exists
+      deviceIdToUse = (registrationData && registrationData.deviceId) || (deviceInfo && deviceInfo.deviceId);
+      console.log(`\u001b[33m🔍 NO DEPLOYMENT DEVICE FOUND - USING PROVIDED DEVICE ID: ${deviceIdToUse || 'NONE'}\u001b[0m`);
+      console.log(`   From Registration: ${registrationData?.deviceId || 'undefined'}`);
+      console.log(`   From Device Info: ${deviceInfo?.deviceId || 'undefined'}`);
+      
+      if (!deviceIdToUse) {
+        deviceIdToUse = `FALLBACK-${materialId}-${slotNumber}-${Date.now()}`;
+        console.log(`\u001b[33m🔍 USING FALLBACK DEVICE ID: ${deviceIdToUse}\u001b[0m`);
+      }
+    }
+    
+    // Ensure we have a valid device ID
+    if (!deviceIdToUse) {
+      deviceIdToUse = `UNKNOWN-${materialId}-${slotNumber}-${Date.now()}`;
+      console.log(`\u001b[33m🔍 USING FALLBACK DEVICE ID: ${deviceIdToUse}\u001b[0m`);
+    }
+    
+    if (deviceIdToUse) {
+      try {
+        const Analytics = require('../models/analytics');
+        
+        // Find or create analytics document for this device
+        let analytics = await Analytics.findOne({
+          deviceId: deviceIdToUse,
+          materialId: materialId,
+          slotNumber: parseInt(slotNumber)
+        });
+        
+        if (!analytics) {
+          // Create new analytics document
+          console.log('🆕 Creating new device analytics document...');
+          analytics = new Analytics({
+            deviceId: deviceIdToUse,
+            materialId: materialId,
+            slotNumber: parseInt(slotNumber),
+            adId: adId,
+            userId: null, // Will be set if available
+            adDeploymentId: null, // Will be set if available
+            isOnline: true,
+            deviceInfo: deviceInfo || null,
+            currentLocation: gpsData ? {
+              type: 'Point',
+              coordinates: [gpsData.lng || 0, gpsData.lat || 0],
+              accuracy: gpsData.accuracy || 0,
+              speed: gpsData.speed || 0,
+              heading: gpsData.heading || 0,
+              timestamp: new Date()
+            } : null,
+            networkStatus: {
+              isOnline: networkStatus || false,
+              lastSeen: new Date()
+            }
+          });
+          console.log('✅ New analytics document created');
+        } else {
+          console.log('📊 Found existing analytics document');
+        }
+        
+        // Add QR scan to analytics
+        const qrScanData = {
+          adId: adId,
+          adTitle: adTitle || `Ad ${adId}`,
+          scanTimestamp: timestamp ? new Date(timestamp) : new Date(),
+          qrCodeUrl: qrCodeUrl,
+          userAgent: userAgent || 'Android App',
+          deviceType: deviceType,
+          browser: browser,
+          operatingSystem: operatingSystem,
+          ipAddress: ipAddress,
+          country: country,
+          city: city,
+          location: locationData,
+          timeOnPage: 0,
+          converted: false,
+          conversionType: null,
+          conversionValue: 0
+        };
+        
+        await analytics.addQRScan(qrScanData);
+        console.log('\u001b[32m✅ Updated device analytics with QR scan data\u001b[0m');
+        console.log('\u001b[1m\u001b[33m📊 DEVICE ANALYTICS UPDATED:\u001b[0m');
+        console.log(`   Device: \u001b[36m${analytics.deviceId}\u001b[0m`);
+        console.log(`   Material: \u001b[36m${analytics.materialId}\u001b[0m`);
+        console.log(`   Slot: \u001b[36m${analytics.slotNumber}\u001b[0m`);
+        console.log(`   Total QR Scans: \u001b[32m${analytics.totalQRScans}\u001b[0m`);
+        console.log(`   QR Scans in Array: \u001b[32m${analytics.qrScans.length}\u001b[0m`);
+        console.log(`   Conversion Rate: \u001b[32m${analytics.qrScanConversionRate.toFixed(2)}%\u001b[0m`);
+        
+      } catch (analyticsError) {
+        console.log('\u001b[31m❌ Could not update device analytics with QR scan:\u001b[0m', analyticsError.message);
+      }
+    }
+
+    // Update screen tracking with QR scan data if we have a device ID
+    if (deviceIdToUse) {
       try {
         const ScreenTracking = require('../models/screenTracking');
         await ScreenTracking.findOneAndUpdate(
-          { 'devices.deviceId': registrationData.deviceId },
+          { 'devices.deviceId': deviceIdToUse },
           { 
             $inc: { 'screenMetrics.qrCodeScans': 1 },
             $set: { 
@@ -383,42 +588,31 @@ router.post('/qr-scan', async (req, res) => {
             }
           }
         );
-        console.log('Updated screen tracking QR scan count');
+        console.log('\u001b[32m✅ Updated screen tracking QR scan count\u001b[0m');
       } catch (screenTrackingError) {
-        console.log('Could not update screen tracking QR count:', screenTrackingError.message);
+        console.log('\u001b[31m❌ Could not update screen tracking QR count:\u001b[0m', screenTrackingError.message);
       }
     }
 
-    // Track QR scan in analytics service
-    try {
-      const AnalyticsService = require('../services/analyticsService');
-      await AnalyticsService.trackQRScan(
-        registrationData?.deviceId || 'unknown',
-        materialId,
-        slotNumber,
-        qrScanData
-      );
-      console.log('✅ QR scan tracked in analytics service');
-    } catch (analyticsError) {
-      console.log('❌ Failed to track QR scan in analytics:', analyticsError.message);
-    }
+    // Note: QR scan is already tracked in device analytics above
 
     res.json({
       success: true,
       message: 'QR scan tracked successfully',
       data: {
-        scanId: qrScan._id,
         adId,
         adTitle: qrScanData.adTitle,
         materialId,
         slotNumber,
-        timestamp: qrScan.scanTimestamp.toISOString(),
+        timestamp: qrScanData.scanTimestamp.toISOString(),
         deviceType,
         browser,
         operatingSystem,
         hasGpsData: !!gpsData,
         hasDeviceInfo: !!deviceInfo,
-        location: gpsData ? `${gpsData.lat}, ${gpsData.lng}` : 'Unknown'
+        location: gpsData ? `${gpsData.lat}, ${gpsData.lng}` : 'Unknown',
+        website: qrScanData.website,
+        redirectUrl: qrScanData.redirectUrl
       }
     });
 
@@ -458,6 +652,82 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /ads/qr-redirect - Redirect QR scans to advertiser website with tracking
+router.get('/qr-redirect', async (req, res) => {
+  try {
+    const { 
+      adId, 
+      adTitle, 
+      materialId, 
+      slotNumber, 
+      website, 
+      redirectUrl,
+      timestamp 
+    } = req.query;
 
+    console.log('\n🔗 QR REDIRECT ENDPOINT HIT!');
+    console.log('=====================================');
+    console.log(`Ad ID: ${adId}`);
+    console.log(`Ad Title: ${adTitle}`);
+    console.log(`Material ID: ${materialId}`);
+    console.log(`Slot Number: ${slotNumber}`);
+    console.log(`Website: ${website}`);
+    console.log(`Redirect URL: ${redirectUrl}`);
+    console.log('=====================================\n');
+
+    // Track the QR scan
+    if (adId && adTitle && materialId && slotNumber) {
+      try {
+        const Analytics = require('../models/analytics');
+        
+        // Find the analytics document for this material and slot
+        let analytics = await Analytics.findOne({
+          materialId: materialId,
+          slotNumber: parseInt(slotNumber),
+          deviceId: { $regex: '^DEPLOYMENT-' }
+        });
+
+        if (analytics) {
+          // Add QR scan to analytics
+          const qrScanData = {
+            adId: adId,
+            adTitle: adTitle || `Ad ${adId}`,
+            scanTimestamp: new Date(),
+            qrCodeUrl: redirectUrl || website,
+            userAgent: req.get('User-Agent') || 'QR Scanner',
+            deviceType: 'mobile',
+            browser: 'QR Scanner',
+            operatingSystem: 'Unknown',
+            ipAddress: req.ip || req.connection.remoteAddress,
+            country: 'Unknown',
+            city: 'Unknown',
+            location: null,
+            timeOnPage: 0,
+            converted: false,
+            conversionType: null,
+            conversionValue: 0
+          };
+
+          await analytics.addQRScan(qrScanData);
+          console.log(`✅ QR scan tracked for ad: ${adTitle}`);
+        } else {
+          console.log(`⚠️  No analytics document found for material ${materialId}, slot ${slotNumber}`);
+        }
+      } catch (trackingError) {
+        console.error('❌ Error tracking QR scan:', trackingError);
+      }
+    }
+
+    // Redirect to the advertiser's website
+    const targetUrl = redirectUrl || website || 'https://ads2go.app';
+    console.log(`🔗 Redirecting to: ${targetUrl}`);
+    
+    res.redirect(302, targetUrl);
+    
+  } catch (error) {
+    console.error('❌ Error in QR redirect:', error);
+    res.redirect(302, 'https://ads2go.app');
+  }
+});
 
 module.exports = router;

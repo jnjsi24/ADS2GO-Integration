@@ -33,6 +33,22 @@ const QRScanTrackingSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  website: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty website
+        return /^https?:\/\/.+/.test(v); // Must be a valid URL if provided
+      },
+      message: 'Website must be a valid URL starting with http:// or https://'
+    }
+  },
+  redirectUrl: {
+    type: String,
+    required: false, // Make it optional since it might not always be provided
+    trim: true
+  },
   
   // Device and User Information
   userAgent: {
@@ -336,4 +352,18 @@ QRScanTrackingSchema.statics.getScansByLocation = function(materialId, startDate
   ]);
 };
 
-module.exports = mongoose.models.QRScanTracking || mongoose.model('QRScanTracking', QRScanTrackingSchema);
+// DEPRECATED: QRScanTracking model is no longer used
+// QR scans are now handled directly in the analytics collection
+// This model is kept for reference but should not be used
+// module.exports = mongoose.models.QRScanTracking || mongoose.model('QRScanTracking', QRScanTrackingSchema);
+
+// Return a dummy model that doesn't create a collection
+module.exports = {
+  find: () => Promise.resolve([]),
+  findOne: () => Promise.resolve(null),
+  create: () => Promise.reject(new Error('QRScanTracking model is deprecated - use analytics collection instead')),
+  save: () => Promise.reject(new Error('QRScanTracking model is deprecated - use analytics collection instead')),
+  deleteMany: () => Promise.resolve({ deletedCount: 0 }),
+  countDocuments: () => Promise.resolve(0),
+  aggregate: () => Promise.resolve([])
+};

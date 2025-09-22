@@ -176,6 +176,9 @@ async function startServer() {
   // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   
+  // Serve public files statically
+  app.use(express.static(path.join(__dirname, '..', 'public')));
+  
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   

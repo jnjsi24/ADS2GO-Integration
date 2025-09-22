@@ -156,6 +156,15 @@ const AnalyticsSchema = new mongoose.Schema({
   qrScanConversionRate: { type: Number, default: 0 },
   lastQRScan: { type: Date },
   
+  // QR Scans per specific ad
+  qrScansByAd: [{
+    adId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    scanCount: { type: Number, default: 0 },
+    lastScanned: { type: Date },
+    firstScanned: { type: Date }
+  }],
+  
   // Location and Movement Analytics
   totalDistanceTraveled: { type: Number, default: 0 }, // lifetime total in km
   averageSpeed: { type: Number, default: 0 }, // km/h
@@ -273,6 +282,23 @@ AnalyticsSchema.methods.addQRScan = function(qrScanData) {
   this.qrScans.push(qrScanData);
   this.totalQRScans += 1;
   this.lastQRScan = new Date();
+  
+  // Update QR scans per specific ad
+  const existingAdIndex = this.qrScansByAd.findIndex(ad => ad.adId === qrScanData.adId);
+  if (existingAdIndex >= 0) {
+    // Update existing ad scan count
+    this.qrScansByAd[existingAdIndex].scanCount += 1;
+    this.qrScansByAd[existingAdIndex].lastScanned = new Date();
+  } else {
+    // Add new ad to QR scans tracking
+    this.qrScansByAd.push({
+      adId: qrScanData.adId,
+      adTitle: qrScanData.adTitle,
+      scanCount: 1,
+      lastScanned: new Date(),
+      firstScanned: new Date()
+    });
+  }
   
   // Update conversion rate
   const totalConversions = this.qrScans.filter(scan => scan.converted).length;
