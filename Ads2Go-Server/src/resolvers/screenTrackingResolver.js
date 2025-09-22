@@ -100,9 +100,11 @@ const resolvers = {
             }
           }
           
-          // Parse location data if it's a string
+          // Get formatted location data (same as REST API)
           let locationData = null;
-          if (screen.currentLocation) {
+          if (screen.getFormattedLocation) {
+            locationData = screen.getFormattedLocation();
+          } else if (screen.currentLocation) {
             if (typeof screen.currentLocation === 'string') {
               try {
                 locationData = JSON.parse(screen.currentLocation);
@@ -128,18 +130,11 @@ const resolvers = {
             }
           }
 
-          // Parse last seen location data if it exists
+          // Get last seen location data (virtual field from model)
           let lastSeenLocationData = null;
           if (screen.lastSeenLocation) {
-            if (typeof screen.lastSeenLocation === 'string') {
-              try {
-                lastSeenLocationData = JSON.parse(screen.lastSeenLocation);
-              } catch (e) {
-                lastSeenLocationData = { address: screen.lastSeenLocation };
-              }
-            } else if (typeof screen.lastSeenLocation === 'object') {
-              lastSeenLocationData = screen.lastSeenLocation;
-            }
+            // lastSeenLocation is a virtual field, so it should already be properly formatted
+            lastSeenLocationData = screen.lastSeenLocation;
           }
 
           return {

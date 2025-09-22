@@ -310,6 +310,12 @@ const ScreenTracking: React.FC = () => {
       
       // Debug coordinate validation
       enhancedScreens.forEach(screen => {
+        console.log(`🔍 Screen ${screen.materialId} full data:`, {
+          currentLocation: screen.currentLocation,
+          lastSeenLocation: screen.lastSeenLocation,
+          isOnline: screen.isOnline
+        });
+        
         if (screen.currentLocation) {
           console.log(`🔍 Screen ${screen.materialId} coordinates:`, {
             lat: screen.currentLocation.lat,
