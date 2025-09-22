@@ -14,16 +14,34 @@ class DeviceStatusService {
     this.materialId = null;
     this.onStatusChange = null;
     this.isConnected = false;
+    this.backgroundTimeout = null;
   }
 
-  initialize = ({ materialId, onStatusChange, forceReconnect = false }) => {
+  initialize = async ({ materialId, onStatusChange, forceReconnect = false }) => {
     // Store the previous materialId to check if it changed
     const previousMaterialId = this.materialId;
     this.materialId = materialId;
     this.onStatusChange = onStatusChange;
     
-    // Get device ID
-    this.deviceId = Application.androidId || Device.modelName || 'unknown-device';
+    // Get device ID from stored registration data
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const registrationData = await AsyncStorage.getItem('tabletRegistration');
+      if (registrationData) {
+        const registration = JSON.parse(registrationData);
+        this.deviceId = registration.deviceId;
+        console.log('Using stored device ID from registration:', this.deviceId);
+      } else {
+        // Fallback to generated device ID if no registration data
+        this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
+        console.log('No registration data found, using generated device ID:', this.deviceId);
+      }
+    } catch (error) {
+      console.error('Error getting device ID from registration:', error);
+      // Fallback to generated device ID
+      this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
+      console.log('Using fallback device ID:', this.deviceId);
+    }
     
     // Connect if we have a materialId and either:
     // 1. It's different from the previous one, OR
@@ -355,17 +373,33 @@ class DeviceStatusService {
     
     if (nextAppState === 'active') {
       // App came to foreground
+      // Clear any background timeout
+      if (this.backgroundTimeout) {
+        clearTimeout(this.backgroundTimeout);
+        this.backgroundTimeout = null;
+      }
+      
       if (!this.isConnected) {
         console.log('[AppState] App is active, reconnecting WebSocket...');
         this.reconnectAttempts = 0;
         this.connect();
+      } else {
+        console.log('[AppState] App is active, WebSocket already connected');
       }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       // App went to background or is inactive
-      console.log('[AppState] App is in background, cleaning up WebSocket...');
-      if (this.ws) {
-        this.ws.close();
+      // Don't close WebSocket immediately - let it try to maintain connection
+      console.log('[AppState] App is in background, maintaining WebSocket connection...');
+      // Only close if we've been in background for too long
+      if (this.backgroundTimeout) {
+        clearTimeout(this.backgroundTimeout);
       }
+      this.backgroundTimeout = setTimeout(() => {
+        console.log('[AppState] App has been in background too long, closing WebSocket...');
+        if (this.ws) {
+          this.ws.close();
+        }
+      }, 300000); // 5 minutes in background before closing
     }
   };
 
@@ -380,6 +414,11 @@ class DeviceStatusService {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+    
+    if (this.backgroundTimeout) {
+      clearTimeout(this.backgroundTimeout);
+      this.backgroundTimeout = null;
     }
     
     // Stop ping interval

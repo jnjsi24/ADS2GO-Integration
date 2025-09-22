@@ -249,7 +249,28 @@ const ScreenTracking: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('Path data received:', data);
-        setPathData(data.data);
+        
+        // Validate path data structure before setting
+        if (data.data && Array.isArray(data.data.locationHistory)) {
+          // Filter out invalid location points
+          const validLocationHistory = data.data.locationHistory.filter((point: any) => 
+            point && 
+            typeof point.lat === 'number' && 
+            typeof point.lng === 'number' && 
+            !isNaN(point.lat) && 
+            !isNaN(point.lng) &&
+            isValidCoordinate(point.lat, point.lng)
+          );
+          
+          setPathData({
+            ...data.data,
+            locationHistory: validLocationHistory,
+            totalPoints: validLocationHistory.length
+          });
+        } else {
+          console.warn('Invalid path data structure received:', data);
+          setPathData(null);
+        }
       } else {
         const errorData = await response.json();
         console.error('Path data API Error:', errorData);
@@ -600,14 +621,22 @@ const ScreenTracking: React.FC = () => {
                   })()}
                   
                   {/* Path for selected tablet */}
-                  {pathData && pathData.locationHistory?.length > 1 && (
-                    <Polyline
-                      positions={pathData.locationHistory.map(point => [point.lat, point.lng] as LatLngTuple)}
-                      color="#3b82f6"
-                      weight={3}
-                      opacity={0.7}
-                    />
-                  )}
+                  {pathData && pathData.locationHistory?.length > 1 && (() => {
+                    const validPositions = pathData.locationHistory
+                      .filter(point => point && typeof point.lat === 'number' && typeof point.lng === 'number' && 
+                             !isNaN(point.lat) && !isNaN(point.lng) &&
+                             isValidCoordinate(point.lat, point.lng))
+                      .map(point => [point.lat, point.lng] as LatLngTuple);
+                    
+                    return validPositions.length > 1 ? (
+                      <Polyline
+                        positions={validPositions}
+                        color="#3b82f6"
+                        weight={3}
+                        opacity={0.7}
+                      />
+                    ) : null;
+                  })()}
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}

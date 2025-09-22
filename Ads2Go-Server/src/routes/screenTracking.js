@@ -53,19 +53,29 @@ router.post('/updateLocation', async (req, res) => {
       address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 
-    // Check if we need to start a new daily session
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Check if we need to reset daily session (new day)
+    const wasReset = screenTracking.resetDailySession();
+    if (wasReset) {
+      console.log(`🔄 Daily session reset for ${deviceId} - new day started`);
+      await screenTracking.save();
+    }
     
-    if (!screenTracking.currentSession || 
-        new Date(screenTracking.currentSession.date).getTime() !== today.getTime()) {
-      // End previous session if exists
-      if (screenTracking.currentSession && screenTracking.currentSession.isActive) {
-        await screenTracking.endDailySession();
-      }
-      
-      // Start new daily session
-      await screenTracking.startDailySession();
+    // Check if device was offline and just reconnected - clear location history to prevent invalid distance calculation
+    const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
+    const wasOffline = !screenTracking.isOnline && hasWebSocketConnection;
+    
+    // Also check if this is a fresh connection (no recent location history or invalid coordinates)
+    const hasInvalidLocationHistory = screenTracking.currentSession?.locationHistory?.some(point => 
+      point.coordinates && point.coordinates[0] === 0 && point.coordinates[1] === 0
+    );
+    
+    if (wasOffline || hasInvalidLocationHistory) {
+      console.log(`🔄 Device ${deviceId} reconnected after being offline or has invalid location history - clearing location history to prevent invalid distance calculation`);
+      screenTracking.currentSession.locationHistory = [];
+      screenTracking.currentLocation = null;
+      screenTracking.currentSession.totalDistanceTraveled = 0;
+      screenTracking.totalDistanceTraveled = 0;
+      await screenTracking.save();
     }
 
     // Update location and online status
@@ -74,7 +84,6 @@ router.post('/updateLocation', async (req, res) => {
       console.log('Location updated successfully for device:', deviceId);
       
       // Check if device has active WebSocket connection before marking as online
-      const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
       
       // Only mark as online if device has active WebSocket connection
       await ScreenTracking.updateOne(
@@ -438,6 +447,7 @@ router.get('/compliance', async (req, res) => {
     
     // Initialize screens array to collect individual device records
     const individualScreens = [];
+    const seenDisplayIds = new Set(); // Track unique display IDs to prevent duplicates
     let totalOnlineScreens = 0;
     let totalCompliantScreens = 0;
     let totalHours = 0;
@@ -448,8 +458,10 @@ router.get('/compliance', async (req, res) => {
       if (tablet.devices && tablet.devices.length > 0) {
         // New multi-device structure: create individual records per device
         tablet.devices.forEach((device, index) => {
-          const deviceHours = device.totalHoursOnline || 0;
-          const deviceDistance = device.totalDistanceTraveled || 0;
+          // Use device-specific values if available, otherwise fall back to legacy values
+          // Count hours if device is online (WebSocket or database status)
+          const deviceHours = device.isOnline ? (device.totalHoursOnline || tablet.currentHoursToday || 0) : (tablet.currentHoursToday || 0);
+          const deviceDistance = device.totalDistanceTraveled || tablet.currentSession?.totalDistanceTraveled || 0;
           const isDeviceOnline = device.isOnline;
           const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
           
@@ -460,6 +472,13 @@ router.get('/compliance', async (req, res) => {
           
           // Create unique display ID by combining materialId with slot info
           const displayId = `${tablet.materialId}-SLOT-${device.slotNumber || (index + 1)}`;
+          
+          // Skip if we've already seen this display ID (deduplication)
+          if (seenDisplayIds.has(displayId)) {
+            console.log(`Skipping duplicate display ID: ${displayId}`);
+            return;
+          }
+          seenDisplayIds.add(displayId);
           
           // Convert coordinates format for individual screens
           let deviceLocation = device.currentLocation || tablet.currentLocation;
@@ -489,7 +508,7 @@ router.get('/compliance', async (req, res) => {
             slotNumber: device.slotNumber || (index + 1),
             isOnline: isDeviceOnline,
             currentLocation: frontendDeviceLocation,
-            lastSeen: device.lastSeen,
+            lastSeen: device.lastSeen || tablet.lastSeen,
             currentHours: deviceHours,
             hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
             isCompliant: isDeviceCompliant,
@@ -513,6 +532,16 @@ router.get('/compliance', async (req, res) => {
         });
       } else {
         // Legacy single-device structure: use root-level fields for backward compatibility
+        // Only process if there are NO devices in the devices array
+        const legacyDisplayId = `${tablet.materialId}-SLOT-${tablet.slotNumber || 1}`;
+        
+        // Skip if we've already seen this display ID (deduplication)
+        if (seenDisplayIds.has(legacyDisplayId)) {
+          console.log(`Skipping duplicate legacy display ID: ${legacyDisplayId}`);
+          return;
+        }
+        seenDisplayIds.add(legacyDisplayId);
+        
         const legacyHours = tablet.currentHoursToday || 0;
         const legacyDistance = tablet.currentSession?.totalDistanceTraveled || 0;
         const isLegacyOnline = tablet.isOnline;
@@ -544,7 +573,7 @@ router.get('/compliance', async (req, res) => {
 
         individualScreens.push({
           deviceId: tablet.deviceId,
-          displayId: `${tablet.materialId}-SLOT-${tablet.slotNumber || 1}`,
+          displayId: legacyDisplayId,
           materialId: tablet.materialId,
           screenType: tablet.screenType,
           carGroupId: tablet.carGroupId,

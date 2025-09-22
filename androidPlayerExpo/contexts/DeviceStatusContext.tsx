@@ -103,24 +103,28 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
     }, 10000); // 10 second timeout
 
-    try {
-      // Initialize WebSocket connection
-      deviceStatusService.initialize({
-        materialId,
-        onStatusChange: (newStatus) => {
-          // Clear timeout if connection succeeds
-          clearTimeout(connectionTimeout);
-          handleStatusChange(newStatus);
-        }
-      });
-    } catch (error) {
-      console.error('Failed to initialize WebSocket:', error);
-      clearTimeout(connectionTimeout);
-      setStatus({
-        isOnline: false,
-        error: error instanceof Error ? error.message : 'Failed to connect'
-      });
-    }
+    const initializeWebSocket = async () => {
+      try {
+        // Initialize WebSocket connection
+        await deviceStatusService.initialize({
+          materialId,
+          onStatusChange: (newStatus) => {
+            // Clear timeout if connection succeeds
+            clearTimeout(connectionTimeout);
+            handleStatusChange(newStatus);
+          }
+        });
+      } catch (error) {
+        console.error('Failed to initialize WebSocket:', error);
+        clearTimeout(connectionTimeout);
+        setStatus({
+          isOnline: false,
+          error: error instanceof Error ? error.message : 'Failed to connect'
+        });
+      }
+    };
+
+    initializeWebSocket();
 
     // Clean up on unmount or when materialId changes
     return () => {

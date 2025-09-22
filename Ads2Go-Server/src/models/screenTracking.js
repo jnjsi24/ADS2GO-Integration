@@ -247,15 +247,47 @@ ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
   
   const now = new Date();
   const startTime = new Date(this.currentSession.startTime);
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
   
-  return Math.round(hoursDiff * 100) / 100; // Round to 2 decimal places
+  // Check if this is a new day - if so, reset to 8 hours
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession.date);
+  sessionDate.setHours(0, 0, 0, 0);
+  
+  // If it's a new day, return 8 hours (fresh start)
+  if (sessionDate.getTime() !== today.getTime()) {
+    return 8;
+  }
+  
+  // Count hours if device is online (either WebSocket connected or database shows online)
+  // If not online, return the last recorded hours
+  if (!this.isOnline) {
+    return this.currentSession.totalHoursOnline || 0;
+  }
+  
+  // Calculate hours since session start, but only if online
+  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  
+  return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
 
 // Virtual for hours remaining to meet target
 ScreenTrackingSchema.virtual('hoursRemaining').get(function() {
   const targetHours = this.currentSession?.targetHours || 8;
   const currentHours = this.currentHoursToday;
+  
+  // If it's a new day, show 8 hours remaining
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      return 8;
+    }
+  }
+  
   return Math.max(0, targetHours - currentHours);
 });
 
@@ -271,6 +303,50 @@ ScreenTrackingSchema.virtual('displayStatus').get(function() {
   if (!this.screenMetrics?.isDisplaying) return 'DISPLAY_OFF';
   return 'ACTIVE';
 });
+
+// Method to reset daily session
+ScreenTrackingSchema.methods.resetDailySession = function() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Check if we need to reset (new day)
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      // Reset for new day
+      this.currentSession = {
+        date: today,
+        startTime: new Date(),
+        endTime: null,
+        totalHoursOnline: 0,
+        totalDistanceTraveled: 0,
+        isActive: true,
+        targetHours: 8,
+        complianceStatus: 'PENDING',
+        locationHistory: []
+      };
+      
+      // Also reset the current location to prevent invalid distance calculations
+      this.currentLocation = null;
+      
+      // Reset device-specific hours and distance
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          device.totalHoursOnline = 0;
+          device.totalDistanceTraveled = 0;
+        });
+      }
+      
+      // Reset total distance as well
+      this.totalDistanceTraveled = 0;
+      
+      return true; // Session was reset
+    }
+  }
+  
+  return false; // No reset needed
+};
 
 // Virtual for easy access to current location coordinates
 ScreenTrackingSchema.virtual('currentLat').get(function() {
@@ -328,10 +404,11 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
     if (this.currentSession.locationHistory.length > 1) {
       const prevPoint = this.currentSession.locationHistory[this.currentSession.locationHistory.length - 2];
       
-      // Check if previous point has valid coordinates
+      // Check if previous point has valid coordinates (not 0,0 which is in the ocean)
       if (prevPoint.coordinates && prevPoint.coordinates.length === 2 && 
           typeof prevPoint.coordinates[0] === 'number' && typeof prevPoint.coordinates[1] === 'number' &&
-          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1])) {
+          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1]) &&
+          !(prevPoint.coordinates[0] === 0 && prevPoint.coordinates[1] === 0)) {
         
         // Extract coordinates from GeoJSON format: [longitude, latitude]
         const prevLng = prevPoint.coordinates[0];
@@ -354,7 +431,32 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
         } else {
           console.log(`📍 No significant movement detected (${latDiff.toFixed(8)}, ${lngDiff.toFixed(8)}) - skipping distance calculation`);
         }
+      } else {
+        console.log(`📍 Previous location invalid or is 0,0 - skipping distance calculation`);
       }
+    }
+    
+    // Update hours tracking - only count when device is online (WebSocket connected)
+    if (this.isOnline && this.currentSession && this.currentSession.isActive) {
+      const now = new Date();
+      const startTime = new Date(this.currentSession.startTime);
+      const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+      
+      // Cap at 8 hours maximum
+      const totalHours = Math.min(8, Math.max(0, hoursDiff));
+      this.currentSession.totalHoursOnline = Math.round(totalHours * 100) / 100;
+      
+      // Update device-specific hours if devices array exists
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          if (device.deviceId === this.deviceId) { // Update the specific device
+            device.totalHoursOnline = this.currentSession.totalHoursOnline;
+            device.totalDistanceTraveled = this.currentSession.totalDistanceTraveled;
+          }
+        });
+      }
+      
+      console.log(`⏰ Hours updated: ${this.currentSession.totalHoursOnline}h (online: ${this.isOnline})`);
     }
   }
 

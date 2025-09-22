@@ -137,6 +137,9 @@ class DeviceStatusService {
     // Update DeviceStatusManager with WebSocket connection
     deviceStatusManager.setWebSocketStatus(deviceId, true, new Date());
     
+    // Immediately broadcast status update for real-time response
+    this.broadcastDeviceUpdate(deviceId, true);
+    
     // Also update with the full device ID if they're different
     if (deviceId !== materialId) {
       // Try to find the full device ID from the database
@@ -161,6 +164,9 @@ class DeviceStatusService {
         // Update DeviceStatusManager with WebSocket disconnection
         console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
+        
+        // Immediately broadcast status update for real-time response
+        this.broadcastDeviceUpdate(deviceId, false);
         
         // Also update with the full device ID if they're different
         if (deviceId !== ws.materialId) {
@@ -420,11 +426,20 @@ class DeviceStatusService {
     });
   }
 
-  broadcastDeviceUpdate(device) {
+  broadcastDeviceUpdate(deviceId, isOnline) {
+    const device = {
+      deviceId,
+      isOnline,
+      lastSeen: new Date(),
+      source: 'websocket'
+    };
+    
     this.broadcast({
       type: 'deviceUpdate',
       device: device
     });
+    
+    console.log(`📡 [Broadcast] Device ${deviceId} status: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
   }
 
   startPingInterval() {
@@ -433,16 +448,16 @@ class DeviceStatusService {
       clearInterval(this.pingInterval);
     }
 
-    // Set up a new ping interval (every 30 seconds)
+    // Set up a new ping interval (every 10 seconds for faster detection)
     this.pingInterval = setInterval(() => {
       const now = Date.now();
       const deadConnections = [];
 
       // Check all active connections
       this.activeConnections.forEach((ws, deviceId) => {
-        // If we haven't received a pong in the last 90 seconds, mark as dead (increased from 60s)
-        if (ws.lastPong && (now - ws.lastPong) > 90000) {
-          console.log(`Device ${deviceId} connection timed out (no pong for 90s)`);
+        // If we haven't received a pong in the last 30 seconds, mark as dead (faster detection)
+        if (ws.lastPong && (now - ws.lastPong) > 30000) {
+          console.log(`Device ${deviceId} connection timed out (no pong for 30s)`);
           deadConnections.push(deviceId);
           ws.close(1000, 'Connection timeout - no pong received');
           return;
@@ -470,10 +485,16 @@ class DeviceStatusService {
       deadConnections.forEach(deviceId => {
         this.activeConnections.delete(deviceId);
         this.updateDeviceStatus(deviceId, false);
+        
+        // Immediately broadcast status update for real-time response
+        this.broadcastDeviceUpdate(deviceId, false);
+        
+        // Update DeviceStatusManager
+        deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       });
 
       console.log(`Active WebSocket connections: ${this.activeConnections.size}`);
-    }, 30000); // 30 seconds
+    }, 10000); // 10 seconds for faster real-time checking
   }
 
   async cleanup() {
