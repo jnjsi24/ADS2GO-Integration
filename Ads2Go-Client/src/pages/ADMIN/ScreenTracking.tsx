@@ -116,7 +116,6 @@ const ScreenTracking: React.FC = () => {
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<ScreenStatus | null>(null);
   const [pathData, setPathData] = useState<PathData | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]);
 
@@ -134,23 +133,62 @@ const ScreenTracking: React.FC = () => {
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const mapRef = useRef<Map | null>(null);
 
-  // GraphQL query for real-time screen data
+  // GraphQL query for screen data (initial load)
   const { data: screensData, loading: screensLoading, error: screensError, refetch: refetchScreens } = useQuery(GET_ALL_SCREENS, {
     variables: {
       filters: selectedMaterial !== 'all' ? { materialId: selectedMaterial } : null
     },
-    pollInterval: 3000,
-    notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'network-only'
+    fetchPolicy: 'cache-first'
   });
 
   // WebSocket real-time status
   const { devices: wsDevices, isConnected: wsConnected } = useDeviceStatus();
 
-  // Update screens when GraphQL data changes
+  // Auto-refresh function that silently updates data
+  const autoRefreshData = useCallback(async () => {
+    try {
+      console.log('🔄 Auto-refresh - fetching screen data silently...');
+      
+      // Refetch screens data using GraphQL
+      const result = await refetchScreens();
+      if (result.data?.getAllScreens) {
+        const screensFromGraphQL = result.data.getAllScreens.screens || [];
+        
+        // Enhance with WebSocket real-time status
+        const enhancedScreens = screensFromGraphQL.map((screen: any) => {
+          const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
+
+          return {
+            ...screen,
+            isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
+            alertCount: screen.alerts?.length || 0
+          };
+        });
+
+        setScreens(prevScreens => {
+          const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(enhancedScreens);
+          if (hasChanged) {
+            console.log('📊 Screen data updated via auto-refresh');
+          }
+          return enhancedScreens;
+        });
+        
+        setConnectionStatus('connected');
+      }
+      
+      setLastRefresh(new Date());
+    } catch (err) {
+      console.error('Error during auto-refresh:', err);
+      setConnectionStatus('disconnected');
+    }
+  }, [refetchScreens, wsDevices]);
+
+  // Update screens when GraphQL data changes (initial load)
   useEffect(() => {
     if (screensData?.getAllScreens) {
       const screensFromGraphQL = screensData.getAllScreens.screens || [];
@@ -173,6 +211,22 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('disconnected');
     }
   }, [screensData, wsDevices, screensError]);
+
+  // Set up auto-refresh interval (every 30 seconds like ads panel)
+  useEffect(() => {
+    // Initial auto-refresh after component mounts
+    const initialTimeout = setTimeout(() => {
+      autoRefreshData();
+    }, 5000); // Start auto-refresh after 5 seconds
+
+    // Set up interval for continuous auto-refresh
+    const interval = setInterval(autoRefreshData, 30000); // Every 30 seconds
+
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [autoRefreshData]);
 
   // Fetch materials list using GraphQL
   const fetchMaterials = async () => {
@@ -331,6 +385,9 @@ const ScreenTracking: React.FC = () => {
                    connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
+              <div className="text-xs text-gray-500">
+                Last updated: {lastRefresh.toLocaleTimeString()}
+              </div>
               <select
                 value={selectedMaterial}
                 onChange={(e) => setSelectedMaterial(e.target.value)}
@@ -353,11 +410,14 @@ const ScreenTracking: React.FC = () => {
                 className="border border-gray-300 rounded-md px-3 py-2"
               />
               <button
-                onClick={fetchData}
-                disabled={refreshing}
+                onClick={() => {
+                  setIsRefreshing(true);
+                  autoRefreshData().finally(() => setIsRefreshing(false));
+                }}
+                disabled={isRefreshing}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
               </button>
             </div>
