@@ -315,7 +315,9 @@ const ScreenTracking: React.FC = () => {
           lastSeenLocation: screen.lastSeenLocation,
           isOnline: screen.isOnline,
           lastSeen: screen.lastSeen,
-          lastSeenDisplay: screen.lastSeenDisplay
+          lastSeenDisplay: screen.lastSeenDisplay,
+          lastSeenDisplayType: typeof screen.lastSeenDisplay,
+          lastSeenDisplayValue: screen.lastSeenDisplay
         });
         
         if (screen.currentLocation) {
@@ -834,7 +836,9 @@ const ScreenTracking: React.FC = () => {
                             ? new Date(screen.lastSeenDisplay).toLocaleTimeString()
                             : screen.isOnline 
                               ? 'Now (Online)' 
-                              : 'Never'
+                              : screen.lastSeen && screen.lastSeen !== 'Invalid Date' && new Date(screen.lastSeen).toString() !== 'Invalid Date'
+                                ? new Date(screen.lastSeen).toLocaleTimeString()
+                                : 'Never'
                           }
                         </span>
                       </div>

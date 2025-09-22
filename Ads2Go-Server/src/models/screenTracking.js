@@ -858,4 +858,8 @@ ScreenTrackingSchema.statics.findDisplayIssues = function() {
   });
 };
 
+// Ensure virtual fields are included in JSON serialization
+ScreenTrackingSchema.set('toJSON', { virtuals: true });
+ScreenTrackingSchema.set('toObject', { virtuals: true });
+
 module.exports = mongoose.models.ScreenTracking || mongoose.model('ScreenTracking', ScreenTrackingSchema);
