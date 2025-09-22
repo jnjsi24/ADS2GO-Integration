@@ -290,6 +290,27 @@ const ScreenTracking: React.FC = () => {
     console.log('fetchPathData called - using GraphQL polling instead');
   }, []);
 
+  // Initialize screens from GraphQL data
+  useEffect(() => {
+    if (screensData?.getAllScreens?.screens) {
+      const screensFromGraphQL = screensData.getAllScreens.screens || [];
+      
+      // Enhance with WebSocket real-time status
+      const enhancedScreens = screensFromGraphQL.map((screen: any) => {
+        const wsDevice = wsDevices.find(ws => ws.deviceId === screen.deviceId || ws.deviceId === screen.materialId);
+
+        return {
+          ...screen,
+          isOnline: wsDevice ? wsDevice.isOnline : screen.isOnline,
+          alertCount: screen.alerts?.length || 0
+        };
+      });
+
+      console.log('📊 Initial screen data loaded from GraphQL:', enhancedScreens);
+      setScreens(enhancedScreens);
+    }
+  }, [screensData, wsDevices]);
+
   // Filter screens based on selected material
   useEffect(() => {
     if (!screens) {
@@ -459,6 +480,19 @@ const ScreenTracking: React.FC = () => {
                 return false;
               }).length || 0}
             </p>
+            <p className="text-xs text-yellow-800">
+              All screens debug: {JSON.stringify(filteredScreens?.map(s => ({
+                materialId: s.materialId,
+                isOnline: s.isOnline,
+                hasCurrentLocation: !!s.currentLocation,
+                hasLastSeenLocation: !!s.lastSeenLocation,
+                currentLat: s.currentLocation?.lat,
+                currentLng: s.currentLocation?.lng,
+                currentLatType: typeof s.currentLocation?.lat,
+                currentLngType: typeof s.currentLocation?.lng,
+                isValidCurrent: s.currentLocation ? isValidCoordinate(s.currentLocation.lat, s.currentLocation.lng) : false
+              })))}
+            </p>
             {filteredScreens && filteredScreens.length > 0 && (
               <p className="text-xs text-yellow-800">
                 First screen: {filteredScreens[0].materialId} | Status: {filteredScreens[0].isOnline ? 'Online' : 'Offline'} | 
@@ -469,6 +503,15 @@ const ScreenTracking: React.FC = () => {
                       ? `${filteredScreens[0].lastSeenLocation.lat}, ${filteredScreens[0].lastSeenLocation.lng} (last seen)`
                       : 'No location'
                 }
+              </p>
+            )}
+            {filteredScreens && filteredScreens.length > 0 && (
+              <p className="text-xs text-yellow-800">
+                Debug location validation: {JSON.stringify({
+                  hasCurrentLocation: !!filteredScreens[0].currentLocation,
+                  currentLocation: filteredScreens[0].currentLocation,
+                  isValidCoord: filteredScreens[0].currentLocation ? isValidCoordinate(filteredScreens[0].currentLocation.lat, filteredScreens[0].currentLocation.lng) : false
+                })}
               </p>
             )}
           </div>
