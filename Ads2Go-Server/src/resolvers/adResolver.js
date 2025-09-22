@@ -3,6 +3,9 @@ const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const MaterialAvailability = require('../models/MaterialAvailability');
+const AdsDeployment = require('../models/adsDeployment');
+const Analytics = require('../models/analytics');
+const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
@@ -265,8 +268,77 @@ const adResolvers = {
 
     deleteAd: async (_, { id }, { user }) => {
       checkAdmin(user);
-      const result = await Ad.findByIdAndDelete(id);
-      return !!result;
+      
+      try {
+        // 1. Find the ad first to ensure it exists
+        const ad = await Ad.findById(id);
+        if (!ad) {
+          throw new Error('Ad not found');
+        }
+
+        console.log(`🗑️ Starting cascade delete for ad: ${id} (${ad.title})`);
+
+        // 2. Remove ad from all deployments (LCD slots and non-LCD)
+        const deployments = await AdsDeployment.find({
+          $or: [
+            { adId: id },
+            { 'lcdSlots.adId': id }
+          ]
+        });
+
+        console.log(`📦 Found ${deployments.length} deployments to update`);
+
+        for (const deployment of deployments) {
+          // Remove from LCD slots
+          if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+            const originalLength = deployment.lcdSlots.length;
+            deployment.lcdSlots = deployment.lcdSlots.filter(slot => 
+              slot.adId.toString() !== id.toString()
+            );
+            
+            if (deployment.lcdSlots.length < originalLength) {
+              console.log(`  ✅ Removed ad from LCD slot in deployment ${deployment._id}`);
+              await deployment.save();
+            }
+          }
+          
+          // Remove from non-LCD deployment
+          if (deployment.adId && deployment.adId.toString() === id.toString()) {
+            deployment.adId = null;
+            console.log(`  ✅ Removed ad from non-LCD deployment ${deployment._id}`);
+            await deployment.save();
+          }
+        }
+
+        // 3. Delete analytics records
+        const analyticsResult = await Analytics.deleteMany({ adId: id });
+        console.log(`📊 Deleted ${analyticsResult.deletedCount} analytics records`);
+
+        // 4. Update payment records (set adsId to null instead of deleting)
+        const paymentResult = await Payment.updateMany(
+          { adsId: id },
+          { $unset: { adsId: 1 } }
+        );
+        console.log(`💳 Updated ${paymentResult.modifiedCount} payment records`);
+
+        // 5. Remove from material availability
+        try {
+          await MaterialAvailabilityService.removeAdFromMaterials(id);
+          console.log(`📋 Removed ad from material availability`);
+        } catch (availabilityError) {
+          console.warn(`⚠️ Warning: Could not remove from material availability:`, availabilityError.message);
+        }
+
+        // 6. Delete the ad itself
+        await Ad.findByIdAndDelete(id);
+        console.log(`✅ Ad ${id} deleted successfully`);
+
+        return true;
+
+      } catch (error) {
+        console.error('❌ Error in cascade delete:', error);
+        throw new Error(`Failed to delete ad: ${error.message}`);
+      }
     }
   },
 

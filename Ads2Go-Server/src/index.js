@@ -59,6 +59,7 @@ const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
+const analyticsRoutes = require('./routes/analytics');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -182,6 +183,7 @@ async function startServer() {
   app.use('/material', materialRoutes);
   app.use('/ads', adsRoutes);
   app.use('/material-photos', materialPhotoUploadRoutes);
+  app.use('/analytics', analyticsRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

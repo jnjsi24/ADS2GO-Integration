@@ -22,6 +22,7 @@ export default function HomeScreen() {
   const [isTracking, setIsTracking] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
+  const [showFullInterface, setShowFullInterface] = useState(false); // Start in video-only mode
 
   useEffect(() => {
     initializeApp();
@@ -381,6 +382,12 @@ export default function HomeScreen() {
     router.push('/registration');
   };
 
+  // Toggle between video-only and full interface mode
+  const toggleInterfaceMode = () => {
+    setShowFullInterface(prev => !prev);
+  };
+
+
   const handleEmergencyUnregister = () => {
     Alert.alert(
       'Emergency Unregister',
@@ -460,20 +467,67 @@ export default function HomeScreen() {
     );
   }
 
+  // If not showing full interface, show only the video player
+  if (!showFullInterface) {
+    return (
+      <View style={styles.videoOnlyContainer}>
+        {registrationData ? (
+          <AdPlayer
+            materialId={registrationData.materialId}
+            slotNumber={registrationData.slotNumber}
+            isOffline={isSimulatingOffline}
+            onAdError={(error) => {
+              console.log('Ad Player Error:', error);
+            }}
+          />
+        ) : (
+          <View style={styles.notRegisteredContainer}>
+            <Text style={styles.notRegisteredTitle}>Tablet Not Registered</Text>
+            <Text style={styles.notRegisteredSubtitle}>
+              This tablet needs to be registered before it can display advertisements.
+            </Text>
+            <TouchableOpacity 
+              style={styles.registerButton}
+              onPress={handleGoToRegistration}
+            >
+              <Text style={styles.registerButtonText}>🔗 Register Tablet</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Tap to show full interface - only visible after 10 taps */}
+        <TouchableOpacity 
+          style={styles.showInterfaceButton}
+          onPress={toggleInterfaceMode}
+        >
+          <Text style={styles.showInterfaceText}>⚙️ Settings</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Advertisement Player</Text>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefreshStatus}
-          disabled={refreshing}
-        >
-          <Text style={styles.refreshButtonText}>
-            {refreshing ? '🔄' : '🔄'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefreshStatus}
+            disabled={refreshing}
+          >
+            <Text style={styles.refreshButtonText}>
+              {refreshing ? '🔄' : '🔄'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.videoModeButton}
+            onPress={toggleInterfaceMode}
+          >
+            <Text style={styles.videoModeButtonText}>📺 Video Mode</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Status Cards */}
@@ -716,11 +770,47 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   refreshButton: {
     padding: 8,
   },
   refreshButtonText: {
     fontSize: 20,
+  },
+  videoModeButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  videoModeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoOnlyContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  showInterfaceButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    zIndex: 1000,
+  },
+  showInterfaceText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   statusSection: {
     padding: 20,
