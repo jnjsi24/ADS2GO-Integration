@@ -19,32 +19,21 @@ class WebSocketService {
   }
 
   private getWebSocketUrl(): string {
-    // Prefer server origin from REACT_APP_API_URL (e.g., https://server.up.railway.app/graphql)
-    const apiUrl = process.env.REACT_APP_API_URL;
-    let origin = '';
-    try {
-      if (apiUrl) {
-        const url = new URL(apiUrl);
-        // Strip trailing /graphql if present
-        origin = `${url.protocol}//${url.host}`.replace(/\/$/, '');
-      }
-    } catch (_) {
-      // ignore parse errors and fall back
-    }
-
-    // Fallback to client origin if env not provided
-    if (!origin) {
-      origin = `${window.location.protocol}//${window.location.host}`;
-    }
-
-    const wsProtocol = origin.startsWith('https:') ? 'wss:' : (origin.startsWith('http:') ? 'ws:' : (window.location.protocol === 'https:' ? 'wss:' : 'ws:'));
-    const host = origin.replace(/^https?:\/\//, '');
-    return `${wsProtocol}//${host}/ws/status`;
+    // For now, disable WebSocket connections for admin dashboard
+    // The server's WebSocket endpoint requires a deviceId which admin dashboard doesn't have
+    // Real-time updates should be handled via GraphQL subscriptions instead
+    return '';
   }
 
   private connect(): void {
+    const wsUrl = this.getWebSocketUrl();
+    if (!wsUrl) {
+      console.log('WebSocket disabled for admin dashboard - using GraphQL polling instead');
+      return;
+    }
+    
     try {
-      this.socket = new WebSocket(this.getWebSocketUrl());
+      this.socket = new WebSocket(wsUrl);
       this.setupEventListeners();
     } catch (error) {
       console.error('WebSocket connection error:', error);

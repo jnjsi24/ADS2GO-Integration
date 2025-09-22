@@ -98,12 +98,15 @@ interface PathData {
 }
 
 interface Material {
-  _id: string;
+  id: string;
   materialId: string;
-  materialType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
-  title: string;
+  materialType: 'HEADDRESS' | 'LCD' | 'POSTER' | 'STICKER' | 'BANNER';
   description?: string;
-  isActive: boolean;
+  category: 'DIGITAL' | 'NON_DIGITAL';
+  vehicleType: 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
+  driverId?: string;
+  mountedAt?: string;
+  dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -174,24 +177,26 @@ const ScreenTracking: React.FC = () => {
     try {
       setMaterialsLoading(true);
 
-      const materialsResponse = await fetch(`${window.location.origin}/graphql`, {
+      const materialsResponse = await fetch('https://ads2go-integration-production.up.railway.app/graphql', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           query: `
-            query GetMaterials {
-              getMaterials {
-                _id
+            query GetAllMaterials {
+              getAllMaterials {
+                id
                 materialId
                 materialType
-                title
                 description
-                isActive
+                category
+                vehicleType
+                driverId
+                mountedAt
+                dismountedAt
                 createdAt
                 updatedAt
-                screenCount
               }
             }
           `
@@ -200,8 +205,8 @@ const ScreenTracking: React.FC = () => {
 
       const materialsResult = await materialsResponse.json();
 
-      if (materialsResult.data?.getMaterials) {
-        setMaterials(materialsResult.data.getMaterials);
+      if (materialsResult.data?.getAllMaterials) {
+        setMaterials(materialsResult.data.getAllMaterials);
       }
     } catch (error) {
       console.error('Error fetching materials:', error);
