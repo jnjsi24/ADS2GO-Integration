@@ -553,11 +553,11 @@ const ManageAds: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-3">
                     <CalendarPlus size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedAd.startTime)} Days</p>
+                    <p>{formatDate(selectedAd.startTime)}</p>
                     </div>
                     <div className="flex items-center space-x-3">
                     <CalendarMinus size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedAd.endTime)} Days</p>
+                    <p>{formatDate(selectedAd.endTime)}</p>
                     </div>
                     <div className="flex items-center space-x-3">
                     <Mail size={20} className="text-gray-500" />
