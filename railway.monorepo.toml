@@ -19,9 +19,8 @@ build = "npm ci && npm run build"
 start = "npx --yes serve -s build -l $PORT"
 
 [[services.env]]
-# REACT_APP_GRAPHQL_URI should be set after the server deploys
-# Example placeholder; update in Railway dashboard to real server URL
-REACT_APP_GRAPHQL_URI = "https://your-server.onrender-or-railway.app/graphql"
+# Client will use the server's Railway URL - update this after server deploys
+REACT_APP_API_URL = "https://ads2go-integration-production.up.railway.app/graphql"
 PORT = "3000"
 
 

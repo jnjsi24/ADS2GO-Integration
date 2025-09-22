@@ -136,6 +136,8 @@ async function startServer() {
         'http://192.168.1.5:3000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        // Railway domains (will be auto-detected, but adding common patterns)
+        'https://ads2go-integration-production.up.railway.app',
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
