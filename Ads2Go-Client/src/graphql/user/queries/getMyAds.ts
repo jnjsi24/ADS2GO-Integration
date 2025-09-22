@@ -33,8 +33,6 @@ export const GET_MY_ADS = gql`
         mountedAt
         dismountedAt
       }
-
-      
     }
   }
 `;

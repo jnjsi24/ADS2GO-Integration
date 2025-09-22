@@ -112,6 +112,7 @@ export const GET_SCREEN_STATUS = gql`
           uniqueAdsPlayed
           averageAdDuration
           adCompletionRate
+        }
         adPerformance {
           adId
           adTitle
@@ -124,6 +125,7 @@ export const GET_SCREEN_STATUS = gql`
           impressions
           revenue
         }
+        displayHours
         lastAdPlayed
       }
     }

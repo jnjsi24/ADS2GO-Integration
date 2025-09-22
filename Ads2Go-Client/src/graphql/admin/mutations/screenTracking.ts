@@ -103,8 +103,25 @@ export const UPDATE_SCREEN_METRICS = gql`
             adDuration
             startTime
           }
-          dailyAdStats
-          adPerformance
+          dailyAdStats {
+            totalAdsPlayed
+            totalDisplayTime
+            uniqueAdsPlayed
+            averageAdDuration
+            adCompletionRate
+          }
+          adPerformance {
+            adId
+            adTitle
+            playCount
+            totalViewTime
+            averageViewTime
+            completionRate
+            firstPlayed
+            lastPlayed
+            impressions
+            revenue
+          }
           displayHours
           lastAdPlayed
         }
