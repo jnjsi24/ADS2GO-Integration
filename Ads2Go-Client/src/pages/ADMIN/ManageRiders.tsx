@@ -63,7 +63,7 @@ const getImageUrl = (imagePath: string | undefined | null) => {
   // If it starts with /uploads, prepend your server URL
   if (imagePath.startsWith('/uploads')) {
     // Replace with your actual server URL
-    return `${process.env.REACT_APP_SERVER_URL || 'http://localhost:4000'}${imagePath}`;
+    return `${process.env.REACT_APP_SERVER_URL || 'https://ads2go-integration-production.up.railway.app'}${imagePath}`;
   }
   return imagePath;
 };
