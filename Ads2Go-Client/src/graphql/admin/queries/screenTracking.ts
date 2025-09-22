@@ -142,56 +142,6 @@ export const GET_SCREEN_STATUS = gql`
   }
 `;
 
-export const GET_AD_ANALYTICS = gql`
-  query GetAdAnalytics($date: String, $materialId: String) {
-    getAdAnalytics(date: $date, materialId: $materialId) {
-      summary {
-        totalDevices
-        onlineDevices
-        totalAdsPlayed
-        totalDisplayHours
-        averageAdsPerDevice
-        averageDisplayHours
-      }
-      devices {
-        deviceId
-        materialId
-        screenType
-        currentAd {
-          adId
-          adTitle
-          adDuration
-          startTime
-        }
-        dailyStats {
-          totalAdsPlayed
-          totalDisplayTime
-          uniqueAdsPlayed
-          averageAdDuration
-          adCompletionRate
-        }
-        totalAdsPlayed
-        displayHours
-        adPerformance {
-          adId
-          adTitle
-          playCount
-          totalViewTime
-          averageViewTime
-          completionRate
-          firstPlayed
-          lastPlayed
-          impressions
-          revenue
-        }
-        lastAdPlayed
-        isOnline
-        lastSeen
-      }
-    }
-  }
-`;
-
 export const GET_COMPLIANCE_REPORT = gql`
   query GetComplianceReport($date: String) {
     getComplianceReport(date: $date) {

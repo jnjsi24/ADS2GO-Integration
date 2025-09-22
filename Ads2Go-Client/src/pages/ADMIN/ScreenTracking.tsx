@@ -243,10 +243,16 @@ const ScreenTracking: React.FC = () => {
     try {
       setMaterialsLoading(true);
 
+      // Get authentication token
+      const adminToken = localStorage.getItem('adminToken');
+      const userToken = localStorage.getItem('token');
+      const token = adminToken || userToken;
+
       const materialsResponse = await fetch('https://ads2go-integration-production.up.railway.app/graphql', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
         body: JSON.stringify({
           query: `
@@ -271,8 +277,15 @@ const ScreenTracking: React.FC = () => {
 
       const materialsResult = await materialsResponse.json();
 
+      console.log('📋 Materials API response:', materialsResult);
+
       if (materialsResult.data?.getAllMaterials) {
         setMaterials(materialsResult.data.getAllMaterials);
+        console.log('📋 Materials loaded:', materialsResult.data.getAllMaterials.length);
+      } else if (materialsResult.errors) {
+        console.error('❌ Materials GraphQL errors:', materialsResult.errors);
+      } else {
+        console.error('❌ Materials response error:', materialsResult);
       }
     } catch (error) {
       console.error('Error fetching materials:', error);
@@ -875,8 +888,13 @@ const ScreenTracking: React.FC = () => {
                               }
                             }
                             
-                            // Default fallback
-                            return 'Never';
+                            // Check if device has any location data
+                            if (screen.currentLocation || screen.lastSeenLocation) {
+                              return 'Unknown time';
+                            }
+                            
+                            // Default fallback for devices with no location data
+                            return 'No location data';
                           })()}
                         </span>
                       </div>
