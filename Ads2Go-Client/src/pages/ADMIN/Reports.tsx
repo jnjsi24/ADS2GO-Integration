@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { ChevronDown, Trash, Plus } from 'lucide-react';
 
 type TransactionStatus = 'Paid' | 'Failed' | 'Refunded' | 'all';
 
@@ -213,10 +212,14 @@ const Reports: React.FC = () => {
                     e.stopPropagation();
                     handleDelete(tx.id);
                   }}
-                  className="text-red-500 text-md hover:text-red-700 flex items-center"
+                  className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
                 >
-                  <TrashIcon className="w-4 h-4 mr-1" />
-                  
+                  <Trash 
+                    className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                    size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                    Delete
+                  </span>
                 </button>
               </div>
             </div>
