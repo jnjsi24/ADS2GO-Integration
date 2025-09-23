@@ -9,6 +9,7 @@ import {
   WifiOff
 } from 'lucide-react';
 import { ScreenData } from '../../../../services/adsPanelGraphQLService';
+import AdProgressBar from '../../../../components/AdProgressBar';
 
 interface DashboardProps {
   screens: ScreenData[];
@@ -142,21 +143,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </td>
                   <td className="py-3 px-4">
                     {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adDuration ? (
-                      <div className="w-32">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>{formatTime(0)}</span>
-                          <span>{formatTime(screen.screenMetrics.currentAd.adDuration)}</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: '0%' }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1 text-center">
-                          Ready to play
-                        </div>
-                      </div>
+                      <AdProgressBar 
+                        adDuration={screen.screenMetrics.currentAd.adDuration}
+                        isPlaying={screen.isOnline}
+                        className="w-32"
+                      />
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>
                     )}

@@ -420,6 +420,52 @@ router.post('/updateTabletStatus', async (req, res) => {
 
     await tablet.save();
 
+    // Also update ScreenTracking collection to sync status
+    try {
+      const now = new Date();
+      
+      // Find the materialId from the tablet record
+      const materialId = tablet.materialId;
+      
+      if (materialId) {
+        // Update ScreenTracking collection
+        const screenTracking = await ScreenTracking.findOneAndUpdate(
+          { materialId },
+          {
+            $set: {
+              isOnline: isOnline,
+              lastSeen: now
+            },
+            $push: {
+              statusHistory: {
+                status: isOnline ? 'online' : 'offline',
+                timestamp: now
+              }
+            }
+          },
+          { upsert: true, new: true }
+        );
+
+        // Also update device-specific status in the devices array
+        if (screenTracking) {
+          await ScreenTracking.updateOne(
+            { 'devices.deviceId': deviceId },
+            {
+              $set: {
+                'devices.$.isOnline': isOnline,
+                'devices.$.lastSeen': now
+              }
+            }
+          );
+        }
+
+        console.log(`🔄 [updateTabletStatus] Updated ScreenTracking for materialId: ${materialId}, deviceId: ${deviceId}, status: ${isOnline ? 'online' : 'offline'}`);
+      }
+    } catch (screenTrackingError) {
+      console.error('Error updating ScreenTracking collection:', screenTrackingError);
+      // Don't fail the request if ScreenTracking update fails
+    }
+
     res.json({
       success: true,
       message: 'Tablet status updated successfully'

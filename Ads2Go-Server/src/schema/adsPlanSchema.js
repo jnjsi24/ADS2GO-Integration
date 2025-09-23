@@ -81,6 +81,18 @@ module.exports = gql`
     nextAvailableDate: String
   }
 
+  type SmartMaterialSelection {
+    id: ID!
+    materialId: String!
+    materialType: String!
+    vehicleType: String!
+    category: String!
+    occupiedSlots: Int!
+    availableSlots: Int!
+    totalSlots: Int!
+    priority: Int!
+  }
+
   type Query {
     getAllAdsPlans: [AdsPlan]
     getAdsPlanById(id: ID!): AdsPlan
@@ -93,6 +105,13 @@ module.exports = gql`
     ): [AdsPlan]
     getPlanAvailability(planId: ID!, desiredStartDate: String!): PlanAvailability!
     getMaterialsAvailability(materialIds: [ID!]!): [MaterialAvailability!]!
+    getSmartMaterialSelection(
+      materialType: String!, 
+      vehicleType: String!, 
+      category: String!,
+      timestamp: String,
+      requestId: String
+    ): SmartMaterialSelection
     getAvailabilitySummary: String!
   }
 

@@ -7,6 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
 import { GET_PLAN_AVAILABILITY } from '../../graphql/admin/planAvailability';
+import { GET_SMART_MATERIAL_SELECTION } from '../../graphql/user/queries/getSmartMaterialSelection';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
@@ -150,14 +151,109 @@ const nextMonth = () => {
   
 
 
-  // Automatically select material from the selected plan's materials
+  // Automatically select material using smart selection from server
   useEffect(() => {
-    if (selectedPlan && selectedPlan.materials && selectedPlan.materials.length > 0) {
-      // Use the first material from the plan's materials array (same as server logic)
-      const selectedMaterial = selectedPlan.materials[0];
-      setMaterials(selectedPlan.materials);
-      setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
-      console.log(`🎯 Selected material from plan: ${selectedMaterial.materialId} (${selectedMaterial.materialType} ${selectedMaterial.vehicleType})`);
+    if (selectedPlan) {
+      console.log('🔄 Selected plan:', selectedPlan.name, selectedPlan.materialType, selectedPlan.vehicleType, selectedPlan.category);
+      console.log('🔄 Plan ID:', selectedPlan.id, 'Timestamp:', Date.now());
+      
+      // Clear any existing materials first
+      setMaterials([]);
+      setFormData(prev => ({ ...prev, materialId: '' }));
+      
+      // Use smart material selection from server instead of plan's materials array
+      const fetchSmartMaterial = async () => {
+        // Small delay to ensure state is cleared
+        await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+          console.log('🚀 Calling smart material selection API...');
+          console.log('📋 Request details:', {
+            materialType: selectedPlan.materialType,
+            vehicleType: selectedPlan.vehicleType,
+            category: selectedPlan.category,
+            timestamp: Date.now().toString()
+          });
+          
+          // Use direct fetch to bypass Apollo Client cache completely
+          const response = await fetch('http://localhost:5000/graphql', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+            },
+            body: JSON.stringify({
+              query: `
+                query GetSmartMaterialSelection($materialType: String!, $vehicleType: String!, $category: String!, $timestamp: String, $requestId: String) {
+                  getSmartMaterialSelection(
+                    materialType: $materialType
+                    vehicleType: $vehicleType
+                    category: $category
+                    timestamp: $timestamp
+                    requestId: $requestId
+                  ) {
+                    id
+                    materialId
+                    materialType
+                    vehicleType
+                    category
+                    occupiedSlots
+                    availableSlots
+                    totalSlots
+                    priority
+                  }
+                }
+              `,
+              variables: {
+                materialType: selectedPlan.materialType,
+                vehicleType: selectedPlan.vehicleType,
+                category: selectedPlan.category,
+                timestamp: Date.now().toString(),
+                requestId: Math.random().toString(36).substring(7)
+              }
+            })
+          });
+          
+          const result = await response.json();
+          const data = result.data;
+
+          console.log('📡 Smart selection API response:', data);
+          console.log('📡 Raw response data:', JSON.stringify(data, null, 2));
+
+          if (data.getSmartMaterialSelection) {
+            const smartMaterial = data.getSmartMaterialSelection;
+            console.log('📡 Smart material details:', JSON.stringify(smartMaterial, null, 2));
+            setMaterials([smartMaterial]);
+            setFormData(prev => ({ ...prev, materialId: smartMaterial.id }));
+            console.log(`🎯 Smart selected material: ${smartMaterial.materialId} (${smartMaterial.occupiedSlots}/${smartMaterial.totalSlots} slots used)`);
+          } else {
+            console.log('⚠️ No smart material selection returned, using fallback');
+            // Fallback to plan's materials if smart selection fails
+            if (selectedPlan.materials && selectedPlan.materials.length > 0) {
+              const selectedMaterial = selectedPlan.materials[0];
+              setMaterials(selectedPlan.materials);
+              setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
+              console.log(`🎯 Fallback to plan material: ${selectedMaterial.materialId}`);
+            } else {
+              setMaterials([]);
+              setFormData(prev => ({ ...prev, materialId: '' }));
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error fetching smart material selection:', error);
+          // Fallback to plan's materials
+          if (selectedPlan.materials && selectedPlan.materials.length > 0) {
+            const selectedMaterial = selectedPlan.materials[0];
+            setMaterials(selectedPlan.materials);
+            setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
+            console.log(`🎯 Fallback to plan material: ${selectedMaterial.materialId}`);
+          } else {
+            setMaterials([]);
+            setFormData(prev => ({ ...prev, materialId: '' }));
+          }
+        }
+      };
+
+      fetchSmartMaterial();
     } else {
       setMaterials([]);
       setFormData(prev => ({ ...prev, materialId: '' }));
