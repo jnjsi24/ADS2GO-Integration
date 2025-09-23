@@ -35,7 +35,7 @@
     "node-osrm": "^1.0.3",
     "nodemailer": "^6.9.7",
     "uuid": "^9.0.1",
-    "ws": "8.11.0"
+    "ws": "^8.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

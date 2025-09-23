@@ -114,14 +114,14 @@ const Reports: React.FC = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               placeholder="Search by ID, Title, or User"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             <div className="relative w-40">
               <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={filterStatus}
                 onChange={(e) =>
                   setFilterStatus(e.target.value as TransactionStatus)
@@ -142,7 +142,7 @@ const Reports: React.FC = () => {
 
       {/* Add New Report Button */}
       <div className="flex justify-end mb-6">
-        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
+        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-lg w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
           <Plus size={16} />
           Add New Report
         </button>

@@ -61,8 +61,8 @@ type Ad = {
   };
 };
 
-const planFilterOptions = ['All Plans', 'Basic Plan', 'Premium Plan'];
-const statusFilterOptions = ['All Status', 'PENDING', 'APPROVED', 'REJECTED', 'RUNNING'];
+const planFilterOptions = ['All Plans', 'Basic Plan', 'Backseat Spotlight Plan'];
+const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'Running'];
 
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
@@ -274,8 +274,9 @@ const Advertisements: React.FC = () => {
       ad.title.toLowerCase().includes(searchLower) ||
       ad.description.toLowerCase().includes(searchLower);
     
-    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name === selectedPlanFilter;
-    const matchesStatus = selectedStatusFilter === 'All Status' || ad.status === selectedStatusFilter;
+    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name.toLowerCase() === selectedPlanFilter.toLowerCase();
+    const matchesStatus = selectedStatusFilter === 'All Status' || ad.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+
     
     return matchesSearch && matchesStatus && matchesPlan;
   });
@@ -373,7 +374,7 @@ const Advertisements: React.FC = () => {
       <div className="flex justify-between items-center mb-6 pt-10">
         <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
         <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <input
               type="text"
               className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
@@ -386,7 +387,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -403,7 +404,7 @@ const Advertisements: React.FC = () => {
                       <button
                         key={plan}
                         onClick={() => handlePlanFilterChange(plan)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
                         {plan}
                       </button>
@@ -417,7 +418,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -434,7 +435,7 @@ const Advertisements: React.FC = () => {
                       <button
                         key={status}
                         onClick={() => handleStatusFilterChange(status)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
                         {status}
                       </button>
