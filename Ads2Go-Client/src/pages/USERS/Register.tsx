@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
 // CREATE USER
 const Register: React.FC = () => {
@@ -32,12 +33,58 @@ const Register: React.FC = () => {
   
   const { register } = useUserAuth();
 
+  // Helper function to check if address is valid (either hierarchical or free-form)
+  const isAddressValid = (address: string): boolean => {
+    if (!address || address.trim().length < 5) return false;
+    
+    // Check if it's just the placeholder text (not valid)
+    if (address.includes('Enter house number and street')) {
+      return false;
+    }
+    
+    // Check if it's a hierarchical location selection (Region, City, Barangay with postal code)
+    const hasRegion = address.includes('National Capital Region') || 
+                     address.includes('Region') ||
+                     address.includes('Province');
+    const hasPostalCode = address.includes('(') && address.includes(')');
+    const hasCommas = address.includes(',');
+    
+    // If it has region, postal code, and commas, check if it has actual address content
+    if (hasRegion && hasPostalCode && hasCommas) {
+      // Extract the part before the region to check for actual address
+      const regionIndex = address.indexOf('National Capital Region');
+      if (regionIndex > 0) {
+        const addressPart = address.substring(0, regionIndex).trim();
+        // Remove common prefixes and check if there's actual content
+        const cleanAddressPart = addressPart.replace(/^Enter house number and street,?\s*/i, '').trim();
+        return cleanAddressPart.length > 0 && cleanAddressPart !== 'Enter house number and street';
+      }
+      return true; // If no region found, assume it's valid
+    }
+    
+    // Otherwise, check if it's a valid free-form address
+    // Should have at least 5 characters and contain some address-like content
+    const trimmedAddress = address.trim();
+    if (trimmedAddress.length < 5) return false;
+    
+    // Check if it contains typical address elements (numbers, street indicators, etc.)
+    const hasNumbers = /\d/.test(trimmedAddress);
+    const hasStreetIndicators = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|way|drive|dr|lane|ln|place|pl|court|ct|circle|cir)\b/i.test(trimmedAddress);
+    const hasLocationIndicators = /\b(manila|quezon|makati|pasig|taguig|mandaluyong|san juan|marikina|caloocan|malabon|navotas|paranaque|las pinas|muntinlupa|pateros|valenzuela|binondo|ermita|intramuros|malate|paco|pandacan|port area|sampaloc|san andres|san miguel|san nicolas|santa ana|santa cruz|santa mesa|tondo|quiapo|santa ana|santa cruz|santa mesa|tondo|quiapo)\b/i.test(trimmedAddress);
+    
+    // Valid if it has numbers and either street indicators or location indicators
+    return hasNumbers && (hasStreetIndicators || hasLocationIndicators);
+  };
+
   const validateField = (name: string, value: string): string => {
     switch (name) {
       case 'firstName':
+      case 'middleName':
       case 'lastName':
         if (!value.trim()) return `${name.split(/(?=[A-Z])/).join(' ')} is required`;
-        if (!/^[a-zA-Z\s]+$/.test(value)) return 'Only letters and spaces allowed';
+        if (value.trim().length < 2) return `${name.split(/(?=[A-Z])/).join(' ')} must be at least 2 characters`;
+        if (!/^[a-zA-Z\s]+$/.test(value.trim())) return `${name.split(/(?=[A-Z])/).join(' ')} can only contain letters and spaces`;
+        if (value.trim().length > 50) return `${name.split(/(?=[A-Z])/).join(' ')} must be less than 50 characters`;
         return '';
       case 'companyName':
         if (!value.trim()) return 'Company/Business name is required';
@@ -46,10 +93,26 @@ const Register: React.FC = () => {
       case 'companyAddress':
         if (!value.trim()) return 'Company/Business address is required';
         if (value.length < 5) return 'Address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'houseAddress':
         if (!value.trim()) return 'House address is required';
         if (value.length < 5) return 'House address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
@@ -79,12 +142,29 @@ const Register: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (errors[name]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
+    // Validate the field in real-time
+    const error = validateField(name, value);
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      if (error) {
+        newErrors[name] = error;
+      } else {
         delete newErrors[name];
-        return newErrors;
-      });
+      }
+      return newErrors;
+    });
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const { name } = e.currentTarget;
+    
+    // Only apply character restrictions to name fields
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      const char = e.key;
+      // Allow letters, spaces, and backspace/delete
+      if (!/^[a-zA-Z\s]$/.test(char) && char !== 'Backspace' && char !== 'Delete' && char !== 'ArrowLeft' && char !== 'ArrowRight') {
+        e.preventDefault();
+      }
     }
   };
 
@@ -94,7 +174,7 @@ const Register: React.FC = () => {
     let fieldsToValidate: (keyof typeof formData)[] = [];
 
     if (step === 1) {
-      fieldsToValidate = ['firstName', 'lastName'];
+      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
     } else if (step === 2) {
       fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
     } else if (step === 3) {
@@ -111,6 +191,29 @@ const Register: React.FC = () => {
 
     setErrors(newErrors);
     return isValid;
+  };
+
+  // Check if current step is valid
+  const isCurrentStepValid = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    let fieldsToValidate: (keyof typeof formData)[] = [];
+
+    if (step === 1) {
+      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
+    } else if (step === 2) {
+      fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
+    } else if (step === 3) {
+      fieldsToValidate = ['contactNumber', 'email', 'password', 'confirmPassword'];
+    }
+
+    fieldsToValidate.forEach(field => {
+      const error = validateField(field, formData[field]);
+      if (error) {
+        newErrors[field] = error;
+      }
+    });
+
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleNext = () => {
@@ -250,7 +353,12 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onKeyPress={handleKeyPress}
+                    className={`w-full border-b py-2 focus:outline-none ${
+                      errors.firstName 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:border-blue-500'
+                    }`}
                   />
                   {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                 </div>
@@ -264,8 +372,14 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.middleName}
                     onChange={handleChange}
-                    className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
+                    onKeyPress={handleKeyPress}
+                    className={`w-full border-b py-2 focus:outline-none ${
+                      errors.middleName 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:border-blue-500'
+                    }`}
                   />
+                  {errors.middleName && <p className="mt-1 text-sm text-red-600">{errors.middleName}</p>}
                 </div>
                 <div>
                   <label htmlFor="lastName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
@@ -277,14 +391,24 @@ const Register: React.FC = () => {
                     type="text"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onKeyPress={handleKeyPress}
+                    className={`w-full border-b py-2 focus:outline-none ${
+                      errors.lastName 
+                        ? 'border-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:border-blue-500'
+                    }`}
                   />
                   {errors.lastName && <p className="mt-1 text-red-600">{errors.lastName}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-full py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
+                  disabled={!isCurrentStepValid()}
+                  className={`w-full py-3 px-4 font-semibold rounded-full focus:outline-none ${
+                    isCurrentStepValid()
+                      ? 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   Next
                 </button>
@@ -308,32 +432,24 @@ const Register: React.FC = () => {
                   {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
                 </div>
                 <div>
-                  <label htmlFor="companyAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Company/Business Address
-                  </label>
-                  <input
-                    id="companyAddress"
-                    name="companyAddress"
-                    type="text"
+                  <LocationAutocomplete
+                    label="Company/Business Address"
                     value={formData.companyAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                    placeholder="Select company location or enter address..."
+                    required
+                    error={errors.companyAddress}
                   />
-                  {errors.companyAddress && <p className="mt-1 text-sm text-red-600">{errors.companyAddress}</p>}
                 </div>
                 <div>
-                  <label htmlFor="houseAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    House Address
-                  </label>
-                  <input
-                    id="houseAddress"
-                    name="houseAddress"
-                    type="text"
+                  <LocationAutocomplete
+                    label="House Address"
                     value={formData.houseAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                    placeholder="Select house location or enter address..."
+                    required
+                    error={errors.houseAddress}
                   />
-                  {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
                 </div>
                 <div className="flex justify-between">
                   <button
@@ -346,7 +462,12 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] justify-end text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
+                    disabled={!isCurrentStepValid()}
+                    className={`w-full ml-2 py-3 px-4 justify-end font-semibold rounded-full focus:outline-none ${
+                      isCurrentStepValid()
+                        ? 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     Next
                   </button>
