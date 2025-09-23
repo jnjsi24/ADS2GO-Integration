@@ -451,7 +451,7 @@ const ManageRiders: React.FC = () => {
               <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
               
             </div>
-            <div className="col-span-1 ml-28 text-center">Action</div>
+            <div className="col-span-1 ml-24 text-center">Action</div>
           </div>
 
           {filteredRiders.map((r: Driver) => (
@@ -517,15 +517,15 @@ const ManageRiders: React.FC = () => {
                     </>
                   )}
                   <button
-                        onClick={() => handleDelete(r.driverId)}
-                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                      >
-                        <Trash 
-                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                          size={16} />
-                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                          Delete
-                        </span>
+                    onClick={() => handleDelete(r.driverId)}
+                    className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                  >
+                    <Trash 
+                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                      size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                      Delete
+                    </span>
                   </button>
                 </div>
               </div>

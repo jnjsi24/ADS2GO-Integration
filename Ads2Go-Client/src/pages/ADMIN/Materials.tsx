@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { TrashIcon, Edit } from 'lucide-react';
+import { Trash, Edit } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -707,27 +707,37 @@ const Materials: React.FC = () => {
                   </div>
 
                   <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                  <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                  <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
-                  <div className="col-span-1 flex justify-center gap-1 ml-36">
+                  <div className="col-span-1 flex justify-center gap-1 ml-">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleViewDetails(material);
                       }}
-                      className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors"
+                      className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
                     >
-                      <Edit size={16} />
+                      <Edit 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Edit
+                        </span>
                     </button> 
+
                     <button
                       onClick={(e) => {
                       e.stopPropagation(); // ✅ stop row click
                       handleDeleteMaterial(material.id); // ✅ delete action
                     }}
-                      className="flex items-center px-1 py-2 text-red-500 rounded-lg hover:text-red-600 transition-colors"
+                      className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
                     >
-                      <TrashIcon size={16} />
-                      
+                      <Trash 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                        size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                        Delete
+                      </span>
                     </button>
                   </div>
                 </div>
