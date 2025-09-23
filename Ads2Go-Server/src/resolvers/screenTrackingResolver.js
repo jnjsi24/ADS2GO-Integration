@@ -1,4 +1,4 @@
-const ScreenTracking = require('../models/ScreenTracking');
+const ScreenTracking = require('../models/screenTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const { checkAuth } = require('../middleware/auth');
 
@@ -29,7 +29,33 @@ const resolvers = {
           { multi: true }
         );
         
-        let query = {};
+        let query = {
+          // Only fetch materials that have actual connected devices (not just temporary records)
+          $and: [
+            {
+              $or: [
+                { 'devices.0': { $exists: true } }, // Has at least one device in devices array
+                { 
+                  deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+                  deviceId: { $exists: true, $ne: null } // Has a real device ID
+                }
+              ]
+            },
+            {
+              $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+            },
+            {
+              $or: [
+                { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+                { 'devices': { $exists: false } }, // Or no devices array (legacy records)
+                { 
+                  'devices': { $size: 0 }, // Or empty devices array
+                  deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
+                }
+              ]
+            }
+          ]
+        };
         
         if (filters) {
           if (filters.screenType) query.screenType = filters.screenType;
@@ -77,91 +103,181 @@ const resolvers = {
           }
         }
         
-        const screensData = screens.map(screen => {
-          // Use DeviceStatusManager as the source of truth
-          let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
-          let isActuallyOnline = false;
-          
-          if (deviceStatus) {
-            isActuallyOnline = deviceStatus.isOnline;
+        // Process screens to create individual device records
+        const individualScreens = [];
+        
+        screens.forEach(screen => {
+          if (screen.devices && screen.devices.length > 0) {
+            // New multi-device structure: create individual records per device
+            screen.devices.forEach((device, index) => {
+              // Use DeviceStatusManager as the source of truth for each device
+              let deviceStatus = deviceStatusService.getDeviceStatus(device.deviceId);
+              let isActuallyOnline = false;
+              
+              if (deviceStatus) {
+                isActuallyOnline = deviceStatus.isOnline;
+              } else {
+                // Fallback to device status
+                isActuallyOnline = device.isOnline;
+              }
+              
+              let displayStatus = 'OFFLINE';
+              if (isActuallyOnline) {
+                if (screen.screenMetrics?.maintenanceMode) {
+                  displayStatus = 'MAINTENANCE';
+                } else if (screen.screenMetrics?.isDisplaying) {
+                  displayStatus = 'PLAYING';
+                } else {
+                  displayStatus = 'ONLINE';
+                }
+              }
+              
+              // Parse location data if it's a string
+              let locationData = null;
+              const deviceLocation = device.currentLocation || screen.currentLocation;
+              if (deviceLocation) {
+                if (typeof deviceLocation === 'string') {
+                  try {
+                    locationData = JSON.parse(deviceLocation);
+                  } catch (e) {
+                    locationData = { address: deviceLocation };
+                  }
+                } else if (typeof deviceLocation === 'object') {
+                  locationData = deviceLocation;
+                }
+              }
+
+              // Parse daily ad stats if it's a string
+              let dailyAdStats = null;
+              if (screen.screenMetrics?.dailyAdStats) {
+                if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+                  try {
+                    dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+                  } catch (e) {
+                    dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+                  }
+                } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+                  dailyAdStats = screen.screenMetrics.dailyAdStats;
+                }
+              }
+
+              individualScreens.push({
+                deviceId: device.deviceId,
+                displayId: `${screen.materialId}-SLOT-${device.slotNumber || (index + 1)}`, // Unique identifier for frontend
+                materialId: screen.materialId,
+                screenType: screen.screenType,
+                carGroupId: screen.carGroupId,
+                slotNumber: device.slotNumber,
+                isOnline: isActuallyOnline,
+                currentLocation: locationData,
+                lastSeen: device.lastSeen,
+                currentHours: device.totalHoursOnline || 0,
+                hoursRemaining: Math.max(0, 8 - (device.totalHoursOnline || 0)), // 8 hours target
+                totalDistanceToday: device.totalDistanceTraveled || 0,
+                displayStatus: displayStatus,
+                screenMetrics: {
+                  isDisplaying: screen.screenMetrics?.isDisplaying || false,
+                  brightness: screen.screenMetrics?.brightness || 50,
+                  volume: screen.screenMetrics?.volume || 50,
+                  adPlayCount: screen.screenMetrics?.adPlayCount || 0,
+                  maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
+                  currentAd: screen.screenMetrics?.currentAd || null,
+                  dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
+                  adPerformance: screen.screenMetrics?.adPerformance || [],
+                  displayHours: device.totalHoursOnline || 0,
+                  lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
+                }
+              });
+            });
           } else {
-            // Fallback to database status
-            isActuallyOnline = screen.isOnline;
-          }
-          
-          let displayStatus = 'OFFLINE';
-          if (isActuallyOnline) {
-            if (screen.screenMetrics?.maintenanceMode) {
-              displayStatus = 'MAINTENANCE';
-            } else if (screen.screenMetrics?.isDisplaying) {
-              displayStatus = 'PLAYING';
+            // Legacy single-device structure: use root-level fields for backward compatibility
+            let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
+            let isActuallyOnline = false;
+            
+            if (deviceStatus) {
+              isActuallyOnline = deviceStatus.isOnline;
             } else {
-              displayStatus = 'ONLINE';
+              // Fallback to database status
+              isActuallyOnline = screen.isOnline;
             }
-          }
-          
-          // Parse location data if it's a string
-          let locationData = null;
-          if (screen.currentLocation) {
-            if (typeof screen.currentLocation === 'string') {
-              try {
-                locationData = JSON.parse(screen.currentLocation);
-              } catch (e) {
-                locationData = { address: screen.currentLocation };
+            
+            let displayStatus = 'OFFLINE';
+            if (isActuallyOnline) {
+              if (screen.screenMetrics?.maintenanceMode) {
+                displayStatus = 'MAINTENANCE';
+              } else if (screen.screenMetrics?.isDisplaying) {
+                displayStatus = 'PLAYING';
+              } else {
+                displayStatus = 'ONLINE';
               }
-            } else if (typeof screen.currentLocation === 'object') {
-              locationData = screen.currentLocation;
             }
-          }
-
-          // Parse daily ad stats if it's a string
-          let dailyAdStats = null;
-          if (screen.screenMetrics?.dailyAdStats) {
-            if (typeof screen.screenMetrics.dailyAdStats === 'string') {
-              try {
-                dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
-              } catch (e) {
-                dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+            
+            // Parse location data if it's a string
+            let locationData = null;
+            if (screen.currentLocation) {
+              if (typeof screen.currentLocation === 'string') {
+                try {
+                  locationData = JSON.parse(screen.currentLocation);
+                } catch (e) {
+                  locationData = { address: screen.currentLocation };
+                }
+              } else if (typeof screen.currentLocation === 'object') {
+                locationData = screen.currentLocation;
               }
-            } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
-              dailyAdStats = screen.screenMetrics.dailyAdStats;
             }
-          }
 
-          return {
-            deviceId: screen.deviceId,
-            materialId: screen.materialId,
-            screenType: screen.screenType,
-            carGroupId: screen.carGroupId,
-            slotNumber: screen.slotNumber,
-            isOnline: isActuallyOnline,
-            currentLocation: locationData,
-            lastSeen: screen.lastSeen,
-            currentHours: screen.currentHoursToday || 0,
-            hoursRemaining: screen.hoursRemaining || 0,
-            totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-            displayStatus: displayStatus,
-            screenMetrics: {
-              isDisplaying: screen.screenMetrics?.isDisplaying || false,
-              brightness: screen.screenMetrics?.brightness || 50,
-              volume: screen.screenMetrics?.volume || 50,
-              adPlayCount: screen.screenMetrics?.adPlayCount || 0,
-              maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
-              currentAd: screen.screenMetrics?.currentAd || null,
-              dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
-              adPerformance: screen.screenMetrics?.adPerformance || [],
-              displayHours: screen.screenMetrics?.displayHours || 0,
-              lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
+            // Parse daily ad stats if it's a string
+            let dailyAdStats = null;
+            if (screen.screenMetrics?.dailyAdStats) {
+              if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+                try {
+                  dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+                } catch (e) {
+                  dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+                }
+              } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+                dailyAdStats = screen.screenMetrics.dailyAdStats;
+              }
             }
-          };
+
+            individualScreens.push({
+              deviceId: screen.deviceId,
+              displayId: `${screen.materialId}-SLOT-${screen.slotNumber || 1}`,
+              materialId: screen.materialId,
+              screenType: screen.screenType,
+              carGroupId: screen.carGroupId,
+              slotNumber: screen.slotNumber,
+              isOnline: isActuallyOnline,
+              currentLocation: locationData,
+              lastSeen: screen.lastSeen,
+              currentHours: screen.currentHoursToday || 0,
+              hoursRemaining: screen.hoursRemaining || 0,
+              totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+              displayStatus: displayStatus,
+              screenMetrics: {
+                isDisplaying: screen.screenMetrics?.isDisplaying || false,
+                brightness: screen.screenMetrics?.brightness || 50,
+                volume: screen.screenMetrics?.volume || 50,
+                adPlayCount: screen.screenMetrics?.adPlayCount || 0,
+                maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
+                currentAd: screen.screenMetrics?.currentAd || null,
+                dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
+                adPerformance: screen.screenMetrics?.adPerformance || [],
+                displayHours: screen.screenMetrics?.displayHours || 0,
+                lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
+              }
+            });
+          }
         });
+        
+        const screensData = individualScreens;
         
         return {
           screens: screensData,
-          totalScreens: screens.length,
-          onlineScreens: screens.filter(s => s.isOnline).length,
-          displayingScreens: screens.filter(s => s.screenMetrics?.isDisplaying).length,
-          maintenanceScreens: screens.filter(s => s.screenMetrics?.maintenanceMode).length
+          totalScreens: screensData.length,
+          onlineScreens: screensData.filter(s => s.isOnline).length,
+          displayingScreens: screensData.filter(s => s.screenMetrics?.isDisplaying).length,
+          maintenanceScreens: screensData.filter(s => s.screenMetrics?.maintenanceMode).length
         };
       } catch (error) {
         console.error('Error in getAllScreens:', error);

@@ -126,7 +126,21 @@ const Materials: React.FC = () => {
   const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
+  const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
 
+  // Custom refresh function for connection status
+  const handleRefetchConnectionStatus = async () => {
+    if (refreshingConnectionStatus) return; // Prevent multiple simultaneous refreshes
+    
+    setRefreshingConnectionStatus(true);
+    try {
+      await refetchConnectionStatus();
+    } catch (error) {
+      console.error('Error refreshing connection status:', error);
+    } finally {
+      setRefreshingConnectionStatus(false);
+    }
+  };
 
   // GraphQL hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_MATERIALS, {
@@ -798,9 +812,10 @@ const Materials: React.FC = () => {
         connectionStatusLoading={connectionStatusLoading}
         connectionStatusError={connectionStatusError}
         unregistering={unregistering}
+        refreshingConnectionStatus={refreshingConnectionStatus}
         creatingTabletConfig={creatingTabletConfig}
         onRefetchTabletData={refetchTabletData}
-        onRefetchConnectionStatus={refetchConnectionStatus}
+        onRefetchConnectionStatus={handleRefetchConnectionStatus}
         onCreateTabletConfiguration={handleCreateTabletConfiguration}
         onUnregisterTablet={handleUnregisterTablet}
         onCopyToClipboard={copyToClipboard}

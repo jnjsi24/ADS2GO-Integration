@@ -34,9 +34,10 @@ const SadminPlans: React.FC = () => {
   const [adLengthSeconds, setAdLengthSeconds] = useState(20);
   const [playsPerDayPerDevice, setPlaysPerDayPerDevice] = useState(160);
   const [pricePerPlayOverride, setPricePerPlayOverride] = useState<number | ''>('');
-  const [deviceCostOverride, setDeviceCostOverride] = useState<number | ''>('');
-  const [durationCostOverride, setDurationCostOverride] = useState<number | ''>('');
-  const [adLengthCostOverride, setAdLengthCostOverride] = useState<number | ''>('');
+  // Scheduling options
+  const [startType, setStartType] = useState<'immediate' | 'scheduled'>('immediate');
+  const [scheduledStartDate, setScheduledStartDate] = useState('');
+  const [scheduledEndDate, setScheduledEndDate] = useState('');
 
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS_PLANS, {
@@ -118,23 +119,67 @@ const SadminPlans: React.FC = () => {
     setAdLengthSeconds(20);
     setPlaysPerDayPerDevice(160);
     setPricePerPlayOverride('');
-    setDeviceCostOverride('');
-    setDurationCostOverride('');
-    setAdLengthCostOverride('');
+    // Reset scheduling options
+    setStartType('immediate');
+    setScheduledStartDate('');
+    setScheduledEndDate('');
   };
 
   // Handle form submission
   const handleFormSubmit = (formData: PlanFormData) => {
+    // Validate required pricePerPlay
+    if (!formData.pricePerPlayOverride || formData.pricePerPlayOverride <= 0) {
+      setErrorMsg('Price per play is required and must be greater than 0');
+      return;
+    }
+
+    // Validate scheduled dates if scheduled
+    if (formData.startType === 'scheduled') {
+      if (!formData.scheduledStartDate || !formData.scheduledEndDate) {
+        setErrorMsg('Start date and end date are required for scheduled plans');
+        return;
+      }
+      
+      const startDate = new Date(formData.scheduledStartDate);
+      const endDate = new Date(formData.scheduledEndDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (startDate < today) {
+        setErrorMsg('Start date cannot be in the past');
+        return;
+      }
+      
+      if (endDate <= startDate) {
+        setErrorMsg('End date must be after start date');
+        return;
+      }
+    }
+
+    // Calculate plays per day automatically (same as server logic)
+    const calculatedPlaysPerDay = Math.floor((8 * 60 * 60) / formData.adLengthSeconds);
+    
     const pricing = calculatePlanPricing(
       formData.numberOfDevices,
-      formData.playsPerDayPerDevice,
+      calculatedPlaysPerDay, // Use calculated value instead of manual input
       formData.adLengthSeconds,
       formData.durationDays,
-      formData.pricePerPlayOverride,
-      formData.deviceCostOverride,
-      formData.durationCostOverride,
-      formData.adLengthCostOverride
+      formData.pricePerPlayOverride
     );
+
+    // Determine plan status and dates based on scheduling
+    let planStatus = 'RUNNING';
+    let startDate = null;
+    let endDate = null;
+
+    if (formData.startType === 'scheduled') {
+      planStatus = 'PENDING';
+      startDate = new Date(formData.scheduledStartDate);
+      endDate = new Date(formData.scheduledEndDate);
+    } else {
+      // Immediate start
+      startDate = new Date();
+    }
 
     const input: AdsPlanInput = {
       name: formData.planName,
@@ -145,11 +190,14 @@ const SadminPlans: React.FC = () => {
       vehicleType: formData.vehicleType as 'CAR' | 'MOTORCYCLE',
       numberOfDevices: formData.numberOfDevices,
       adLengthSeconds: formData.adLengthSeconds,
-      playsPerDayPerDevice: formData.playsPerDayPerDevice,
+      playsPerDayPerDevice: calculatedPlaysPerDay, // Use calculated value
       totalPlaysPerDay: pricing.totalPlaysPerDay,
-      pricePerPlay: formData.pricePerPlayOverride || 0.50,
+      pricePerPlay: formData.pricePerPlayOverride, // Required - no fallback
       dailyRevenue: pricing.dailyRevenue,
       totalPrice: pricing.totalPrice,
+      status: planStatus,
+      startDate: startDate,
+      endDate: endDate,
     };
 
     if (editingPlan) {

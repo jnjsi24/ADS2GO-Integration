@@ -52,6 +52,7 @@ interface TabletConnectionModalProps {
   connectionStatusLoading: boolean;
   connectionStatusError: any;
   unregistering: boolean;
+  refreshingConnectionStatus?: boolean;
   creatingTabletConfig: boolean;
   onRefetchTabletData: () => void;
   onRefetchConnectionStatus: () => void;
@@ -72,6 +73,7 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
   connectionStatusLoading,
   connectionStatusError,
   unregistering,
+  refreshingConnectionStatus = false,
   creatingTabletConfig,
   onRefetchTabletData,
   onRefetchConnectionStatus,
@@ -178,31 +180,32 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-semibold text-gray-800">Connection Status</h3>
                 <button
-                  onClick={onRefetchConnectionStatus}
-                  disabled={connectionStatusLoading}
-                  className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                  onClick={() => onRefetchConnectionStatus()}
+                  disabled={connectionStatusLoading || refreshingConnectionStatus || (!tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0) || (!connectionStatusData?.getTabletConnectionStatus && connectionStatusError)}
+                  className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <div className={`w-3 h-3 border border-white rounded-full ${connectionStatusLoading ? 'animate-spin' : ''}`}></div>
+                  <div className={`w-3 h-3 border border-white rounded-full ${(connectionStatusLoading || refreshingConnectionStatus) ? 'animate-spin' : ''}`}></div>
                   Refresh
                 </button>
               </div>
-              {connectionStatusLoading ? (
+              {(connectionStatusLoading || refreshingConnectionStatus) ? (
                 <div className="flex items-center justify-center py-4">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                   <span className="ml-2 text-gray-600">Checking connection status...</span>
                 </div>
+              ) : !tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0 ? (
+                <div className="text-center py-4">
+                  <div className="text-gray-400 mb-2">📱</div>
+                  <span className="text-gray-600">This slot is not yet connected to a tablet</span>
+                  <br />
+                  <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
+                </div>
               ) : connectionStatusError ? (
                 <div className="text-center py-4">
-                  <div className="text-red-500 mb-2">❌</div>
-                  <span className="text-gray-600">Error loading connection status</span>
+                  <div className="text-gray-400 mb-2">📱</div>
+                  <span className="text-gray-600">Please connect this slot to a tablet first</span>
                   <br />
-                  <span className="text-sm text-gray-500 mb-2">{connectionStatusError.message}</span>
-                  <button
-                    onClick={onRefetchConnectionStatus}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Retry
-                  </button>
+                  <span className="text-sm text-gray-500 mb-2">Use the QR code below to Connect a Tablet to this Slot or Input the Connection Information above Manually </span>
                 </div>
               ) : connectionStatusData?.getTabletConnectionStatus ? (
                 <div className="space-y-3">
@@ -268,7 +271,10 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
                 </div>
               ) : (
                 <div className="text-center py-4">
-                  <span className="text-gray-600">Unable to load connection status</span>
+                  <div className="text-gray-400 mb-2">📱</div>
+                  <span className="text-gray-600">This slot is not yet connected to a tablet</span>
+                  <br />
+                  <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
                 </div>
               )}
             </div>

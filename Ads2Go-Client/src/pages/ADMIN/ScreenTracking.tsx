@@ -21,6 +21,7 @@ import {
 
 interface ScreenStatus {
   deviceId: string;
+  displayId?: string; // Unique display identifier (e.g., "DGL-HEADDRESS-CAR-001-SLOT-1")
   materialId: string;
   screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
   carGroupId?: string;
@@ -61,6 +62,11 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
+  // Additional fields for material-level screens (used in map)
+  totalDevices?: number;
+  onlineDevices?: number;
+  totalHours?: number;
+  totalDistance?: number;
 }
 
 interface ComplianceReport {
@@ -105,6 +111,7 @@ interface Material {
 
 const ScreenTracking: React.FC = () => {
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
+  const [materialScreens, setMaterialScreens] = useState<ScreenStatus[]>([]);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<ScreenStatus | null>(null);
   const [pathData, setPathData] = useState<PathData | null>(null);
@@ -186,7 +193,22 @@ const ScreenTracking: React.FC = () => {
         console.log('Number of screens:', complianceData.data?.screens?.length || 0);
         
         setComplianceReport(complianceData.data);
-        setScreens(complianceData.data?.screens || []);
+        setScreens(complianceData.data?.screens || []); // Individual device records for screen list
+        
+        // Set material screens for map display with validation
+        if (complianceData.data?.materialScreens && Array.isArray(complianceData.data.materialScreens)) {
+          // Filter out any undefined or invalid entries
+          const validMaterialScreens = complianceData.data.materialScreens.filter(screen => 
+            screen && 
+            typeof screen === 'object' && 
+            screen.deviceId && 
+            screen.materialId
+          );
+          setMaterialScreens(validMaterialScreens);
+        } else {
+          setMaterialScreens([]);
+        }
+        
         setConnectionStatus('connected');
 
         // Auto-center map on first screen if available
@@ -227,7 +249,28 @@ const ScreenTracking: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         console.log('Path data received:', data);
-        setPathData(data.data);
+        
+        // Validate path data structure before setting
+        if (data.data && Array.isArray(data.data.locationHistory)) {
+          // Filter out invalid location points
+          const validLocationHistory = data.data.locationHistory.filter((point: any) => 
+            point && 
+            typeof point.lat === 'number' && 
+            typeof point.lng === 'number' && 
+            !isNaN(point.lat) && 
+            !isNaN(point.lng) &&
+            isValidCoordinate(point.lat, point.lng)
+          );
+          
+          setPathData({
+            ...data.data,
+            locationHistory: validLocationHistory,
+            totalPoints: validLocationHistory.length
+          });
+        } else {
+          console.warn('Invalid path data structure received:', data);
+          setPathData(null);
+        }
       } else {
         const errorData = await response.json();
         console.error('Path data API Error:', errorData);
@@ -304,6 +347,7 @@ const ScreenTracking: React.FC = () => {
   };
 
   const getMarkerColor = (screen: ScreenStatus) => {
+    if (!screen || typeof screen !== 'object') return '#6b7280'; // gray for invalid data
     if (!screen.isOnline) return '#ef4444'; // red
     if (screen.isCompliant) return '#22c55e'; // green
     return '#eab308'; // yellow
@@ -311,10 +355,13 @@ const ScreenTracking: React.FC = () => {
 
   // Create custom PIN icon
   const createPinIcon = (color: string) => {
+    // Validate color input
+    const validColor = color && typeof color === 'string' ? color : '#6b7280';
+    
     return new Icon({
       iconUrl: `data:image/svg+xml;base64,${btoa(`
         <svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 20 12 20s12-12.5 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 20 12 20s12-12.5 12-20c0-6.627-5.373-12-12-12z" fill="${validColor}" stroke="#ffffff" stroke-width="2"/>
           <circle cx="12" cy="12" r="6" fill="#ffffff"/>
         </svg>
       `)}`,
@@ -508,46 +555,92 @@ const ScreenTracking: React.FC = () => {
                   }}
                 >
                   
-                  {/* Screen markers - only show markers for screens with valid location data */}
-                  {filteredScreens?.filter(screen => 
-                    screen && 
-                    screen.currentLocation && 
-                    isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
-                  ).map((screen) => (
-                    <Marker
-                      key={screen.deviceId}
-                      position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
-                      icon={createPinIcon(getMarkerColor(screen))}
-                      eventHandlers={{
-                        click: () => handleScreenSelect(screen),
-                      }}
-                    >
-                      <Popup>
-                        <div className="p-2">
-                          <h3 className="font-semibold">{screen.screenType} {screen.slotNumber || ''}</h3>
-                          <p className="text-sm">Material: {screen.materialId}</p>
-                          <p className="text-sm">Hours: {formatTime(screen.currentHours)}</p>
-                          <p className="text-sm">Distance: {formatDistance(screen.totalDistanceToday)}</p>
-                          <p className="text-sm">Status: {screen.displayStatus}</p>
-                          <p className="text-sm">Address: {screen.currentLocation.address}</p>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
+                  {/* Material markers - show one marker per material (not per slot) */}
+                  {(() => {
+                    try {
+                      if (!materialScreens || !Array.isArray(materialScreens)) {
+                        console.warn('materialScreens is not a valid array:', materialScreens);
+                        return null;
+                      }
+                      
+                      const validScreens = materialScreens.filter(screen => {
+                        if (!screen || typeof screen !== 'object') {
+                          console.warn('Invalid screen object:', screen);
+                          return false;
+                        }
+                        if (!screen.currentLocation) {
+                          console.warn('Screen missing currentLocation:', screen.deviceId);
+                          return false;
+                        }
+                        if (screen.currentLocation.lat === undefined || screen.currentLocation.lng === undefined) {
+                          console.warn('Screen missing coordinates:', screen.deviceId, screen.currentLocation);
+                          return false;
+                        }
+                        if (!isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                          console.warn('Screen has invalid coordinates:', screen.deviceId, screen.currentLocation);
+                          return false;
+                        }
+                        return true;
+                      });
+                      
+                      console.log(`Rendering ${validScreens.length} valid markers out of ${materialScreens.length} total screens`);
+                      
+                      return validScreens.map((screen) => {
+                        try {
+                          return (
+                            <Marker
+                              key={screen.deviceId}
+                              position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                              icon={createPinIcon(getMarkerColor(screen))}
+                              eventHandlers={{
+                                click: () => handleScreenSelect(screen),
+                              }}
+                            >
+                              <Popup>
+                                <div className="p-2">
+                                  <h3 className="font-semibold">{screen.materialId || 'Unknown Material'}</h3>
+                                  <p className="text-sm">Type: {screen.screenType || 'Unknown'}</p>
+                                  <p className="text-sm">Devices: {screen.onlineDevices || 0}/{screen.totalDevices || 1} online</p>
+                                  <p className="text-sm">Total Hours: {formatTime(screen.totalHours || 0)}</p>
+                                  <p className="text-sm">Total Distance: {formatDistance(screen.totalDistance || 0)}</p>
+                                  <p className="text-sm">Status: {screen.displayStatus || 'Unknown'}</p>
+                                  <p className="text-sm">Address: {screen.currentLocation.address || 'No address available'}</p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          );
+                        } catch (error) {
+                          console.error('Error rendering marker for screen:', screen.deviceId, error);
+                          return null;
+                        }
+                      });
+                    } catch (error) {
+                      console.error('Error processing material screens for map:', error);
+                      return null;
+                    }
+                  })()}
                   
                   {/* Path for selected tablet */}
-                  {pathData && pathData.locationHistory?.length > 1 && (
-                    <Polyline
-                      positions={pathData.locationHistory.map(point => [point.lat, point.lng] as LatLngTuple)}
-                      color="#3b82f6"
-                      weight={3}
-                      opacity={0.7}
-                    />
-                  )}
+                  {pathData && pathData.locationHistory?.length > 1 && (() => {
+                    const validPositions = pathData.locationHistory
+                      .filter(point => point && typeof point.lat === 'number' && typeof point.lng === 'number' && 
+                             !isNaN(point.lat) && !isNaN(point.lng) &&
+                             isValidCoordinate(point.lat, point.lng))
+                      .map(point => [point.lat, point.lng] as LatLngTuple);
+                    
+                    return validPositions.length > 1 ? (
+                      <Polyline
+                        positions={validPositions}
+                        color="#3b82f6"
+                        weight={3}
+                        opacity={0.7}
+                      />
+                    ) : null;
+                  })()}
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter(screen => 
+                {materialScreens && materialScreens.filter(screen => 
                   screen && 
                   screen.currentLocation && 
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
@@ -592,7 +685,7 @@ const ScreenTracking: React.FC = () => {
                        <div className="flex items-center justify-between mb-2">
                          <div className="flex items-center space-x-2">
                            <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.screenType} {screen.slotNumber || ''}</span>
+                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
                          </div>
                          <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
                            {getStatusIcon(screen.isOnline, screen.isCompliant)}

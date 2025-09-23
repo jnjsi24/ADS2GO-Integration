@@ -1,8 +1,8 @@
 const cron = require('node-cron');
 const ScreenTracking = require('../models/screenTracking');
 
-// Run every 5 minutes to check for offline devices
-const checkDeviceStatus = cron.schedule('*/5 * * * *', async () => {
+// Run every 30 seconds to check for offline devices (much faster for real-time updates)
+const checkDeviceStatus = cron.schedule('*/30 * * * * *', async () => {
   try {
     console.log('Running device status check...');
     const result = await ScreenTracking.updateOfflineStatus();

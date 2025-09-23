@@ -22,7 +22,7 @@ export default function HomeScreen() {
   const [isTracking, setIsTracking] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
-  const [showFullInterface, setShowFullInterface] = useState(false); // Start in video-only mode
+  const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
 
   useEffect(() => {
     initializeApp();

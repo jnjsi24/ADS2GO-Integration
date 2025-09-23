@@ -19,15 +19,16 @@ router.post('/updateLocation', async (req, res) => {
 
     // Check if device has active WebSocket connection (new source of truth)
     const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
-    if (deviceStatus.source === 'websocket' && !deviceStatus.isOnline) {
-      console.log(`🚫 [LOCATION UPDATE] Skipping location update for ${deviceId} - WebSocket disconnected`);
+    if (deviceStatus.source !== 'websocket' || !deviceStatus.isOnline) {
+      console.log(`🚫 [LOCATION UPDATE] Skipping location update for ${deviceId} - No WebSocket connection (source: ${deviceStatus.source}, isOnline: ${deviceStatus.isOnline})`);
       return res.json({
         success: true,
-        message: 'Location update skipped - device offline',
+        message: 'Location update skipped - no WebSocket connection',
         data: {
           deviceId,
           isOnline: false,
-          reason: 'WebSocket disconnected'
+          reason: 'No active WebSocket connection',
+          source: deviceStatus.source
         }
       });
     }
@@ -52,19 +53,29 @@ router.post('/updateLocation', async (req, res) => {
       address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
 
-    // Check if we need to start a new daily session
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Check if we need to reset daily session (new day)
+    const wasReset = screenTracking.resetDailySession();
+    if (wasReset) {
+      console.log(`🔄 Daily session reset for ${deviceId} - new day started`);
+      await screenTracking.save();
+    }
     
-    if (!screenTracking.currentSession || 
-        new Date(screenTracking.currentSession.date).getTime() !== today.getTime()) {
-      // End previous session if exists
-      if (screenTracking.currentSession && screenTracking.currentSession.isActive) {
-        await screenTracking.endDailySession();
-      }
-      
-      // Start new daily session
-      await screenTracking.startDailySession();
+    // Check if device was offline and just reconnected - clear location history to prevent invalid distance calculation
+    const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
+    const wasOffline = !screenTracking.isOnline && hasWebSocketConnection;
+    
+    // Also check if this is a fresh connection (no recent location history or invalid coordinates)
+    const hasInvalidLocationHistory = screenTracking.currentSession?.locationHistory?.some(point => 
+      point.coordinates && point.coordinates[0] === 0 && point.coordinates[1] === 0
+    );
+    
+    if (wasOffline || hasInvalidLocationHistory) {
+      console.log(`🔄 Device ${deviceId} reconnected after being offline or has invalid location history - clearing location history to prevent invalid distance calculation`);
+      screenTracking.currentSession.locationHistory = [];
+      screenTracking.currentLocation = null;
+      screenTracking.currentSession.totalDistanceTraveled = 0;
+      screenTracking.totalDistanceTraveled = 0;
+      await screenTracking.save();
     }
 
     // Update location and online status
@@ -72,16 +83,30 @@ router.post('/updateLocation', async (req, res) => {
       await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
       console.log('Location updated successfully for device:', deviceId);
       
-      // Explicitly update online status and lastSeen
+      // Check if device has active WebSocket connection before marking as online
+      
+      // Only mark as online if device has active WebSocket connection
       await ScreenTracking.updateOne(
         { 'devices.deviceId': deviceId },
         { 
           $set: { 
-            'devices.$.isOnline': true,
+            'devices.$.isOnline': hasWebSocketConnection,
             'devices.$.lastSeen': new Date()
           } 
         }
       );
+      
+      console.log(`📱 Device ${deviceId} status: ${hasWebSocketConnection ? 'ONLINE (WebSocket connected)' : 'OFFLINE (no WebSocket connection)'}`);
+      
+      // Also update root level isOnline status based on WebSocket connection
+      const hasAnyOnlineDevice = screenTracking.devices?.some(d => d.isOnline) || false;
+      if (screenTracking.isOnline !== hasAnyOnlineDevice) {
+        console.log(`🔄 Updating root status for ${screenTracking.materialId}: ${screenTracking.isOnline} -> ${hasAnyOnlineDevice}`);
+        await ScreenTracking.updateOne(
+          { _id: screenTracking._id },
+          { $set: { isOnline: hasAnyOnlineDevice } }
+        );
+      }
     } catch (error) {
       console.error('Error updating location and status:', error);
       // Continue processing even if update fails
@@ -93,21 +118,41 @@ router.post('/updateLocation', async (req, res) => {
       const hoursRemaining = screenTracking.hoursRemaining;
       
       // Alert for low hours (less than 6 hours with 2 hours remaining) - Only for HEADDRESS
-      if (screenTracking.screenType === 'HEADDRESS' && currentHours < 6 && hoursRemaining > 2) {
-        await screenTracking.addAlert(
-          'LOW_HOURS',
-          `Driver has only ${currentHours} hours today. ${hoursRemaining} hours remaining to meet 8-hour target.`,
-          'HIGH'
+      // Only create alert if device is actually online and we don't already have a recent LOW_HOURS alert (within last hour)
+      if (screenTracking.screenType === 'HEADDRESS' && screenTracking.isOnline && currentHours < 6 && hoursRemaining > 2) {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        const recentLowHoursAlert = screenTracking.alerts.find(alert => 
+          alert.type === 'LOW_HOURS' && 
+          alert.timestamp > oneHourAgo && 
+          !alert.isResolved
         );
+        
+        if (!recentLowHoursAlert) {
+          await screenTracking.addAlert(
+            'LOW_HOURS',
+            `Driver has only ${currentHours.toFixed(1)} hours today. ${hoursRemaining.toFixed(1)} hours remaining to meet 8-hour target.`,
+            'HIGH'
+          );
+        }
       }
 
       // Alert for speed violations (over 80 km/h) - Only for HEADDRESS
-      if (screenTracking.screenType === 'HEADDRESS' && speed > 80) {
-        await screenTracking.addAlert(
-          'SPEED_VIOLATION',
-          `Speed violation detected: ${speed} km/h`,
-          'MEDIUM'
+      // Only create alert if device is actually online and we don't already have a recent SPEED_VIOLATION alert (within last 10 minutes)
+      if (screenTracking.screenType === 'HEADDRESS' && screenTracking.isOnline && speed > 80) {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const recentSpeedAlert = screenTracking.alerts.find(alert => 
+          alert.type === 'SPEED_VIOLATION' && 
+          alert.timestamp > tenMinutesAgo && 
+          !alert.isResolved
         );
+        
+        if (!recentSpeedAlert) {
+          await screenTracking.addAlert(
+            'SPEED_VIOLATION',
+            `Speed violation detected: ${speed} km/h`,
+            'MEDIUM'
+          );
+        }
       }
     } catch (error) {
       console.warn('Error processing alerts:', error.message);
@@ -371,50 +416,260 @@ router.get('/compliance', async (req, res) => {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
-    const allTablets = await ScreenTracking.find({ isActive: true });
+    // Only fetch materials that have actual connected devices (not just temporary records)
+    const allTablets = await ScreenTracking.find({ 
+      isActive: true,
+      $and: [
+        {
+          $or: [
+            { 'devices.0': { $exists: true } }, // Has at least one device in devices array
+            { 
+              deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+              deviceId: { $exists: true, $ne: null } // Has a real device ID
+            }
+          ]
+        },
+        {
+          $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+        },
+        {
+          $or: [
+            { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { 'devices': { $exists: false } }, // Or no devices array (legacy records)
+            { 
+              'devices': { $size: 0 }, // Or empty devices array
+              deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
+            }
+          ]
+        }
+      ]
+    });
     
+    // Initialize screens array to collect individual device records
+    const individualScreens = [];
+    const seenDisplayIds = new Set(); // Track unique display IDs to prevent duplicates
+    let totalOnlineScreens = 0;
+    let totalCompliantScreens = 0;
+    let totalHours = 0;
+    let totalDistance = 0;
+    
+    // Process each tablet and create individual device records
+    allTablets.forEach(tablet => {
+      if (tablet.devices && tablet.devices.length > 0) {
+        // New multi-device structure: create individual records per device
+        tablet.devices.forEach((device, index) => {
+          // Use device-specific values if available, otherwise fall back to legacy values
+          // Count hours if device is online (WebSocket or database status)
+          const deviceHours = device.isOnline ? (device.totalHoursOnline || tablet.currentHoursToday || 0) : (tablet.currentHoursToday || 0);
+          const deviceDistance = device.totalDistanceTraveled || tablet.currentSession?.totalDistanceTraveled || 0;
+          const isDeviceOnline = device.isOnline;
+          const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
+          
+          totalHours += deviceHours;
+          totalDistance += deviceDistance;
+          if (isDeviceOnline) totalOnlineScreens++;
+          if (isDeviceCompliant) totalCompliantScreens++;
+          
+          // Create unique display ID by combining materialId with slot info
+          const displayId = `${tablet.materialId}-SLOT-${device.slotNumber || (index + 1)}`;
+          
+          // Skip if we've already seen this display ID (deduplication)
+          if (seenDisplayIds.has(displayId)) {
+            console.log(`Skipping duplicate display ID: ${displayId}`);
+            return;
+          }
+          seenDisplayIds.add(displayId);
+          
+          // Convert coordinates format for individual screens
+          let deviceLocation = device.currentLocation || tablet.currentLocation;
+          let frontendDeviceLocation = null;
+          if (deviceLocation) {
+            if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
+              frontendDeviceLocation = {
+                lat: deviceLocation.coordinates[1],
+                lng: deviceLocation.coordinates[0],
+                timestamp: deviceLocation.timestamp,
+                speed: deviceLocation.speed,
+                heading: deviceLocation.heading,
+                accuracy: deviceLocation.accuracy,
+                address: deviceLocation.address
+              };
+            } else if (deviceLocation.lat !== undefined && deviceLocation.lng !== undefined) {
+              frontendDeviceLocation = deviceLocation;
+            }
+          }
+
+          individualScreens.push({
+            deviceId: device.deviceId,
+            displayId: displayId, // Unique identifier for frontend display
+            materialId: tablet.materialId,
+            screenType: tablet.screenType,
+            carGroupId: tablet.carGroupId,
+            slotNumber: device.slotNumber || (index + 1),
+            isOnline: isDeviceOnline,
+            currentLocation: frontendDeviceLocation,
+            lastSeen: device.lastSeen || tablet.lastSeen,
+            currentHours: deviceHours,
+            hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
+            isCompliant: isDeviceCompliant,
+            totalDistanceToday: deviceDistance,
+            averageDailyHours: deviceHours,
+            complianceRate: Math.min(100, (deviceHours / 8) * 100), // Percentage of 8-hour target
+            totalHoursOnline: deviceHours,
+            totalDistanceTraveled: deviceDistance,
+            displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
+            screenMetrics: tablet.screenMetrics || {
+              displayHours: deviceHours,
+              adPlayCount: 0,
+              lastAdPlayed: null,
+              brightness: 100,
+              volume: 50,
+              isDisplaying: isDeviceOnline,
+              maintenanceMode: false
+            },
+            alerts: tablet.alerts || []
+          });
+        });
+      } else {
+        // Legacy single-device structure: use root-level fields for backward compatibility
+        // Only process if there are NO devices in the devices array
+        const legacyDisplayId = `${tablet.materialId}-SLOT-${tablet.slotNumber || 1}`;
+        
+        // Skip if we've already seen this display ID (deduplication)
+        if (seenDisplayIds.has(legacyDisplayId)) {
+          console.log(`Skipping duplicate legacy display ID: ${legacyDisplayId}`);
+          return;
+        }
+        seenDisplayIds.add(legacyDisplayId);
+        
+        const legacyHours = tablet.currentHoursToday || 0;
+        const legacyDistance = tablet.currentSession?.totalDistanceTraveled || 0;
+        const isLegacyOnline = tablet.isOnline;
+        const isLegacyCompliant = tablet.isCompliantToday || (legacyHours >= 8);
+        
+        totalHours += legacyHours;
+        totalDistance += legacyDistance;
+        if (isLegacyOnline) totalOnlineScreens++;
+        if (isLegacyCompliant) totalCompliantScreens++;
+        
+        // Convert coordinates format for legacy structure
+        let legacyLocation = tablet.getFormattedLocation ? tablet.getFormattedLocation() : tablet.currentLocation;
+        let frontendLegacyLocation = null;
+        if (legacyLocation) {
+          if (legacyLocation.coordinates && Array.isArray(legacyLocation.coordinates)) {
+            frontendLegacyLocation = {
+              lat: legacyLocation.coordinates[1],
+              lng: legacyLocation.coordinates[0],
+              timestamp: legacyLocation.timestamp,
+              speed: legacyLocation.speed,
+              heading: legacyLocation.heading,
+              accuracy: legacyLocation.accuracy,
+              address: legacyLocation.address
+            };
+          } else if (legacyLocation.lat !== undefined && legacyLocation.lng !== undefined) {
+            frontendLegacyLocation = legacyLocation;
+          }
+        }
+
+        individualScreens.push({
+          deviceId: tablet.deviceId,
+          displayId: legacyDisplayId,
+          materialId: tablet.materialId,
+          screenType: tablet.screenType,
+          carGroupId: tablet.carGroupId,
+          slotNumber: tablet.slotNumber,
+          isOnline: isLegacyOnline,
+          currentLocation: frontendLegacyLocation,
+          lastSeen: tablet.lastSeen,
+          currentHours: legacyHours,
+          hoursRemaining: tablet.hoursRemaining || Math.max(0, 8 - legacyHours),
+          isCompliant: isLegacyCompliant,
+          totalDistanceToday: legacyDistance,
+          averageDailyHours: tablet.averageDailyHours || legacyHours,
+          complianceRate: tablet.complianceRate || Math.min(100, (legacyHours / 8) * 100),
+          totalHoursOnline: tablet.totalHoursOnline || legacyHours,
+          totalDistanceTraveled: tablet.totalDistanceTraveled || legacyDistance,
+          displayStatus: tablet.displayStatus || (isLegacyOnline ? 'ACTIVE' : 'OFFLINE'),
+          screenMetrics: tablet.screenMetrics,
+          alerts: tablet.alerts
+        });
+      }
+    });
+
+    // Create material-level records for map display (one per material)
+    const materialScreens = [];
+    allTablets.forEach(tablet => {
+      // Use the first online device's location, or first device's location if none online
+      let displayLocation = null;
+      let displayStatus = 'OFFLINE';
+      let hasOnlineDevice = false;
+      
+      if (tablet.devices && tablet.devices.length > 0) {
+        const onlineDevice = tablet.devices.find(d => d.isOnline);
+        if (onlineDevice) {
+          displayLocation = onlineDevice.currentLocation || tablet.currentLocation;
+          displayStatus = 'ACTIVE';
+          hasOnlineDevice = true;
+        } else {
+          displayLocation = tablet.devices[0].currentLocation || tablet.currentLocation;
+          displayStatus = 'OFFLINE';
+        }
+      } else {
+        displayLocation = tablet.currentLocation;
+        displayStatus = tablet.isOnline ? 'ACTIVE' : 'OFFLINE';
+        hasOnlineDevice = tablet.isOnline;
+      }
+      
+      // Convert coordinates format from [lng, lat] to {lat, lng} for frontend compatibility
+      let frontendLocation = null;
+      if (displayLocation) {
+        if (displayLocation.coordinates && Array.isArray(displayLocation.coordinates)) {
+          // MongoDB GeoJSON format: coordinates: [lng, lat]
+          frontendLocation = {
+            lat: displayLocation.coordinates[1],
+            lng: displayLocation.coordinates[0],
+            timestamp: displayLocation.timestamp,
+            speed: displayLocation.speed,
+            heading: displayLocation.heading,
+            accuracy: displayLocation.accuracy,
+            address: displayLocation.address
+          };
+        } else if (displayLocation.lat !== undefined && displayLocation.lng !== undefined) {
+          // Already in correct format
+          frontendLocation = displayLocation;
+        }
+      }
+
+      materialScreens.push({
+        materialId: tablet.materialId,
+        deviceId: tablet.deviceId, // Legacy deviceId for compatibility
+        screenType: tablet.screenType,
+        carGroupId: tablet.carGroupId,
+        isOnline: hasOnlineDevice,
+        currentLocation: frontendLocation,
+        lastSeen: tablet.lastSeen,
+        displayStatus: displayStatus,
+        totalDevices: tablet.devices?.length || 1,
+        onlineDevices: tablet.devices?.filter(d => d.isOnline).length || (tablet.isOnline ? 1 : 0),
+        // Aggregate data for display
+        totalHours: tablet.devices?.reduce((sum, d) => sum + (d.totalHoursOnline || 0), 0) || (tablet.currentHoursToday || 0),
+        totalDistance: tablet.devices?.reduce((sum, d) => sum + (d.totalDistanceTraveled || 0), 0) || (tablet.currentSession?.totalDistanceTraveled || 0),
+        screenMetrics: tablet.screenMetrics,
+        alerts: tablet.alerts
+      });
+    });
+
     const complianceReport = {
       date: targetDate,
-      totalTablets: allTablets.length,
-      onlineTablets: allTablets.filter(t => t.isOnline).length,
-      compliantTablets: allTablets.filter(t => t.isCompliantToday).length,
-      nonCompliantTablets: allTablets.filter(t => !t.isCompliantToday).length,
-      averageHours: 0,
-      averageDistance: 0,
-      tablets: []
+      totalTablets: individualScreens.length,
+      onlineTablets: totalOnlineScreens,
+      compliantTablets: totalCompliantScreens,
+      nonCompliantTablets: individualScreens.length - totalCompliantScreens,
+      averageHours: individualScreens.length > 0 ? Math.round((totalHours / individualScreens.length) * 100) / 100 : 0,
+      averageDistance: individualScreens.length > 0 ? Math.round((totalDistance / individualScreens.length) * 100) / 100 : 0,
+      screens: individualScreens, // Individual device records for screen list
+      materialScreens: materialScreens // Material-level records for map display
     };
-
-    if (allTablets.length > 0) {
-      const totalHours = allTablets.reduce((sum, t) => sum + t.currentHoursToday, 0);
-      const totalDistance = allTablets.reduce((sum, t) => 
-        sum + (t.currentSession?.totalDistanceTraveled || 0), 0
-      );
-      
-      complianceReport.averageHours = Math.round((totalHours / allTablets.length) * 100) / 100;
-      complianceReport.averageDistance = Math.round((totalDistance / allTablets.length) * 100) / 100;
-    }
-
-    complianceReport.screens = allTablets.map(tablet => ({
-      deviceId: tablet.deviceId,
-      materialId: tablet.materialId,
-      screenType: tablet.screenType,
-      carGroupId: tablet.carGroupId,
-      slotNumber: tablet.slotNumber,
-      isOnline: tablet.isOnline,
-      currentLocation: tablet.getFormattedLocation(),
-      lastSeen: tablet.lastSeen,
-      currentHours: tablet.currentHoursToday,
-      hoursRemaining: tablet.hoursRemaining,
-      isCompliant: tablet.isCompliantToday,
-      totalDistanceToday: tablet.currentSession?.totalDistanceTraveled || 0,
-      averageDailyHours: tablet.averageDailyHours,
-      complianceRate: tablet.complianceRate,
-      totalHoursOnline: tablet.totalHoursOnline,
-      totalDistanceTraveled: tablet.totalDistanceTraveled,
-      displayStatus: tablet.displayStatus,
-      screenMetrics: tablet.screenMetrics,
-      alerts: tablet.alerts
-    }));
 
     res.json({
       success: true,
@@ -1053,7 +1308,33 @@ router.get('/screens', async (req, res) => {
       { multi: true }
     );
     
-    let query = {};
+    let query = {
+      // Only fetch materials that have actual connected devices (not just temporary records)
+      $and: [
+        {
+          $or: [
+            { 'devices.0': { $exists: true } }, // Has at least one device in devices array
+            { 
+              deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+              deviceId: { $exists: true, $ne: null } // Has a real device ID
+            }
+          ]
+        },
+        {
+          $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+        },
+        {
+          $or: [
+            { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { 'devices': { $exists: false } }, // Or no devices array (legacy records)
+            { 
+              'devices': { $size: 0 }, // Or empty devices array
+              deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
+            }
+          ]
+        }
+      ]
+    };
     
     if (screenType) query.screenType = screenType;
     if (materialId) query.materialId = materialId;

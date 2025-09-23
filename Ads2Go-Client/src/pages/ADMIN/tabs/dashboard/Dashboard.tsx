@@ -82,7 +82,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <WifiOff className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No active devices</h3>
-              <p className="mt-1 text-sm text-gray-500">No devices are currently online and playing ads.</p>
+              <p className="mt-1 text-sm text-gray-500">No screens are currently online and connected via WebSocket.</p>
+              <p className="mt-1 text-xs text-gray-400">Check the Screen Tracking page for real-time device status.</p>
             </div>
           ) : (
             <table className="w-full">
@@ -91,7 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <th className="text-left py-3 px-4">
                     <input type="checkbox" className="rounded" />
                   </th>
-                  <th className="text-left py-3 px-4">Material</th>
+                  <th className="text-left py-3 px-4">Screen ID</th>
                   <th className="text-left py-3 px-4">Slot</th>
                   <th className="text-left py-3 px-4">Status</th>
                   <th className="text-left py-3 px-4">Current Ad</th>
@@ -117,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer"
                       title="Click to view device details"
                     >
-                      {screen.materialId}
+                      {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                     </button>
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber}</td>

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
 import { adsPanelGraphQLService, ScreenData, AdAnalytics } from '../../services/adsPanelGraphQLService';
+import { adsPanelService } from '../../services/adsPanelService';
 import '../../services/testEndpoints';
 
 // Import tab components
@@ -60,8 +61,8 @@ const AdminAdsControl: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
-  // GraphQL service for all API operations
-  const graphQLService = adsPanelGraphQLService;
+  // REST API service for all API operations (using compliance endpoint for real-time data)
+  const apiService = adsPanelService;
 
   // Data fetching functions - only for initial load and manual refresh
   const fetchData = useCallback(async (isManualRefresh = false) => {
@@ -79,10 +80,10 @@ const AdminAdsControl: React.FC = () => {
       
       console.log('🔄 Fetching data from server...');
       
-      // Fetch screens data using GraphQL
+      // Fetch screens data using REST API (compliance endpoint)
       try {
-        console.log('🔍 Fetching screens data via GraphQL...');
-        const screensResponse = await graphQLService.getScreens();
+        console.log('🔍 Fetching screens data via REST API...');
+        const screensResponse = await apiService.getScreens();
         console.log('📊 Screens data received:', screensResponse);
         
         if (screensResponse && Array.isArray(screensResponse.screens)) {
@@ -107,10 +108,10 @@ const AdminAdsControl: React.FC = () => {
         setScreens([]);
       }
       
-      // Fetch other data in parallel using GraphQL
+      // Fetch other data in parallel using REST API
       try {
-        console.log('🔄 Fetching additional data via GraphQL...');
-        const analyticsData = await graphQLService.getAdAnalytics();
+        console.log('🔄 Fetching additional data via REST API...');
+        const analyticsData = await apiService.getAdAnalytics();
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data:', otherError);
@@ -132,16 +133,16 @@ const AdminAdsControl: React.FC = () => {
       setIsRefreshing(false);
       setLastRefresh(new Date());
     }
-  }, [hasInitiallyLoaded, graphQLService]);
+  }, [hasInitiallyLoaded, apiService]);
 
   // Auto-refresh function that never shows loading
   const autoRefreshData = useCallback(async () => {
     try {
       console.log('🔄 Auto-refresh - fetching data silently...');
       
-      // Fetch screens data using GraphQL
+      // Fetch screens data using REST API
       try {
-        const screensResponse = await graphQLService.getScreens();
+        const screensResponse = await apiService.getScreens();
         if (screensResponse && Array.isArray(screensResponse.screens)) {
           setScreens(prevScreens => {
             const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
@@ -155,9 +156,9 @@ const AdminAdsControl: React.FC = () => {
         console.error('❌ Error fetching screens during auto-refresh:', screensError);
       }
       
-      // Fetch other data in parallel using GraphQL
+      // Fetch other data in parallel using REST API
       try {
-        const analyticsData = await graphQLService.getAdAnalytics();
+        const analyticsData = await apiService.getAdAnalytics();
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data during auto-refresh:', otherError);
@@ -167,7 +168,7 @@ const AdminAdsControl: React.FC = () => {
     } catch (err) {
       console.error('Error during auto-refresh:', err);
     }
-  }, [graphQLService]);
+  }, [apiService]);
 
   // Load data on component mount
   useEffect(() => {

@@ -135,6 +135,7 @@ async function startServer() {
         'http://localhost',
         'http://127.0.0.1',
         'http://192.168.1.5:3000',
+        'http://192.168.100.22:3000',
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
@@ -264,9 +265,9 @@ async function startServer() {
   deviceStatusService.initializeWebSocketServer(httpServer);
 
   // Start the server
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 Server ready at http://localhost:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://localhost:${PORT}/graphql`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
+    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
     startDeviceStatusJob();

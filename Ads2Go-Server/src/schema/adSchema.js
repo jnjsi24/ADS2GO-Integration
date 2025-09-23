@@ -22,6 +22,7 @@ const adTypeDefs = gql`
     planId: AdsPlan        
     title: String!
     description: String
+    website: String        # Optional advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!          # total price for the ad
@@ -53,6 +54,7 @@ const adTypeDefs = gql`
     planId: ID!
     title: String!
     description: String
+    website: String         # Optional advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!

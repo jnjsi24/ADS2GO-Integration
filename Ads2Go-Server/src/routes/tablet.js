@@ -129,6 +129,14 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
+    // Validate device ID contains "TABLET"
+    if (!deviceId.includes('TABLET')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only devices with TABLET in their device ID can be registered'
+      });
+    }
+
     // Check if the slot is already occupied by another device
     const existingTablet = tablet.tablets.find(t => t.tabletNumber === slotNumber);
     if (existingTablet && existingTablet.deviceId && existingTablet.deviceId !== deviceId) {
@@ -193,12 +201,13 @@ router.post('/registerTablet', async (req, res) => {
         tabletTracking.devices = [];
       }
       
-      // Find existing device in the array
-      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
+      // Find existing device in the array by deviceId first, then by slotNumber
+      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.deviceId === deviceId);
+      const slotOccupiedIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
       
       if (existingDeviceIndex >= 0) {
-        // Update existing device
-        console.log(`Updating existing device in slot ${slotNumber}`);
+        // Device already exists, update its slot and status
+        console.log(`Device ${deviceId} already exists, updating slot to ${slotNumber}`);
         tabletTracking.devices[existingDeviceIndex] = {
           deviceId,
           slotNumber,
@@ -208,15 +217,55 @@ router.post('/registerTablet', async (req, res) => {
           totalHoursOnline: tabletTracking.devices[existingDeviceIndex].totalHoursOnline,
           totalDistanceTraveled: tabletTracking.devices[existingDeviceIndex].totalDistanceTraveled
         };
-      } else {
-        // Add new device
-        console.log(`Adding new device to slot ${slotNumber}`);
-        tabletTracking.devices.push({
+      } else if (slotOccupiedIndex >= 0) {
+        // Slot is occupied by a different device, replace it
+        console.log(`Slot ${slotNumber} is occupied by device ${tabletTracking.devices[slotOccupiedIndex].deviceId}, replacing with ${deviceId}`);
+        tabletTracking.devices[slotOccupiedIndex] = {
           deviceId,
           slotNumber,
           isOnline: true,
-          lastSeen: new Date()
-        });
+          lastSeen: new Date(),
+          currentLocation: tabletTracking.devices[slotOccupiedIndex].currentLocation,
+          totalHoursOnline: tabletTracking.devices[slotOccupiedIndex].totalHoursOnline,
+          totalDistanceTraveled: tabletTracking.devices[slotOccupiedIndex].totalDistanceTraveled
+        };
+      } else {
+        // Check if we've reached the maximum number of slots (2)
+        if (tabletTracking.devices.length >= 2) {
+          console.log(`⚠️ Warning: Material ${materialId} already has 2 devices. Replacing the oldest offline device.`);
+          
+          // Find the oldest offline device to replace
+          const offlineDevices = tabletTracking.devices.filter(d => !d.isOnline);
+          if (offlineDevices.length > 0) {
+            const oldestOfflineDevice = offlineDevices.sort((a, b) => new Date(a.lastSeen) - new Date(b.lastSeen))[0];
+            const oldestIndex = tabletTracking.devices.findIndex(d => d.deviceId === oldestOfflineDevice.deviceId);
+            
+            console.log(`Replacing oldest offline device ${oldestOfflineDevice.deviceId} with new device ${deviceId}`);
+            tabletTracking.devices[oldestIndex] = {
+              deviceId,
+              slotNumber,
+              isOnline: true,
+              lastSeen: new Date()
+            };
+          } else {
+            console.log(`⚠️ All devices are online. Adding new device anyway (this may cause issues).`);
+            tabletTracking.devices.push({
+              deviceId,
+              slotNumber,
+              isOnline: true,
+              lastSeen: new Date()
+            });
+          }
+        } else {
+          // Add new device normally
+          console.log(`Adding new device to slot ${slotNumber}`);
+          tabletTracking.devices.push({
+            deviceId,
+            slotNumber,
+            isOnline: true,
+            lastSeen: new Date()
+          });
+        }
       }
       
       // Update legacy fields (for backward compatibility)

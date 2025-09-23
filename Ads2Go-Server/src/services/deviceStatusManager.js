@@ -13,8 +13,8 @@ class DeviceStatusManager {
     this.webSocketConnections = new Map(); // deviceId -> { ws, lastSeen, source }
     this.databaseStatus = new Map();       // deviceId -> { isOnline, lastSeen, source }
     this.statusCache = new Map();          // deviceId -> { isOnline, source, timestamp, confidence }
-    this.cacheTimeout = 5000; // 5 seconds cache timeout
-    this.databaseFallbackTimeout = 30; // 30 seconds database fallback
+    this.cacheTimeout = 2000; // 2 seconds cache timeout for faster updates
+    this.databaseFallbackTimeout = 15; // 15 seconds database fallback for faster detection
   }
 
   /**
