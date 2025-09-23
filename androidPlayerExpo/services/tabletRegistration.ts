@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
+import playbackWebSocketService from './playbackWebSocketService';
 import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
@@ -196,6 +197,10 @@ export class TabletRegistrationService {
               // Save the fallback registration
               await AsyncStorage.setItem('tabletRegistration', JSON.stringify(fallbackRegistration));
               this.registration = fallbackRegistration;
+              
+              // Update WebSocket service with new device info
+              await playbackWebSocketService.updateDeviceInfo(fallbackRegistration.deviceId, fallbackRegistration.materialId);
+              
               return fallbackRegistration;
             }
           }
@@ -251,6 +256,9 @@ export class TabletRegistrationService {
 
         await AsyncStorage.setItem('tabletRegistration', JSON.stringify(registration));
         this.registration = registration;
+        
+        // Update WebSocket service with new device info
+        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId);
       }
 
       return result;
@@ -635,6 +643,27 @@ export class TabletRegistrationService {
       console.log('All registration-related data cleared');
     } catch (error) {
       console.error('Error clearing all registration data:', error);
+    }
+  }
+
+  async clearAllCachedAds(): Promise<void> {
+    try {
+      console.log('Clearing all cached ads...');
+      
+      // Get all keys from AsyncStorage
+      const allKeys = await AsyncStorage.getAllKeys();
+      
+      // Filter keys that match the ad cache pattern: ads_${materialId}_${slotNumber}
+      const adCacheKeys = allKeys.filter(key => key.startsWith('ads_'));
+      
+      if (adCacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(adCacheKeys);
+        console.log(`Cleared ${adCacheKeys.length} cached ad entries:`, adCacheKeys);
+      } else {
+        console.log('No cached ads found to clear');
+      }
+    } catch (error) {
+      console.error('Error clearing cached ads:', error);
     }
   }
 

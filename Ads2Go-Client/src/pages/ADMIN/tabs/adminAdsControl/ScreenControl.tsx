@@ -48,6 +48,12 @@ const ScreenControl: React.FC<ScreenControlProps> = ({
                     adDuration={screen.screenMetrics.currentAd.adDuration}
                     isPlaying={screen.isOnline}
                     className="w-full"
+                    startTime={screen.screenMetrics.currentAd.startTime}
+                    realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
+                      currentTime: screen.screenMetrics.currentAd.currentTime,
+                      progress: screen.screenMetrics.currentAd.progress || 0,
+                      state: screen.screenMetrics.currentAd.state || 'playing'
+                    } : undefined}
                   />
                 </div>
               </div>

@@ -147,6 +147,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                         adDuration={screen.screenMetrics.currentAd.adDuration}
                         isPlaying={screen.isOnline}
                         className="w-32"
+                        startTime={screen.screenMetrics.currentAd.startTime}
+                        realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
+                          currentTime: screen.screenMetrics.currentAd.currentTime,
+                          progress: screen.screenMetrics.currentAd.progress || 0,
+                          state: screen.screenMetrics.currentAd.state || 'playing'
+                        } : undefined}
                       />
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>

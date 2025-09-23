@@ -7,6 +7,7 @@ import QRCode from 'react-native-qrcode-svg';
 import * as Location from 'expo-location';
 import * as Device from 'expo-device';
 import tabletRegistrationService from '../services/tabletRegistration';
+import playbackWebSocketService from '../services/playbackWebSocketService';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = 'http://192.168.1.7:5000';
@@ -46,6 +47,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [lastTapTime, setLastTapTime] = useState<number>(0);
   const [showControls, setShowControls] = useState(false);
   const [screenData, setScreenData] = useState(Dimensions.get('window'));
+  const [websocketUpdatesStarted, setWebsocketUpdatesStarted] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [qrCodeReady, setQrCodeReady] = useState(false);
+  const [videoActuallyStarted, setVideoActuallyStarted] = useState(false);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -459,36 +464,58 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }, 5000);
   };
 
-  // Generate QR code data for current ad
+  // State for QR code data - generated asynchronously to not block video
+  const [qrData, setQrData] = useState<string | null>(null);
+
+  // Generate QR code data asynchronously to prevent blocking video playback
+  useEffect(() => {
+    if (!currentAd) {
+      setQrData(null);
+      setQrCodeReady(false);
+      return;
+    }
+
+    // Generate QR data asynchronously using setTimeout to prevent blocking
+    const generateQRAsync = () => {
+      // Calculate the correct slot number for this ad
+      const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
+      
+      console.log('🔍 Generating QR data for ad:', {
+        adId: currentAd.adId,
+        adTitle: currentAd.adTitle,
+        website: (currentAd as any).website,
+        hasWebsite: !!(currentAd as any).website,
+        adSlotNumber: adSlotNumber,
+        currentAdIndex: currentAdIndex
+      });
+      
+      // Use the tracking server to track QR scans
+      const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
+        ad_id: currentAd.adId,
+        ad_title: currentAd.adTitle || `Ad ${currentAd.adId}`,
+        material_id: materialId,
+        slot_number: adSlotNumber.toString(),
+        website: (currentAd as any).website || 'https://ads2go.app',
+        redirect_url: (currentAd as any).website || 'https://ads2go.app',
+        scan_time: Date.now().toString()
+      }).toString();
+      
+      console.log('🔍 Using tracking URL:', trackingUrl);
+      
+      // Set QR data and mark as ready
+      setQrData(trackingUrl);
+      setQrCodeReady(true);
+    };
+
+    // Use setTimeout to make QR generation non-blocking
+    const timeoutId = setTimeout(generateQRAsync, 0);
+    
+    return () => clearTimeout(timeoutId);
+  }, [currentAd?.adId, currentAd?.adTitle, currentAdIndex, materialId]);
+
+  // Generate QR code data for current ad (legacy function for compatibility)
   const generateQRData = () => {
-    if (!currentAd) return null;
-    
-    // Calculate the correct slot number for this ad
-    const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
-    
-    console.log('🔍 Generating QR data for ad:', {
-      adId: currentAd.adId,
-      adTitle: currentAd.adTitle,
-      website: (currentAd as any).website,
-      hasWebsite: !!(currentAd as any).website,
-      adSlotNumber: adSlotNumber,
-      currentAdIndex: currentAdIndex
-    });
-    
-    // Use the tracking server to track QR scans
-    const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
-      ad_id: currentAd.adId,
-      ad_title: currentAd.adTitle || `Ad ${currentAd.adId}`,
-      material_id: materialId,
-      slot_number: adSlotNumber.toString(),
-      website: (currentAd as any).website || 'https://ads2go.app',
-      redirect_url: (currentAd as any).website || 'https://ads2go.app',
-      scan_time: Date.now().toString()
-    }).toString();
-    
-    console.log('🔍 Using tracking URL:', trackingUrl);
-    
-    return trackingUrl;
+    return qrData;
   };
 
   // Generate QR code data for tracking (separate from the URL)
@@ -629,6 +656,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         const hasCached = await loadCachedAds();
         if (hasCached) {
           setIsDeviceOffline(true);
+          setWebsocketUpdatesStarted(false); // Reset flag for cached ads
           setLoading(false);
           return;
         } else {
@@ -648,6 +676,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         if (validAds.length > 0) {
           setAds(validAds);
           setCurrentAdIndex(0);
+          setWebsocketUpdatesStarted(false); // Reset flag for new ads
           console.log('Loaded valid ads from server:', validAds.length);
           
           // Cache the valid ads for offline use
@@ -711,6 +740,20 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
   useEffect(() => {
     fetchAds();
+    
+    // Connect to WebSocket for real-time playback updates
+    playbackWebSocketService.connect().then((connected) => {
+      if (connected) {
+        console.log('🔌 [AdPlayer] WebSocket connected for real-time updates');
+      } else {
+        console.log('🔌 [AdPlayer] WebSocket connection failed');
+      }
+    });
+    
+    // Cleanup WebSocket on unmount
+    return () => {
+      playbackWebSocketService.disconnect();
+    };
   }, [materialId, slotNumber]);
 
   // Listen for orientation changes
@@ -729,6 +772,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log(`🎬 Starting ad playback tracking: ${currentAd.adTitle}`);
       setAdStartTime(new Date());
       trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+      
+      // Reset WebSocket updates for new ad
+      setWebsocketUpdatesStarted(false);
+      setVideoActuallyStarted(false);
+      
+      // DON'T send any WebSocket updates yet - wait for video to actually load
+      // The onLoadStart, onLoad, and onReadyForDisplay will handle the buffering states
+      console.log(`🎬 [AdPlayer] New ad loaded: ${currentAd.adTitle} - waiting for video to load before sending WebSocket updates`);
     }
   }, [currentAdIndex, currentAd?.adTitle, currentAd?.adId]);
 
@@ -759,8 +810,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     // End tracking for current ad
     await endAdPlayback();
     
+    // Stop WebSocket updates completely
+    playbackWebSocketService.stopPlaybackUpdates();
+    
+    // Set transitioning state to prevent false progress
+    setIsTransitioning(true);
+    
     // Reset ad start time for next ad
     setAdStartTime(null);
+    
+    // Reset WebSocket updates flag for next ad
+    setWebsocketUpdatesStarted(false);
     
     // If slots are not full (less than 5 ads), include company ads in rotation
     if (ads.length < 5) {
@@ -887,27 +947,279 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             if (status.isLoaded) {
               setIsPlaying(status.isPlaying || false);
               
-              // Track ad playback when video starts playing
-              if (status.isPlaying && currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad' && !adStartTime) {
-                console.log(`🎬 Video started playing, tracking ad: ${currentAd.adTitle}`);
-                setAdStartTime(new Date());
-                trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+              // Track ad playback when video starts playing (only if not already started)
+              // Use more reliable conditions: isPlaying AND positionMillis > 0 AND isLoaded
+              if (status.isPlaying && status.isLoaded && status.positionMillis > 0 && currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad' && !adStartTime && !videoActuallyStarted) {
+                console.log(`🎬 Video ACTUALLY playing with position ${status.positionMillis}ms, tracking ad: ${currentAd.adTitle}`);
+                
+                // Add a small delay to ensure video is really playing and not just buffering
+                setTimeout(() => {
+                  // Double-check that video is still playing after delay
+                  if (status.isPlaying && status.positionMillis > 0) {
+                    console.log(`🎬 Video confirmed playing after delay, position: ${status.positionMillis}ms`);
+                    setAdStartTime(new Date());
+                    trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+                    
+                    // NOW start WebSocket updates when video is CONFIRMED playing
+                    console.log('🎬 [AdPlayer] Video CONFIRMED playing - starting WebSocket updates NOW');
+                    // Use actual video duration if available
+                    const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
+                    playbackWebSocketService.startPlaybackUpdates({
+                      adId: currentAd.adId,
+                      adTitle: currentAd.adTitle,
+                      state: 'playing',
+                      currentTime: status.positionMillis / 1000, // Use actual position
+                      duration: duration,
+                      progress: duration > 0 ? ((status.positionMillis / 1000) / duration) * 100 : 0,
+                      remainingTime: duration - (status.positionMillis / 1000),
+                      playbackRate: status.rate || 1.0,
+                      volume: status.volume || 1.0,
+                      isMuted: status.isMuted || false,
+                      hasJustStarted: true,
+                      adDetails: {
+                        adId: currentAd.adId,
+                        adTitle: currentAd.adTitle,
+                        adDuration: currentAd.duration,
+                        mediaFile: currentAd.mediaFile,
+                        slotNumber: slotNumber,
+                        materialId: materialId,
+                        isCompanyAd: currentAdIndex === -1,
+                        adIndex: currentAdIndex,
+                        totalAds: ads.length
+                      },
+                      startTime: new Date().toISOString()
+                    });
+                    
+                    // Mark that WebSocket updates have started and video has actually started
+                    setWebsocketUpdatesStarted(true);
+                    setVideoActuallyStarted(true);
+                  } else {
+                    console.log('🎬 Video stopped playing during delay, not starting WebSocket updates');
+                  }
+                }, 500); // 500ms delay to ensure video is really playing
+              }
+              
+              // Send ultra-detailed real-time WebSocket updates during playback
+              if (currentAd && status.isPlaying && status.isLoaded && !isTransitioning && websocketUpdatesStarted) {
+                // Only send progress updates when video is ACTUALLY playing and WebSocket updates have started
+                const currentTime = status.positionMillis / 1000;
+                // Use the actual video duration from the video player, not the ad data
+                const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
+                const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+                
+                // Calculate remaining time and playback speed
+                const remainingTime = Math.max(0, duration - currentTime);
+                const playbackRate = status.rate || 1.0;
+                const volume = status.volume || 1.0;
+                
+                playbackWebSocketService.updatePlaybackData({
+                  state: 'playing',
+                  currentTime: currentTime,
+                  duration: duration,
+                  progress: progress,
+                  remainingTime: remainingTime,
+                  playbackRate: playbackRate,
+                  volume: volume,
+                  isMuted: status.isMuted || false,
+                  hasJustStarted: status.hasJustStarted || false,
+                  hasJustFinished: status.hasJustFinished || false,
+                  // Additional detailed info
+                  adDetails: {
+                    adId: currentAd.adId,
+                    adTitle: currentAd.adTitle,
+                    adDuration: currentAd.duration,
+                    mediaFile: currentAd.mediaFile,
+                    slotNumber: slotNumber,
+                    materialId: materialId,
+                    isCompanyAd: currentAdIndex === -1,
+                    adIndex: currentAdIndex,
+                    totalAds: ads.length
+                  }
+                });
+              } else if (currentAd && !status.isPlaying && status.positionMillis > 0 && status.isLoaded && !isTransitioning) {
+                // Video is paused (but loaded)
+                const currentTime = status.positionMillis / 1000;
+                // Use the actual video duration from the video player
+                const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
+                const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+                const remainingTime = Math.max(0, duration - currentTime);
+                
+                playbackWebSocketService.updatePlaybackData({
+                  state: 'paused',
+                  currentTime: currentTime,
+                  duration: duration,
+                  progress: progress,
+                  remainingTime: remainingTime,
+                  playbackRate: status.rate || 1.0,
+                  volume: status.volume || 1.0,
+                  isMuted: status.isMuted || false,
+                  adDetails: {
+                    adId: currentAd.adId,
+                    adTitle: currentAd.adTitle,
+                    adDuration: currentAd.duration,
+                    mediaFile: currentAd.mediaFile,
+                    slotNumber: slotNumber,
+                    materialId: materialId,
+                    isCompanyAd: currentAdIndex === -1,
+                    adIndex: currentAdIndex,
+                    totalAds: ads.length
+                  }
+                });
+              } else if (currentAd && (!status.isLoaded || !status.isPlaying)) {
+                // Video is buffering/loading - DON'T send any updates, just stop the interval
+                // This prevents false progress updates during buffering
+                playbackWebSocketService.stopPlaybackUpdates();
+                
+                // Only send one buffering state update, then stop
+                if (!websocketUpdatesStarted) {
+                  const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
+                  
+                  playbackWebSocketService.updatePlaybackDataAndSend({
+                    state: 'buffering',
+                    currentTime: 0, // Always 0 during buffering
+                    duration: duration,
+                    progress: 0, // Always 0 during buffering
+                    remainingTime: duration,
+                    playbackRate: 0,
+                    volume: status.volume || 1.0,
+                    isMuted: status.isMuted || false,
+                    adDetails: {
+                      adId: currentAd.adId,
+                      adTitle: currentAd.adTitle,
+                      adDuration: currentAd.duration,
+                      mediaFile: currentAd.mediaFile,
+                      slotNumber: slotNumber,
+                      materialId: materialId,
+                      isCompanyAd: currentAdIndex === -1,
+                      adIndex: currentAdIndex,
+                      totalAds: ads.length
+                    }
+                  });
+                  
+                  setWebsocketUpdatesStarted(true);
+                }
               }
               
               if (status.didJustFinish) {
+                // Stop WebSocket updates when ad ends
+                playbackWebSocketService.stopPlaybackUpdates();
                 handleVideoEnd();
+              }
+            } else if (status.error) {
+              // Handle buffering/loading states with detailed error info
+              if (currentAd) {
+                playbackWebSocketService.updatePlaybackDataAndSend({
+                  state: 'buffering',
+                  currentTime: status.positionMillis ? status.positionMillis / 1000 : 0,
+                  duration: currentAd.duration,
+                  progress: status.positionMillis && status.durationMillis ? 
+                    (status.positionMillis / status.durationMillis) * 100 : 0,
+                  remainingTime: currentAd.duration - (status.positionMillis ? status.positionMillis / 1000 : 0),
+                  playbackRate: 0,
+                  volume: status.volume || 1.0,
+                  isMuted: status.isMuted || false,
+                  adDetails: {
+                    adId: currentAd.adId,
+                    adTitle: currentAd.adTitle,
+                    adDuration: currentAd.duration,
+                    mediaFile: currentAd.mediaFile,
+                    slotNumber: slotNumber,
+                    materialId: materialId,
+                    isCompanyAd: currentAdIndex === -1,
+                    adIndex: currentAdIndex,
+                    totalAds: ads.length
+                  }
+                });
               }
             }
           }}
           onError={handleVideoError}
           onLoadStart={() => {
             console.log('Video loading started:', currentAd?.mediaFile);
+            if (currentAd) {
+              playbackWebSocketService.updatePlaybackDataAndSend({
+                state: 'loading',
+                currentTime: 0,
+                duration: currentAd.duration, // Use ad duration for loading states
+                progress: 0,
+                remainingTime: currentAd.duration,
+                playbackRate: 0,
+                volume: 1.0,
+                isMuted: false,
+                adDetails: {
+                  adId: currentAd.adId,
+                  adTitle: currentAd.adTitle,
+                  adDuration: currentAd.duration,
+                  mediaFile: currentAd.mediaFile,
+                  slotNumber: slotNumber,
+                  materialId: materialId,
+                  isCompanyAd: currentAdIndex === -1,
+                  adIndex: currentAdIndex,
+                  totalAds: ads.length
+                }
+              });
+            }
           }}
           onLoad={() => {
             console.log('Video loaded successfully:', currentAd?.mediaFile);
+            if (currentAd) {
+              playbackWebSocketService.updatePlaybackDataAndSend({
+                state: 'buffering',
+                currentTime: 0,
+                duration: currentAd.duration, // Use ad duration for loading states
+                progress: 0,
+                remainingTime: currentAd.duration,
+                playbackRate: 0,
+                volume: 1.0,
+                isMuted: false,
+                adDetails: {
+                  adId: currentAd.adId,
+                  adTitle: currentAd.adTitle,
+                  adDuration: currentAd.duration,
+                  mediaFile: currentAd.mediaFile,
+                  slotNumber: slotNumber,
+                  materialId: materialId,
+                  isCompanyAd: currentAdIndex === -1,
+                  adIndex: currentAdIndex,
+                  totalAds: ads.length
+                }
+              });
+            }
           }}
           onReadyForDisplay={() => {
             console.log('Video ready for display:', currentAd?.mediaFile);
+            if (currentAd && !websocketUpdatesStarted) {
+              console.log('🎬 [AdPlayer] Video ready for display - but NOT starting progress yet, waiting for actual playback');
+              
+              // Clear transitioning state - video is ready
+              setIsTransitioning(false);
+              
+              // DON'T start WebSocket updates yet - wait for actual playback
+              // Just send a single buffering state to indicate video is ready
+              playbackWebSocketService.updatePlaybackDataAndSend({
+                state: 'buffering', // Still buffering until actually playing
+                currentTime: 0,
+                duration: currentAd.duration,
+                progress: 0,
+                remainingTime: currentAd.duration,
+                playbackRate: 0,
+                volume: 1.0,
+                isMuted: false,
+                adDetails: {
+                  adId: currentAd.adId,
+                  adTitle: currentAd.adTitle,
+                  adDuration: currentAd.duration,
+                  mediaFile: currentAd.mediaFile,
+                  slotNumber: slotNumber,
+                  materialId: materialId,
+                  isCompanyAd: currentAdIndex === -1,
+                  adIndex: currentAdIndex,
+                  totalAds: ads.length
+                }
+              });
+              
+              // DON'T set websocketUpdatesStarted yet - wait for actual playback
+            }
           }}
         />
         
@@ -924,11 +1236,11 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         </View>
 
         {/* QR Code Overlay - Always visible for user ads */}
-        {currentAd && currentAd.adId !== 'company-ad' && generateQRData() && (
+        {currentAd && currentAd.adId !== 'company-ad' && qrData && (
           <View style={styles.qrOverlay}>
             <View style={styles.qrContainer}>
               <QRCode
-                value={generateQRData() || ''}
+                value={qrData}
                 size={100}
                 color="#000000"
                 backgroundColor="#FFFFFF"

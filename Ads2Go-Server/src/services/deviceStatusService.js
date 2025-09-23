@@ -73,6 +73,7 @@ class DeviceStatusService {
           if (materialId) ws.materialId = materialId;
           ws.isAlive = true;
           ws.lastPong = Date.now();
+          ws.connectionType = 'status'; // Mark as status connection
           
           // Set up ping-pong handler
           ws.on('pong', () => {
@@ -81,6 +82,42 @@ class DeviceStatusService {
           });
           
           this.handleConnection(ws, request);
+        });
+      } else if (pathname === '/ws/playback') {
+        // New endpoint for real-time ad playback updates
+        const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
+        const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
+        
+        console.log('WebSocket playback upgrade request details:');
+        console.log('- Pathname:', pathname);
+        console.log('- Device ID from query:', url.searchParams.get('deviceId'));
+        console.log('- Material ID from query:', url.searchParams.get('materialId'));
+        console.log('- Final device ID:', deviceId);
+        console.log('- Final material ID:', materialId);
+        
+        if (!deviceId) {
+          console.error('No device ID provided in WebSocket playback upgrade request');
+          socket.destroy();
+          return;
+        }
+        
+        console.log(`WebSocket playback upgrade request for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        
+        this.wss.handleUpgrade(request, socket, head, (ws) => {
+          // Store the device and material IDs with the connection
+          ws.deviceId = deviceId;
+          if (materialId) ws.materialId = materialId;
+          ws.isAlive = true;
+          ws.lastPong = Date.now();
+          ws.connectionType = 'playback'; // Mark as playback connection
+          
+          // Set up ping-pong handler
+          ws.on('pong', () => {
+            ws.isAlive = true;
+            ws.lastPong = Date.now();
+          });
+          
+          this.handlePlaybackConnection(ws, request);
         });
       } else {
         console.log(`Rejected WebSocket connection to unknown path: ${pathname}`);
@@ -192,7 +229,7 @@ class DeviceStatusService {
       ws.isAlive = true;
     });
     
-    // Handle incoming messages (including ping)
+    // Handle incoming messages (including ping and playback updates)
     ws.on('message', (data) => {
       try {
         const message = JSON.parse(data.toString());
@@ -200,11 +237,128 @@ class DeviceStatusService {
           // Respond to ping with pong
           ws.send(JSON.stringify({ type: 'pong' }));
           ws.isAlive = true;
+        } else if (message.type === 'adPlaybackUpdate') {
+          // Handle real-time ad playback updates
+          this.handlePlaybackUpdate(deviceId, message);
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
       }
     });
+  }
+
+  async handlePlaybackConnection(ws, request) {
+    const deviceId = ws.deviceId || request.headers['device-id'];
+    const materialId = ws.materialId || request.headers['material-id'];
+    
+    console.log(`🎬 New WebSocket playback connection from device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
+
+    // Store the connection with its device ID and material ID
+    ws.deviceId = deviceId;
+    ws.materialId = materialId;
+    this.activeConnections.set(deviceId, ws);
+    
+    console.log(`Playback connection established: ${deviceId}`);
+    console.log(`Active connections: ${this.activeConnections.size}`);
+    
+    // Handle incoming messages (including ping and playback updates)
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === 'ping') {
+          // Respond to ping with pong
+          ws.send(JSON.stringify({ type: 'pong' }));
+          ws.isAlive = true;
+        } else if (message.type === 'adPlaybackUpdate') {
+          // Handle real-time ad playback updates
+          this.handlePlaybackUpdate(deviceId, message);
+        }
+      } catch (error) {
+        console.error('Error processing WebSocket playback message:', error);
+      }
+    });
+
+    ws.on('close', (code, reason) => {
+      console.log(`🎬 [WebSocket] Playback connection closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
+      if (this.activeConnections.get(deviceId) === ws) {
+        this.removeConnection(deviceId);
+      }
+      console.log(`Active connections: ${this.activeConnections.size}`);
+    });
+  }
+
+  async handlePlaybackUpdate(deviceId, message) {
+    try {
+      console.log(`🎬 [Playback Update] ${deviceId}:`, {
+        adId: message.adId,
+        adTitle: message.adTitle,
+        state: message.state,
+        currentTime: message.currentTime,
+        duration: message.duration,
+        progress: message.progress
+      });
+
+      // Update the database with current ad information
+      await this.updateCurrentAd(deviceId, message);
+
+      // Broadcast the playback update to all admin clients
+      this.broadcastPlaybackUpdate(deviceId, message);
+
+    } catch (error) {
+      console.error(`Error handling playback update for device ${deviceId}:`, error);
+    }
+  }
+
+  async updateCurrentAd(deviceId, playbackData) {
+    try {
+      const now = new Date();
+      const connection = this.activeConnections.get(deviceId);
+      const materialId = connection?.materialId || deviceId;
+
+      // Update the current ad information in the database
+      await ScreenTracking.findOneAndUpdate(
+        { 'devices.deviceId': deviceId },
+        {
+          $set: {
+            'screenMetrics.currentAd': {
+              adId: playbackData.adId,
+              adTitle: playbackData.adTitle,
+              adDuration: playbackData.duration,
+              startTime: playbackData.startTime || now.toISOString(),
+              currentTime: playbackData.currentTime,
+              state: playbackData.state,
+              progress: playbackData.progress
+            },
+            lastSeen: now
+          }
+        },
+        { new: true }
+      );
+
+      console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
+
+    } catch (error) {
+      console.error(`Error updating current ad for device ${deviceId}:`, error);
+    }
+  }
+
+  broadcastPlaybackUpdate(deviceId, playbackData) {
+    const updateMessage = {
+      type: 'adPlaybackUpdate',
+      deviceId: deviceId,
+      adId: playbackData.adId,
+      adTitle: playbackData.adTitle,
+      state: playbackData.state,
+      currentTime: playbackData.currentTime,
+      duration: playbackData.duration,
+      progress: playbackData.progress,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Broadcast to all connections (both status and playback connections)
+    this.broadcast(updateMessage);
+    
+    console.log(`📡 [Broadcast] Playback update for ${deviceId}: ${playbackData.adTitle} - ${playbackData.state} (${playbackData.progress}%)`);
   }
 
   removeConnection(deviceId) {

@@ -25,6 +25,7 @@ import {
 // Icons are imported individually to avoid unused imports
 import { adsPanelGraphQLService, ScreenData, AdAnalytics } from '../../services/adsPanelGraphQLService';
 import { adsPanelService } from '../../services/adsPanelService';
+import playbackWebSocketService from '../../services/playbackWebSocketService';
 import '../../services/testEndpoints';
 
 // Import tab components
@@ -99,6 +100,13 @@ const AdminAdsControl: React.FC = () => {
             screenMetrics: s.screenMetrics,
             currentAd: s.screenMetrics?.currentAd
           })));
+          
+          // Log current ad information for debugging
+          screensResponse.screens.forEach((screen: any) => {
+            if (screen.screenMetrics?.currentAd) {
+              console.log(`🎬 Initial load - Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+            }
+          });
         } else {
           console.warn('⚠️ Unexpected screens data format:', screensResponse);
           setScreens([]);
@@ -148,6 +156,14 @@ const AdminAdsControl: React.FC = () => {
             const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
             if (hasChanged) {
               console.log('📊 Screen data updated via auto-refresh');
+              // Log current ad information for debugging
+              screensResponse.screens.forEach((screen: any) => {
+                if (screen.screenMetrics?.currentAd) {
+                  console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+                }
+              });
+            } else {
+              console.log('📊 No changes detected in screen data');
             }
             return screensResponse.screens;
           });
@@ -174,9 +190,60 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // Set up auto-refresh every 5 seconds for real-time updates
+    // Set up auto-refresh every 5 seconds (reduced to not override WebSocket updates)
     const interval = setInterval(autoRefreshData, 5000);
-    return () => clearInterval(interval);
+    
+    // Subscribe to real-time WebSocket updates for immediate processing
+    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      console.log('🎬 [AdminAdsControl] Received real-time playback update:', {
+        deviceId: update.deviceId,
+        adTitle: update.adTitle,
+        state: update.state,
+        currentTime: update.currentTime,
+        progress: update.progress,
+        timestamp: update.timestamp
+      });
+      
+      // Process updates immediately for perfect real-time sync
+      // Update the screens state with real-time data immediately
+      setScreens(prevScreens => {
+        return prevScreens.map(screen => {
+          if (screen.deviceId === update.deviceId) {
+            console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} with real-time data:`, {
+              currentTime: update.currentTime,
+              progress: update.progress,
+              state: update.state,
+              timestamp: update.timestamp
+            });
+            
+            const updatedScreen = {
+              ...screen,
+              screenMetrics: {
+                ...screen.screenMetrics,
+                currentAd: {
+                  adId: update.adId,
+                  adTitle: update.adTitle,
+                  adDuration: update.duration,
+                  startTime: update.timestamp,
+                  currentTime: update.currentTime,
+                  state: update.state,
+                  progress: update.progress
+                }
+              }
+            };
+            
+            // Force immediate re-render by creating new object reference
+            return updatedScreen;
+          }
+          return screen;
+        });
+      });
+    });
+    
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [fetchData, autoRefreshData]);
 
   // Action handlers
