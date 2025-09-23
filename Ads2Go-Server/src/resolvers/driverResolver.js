@@ -419,7 +419,7 @@ createDriver: async (_, { input }) => {
         if (!valid) {
           driver.loginAttempts = (driver.loginAttempts || 0) + 1;
           const MAX_LOGIN_ATTEMPTS = 5;
-          const LOCK_TIME = 2 * 60 * 60 * 1000;
+          const LOCK_TIME = 1 * 60 * 60 * 1000;
 
           if (driver.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
             driver.accountLocked = true;

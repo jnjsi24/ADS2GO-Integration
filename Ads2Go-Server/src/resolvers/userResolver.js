@@ -8,7 +8,7 @@ const EmailService = require('../utils/emailService');
 const validator = require('validator');
 
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
+const LOCK_TIME = 1 * 60 * 60 * 1000; // 1 hour
 
 const checkAuth = (user) => {
   if (!user) throw new Error('Not authenticated');

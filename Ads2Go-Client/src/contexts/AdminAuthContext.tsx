@@ -266,12 +266,21 @@ export const AdminAuthProvider: React.FC<{
 
       // Try admin login first
       try {
-        const { data: adminData } = await loginAdminMutation({
+        const result = await loginAdminMutation({
           variables: { email, password, deviceInfo },
         });
 
-        if (adminData?.loginAdmin?.token && adminData?.loginAdmin?.admin) {
-          const { token, admin: adminRaw } = adminData.loginAdmin;
+        // Check for GraphQL errors first
+        if (result.errors && result.errors.length > 0) {
+          const errorMessage = result.errors[0].message;
+          if (errorMessage.includes('Account is temporarily locked')) {
+            throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+          }
+          throw new Error(errorMessage);
+        }
+
+        if (result.data?.loginAdmin?.token && result.data?.loginAdmin?.admin) {
+          const { token, admin: adminRaw } = result.data.loginAdmin;
           localStorage.setItem('adminToken', token);
 
           const adminUser: Admin = {
@@ -308,12 +317,21 @@ export const AdminAuthProvider: React.FC<{
       } catch (adminError) {
         // Admin login failed, try superadmin login
         try {
-          const { data: superAdminData } = await loginSuperAdminMutation({
+          const result = await loginSuperAdminMutation({
             variables: { email, password, deviceInfo },
           });
 
-          if (superAdminData?.loginSuperAdmin?.token && superAdminData?.loginSuperAdmin?.superAdmin) {
-            const { token, superAdmin: superAdminRaw } = superAdminData.loginSuperAdmin;
+          // Check for GraphQL errors first
+          if (result.errors && result.errors.length > 0) {
+            const errorMessage = result.errors[0].message;
+            if (errorMessage.includes('Account is temporarily locked')) {
+              throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+            }
+            throw new Error(errorMessage);
+          }
+
+          if (result.data?.loginSuperAdmin?.token && result.data?.loginSuperAdmin?.superAdmin) {
+            const { token, superAdmin: superAdminRaw } = result.data.loginSuperAdmin;
             localStorage.setItem('adminToken', token);
 
             const adminUser: Admin = {
@@ -360,6 +378,12 @@ export const AdminAuthProvider: React.FC<{
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'Login failed';
       console.error('Admin login error:', message);
+      
+      // Handle specific error cases
+      if (message.includes('Account is temporarily locked')) {
+        throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+      }
+      
       // Throw so the component can display the specific backend error
       throw new Error(message);
     }
