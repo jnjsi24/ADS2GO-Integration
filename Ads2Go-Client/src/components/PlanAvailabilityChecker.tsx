@@ -80,9 +80,8 @@ const PlanAvailabilityChecker: React.FC<PlanAvailabilityCheckerProps> = ({
   return (
     <div className="p-4 bg-white border rounded-lg shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Plan Availability</h3>
+        <p className="font-medium text-2xl text-gray-900 mb-2">{availability.plan.name}</p>
         <div className="flex items-center space-x-2">
-          <Calendar className="w-5 h-5 text-gray-400" />
           <input
             type="date"
             value={desiredStartDate}
@@ -94,18 +93,40 @@ const PlanAvailabilityChecker: React.FC<PlanAvailabilityCheckerProps> = ({
       </div>
 
       {/* Plan Info */}
-      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-        <h4 className="font-medium text-gray-900 mb-2">{availability.plan.name}</h4>
-        <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-          <div>Duration: {availability.plan.durationDays} days</div>
-          <div>Devices: {availability.plan.numberOfDevices}</div>
-          <div>Material: {availability.plan.materialType}</div>
-          <div>Vehicle: {availability.plan.vehicleType}</div>
+      <div className='mb-4' >{availability.plan.description}</div>
+        <div className="grid grid-cols-4 gap-2 text-sm text-gray-600 mb-6">
+          <div className="flex flex-col items-center border-r ">
+            <span className="text-lg font-semibold text-gray-900">
+              {availability.plan.durationDays}
+            </span>
+            <span className="text-xs text-gray-500">Duration (days)</span>
+          </div>
+
+          <div className="flex flex-col items-center border-r">
+            <span className="text-lg font-semibold text-gray-900">
+              {availability.plan.numberOfDevices}
+            </span>
+            <span className="text-xs text-gray-500">Devices</span>
+          </div>
+
+          <div className="flex flex-col items-center border-r">
+            <span className="text-lg font-semibold text-gray-900">
+              {availability.plan.materialType}
+            </span>
+            <span className="text-xs text-gray-500">Material</span>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-semibold text-gray-900">
+              {availability.plan.vehicleType}
+            </span>
+            <span className="text-xs text-gray-500">Vehicle</span>
+          </div>
         </div>
-      </div>
+
 
       {/* Availability Status */}
-      <div className={`p-3 rounded-lg mb-4 ${
+      <div className={`p-3 rounded-lg ${
         availability.canCreate 
           ? 'bg-green-50 border border-green-200' 
           : 'bg-red-50 border border-red-200'
@@ -130,29 +151,6 @@ const PlanAvailabilityChecker: React.FC<PlanAvailabilityCheckerProps> = ({
             : `Next available: ${formatDate(availability.nextAvailableDate)}`
           }
         </p>
-      </div>
-
-      {/* Material Details */}
-      <div className="space-y-2">
-        <h4 className="font-medium text-gray-900">Material Status</h4>
-        {availability.materialAvailabilities.map((material) => (
-          <div key={material.materialId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-            <div className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${
-                material.canAcceptAd ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              <span className="text-sm font-medium">
-                {material.materialInfo.materialId}
-              </span>
-              <span className="text-xs text-gray-500">
-                ({material.materialInfo.materialType} - {material.materialInfo.vehicleType})
-              </span>
-            </div>
-            <div className="text-sm text-gray-600">
-              {material.availableSlots}/{material.totalSlots} slots
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Next Available Info */}

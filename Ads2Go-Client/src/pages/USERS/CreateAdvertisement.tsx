@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useApolloClient } from '@apollo/client';
-import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
+import { useQuery, useMutation } from '@apollo/client';
+import { ChevronLeft, ChevronDown, Car, TabletSmartphone, Hourglass, QrCode, FileType, View, ChevronRight, Upload, Play, CalendarCheck2, CalendarX2, Pause, Loader2 } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
-import { GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE } from '../../graphql/admin';
+import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
-import { GET_PLAN_AVAILABILITY } from '../../graphql/admin/planAvailability';
+import { motion, AnimatePresence } from "framer-motion";
+
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
@@ -39,16 +40,18 @@ type AdvertisementForm = {
 
 const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
-  const apolloClient = useApolloClient();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
   const [activePlanIndex, setActivePlanIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
-  const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false); // New state to track submission
+  
+  // Move these here from renderStep2
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
 
   // State for custom calendar
-  const [currentDate, setCurrentDate] = useState(new Date()); // Initialize with today's date (September 5, 2025)
-  const [selectedDate, setSelectedDate] = useState(new Date()); // Initialize with today's date
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
 // Function to generate days for the current month
 const getDaysInMonth = (date: Date) => {
@@ -106,15 +109,6 @@ const nextMonth = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [errors, setErrors] = useState<{ 
-    plan?: string; 
-    material?: string; 
-    title?: string; 
-    description?: string; 
-    startDate?: string; 
-    mediaFile?: string; 
-  }>({});
-  const [mediaDurationSec, setMediaDurationSec] = useState<number | null>(null);
 
   // Function to calculate end date based on start date and duration
   const calculateEndDate = (startDate: string, durationDays: number): string => {
@@ -137,24 +131,26 @@ const nextMonth = () => {
 
 
   // Automatically fetch and select material based on selected plan
-  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE, {
+  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
     variables: { 
-      category: selectedPlan?.category?.replace('-', '_') as any,
-      vehicleType: selectedPlan?.vehicleType as any,
-      materialType: selectedPlan?.materialType as any
+      category: selectedPlan?.category as any,
+      vehicleType: selectedPlan?.vehicleType as any
     },
     skip: !selectedPlan,
     onCompleted: (data) => {
-      if (data?.getMaterialsByCategoryVehicleAndType?.length > 0) {
-        setMaterials(data.getMaterialsByCategoryVehicleAndType);
+      if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
+        setMaterials(data.getMaterialsByCategoryAndVehicle);
     
-        // Since we're filtering by materialType in the query, we can directly select the first result
-        const matchingMaterial = data.getMaterialsByCategoryVehicleAndType[0];
+        // Try to find a material that matches the plan's materialType
+        const matchingMaterial = data.getMaterialsByCategoryAndVehicle.find(
+          (m: any) => m.materialType === selectedPlan?.materialType
+        );
     
         if (matchingMaterial) {
           setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
         } else {
-          setFormData(prev => ({ ...prev, materialId: '' }));
+          // fallback: pick first material if exact match not found
+          setFormData(prev => ({ ...prev, materialId: data.getMaterialsByCategoryAndVehicle[0]?.id || '' }));
         }
       } else {
         setMaterials([]);
@@ -180,18 +176,10 @@ const nextMonth = () => {
 
   const [createAd, { loading: isSubmitting }] = useMutation(CREATE_AD, {
     onCompleted: () => {
-      setIsSubmissionInProgress(false); // Reset submission state on success
-      setShowToast(true);
-      // Auto-hide after 3 seconds and navigate
-      setTimeout(() => {
-        setShowToast(false);
-        navigate('/advertisements');
-      }, 3000);
+      navigate('/advertisements');
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
-      setIsSubmissionInProgress(false); // Reset submission state on error
-      alert('Failed to create advertisement. Please try again.');
     }
   });
 
@@ -230,80 +218,12 @@ const nextMonth = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Require plan selected first to know allowed ad length for videos
-      if (!selectedPlan) {
-        setErrors(prev => ({ ...prev, mediaFile: 'Please select a plan first' }));
-        return;
-      }
-
-      // Validate file type by extension
-      const allowedExtensions = ['jpg', 'jpeg', 'png', 'mp4', 'mov', 'webm', 'avi'];
-      const extension = (file.name.split('.').pop() || '').toLowerCase();
-      if (!allowedExtensions.includes(extension)) {
-        setErrors(prev => ({ ...prev, mediaFile: 'Unsupported file type. Allowed types: JPG, JPEG, PNG, MP4, MOV, WEBM, AVI.' }));
-        return;
-      }
-
-      // Dynamic file size limit
-      let maxSizeMB = 50; // default for images and as baseline
-      if (file.type.startsWith('video/')) {
-        const adLen = selectedPlan?.adLengthSeconds || 30;
-        // Heuristic limits by ad length
-        if (adLen <= 20) maxSizeMB = 150;
-        else if (adLen <= 30) maxSizeMB = 250;
-        else if (adLen <= 60) maxSizeMB = 400;
-        else maxSizeMB = 500;
-      }
-      const maxSizeBytes = maxSizeMB * 1024 * 1024;
-      if (file.size > maxSizeBytes) {
-        setErrors(prev => ({ ...prev, mediaFile: `File is too large. Maximum allowed size for this plan is ${maxSizeMB} MB.` }));
-        return;
-      }
-
       const previewUrl = URL.createObjectURL(file);
-
-      // If video, check duration <= plan's adLengthSeconds
-      if (file.type.startsWith('video/')) {
-        const videoEl = document.createElement('video');
-        videoEl.preload = 'metadata';
-        videoEl.src = previewUrl;
-        videoEl.onloadedmetadata = () => {
-          const duration = videoEl.duration; // in seconds
-          setMediaDurationSec(duration);
-          const maxAllowed = selectedPlan?.adLengthSeconds || 0;
-          if (duration > maxAllowed + 0.2) { // small tolerance ~200ms
-            setErrors(prev => ({ 
-              ...prev, 
-              mediaFile: `Video is too long. Maximum allowed length for this plan is ${maxAllowed} seconds.` 
-            }));
-            // Do not set the invalid file
-            URL.revokeObjectURL(previewUrl);
-            return;
-          }
-
-          // Valid video: set state
-          setFormData({
-            ...formData,
-            mediaFile: file,
-            mediaPreview: previewUrl
-          });
-          setErrors(prev => ({ ...prev, mediaFile: undefined }));
-        };
-        videoEl.onerror = () => {
-          setErrors(prev => ({ ...prev, mediaFile: 'Could not load video metadata. Please try a different file.' }));
-          URL.revokeObjectURL(previewUrl);
-        };
-        return; // wait for metadata before setting state
-      }
-
-      // Non-video: set immediately
-      setMediaDurationSec(null);
       setFormData({
         ...formData,
         mediaFile: file,
         mediaPreview: previewUrl
       });
-      setErrors(prev => ({ ...prev, mediaFile: undefined }));
     }
   };
 
@@ -343,114 +263,39 @@ const nextMonth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('Form submission started', { formData, selectedPlan, isSubmissionInProgress, isSubmitting });
-    
-    // Prevent multiple submissions
-    if (isSubmissionInProgress || isSubmitting) {
-      console.log('Submission already in progress, returning');
+    if (!selectedPlan) {
+      alert('Please select a plan first');
       return;
     }
-    
-    setIsSubmissionInProgress(true);
-    
-    const newErrors: typeof errors = {};
-    if (!selectedPlan) {
-      newErrors.plan = 'Please select a plan first';
-    }
-    if (!formData.materialId) {
-      newErrors.material = 'No suitable material found for the selected plan';
-    }
 
-    // Trimmed checks for text fields
-    if (!formData.title || !formData.title.trim()) {
-      newErrors.title = 'Please fill out this field';
-    }
-    if (!formData.description || !formData.description.trim()) {
-      newErrors.description = 'Please fill out this field';
+    if (!formData.materialId) {
+      alert('No suitable material found for the selected plan');
+      return;
     }
 
     if (!formData.mediaFile) {
-      newErrors.mediaFile = 'Please upload a media file';
+      alert('Please upload a media file');
+      return;
     }
 
     if (!formData.startDate) {
-      newErrors.startDate = 'Please select a start date';
-    }
-
-    // Ensure start date is not in the past
-    const startDateOnly = new Date(formData.startDate);
-    const todayDateOnly = new Date(new Date().toISOString().split('T')[0]);
-    if (startDateOnly < todayDateOnly) {
-      newErrors.startDate = 'Please select a start date that is today or later';
-    }
-
-    console.log('Validation errors:', newErrors);
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-      console.log('Validation failed, resetting submission state');
-      setIsSubmissionInProgress(false); // Reset submission state if validation fails
+      alert('Please select a start date');
       return;
     }
 
     try {
-      // Check plan availability before uploading media to avoid wasted uploads
-      if (!selectedPlan) {
-        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
-        setIsSubmissionInProgress(false);
-        return;
-      }
-
-      const desiredStartIso = new Date(formData.startDate).toISOString();
-      const { data: availabilityData } = await apolloClient.query({
-        query: GET_PLAN_AVAILABILITY,
-        variables: { planId: selectedPlan._id, desiredStartDate: desiredStartIso },
-        fetchPolicy: 'network-only',
-      });
-
-      const canCreate = availabilityData?.getPlanAvailability?.canCreate;
-      if (!canCreate) {
-        const nextAvailable = availabilityData?.getPlanAvailability?.nextAvailableDate;
-        const nextMsg = nextAvailable ? new Date(nextAvailable).toLocaleDateString() : 'Unknown';
-        setErrors(prev => ({
-          ...prev,
-          plan: `No available materials or slots for selected plan. Next available: ${nextMsg}`,
-        }));
-        setIsSubmissionInProgress(false);
-        return;
-      }
-
       // Upload media file to Firebase Storage
-      if (!formData.mediaFile) {
-        setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
-        setIsSubmissionInProgress(false);
-        return;
-      }
-      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
+      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile);
 
       // Determine ad format based on file type
-      const fileExtension = (formData.mediaFile.name.split('.').pop() || '').toLowerCase();
+      const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
       const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
       
       // Calculate start and end times
-      // Create date in UTC to avoid timezone conversion issues
-      const startDateStr = formData.startDate; // YYYY-MM-DD format
-      const [year, month, day] = startDateStr.split('-').map(Number);
-      
-      // Create date in UTC at midnight
-      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const startTime = startDate.toISOString();
-      
-      if (!selectedPlan) {
-        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
-        setIsSubmissionInProgress(false);
-        return;
-      }
-      
-      // Calculate end date in UTC
-      const endDate = new Date(startDate);
-      endDate.setUTCDate(endDate.getUTCDate() + selectedPlan!.durationDays);
-      endDate.setUTCHours(23, 59, 59, 999); // Set to end of day in UTC
-      const endTime = endDate.toISOString();
+      const startTime = new Date(formData.startDate).toISOString();
+      const endTime = new Date(
+        new Date(formData.startDate).getTime() + selectedPlan.durationDays * 24 * 60 * 60 * 1000
+      ).toISOString();
       
       // Prepare the input for createAd mutation
       const input = {
@@ -460,39 +305,34 @@ const nextMonth = () => {
         planId: selectedPlan._id,
         adType: selectedPlan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL',
         adFormat: isVideo ? 'VIDEO' : 'IMAGE',
-        price: selectedPlan!.totalPrice,
+        price: selectedPlan.totalPrice,
         status: 'PENDING',
         startTime: startTime,
         endTime: endTime,
         mediaFile: mediaFileURL // Use Firebase download URL instead of local path
       };
-      
-      console.log('Date debugging:', {
-        formDataStartDate: formData.startDate,
-        startDate: startDate,
-        startTime: startTime,
-        endTime: endTime,
-        now: new Date().toISOString(),
-        today: new Date().toISOString().split('T')[0],
-        startDateUTC: startDate.toISOString(),
-        endDateUTC: endDate.toISOString()
-      });
 
       // Create the ad with the Firebase media URL
-      console.log('Calling createAd mutation with input:', input);
-      await createAd({
-        variables: { input },
-      });
-      console.log('createAd mutation completed successfully');
+       await createAd({
+    variables: { input },
+  });
 
-    } catch (error) {
-      console.error('Error creating advertisement:', error);
-      setIsSubmissionInProgress(false); // Reset submission state on error
-      // Error handling is done in the mutation's onError callback
-    }
+  // Show toast instead of alert
+  setShowToast(true);
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    setShowToast(false);
+    navigate('/advertisements'); // navigate after toast disappears
+  }, 3000);
+
+} catch (error) {
+  console.error('Error creating advertisement:', error);
+  alert('Failed to create advertisement. Please try again.');
+}
   };
 
-    const canProceedToStep = (step: number) => {
+  const canProceedToStep = (step: number) => {
     switch (step) {
       case 2:
         return selectedPlan !== null && formData.materialId !== '';
@@ -513,7 +353,7 @@ const nextMonth = () => {
             <div
               className={`w-11 h-11 rounded-full flex items-center justify-center ${
                 currentStep > index + 1 || (currentStep === index + 1 && canProceedToStep(currentStep))
-                  ? 'bg-[#FF9800] text-white font-bold'
+                  ? 'bg-[#feb011] text-white border border-[#feb011] font-bold'
                   : 'bg-gray-200 text-gray-600 '
               }`}
             >
@@ -525,7 +365,7 @@ const nextMonth = () => {
             <div className="w-16 h-1 bg-gray-200 mx-2 mb-5">
               <div
                 className={`h-full ${
-                  currentStep > index + 1 ? 'bg-[#FF9B45]' : 'bg-gray-200'
+                  currentStep > index + 1 ? 'bg-gray-300' : 'bg-gray-200'
                 }`}
                 style={{
                   width: currentStep > index + 1 ? '100%' : '0%',
@@ -570,7 +410,7 @@ useEffect(() => {
         No active plans available at the moment.
       </div>
     ) : (
-      <div className="relative h-[550px] flex items-center justify-center overflow-hidden">
+      <div className="relative h-[560px] flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 flex items-center justify-center">
           {plans.map((plan, index) => {
             let transformClass = "scale-90 opacity-0";
@@ -585,46 +425,70 @@ useEffect(() => {
             return (
               <div
                 key={plan._id}
-                className={`absolute mb-8 w-full max-w-md h-[480px] transform transition-all duration-500 ${transformClass}`}
-                onClick={() => setActivePlanIndex(index)} // ðŸ†• click side card to bring it front
+                className={`absolute mb-8 w-full max-w-md h-[490px] transform transition-all duration-500 ${transformClass}`}
+                onClick={() => setActivePlanIndex(index)}
               >
                 <div
-                  className={`border-2 rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
+                  className={`border rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
                     selectedPlan?._id === plan._id
-                      ? "shadow-xl bg-white border-gray-400"
-                      : "border-gray-200 hover:border-gray-300 bg-white"
+                      ? 'shadow-xl bg-white border-gray-400'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                 >
-                  <h3 className="text-xl mt-4 font-semibold mb-2">{plan.name}</h3>
-                  <p className="text-gray-600 mb-4">{plan.description}</p>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Duration:</span>
-                      <span className="font-medium">{plan.durationDays} days</span>
+                  <h3 className="text-xl text-[#1B4F9C] font-bold">
+                    {plan.name}
+                  </h3>
+                  <p className="text-sm">{plan.description}</p>
+
+                  {/* Total Price */}
+                    <div className="text-3xl mt-5 font-bold items-center">
+                      <span className="text-[#1B4F9C]">
+                        ₱{plan.totalPrice.toLocaleString()}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Vehicles:</span>
-                      <span className="font-medium">{plan.vehicleType}</span>
+                    <p className='text-sm'>on this advertisement</p>
+
+
+                    <p className="text-sm text-gray-500 mt-7"> What's in the plan:</p>
+                  <div className="space-y-4 mt-2 text-sm">
+                    {/* Duration */}
+                    <div className="flex items-center space-x-2">
+                      <Hourglass className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.durationDays} Days Advertisement
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Material:</span>
-                      <span className="font-medium">{plan.materialType}</span>
+
+                    {/* Vehicles */}
+                    <div className="flex items-center space-x-2">
+                      <Car className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.vehicleType} Usage
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Devices:</span>
-                      <span className="font-medium">{plan.numberOfDevices}</span>
+
+                    {/* Material */}
+                    <div className="flex items-center space-x-2">
+                      <QrCode className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.materialType}
+                      </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Ad Length:</span>
-                      <span className="font-medium">{plan.adLengthSeconds}s</span>
+
+                    {/* Devices */}
+                    <div className="flex items-center space-x-2">
+                      <TabletSmartphone className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.numberOfDevices} Devices
+                      </span>
                     </div>
-                    <div className="border-t pt-2 mt-4">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total Price:</span>
-                        <span className="text-[#251f70]">
-                          ₱{plan.totalPrice.toLocaleString()}
-                        </span>
-                      </div>
+
+                    {/* Ad Length */}
+                    <div className="flex items-center space-x-2">
+                      <View className="text-black" size={20} />
+                      <span className="font-medium ml-auto">
+                        {plan.adLengthSeconds} Seconds
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -699,13 +563,38 @@ useEffect(() => {
 
 
   // Step 2: Advertisement Details (previously step 3)
-  const renderStep2 = () => (
+  const renderStep2 = (
+  showMonthDropdown: boolean,
+  setShowMonthDropdown: React.Dispatch<React.SetStateAction<boolean>>,
+  showYearDropdown: boolean,
+  setShowYearDropdown: React.Dispatch<React.SetStateAction<boolean>>
+) => {
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const years = Array.from({ length: 5 }, (_, i) => 2025 + i);
+
+  const handleMonthChange = (index: number) => {
+    if (currentDate.getFullYear() === today.getFullYear() && index < today.getMonth()) return;
+    setCurrentDate(new Date(currentDate.getFullYear(), index, 1));
+    setShowMonthDropdown(false);
+  };
+
+  const handleYearChange = (year: number) => {
+    if (year < today.getFullYear()) return;
+    setCurrentDate(new Date(year, currentDate.getMonth(), 1));
+    setShowYearDropdown(false);
+  };
+
+  return (
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-semibold mb-6 text-center">Advertisement Details</h2>
       <div className="space-y-6">
+        {/* Advertisement Title */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Advertisement Title *
+            Advertisement Title 
           </label>
           <input
             type="text"
@@ -715,150 +604,174 @@ useEffect(() => {
             placeholder="Enter advertisement title"
             required
           />
-          {errors.title && (
-            <p className="text-sm text-red-600 mt-1">{errors.title}</p>
-          )}
         </div>
-        
+
+        {/* Description */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Description *
+            Description 
           </label>
           <textarea
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400 h-32"
-
             placeholder="Describe your advertisement"
             required
           />
-          {errors.description && (
-            <p className="text-sm text-red-600 mt-1">{errors.description}</p>
-          )}
         </div>
 
+        {/* Calendar */}
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
-            Campaign Start Date *
+            Campaign Start Date 
           </label>
           <div className="relative">
-            <div className="bg-white border border-gray-300 rounded-md shadow-sm p-14">
-              <div className="flex justify-between items-center mb-3">
-                <button onClick={prevMonth} className="text-black pl-6 mb-7 hover:text-[#FF9B45]">
-                  <ChevronLeft size={20} />
-                </button>
-                <select
-                  value={currentDate.getMonth()}
-                  onChange={(e) => {
-                    const newMonth = parseInt(e.target.value);
-                    const newDate = new Date(currentDate.getFullYear(), newMonth, 1);
+            <div className="bg-white rounded-md p-14">
+              <div className="flex justify-center items-center mb-3">
+                {/* Month Dropdown */}
+                <div className="relative w-32 text-center mb-7">
+                  <button
+                    onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                    className="flex items-center justify-center gap-2 w-full text-[#1B5087] text-lg font-bold bg-transparent focus:outline-none"
+                  >
+                    {months[currentDate.getMonth()]}
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform duration-200 ${
+                        showMonthDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showMonthDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {months.map((m, idx) => {
+                          const isDisabled =
+                            currentDate.getFullYear() === today.getFullYear() &&
+                            idx < today.getMonth();
+                          return (
+                            <button
+                              key={m}
+                              disabled={isDisabled}
+                              onClick={() => handleMonthChange(idx)}
+                              className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                                isDisabled
+                                  ? "text-gray-300 cursor-not-allowed"
+                                  : "text-gray-700 hover:bg-gray-100"
+                              }`}
+                            >
+                              {m}
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
-                    // Prevent selecting past month in the current year
-                    if (currentDate.getFullYear() === today.getFullYear() && newMonth < today.getMonth()) {
-                      return;
-                    }
-                    setCurrentDate(newDate);
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {[
-                    'January', 'February', 'March', 'April', 'May', 'June',
-                    'July', 'August', 'September', 'October', 'November', 'December'
-                  ].map((month, index) => {
-                    const isDisabled = currentDate.getFullYear() === today.getFullYear() && index < today.getMonth();
-                    return (
-                      <option key={month} value={index} disabled={isDisabled}>
-                        {month}
-                      </option>
-                    );
-                  })}
-                </select>
-                <select
-                  value={currentDate.getFullYear()}
-                  onChange={(e) => {
-                    const newYear = parseInt(e.target.value);
-                    if (newYear < today.getFullYear()) return; // prevent past years
-                    setCurrentDate(new Date(newYear, currentDate.getMonth(), 1));
-                  }}
-                  className="text-[#1B5087] text-lg font-bold mb-7 bg-transparent border-none focus:outline-none cursor-pointer"
-                >
-                  {Array.from({ length: 10 }, (_, i) => today.getFullYear() - 5 + i).map(year => (
-                    <option key={year} value={year} disabled={year < today.getFullYear()}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-
-                <button onClick={nextMonth} className="text-black mb-7 pr-8 hover:text-[#FF9B45]">
-                  <ChevronRight size={20} />
-                </button>
+                {/* Year Dropdown */}
+                <div className="relative w-24 text-center mb-7">
+                  <button
+                    onClick={() => setShowYearDropdown(!showYearDropdown)}
+                    className="flex items-center justify-center gap-2 w-full text-[#1B5087] text-lg font-bold bg-transparent focus:outline-none"
+                  >
+                    {currentDate.getFullYear()}
+                    <ChevronDown
+                      size={18}
+                      className={`transform transition-transform duration-200 ${
+                        showYearDropdown ? "rotate-180" : "rotate-0"
+                      }`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showYearDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {years.map((year) => (
+                          <button
+                            key={year}
+                            disabled={year < today.getFullYear()}
+                            onClick={() => handleYearChange(year)}
+                            className={`block w-full text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                              year < today.getFullYear()
+                                ? "text-gray-300 cursor-not-allowed"
+                                : "text-gray-700 hover:bg-gray-100"
+                            }`}
+                          >
+                            {year}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-              {/* This container holds the days of the week and the horizontal line */}
-              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 border-b-2 pb-4 border-gray-300 pb-2">
-                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map(day => (
+
+              {/* Days Header */}
+              <div className="grid grid-cols-7 gap-1 text-center text-gray-700 border-b-2 pb-4 border-gray-300">
+                {["SU", "MO", "TU", "WE", "TH", "FR", "SA"].map(day => (
                   <div key={day} className="font-semibold text-sm">{day}</div>
                 ))}
               </div>
+
+              {/* Calendar Days */}
               <div className="grid grid-cols-7 gap-1 text-center text-gray-700 pt-2">
-  {getDaysInMonth(currentDate).map((day, index) => {
-    const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
-    const isPast = dayDate ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
-
-    return (
-      <div
-        key={index}
-        onClick={() => !isPast && handleDateClick(day)}
-        className={`cursor-pointer p-2 rounded-lg ${
-          day
-            ? isPast
-              ? 'text-gray-300 cursor-not-allowed'
-              : selectedDate.getDate() === day &&
-                selectedDate.getMonth() === currentDate.getMonth() &&
-                selectedDate.getFullYear() === currentDate.getFullYear()
-              ? 'bg-[#1B5087] text-white'
-              : 'text-gray-800 hover:bg-gray-200 hover:text-black'
-            : 'text-gray-300'
-        }`}
-      >
-        {day || ''}
-      </div>
-    );
-  })}
-</div>
-
+                {getDaysInMonth(currentDate).map((day, index) => {
+                  const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
+                  const isPast = dayDate
+                    ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                    : false;
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => !isPast && handleDateClick(day)}
+                      className={`cursor-pointer p-2 rounded-lg ${
+                        day
+                          ? isPast
+                            ? "text-gray-300 cursor-not-allowed"
+                            : selectedDate.getDate() === day &&
+                              selectedDate.getMonth() === currentDate.getMonth() &&
+                              selectedDate.getFullYear() === currentDate.getFullYear()
+                            ? "bg-[#1B5087] text-white"
+                            : "text-gray-800 hover:bg-gray-200 hover:text-black"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      {day || ""}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
+
           {selectedPlan && formData.startDate && (
             <p className="text-sm text-gray-600 mt-2">
-              Campaign will end on: <span className="font-bold">
-                {formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays))}
+              Campaign will end on:{" "}
+              <span className="font-bold">
+                {formatDateForDisplay(
+                  calculateEndDate(formData.startDate, selectedPlan.durationDays)
+                )}
               </span>
             </p>
           )}
-          {errors.startDate && (
-            <p className="text-sm text-red-600 mt-2">{errors.startDate}</p>
-          )}
         </div>
-
-        {selectedPlan && (
-          <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="font-semibold mb-2">Selected Plan: {selectedPlan.name}</h3>
-            <p className="text-sm text-gray-600">
-              Duration: {selectedPlan.durationDays} days | 
-              Price: ₱{selectedPlan.totalPrice.toLocaleString()} | 
-              Ad Length: {selectedPlan.adLengthSeconds} seconds
-            </p>
-            {materials.length > 0 && formData.materialId && (
-              <p className="text-sm text-gray-600 mt-2">
-                Material: {materials.find(m => m.id === formData.materialId)?.materialType} 
-                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
-              </p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
+};
+
   // Step 3: Upload Media (previously step 4)
   const renderStep3 = () => (
     <div className="max-w-2xl mx-auto">
@@ -867,7 +780,7 @@ useEffect(() => {
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <input
             type="file"
-            accept="image/*,video/mp4,video/quicktime,video/webm,video/x-msvideo"
+            accept="image/*,video/mp4"
             onChange={handleFileUpload}
             className="hidden"
             id="media-upload"
@@ -881,18 +794,9 @@ useEffect(() => {
               Click to upload media file
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              Supports: JPG, PNG, MP4. Max image size: 50MB. Max video size: {
-                selectedPlan ? (
-                  selectedPlan.adLengthSeconds <= 20 ? '150MB' :
-                  selectedPlan.adLengthSeconds <= 30 ? '250MB' :
-                  selectedPlan.adLengthSeconds <= 60 ? '400MB' : '500MB'
-                ) : 'based on plan'
-              }.
+              Supports: JPG, PNG, MP4 (Max file size: 50MB)
             </p>
           </label>
-          {errors.mediaFile && (
-            <p className="text-sm text-red-600 mt-3">{errors.mediaFile}</p>
-          )}
         </div>
 
         {/* Upload Progress Indicator */}
@@ -971,142 +875,174 @@ useEffect(() => {
 
   // Step 4: Review & Submit (previously step 5)
   const renderStep4 = () => (
-  <div className="max-w-4xl mx-auto">
-    <h2 className="text-xl text-center font-medium mb-4 text-gray-800">Review & Submit</h2>
+    <div className="max-w-4xl mx-auto">
+      <h2 className="text-xl text-center font-medium mb-4 text-gray-800">Review & Submit</h2>
 
-    {/* Top Row: Media Preview + Title/Description/Duration */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
-
-      {/* Media Preview */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <h3 className="text-xl font-medium text-gray-600 mb-7">Media Preview</h3>
-        {formData.mediaPreview && (
-          <div className="mb-1">
-            <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
-              {formData.mediaFile?.type.startsWith('video/') ? (
-                <video
-                  src={formData.mediaPreview}
-                  className="w-full h-60 object-cover"
-                  controls
-                />
-              ) : (
-                <img
-                  src={formData.mediaPreview}
-                  alt="Media preview"
-                  className="w-full h-32 object-cover"
-                />
-              )}
-            </div>
-            <p className="text-md text-center mt-2 text-black">
-              File: {formData.mediaFile?.name}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Title/Description/Duration */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Advertisement Information</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Title:</span>
-            <p className="text-lg text-gray-600">{formData.title}</p>
-          </div>
-          <div>
-            <span className="font-medium">Description:</span>
-            <p className="text-lg text-gray-600">{formData.description}</p>
-          </div>
-          <div>
-            <span className="font-medium">Campaign Duration:</span>
-            <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-        </div>
-
-        {/* Agreement / Notice */}
-    <div className="bg-blue-50 rounded-lg p-4 mt-10 text-sm text-blue-800">
-      <p>
-        By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString() }
-        for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}.
-        Your advertisement will be submitted for review and you'll be notified once it's approved.
-      </p>
-    </div>
-
-      </div>
-    </div>
-
-    {/* Second Row: Campaign Schedule + Selected Plan & Material */}
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-4 mb-4">
-
-      {/* Campaign Schedule */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Campaign Schedule</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="space-y-2 text-sm text-gray-700">
-          <div>
-            <span className="font-medium">Start Date:</span>
-            <p className="text-lg text-gray-600">{formatDateForDisplay(formData.startDate)}</p>
-          </div>
-          <div>
-            <span className="font-medium">End Date:</span>
-           <p className="text-lg text-gray-600">
-              {selectedPlan ? formatDateForDisplay(calculateEndDate(formData.startDate, selectedPlan.durationDays)) : 'N/A'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Selected Plan & Material */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-2 border-gray-300">
-        <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-600">Selected Plan & Material</h3>
-          <div className="w-full border-b-2 border-gray-300 mt-2"></div>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="font-medium text-gray-700">Plan:</span>
-            <p className="text-blue-600">{selectedPlan?.name}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Duration:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.durationDays} days</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Vehicle Type:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.vehicleType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Material:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.materialType}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Devices:</span>
-           <p className="text-lg text-gray-600">{selectedPlan?.numberOfDevices}</p>
-          </div>
-          <div>
-            <span className="font-medium text-gray-700">Total Price:</span>
-            <p className="text-blue-600 text-lg font-medium">P{selectedPlan?.totalPrice.toLocaleString()}</p>
-          </div>
-          {materials.length > 0 && formData.materialId && (
-            <div className="col-span-2">
-              <span className="font-medium text-gray-700">Auto-selected Material:</span>
-             <p className="text-lg text-gray-600">
-                {materials.find(m => m.id === formData.materialId)?.materialType}
-                (ID: {materials.find(m => m.id === formData.materialId)?.materialId})
+      {/* === Single grid row with Media + Info === */}
+      <div className="grid grid-cols-1 md:grid-cols-[1.8fr_2fr] gap-4 mb-4">
+        
+        {/* LEFT COLUMN : Media + Campaign Schedule BELOW */}
+        <div className="bg-white p-4">
+          {formData.mediaPreview && (
+            <div className="mb-1">
+              <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
+                {formData.mediaFile?.type.startsWith("video/") ? (
+                  <video src={formData.mediaPreview} className="w-full h-60 object-cover" controls />
+                ) : (
+                  <img
+                    src={formData.mediaPreview}
+                    alt="Media preview"
+                    className="w-full h-52 object-cover"
+                  />
+                )}
+              </div>
+              <p className="text-md text-center mt-2 text-black">
+                File: {formData.mediaFile?.name}
               </p>
             </div>
           )}
+
+          <div className="mt-6 rounded-lg p-4">
+            <h3 className="text-lg font-medium text-gray-700 mb-4">Campaign Schedule</h3>
+
+            <div className="flex items-center justify-between gap-4 text-gray-800">
+              {/* Start Date */}
+              <div className="flex items-center gap-2">
+                <CalendarCheck2 className="w-5 h-5 text-green-500" />
+                <span className="text-base ">
+                  {formatDateForDisplay(formData.startDate)}
+                </span>
+              </div>
+
+              {/* End Date */}
+              <div className="flex items-center gap-2">
+                <CalendarX2 className="w-5 h-5 text-red-500" />
+                <span className="text-base">
+                  {selectedPlan
+                    ? formatDateForDisplay(
+                        calculateEndDate(formData.startDate, selectedPlan.durationDays)
+                      )
+                    : "N/A"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Title/Description/Duration */}
+        <div className="bg-white rounded-lg">
+          <div className="mb-4">
+          </div>
+          <div className="space-y-2 text-sm text-gray-700">
+            <div>
+              <p className="text-xl font-bold mb-3 text-gray-600">{formData.title}</p>
+            </div>
+            <div>
+              <p className="text-md mb-3 text-gray-600">{formData.description}</p>
+            </div>
+          </div>
+
+
+        {/* Selected Plan & Material */}
+        <div className="bg-white">
+          {/* === Selected Plan & Material (Updated UI) === */}
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8 mt-10 bg-white">
+            {/* Left: Plan Details */}
+            <div className="space-y-4 text-gray-800 mt-5">
+              {/* Plan */}
+              <div className="flex items-center gap-2">
+                <FileType className="w-6 h-6 text-gray-500" /> {/* Plan Icon */}
+                <div className="flex flex-col">
+                  <span className="font-bold text-md">{selectedPlan?.name}</span>
+                </div>
+              </div>
+
+              {/* Vehicle Type */}
+              <div className="flex items-center gap-2">
+                <Car className="w-6 h-6 text-gray-500" /> {/* Vehicle Icon */}
+                <div className="flex flex-col">
+                  <span className="font-bold text-md">{selectedPlan?.vehicleType} <span className='text-sm font-medium'> Usage</span></span>
+                </div>
+              </div>
+
+              {/* Material */}
+              <div className="flex items-center gap-2">
+                <View className="w-6 h-6 text-gray-500" /> {/* Material Icon */}
+                <div className="flex flex-col">
+                  <span className="font-bold text-md">
+                    {materials.find(m => m.id === formData.materialId)?.materialType}
+                  </span>
+                </div>
+              </div>
+
+              {/* Devices */}
+              <div className="flex items-center gap-2">
+                <TabletSmartphone className="w-6 h-6 text-gray-500" /> {/* Devices Icon */}
+                <div className="flex flex-col">
+                  <span className="font-bold text-md">{selectedPlan?.numberOfDevices} <span className='text-sm font-medium'>Device/s</span></span>
+                </div>
+              </div>
+            </div>
+
+
+            {/* Right: Duration & Price */}
+            <div className="flex flex-col items-center">
+              {(() => {
+                const duration = selectedPlan?.durationDays ?? 0;
+                const maxDays = 120; // 🔵 Maximum days
+                const percent = Math.min(duration / maxDays, 1);
+                const radius = 46;
+                const circumference = 2 * Math.PI * radius;
+                const dashOffset = circumference * (1 - percent);
+
+                return (
+                  <div className="relative mr-16 w-32 h-32">
+                    <svg className="w-full h-full transform -rotate-90">
+                      {/* Background circle */}
+                      <circle
+                        cx="50%" cy="50%" r={radius}
+                        className="stroke-gray-200"
+                        strokeWidth="8"
+                        fill="transparent"
+                      />
+                      {/* Progress circle */}
+                      <circle
+                        cx="50%" cy="50%" r={radius}
+                        className="stroke-[#1B4F9C] transition-all duration-700"
+                        strokeWidth="7"
+                        fill="transparent"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={dashOffset}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col justify-center items-center">
+                      <span className="text-xs text-gray-500">Duration</span>
+                      <span className="text-lg font-bold text-gray-900">
+                        {duration} days
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <p className="text-2xl mr-16 font-extrabold text-[#1B4F9C]">
+                ₱{selectedPlan?.totalPrice.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
         </div>
       </div>
+      {/* Agreement / Notice */}
+      <div className="bg-blue-50 rounded-lg p-4 mt-10 text-sm w-auto text-blue-800">
+        <p>
+          By creating this advertisement, you agree to pay ₱{selectedPlan?.totalPrice.toLocaleString() + " "}
+          for a {selectedPlan?.durationDays}-day campaign starting on {formatDateForDisplay(formData.startDate)}.
+          Your advertisement will be submitted for review and you'll be notified once it's approved.
+        </p>
+      </div>
     </div>
-
-    
-  </div>
-);
+  );
 
   
   return (
@@ -1127,10 +1063,15 @@ useEffect(() => {
           
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}
-            {currentStep === 2 && renderStep2()}
-            {currentStep === 3 && renderStep3()}
-            {currentStep === 4 && renderStep4()}
-          </div>
+        {currentStep === 2 && renderStep2(
+          showMonthDropdown,
+          setShowMonthDropdown,
+          showYearDropdown,
+          setShowYearDropdown
+        )}
+        {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && renderStep4()}
+      </div>
           
           <div className="flex justify-between">
             <button
@@ -1150,7 +1091,7 @@ useEffect(() => {
                 onClick={() => setCurrentStep(prev => prev + 1)}
                 disabled={!canProceedToStep(currentStep + 1)}
                 className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                  !canProceedToStep(currentStep + 1) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#feb011] text-white hover:bg-[#FF9B45]'
                 }`}
               >
                 Next
@@ -1159,14 +1100,14 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress}
-                className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress
+                disabled={!canProceedToStep(currentStep) || isSubmitting}
+                className={`px-4 py-2 rounded-md mr-16 w-60 ${
+                  !canProceedToStep(currentStep) || isSubmitting
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                    : 'bg-[#feb011] text-white hover:bg-[#FF9B45]'
                 }`}
               >
-                {isSubmitting || isSubmissionInProgress ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Submitting...

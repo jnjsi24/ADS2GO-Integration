@@ -1,19 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { 
-  X, 
-  Trash,
-  Eye, 
-  User, 
-  IdCard, 
-  CalendarClock, 
-  Mail, 
-  CalendarCheck2, 
-  Phone, 
-  MapPin, 
-  } from 'lucide-react';
+import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check} from 'lucide-react';
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 // === Types ===
 interface Driver {
@@ -133,21 +124,26 @@ const DocumentImage: React.FC<{
         onError={() => setImageError(true)}
       />
       <button 
-        className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center"
+        className="absolute inset-0 group-hover:bg-opacity-20 transition-all rounded-lg flex items-center justify-center"
         onClick={() => {
           setModalImageSrc(imageUrl); 
           setShowImageModal(true);
         }}
       >
-        <Eye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={24} />
+      <span className="absolute top-10 left-2 text-black bg-gray-200 w-40 h-6 flex items-center justify-center rounded-md text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        Click to view image
+      </span>
       </button>
     </div>
   );
 };
 
+const statusFilterOptions = ['All Status', 'Active', 'Pending', 'Rejected'];
+
 const ManageRiders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'PENDING' | 'REJECTED'>('all');
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -205,7 +201,9 @@ const ManageRiders: React.FC = () => {
                          r.contactNumber.includes(searchTerm) ||
                          r.driverId.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || r.accountStatus === statusFilter;
+    const matchesStatus = selectedStatusFilter === 'All Status' || r.accountStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
+
+
 
     return matchesSearch && matchesStatus;
   });
@@ -337,6 +335,11 @@ const ManageRiders: React.FC = () => {
     }, 300); // Matches the transition duration
   };
 
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
+
   // Selection
   const handleSelect = (id: string) => {
     setSelectedRiders(prev =>
@@ -376,40 +379,43 @@ const ManageRiders: React.FC = () => {
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Riders Management</h1>
-        <div className="flex gap-4">
+        <div className="flex gap-2">
           <input
             type="text"
             placeholder="Search by name or Rider ID..."
-            className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
           {/* Custom Dropdown with SVG */}
-          <div className="relative w-40">
-            <select
-              className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-              value={statusFilter}
-              onChange={e =>
-                setStatusFilter(e.target.value as 'all' | 'ACTIVE' | 'PENDING' | 'REJECTED')
-              }
-            >
-              <option value="all">All Status</option>
-              <option value="PENDING">Pending</option>
-              <option value="ACTIVE">Active</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
-            {/* SVG Arrow */}
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <svg
-                className="w-4 h-4 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedStatusFilter}
+              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+            </button>
+            <AnimatePresence>
+              {showStatusDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                >
+                  {statusFilterOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusFilterChange(status)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </div>
@@ -421,7 +427,7 @@ const ManageRiders: React.FC = () => {
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredRiders.length === 0 ? (
         <div className="text-center py-10 text-gray-500">
-          {searchTerm || statusFilter !== 'all' ? 'No riders match your search criteria' : 'No riders found'}
+          {searchTerm ? 'No riders match your search criteria' : 'No riders found'}
         </div>
       ) : (
         <div className="rounded-md mb-4 overflow-hidden">
@@ -439,12 +445,13 @@ const ManageRiders: React.FC = () => {
             </div>
             <div className="col-span-3 ml-16">Email</div>
             <div className="col-span-2">Contact</div>
-            <div className="col-span-2 mr-16">Vehicle</div>
-            <div className="col-span-1 flex items-center gap-1">
+            <div className="col-span-1">Vehicle</div>
+            <div className="col-span-1 ml-10 flex items-center gap-1">
               <span>Status</span>
               <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+              
             </div>
-            <div className="col-span-1 text-center">Action</div>
+            <div className="col-span-1 ml-28 text-center">Action</div>
           </div>
 
           {filteredRiders.map((r: Driver) => (
@@ -471,8 +478,8 @@ const ManageRiders: React.FC = () => {
                 </div>
                 <div className="col-span-3 truncate">{r.email}</div>
                 <div className="col-span-2 truncate">{r.contactNumber}</div>
-                <div className="col-span-2 truncate">{r.vehicleType}</div>
-                <div className="col-span-1">
+                <div className="col-span-1 truncate">{r.vehicleType}</div>
+                <div className="col-span-1 ml-10">
                   <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                     r.accountStatus === 'ACTIVE'
                       ? 'bg-green-200 text-green-800'
@@ -485,31 +492,40 @@ const ManageRiders: React.FC = () => {
                     {r.accountStatus}
                   </span>
                 </div>
-                <div className="col-span-1 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div className="col-span-2 ml-16 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                   {r.accountStatus === 'PENDING' && (
                     <>
                       <button
-                        className="border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white"
                         onClick={() => handleApprove(r.driverId)}
-                        title="Approve"
+                        className="group flex items-center bg-green-200 hover:bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
                       >
-                        Accept
+                        <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                          <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                          Accept
+                        </span>
                       </button>
                       <button
-                        className="border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white"
                         onClick={() => handleReject(r.driverId)}
-                        title="Reject"
+                        className="group flex items-center bg-red-200 hover:bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
                       >
-                        Reject
+                        <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                        <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
+                          Reject
+                        </span>
                       </button>
+
                     </>
                   )}
                   <button
-                    className="text-red-500 text-md hover:text-red-700"
-                    onClick={() => handleDelete(r.driverId)}
-                    title="Delete Driver"
-                  >
-                    <Trash size={16} />
+                        onClick={() => handleDelete(r.driverId)}
+                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                      >
+                        <Trash 
+                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Delete
+                        </span>
                   </button>
                 </div>
               </div>
@@ -648,30 +664,30 @@ const ManageRiders: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
                   <div className="flex items-center space-x-3">
                     <IdCard size={20} className="text-gray-500" />
-                    <p>{selectedDriverDetails.licenseNumber}</p>
+                    <p className='text-black'>{selectedDriverDetails.licenseNumber}</p>
                   </div>
                   <div className="flex items-center space-x-3">
                     <Mail size={20} className="text-gray-500" />
-                    <p>{selectedDriverDetails.email}</p>
+                    <p className='text-black'>{selectedDriverDetails.email}</p>
                   </div>
                   <div className="flex items-center space-x-3">
                     <CalendarClock size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedDriverDetails.createdAt)}</p>
+                    <p className='text-black'>{formatDate(selectedDriverDetails.createdAt)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
                     <MapPin size={20} className="text-gray-500" />
-                    <p>{selectedDriverDetails.address || 'N/A'}</p>
+                    <p className='text-black'>{selectedDriverDetails.address || 'N/A'}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
                     <CalendarCheck2 size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedDriverDetails.lastLogin)}</p>
+                    <p className='text-black'>{formatDate(selectedDriverDetails.lastLogin)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
                     <Phone size={20} className="text-gray-500" />
-                    <p>{selectedDriverDetails.contactNumber}</p>
+                    <p className='text-black'>{selectedDriverDetails.contactNumber}</p>
                   </div>
                 </div>
               </div>

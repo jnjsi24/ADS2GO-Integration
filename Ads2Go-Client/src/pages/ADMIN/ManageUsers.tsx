@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import AdminLayout from '../../components/AdminLayout';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
 import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface User {
   id: string;
@@ -133,8 +134,15 @@ const ManageUsers: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
+  const cityFilterOptions = ['All Cities', ...cities];
+
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [selectedCityFilter, setSelectedCityFilter] = useState('All Cities');
+
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false); // New state for animation
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -240,6 +248,17 @@ const ManageUsers: React.FC = () => {
     }
   };
 
+  const handleStatusFilterChange = (status: string) => {
+  setSelectedStatusFilter(status);
+  setShowStatusDropdown(false);
+};
+
+const handleCityFilterChange = (city: string) => {
+  setSelectedCityFilter(city);
+  setShowCityDropdown(false);
+};
+
+
   // Filter users based on search term, status, and city
   const filteredUsers = users.filter((user) => {
     const searchLower = searchTerm.toLowerCase();
@@ -250,8 +269,8 @@ const ManageUsers: React.FC = () => {
       user.company.toLowerCase().includes(searchLower) ||
       user.contact.toLowerCase().includes(searchLower);
     
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    const matchesCity = !selectedCity || user.city.toLowerCase().includes(selectedCity.toLowerCase());
+    const matchesStatus = selectedStatusFilter === 'All Status' || user.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+    const matchesCity = selectedCityFilter === 'All Cities' || user.city.toLowerCase().includes(selectedCityFilter.toLowerCase());
     
     return matchesSearch && matchesStatus && matchesCity;
   });
@@ -354,69 +373,86 @@ const ManageUsers: React.FC = () => {
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Users Management</h1>
-        <div className="flex gap-4">
+        <div className="flex gap-2">
           <input
             type="text"
-            className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
             placeholder="Search by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <div className="flex space-x-2">
-            {/* Status Filter with SVG */}
-            <div className="relative w-40">
-              <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <svg
-                className="w-4 h-4 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          {/* City Filter with SVG */}
-            <div className="relative w-40">
-              <select
-              className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={selectedCity || ''}
-                onChange={(e) => setSelectedCity(e.target.value || null)}
-              >
-                <option value="">Filter by City</option>
-                {cities.map(city => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <svg
-                  className="w-4 h-4 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  viewBox="0 0 24 24"
-                  >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+          {/* STATUS Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedStatusFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showStatusDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                >
+                  {statusFilterOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusFilterChange(status)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-            
+          {/* CITY Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowCityDropdown(!showCityDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedCityFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showCityDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                >
+                  {cityFilterOptions.map((city) => (
+                    <button
+                      key={city}
+                      onClick={() => handleCityFilterChange(city)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
+      </div>
+      
 
         {/* User List */}
         <div className="rounded-xl mb-4 overflow-hidden">
@@ -495,11 +531,16 @@ const ManageUsers: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
-                    className="text-red-500 text-md hover:text-red-700"
+                    className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                     onClick={() => handleDelete(user.id)}
-                    title="Delete User"
+                    title="Delete"
                   >
-                    <Trash size={16} />
+                    <Trash 
+                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                      size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                      Delete
+                    </span>
                   </button>
                 </div>
               </div>
