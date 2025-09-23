@@ -182,6 +182,10 @@ const ScreenTrackingSchema = new mongoose.Schema({
       impressions: { type: Number, default: 0 }, // How many times this ad was shown
       totalViewTime: { type: Number, default: 0 }, // Total time viewed in seconds
       completionRate: { type: Number, default: 0 }, // Percentage of ad completed
+      // Real-time playback fields
+      currentTime: { type: Number, default: 0 }, // Current playback time in seconds
+      state: { type: String, enum: ['playing', 'paused', 'buffering', 'loading', 'ended'], default: 'loading' },
+      progress: { type: Number, default: 0, min: 0, max: 100 } // Progress percentage
     },
     
     // Daily ad statistics
@@ -623,7 +627,11 @@ ScreenTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
     endTime: null,
     impressions: (this.screenMetrics.currentAd?.impressions || 0) + 1,
     totalViewTime: (this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime,
-    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0
+    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0,
+    // Real-time playback fields
+    currentTime: 0,
+    state: 'playing',
+    progress: 0
   };
   
   // Update total ad play count

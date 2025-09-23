@@ -83,6 +83,9 @@ export interface ScreenData {
       adTitle: string;
       adDuration: number;
       startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
     };
     dailyAdStats: DailyAdStats;
     adPerformance: any[];

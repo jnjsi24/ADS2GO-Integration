@@ -518,14 +518,16 @@ router.get('/compliance', async (req, res) => {
             totalHoursOnline: deviceHours,
             totalDistanceTraveled: deviceDistance,
             displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
-            screenMetrics: tablet.screenMetrics || {
+            screenMetrics: {
+              ...(tablet.screenMetrics || {}),
               displayHours: deviceHours,
-              adPlayCount: 0,
-              lastAdPlayed: null,
-              brightness: 100,
-              volume: 50,
+              adPlayCount: tablet.screenMetrics?.adPlayCount || 0,
+              lastAdPlayed: tablet.screenMetrics?.lastAdPlayed || null,
+              brightness: tablet.screenMetrics?.brightness || 100,
+              volume: tablet.screenMetrics?.volume || 50,
               isDisplaying: isDeviceOnline,
-              maintenanceMode: false
+              maintenanceMode: tablet.screenMetrics?.maintenanceMode || false,
+              currentAd: tablet.screenMetrics?.currentAd || null
             },
             alerts: tablet.alerts || []
           });

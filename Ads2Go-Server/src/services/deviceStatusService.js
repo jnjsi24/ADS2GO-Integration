@@ -7,6 +7,7 @@ class DeviceStatusService {
     this.wss = null;
     this.activeConnections = new Map();
     this.pingInterval = null;
+    this.adEndTimers = new Map(); // Track timers for clearing ended ads
   }
 
   initializeWebSocketServer(server) {
@@ -87,15 +88,17 @@ class DeviceStatusService {
         // New endpoint for real-time ad playback updates
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
+        const isAdmin = url.searchParams.get('admin') === 'true' || request.headers['admin'] === 'true';
         
         console.log('WebSocket playback upgrade request details:');
         console.log('- Pathname:', pathname);
         console.log('- Device ID from query:', url.searchParams.get('deviceId'));
         console.log('- Material ID from query:', url.searchParams.get('materialId'));
+        console.log('- Is Admin:', isAdmin);
         console.log('- Final device ID:', deviceId);
         console.log('- Final material ID:', materialId);
         
-        if (!deviceId) {
+        if (!deviceId && !isAdmin) {
           console.error('No device ID provided in WebSocket playback upgrade request');
           socket.destroy();
           return;
@@ -105,11 +108,12 @@ class DeviceStatusService {
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
           // Store the device and material IDs with the connection
-          ws.deviceId = deviceId;
+          ws.deviceId = deviceId || 'ADMIN';
           if (materialId) ws.materialId = materialId;
           ws.isAlive = true;
           ws.lastPong = Date.now();
           ws.connectionType = 'playback'; // Mark as playback connection
+          ws.isAdmin = isAdmin; // Mark as admin connection
           
           // Set up ping-pong handler
           ws.on('pong', () => {
@@ -239,6 +243,14 @@ class DeviceStatusService {
           ws.isAlive = true;
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
+          console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
+            adId: message.adId,
+            adTitle: message.adTitle,
+            state: message.state,
+            currentTime: message.currentTime,
+            duration: message.duration,
+            progress: message.progress
+          });
           this.handlePlaybackUpdate(deviceId, message);
         }
       } catch (error) {
@@ -271,6 +283,14 @@ class DeviceStatusService {
           ws.isAlive = true;
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
+          console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
+            adId: message.adId,
+            adTitle: message.adTitle,
+            state: message.state,
+            currentTime: message.currentTime,
+            duration: message.duration,
+            progress: message.progress
+          });
           this.handlePlaybackUpdate(deviceId, message);
         }
       } catch (error) {
@@ -315,27 +335,79 @@ class DeviceStatusService {
       const connection = this.activeConnections.get(deviceId);
       const materialId = connection?.materialId || deviceId;
 
+      console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in ScreenTracking...`);
+
+      // Handle different states appropriately
+      let updateData = {};
+      
+      if (playbackData.state === 'ended') {
+        // When ad ends, don't clear currentAd immediately - keep it for a few seconds
+        // This prevents the "No ads playing" flash between ads
+        console.log(`🏁 [updateCurrentAd] Ad ended for device ${deviceId}: ${playbackData.adTitle}`);
+        updateData = {
+          'screenMetrics.currentAd.state': 'ended',
+          'screenMetrics.currentAd.endTime': now,
+          'screenMetrics.currentAd.progress': 100,
+          lastSeen: now
+        };
+        
+        // Set a timer to clear the currentAd after 5 seconds if no new ad starts
+        this.scheduleAdCleanup(deviceId, materialId);
+      } else if (playbackData.state === 'loading' || playbackData.state === 'buffering') {
+        // During loading/buffering, keep the current ad info but update state
+        console.log(`⏳ [updateCurrentAd] Ad ${playbackData.state} for device ${deviceId}: ${playbackData.adTitle}`);
+        updateData = {
+          'screenMetrics.currentAd.state': playbackData.state,
+          'screenMetrics.currentAd.currentTime': playbackData.currentTime || 0,
+          'screenMetrics.currentAd.progress': playbackData.progress || 0,
+          lastSeen: now
+        };
+      } else {
+        // Normal playback state - update all fields
+        // Cancel any pending cleanup timer since a new ad is starting
+        this.cancelAdCleanup(deviceId);
+        
+        updateData = {
+          'screenMetrics.currentAd': {
+            adId: playbackData.adId,
+            adTitle: playbackData.adTitle,
+            adDuration: playbackData.duration,
+            startTime: playbackData.startTime || now.toISOString(),
+            currentTime: playbackData.currentTime,
+            state: playbackData.state,
+            progress: playbackData.progress
+          },
+          lastSeen: now
+        };
+      }
+
       // Update the current ad information in the database
-      await ScreenTracking.findOneAndUpdate(
+      const result = await ScreenTracking.findOneAndUpdate(
         { 'devices.deviceId': deviceId },
-        {
-          $set: {
-            'screenMetrics.currentAd': {
-              adId: playbackData.adId,
-              adTitle: playbackData.adTitle,
-              adDuration: playbackData.duration,
-              startTime: playbackData.startTime || now.toISOString(),
-              currentTime: playbackData.currentTime,
-              state: playbackData.state,
-              progress: playbackData.progress
-            },
-            lastSeen: now
-          }
-        },
+        { $set: updateData },
         { new: true }
       );
 
-      console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
+      if (result) {
+        console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
+        console.log(`📊 Current ad data:`, result.screenMetrics?.currentAd);
+      } else {
+        console.log(`❌ No ScreenTracking document found for device ${deviceId}`);
+        
+        // Try alternative query by materialId
+        console.log(`🔍 Trying alternative query by materialId: ${materialId}`);
+        const altResult = await ScreenTracking.findOneAndUpdate(
+          { materialId },
+          { $set: updateData },
+          { new: true }
+        );
+        
+        if (altResult) {
+          console.log(`✅ Updated current ad via materialId ${materialId}: ${playbackData.adTitle}`);
+        } else {
+          console.log(`❌ No ScreenTracking document found for materialId ${materialId} either`);
+        }
+      }
 
     } catch (error) {
       console.error(`Error updating current ad for device ${deviceId}:`, error);
@@ -675,6 +747,66 @@ class DeviceStatusService {
     }
     
     console.log('Device status service cleaned up');
+  }
+
+  // Schedule cleanup of ended ad after delay
+  scheduleAdCleanup(deviceId, materialId) {
+    // Clear any existing timer
+    this.cancelAdCleanup(deviceId);
+    
+    // Set new timer to clear currentAd after 5 seconds
+    const timer = setTimeout(async () => {
+      try {
+        console.log(`🧹 [AdCleanup] Clearing currentAd for device ${deviceId} after 5 seconds`);
+        
+        // Try to clear currentAd by deviceId first
+        let result = await ScreenTracking.findOneAndUpdate(
+          { 'devices.deviceId': deviceId },
+          { 
+            $unset: { 'screenMetrics.currentAd': 1 },
+            $set: { lastSeen: new Date() }
+          },
+          { new: true }
+        );
+        
+        // If not found, try by materialId
+        if (!result) {
+          result = await ScreenTracking.findOneAndUpdate(
+            { materialId },
+            { 
+              $unset: { 'screenMetrics.currentAd': 1 },
+              $set: { lastSeen: new Date() }
+            },
+            { new: true }
+          );
+        }
+        
+        if (result) {
+          console.log(`✅ [AdCleanup] Cleared currentAd for device ${deviceId}`);
+        } else {
+          console.log(`❌ [AdCleanup] Could not find device ${deviceId} to clear currentAd`);
+        }
+        
+        // Remove timer from map
+        this.adEndTimers.delete(deviceId);
+      } catch (error) {
+        console.error(`Error clearing currentAd for device ${deviceId}:`, error);
+        this.adEndTimers.delete(deviceId);
+      }
+    }, 5000); // 5 seconds delay
+    
+    // Store timer in map
+    this.adEndTimers.set(deviceId, timer);
+  }
+
+  // Cancel scheduled ad cleanup
+  cancelAdCleanup(deviceId) {
+    const timer = this.adEndTimers.get(deviceId);
+    if (timer) {
+      clearTimeout(timer);
+      this.adEndTimers.delete(deviceId);
+      console.log(`🚫 [AdCleanup] Cancelled cleanup timer for device ${deviceId}`);
+    }
   }
 }
 

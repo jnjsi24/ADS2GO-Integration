@@ -25,6 +25,12 @@ class PlaybackWebSocketService {
     this.connect();
   }
 
+  private getWebSocketUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = process.env.REACT_APP_API_HOST || window.location.host;
+    return `${protocol}//${host}/ws/playback?admin=true`;
+  }
+
   private connect(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       console.log('🔌 [Admin WebSocket] Already connected');
@@ -32,7 +38,7 @@ class PlaybackWebSocketService {
     }
 
     try {
-      const wsUrl = 'ws://192.168.1.7:5000/ws/playback';
+      const wsUrl = this.getWebSocketUrl();
       console.log('🔌 [Admin WebSocket] Connecting to:', wsUrl);
 
       this.ws = new WebSocket(wsUrl);

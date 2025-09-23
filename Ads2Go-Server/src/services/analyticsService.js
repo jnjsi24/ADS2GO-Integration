@@ -136,17 +136,31 @@ class AnalyticsService {
       await analytics.addAdPlayback(adId, adTitle, adDuration, viewTime);
       
       // Also update screen tracking
-      await ScreenTracking.findOneAndUpdate(
+      console.log(`🔍 [analyticsService] Updating ScreenTracking for device ${deviceId}...`);
+      const screenResult = await ScreenTracking.findOneAndUpdate(
         { 'devices.deviceId': deviceId },
         { 
           $inc: { 'screenMetrics.adPlayCount': 1 },
           $set: { 
             'screenMetrics.lastAdPlayed': new Date(),
             'screenMetrics.currentAd.adId': adId,
-            'screenMetrics.currentAd.adTitle': adTitle
+            'screenMetrics.currentAd.adTitle': adTitle,
+            'screenMetrics.currentAd.adDuration': adDuration,
+            'screenMetrics.currentAd.startTime': new Date(),
+            'screenMetrics.currentAd.currentTime': 0,
+            'screenMetrics.currentAd.state': 'playing',
+            'screenMetrics.currentAd.progress': 0
           }
-        }
+        },
+        { new: true }
       );
+      
+      if (screenResult) {
+        console.log(`✅ [analyticsService] Updated ScreenTracking for device ${deviceId}: ${adTitle}`);
+        console.log(`📊 ScreenTracking currentAd:`, screenResult.screenMetrics?.currentAd);
+      } else {
+        console.log(`❌ [analyticsService] No ScreenTracking document found for device ${deviceId}`);
+      }
       
       return analytics;
     } catch (error) {
