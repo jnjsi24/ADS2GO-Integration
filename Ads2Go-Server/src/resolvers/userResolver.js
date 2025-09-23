@@ -5,6 +5,7 @@ const Ad = require('../models/Ad');
 const { JWT_SECRET } = require('../middleware/auth');
 const { validateUserInput, checkPasswordStrength } = require('../utils/validations');
 const EmailService = require('../utils/emailService');
+const AnalyticsService = require('../services/analyticsService');
 const validator = require('validator');
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -27,6 +28,33 @@ const resolvers = {
     },
 
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
+
+        getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
+          checkAuth(user);
+          try {
+            const analytics = await AnalyticsService.getUserAnalytics(
+              user.id,
+              startDate,
+              endDate,
+              period
+            );
+            return analytics;
+          } catch (error) {
+            console.error('Error fetching user analytics:', error);
+            throw new Error('Failed to fetch analytics data');
+          }
+        },
+
+    getUserAdDetails: async (_, { adId }, { user }) => {
+      checkAuth(user);
+      try {
+        const adDetails = await AnalyticsService.getUserAdDetails(user.id, adId);
+        return adDetails;
+      } catch (error) {
+        console.error('Error fetching ad details:', error);
+        throw new Error('Failed to fetch ad details');
+      }
+    },
   },
 
   Mutation: {
