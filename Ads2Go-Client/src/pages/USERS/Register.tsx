@@ -54,7 +54,7 @@ const Register: React.FC = () => {
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-          return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
+          return 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)';
         }
         return '';
       case 'email':

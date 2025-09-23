@@ -243,7 +243,7 @@ const Account: React.FC = () => {
     if (formData.contactNumber && formData.contactNumber !== "+63 " && formData.contactNumber.trim() !== '') {
       const phoneRegex = /^\+63\s?\d{10}$/;
       if (!phoneRegex.test(formData.contactNumber)) {
-        newErrors.contactNumber = "Please enter a valid Philippine phone number (e.g., +63 9123456789)";
+        newErrors.contactNumber = "Please enter a valid Philippine mobile number. Format: +639XXXXXXXXX (10 digits starting with 9)";
       }
     }
 
