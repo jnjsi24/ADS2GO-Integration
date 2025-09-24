@@ -197,6 +197,16 @@ const adResolvers = {
 
       const savedAd = await ad.save();
 
+      // Send notification to admins about new ad submission
+      try {
+        const AdminNotificationService = require('../services/notifications/AdminNotificationService');
+        await AdminNotificationService.sendNewAdSubmissionNotification(savedAd._id);
+        console.log(`✅ Sent new ad submission notification for ad: ${savedAd._id}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending new ad submission notification:', notificationError);
+        // Don't fail the ad creation if notification fails
+      }
+
       // Update material availability when ad is created
       try {
         console.log(`🔄 Updating material availability for ad: ${savedAd._id}`);

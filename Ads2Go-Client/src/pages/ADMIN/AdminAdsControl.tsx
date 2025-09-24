@@ -32,7 +32,7 @@ import '../../services/testEndpoints';
 import Dashboard from './tabs/dashboard/Dashboard';
 import ScreenControl from './tabs/adminAdsControl/ScreenControl';
 import ContentManagement from './tabs/manageAds/ContentManagement';
-import Analytics from './tabs/dashboard/Analytics';
+import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
 
 const AdminAdsControl: React.FC = () => {
@@ -579,7 +579,7 @@ const AdminAdsControl: React.FC = () => {
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'screens', label: 'Screen Control', icon: Monitor },
               { id: 'content', label: 'Content Management', icon: Upload },
-              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
               { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
             ].map(tab => (
               <button
@@ -641,10 +641,8 @@ const AdminAdsControl: React.FC = () => {
             />
           )}
 
-          {activeTab === 'analytics' && (
-            <Analytics
-              analytics={mockAnalytics}
-            />
+          {activeTab === 'notifications' && (
+            <NotificationDashboard />
           )}
 
           {activeTab === 'alerts' && (

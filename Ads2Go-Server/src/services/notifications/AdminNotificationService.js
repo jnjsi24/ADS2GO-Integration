@@ -81,6 +81,49 @@ class AdminNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send new material creation notification to admins
+   */
+  static async sendNewMaterialCreatedNotification(materialId) {
+    try {
+      const Material = require('../../models/Material');
+      const Admin = require('../../models/Admin');
+      
+      const material = await Material.findById(materialId).populate('driverId');
+      if (!material) throw new Error('Material not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📦 New Material Created',
+          `New material "${material.materialId}" created by ${material.driverId ? material.driverId.firstName + ' ' + material.driverId.lastName : 'System'}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'NEW_MATERIAL_CREATED',
+            priority: 'MEDIUM',
+            data: { 
+              materialId: material.materialId,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              driverName: material.driverId ? `${material.driverId.firstName} ${material.driverId.lastName}` : 'System'
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending new material creation notification:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send new user registration notification to admins
    */
   static async sendNewUserRegistrationNotification(userId) {

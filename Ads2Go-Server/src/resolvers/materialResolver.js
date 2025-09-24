@@ -220,6 +220,16 @@ const materialResolvers = {
         throw new Error(`Failed to save material: ${error.message}`);
       }
 
+      // Send notification to admins about new material creation
+      try {
+        const AdminNotificationService = require('../services/notifications/AdminNotificationService');
+        await AdminNotificationService.sendNewMaterialCreatedNotification(material._id);
+        console.log(`✅ Sent new material creation notification for material: ${material.materialId}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending new material creation notification:', notificationError);
+        // Don't fail the material creation if notification fails
+      }
+
       // Create MaterialAvailability record automatically
       try {
         // Check if availability already exists

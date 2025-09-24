@@ -10,7 +10,9 @@ import {
 } from "recharts";
 import { useQuery } from '@apollo/client';
 import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
+import { GET_ADMIN_DASHBOARD_STATS } from '../../graphql/admin/queries';
 import DeviceStatus from '../../components/DeviceStatus';
+import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -67,7 +69,18 @@ const Dashboard = () => {
     }
   });
 
-  if (loading) return (
+  // Fetch admin dashboard stats
+  const { data: statsData, loading: statsLoading } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
+    pollInterval: 30000, // Refresh every 30 seconds
+    onCompleted: (data) => {
+      console.log('🔔 Frontend: Dashboard stats received:', data);
+    },
+    onError: (error) => {
+      console.error("Error fetching admin dashboard stats:", error);
+    }
+  });
+
+  if (loading || statsLoading) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
     </div>
@@ -78,6 +91,8 @@ const Dashboard = () => {
       <div className="text-red-500">Error loading admin details: {error.message}</div>
     </div>
   );
+
+  const stats = statsData?.getAdminDashboardStats;
 
   return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
@@ -130,10 +145,30 @@ const Dashboard = () => {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
-          { label: "Total Advertisements", value: "$15,700.00", change: "12.1%", up: true },
-          { label: "Active Advertisements", value: "$8,500.00", change: "6.3%", up: true },
-          { label: "Pending Advertisements", value: "$6,222.00", change: "2.4%", up: false },
-          { label: "Total Riders", value: "$32,913.00", change: "12.1%", up: true },
+          { 
+            label: "Total Advertisements", 
+            value: stats?.totalAds || 0, 
+            change: `${stats?.newUsersToday || 0} new today`, 
+            up: true 
+          },
+          { 
+            label: "Active Advertisements", 
+            value: stats?.activeAds || 0, 
+            change: "Currently running", 
+            up: true 
+          },
+          { 
+            label: "Pending Advertisements", 
+            value: stats?.pendingAds || 0, 
+            change: "Awaiting review", 
+            up: false 
+          },
+          { 
+            label: "Unread Notifications", 
+            value: stats?.unreadNotifications || 0, 
+            change: `${stats?.highPriorityNotifications || 0} high priority`, 
+            up: true 
+          },
         ].map((stat, i) => (
           <div
             key={i}
@@ -170,63 +205,9 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Ad Impressions & QR Scans Chart (now spans full width below stat cards) */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">
-            Ad Impressions & QR Scans
-          </h3>
-          <div className="flex items-center space-x-4 text-sm">
-            <span className="flex items-center text-gray-600">
-              <span className="w-2 h-2 rounded-full bg-blue-500 mr-1"></span>
-              Impressions
-            </span>
-            <span className="flex items-center text-gray-600">
-              <span className="w-2 h-2 rounded-full bg-green-500 mr-1"></span>
-              qrScans
-            </span>
-            <div className="relative">
-              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 leading-tight focus:outline-none focus:border-blue-500">
-                <option>All accounts</option>
-                <option>Account A</option>
-                <option>Account B</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                <svg
-                  className="fill-current h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                </svg>
-              </div>
-            </div>
-            <div className="relative">
-              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 leading-tight focus:outline-none focus:border-blue-500">
-                <option>This year</option>
-                <option>Last year</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                <svg
-                  className="fill-current h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={adPerformanceData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
-            <XAxis dataKey="month" axisLine={false} tickLine={false} />
-            <YAxis axisLine={false} tickLine={false} />
-            <Tooltip />
-            <Bar dataKey="impressions" fill="#3674B5" barSize={50} radius={[10, 10, 0, 0]} />
-            <Bar dataKey="qrScans" fill="#C9E6F0" barSize={50} radius={[10, 10, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      {/* Notification Dashboard */}
+      <div className="mb-8">
+        <NotificationDashboard pendingAdsCount={stats?.pendingAds} />
       </div>
 
       {/* Device Status */}

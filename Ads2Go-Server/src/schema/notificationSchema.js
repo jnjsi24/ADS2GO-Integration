@@ -14,12 +14,54 @@ const notificationTypeDefs = gql`
     title: String!
     message: String!
     type: NotificationType!
+    category: String
+    priority: String
     read: Boolean!
     readAt: String
     adId: ID
     adTitle: String
+    data: String
     createdAt: String!
     updatedAt: String!
+  }
+
+  type AdminNotifications {
+    notifications: [Notification!]!
+    unreadCount: Int!
+  }
+
+  type PendingAd {
+    id: ID!
+    title: String!
+    status: String!
+    createdAt: String!
+    user: User!
+    materialId: ID
+    planId: ID
+  }
+
+  type PendingMaterial {
+    id: ID!
+    materialId: String!
+    materialType: String!
+    vehicleType: String!
+    category: String!
+    createdAt: String!
+    driver: Driver!
+  }
+
+  type AdminDashboardStats {
+    totalAds: Int!
+    pendingAds: Int!
+    activeAds: Int!
+    totalUsers: Int!
+    newUsersToday: Int!
+    totalDrivers: Int!
+    newDriversToday: Int!
+    totalRevenue: Float!
+    revenueToday: Float!
+    unreadNotifications: Int!
+    highPriorityNotifications: Int!
   }
 
   input CreateNotificationInput {
@@ -48,6 +90,10 @@ const notificationTypeDefs = gql`
     getUserNotifications: [Notification!]!
     getNotificationById(id: ID!): Notification
     getUnreadNotificationCount: Int!
+    getAdminNotifications: AdminNotifications!
+    getPendingAds: [PendingAd!]!
+    getPendingMaterials: [PendingMaterial!]!
+    getAdminDashboardStats: AdminDashboardStats!
   }
 
   type Mutation {
@@ -58,6 +104,9 @@ const notificationTypeDefs = gql`
     deleteNotification(id: ID!): NotificationResponse!
     deleteAllNotifications: NotificationResponse!
     deleteNotificationsByCategory(category: String!): NotificationResponse!
+    markNotificationRead(notificationId: ID!): NotificationResponse!
+    markAllNotificationsRead: NotificationResponse!
+    deleteNotification(notificationId: ID!): NotificationResponse!
   }
 
   type Subscription {
