@@ -321,8 +321,8 @@ const Dashboard = () => {
 
 
   return (
-    <div className="min-h-screen bg-white pl-72 pr-5 p-10">
-      {/* Header Section */}
+  <div className="min-h-screen pl-72 pr-5 p-10 shadow-md backdrop-blur-md bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC]">      
+  {/* Header Section */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-800">Welcome back, {userFirstName}!</h1>

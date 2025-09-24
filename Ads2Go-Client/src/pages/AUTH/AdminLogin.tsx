@@ -34,88 +34,92 @@ const AdminLogin: React.FC = () => {
     }
   };
 
-  return (
-    <div className="relative flex min-h-screen bg-[#fdfdfd]">
-      {/* Video Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed top-1/2 left-10 -translate-y-1/2 w-[50vw] h-auto object-cover "
-      >
-        <source src="/image/admin.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
-      
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0"></div>
-
+ return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-black/30 to-gray-200">
       {/* Form Container */}
-      <div className="relative z-10 w-full max-w-xl ml-auto mr-28 flex flex-col justify-center px-10">
-        <div className="p-8 rounded-xl shadow-xl bg-[#fdfdfd]">
-          <div className="flex items-center space-x-2 mb-6">
-            <h1 className="text-5xl font-extrabold text-black">Admin Log in</h1>
-          </div>
+      <div className="w-full max-w-md p-10">
+        <h1 className="text-4xl font-extrabold text-black mb-6 text-center">Admin Log in</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-lg">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
-              placeholder="admin@example.com"
-              autoComplete="email"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2 text-lg">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-400 rounded-xl shadow-lg focus:outline-none"
-                placeholder="••••••••••••••••••••"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                className="absolute inset-y-0 right-4 flex items-center"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5 text-gray-500" />
-                ) : (
-                  <EyeIcon className="h-5 w-5 text-gray-500" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={isLoggingIn}
-            className="w-full py-3 rounded-lg bg-[#0A192F] text-white text-lg font-bold hover:bg-[#091a2c] transition disabled:bg-gray-400"
+        {/* Email */}
+        <div className="relative">
+          <input
+            type="email"
+            id="email"
+            placeholder=" " // keep placeholder empty for peer
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 transition ${
+              error ? 'border-red-400' : 'border-gray-400'
+            }`}
+          />
+          <label
+            htmlFor="email"
+            className={`absolute left-0 text-black transition-all duration-200 ${
+              email
+                ? '-top-2 text-sm text-black font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'
+            } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
           >
-            {isLoggingIn ? (
-              <div className="flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Logging in...
-              </div>
+            Email
+          </label>
+          {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+        </div>
+
+        {/* Password */}
+        <div className="relative">
+          <input
+            type={showPassword ? 'text' : 'password'}
+            id="password"
+            placeholder=" "
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 transition ${
+              error ? 'border-red-400' : 'border-gray-400'
+            }`}
+          />
+          <label
+            htmlFor="password"
+            className={`absolute left-0 text-black transition-all duration-200 ${
+              password
+                ? '-top-2 text-sm text-black font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'
+            } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+          >
+            Password
+          </label>
+          <button
+            type="button"
+            className="absolute inset-y-0 right-0 flex items-center pr-2"
+            onClick={() => setShowPassword(!showPassword)}
+          >
+            {showPassword ? (
+              <EyeSlashIcon className="h-5 w-5 text-gray-500" />
             ) : (
-              'LOGIN'
+              <EyeIcon className="h-5 w-5 text-gray-500" />
             )}
           </button>
-        </form>
+        </div>
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={isLoggingIn}
+          className="w-full py-3 rounded-lg bg-[#0A192F] text-white text-lg font-bold hover:bg-[#091a2c] transition disabled:bg-gray-400"
+        >
+          {isLoggingIn ? (
+            <div className="flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+              Logging in...
+            </div>
+          ) : (
+            'LOGIN'
+          )}
+        </button>
+      </form>
+
       </div>
-    </div>
     </div>
   );
 };

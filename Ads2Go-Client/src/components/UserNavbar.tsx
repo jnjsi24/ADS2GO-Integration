@@ -10,6 +10,28 @@ import {
   HelpCircle
 } from 'lucide-react';
 
+const DrawOutlineLink = ({ to, active, children }: { to: string; active: boolean; children: React.ReactNode }) => (
+  <Link
+    to={to}
+    className={`
+      group relative flex items-center px-4 py-2 font-medium
+      transition-colors duration-[400ms]
+      ${active ? 'text-white bg-[#185ADB]' : 'text-white/90 hover:text-white'}
+    `}
+  >
+    <span className="relative z-10 flex items-center space-x-3">{children}</span>
+
+    {/* TOP */}
+    <span className="absolute left-0 top-0 h-[2px] w-0 bg-[#185ADB] transition-all duration-100 group-hover:w-full" />
+    {/* RIGHT */}
+    <span className="absolute right-0 top-0 h-0 w-[2px] bg-[#185ADB] transition-all delay-100 duration-100 group-hover:h-full" />
+    {/* BOTTOM */}
+    <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-[#185ADB] transition-all delay-200 duration-100 group-hover:w-full" />
+    {/* LEFT */}
+    <span className="absolute bottom-0 left-0 h-0 w-[2px] bg-[#185ADB] transition-all delay-300 duration-100 group-hover:h-full" />
+  </Link>
+);
+
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
   const navigate = useNavigate();
@@ -34,41 +56,29 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed">
-      <div className="p-6">
+<div className="bg-black/20 backdrop-blur-md shadow-inner fixed rounded-lg top-3 bottom-3 left-3 p-3 flex flex-col justify-between z-50 w-64">
+      <div className="p-3">
         {/* Logo */}
-        <div className="flex items-center pl-3 space-x-3 mb-10">
+        <div className="flex items-center pl-5 mt-5 space-x-3 mb-10">
           <img src="/image/white-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-white font-bold">Ads2Go</span>
+          <span className="text-white/80 text-2xl font-bold">Ads2Go</span>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation with Outline Animation */}
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
-            <li key={link.label} className="relative group">
-              <Link
-                to={link.path}
-                className={`relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-colors ${
-                  location.pathname === link.path
-                    ? 'text-white font-bold bg-[#3367cc]'
-                    : 'text-gray-200 hover:text-gray-300'
-                }`}
-              >
-                {/* Background animation */}
-                <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
-
-                <span className="relative z-10 flex items-center space-x-3">
-                  {link.icon}
-                  <span>{link.label}</span>
-                </span>
-              </Link>
+            <li key={link.label}>
+              <DrawOutlineLink to={link.path} active={location.pathname === link.path}>
+                {link.icon}
+                <span>{link.label}</span>
+              </DrawOutlineLink>
             </li>
           ))}
         </ul>
       </div>
 
       {/* User Profile & Logout */}
-      <div className="p-6">
+      <div className="p-4">
         <div
           className="flex items-center space-x-3 mb-4 cursor-pointer"
           onClick={() => navigate('/account')}
@@ -81,13 +91,11 @@ const SideNavbar: React.FC = () => {
           </div>
           <div>
             {user ? (
-              <p className="font-semibold text-white">
-                {`${user.firstName} ${user.lastName}`}
-              </p>
+              <p className="font-semibold text-white/80">{`${user.firstName} ${user.lastName}`}</p>
             ) : (
               <>
-                <p className="font-semibold text-gray-800">Loading...</p>
-                <p className="text-sm text-gray-500">Please wait</p>
+                <p className="font-semibold text-gray-300">Loading...</p>
+                <p className="text-sm text-gray-400">Please wait</p>
               </>
             )}
           </div>
@@ -95,7 +103,7 @@ const SideNavbar: React.FC = () => {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center space-x-2 text-sm text-[#FF2929] hover:text-red-500 transition px-4 py-2 rounded-lg bg-red-50"
+          className="w-full flex items-center space-x-2 text-sm text-red-300 hover:text-red-500 transition px-4 py-2 bg-red-50/10 border border-red-500/20"
         >
           <LogOut size={18} />
           <span>Logout</span>
