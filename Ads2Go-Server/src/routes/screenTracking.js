@@ -3,7 +3,6 @@ const router = express.Router();
 const ScreenTracking = require('../models/screenTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
-const DriverAnalyticsService = require('../services/driverAnalyticsService');
 const { checkDriver } = require('../middleware/driverAuth');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
@@ -177,13 +176,6 @@ router.post('/updateLocation', async (req, res) => {
       // Continue processing even if alerts fail
     }
 
-    // Sync driver analytics (optional - don't fail if sync fails)
-    try {
-      await DriverAnalyticsService.syncFromScreenTracking(deviceId, screenTracking.materialId);
-    } catch (error) {
-      console.error('Error syncing driver analytics:', error);
-      // Continue processing even if driver analytics sync fails
-    }
 
     res.json({
       success: true,

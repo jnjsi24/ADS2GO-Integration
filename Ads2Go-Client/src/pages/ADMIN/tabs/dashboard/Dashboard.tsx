@@ -8,7 +8,7 @@ import {
   Settings,
   WifiOff
 } from 'lucide-react';
-import { ScreenData } from '../../../../services/adsPanelGraphQLService';
+import { ScreenData } from '../../../../types/screenTypes';
 import AdProgressBar from '../../../../components/AdProgressBar';
 
 interface DashboardProps {

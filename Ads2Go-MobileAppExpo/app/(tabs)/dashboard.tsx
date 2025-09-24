@@ -28,8 +28,12 @@ interface DriverAnalytics {
   driverId: string;
   vehiclePlateNumber: string;
   vehicleType: string;
+  deviceId: string;
+  screenType: string;
+  materialId: string;
   totalDistance: number;
   totalHours: number;
+  hoursRemaining: number;
   averageSpeed: number;
   maxSpeed: number;
   speedViolations: number;
@@ -187,23 +191,45 @@ const Dashboard: React.FC = () => {
             : 0
         };
 
+        // Helper function to sanitize numeric values
+        const sanitizeNumeric = (value: any, defaultValue: number = 0): number => {
+          if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
+            return defaultValue;
+          }
+          return Math.max(0, Number(value));
+        };
+
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
-          driverId: data.driverId,
-          vehiclePlateNumber: data.vehiclePlateNumber,
-          vehicleType: data.vehicleType,
-          totalDistance: data.totalDistanceToday || 0,
-          totalHours: data.currentHours || 0,
-          averageSpeed: data.averageSpeed || 0,
-          maxSpeed: data.maxSpeed || 0,
-          speedViolations: violationStats.total,
-          safetyScore: data.safetyScore || 0,
-          complianceRate: data.complianceRate || 0,
+          driverId: data.driverId || 'Unknown',
+          vehiclePlateNumber: data.vehiclePlateNumber || 'Unknown',
+          vehicleType: data.vehicleType || 'Unknown',
+          deviceId: data.deviceId || 'Unknown',
+          screenType: data.screenType || 'Unknown',
+          materialId: data.materialId || 'Unknown',
+          totalDistance: sanitizeNumeric(data.totalDistanceToday, 0),
+          totalHours: sanitizeNumeric(data.currentHours, 0),
+          hoursRemaining: sanitizeNumeric(data.hoursRemaining, 0),
+          averageSpeed: sanitizeNumeric(data.averageSpeed, 0),
+          maxSpeed: sanitizeNumeric(data.maxSpeed, 0),
+          speedViolations: sanitizeNumeric(violationStats.total, 0),
+          safetyScore: sanitizeNumeric(data.safetyScore, 0),
+          // Calculate real-time compliance rate to match admin client (currentHours / 8 * 100)
+          complianceRate: data.currentHours ? Math.min(100, (data.currentHours / 8) * 100) : 0,
           totalRoutes: 1, // Single route for current session
-          isOnline: data.isOnline || false,
-          violations: violations,
+          isOnline: Boolean(data.isOnline),
+          violations: violations || [],
           violationStats: violationStats,
-          dailyPerformance: data.dailyPerformance || [],
+          dailyPerformance: (data.dailyPerformance || []).map((day: any) => ({
+            date: day.date || new Date().toISOString(),
+            totalDistance: sanitizeNumeric(day.totalDistance, 0),
+            totalHours: sanitizeNumeric(day.totalHours, 0),
+            averageSpeed: sanitizeNumeric(day.averageSpeed, 0),
+            maxSpeed: sanitizeNumeric(day.maxSpeed, 0),
+            speedViolations: sanitizeNumeric(day.speedViolations, 0),
+            complianceScore: sanitizeNumeric(day.complianceScore, 0),
+            safetyScore: sanitizeNumeric(day.safetyScore, 0)
+          })),
           monthlyTrends: [] // Will be populated if needed
         };
         
@@ -221,22 +247,51 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Helper function to sanitize data for charts
+  const sanitizeChartValue = (value: any): number => {
+    if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Number(value)); // Ensure non-negative values
+  };
+
   const getChartData = () => {
     if (!analytics) return null;
 
     if (selectedPeriod === 'daily') {
       const data = analytics.dailyPerformance.slice(-7); // Last 7 days
+      
+      // Ensure we have at least some data points
+      if (data.length === 0) {
+        return {
+          labels: ['No Data'],
+          datasets: [{
+            data: [0],
+            color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+            strokeWidth: 2
+          }]
+        };
+      }
+
       return {
-        labels: data.map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })),
+        labels: data.map(d => {
+          try {
+            return new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
+          } catch {
+            return 'Invalid Date';
+          }
+        }),
         datasets: [{
           data: data.map(d => {
+            let value = 0;
             switch (selectedMetric) {
-              case 'distance': return d.totalDistance;
-              case 'hours': return d.totalHours;
-              case 'speed': return d.averageSpeed;
-              case 'compliance': return d.complianceScore;
-              default: return d.totalDistance;
+              case 'distance': value = d.totalDistance; break;
+              case 'hours': value = d.totalHours; break;
+              case 'speed': value = d.averageSpeed; break;
+              case 'compliance': value = d.complianceScore; break;
+              default: value = d.totalDistance; break;
             }
+            return sanitizeChartValue(value);
           }),
           color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // Blue
           strokeWidth: 2
@@ -244,17 +299,38 @@ const Dashboard: React.FC = () => {
       };
     } else {
       const data = analytics.monthlyTrends;
+      
+      // Ensure we have at least some data points
+      if (data.length === 0) {
+        return {
+          labels: ['No Data'],
+          datasets: [{
+            data: [0],
+            color: (opacity = 1) => `rgba(34, 197, 94, ${opacity})`,
+            strokeWidth: 2
+          }]
+        };
+      }
+
       return {
-        labels: data.map(m => new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' })),
+        labels: data.map(m => {
+          try {
+            return new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' });
+          } catch {
+            return 'Invalid Month';
+          }
+        }),
         datasets: [{
           data: data.map(m => {
+            let value = 0;
             switch (selectedMetric) {
-              case 'distance': return m.distance;
-              case 'hours': return m.hours;
-              case 'speed': return m.compliance; // Using compliance as proxy for speed in monthly
-              case 'compliance': return m.compliance;
-              default: return m.distance;
+              case 'distance': value = m.distance; break;
+              case 'hours': value = m.hours; break;
+              case 'speed': value = m.compliance; break; // Using compliance as proxy for speed in monthly
+              case 'compliance': value = m.compliance; break;
+              default: value = m.distance; break;
             }
+            return sanitizeChartValue(value);
           }),
           color: (opacity = 1) => `rgba(34, 197, 94, ${opacity})`, // Green
           strokeWidth: 2
@@ -348,6 +424,41 @@ const Dashboard: React.FC = () => {
             <Text style={styles.infoValue}>{analytics.totalRoutes}</Text>
           </View>
         </View>
+        
+        {/* Device Info Section */}
+        <View style={styles.deviceInfoSection}>
+          <View style={styles.deviceInfoItem}>
+            <View style={styles.deviceInfoHeader}>
+              <Ionicons name="tablet-portrait" size={20} color="#3b82f6" />
+              <Text style={styles.deviceInfoLabel}>Device ID</Text>
+            </View>
+            <Text style={styles.deviceInfoValue} numberOfLines={1} ellipsizeMode="middle">
+              {analytics.deviceId}
+            </Text>
+          </View>
+          
+          <View style={styles.deviceInfoRow}>
+            <View style={styles.deviceInfoItem}>
+              <View style={styles.deviceInfoHeader}>
+                <Ionicons name="tv" size={20} color="#3b82f6" />
+                <Text style={styles.deviceInfoLabel}>Screen Type</Text>
+              </View>
+              <Text style={styles.deviceInfoValue} numberOfLines={1}>
+                {analytics.screenType}
+              </Text>
+            </View>
+            
+            <View style={styles.deviceInfoItem}>
+              <View style={styles.deviceInfoHeader}>
+                <Ionicons name="cube" size={20} color="#3b82f6" />
+                <Text style={styles.deviceInfoLabel}>Material ID</Text>
+              </View>
+              <Text style={styles.deviceInfoValue} numberOfLines={1} ellipsizeMode="middle">
+                {analytics.materialId}
+              </Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Performance Metrics */}
@@ -361,6 +472,10 @@ const Dashboard: React.FC = () => {
           <Text style={styles.metricValue}>{analytics.totalHours.toFixed(1)}h</Text>
         </View>
         <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Hours Remaining</Text>
+          <Text style={styles.metricValue}>{analytics.hoursRemaining.toFixed(1)}h</Text>
+        </View>
+        <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Safety Score</Text>
           <Text style={[styles.metricValue, { color: getSafetyColor(analytics.safetyScore) }]}>
             {analytics.safetyScore}/100
@@ -369,7 +484,7 @@ const Dashboard: React.FC = () => {
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Compliance</Text>
           <Text style={[styles.metricValue, { color: getComplianceColor(analytics.complianceRate) }]}>
-            {analytics.complianceRate}%
+            {analytics.complianceRate.toFixed(1)}%
           </Text>
         </View>
       </View>
@@ -496,7 +611,7 @@ const Dashboard: React.FC = () => {
       </View>
 
       {/* Chart */}
-      {chartData && (
+      {chartData && chartData.datasets && chartData.datasets.length > 0 && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>
             {selectedPeriod === 'daily' ? 'Daily' : 'Monthly'} {getMetricLabel()}
@@ -636,19 +751,56 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
   },
+  // Device Info Section Styles
+  deviceInfoSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  deviceInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  deviceInfoItem: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  deviceInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  deviceInfoLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  deviceInfoValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#111827',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    textAlign: 'center',
+  },
   metricsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: 20,
     marginBottom: 20,
+    justifyContent: 'space-between',
   },
   metricCard: {
-    width: '48%',
+    width: '31%',
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
-    marginRight: '2%',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -657,14 +809,16 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   metricLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#6b7280',
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   metricValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+    textAlign: 'center',
   },
   // Violations Section Styles
   violationsSection: {

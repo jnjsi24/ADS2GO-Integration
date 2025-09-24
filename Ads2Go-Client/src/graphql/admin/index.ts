@@ -5,7 +5,6 @@ export * from './queries/getAd';
 export * from './queries/getPendingForms';
 export * from './queries/getVehicleTypes';
 export * from './queries/getOwnAdminDetails';
-export * from './queries/screenTracking';
 export * from './queries/manageRiders';
 export * from './queries/manageUsers';
 
@@ -15,7 +14,6 @@ export * from './mutations/createAdminUser';
 export * from './mutations/updateAdminUser';
 export * from './mutations/manageForms';
 export * from './mutations/createAd';
-export * from './mutations/screenTracking';
 export * from './mutations/manageRiders';
 export * from './mutations/manageUsers';
 export * from './mutations/materials';

@@ -23,7 +23,7 @@ import {
   Loader2
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
-import { adsPanelGraphQLService, ScreenData, AdAnalytics } from '../../services/adsPanelGraphQLService';
+import { ScreenData, AdAnalytics } from '../../types/screenTypes';
 import { adsPanelService } from '../../services/adsPanelService';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
 import '../../services/testEndpoints';

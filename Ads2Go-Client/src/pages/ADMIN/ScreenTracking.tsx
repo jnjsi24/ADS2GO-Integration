@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Popup, Polyline, CircleMarker, Marker } from 'react-leaflet';
+import { Popup, Polyline, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map, Icon } from 'leaflet';
@@ -229,7 +229,7 @@ const ScreenTracking: React.FC = () => {
         // Set material screens for map display with validation
         if (complianceData.data?.materialScreens && Array.isArray(complianceData.data.materialScreens)) {
           // Filter out any undefined or invalid entries
-          const validMaterialScreens = complianceData.data.materialScreens.filter(screen => 
+          const validMaterialScreens = complianceData.data.materialScreens.filter((screen: any) => 
             screen && 
             typeof screen === 'object' && 
             screen.deviceId && 
@@ -325,7 +325,7 @@ const ScreenTracking: React.FC = () => {
       console.log('Showing all screens:', screens.length);
       setFilteredScreens(screens);
     } else {
-      const filtered = screens.filter(screen => screen.materialId === selectedMaterial);
+      const filtered = screens.filter((screen: ScreenStatus) => screen.materialId === selectedMaterial);
       console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
       setFilteredScreens(filtered);
     }
@@ -617,15 +617,15 @@ const ScreenTracking: React.FC = () => {
                   }}
                 >
                   
-                  {/* Material markers - show one marker per material (not per slot) */}
+                  {/* Individual device markers - show one marker per device */}
                   {(() => {
                     try {
-                      if (!materialScreens || !Array.isArray(materialScreens)) {
-                        console.warn('materialScreens is not a valid array:', materialScreens);
+                      if (!filteredScreens || !Array.isArray(filteredScreens)) {
+                        console.warn('filteredScreens is not a valid array:', filteredScreens);
                         return null;
                       }
                       
-                      const validScreens = materialScreens.filter(screen => {
+                      const validScreens = filteredScreens.filter(screen => {
                         if (!screen || typeof screen !== 'object') {
                           console.warn('Invalid screen object:', screen);
                           return false;
@@ -645,28 +645,60 @@ const ScreenTracking: React.FC = () => {
                         return true;
                       });
                       
-                      console.log(`Rendering ${validScreens.length} valid markers out of ${materialScreens.length} total screens`);
+                      console.log(`Rendering ${validScreens.length} valid markers out of ${filteredScreens.length} total screens`);
                       
                       return validScreens.map((screen) => {
                         try {
                           return (
                             <Marker
                               key={screen.deviceId}
-                              position={[screen.currentLocation.lat, screen.currentLocation.lng] as LatLngTuple}
+                              position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
                               icon={createPinIcon(getMarkerColor(screen))}
                               eventHandlers={{
                                 click: () => handleScreenSelect(screen),
                               }}
                             >
-                              <Popup>
-                                <div className="p-2">
-                                  <h3 className="font-semibold">{screen.materialId || 'Unknown Material'}</h3>
-                                  <p className="text-sm">Type: {screen.screenType || 'Unknown'}</p>
-                                  <p className="text-sm">Devices: {screen.onlineDevices || 0}/{screen.totalDevices || 1} online</p>
-                                  <p className="text-sm">Total Hours: {formatTime(screen.totalHours || 0)}</p>
-                                  <p className="text-sm">Total Distance: {formatDistance(screen.totalDistance || 0)}</p>
-                                  <p className="text-sm">Status: {screen.displayStatus || 'Unknown'}</p>
-                                  <p className="text-sm">Address: {screen.currentLocation.address || 'No address available'}</p>
+                              <Popup maxWidth={300} maxHeight={400}>
+                                <div className="p-3 space-y-3 max-w-xs">
+                                  {/* Header */}
+                                  <div className="border-b pb-2">
+                                    <h3 className="text-base font-semibold text-gray-900">Screen Details</h3>
+                                  </div>
+
+                                  {/* Device Info */}
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 text-sm">Device Info</h4>
+                                    <div className="mt-1 space-y-1 text-xs text-gray-600">
+                                      <p>Device ID: {screen.deviceId}</p>
+                                      <p>Material: {screen.materialId}</p>
+                                      <p>Screen Type: {screen.screenType}</p>
+                                      {screen.carGroupId && <p>Car Group: {screen.carGroupId}</p>}
+                                      {screen.slotNumber && <p>Slot: {screen.slotNumber}</p>}
+                                    </div>
+                                  </div>
+
+                                  {/* Today's Progress */}
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 text-sm">Today's Progress</h4>
+                                    <div className="mt-1 space-y-1">
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Hours Online:</span>
+                                        <span className="font-medium text-xs">{formatTime(screen.currentHours)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Hours Remaining:</span>
+                                        <span className="font-medium text-xs">{formatTime(screen.hoursRemaining)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Distance Traveled:</span>
+                                        <span className="font-medium text-xs">{formatDistance(screen.totalDistanceToday)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Compliance Rate:</span>
+                                        <span className="font-medium text-xs">{screen.complianceRate}%</span>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
                               </Popup>
                             </Marker>
@@ -677,7 +709,7 @@ const ScreenTracking: React.FC = () => {
                         }
                       });
                     } catch (error) {
-                      console.error('Error processing material screens for map:', error);
+                      console.error('Error processing filtered screens for map:', error);
                       return null;
                     }
                   })()}
@@ -702,7 +734,7 @@ const ScreenTracking: React.FC = () => {
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
-                {materialScreens && materialScreens.filter(screen => 
+                {filteredScreens && filteredScreens.filter((screen: ScreenStatus) => 
                   screen && 
                   screen.currentLocation && 
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
