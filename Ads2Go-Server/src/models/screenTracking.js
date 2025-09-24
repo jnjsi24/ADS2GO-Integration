@@ -146,6 +146,33 @@ const ScreenTrackingSchema = new mongoose.Schema({
   totalDistanceTraveled: { type: Number, default: 0 }, // lifetime total
   averageDailyHours: { type: Number, default: 0 },
   complianceRate: { type: Number, default: 0 }, // percentage of days meeting 8-hour target
+  
+  // Safety and violations tracking
+  safetyScore: { type: Number, default: 100, min: 0, max: 100 },
+  violations: [{
+    type: { 
+      type: String, 
+      enum: ['SPEED_VIOLATION', 'ROUTE_VIOLATION', 'TIME_VIOLATION'],
+      required: true 
+    },
+    level: { 
+      type: String, 
+      enum: ['LOW', 'MEDIUM', 'HIGH', 'EXTREME'],
+      required: true 
+    },
+    penalty: { type: Number, required: true },
+    currentSpeed: { type: Number, required: true },
+    speedLimit: { type: Number, required: true },
+    speedOverLimit: { type: Number, required: true },
+    timestamp: { type: Date, default: Date.now },
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: [Number], // [lng, lat]
+      accuracy: Number
+    },
+    isResolved: { type: Boolean, default: false },
+    resolvedAt: { type: Date }
+  }],
 
   // Route tracking (for mobile screens only)
   currentRoute: {
@@ -380,7 +407,7 @@ ScreenTrackingSchema.methods.startDailySession = function() {
   return this.save();
 };
 
-ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '') {
+ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', violationData = null) {
   const locationPoint = {
     type: 'Point',
     coordinates: [lng, lat], // GeoJSON format: [longitude, latitude]
@@ -394,6 +421,12 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   // Update current location
   this.currentLocation = locationPoint;
   this.lastSeen = new Date();
+  
+  // Handle speed violation if present
+  if (violationData && violationData.type === 'SPEED_VIOLATION') {
+    // Add violation to the record
+    this.addViolation(violationData);
+  }
 
   // Add to current session history (but limit entries to prevent database bloat)
   if (this.currentSession && this.currentSession.isActive) {
@@ -542,6 +575,60 @@ ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDI
     isResolved: false,
     severity
   });
+  
+  return this.save();
+};
+
+// Safety score calculation methods
+ScreenTrackingSchema.methods.updateSafetyScore = function(violation) {
+  // Deduct points based on violation level
+  switch(violation.level) {
+    case 'LOW':
+      this.safetyScore = Math.max(0, this.safetyScore - 2);
+      break;
+    case 'MEDIUM':
+      this.safetyScore = Math.max(0, this.safetyScore - 5);
+      break;
+    case 'HIGH':
+      this.safetyScore = Math.max(0, this.safetyScore - 10);
+      break;
+    case 'EXTREME':
+      this.safetyScore = Math.max(0, this.safetyScore - 20);
+      break;
+  }
+  
+  console.log(`📊 Safety score updated: ${this.safetyScore} (deducted ${violation.penalty} points for ${violation.level} violation)`);
+  
+  return this.save();
+};
+
+// Add violation to the record
+ScreenTrackingSchema.methods.addViolation = function(violationData) {
+  // Add violation to the violations array
+  this.violations.push(violationData);
+  
+  // Update safety score
+  this.updateSafetyScore(violationData);
+  
+  // Create alert for the violation
+  this.addAlert(
+    'SPEED_VIOLATION',
+    `Driver exceeded speed limit by ${violationData.speedOverLimit} km/h (${violationData.currentSpeed}/${violationData.speedLimit} km/h)`,
+    violationData.level
+  );
+  
+  console.log(`🚨 Violation recorded: ${violationData.level} level - Speed: ${violationData.currentSpeed} km/h, Limit: ${violationData.speedLimit} km/h`);
+  
+  return this.save();
+};
+
+// Recovery mechanism - add points for safe driving
+ScreenTrackingSchema.methods.updateSafeDrivingTime = function(hours) {
+  // Add 1 point per hour of safe driving (no violations)
+  const pointsToAdd = Math.floor(hours);
+  this.safetyScore = Math.min(100, this.safetyScore + pointsToAdd);
+  
+  console.log(`📈 Safety score recovery: +${pointsToAdd} points for ${hours} hours of safe driving. New score: ${this.safetyScore}`);
   
   return this.save();
 };

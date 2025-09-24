@@ -620,6 +620,62 @@ class AnalyticsService {
         ...dateFilter
       }).populate('userId', 'firstName lastName email');
 
+      // Sync view time from ScreenTracking to Analytics
+      if (userAnalytics.length > 0) {
+        console.log(`🔄 Syncing view time from ScreenTracking for user ${userId}...`);
+        
+        // Get ScreenTracking data for user's ads
+        const screenTrackings = await ScreenTracking.find({
+          'screenMetrics.currentAd.adId': { $in: userAdIds }
+        });
+        
+        for (const screenTracking of screenTrackings) {
+          const currentAd = screenTracking.screenMetrics?.currentAd;
+          if (currentAd && userAdIds.includes(currentAd.adId)) {
+            // Find corresponding analytics record
+            const analyticsRecord = userAnalytics.find(analytics => 
+              analytics.adPlaybacks.some(playback => playback.adId === currentAd.adId)
+            );
+            
+            if (analyticsRecord && currentAd.totalViewTime > 0) {
+              // Update the analytics record with actual view time
+              const playbackIndex = analyticsRecord.adPlaybacks.findIndex(
+                playback => playback.adId === currentAd.adId
+              );
+              
+              if (playbackIndex >= 0) {
+                const oldViewTime = analyticsRecord.adPlaybacks[playbackIndex].viewTime || 0;
+                const newViewTime = currentAd.totalViewTime;
+                
+                if (newViewTime > oldViewTime) {
+                  // Update the playback record
+                  analyticsRecord.adPlaybacks[playbackIndex].viewTime = newViewTime;
+                  analyticsRecord.adPlaybacks[playbackIndex].completionRate = 
+                    currentAd.adDuration > 0 ? Math.min(100, (newViewTime / currentAd.adDuration) * 100) : 0;
+                  
+                  // Update total play time
+                  analyticsRecord.totalAdPlayTime += (newViewTime - oldViewTime);
+                  
+                  // Update average completion rate
+                  const totalCompletion = analyticsRecord.adPlaybacks.reduce((sum, ad) => sum + ad.completionRate, 0);
+                  analyticsRecord.averageAdCompletionRate = analyticsRecord.adPlaybacks.length > 0 ? totalCompletion / analyticsRecord.adPlaybacks.length : 0;
+                  
+                  await analyticsRecord.save();
+                  console.log(`✅ Updated view time for ad ${currentAd.adTitle}: ${oldViewTime}s → ${newViewTime}s`);
+                }
+              }
+            }
+          }
+        }
+        
+        // Refresh userAnalytics after sync
+        userAnalytics = await Analytics.find({
+          userId: userId,
+          'adPlaybacks.adId': { $in: userAdIds },
+          ...dateFilter
+        }).populate('userId', 'firstName lastName email');
+      }
+
       // If no analytics found with userId, try to find analytics that have the user's ads
       if (userAnalytics.length === 0) {
         userAnalytics = await Analytics.find({
@@ -713,7 +769,7 @@ class AnalyticsService {
       // Calculate averages and totals
       summary.activeAds = activeAdIds.size;
       
-      // Calculate average completion rate based on ad plan durations
+      // Calculate average completion rate based on actual ad playback data
       let totalCompletionRate = 0;
       let adsWithCompletionRate = 0;
       
@@ -730,7 +786,35 @@ class AnalyticsService {
           const elapsedDays = Math.max(0, Math.ceil(elapsedMs / (1000 * 60 * 60 * 24)));
           
           if (totalDurationDays > 0) {
-            const completionRate = Math.min(100, (elapsedDays / totalDurationDays) * 100);
+            // Calculate completion rate based on actual ad playback data for this specific ad
+            let adSpecificHours = 0;
+            let adSpecificImpressions = 0;
+            
+            // Check if this ad has been played (has analytics data)
+            const adAnalytics = userAnalytics.find(analytics => 
+              analytics.adPlaybacks.some(playback => playback.adId === ad._id.toString())
+            );
+            
+            if (adAnalytics) {
+              // Get total play time for this specific ad
+              const adPlaybacks = adAnalytics.adPlaybacks.filter(playback => 
+                playback.adId === ad._id.toString()
+              );
+              
+              adSpecificImpressions = adPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 1), 0);
+              adSpecificHours = adPlaybacks.reduce((sum, playback) => sum + (playback.viewTime || 0), 0) / 3600; // Convert seconds to hours
+            }
+            
+            // Only calculate completion rate if the ad has been played
+            let completionRate = 0;
+            if (adSpecificImpressions > 0) {
+              // Calculate completion rate based on hours this specific ad was played vs 8-hour target
+              completionRate = Math.min(100, (adSpecificHours / 8) * 100);
+              console.log(`📊 Ad "${ad.title}" - Played ${adSpecificHours.toFixed(2)} hours, ${adSpecificImpressions} impressions, Completion rate: ${completionRate.toFixed(1)}%`);
+            } else {
+              console.log(`📊 Ad "${ad.title}" - Not played yet, Completion rate: 0%`);
+            }
+            
             totalCompletionRate += completionRate;
             adsWithCompletionRate++;
           }
@@ -758,9 +842,26 @@ class AnalyticsService {
           const elapsedMs = now.getTime() - startDate.getTime();
           const elapsedDays = Math.max(0, Math.ceil(elapsedMs / (1000 * 60 * 60 * 24)));
           
-          // Calculate completion rate (percentage of plan duration completed)
-          if (totalDurationDays > 0) {
-            completionRate = Math.min(100, (elapsedDays / totalDurationDays) * 100);
+          // Calculate completion rate based on actual ad playback data for this specific ad
+          // Check if this ad has been played (has analytics data)
+          const adAnalytics = userAnalytics.find(analytics => 
+            analytics.adPlaybacks.some(playback => playback.adId === ad.adId)
+          );
+          
+          if (adAnalytics) {
+            // Get total play time for this specific ad
+            const adPlaybacks = adAnalytics.adPlaybacks.filter(playback => 
+              playback.adId === ad.adId
+            );
+            
+            const adSpecificImpressions = adPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 1), 0);
+            const adSpecificHours = adPlaybacks.reduce((sum, playback) => sum + (playback.viewTime || 0), 0) / 3600; // Convert seconds to hours
+            
+            // Only calculate completion rate if the ad has been played
+            if (adSpecificImpressions > 0) {
+              // Calculate completion rate based on hours this specific ad was played vs 8-hour target
+              completionRate = Math.min(100, (adSpecificHours / 8) * 100);
+            }
           }
         }
         

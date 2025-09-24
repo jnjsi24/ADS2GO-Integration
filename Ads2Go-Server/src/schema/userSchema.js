@@ -66,7 +66,7 @@ const typeDefs = gql`
   type UserAnalyticsSummary {
     totalAdImpressions: Int!
     totalAdsPlayed: Int!
-    totalDisplayTime: Int!
+    totalDisplayTime: Float!
     averageCompletionRate: Float!
     totalAds: Int!
     activeAds: Int!
@@ -76,7 +76,7 @@ const typeDefs = gql`
     adId: String!
     adTitle: String!
     impressions: Int!
-    totalPlayTime: Int!
+    totalPlayTime: Float!
     averageCompletionRate: Float!
     playCount: Int!
     lastPlayed: String
@@ -86,7 +86,7 @@ const typeDefs = gql`
     date: String!
     impressions: Int!
     adsPlayed: Int!
-    displayTime: Int!
+    displayTime: Float!
   }
 
   type UserDeviceStats {
@@ -94,7 +94,7 @@ const typeDefs = gql`
     materialId: String!
     impressions: Int!
     adsPlayed: Int!
-    displayTime: Int!
+    displayTime: Float!
     lastActivity: String
     isOnline: Boolean!
   }

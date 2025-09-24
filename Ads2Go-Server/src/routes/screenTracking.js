@@ -3,11 +3,15 @@ const router = express.Router();
 const ScreenTracking = require('../models/screenTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
+const DriverAnalyticsService = require('../services/driverAnalyticsService');
+const { checkDriver } = require('../middleware/driverAuth');
+const Material = require('../models/Material');
+const Driver = require('../models/Driver');
 
 // POST /updateLocation - Update tablet location and start/continue daily session
 router.post('/updateLocation', async (req, res) => {
   try {
-    const { deviceId, lat, lng, speed = 0, heading = 0, accuracy = 0 } = req.body;
+    const { deviceId, lat, lng, speed = 0, heading = 0, accuracy = 0, speedLimit, violation } = req.body;
 
     // Validate required fields
     if (!deviceId || lat === undefined || lng === undefined) {
@@ -80,8 +84,22 @@ router.post('/updateLocation', async (req, res) => {
 
     // Update location and online status
     try {
-      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
+      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address, violation);
       console.log('Location updated successfully for device:', deviceId);
+      
+      // Log violation if present
+      if (violation) {
+        console.log(`🚨 Violation processed: ${violation.level} level - Speed: ${violation.currentSpeed} km/h, Limit: ${violation.speedLimit} km/h`);
+      } else {
+        // No violation - check for safe driving time recovery
+        const lastViolation = screenTracking.violations[screenTracking.violations.length - 1];
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        
+        if (!lastViolation || lastViolation.timestamp < oneHourAgo) {
+          // Add 1 point per hour of safe driving (no violations)
+          await screenTracking.updateSafeDrivingTime(1);
+        }
+      }
       
       // Check if device has active WebSocket connection before marking as online
       
@@ -157,6 +175,14 @@ router.post('/updateLocation', async (req, res) => {
     } catch (error) {
       console.warn('Error processing alerts:', error.message);
       // Continue processing even if alerts fail
+    }
+
+    // Sync driver analytics (optional - don't fail if sync fails)
+    try {
+      await DriverAnalyticsService.syncFromScreenTracking(deviceId, screenTracking.materialId);
+    } catch (error) {
+      console.error('Error syncing driver analytics:', error);
+      // Continue processing even if driver analytics sync fails
     }
 
     res.json({
@@ -529,7 +555,32 @@ router.get('/compliance', async (req, res) => {
               maintenanceMode: tablet.screenMetrics?.maintenanceMode || false,
               currentAd: tablet.screenMetrics?.currentAd || null
             },
-            alerts: tablet.alerts || []
+            alerts: tablet.alerts || [],
+            // Safety and violation tracking
+            safetyScore: tablet.safetyScore || 0,
+            violations: tablet.violations || [],
+            violationStats: tablet.violations ? {
+              total: tablet.violations.length,
+              today: tablet.violations.filter(v => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return new Date(v.timestamp) >= today;
+              }).length,
+              byLevel: {
+                low: tablet.violations.filter(v => v.level === 'LOW').length,
+                medium: tablet.violations.filter(v => v.level === 'MEDIUM').length,
+                high: tablet.violations.filter(v => v.level === 'HIGH').length,
+                extreme: tablet.violations.filter(v => v.level === 'EXTREME').length
+              },
+              averageSpeedOverLimit: tablet.violations.length > 0 
+                ? tablet.violations.reduce((sum, v) => sum + v.speedOverLimit, 0) / tablet.violations.length 
+                : 0
+            } : {
+              total: 0,
+              today: 0,
+              byLevel: { low: 0, medium: 0, high: 0, extreme: 0 },
+              averageSpeedOverLimit: 0
+            }
           });
         });
       } else {
@@ -593,7 +644,32 @@ router.get('/compliance', async (req, res) => {
           totalDistanceTraveled: tablet.totalDistanceTraveled || legacyDistance,
           displayStatus: tablet.displayStatus || (isLegacyOnline ? 'ACTIVE' : 'OFFLINE'),
           screenMetrics: tablet.screenMetrics,
-          alerts: tablet.alerts
+          alerts: tablet.alerts,
+          // Safety and violation tracking
+          safetyScore: tablet.safetyScore || 0,
+          violations: tablet.violations || [],
+          violationStats: tablet.violations ? {
+            total: tablet.violations.length,
+            today: tablet.violations.filter(v => {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return new Date(v.timestamp) >= today;
+            }).length,
+            byLevel: {
+              low: tablet.violations.filter(v => v.level === 'LOW').length,
+              medium: tablet.violations.filter(v => v.level === 'MEDIUM').length,
+              high: tablet.violations.filter(v => v.level === 'HIGH').length,
+              extreme: tablet.violations.filter(v => v.level === 'EXTREME').length
+            },
+            averageSpeedOverLimit: tablet.violations.length > 0 
+              ? tablet.violations.reduce((sum, v) => sum + v.speedOverLimit, 0) / tablet.violations.length 
+              : 0
+          } : {
+            total: 0,
+            today: 0,
+            byLevel: { low: 0, medium: 0, high: 0, extreme: 0 },
+            averageSpeedOverLimit: 0
+          }
         });
       }
     });
@@ -862,10 +938,10 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
   }
 });
 
-// GET /adAnalytics - Get ad analytics for all devices
+// GET /adAnalytics - Get ad analytics for all devices (filtered by user if provided)
 router.get('/adAnalytics', async (req, res) => {
   try {
-    const { date, materialId } = req.query;
+    const { date, materialId, userId } = req.query;
 
     let query = { isActive: true };
     if (materialId) {
@@ -874,7 +950,7 @@ router.get('/adAnalytics', async (req, res) => {
 
     const allTablets = await ScreenTracking.find(query);
     
-    const analytics = allTablets.map(tablet => ({
+    let analytics = allTablets.map(tablet => ({
       deviceId: tablet.deviceId,
       materialId: tablet.materialId,
       screenType: tablet.screenType,
@@ -887,6 +963,26 @@ router.get('/adAnalytics', async (req, res) => {
       isOnline: tablet.isOnline,
       lastSeen: tablet.lastSeen
     }));
+
+    // Filter by user if userId is provided
+    if (userId) {
+      console.log(`🔍 Filtering ad analytics for user: ${userId}`);
+      
+      // Get all ads created by this user
+      const Ad = require('../models/Ad');
+      const userAds = await Ad.find({ userId: userId });
+      const userAdIds = userAds.map(ad => ad._id.toString());
+      
+      console.log(`📊 Found ${userAdIds.length} ads for user ${userId}:`, userAdIds);
+      
+      // Filter analytics to only include devices playing ads from this user
+      analytics = analytics.filter(tablet => {
+        const currentAdId = tablet.currentAd?.adId;
+        return currentAdId && userAdIds.includes(currentAdId);
+      });
+      
+      console.log(`📱 Filtered to ${analytics.length} devices playing user's ads`);
+    }
 
     // Calculate summary statistics
     const summary = {
@@ -1556,6 +1652,95 @@ router.get('/debug/device/:deviceId', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error checking device status',
+      error: error.message
+    });
+  }
+});
+
+// GET /screen-tracking/driver/:driverId - Get real-time ScreenTracking data for a driver
+router.get('/driver/:driverId', checkDriver, async (req, res) => {
+  try {
+    const { driverId } = req.params;
+    
+    // Validate driver access
+    if (req.driver.driverId !== driverId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view your own data.'
+      });
+    }
+    
+    // Find the material assigned to this driver
+    const material = await Material.findOne({ driverId: driverId });
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'No material assigned to this driver'
+      });
+    }
+    
+    // Find ScreenTracking record for this material
+    const screenTracking = await ScreenTracking.findOne({ 
+      materialId: material.materialId 
+    });
+    
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'No screen tracking data found for this driver'
+      });
+    }
+    
+    // Get driver details
+    const driver = await Driver.findOne({ driverId: driverId });
+    
+    // Format the response to match mobile app expectations
+    const response = {
+      success: true,
+      data: {
+        driverId: driverId,
+        vehiclePlateNumber: driver?.vehiclePlateNumber || 'Unknown',
+        vehicleType: driver?.vehicleType || 'Unknown',
+        materialId: material.materialId,
+        materialType: material.materialType,
+        isOnline: screenTracking.isOnline,
+        lastSeen: screenTracking.lastSeen,
+        currentLocation: screenTracking.currentLocation,
+        
+        // Real-time data from ScreenTracking
+        currentHours: screenTracking.currentHoursToday || 0,
+        hoursRemaining: screenTracking.hoursRemaining || 0,
+        totalDistanceToday: screenTracking.currentSession?.totalDistanceTraveled || 0,
+        averageSpeed: screenTracking.currentSession?.averageSpeed || 0,
+        maxSpeed: screenTracking.currentSession?.maxSpeed || 0,
+        
+        // Compliance and safety
+        complianceRate: screenTracking.complianceRate || 0,
+        safetyScore: screenTracking.safetyScore || 0, // Start at 0, not 100
+        
+        // Violations data
+        violations: screenTracking.violations || [],
+        
+        // Daily performance
+        dailyPerformance: screenTracking.dailyPerformance || [],
+        
+        // Device info
+        deviceId: screenTracking.deviceId,
+        screenType: screenTracking.screenType,
+        displayStatus: screenTracking.displayStatus,
+        
+        // Alerts
+        totalAlerts: screenTracking.alerts?.length || 0,
+        recentAlerts: screenTracking.alerts?.slice(-5) || []
+      }
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error getting driver screen tracking data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching screen tracking data',
       error: error.message
     });
   }

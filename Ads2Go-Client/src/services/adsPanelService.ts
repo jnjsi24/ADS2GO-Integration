@@ -236,10 +236,11 @@ class AdsPanelServiceV4 {
   }
 
   // Get ad analytics
-  async getAdAnalytics(date?: string, materialId?: string): Promise<AdAnalytics> {
+  async getAdAnalytics(date?: string, materialId?: string, userId?: string): Promise<AdAnalytics> {
     const queryParams = new URLSearchParams();
     if (date) queryParams.append('date', date);
     if (materialId) queryParams.append('materialId', materialId);
+    if (userId) queryParams.append('userId', userId);
 
     const endpoint = `/screenTracking/adAnalytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await this.makeRequest(endpoint);

@@ -2,12 +2,15 @@ import * as FileSystem from 'expo-file-system';
 import { Platform, Alert } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
 
-// Temporary auth mock - replace with your actual auth implementation
-const auth = {
-  currentUser: {
-    uid: 'temp-user-id',
-    getIdToken: async () => 'mock-token-123',
-  },
+// Get auth token from AsyncStorage
+const getAuthToken = async (): Promise<string | null> => {
+  try {
+    const AsyncStorage = await import('@react-native-async-storage/async-storage');
+    return await AsyncStorage.default.getItem('token');
+  } catch (error) {
+    console.error('Error getting auth token:', error);
+    return null;
+  }
 };
 
 type UploadProgressCallback = (progress: number) => void;
@@ -31,7 +34,7 @@ export const uploadFile = async (
   options: UploadOptions
 ) => {
   const { onProgress, metadata = {}, folder = 'driver-documents', documentType } = options;
-  const token = await auth.currentUser?.getIdToken();
+  const token = await getAuthToken();
 
   if (!token) {
     throw new Error('Authentication required');
@@ -79,7 +82,7 @@ const uploadToServer = async (
     type: fileType,
   } as any);
   
-  formData.append('userId', auth.currentUser?.uid || '');
+  formData.append('userId', 'driver-user'); // Will be validated by server using token
   formData.append('folder', folder);
   formData.append('documentType', documentType);
   formData.append('metadata', JSON.stringify(metadata));

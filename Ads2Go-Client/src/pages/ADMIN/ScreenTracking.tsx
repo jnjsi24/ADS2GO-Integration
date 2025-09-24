@@ -19,6 +19,23 @@ import {
 } from 'lucide-react';
 
 
+interface SpeedViolation {
+  type: 'SPEED_VIOLATION';
+  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  penalty: number;
+  currentSpeed: number;
+  speedLimit: number;
+  speedOverLimit: number;
+  timestamp: string;
+  location: {
+    lat: number;
+    lng: number;
+    accuracy: number;
+  };
+  isResolved: boolean;
+  resolvedAt?: string;
+}
+
 interface ScreenStatus {
   deviceId: string;
   displayId?: string; // Unique display identifier (e.g., "DGL-HEADDRESS-CAR-001-SLOT-1")
@@ -37,14 +54,14 @@ interface ScreenStatus {
     address: string;
   };
   lastSeen: string;
-  currentHours: number;
-  hoursRemaining: number;
+  currentHours?: number;
+  hoursRemaining?: number;
   isCompliant: boolean;
-  totalDistanceToday: number;
-  averageDailyHours: number;
-  complianceRate: number;
-  totalHoursOnline: number;
-  totalDistanceTraveled: number;
+  totalDistanceToday?: number;
+  averageDailyHours?: number;
+  complianceRate?: number;
+  totalHoursOnline?: number;
+  totalDistanceTraveled?: number;
   displayStatus: 'ACTIVE' | 'OFFLINE' | 'MAINTENANCE' | 'DISPLAY_OFF';
   screenMetrics?: {
     displayHours: number;
@@ -62,6 +79,20 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
+  // Safety and violation tracking
+  safetyScore?: number;
+  violations?: SpeedViolation[];
+  violationStats?: {
+    total: number;
+    today: number;
+    byLevel: {
+      low: number;
+      medium: number;
+      high: number;
+      extreme: number;
+    };
+    averageSpeedOverLimit: number;
+  };
   // Additional fields for material-level screens (used in map)
   totalDevices?: number;
   onlineDevices?: number;
@@ -336,14 +367,45 @@ const ScreenTracking: React.FC = () => {
     return <AlertTriangle className="w-4 h-4" />;
   };
 
-  const formatTime = (hours: number) => {
+  const formatTime = (hours: number | undefined | null) => {
+    if (hours === undefined || hours === null || isNaN(hours)) {
+      return '0h 0m';
+    }
     const wholeHours = Math.floor(hours);
     const minutes = Math.round((hours - wholeHours) * 60);
     return `${wholeHours}h ${minutes}m`;
   };
 
-  const formatDistance = (distance: number) => {
+  const formatDistance = (distance: number | undefined | null) => {
+    if (distance === undefined || distance === null || isNaN(distance)) {
+      return '0.00 km';
+    }
     return `${distance.toFixed(2)} km`;
+  };
+
+  const getSafetyScoreColor = (score: number | undefined | null) => {
+    if (score === undefined || score === null) return '#6b7280'; // gray
+    if (score >= 90) return '#22c55e'; // green
+    if (score >= 70) return '#eab308'; // yellow
+    return '#ef4444'; // red
+  };
+
+  const getViolationColor = (level: string) => {
+    switch (level) {
+      case 'LOW': return '#22c55e'; // green
+      case 'MEDIUM': return '#f59e0b'; // orange
+      case 'HIGH': return '#ef4444'; // red
+      case 'EXTREME': return '#dc2626'; // dark red
+      default: return '#6b7280'; // gray
+    }
+  };
+
+  const getSafetyScoreText = (score: number | undefined | null) => {
+    if (score === undefined || score === null) return 'N/A';
+    if (score >= 90) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Fair';
+    return 'Needs Improvement';
   };
 
   const getMarkerColor = (screen: ScreenStatus) => {
@@ -522,7 +584,7 @@ const ScreenTracking: React.FC = () => {
                   <p className="text-sm font-medium text-gray-600">Avg Hours</p>
                   <p className="text-2xl font-bold text-gray-900">
                    {filteredScreens && filteredScreens.length > 0 
-                     ? (filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) / filteredScreens.length).toFixed(1)
+                     ? (filteredScreens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / filteredScreens.length).toFixed(1)
                      : '0.0'
                    }h
                  </p>
@@ -711,7 +773,7 @@ const ScreenTracking: React.FC = () => {
                          <div className="flex justify-between">
                            <span>Last Seen:</span>
                            <span className="font-medium">
-                             {new Date(screen.lastSeen).toLocaleTimeString()}
+                             {screen.lastSeen ? new Date(screen.lastSeen).toLocaleTimeString() : 'Unknown'}
                            </span>
                          </div>
                        </div>
@@ -767,8 +829,118 @@ const ScreenTracking: React.FC = () => {
                            <span className="text-sm text-gray-600">Compliance Rate:</span>
                            <span className="font-medium">{selectedScreen.complianceRate}%</span>
                          </div>
+                         <div className="flex justify-between">
+                           <span className="text-sm text-gray-600">Safety Score:</span>
+                           <span 
+                             className="font-medium" 
+                             style={{ color: getSafetyScoreColor(selectedScreen.safetyScore) }}
+                           >
+                             {selectedScreen.safetyScore || 0}/100 ({getSafetyScoreText(selectedScreen.safetyScore)})
+                           </span>
+                         </div>
                        </div>
                      </div>
+
+                     {/* Safety & Violations Section */}
+                     {selectedScreen.violationStats && (
+                       <div>
+                         <h4 className="font-medium text-gray-900">Safety & Violations</h4>
+                         <div className="mt-2 space-y-3">
+                           {/* Violation Statistics */}
+                           <div className="grid grid-cols-3 gap-4">
+                             <div className="text-center p-2 bg-gray-50 rounded">
+                               <div className="text-lg font-semibold text-red-600">
+                                 {selectedScreen.violationStats.total}
+                               </div>
+                               <div className="text-xs text-gray-600">Total Violations</div>
+                             </div>
+                             <div className="text-center p-2 bg-gray-50 rounded">
+                               <div className="text-lg font-semibold text-orange-600">
+                                 {selectedScreen.violationStats.today}
+                               </div>
+                               <div className="text-xs text-gray-600">Today</div>
+                             </div>
+                             <div className="text-center p-2 bg-gray-50 rounded">
+                               <div className="text-lg font-semibold text-purple-600">
+                                 {selectedScreen.violationStats.averageSpeedOverLimit.toFixed(1)}
+                               </div>
+                               <div className="text-xs text-gray-600">Avg Over Limit (km/h)</div>
+                             </div>
+                           </div>
+
+                           {/* Violation Levels */}
+                           <div className="grid grid-cols-2 gap-2">
+                             <div className="flex items-center space-x-2">
+                               <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                               <span className="text-sm text-gray-600">
+                                 Low: {selectedScreen.violationStats.byLevel.low}
+                               </span>
+                             </div>
+                             <div className="flex items-center space-x-2">
+                               <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                               <span className="text-sm text-gray-600">
+                                 Medium: {selectedScreen.violationStats.byLevel.medium}
+                               </span>
+                             </div>
+                             <div className="flex items-center space-x-2">
+                               <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                               <span className="text-sm text-gray-600">
+                                 High: {selectedScreen.violationStats.byLevel.high}
+                               </span>
+                             </div>
+                             <div className="flex items-center space-x-2">
+                               <div className="w-3 h-3 rounded-full bg-red-800"></div>
+                               <span className="text-sm text-gray-600">
+                                 Extreme: {selectedScreen.violationStats.byLevel.extreme}
+                               </span>
+                             </div>
+                           </div>
+                         </div>
+                       </div>
+                     )}
+
+                     {/* Recent Violations */}
+                     {selectedScreen.violations && selectedScreen.violations.length > 0 && (
+                       <div>
+                         <h4 className="font-medium text-gray-900">Recent Violations</h4>
+                         <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                           {selectedScreen.violations.slice(0, 5).map((violation, index) => (
+                             <div key={index} className="p-3 bg-gray-50 rounded-lg border">
+                               <div className="flex justify-between items-start">
+                                 <div className="flex items-center space-x-2">
+                                   <span 
+                                     className="px-2 py-1 text-xs font-semibold text-white rounded"
+                                     style={{ backgroundColor: getViolationColor(violation.level) }}
+                                   >
+                                     {violation.level}
+                                   </span>
+                                   <span className="text-sm text-gray-500">
+                                     {new Date(violation.timestamp).toLocaleString()}
+                                   </span>
+                                 </div>
+                                 {violation.isResolved && (
+                                   <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
+                                     Resolved
+                                   </span>
+                                 )}
+                               </div>
+                               <div className="mt-1 text-sm text-gray-700">
+                                 <span className="font-medium">{violation.currentSpeed} km/h</span>
+                                 <span className="mx-1">in</span>
+                                 <span className="font-medium">{violation.speedLimit} km/h</span>
+                                 <span className="mx-1">zone</span>
+                                 <span className="text-red-600 font-medium">
+                                   (+{violation.speedOverLimit} km/h)
+                                 </span>
+                               </div>
+                               <div className="mt-1 text-xs text-gray-500">
+                                 Penalty: {violation.penalty} points
+                               </div>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                     )}
 
                      {selectedScreen.currentLocation && (
                        <div>

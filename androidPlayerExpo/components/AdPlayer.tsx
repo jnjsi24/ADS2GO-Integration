@@ -57,7 +57,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const getCacheKey = () => `ads_${materialId}_${slotNumber}`;
 
   // Track ad playback
-  const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number) => {
+  const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
     try {
       // Don't track ad playback if offline
       if (isOffline) {
@@ -65,7 +65,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         return;
       }
       
-      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s)`);
+      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s`);
       
       // Get registration data for analytics
       const registrationData = await tabletRegistrationService.getRegistrationData();
@@ -78,7 +78,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         adId: adId,
         adTitle: adTitle,
         adDuration: adDuration,
-        viewTime: 0,
+        viewTime: viewTime, // Use actual view time instead of 0
         timestamp: new Date().toISOString(),
         // Note: userId and adDeploymentId would need to be fetched from the ad data
         // For now, we'll use the adId as a string reference
@@ -117,7 +117,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
       }
       
-      // Also send to existing screen tracking
+      // Also send to existing screen tracking (start of ad playback)
       const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
       if (success) {
         console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
@@ -771,7 +771,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
       console.log(`🎬 Starting ad playback tracking: ${currentAd.adTitle}`);
       setAdStartTime(new Date());
-      trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+      trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration, 0); // Start of ad playback
       
       // Reset WebSocket updates for new ad
       setWebsocketUpdatesStarted(false);
@@ -958,7 +958,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                   if (status.isPlaying && status.positionMillis > 0) {
                     console.log(`🎬 Video confirmed playing after delay, position: ${status.positionMillis}ms`);
                     setAdStartTime(new Date());
-                    trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration);
+                    trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration, 0); // Start of ad playback
                     
                     // NOW start WebSocket updates when video is CONFIRMED playing
                     console.log('🎬 [AdPlayer] Video CONFIRMED playing - starting WebSocket updates NOW');
