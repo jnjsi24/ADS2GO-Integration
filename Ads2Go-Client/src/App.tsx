@@ -5,7 +5,6 @@ import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import NotificationContainer from './components/NotificationContainer';
 
 
 // Import Navbars
@@ -209,6 +208,8 @@ const UserAppContent: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="/forgot-password" element={<ForgotPass />} />
 
         {/* Protected user routes */}
         <Route
@@ -304,7 +305,6 @@ const UserAppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-      <NotificationContainer />
     </div>
     </NotificationProvider>
   );

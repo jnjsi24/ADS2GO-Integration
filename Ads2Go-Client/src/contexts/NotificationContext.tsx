@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useQuery } from '@apollo/client';
-import { GET_USER_NOTIFICATIONS } from '../graphql/notifications';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ } from '../graphql/notifications';
 import { useUserAuth } from './UserAuthContext';
 
 export interface Notification {
@@ -46,6 +46,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [error, setError] = useState<string | null>(null);
   const { user, isAuthenticated } = useUserAuth();
 
+  // GraphQL mutations
+  const [markNotificationAsReadMutation] = useMutation(MARK_NOTIFICATION_AS_READ);
+  const [markAllNotificationsAsReadMutation] = useMutation(MARK_ALL_NOTIFICATIONS_AS_READ);
+
   // Debug user authentication
   console.log('🔔 NotificationContext: User auth state:', { user, isAuthenticated });
 
@@ -57,7 +61,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       console.log('🔔 NotificationContext: Query completed with data:', data);
       if (data?.getUserNotifications) {
         // Debug the createdAt values
-        data.getUserNotifications.forEach((notif, index) => {
+        data.getUserNotifications.forEach((notif: Notification, index: number) => {
           console.log(`🔔 Notification ${index + 1} createdAt:`, notif.createdAt, typeof notif.createdAt);
         });
         setNotifications(data.getUserNotifications);
@@ -89,20 +93,58 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === notificationId 
-          ? { ...notification, read: true }
-          : notification
-      )
-    );
+  const markAsRead = async (notificationId: string) => {
+    try {
+      console.log('🔔 Marking notification as read:', notificationId);
+      
+      // Update local state immediately for better UX
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+
+      // Call backend mutation
+      await markNotificationAsReadMutation({
+        variables: { notificationId }
+      });
+      
+      console.log('✅ Notification marked as read successfully');
+    } catch (error) {
+      console.error('❌ Error marking notification as read:', error);
+      // Revert local state on error
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, read: false }
+            : notification
+        )
+      );
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      console.log('🔔 Marking all notifications as read');
+      
+      // Update local state immediately for better UX
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: true }))
+      );
+
+      // Call backend mutation
+      await markAllNotificationsAsReadMutation();
+      
+      console.log('✅ All notifications marked as read successfully');
+    } catch (error) {
+      console.error('❌ Error marking all notifications as read:', error);
+      // Revert local state on error
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, read: false }))
+      );
+    }
   };
 
   const addNotification = (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
@@ -131,7 +173,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       console.log('🔔 Manual refresh errors:', result.errors);
     } catch (error) {
       console.error('🔔 Manual refresh error:', error);
-      console.error('🔔 Manual refresh error details:', error.message, error.graphQLErrors, error.networkError);
+      console.error('🔔 Manual refresh error details:', (error as any).message, (error as any).graphQLErrors, (error as any).networkError);
     }
   };
 

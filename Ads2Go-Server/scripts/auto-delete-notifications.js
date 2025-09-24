@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const NotificationService = require('../src/services/notificationService');
+const NotificationService = require('../src/services/notifications/NotificationService');
 require('dotenv').config();
 
 async function autoDeleteOldNotifications() {

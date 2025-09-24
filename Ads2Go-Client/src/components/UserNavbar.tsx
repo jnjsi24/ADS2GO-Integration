@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import {
   LayoutDashboard,
   Megaphone,
@@ -10,10 +11,10 @@ import {
   HelpCircle,
   Bell
 } from 'lucide-react';
-import NotificationBell from './NotificationBell';
 
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
+  const { unreadCount, isLoading } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,7 +32,6 @@ const SideNavbar: React.FC = () => {
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
     { label: 'Advertisements', icon: <Megaphone size={20} />, path: '/advertisements' },
     { label: 'Payment History', icon: <CreditCard size={20} />, path: '/history' },
-    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
   ];
@@ -96,7 +96,23 @@ const SideNavbar: React.FC = () => {
               )}
             </div>
           </div>
-          <NotificationBell />
+          <button
+            onClick={() => navigate('/notifications')}
+            className="relative p-2 text-gray-200 hover:text-white transition-colors"
+            disabled={isLoading}
+            title="View notifications"
+          >
+            {isLoading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-200"></div>
+            ) : (
+              <Bell size={20} />
+            )}
+            {!isLoading && unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <button

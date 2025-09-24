@@ -2,7 +2,7 @@ const UserNotifications = require('../models/Notification');
 const User = require('../models/User');
 const Ad = require('../models/Ad');
 const { checkAuth } = require('../middleware/auth');
-const NotificationService = require('../services/notificationService');
+const NotificationService = require('../services/notifications/NotificationService');
 
 const notificationResolvers = {
   Query: {

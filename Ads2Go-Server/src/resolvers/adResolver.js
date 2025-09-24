@@ -9,7 +9,7 @@ const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
-const NotificationService = require('../services/notificationService');
+const NotificationService = require('../services/notifications/NotificationService');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 
 const adResolvers = {
