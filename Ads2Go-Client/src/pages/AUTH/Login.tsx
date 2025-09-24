@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { Link } from 'react-router-dom';
 import {EyeIcon, EyeOff, Check } from 'lucide-react';
@@ -12,12 +12,32 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [checked, setChecked] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
 
   const [validationErrors, setValidationErrors] = useState({
     email: '',
     password: ''
   });
+
+  // Handle video loading and playback
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      // Ensure video plays on load
+      video.addEventListener('loadeddata', () => {
+        setVideoLoaded(true);
+        video.play().catch(console.error);
+      });
+      
+      // Handle video errors
+      video.addEventListener('error', () => {
+        console.log('Video failed to load, falling back to image background');
+        setVideoLoaded(false);
+      });
+    }
+  }, []);
 
   const validateForm = () => {
     const errors = {
@@ -123,12 +143,45 @@ const Login: React.FC = () => {
   }, [navigateToRegister]);
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center"
-      style={{ backgroundImage: "url('/image/login.png')" }}
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      {/* Video Background */}
+      <video
+        ref={videoRef}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        style={{
+          minWidth: '100%',
+          minHeight: '100%',
+          width: 'auto',
+          height: 'auto',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          objectFit: 'cover',
+          zIndex: -1
+        }}
+      >
+        <source src="/image/Ads2Go.mp4" type="video/mp4" />
+        {/* Fallback image if video doesn't load */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/image/login.png')" }}
+        />
+      </video>
       
-    >
+      {/* Dark overlay for better text readability */}
       <div className="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
+      
+      {/* Loading indicator for video */}
+      {!videoLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+        </div>
+      )}
 
       <div className="relative z-10 p-8 sm:p-10 
                 rounded-xl shadow-2xl w-full max-w-xl
