@@ -7,8 +7,10 @@ import {
   Settings,
   LogOut,
   CreditCard,
-  HelpCircle
+  HelpCircle,
+  Bell
 } from 'lucide-react';
+import NotificationBell from './NotificationBell';
 
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
@@ -29,6 +31,7 @@ const SideNavbar: React.FC = () => {
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
     { label: 'Advertisements', icon: <Megaphone size={20} />, path: '/advertisements' },
     { label: 'Payment History', icon: <CreditCard size={20} />, path: '/history' },
+    { label: 'Notifications', icon: <Bell size={20} />, path: '/notifications' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
   ];
@@ -69,28 +72,31 @@ const SideNavbar: React.FC = () => {
 
       {/* User Profile & Logout */}
       <div className="p-6">
-        <div
-          className="flex items-center space-x-3 mb-4 cursor-pointer"
-          onClick={() => navigate('/account')}
-        >
-          <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-            <span className="text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : '...'}
-            </span>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+        <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center space-x-3 cursor-pointer flex-1"
+            onClick={() => navigate('/account')}
+          >
+            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
+              <span className="text-white font-semibold">
+                {user ? getInitials(user.firstName, user.lastName) : '...'}
+              </span>
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+            </div>
+            <div>
+              {user ? (
+                <p className="font-semibold text-white">
+                  {`${user.firstName} ${user.lastName}`}
+                </p>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-800">Loading...</p>
+                  <p className="text-sm text-gray-500">Please wait</p>
+                </>
+              )}
+            </div>
           </div>
-          <div>
-            {user ? (
-              <p className="font-semibold text-white">
-                {`${user.firstName} ${user.lastName}`}
-              </p>
-            ) : (
-              <>
-                <p className="font-semibold text-gray-800">Loading...</p>
-                <p className="text-sm text-gray-500">Please wait</p>
-              </>
-            )}
-          </div>
+          <NotificationBell />
         </div>
 
         <button

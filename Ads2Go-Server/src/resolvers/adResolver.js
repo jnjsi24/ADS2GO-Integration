@@ -9,6 +9,7 @@ const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const NotificationService = require('../services/notificationService');
 const { deleteFromFirebase } = require('../utils/firebaseStorage');
 
 const adResolvers = {
@@ -257,16 +258,37 @@ const adResolvers = {
 
       if (isAdmin) {
         if (input.status && input.status !== ad.status) {
+          const previousStatus = ad.status;
           ad.status = input.status;
 
           if (input.status === "APPROVED") {
             ad.approveTime = new Date();
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            
+            // Send approval notification
+            try {
+              console.log('🔔 AdResolver: Sending approval notification for ad:', ad._id);
+              await NotificationService.sendAdApprovalNotification(ad._id);
+              console.log('✅ AdResolver: Approval notification sent successfully');
+            } catch (notificationError) {
+              console.error('❌ AdResolver: Error sending approval notification:', notificationError);
+              console.error('❌ AdResolver: Error details:', notificationError.message);
+              console.error('❌ AdResolver: Stack trace:', notificationError.stack);
+              // Don't fail the ad update if notification fails
+            }
           } else if (input.status === "REJECTED") {
             ad.rejectTime = new Date();
             ad.approveTime = null;
             ad.reasonForReject = input.reasonForReject || "No reason provided";
+            
+            // Send rejection notification
+            try {
+              await NotificationService.sendAdRejectionNotification(ad._id, ad.reasonForReject);
+            } catch (notificationError) {
+              console.error('Error sending rejection notification:', notificationError);
+              // Don't fail the ad update if notification fails
+            }
           } else {
             ad.approveTime = null;
             ad.rejectTime = null;

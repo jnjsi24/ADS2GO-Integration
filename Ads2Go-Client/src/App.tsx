@@ -3,7 +3,9 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import NotificationContainer from './components/NotificationContainer';
 
 
 // Import Navbars
@@ -26,6 +28,7 @@ import Help from './pages/USERS/Help';
 import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
+import Notifications from './pages/USERS/Notifications';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -196,11 +199,12 @@ const UserAppContent: React.FC = () => {
   const { user } = useUserAuth();
   
   return (
-    <div className="min-h-screen bg-white text-black">
-      {/* Show navbar depending on user role */}
-      {user?.role === 'USER' && <UserNavbar />}
-      
-      <Routes>
+    <NotificationProvider>
+      <div className="min-h-screen bg-white text-black">
+        {/* Show navbar depending on user role */}
+        {user?.role === 'USER' && <UserNavbar />}
+        
+        <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -287,12 +291,22 @@ const UserAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      <NotificationContainer />
     </div>
+    </NotificationProvider>
   );
 };
 
