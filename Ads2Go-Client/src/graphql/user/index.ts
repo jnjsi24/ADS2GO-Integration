@@ -8,3 +8,4 @@ export * from './mutations/Login';
 export * from './mutations/Register';
 export * from './mutations/VerifyEmail';
 export * from './mutations/Logout';
+export * from './mutations/deleteAd';

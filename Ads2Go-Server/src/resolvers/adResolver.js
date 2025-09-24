@@ -9,6 +9,7 @@ const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const { deleteFromFirebase } = require('../utils/firebaseStorage');
 
 const adResolvers = {
   Query: {
@@ -331,13 +332,22 @@ const adResolvers = {
     },
 
     deleteAd: async (_, { id }, { user }) => {
-      checkAdmin(user);
+      checkAuth(user);
       
       try {
         // 1. Find the ad first to ensure it exists
         const ad = await Ad.findById(id);
         if (!ad) {
           throw new Error('Ad not found');
+        }
+
+        // 2. Check permissions: Admin can delete any ad, users can only delete their own pending ads
+        const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const isOwner = ad.userId.toString() === user.id;
+        const isPending = ad.status === 'PENDING';
+
+        if (!isAdmin && (!isOwner || !isPending)) {
+          throw new Error('You can only delete your own pending advertisements');
         }
 
         console.log(`🗑️ Starting cascade delete for ad: ${id} (${ad.title})`);
@@ -393,7 +403,21 @@ const adResolvers = {
           console.warn(`⚠️ Warning: Could not remove from material availability:`, availabilityError.message);
         }
 
-        // 6. Delete the ad itself
+        // 6. Delete media file from Firebase Storage
+        if (ad.mediaFile) {
+          try {
+            const deleteSuccess = await deleteFromFirebase(ad.mediaFile);
+            if (deleteSuccess) {
+              console.log(`🗑️ Successfully deleted media file from Firebase Storage`);
+            } else {
+              console.warn(`⚠️ Warning: Could not delete media file from Firebase Storage`);
+            }
+          } catch (firebaseError) {
+            console.warn(`⚠️ Warning: Error deleting media file from Firebase Storage:`, firebaseError.message);
+          }
+        }
+
+        // 7. Delete the ad itself
         await Ad.findByIdAndDelete(id);
         console.log(`✅ Ad ${id} deleted successfully`);
 

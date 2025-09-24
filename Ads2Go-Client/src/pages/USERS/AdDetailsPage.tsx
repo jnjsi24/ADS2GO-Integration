@@ -1,10 +1,11 @@
 // src/pages/AdDetailsPage.tsx
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
+import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 
 
@@ -122,6 +123,18 @@ const AdDetailsPage: React.FC = () => {
     fetchPolicy: 'network-only',
     onError: (err) => {
       console.error('Error fetching ads:', err);
+    },
+  });
+
+  // Delete ad mutation
+  const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
+    onCompleted: () => {
+      navigate('/advertisements');
+    },
+    onError: (err) => {
+      console.error('Error deleting ad:', err);
+      alert('Failed to delete advertisement. Please try again.');
     },
   });
 
@@ -341,12 +354,16 @@ const AdDetailsPage: React.FC = () => {
 
               <button
                 onClick={() => {
-                  alert(`Deleting ad ${ad.id}`);
-                  navigate('/advertisements');
+                  if (window.confirm('Are you sure you want to delete this advertisement? This action cannot be undone.')) {
+                    deleteAd({ variables: { id: ad.id } });
+                  }
                 }}
-                className="ml-auto px-4 py-2 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-sm"
+                disabled={deleteLoading || ad?.status !== 'PENDING'}
+                className={`ml-auto px-4 py-2 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-sm ${
+                  deleteLoading || ad?.status !== 'PENDING' ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                Delete Ad
+                {deleteLoading ? 'Deleting...' : 'Delete Ad'}
               </button>
             </nav>
           </div>
