@@ -1,5 +1,8 @@
 const AdsPlan = require('../models/AdsPlan');
+const Material = require('../models/Material');
+const MaterialAvailability = require('../models/MaterialAvailability');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
 // Helper function to get pricePerPlay - super admin must provide this
 const getPricePerPlay = (pricePerPlay) => {
@@ -53,6 +56,7 @@ const calculatePricing = (
   };
 };
 
+
 module.exports = {
 
   Mutation: {
@@ -102,7 +106,40 @@ module.exports = {
         endDate: input.endDate ? new Date(input.endDate) : null,
       });
 
-      return await newPlan.save();
+      const savedPlan = await newPlan.save();
+
+      // Automatically assign compatible materials to the plan (sorted by slot availability)
+      try {
+        console.log(`🔗 Auto-assigning materials to plan: ${savedPlan.name}`);
+        
+        // Get materials sorted by slot availability (most available first)
+        const compatibleMaterials = await getMaterialsSortedByAvailability(
+          materialType,
+          vehicleType,
+          input.category
+        );
+        
+        console.log(`📋 Found ${compatibleMaterials.length} compatible materials for plan: ${savedPlan.name}`);
+        
+        if (compatibleMaterials.length > 0) {
+          // Take up to 3 materials, already sorted by availability
+          const materialsToAssign = compatibleMaterials.slice(0, 3);
+          savedPlan.materials = materialsToAssign.map(m => m._id);
+          await savedPlan.save();
+          
+          console.log(`✅ Assigned ${materialsToAssign.length} materials to plan: ${savedPlan.name}`);
+          console.log(`📦 Materials (sorted by availability): ${materialsToAssign.map(m => m.materialId).join(', ')}`);
+        } else {
+          console.log(`⚠️ No compatible materials found for plan: ${savedPlan.name}`);
+          console.log(`🔍 Looking for: ${materialType} ${vehicleType} ${input.category}`);
+        }
+      } catch (materialAssignmentError) {
+        console.error(`❌ Error auto-assigning materials to plan:`, materialAssignmentError);
+        // Don't throw error - material assignment is helpful but shouldn't break plan creation
+        console.log(`⚠️ Plan created but material assignment failed. Run fix script to assign materials.`);
+      }
+
+      return savedPlan;
     },
 
     updateAdsPlan: async (_, { id, input }, { user }) => {
@@ -239,6 +276,44 @@ module.exports = {
       }
     },
 
+    getSmartMaterialSelection: async (_, { materialType, vehicleType, category, timestamp, requestId }, { user }) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+      
+      console.log(`🧠 [getSmartMaterialSelection] Request for: ${materialType} ${vehicleType} ${category} (timestamp: ${timestamp}, requestId: ${requestId})`);
+      
+      try {
+        // Get materials sorted by smart selection logic
+        const sortedMaterials = await getMaterialsSortedByAvailability(materialType, vehicleType, category);
+        
+        // Return the first material (highest priority) with slot information
+        if (sortedMaterials.length > 0) {
+          const selectedMaterial = sortedMaterials[0];
+          const availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
+          
+          const result = {
+            id: selectedMaterial._id,
+            materialId: selectedMaterial.materialId,
+            materialType: selectedMaterial.materialType,
+            vehicleType: selectedMaterial.vehicleType,
+            category: selectedMaterial.category,
+            occupiedSlots: availability ? availability.occupiedSlots : 0,
+            availableSlots: availability ? availability.availableSlots : 5,
+            totalSlots: availability ? availability.totalSlots : 5,
+            priority: 1
+          };
+          
+          console.log(`🎯 [getSmartMaterialSelection] Returning: ${result.materialId} (${result.occupiedSlots}/${result.totalSlots} slots)`);
+          return result;
+        }
+        
+        return null;
+      } catch (error) {
+        throw new Error(`Error getting smart material selection: ${error.message}`);
+      }
+    },
+
     getAvailabilitySummary: async (_, __, { user }) => {
       if (!user || !['ADMIN', 'SUPERADMIN'].includes(user.role)) {
         throw new Error('Unauthorized: Admin access required');
@@ -253,3 +328,4 @@ module.exports = {
     },
   },
 };
+

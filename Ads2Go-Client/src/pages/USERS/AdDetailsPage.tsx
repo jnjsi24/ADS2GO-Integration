@@ -119,7 +119,7 @@ const AdDetailsPage: React.FC = () => {
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: 'network-only',
     onError: (err) => {
       console.error('Error fetching ads:', err);
     },
@@ -127,6 +127,20 @@ const AdDetailsPage: React.FC = () => {
 
   // Find the specific ad by ID
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
+  
+  // Debug logging
+  React.useEffect(() => {
+    if (ad) {
+      console.log('🔍 Ad Details Debug:', {
+        id: ad.id,
+        title: ad.title,
+        adFormat: ad.adFormat,
+        adLengthSeconds: ad.adLengthSeconds,
+        materialId: ad.materialId?.materialId,
+        planName: ad.planId?.name
+      });
+    }
+  }, [ad]);
 
   const tabletActivities = [
     { id: 1, ad: 'Material 1', gps: '14.5995° N, 120.9842° E', timestamp: '2025-09-16 09:30 AM', lastSeen: '3 mins ago', kmTraveled: 12.4 },
@@ -532,36 +546,36 @@ const AdDetailsPage: React.FC = () => {
           {/* Properties Section */}
           <div className="bg-white">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* HEADDRESS */}
+              {/* MATERIAL */}
               <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
                 <p className="text-sm font-semibold text-gray-900">
-                  {ad.vehicleType || 'N/A'}
+                  {ad.materialId?.materialId || 'N/A'}
                 </p>
-                <p className="text-xs text-gray-500">HEADDRESS</p>
+                <p className="text-xs text-gray-500">MATERIAL</p>
               </div>
 
-              {/* Drive & Dazzle */}
+              {/* AD PLAN */}
               <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
                 <p className="text-sm font-semibold text-gray-900">
-                  {ad.materialId?.materialType || 'N/A'}
+                  {ad.planId?.name || 'Plan Deleted'}
                 </p>
-                <p className="text-xs text-gray-500">Drive & Dazzle</p>
+                <p className="text-xs text-gray-500">AD PLAN</p>
               </div>
 
-              {/* VIDEO */}
+              {/* AD LENGTH */}
               <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
                 <p className="text-sm font-semibold text-gray-900">
-                  {ad.planId?.name || 'N/A'}
+                  {ad.adLengthSeconds ? `${ad.adLengthSeconds}s` : 'N/A'}
                 </p>
-                <p className="text-xs text-gray-500">VIDEO</p>
+                <p className="text-xs text-gray-500">AD LENGTH</p>
               </div>
 
-              {/* Format */}
+              {/* AD FORMAT */}
               <div className="border bg-gray-100 rounded-lg p-2 flex flex-col items-center justify-center text-center">
                 <p className="text-sm font-semibold text-gray-900">
                   {ad.adFormat || 'N/A'}
                 </p>
-                <p className="text-xs text-gray-500">Format</p>
+                <p className="text-xs text-gray-500">AD FORMAT</p>
               </div>
             </div>
           </div>

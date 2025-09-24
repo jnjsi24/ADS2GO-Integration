@@ -1,6 +1,6 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://192.168.1.7:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
@@ -32,6 +32,9 @@ export interface ScreenData {
       adTitle: string;
       adDuration: number;
       startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
     };
     dailyAdStats: any;
     adPerformance: any[];
@@ -108,7 +111,9 @@ class AdsPanelServiceV4 {
     try {
       // Use the compliance endpoint to get real-time screen data with displayId
       console.log('🔍 [getScreens] Using compliance endpoint: /screenTracking/compliance');
-      const response = await this.makeRequest('/screenTracking/compliance');
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = `?t=${Date.now()}`;
+      const response = await this.makeRequest(`/screenTracking/compliance${cacheBuster}`);
       
       if (!response || !response.data || !response.data.screens) {
         console.error('❌ Invalid response format from compliance endpoint:', response);
@@ -120,29 +125,27 @@ class AdsPanelServiceV4 {
           maintenanceScreens: 0
         };
       }
+      
+      // Debug: Log current ad information from server response
+      console.log('🔍 Server response current ads:', response.data.screens.map((screen: any) => ({
+        deviceId: screen.deviceId,
+        currentAd: screen.screenMetrics?.currentAd?.adTitle || 'No ad'
+      })));
 
       // Transform compliance data to ScreenData format
       const screens: ScreenData[] = await Promise.all(response.data.screens.map(async (screen: any) => {
-        // Fetch real ads for this screen
+        // Use the current ad from compliance endpoint (this is the actually playing ad)
         let currentAd = undefined;
-        if (screen.isOnline && screen.materialId && screen.slotNumber) {
-          try {
-            const adsResponse = await this.makeRequest(`/ads/${screen.materialId}/${screen.slotNumber}`);
-            if (adsResponse.success && adsResponse.ads && adsResponse.ads.length > 0) {
-              const activeAd = adsResponse.ads[0]; // Get the first active ad
-              currentAd = {
-                adId: activeAd.adId,
-                adTitle: activeAd.adTitle,
-                adDuration: activeAd.duration || 30,
-                startTime: activeAd.startTime
-              };
-              console.log(`🎯 Real ad found for ${screen.displayId}:`, currentAd);
-            } else {
-              console.log(`📭 No ads found for ${screen.displayId}`);
-            }
-          } catch (error) {
-            console.error(`❌ Error fetching ads for ${screen.displayId}:`, error);
-          }
+        if (screen.screenMetrics?.currentAd) {
+          currentAd = {
+            adId: screen.screenMetrics.currentAd.adId,
+            adTitle: screen.screenMetrics.currentAd.adTitle,
+            adDuration: screen.screenMetrics.currentAd.adDuration || 30,
+            startTime: screen.screenMetrics.currentAd.startTime
+          };
+          console.log(`🎯 Using current playing ad for ${screen.displayId}:`, currentAd);
+        } else {
+          console.log(`📭 No current ad playing for ${screen.displayId}`);
         }
 
         return {

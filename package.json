@@ -13,7 +13,8 @@
     "test": "npm test --prefix Ads2Go-Client"
   },
   "dependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "ws": "^8.18.3"
   },
   "private": true
 }

@@ -300,9 +300,10 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.unregisterTablet();
               if (result.success) {
-                // Clear local registration data and material ID before redirect
+                // Clear local registration data, material ID, and cached ads before redirect
                 await tabletRegistrationService.clearRegistration();
                 await tabletRegistrationService.clearMaterialId();
+                await tabletRegistrationService.clearAllCachedAds();
                 
                 Alert.alert(
                   'Success',
@@ -335,9 +336,10 @@ export default function HomeScreen() {
                         try {
                           const forceResult = await tabletRegistrationService.forceUnregisterTablet();
                           if (forceResult.success) {
-                            // Clear local registration data and material ID before redirect
+                            // Clear local registration data, material ID, and cached ads before redirect
                             await tabletRegistrationService.clearRegistration();
                             await tabletRegistrationService.clearMaterialId();
+                            await tabletRegistrationService.clearAllCachedAds();
                             
                             Alert.alert(
                               'Success',
@@ -402,9 +404,10 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.forceUnregisterTablet();
               if (result.success) {
-                // Clear local registration data and material ID before redirect
+                // Clear local registration data, material ID, and cached ads before redirect
                 await tabletRegistrationService.clearRegistration();
                 await tabletRegistrationService.clearMaterialId();
+                await tabletRegistrationService.clearAllCachedAds();
                 
                 Alert.alert(
                   'Success',

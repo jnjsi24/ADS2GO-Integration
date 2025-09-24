@@ -124,27 +124,50 @@ const adResolvers = {
       const endTime = new Date(userDesiredStartDate);
       endTime.setDate(endTime.getDate() + plan.durationDays);
 
-      // Select the first available material from the plan's materials array
-      // This ensures consistency with the client-side material selection
+      // Use smart material selection instead of plan's materials array
       let selectedMaterial = null;
-      if (plan.materials && plan.materials.length > 0) {
-        // Find the first material that has availability for the desired time period
-        for (const material of plan.materials) {
-          const availability = await MaterialAvailability.findOne({ materialId: material._id });
-          if (availability && availability.canAcceptAd(startTime, endTime)) {
-            selectedMaterial = material;
-            console.log(`🎯 Selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType})`);
-            break;
-          }
-        }
+      
+      // Import the smart selection function from utility
+      const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
+      
+      try {
+        console.log('🧠 Using smart material selection for ad creation...');
+        const sortedMaterials = await getMaterialsSortedByAvailability(
+          plan.materialType,
+          plan.vehicleType,
+          plan.category,
+          startTime,
+          endTime
+        );
         
-        // If no available material found, use the first material (fallback)
-        if (!selectedMaterial) {
-          selectedMaterial = plan.materials[0];
-          console.log(`⚠️ No available material found, using first material: ${selectedMaterial.materialId}`);
+        if (sortedMaterials.length > 0) {
+          // Find the first material that has availability for the desired time period
+          for (const material of sortedMaterials) {
+            const availability = await MaterialAvailability.findOne({ materialId: material._id });
+            if (availability && availability.canAcceptAd(startTime, endTime)) {
+              selectedMaterial = material;
+              console.log(`🎯 Smart selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType}) - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+              break;
+            }
+          }
+          
+          // If no available material found, use the first material (fallback)
+          if (!selectedMaterial) {
+            selectedMaterial = sortedMaterials[0];
+            console.log(`⚠️ No available material found, using first smart material: ${selectedMaterial.materialId}`);
+          }
+        } else {
+          throw new Error('No compatible materials found for this plan');
         }
-      } else {
-        throw new Error('No materials assigned to this plan');
+      } catch (error) {
+        console.error('❌ Smart material selection failed, falling back to plan materials:', error.message);
+        // Fallback to plan's materials if smart selection fails
+        if (plan.materials && plan.materials.length > 0) {
+          selectedMaterial = plan.materials[0];
+          console.log(`⚠️ Fallback to plan material: ${selectedMaterial.materialId}`);
+        } else {
+          throw new Error('No materials assigned to this plan');
+        }
       }
 
       const ad = new Ad({
@@ -171,6 +194,22 @@ const adResolvers = {
       });
 
       const savedAd = await ad.save();
+
+      // Update material availability when ad is created
+      try {
+        console.log(`🔄 Updating material availability for ad: ${savedAd._id}`);
+        const availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
+        if (availability) {
+          availability.addAd(savedAd._id, startTime, endTime);
+          await availability.save();
+          console.log(`✅ Updated material availability: ${selectedMaterial.materialId} now has ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+        } else {
+          console.warn(`⚠️ No availability record found for material: ${selectedMaterial.materialId}`);
+        }
+      } catch (availabilityError) {
+        console.error('❌ Error updating material availability:', availabilityError);
+        // Don't fail the ad creation if availability update fails
+      }
 
       // Note: Ad deployment is handled by the Ad model's post-save hook
       // when the ad status is PAID and adStatus is ACTIVE

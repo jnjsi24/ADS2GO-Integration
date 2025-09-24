@@ -18,6 +18,9 @@ const typeDefs = gql`
     adTitle: String
     adDuration: Int
     startTime: String
+    currentTime: Float
+    state: String
+    progress: Float
   }
 
   """

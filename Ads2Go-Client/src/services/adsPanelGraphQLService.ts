@@ -83,6 +83,9 @@ export interface ScreenData {
       adTitle: string;
       adDuration: number;
       startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
     };
     dailyAdStats: DailyAdStats;
     adPerformance: any[];
@@ -145,7 +148,7 @@ class AdsPanelGraphQLService {
   constructor() {
     // Create HTTP link
     const httpLink = createHttpLink({
-      uri: process.env.REACT_APP_GRAPHQL_URL || 'http://localhost:5000/graphql',
+      uri: process.env.REACT_APP_GRAPHQL_URL || 'http://192.168.1.7:5000/graphql',
     });
 
     // Create auth link that adds the token to every request

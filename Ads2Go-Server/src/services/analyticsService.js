@@ -91,6 +91,11 @@ class AnalyticsService {
   // Track ad playback
   static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
     try {
+      // Get the ad to find the userId - require Ad model locally to avoid OverwriteModelError
+      const Ad = mongoose.models.Ad || require('../models/ad');
+      const ad = await Ad.findById(adId);
+      const userId = ad ? ad.userId : null;
+      
       // Always prioritize active deployment devices for ad playback tracking
       let analytics = await Analytics.findOne({ 
         materialId, 
@@ -100,6 +105,11 @@ class AnalyticsService {
       
       if (analytics) {
         console.log(`✅ Found active deployment device for ad playback: ${analytics.deviceId}`);
+        // Update userId if not set
+        if (!analytics.userId && userId) {
+          analytics.userId = userId;
+          await analytics.save();
+        }
       } else {
         // Only create new document if no deployment device exists
         analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
@@ -109,27 +119,48 @@ class AnalyticsService {
             deviceId,
             materialId,
             slotNumber,
+            userId: userId, // Set the userId from the ad
             adPlaybacks: [],
             totalAdPlayTime: 0,
             totalAdImpressions: 0
           });
+        } else {
+          // Update userId if not set
+          if (!analytics.userId && userId) {
+            analytics.userId = userId;
+            await analytics.save();
+          }
         }
       }
       
       await analytics.addAdPlayback(adId, adTitle, adDuration, viewTime);
       
       // Also update screen tracking
-      await ScreenTracking.findOneAndUpdate(
+      console.log(`🔍 [analyticsService] Updating ScreenTracking for device ${deviceId}...`);
+      const screenResult = await ScreenTracking.findOneAndUpdate(
         { 'devices.deviceId': deviceId },
         { 
           $inc: { 'screenMetrics.adPlayCount': 1 },
           $set: { 
             'screenMetrics.lastAdPlayed': new Date(),
             'screenMetrics.currentAd.adId': adId,
-            'screenMetrics.currentAd.adTitle': adTitle
+            'screenMetrics.currentAd.adTitle': adTitle,
+            'screenMetrics.currentAd.adDuration': adDuration,
+            'screenMetrics.currentAd.startTime': new Date(),
+            'screenMetrics.currentAd.currentTime': 0,
+            'screenMetrics.currentAd.state': 'playing',
+            'screenMetrics.currentAd.progress': 0
           }
-        }
+        },
+        { new: true }
       );
+      
+      if (screenResult) {
+        console.log(`✅ [analyticsService] Updated ScreenTracking for device ${deviceId}: ${adTitle}`);
+        console.log(`📊 ScreenTracking currentAd:`, screenResult.screenMetrics?.currentAd);
+      } else {
+        console.log(`❌ [analyticsService] No ScreenTracking document found for device ${deviceId}`);
+      }
       
       return analytics;
     } catch (error) {
@@ -507,6 +538,379 @@ class AnalyticsService {
     }
   }
   
+  // Get user-specific analytics
+  static async getUserAnalytics(userId, startDate, endDate, period = '7d') {
+    try {
+      console.log(`Getting analytics for user ${userId} for period ${period}`);
+      
+      // Calculate date range based on period
+      const now = new Date();
+      let dateFilter = {};
+      
+      if (startDate && endDate) {
+        dateFilter = {
+          'adPlaybacks.startTime': {
+            $gte: new Date(startDate),
+            $lte: new Date(endDate)
+          }
+        };
+      } else {
+        // Default periods
+        switch (period) {
+          case '1d':
+            dateFilter = {
+              'adPlaybacks.startTime': {
+                $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000)
+              }
+            };
+            break;
+          case '7d':
+            dateFilter = {
+              'adPlaybacks.startTime': {
+                $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+              }
+            };
+            break;
+          case '30d':
+            dateFilter = {
+              'adPlaybacks.startTime': {
+                $gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+              }
+            };
+            break;
+          default:
+            dateFilter = {
+              'adPlaybacks.startTime': {
+                $gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+              }
+            };
+        }
+      }
+
+      // Get user's ads first to get the ad IDs - require Ad model locally to avoid OverwriteModelError
+      const Ad = mongoose.models.Ad || require('../models/ad');
+      const userAds = await Ad.find({ userId: userId }).select('id title description adFormat status createdAt startTime endTime price');
+      const userAdIds = userAds.map(ad => ad._id.toString());
+      
+
+      if (userAdIds.length === 0) {
+        // Return empty analytics if user has no ads
+        return {
+          summary: {
+            totalAdImpressions: 0,
+            totalAdsPlayed: 0,
+            totalDisplayTime: 0,
+            averageCompletionRate: 0,
+            totalAds: 0,
+            activeAds: 0
+          },
+          adPerformance: [],
+          dailyStats: [],
+          deviceStats: [],
+          period,
+          startDate: startDate || null,
+          endDate: endDate || null
+        };
+      }
+
+      // Get analytics for user's ads only - try both with userId and without (for existing data)
+      let userAnalytics = await Analytics.find({
+        userId: userId,
+        'adPlaybacks.adId': { $in: userAdIds },
+        ...dateFilter
+      }).populate('userId', 'firstName lastName email');
+
+      // If no analytics found with userId, try to find analytics that have the user's ads
+      if (userAnalytics.length === 0) {
+        userAnalytics = await Analytics.find({
+          'adPlaybacks.adId': { $in: userAdIds },
+          ...dateFilter
+        }).populate('userId', 'firstName lastName email');
+        
+        // Update these analytics documents with the correct userId
+        if (userAnalytics.length > 0) {
+          await Promise.all(userAnalytics.map(analytics => {
+            if (!analytics.userId) {
+              analytics.userId = userId;
+              return analytics.save();
+            }
+          }));
+        }
+      }
+
+      // Aggregate data
+      const summary = {
+        totalAdImpressions: 0,
+        totalAdsPlayed: 0,
+        totalDisplayTime: 0,
+        averageCompletionRate: 0,
+        totalAds: userAdIds.length,
+        activeAds: 0
+      };
+
+      const adPerformance = new Map();
+      const dailyStats = new Map();
+      const activeAdIds = new Set();
+
+      // Process analytics data
+      userAnalytics.forEach(analytics => {
+        // Process ad playbacks for user's ads only
+        analytics.adPlaybacks.forEach(playback => {
+          // Only process playbacks for user's ads
+          if (!userAdIds.includes(playback.adId)) return;
+
+          // Apply date filter to individual playbacks
+          const playbackDate = new Date(playback.startTime);
+          const isInDateRange = !startDate || !endDate || 
+            (playbackDate >= new Date(startDate) && playbackDate <= new Date(endDate));
+          
+          if (!isInDateRange) return;
+
+          activeAdIds.add(playback.adId);
+          summary.totalAdImpressions += playback.impressions || 1;
+          summary.totalAdsPlayed += 1;
+          summary.totalDisplayTime += playback.viewTime || 0;
+
+          // Ad performance tracking
+          const adKey = playback.adId;
+          if (!adPerformance.has(adKey)) {
+            // Get ad details from user's ads
+            const adDetails = userAds.find(ad => ad._id.toString() === adKey);
+            adPerformance.set(adKey, {
+              adId: playback.adId,
+              adTitle: playback.adTitle || adDetails?.title || 'Unknown Ad',
+              impressions: 0,
+              totalPlayTime: 0,
+              averageCompletionRate: 0,
+              playCount: 0,
+              lastPlayed: playback.startTime
+            });
+          }
+
+          const adPerf = adPerformance.get(adKey);
+          adPerf.impressions += playback.impressions || 1;
+          adPerf.totalPlayTime += playback.viewTime || 0;
+          adPerf.playCount += 1;
+
+          // Daily stats
+          const dateKey = playbackDate.toISOString().split('T')[0];
+          if (!dailyStats.has(dateKey)) {
+            dailyStats.set(dateKey, {
+              date: dateKey,
+              impressions: 0,
+              adsPlayed: 0,
+              displayTime: 0
+            });
+          }
+
+          const dailyStat = dailyStats.get(dateKey);
+          dailyStat.impressions += playback.impressions || 1;
+          dailyStat.adsPlayed += 1;
+          dailyStat.displayTime += playback.viewTime || 0;
+        });
+      });
+
+      // Calculate averages and totals
+      summary.activeAds = activeAdIds.size;
+      
+      // Calculate average completion rate based on ad plan durations
+      let totalCompletionRate = 0;
+      let adsWithCompletionRate = 0;
+      
+      userAds.forEach(ad => {
+        if (ad.startTime && ad.endTime) {
+          const now = new Date();
+          const startDate = new Date(ad.startTime);
+          const endDate = new Date(ad.endTime);
+          
+          const totalDurationMs = endDate.getTime() - startDate.getTime();
+          const totalDurationDays = Math.ceil(totalDurationMs / (1000 * 60 * 60 * 24));
+          
+          const elapsedMs = now.getTime() - startDate.getTime();
+          const elapsedDays = Math.max(0, Math.ceil(elapsedMs / (1000 * 60 * 60 * 24)));
+          
+          if (totalDurationDays > 0) {
+            const completionRate = Math.min(100, (elapsedDays / totalDurationDays) * 100);
+            totalCompletionRate += completionRate;
+            adsWithCompletionRate++;
+          }
+        }
+      });
+      
+      summary.averageCompletionRate = adsWithCompletionRate > 0 ? totalCompletionRate / adsWithCompletionRate : 0;
+
+      const processedAdPerformance = Array.from(adPerformance.values()).map(ad => {
+        // Find the corresponding ad details to get startTime and endTime
+        const adDetails = userAds.find(userAd => userAd._id.toString() === ad.adId);
+        
+        let completionRate = 0;
+        
+        if (adDetails && adDetails.startTime && adDetails.endTime) {
+          const now = new Date();
+          const startDate = new Date(adDetails.startTime);
+          const endDate = new Date(adDetails.endTime);
+          
+          // Calculate total plan duration in days
+          const totalDurationMs = endDate.getTime() - startDate.getTime();
+          const totalDurationDays = Math.ceil(totalDurationMs / (1000 * 60 * 60 * 24));
+          
+          // Calculate days elapsed since start
+          const elapsedMs = now.getTime() - startDate.getTime();
+          const elapsedDays = Math.max(0, Math.ceil(elapsedMs / (1000 * 60 * 60 * 24)));
+          
+          // Calculate completion rate (percentage of plan duration completed)
+          if (totalDurationDays > 0) {
+            completionRate = Math.min(100, (elapsedDays / totalDurationDays) * 100);
+          }
+        }
+        
+        return {
+          ...ad,
+          averageCompletionRate: completionRate
+        };
+      }).sort((a, b) => b.impressions - a.impressions); // Sort by impressions descending
+
+      const processedDailyStats = Array.from(dailyStats.values()).map(stat => ({
+        ...stat
+      })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+
+      return {
+        summary,
+        adPerformance: processedAdPerformance,
+        dailyStats: processedDailyStats,
+        deviceStats: [], // Remove device stats since we're focusing on ads
+        period,
+        startDate: startDate || null,
+        endDate: endDate || null
+      };
+
+    } catch (error) {
+      console.error('Error getting user analytics:', error);
+      throw error;
+    }
+  }
+
+  // Get detailed analytics for a specific ad
+  static async getUserAdDetails(userId, adId) {
+    try {
+      console.log(`Getting ad details for user ${userId}, ad ${adId}`);
+      
+      // Get the ad details - require Ad model locally to avoid OverwriteModelError
+      const Ad = mongoose.models.Ad || require('../models/ad');
+      const ad = await Ad.findOne({ _id: adId, userId: userId });
+      
+      if (!ad) {
+        throw new Error('Ad not found or access denied');
+      }
+
+      // Get analytics for this specific ad
+      const adAnalytics = await Analytics.find({
+        userId: userId,
+        'adPlaybacks.adId': adId
+      });
+
+      // Aggregate ad-specific data
+      const totalImpressions = adAnalytics.reduce((sum, analytics) => {
+        return sum + analytics.adPlaybacks
+          .filter(playback => playback.adId === adId)
+          .reduce((playbackSum, playback) => playbackSum + (playback.impressions || 1), 0);
+      }, 0);
+
+      const totalPlayTime = adAnalytics.reduce((sum, analytics) => {
+        return sum + analytics.adPlaybacks
+          .filter(playback => playback.adId === adId)
+          .reduce((playbackSum, playback) => playbackSum + (playback.viewTime || 0), 0);
+      }, 0);
+
+      const averageCompletionRate = adAnalytics.length > 0 ? 
+        adAnalytics.reduce((sum, analytics) => {
+          const adPlaybacks = analytics.adPlaybacks.filter(playback => playback.adId === adId);
+          return sum + adPlaybacks.reduce((playbackSum, playback) => 
+            playbackSum + (playback.completionRate || 0), 0);
+        }, 0) / adAnalytics.length : 0;
+
+      // Device performance
+      const devicePerformance = [];
+      const deviceMap = new Map();
+
+      adAnalytics.forEach(analytics => {
+        const deviceKey = analytics.deviceId;
+        if (!deviceMap.has(deviceKey)) {
+          deviceMap.set(deviceKey, {
+            deviceId: analytics.deviceId,
+            materialId: analytics.materialId,
+            impressions: 0,
+            playTime: 0,
+            completionRate: 0,
+            lastPlayed: null
+          });
+        }
+
+        const devicePerf = deviceMap.get(deviceKey);
+        const adPlaybacks = analytics.adPlaybacks.filter(playback => playback.adId === adId);
+        
+        adPlaybacks.forEach(playback => {
+          devicePerf.impressions += playback.impressions || 1;
+          devicePerf.playTime += playback.viewTime || 0;
+          devicePerf.completionRate = playback.completionRate || 0;
+          if (!devicePerf.lastPlayed || new Date(playback.startTime) > new Date(devicePerf.lastPlayed)) {
+            devicePerf.lastPlayed = playback.startTime;
+          }
+        });
+      });
+
+      devicePerformance.push(...Array.from(deviceMap.values()));
+
+      // Daily performance
+      const dailyPerformance = [];
+      const dailyMap = new Map();
+
+      adAnalytics.forEach(analytics => {
+        analytics.adPlaybacks
+          .filter(playback => playback.adId === adId)
+          .forEach(playback => {
+            const dateKey = new Date(playback.startTime).toISOString().split('T')[0];
+            if (!dailyMap.has(dateKey)) {
+              dailyMap.set(dateKey, {
+                date: dateKey,
+                impressions: 0,
+                playTime: 0,
+                completionRate: 0
+              });
+            }
+
+            const dailyPerf = dailyMap.get(dateKey);
+            dailyPerf.impressions += playback.impressions || 1;
+            dailyPerf.playTime += playback.viewTime || 0;
+            dailyPerf.completionRate = playback.completionRate || 0;
+          });
+      });
+
+      dailyPerformance.push(...Array.from(dailyMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date)));
+
+      return {
+        adId: ad._id.toString(),
+        adTitle: ad.title,
+        adDescription: ad.description,
+        adFormat: ad.adFormat,
+        status: ad.status,
+        createdAt: ad.createdAt,
+        startTime: ad.startTime,
+        endTime: ad.endTime,
+        totalImpressions,
+        totalPlayTime,
+        averageCompletionRate,
+        devicePerformance,
+        dailyPerformance
+      };
+
+    } catch (error) {
+      console.error('Error getting user ad details:', error);
+      throw error;
+    }
+  }
+
   // Sync data from existing collections
   static async syncFromExistingCollections() {
     try {

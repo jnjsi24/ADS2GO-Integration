@@ -38,6 +38,9 @@ export const GET_ALL_SCREENS = gql`
             adTitle
             adDuration
             startTime
+            currentTime
+            state
+            progress
           }
           dailyAdStats {
             totalAdsPlayed
@@ -153,6 +156,9 @@ export const GET_COMPLIANCE_REPORT = gql`
             adTitle
             adDuration
             startTime
+            currentTime
+            state
+            progress
           }
           dailyAdStats {
             totalAdsPlayed

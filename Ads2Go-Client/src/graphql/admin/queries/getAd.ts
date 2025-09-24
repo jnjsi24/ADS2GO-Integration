@@ -16,6 +16,7 @@ export const GET_MY_ADS = gql`
       createdAt
       startTime
       endTime
+      adLengthSeconds
       planId {
         id
         name
@@ -28,6 +29,7 @@ export const GET_MY_ADS = gql`
       }
       materialId {
         id
+        materialId
         materialType
         category
         description
