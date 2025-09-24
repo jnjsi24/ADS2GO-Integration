@@ -186,12 +186,19 @@ const Login: React.FC = () => {
       <div className="relative z-10 p-8 sm:p-10 
                 rounded-xl shadow-2xl w-full max-w-xl
                 bg-white/20 backdrop-blur-lg border border-white/30">
-        <h1 className="text-5xl font-bold text-center mb-6 text-white">
+        {/* Ads2Go Logo */}
+        <div className="flex justify-center mb-6">
+          <img 
+            src="/image/Ads2GoLogoText.png" 
+            alt="Ads2Go Logo" 
+            className="h-24 w-auto object-contain"
+          />
+        </div>
+        
+        {/* Login Title */}
+        <h1 className="text-3xl font-bold text-center mb-6 text-white">
           Login
         </h1>
-        <p className="text-sm text-center text-white mb-6">
-          Please enter your login details to log in.
-        </p>
         
         <form className="space-y-4" onSubmit={handleSubmit} noValidate>
          <div className="relative mt-10">
@@ -202,7 +209,8 @@ const Login: React.FC = () => {
               required
               value={email}
               onChange={handleEmailChange}
-              className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0placeholder-transparent transition ${validationErrors.email ? 'border-red-400' : 'border-gray-300'}`}
+              className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.email ? 'border-red-400' : 'border-gray-300'}`}
+              style={{ backgroundColor: 'transparent' }}
             />
             <label
               htmlFor="email"
