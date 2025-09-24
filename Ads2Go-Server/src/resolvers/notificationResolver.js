@@ -2,6 +2,7 @@ const UserNotifications = require('../models/Notification');
 const User = require('../models/User');
 const Ad = require('../models/Ad');
 const { checkAuth } = require('../middleware/auth');
+const NotificationService = require('../services/notificationService');
 
 const notificationResolvers = {
   Query: {
@@ -199,22 +200,35 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        const notification = await Notification.findOneAndDelete({
-          _id: id,
-          userId: user.id
-        });
-        
-        if (!notification) {
-          throw new Error('Notification not found');
-        }
-        
-        return {
-          success: true,
-          message: 'Notification deleted successfully'
-        };
+        const result = await NotificationService.deleteNotification(user.id, id);
+        return result;
       } catch (error) {
         console.error('Error deleting notification:', error);
-        throw new Error('Failed to delete notification');
+        throw new Error(`Failed to delete notification: ${error.message}`);
+      }
+    },
+
+    deleteAllNotifications: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const result = await NotificationService.deleteAllNotifications(user.id);
+        return result;
+      } catch (error) {
+        console.error('Error deleting all notifications:', error);
+        throw new Error(`Failed to delete all notifications: ${error.message}`);
+      }
+    },
+
+    deleteNotificationsByCategory: async (_, { category }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        const result = await NotificationService.deleteNotificationsByCategory(user.id, category);
+        return result;
+      } catch (error) {
+        console.error('Error deleting notifications by category:', error);
+        throw new Error(`Failed to delete notifications by category: ${error.message}`);
       }
     }
   },

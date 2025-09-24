@@ -56,6 +56,8 @@ const notificationTypeDefs = gql`
     markNotificationAsRead(id: ID!): Notification!
     markAllNotificationsAsRead: NotificationResponse!
     deleteNotification(id: ID!): NotificationResponse!
+    deleteAllNotifications: NotificationResponse!
+    deleteNotificationsByCategory(category: String!): NotificationResponse!
   }
 
   type Subscription {

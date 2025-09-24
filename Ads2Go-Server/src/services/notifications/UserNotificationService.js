@@ -1,103 +1,56 @@
-const UserNotifications = require('../models/Notification');
-const User = require('../models/User');
-const Ad = require('../models/Ad');
-const EmailService = require('../utils/emailService');
+const BaseNotificationService = require('./BaseNotificationService');
+const EmailService = require('../../utils/emailService');
 
-class NotificationService {
-  /**
-   * Create a notification for a user
-   */
-  static async createNotification(userId, title, message, type = 'INFO', options = {}) {
-    try {
-      // Find or create user notifications document
-      let userNotifications = await UserNotifications.findOne({ userId });
-      
-      if (!userNotifications) {
-        // Create new user notifications document
-        userNotifications = new UserNotifications({
-          userId,
-          notifications: [],
-          unreadCount: 0
-        });
-      }
-
-      // Create new notification item
-      const notificationItem = {
-        title,
-        message,
-        type,
-        read: false,
-        readAt: null,
-        adId: options.adId ? options.adId.toString() : null, // Convert ObjectId to string
-        adTitle: options.adTitle || null,
-        data: options.data || {}
-      };
-
-      // Add notification to the array
-      userNotifications.notifications.unshift(notificationItem); // Add to beginning
-      userNotifications.unreadCount += 1;
-
-      // Keep only last 50 notifications to prevent document from growing too large
-      if (userNotifications.notifications.length > 50) {
-        userNotifications.notifications = userNotifications.notifications.slice(0, 50);
-      }
-
-      await userNotifications.save();
-      console.log(`✅ Notification created for user ${userId}: ${title}`);
-      console.log('🔔 NotificationService: Created notification:', notificationItem);
-      
-      return notificationItem;
-    } catch (error) {
-      console.error('Error creating notification:', error);
-      throw error;
-    }
-  }
-
+class UserNotificationService extends BaseNotificationService {
   /**
    * Send ad approval notification
    */
   static async sendAdApprovalNotification(adId) {
     try {
-      console.log('🔔 NotificationService: Starting ad approval notification for ad:', adId);
+      console.log('🔔 UserNotificationService: Starting ad approval notification for ad:', adId);
       
+      const Ad = require('../../models/Ad');
       const ad = await Ad.findById(adId).populate('userId');
       if (!ad) {
-        console.error('❌ NotificationService: Ad not found:', adId);
+        console.error('❌ UserNotificationService: Ad not found:', adId);
         throw new Error('Ad not found');
       }
 
       const user = ad.userId;
       if (!user) {
-        console.error('❌ NotificationService: User not found for ad:', adId);
+        console.error('❌ UserNotificationService: User not found for ad:', adId);
         throw new Error('User not found');
       }
 
-      console.log('👤 NotificationService: Found user:', user.firstName, user.lastName, user.email);
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
 
       // Create in-app notification
-      console.log('🔔 NotificationService: Creating in-app notification...');
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
       const notification = await this.createNotification(
         user._id,
         '🎉 Ad Approved!',
         `Your advertisement "${ad.title}" has been approved and is now live!`,
         'SUCCESS',
         {
+          userRole: 'USER',
+          category: 'AD_APPROVAL',
+          priority: 'HIGH',
           adId: ad._id,
           adTitle: ad.title
         }
       );
-      console.log('✅ NotificationService: In-app notification created');
+      console.log('✅ UserNotificationService: In-app notification created');
 
       // Send email notification
-      console.log('📧 NotificationService: Sending email notification...');
+      console.log('📧 UserNotificationService: Sending email notification...');
       await this.sendAdApprovalEmail(user.email, user.firstName, ad.title, ad._id);
-      console.log('✅ NotificationService: Email notification sent');
+      console.log('✅ UserNotificationService: Email notification sent');
 
       return notification;
     } catch (error) {
-      console.error('❌ NotificationService: Error sending ad approval notification:', error);
-      console.error('❌ NotificationService: Error details:', error.message);
-      console.error('❌ NotificationService: Stack trace:', error.stack);
+      console.error('❌ UserNotificationService: Error sending ad approval notification:', error);
+      console.error('❌ UserNotificationService: Error details:', error.message);
+      console.error('❌ UserNotificationService: Stack trace:', error.stack);
       throw error;
     }
   }
@@ -107,6 +60,7 @@ class NotificationService {
    */
   static async sendAdRejectionNotification(adId, reason) {
     try {
+      const Ad = require('../../models/Ad');
       const ad = await Ad.findById(adId).populate('userId');
       if (!ad) {
         throw new Error('Ad not found');
@@ -124,6 +78,9 @@ class NotificationService {
         `Your advertisement "${ad.title}" has been rejected. Reason: ${reason}`,
         'ERROR',
         {
+          userRole: 'USER',
+          category: 'AD_REJECTION',
+          priority: 'HIGH',
           adId: ad._id,
           adTitle: ad.title
         }
@@ -149,7 +106,11 @@ class NotificationService {
         '💳 Payment Confirmed',
         `Your payment of $${amount} for "${adTitle}" has been confirmed.`,
         'SUCCESS',
-        {}
+        {
+          userRole: 'USER',
+          category: 'PAYMENT_CONFIRMATION',
+          priority: 'HIGH'
+        }
       );
 
       return notification;
@@ -169,7 +130,11 @@ class NotificationService {
         '📊 Ad Performance Update',
         `Your ad "${adTitle}" has reached ${impressions} impressions and ${plays} plays!`,
         'INFO',
-        {}
+        {
+          userRole: 'USER',
+          category: 'AD_PERFORMANCE',
+          priority: 'MEDIUM'
+        }
       );
 
       return notification;
@@ -281,26 +246,6 @@ class NotificationService {
       throw error;
     }
   }
-
-  /**
-   * Get user's notification statistics
-   */
-  static async getUserNotificationStats(userId) {
-    try {
-      const total = await Notification.countDocuments({ userId });
-      const unread = await Notification.countDocuments({ userId, read: false });
-      const read = total - unread;
-
-      return {
-        total,
-        unread,
-        read
-      };
-    } catch (error) {
-      console.error('Error getting notification stats:', error);
-      throw error;
-    }
-  }
 }
 
-module.exports = NotificationService;
+module.exports = UserNotificationService;
