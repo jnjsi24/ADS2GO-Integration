@@ -18,6 +18,7 @@ import {
 import CreateMaterialModal from './tabs/materials/CreateMaterialModal';
 import MaterialDetailsModal from './tabs/materials/MaterialDetailsModal';
 import TabletConnectionModal from './tabs/materials/TabletConnectionModal';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 
@@ -127,6 +128,10 @@ const Materials: React.FC = () => {
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
   const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
 
   // Custom refresh function for connection status
   const handleRefetchConnectionStatus = async () => {
@@ -486,16 +491,30 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const handleDeleteMaterial = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this material?')) {
+  const handleDeleteMaterial = (id: string) => {
+    setMaterialToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (materialToDelete) {
       try {
-        await deleteMaterial({ variables: { id } });
+        await deleteMaterial({ variables: { id: materialToDelete } });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       } catch (error) {
         console.error('Error deleting material:', error);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setMaterialToDelete(null);
   };
 
   const handleCloseModal = () => {
@@ -503,12 +522,17 @@ const Materials: React.FC = () => {
     setSelectedMaterialDetails(null);
   };
 
-  const handleRemoveFromDriver = async (id: string) => {
-    if (window.confirm('Are you sure you want to remove this material from the driver?')) {
+  const handleRemoveFromDriver = (id: string) => {
+    setMaterialToRemove(id);
+    setShowRemoveModal(true);
+  };
+
+  const confirmRemove = async () => {
+    if (materialToRemove) {
       try {
         await updateMaterial({
           variables: {
-            id,
+            id: materialToRemove,
             input: {
               driverId: null
             }
@@ -516,10 +540,19 @@ const Materials: React.FC = () => {
         });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
       } catch (error) {
         console.error('Error removing material from driver:', error);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
       }
     }
+  };
+
+  const cancelRemove = () => {
+    setShowRemoveModal(false);
+    setMaterialToRemove(null);
   };
 
   const handleCreateSubmit = async (formData: CreateMaterialInput) => {
@@ -848,6 +881,30 @@ const Materials: React.FC = () => {
       onCancelEditingDates={cancelEditingDates}
       onSaveDateChanges={saveDateChanges}
       onUpdateEditingDate={updateEditingDate}
+    />
+    
+    {/* Delete Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showDeleteModal}
+      onClose={cancelDelete}
+      onConfirm={confirmDelete}
+      title="Delete Material"
+      message="Are you sure you want to delete this material? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+    />
+    
+    {/* Remove from Driver Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showRemoveModal}
+      onClose={cancelRemove}
+      onConfirm={confirmRemove}
+      title="Remove Material from Driver"
+      message="Are you sure you want to remove this material from the driver?"
+      confirmText="Remove"
+      cancelText="Cancel"
+      confirmButtonClass="bg-orange-600 hover:bg-orange-700"
     />
     </div>
   );

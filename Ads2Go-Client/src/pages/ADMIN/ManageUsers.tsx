@@ -6,6 +6,7 @@ import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
 import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 interface User {
   id: string;
@@ -149,6 +150,8 @@ const ManageUsers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -221,29 +224,43 @@ const ManageUsers: React.FC = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+  const handleDelete = (id: string) => {
+    setUserToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (userToDelete) {
       try {
         const result = await deleteUser({
-          variables: { id },
+          variables: { id: userToDelete },
         });
         
         if (result.data?.deleteUser?.success) {
           // Remove the user from the local state
-          setUsers(prev => prev.filter((user) => user.id !== id));
-          if (selectedUser?.id === id) setSelectedUser(null);
+          setUsers(prev => prev.filter((user) => user.id !== userToDelete));
+          if (selectedUser?.id === userToDelete) setSelectedUser(null);
 
           // Remove from selected users if it was selected
-          setSelectedUsers(prev => prev.filter(userId => userId !== id));
+          setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
           alert('User deleted successfully');
         } else {
           alert('Failed to delete user: ' + (result.data?.deleteUser?.message || 'Unknown error'));
         }
+        setShowDeleteModal(false);
+        setUserToDelete(null);
       } catch (err: any) {
         alert('Error deleting user: ' + (err.message || 'Unknown error'));
         console.error('Error deleting user:', err);
+        setShowDeleteModal(false);
+        setUserToDelete(null);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setUserToDelete(null);
   };
 
   const handleStatusFilterChange = (status: string) => {
@@ -702,7 +719,19 @@ const handleCityFilterChange = (city: string) => {
             </button>
           </div>
         </div>
-      </div>      
+      </div>
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete User"
+        message="Are you sure you want to delete this user? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </AdminLayout>
   );
 };
