@@ -7,6 +7,7 @@ import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // Form data type
@@ -90,6 +91,8 @@ const Advertisements: React.FC = () => {
     status: 'PENDING' as const,
   });
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adToDelete, setAdToDelete] = useState<string | null>(null);
   const { data, loading, error } = useQuery(GET_MY_ADS);
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
@@ -216,14 +219,26 @@ const Advertisements: React.FC = () => {
     setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleDeleteAd = async (adId: string) => {
-    if (window.confirm('Are you sure you want to delete this advertisement? This action cannot be undone.')) {
+  const handleDeleteAd = (adId: string) => {
+    setAdToDelete(adId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (adToDelete) {
       try {
-        await deleteAd({ variables: { id: adId } });
+        await deleteAd({ variables: { id: adToDelete } });
+        setShowDeleteModal(false);
+        setAdToDelete(null);
       } catch (error) {
         console.error('Error deleting ad:', error);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setAdToDelete(null);
   };
 
   const handleViewAd = (ad: Ad) => {
@@ -814,6 +829,19 @@ const Advertisements: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+      
       <style>
         {`
           @keyframes slideIn {

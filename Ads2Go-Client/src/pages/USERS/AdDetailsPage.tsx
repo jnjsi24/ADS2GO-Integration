@@ -7,6 +7,7 @@ import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // Ad type (updated to include startTime and endTime)
@@ -117,6 +118,7 @@ const AdDetailsPage: React.FC = () => {
   const adOptions = ["Material 1", "Material 2", "Material 3"];
   const [selectedAd, setSelectedAd] = useState(adOptions[0]);
   const [showAdDropdown, setShowAdDropdown] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
@@ -137,6 +139,17 @@ const AdDetailsPage: React.FC = () => {
       alert('Failed to delete advertisement. Please try again.');
     },
   });
+
+  const confirmDelete = () => {
+    if (ad) {
+      deleteAd({ variables: { id: ad.id } });
+      setShowDeleteModal(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+  };
 
   // Find the specific ad by ID
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
@@ -353,11 +366,7 @@ const AdDetailsPage: React.FC = () => {
               </div>
 
               <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to delete this advertisement? This action cannot be undone.')) {
-                    deleteAd({ variables: { id: ad.id } });
-                  }
-                }}
+                onClick={() => setShowDeleteModal(true)}
                 disabled={deleteLoading || ad?.status !== 'PENDING'}
                 className={`ml-auto px-4 py-2 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-sm ${
                   deleteLoading || ad?.status !== 'PENDING' ? 'opacity-50 cursor-not-allowed' : ''
@@ -598,6 +607,18 @@ const AdDetailsPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

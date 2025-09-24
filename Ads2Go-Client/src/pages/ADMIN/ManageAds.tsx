@@ -18,6 +18,7 @@ import {
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 import {
   GET_ALL_ADS,
@@ -56,6 +57,8 @@ const ManageAds: React.FC = () => {
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
   const [deploymentStatusFilter, setDeploymentStatusFilter] = useState('All Status');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adToDelete, setAdToDelete] = useState<string | null>(null);
 
   
 
@@ -204,17 +207,29 @@ const ManageAds: React.FC = () => {
     }
   };
 
-  const handleDelete = async (adId: string) => {
-    if (window.confirm('Are you sure you want to delete this ad? This action cannot be undone.')) {
+  const handleDelete = (adId: string) => {
+    setAdToDelete(adId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (adToDelete) {
       try {
         await deleteAd({
-          variables: { id: adId }
+          variables: { id: adToDelete }
         });
-        alert(`Ad ${adId} deleted successfully!`);
+        alert(`Ad ${adToDelete} deleted successfully!`);
+        setShowDeleteModal(false);
+        setAdToDelete(null);
       } catch (error) {
         console.error('Error deleting ad:', error);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setAdToDelete(null);
   };
 
   const handleStatusFilterChange = (status: string) => {
@@ -720,6 +735,18 @@ const ManageAds: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this ad? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };
