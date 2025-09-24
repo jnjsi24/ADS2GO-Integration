@@ -4,6 +4,7 @@ import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  Calenda
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // === Types ===
@@ -157,6 +158,8 @@ const ManageRiders: React.FC = () => {
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
   const [showImageModal, setShowImageModal] = useState(false);
   const [modalImageSrc, setModalImageSrc] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
 
   // Apollo hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
@@ -292,26 +295,38 @@ const ManageRiders: React.FC = () => {
     }
   };
 
-  const handleDelete = async (driverId: string) => {
-    if (!window.confirm('Are you sure you want to delete this driver? This action cannot be undone.')) {
-      return;
-    }
+  const handleDelete = (driverId: string) => {
+    setDriverToDelete(driverId);
+    setShowDeleteModal(true);
+  };
 
-    try {
-      const result = await deleteDriver({ 
-        variables: { driverId } 
-      });
+  const confirmDelete = async () => {
+    if (driverToDelete) {
+      try {
+        const result = await deleteDriver({ 
+          variables: { driverId: driverToDelete } 
+        });
 
-      if (result.data?.deleteDriver?.success) {
-        alert(result.data.deleteDriver.message);
-        refetch();
-      } else {
-        alert(result.data?.deleteDriver?.message || 'Failed to delete driver');
+        if (result.data?.deleteDriver?.success) {
+          alert(result.data.deleteDriver.message);
+          refetch();
+        } else {
+          alert(result.data?.deleteDriver?.message || 'Failed to delete driver');
+        }
+        setShowDeleteModal(false);
+        setDriverToDelete(null);
+      } catch (error: any) {
+        console.error('Error deleting driver:', error);
+        alert(error.message || 'Failed to delete driver');
+        setShowDeleteModal(false);
+        setDriverToDelete(null);
       }
-    } catch (error: any) {
-      console.error('Error deleting driver:', error);
-      alert(error.message || 'Failed to delete driver');
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setDriverToDelete(null);
   };
   
   const handleViewDetails = (driver: Driver) => {
@@ -846,6 +861,18 @@ const ManageRiders: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Driver"
+        message="Are you sure you want to delete this driver? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

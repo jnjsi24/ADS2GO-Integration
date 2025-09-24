@@ -5,7 +5,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
+import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // Form data type
@@ -66,7 +68,6 @@ const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'R
 
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
-  const [pos, setPos] = useState({ x: 50, y: 50 });
   const navigate = useNavigate();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -90,9 +91,30 @@ const Advertisements: React.FC = () => {
     status: 'PENDING' as const,
   });
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adToDelete, setAdToDelete] = useState<string | null>(null);
   const { data, loading, error } = useQuery(GET_MY_ADS);
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
+  });
+
+  const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
+    onCompleted: () => {
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Advertisement deleted successfully!', 
+        type: 'success' as const 
+      }]);
+    },
+    onError: (error) => {
+      console.error('Error deleting ad:', error);
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Failed to delete advertisement', 
+        type: 'error' as const 
+      }]);
+    },
   });
   
   const ads: Ad[] = data?.getMyAds || [];
@@ -197,23 +219,26 @@ const Advertisements: React.FC = () => {
     setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleDeleteAd = async (adId: string) => {
-    try {
-      // Handle delete ad logic here
-      console.log('Deleting ad:', adId);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
-        message: 'Ad deleted successfully!', 
-        type: 'success' as const 
-      }]);
-    } catch (error) {
-      console.error('Error deleting ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
-        message: 'Failed to delete ad', 
-        type: 'error' as const 
-      }]);
+  const handleDeleteAd = (adId: string) => {
+    setAdToDelete(adId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (adToDelete) {
+      try {
+        await deleteAd({ variables: { id: adToDelete } });
+        setShowDeleteModal(false);
+        setAdToDelete(null);
+      } catch (error) {
+        console.error('Error deleting ad:', error);
+      }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setAdToDelete(null);
   };
 
   const handleViewAd = (ad: Ad) => {
@@ -247,8 +272,6 @@ const Advertisements: React.FC = () => {
               d1.getMonth() === d2.getMonth() &&
               d1.getDate() === d2.getDate();
   };
-
- 
 
   const isSameWeek = (d1: Date, d2: Date): boolean => {
     const startOfWeek1 = new Date(d1);
@@ -291,7 +314,6 @@ const Advertisements: React.FC = () => {
 
   const startItem = indexOfFirstItem + 1;
   const endItem = Math.min(indexOfLastItem, filteredAds.length);
-  
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -372,8 +394,8 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FBFBFB] pl-64 pr-5">
-      <div className="bg-[#FBFBFB] w-full min-h-screen">
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
       {/* Header with Title*/}
       <div className="flex justify-between items-center mb-6 pt-10">
         <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
@@ -381,7 +403,7 @@ const Advertisements: React.FC = () => {
           <div className="flex gap-1">
             <input
               type="text"
-              className="text-xs text-black rounded-md pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -391,7 +413,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between rounded-md w-full text-xs text-black  pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -402,7 +424,7 @@ const Advertisements: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full  shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
                     {planFilterOptions.map((plan) => (
                       <button
@@ -422,7 +444,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full rounded-md text-xs text-black  pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -433,7 +455,7 @@ const Advertisements: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full  shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map((status) => (
                       <button
@@ -455,46 +477,22 @@ const Advertisements: React.FC = () => {
       {/* Add New Material Button */}
       <div className="flex justify-end mb-6">
         <button
-          onClick={() => navigate("/create-advertisement")}
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = ((e.clientX - rect.left) / rect.width) * 100;
-            const y = ((e.clientY - rect.top) / rect.height) * 100;
-            setPos({ x, y });
-          }}
-          className="relative group inline-flex items-center justify-center overflow-hidden
-                    rounded-md px-6 py-3 text-xs font-medium text-white
-                    transition-all duration-300 hover:scale-105"
-          style={{
-            // Base blue gradient background
-            backgroundImage: `linear-gradient(to right, #3674B5 0%, #1B5087 100%),
-                              radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
-          }}
+          onClick={() => navigate('/create-advertisement')}
+          className="py-3 bg-[#feb011] text-xs text-white rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
         >
-          <span className="inline-flex items-center gap-2">
-            <Plus size={16} />
-            Add New Ads
-          </span>
-
-          {/* Light-blue shine that follows the mouse on hover */}
-          <span
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            style={{
-              background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0.5), transparent 60%)`,
-            }}
-          />
+          <Plus size={16} />
+          Add New Ads
         </button>
       </div>
-
       
 
       {/* Ad Cards */}
-      <div className=" bg-[#FBFBFB] p-6 grid grid-cols-4 gap-6">
+      <div className=" bg-white p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
               key={ad.id}
-              className=" overflow-hidden  shadow-md cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className=" overflow-hidden rounded-lg shadow-md cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
               <div className="w-full h-48 flex-shrink-0 relative">
                 {/* Fixed media display based on ManageAds.tsx */}
@@ -563,21 +561,35 @@ const Advertisements: React.FC = () => {
                 )}
 
                 <div className="mt-2 pt-2 border-t border-gray-200">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/ad-details/${ad.id}`);
-                    }}
-                    className="text-gray-500 text-xs font-semibold px-4 py-2 flex items-center justify-center w-full hover:bg-[#1B5087] hover:text-white transition-colors"
-                  >
-                    View Details →
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/ad-details/${ad.id}`);
+                      }}
+                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                    >
+                      View Details →
+                    </button>
+                    {ad.status === 'PENDING' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAd(ad.id);
+                        }}
+                        disabled={deleteLoading}
+                        className="text-red-600 text-xs font-semibold rounded-md px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deleteLoading ? '...' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
 
               <div className="absolute top-2 left-2">
-                <span className={`inline-block px-2 py-1 text-xs font-semibold  ${
+                <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
                   ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
                   ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
                   ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
@@ -594,45 +606,45 @@ const Advertisements: React.FC = () => {
             </div>
           ))
         ) : (
-          <div className="col-span-4 bg-[#FBFBFB] text-center text-black">
+          <div className="col-span-4 text-center text-gray-500">
             No advertisements found for the selected filters.
           </div>
         )}
       </div>
 
       {/* Pagination */}
-      <div className="flex justify-center items-center mt-6 space-x-2">
-  <button
-    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-    disabled={currentPage === 1}
-    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-[#1B5087] hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-600"
-  >
-    Previous
-  </button>
-  <div className="flex space-x-1">
-    {Array.from({ length: totalPages }, (_, index) => (
-      <button
-        key={index + 1}
-        onClick={() => setCurrentPage(index + 1)}
-        className={`px-3 py-1 rounded-lg transition-colors duration-200 ${
-          currentPage === index + 1
-            ? 'bg-[#1B5087] text-white'
-            : 'bg-white text-gray-700 hover:bg-gray-200'
-        }`}
-      >
-        {index + 1}
-      </button>
-    ))}
-  </div>
-  <button
-    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-    disabled={currentPage === totalPages}
-    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-[#1B5087] hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-gray-600"
-  >
-    Next
-  </button>
-</div>
-
+      <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
+        <span className="text-gray-500">
+          Showing {startItem}-{endItem} of {filteredAds.length}
+        </span>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+          >
+            «
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <button
+              key={page}
+              onClick={() => handlePageChange(page)}
+              className={`px-2 py-1 border border-gray-300 rounded ${
+                currentPage === page ? 'bg-[#3674B5] text-white' : ''
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+          >
+            »
+          </button>
+        </div>
+      </div>
       </div>
 
       {/* Toast Notifications */}
@@ -640,7 +652,7 @@ const Advertisements: React.FC = () => {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`text-white px-4 py-2 shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
+            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
           >
             <span>{toast.message}</span>
             <button
@@ -663,7 +675,7 @@ const Advertisements: React.FC = () => {
           ></div>
 
           {/* Form container sliding in from right */}
-          <div className="relative w-full max-w-xl h-[730px] pb-6 bg-gray-200 mt-2 shadow-lg animate-slideIn">
+          <div className="relative w-full max-w-xl h-[730px] pb-6 rounded-3xl bg-gray-200 mt-2 shadow-lg animate-slideIn">
             <div className="p-6 h-full overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Create New Advertisement</h2>
@@ -679,7 +691,7 @@ const Advertisements: React.FC = () => {
                     name="title"
                     value={formData.title}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   />
                 </div>
@@ -692,7 +704,7 @@ const Advertisements: React.FC = () => {
                     name="description"
                     value={formData.description}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                     rows={3}
                   />
@@ -706,7 +718,7 @@ const Advertisements: React.FC = () => {
                     name="vehicleType"
                     value={formData.vehicleType}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Vehicle Type</option>
@@ -725,7 +737,7 @@ const Advertisements: React.FC = () => {
                     name="materialsUsed"
                     value={formData.materialsUsed}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                     disabled={!formData.vehicleType}
                   >
@@ -744,7 +756,7 @@ const Advertisements: React.FC = () => {
                     name="plan"
                     value={formData.plan}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Plan</option>
@@ -770,7 +782,7 @@ const Advertisements: React.FC = () => {
                     name="adFormat"
                     value={formData.adFormat}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Format</option>
@@ -782,7 +794,7 @@ const Advertisements: React.FC = () => {
                 {/* Media Upload */}
                 <div className="flex flex-col space-y-1">
                   <label htmlFor="media" className="text-sm font-medium text-gray-700">Media Upload</label>
-                  <div className="w-full bg-gray-200 border border-gray-300  p-2 focus-within:ring-2 focus-within:ring-[#3674B5] focus:outline-none">
+                  <div className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus-within:ring-2 focus-within:ring-[#3674B5] focus:outline-none">
                     <input
                       id="media"
                       type="file"
@@ -799,14 +811,14 @@ const Advertisements: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCreateAdPopup(false)}
-                    className="px-5 py-2  hover:bg-gray-200 border border-gray-300 text-gray-700"
+                    className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
                   >
                     Cancel
                   </button>
                   <Link to='/payment'>
                     <button
                       type="submit"
-                      className="px-6 py-2  bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
+                      className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
                     >
                       Create Advertisement
                     </button>
@@ -817,6 +829,19 @@ const Advertisements: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+      
       <style>
         {`
           @keyframes slideIn {
