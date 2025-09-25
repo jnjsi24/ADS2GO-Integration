@@ -10,7 +10,7 @@ import tabletRegistrationService from '../services/tabletRegistration';
 import playbackWebSocketService from '../services/playbackWebSocketService';
 
 // API Base URL - should match the one in tabletRegistration service
-const API_BASE_URL = 'http://192.168.1.7:5000';
+const API_BASE_URL = 'http://192.168.100.22:5000';
 
 // Suppress expo-av deprecation warning
 const originalWarn = console.warn;

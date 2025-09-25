@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { request, gql } from 'graphql-request';
 import API_CONFIG from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const API_URL = API_CONFIG.API_URL;
 console.log('🔍 API_URL from config:', API_URL);
@@ -113,6 +114,7 @@ interface DriverProfile {
 export default function Home() {
   const navigation = useNavigation();
   const router = useRouter();
+  const { signOut } = useAuth();
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,16 +255,9 @@ export default function Home() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            // Clear all stored data
-            await AsyncStorage.multiRemove([
-              'token',
-              'driverId',
-              'driverInfo',
-              'pendingDriver'
-            ]);
-            console.log('Logged out - cleared AsyncStorage');
-            // @ts-ignore
-            navigation.navigate('(auth)/login');
+            console.log('Logging out...');
+            // Use AuthContext signOut which properly handles navigation
+            await signOut();
           }
         }
       ]

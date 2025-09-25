@@ -73,7 +73,7 @@ class PlaybackWebSocketService {
 
     try {
       // Use dynamic URL with environment support
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.100.22:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}`;

@@ -1,7 +1,7 @@
 // Test endpoints to verify they're correct
 console.log('🧪 Testing endpoints...');
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'http://192.168.100.22:5000';
 
 // Test the exact endpoints we're using
 const endpoints = [

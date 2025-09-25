@@ -413,7 +413,28 @@ createDriver: async (_, { input }) => {
         }
 
         if (!driver.isEmailVerified) return { success: false, message: 'Please verify your email before logging in', token: null, driver: null };
-        if (driver.accountStatus !== 'ACTIVE') return { success: false, message: `Driver account is ${driver.accountStatus}`, token: null, driver: null };
+        
+        // Provide specific messages for different account statuses
+        if (driver.accountStatus !== 'ACTIVE') {
+          let statusMessage = '';
+          switch (driver.accountStatus) {
+            case 'PENDING':
+              statusMessage = 'Your account is still under review. Please wait for approval.';
+              break;
+            case 'SUSPENDED':
+              statusMessage = 'Your account has been suspended. Please contact support for assistance.';
+              break;
+            case 'REJECTED':
+              statusMessage = 'Your account application was rejected. Please contact support for more information.';
+              break;
+            case 'RESUBMITTED':
+              statusMessage = 'Your account is being reviewed after resubmission. Please wait for approval.';
+              break;
+            default:
+              statusMessage = `Your account status is ${driver.accountStatus}. Please contact support for assistance.`;
+          }
+          return { success: false, message: statusMessage, token: null, driver: null };
+        }
 
         const valid = await bcrypt.compare(password.trim(), driver.password);
         if (!valid) {

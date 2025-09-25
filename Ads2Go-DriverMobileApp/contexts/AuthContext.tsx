@@ -56,11 +56,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      await AsyncStorage.removeItem('token');
+      // Clear all stored data
+      await AsyncStorage.multiRemove([
+        'token',
+        'driverId', 
+        'driverInfo',
+        'pendingDriver'
+      ]);
+      
       setState({
         token: null,
         isLoading: false,
       });
+      
+      // Reset navigation stack to prevent back button issues
       router.replace('/(auth)/login');
     } catch (error) {
       console.error('Failed to sign out', error);

@@ -111,27 +111,27 @@ const SiteSettings: React.FC = () => {
     },
   });
 
-  // Update form when user data changes
+  // Update form when admin data changes
   useEffect(() => {
-    if (user) {
+    if (admin) {
       const newFormData: AccountFormState = {
-        firstName: user.firstName || '',
-        middleName: user.middleName,
-        lastName: user.lastName || '',
+        firstName: admin.firstName || '',
+        middleName: admin.middleName,
+        lastName: admin.lastName || '',
         title: 'CEO',
         practice: 'Finance',
         branch: 'Quezon City',
-        email: user.email || '',
-        contactNumber: user.contactNumber,
-        loginId: `id/${user.email?.split('@')[0] || 'user'}`,
+        email: admin.email || '',
+        contactNumber: admin.contactNumber,
+        loginId: `id/${admin.email?.split('@')[0] || 'admin'}`,
         statusHistory: 'Active',
-        companyName: user.companyName,
-        houseAddress: user.houseAddress,
+        companyName: admin.companyName,
+        houseAddress: admin.houseAddress,
       };
       setAccountForm(newFormData);
       initialAccountFormRef.current = newFormData;
     }
-  }, [user]);
+  }, [admin]);
 
   // Dropdown options for Field
   const fieldOptions = [
@@ -299,10 +299,10 @@ const SiteSettings: React.FC = () => {
       return;
     }
 
-    const userId = (user as any)?._id || (user as any)?.id || (user as any)?.userId;
+    const userId = (admin as any)?._id || (admin as any)?.id || (admin as any)?.userId;
     if (!userId) {
-      console.error('User ID is missing');
-      toast.error('User ID is missing. Please try again.');
+      console.error('Admin ID is missing');
+      toast.error('Admin ID is missing. Please try again.');
       return;
     }
 
@@ -364,13 +364,13 @@ const SiteSettings: React.FC = () => {
         // Update the local form reference
         initialAccountFormRef.current = { ...accountForm };
         
-        // Update the user context with the new data
-        if (setUser) {
-          console.log('Updating user context with new data');
-          setUser({
-            ...(user || {}),
+        // Update the admin context with the new data
+        if (setAdmin) {
+          console.log('Updating admin context with new data');
+          setAdmin({
+            ...(admin || {}),
             ...input,
-            name: `${input.firstName || user?.firstName || ''} ${input.middleName || user?.middleName || ''} ${input.lastName || user?.lastName || ''}`.replace(/\s+/g, ' ').trim()
+            name: `${input.firstName || admin?.firstName || ''} ${input.middleName || admin?.middleName || ''} ${input.lastName || admin?.lastName || ''}`.replace(/\s+/g, ' ').trim()
           });
         }
         
@@ -646,7 +646,7 @@ const SiteSettings: React.FC = () => {
             >
               {!profileImage && (
                 <span className="text-white text-4xl font-bold">
-                  {getInitials(`${user?.firstName ?? ''} ${user?.middleName ?? ''} ${user?.lastName ?? ''}`.trim())}
+                  {getInitials(`${admin?.firstName ?? ''} ${admin?.middleName ?? ''} ${admin?.lastName ?? ''}`.trim())}
                 </span>
               )}
             </div>
