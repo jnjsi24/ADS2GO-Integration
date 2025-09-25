@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check} from 'lucide-react';
+import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle} from 'lucide-react';
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -161,6 +161,31 @@ const ManageRiders: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
 
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove toast after duration (default 5 seconds)
+    setTimeout(() => {
+      removeToast(id);
+    }, toast.duration || 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
   // Apollo hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_DRIVERS, {
     context: {
@@ -219,14 +244,29 @@ const ManageRiders: React.FC = () => {
       });
       
       if (result.data?.approveDriver?.success) {
-        alert(result.data.approveDriver.message);
+        addToast({
+          type: 'success',
+          title: 'Driver Approved',
+          message: result.data.approveDriver.message,
+          duration: 4000
+        });
         refetch();
       } else {
-        alert(result.data?.approveDriver?.message || 'Failed to approve driver');
+        addToast({
+          type: 'error',
+          title: 'Approval Failed',
+          message: result.data?.approveDriver?.message || 'Failed to approve driver',
+          duration: 6000
+        });
       }
     } catch (error: any) {
       console.error('Error approving driver:', error);
-      alert(error.message || 'Failed to approve driver');
+      addToast({
+        type: 'error',
+        title: 'Approval Failed',
+        message: error.message || 'Failed to approve driver',
+        duration: 6000
+      });
     }
   };
 
@@ -240,17 +280,32 @@ const ManageRiders: React.FC = () => {
       });
 
       if (result.data?.approveDriver?.success) {
-        alert(result.data.approveDriver.message);
+        addToast({
+          type: 'success',
+          title: 'Driver Approved',
+          message: result.data.approveDriver.message,
+          duration: 4000
+        });
         setShowMaterialModal(false);
         setShowDetailsModal(false);
         setSelectedMaterials([]);
         refetch();
       } else {
-        alert(result.data?.approveDriver?.message || 'Failed to approve driver');
+        addToast({
+          type: 'error',
+          title: 'Approval Failed',
+          message: result.data?.approveDriver?.message || 'Failed to approve driver',
+          duration: 6000
+        });
       }
     } catch (error: any) {
       console.error('Error approving driver with materials:', error);
-      alert(error.message || 'Failed to approve driver');
+      addToast({
+        type: 'error',
+        title: 'Approval Failed',
+        message: error.message || 'Failed to approve driver',
+        duration: 6000
+      });
     }
   };
 
@@ -391,6 +446,50 @@ const ManageRiders: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+      {/* Toast Notifications */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, scale: 0.3 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
+              className={`max-w-md w-full mx-4 bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden ${
+                toast.type === 'success' ? 'border-l-4 border-green-400' :
+                toast.type === 'error' ? 'border-l-4 border-red-400' :
+                toast.type === 'warning' ? 'border-l-4 border-yellow-400' :
+                'border-l-4 border-blue-400'
+              }`}
+            >
+              <div className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {toast.type === 'success' && <CheckCircle className="h-8 w-8 text-green-400" />}
+                    {toast.type === 'error' && <XCircle className="h-8 w-8 text-red-400" />}
+                    {toast.type === 'warning' && <AlertCircle className="h-8 w-8 text-yellow-400" />}
+                    {toast.type === 'info' && <AlertCircle className="h-8 w-8 text-blue-400" />}
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <p className="text-lg font-medium text-gray-900">{toast.title}</p>
+                    <p className="mt-1 text-sm text-gray-500">{toast.message}</p>
+                  </div>
+                  <div className="ml-4 flex-shrink-0">
+                    <button
+                      className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      onClick={() => removeToast(toast.id)}
+                    >
+                      <span className="sr-only">Close</span>
+                      <X className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Riders Management</h1>

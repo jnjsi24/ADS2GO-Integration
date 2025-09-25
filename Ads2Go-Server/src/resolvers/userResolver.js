@@ -104,6 +104,16 @@ const resolvers = {
         await EmailService.sendVerificationEmail(newUser.email, verificationCode);
         await newUser.save();
 
+        // Send notification to admins about new user registration
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendNewUserRegistrationNotification(newUser._id);
+          console.log(`✅ Sent new user registration notification for user: ${newUser._id}`);
+        } catch (notificationError) {
+          console.error('❌ Error sending new user registration notification:', notificationError);
+          // Don't fail the user creation if notification fails
+        }
+
         const token = jwt.sign({
           userId: newUser.id,
           email: newUser.email,
