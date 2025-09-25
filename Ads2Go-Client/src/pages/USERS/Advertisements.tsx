@@ -70,6 +70,7 @@ const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
   const navigate = useNavigate();
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [pos, setPos] = useState({ x: 50, y: 50 });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchTerm, setSearchTerm] = useState('');
@@ -394,105 +395,142 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pl-64 pr-5">
-      <div className="bg-white w-full min-h-screen">
-      {/* Header with Title*/}
-      <div className="flex justify-between items-center mb-6 pt-10">
-        <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
+  <div
+    className="min-h-screen pl-64 pr-5 p-10 bg-cover bg-center bg-no-repeat"
+    style={{
+      backgroundImage: "linear-gradient(135deg, #3674B5 20%, black 100%)"
+    }}
+  >       
+  {/* Header with Title*/}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl ml-5 font-bold text-white/90">Advertisements</h1>
         <div className="flex flex-col items-end gap-3">
           <div className="flex gap-1">
-            <input
-              type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-              placeholder="Search Advertisements"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+  <input
+    type="text"
+    className="text-xs text-black rounded-md pl-5 py-3 w-80 shadow-md
+               focus:outline-none bg-white/60 backdrop-blur-md placeholder-gray-700"
+    placeholder="Search Advertisements"
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+  />
 
-            {/* Filter for Plans */}
-            <div className="relative w-32">
-              <button
-                onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                {selectedPlanFilter}
-                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
-              </button>
-              <AnimatePresence>
-                {showPlanDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {planFilterOptions.map((plan) => (
-                      <button
-                        key={plan}
-                        onClick={() => handlePlanFilterChange(plan)}
-                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {plan}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+  {/* Filter for Plans */}
+  <div className="relative w-32">
+    <button
+      onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+      className="flex items-center rounded-md justify-between w-full text-xs text-black
+                 pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2">
+      {selectedPlanFilter}
+      <ChevronDown
+        size={16}
+        className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`}
+      />
+    </button>
+    <AnimatePresence>
+      {showPlanDropdown && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
+        >
+          {planFilterOptions.map((plan) => (
+            <button
+              key={plan}
+              onClick={() => handlePlanFilterChange(plan)}
+              className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
+            >
+              {plan}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
 
-            {/* Filter for Status */}
-            <div className="relative w-32">
-              <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                {selectedStatusFilter}
-                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
-              </button>
-              <AnimatePresence>
-                {showStatusDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {statusFilterOptions.map((status) => (
-                      <button
-                        key={status}
-                        onClick={() => handleStatusFilterChange(status)}
-                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
+  {/* Filter for Status */}
+  <div className="relative w-32">
+    <button
+      onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+      className="flex items-center rounded-md justify-between w-full text-xs text-black
+                 pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2">
+      {selectedStatusFilter}
+      <ChevronDown
+        size={16}
+        className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+      />
+    </button>
+    <AnimatePresence>
+      {showStatusDropdown && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
+        >
+          {statusFilterOptions.map((status) => (
+            <button
+              key={status}
+              onClick={() => handleStatusFilterChange(status)}
+              className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
+            >
+              {status}
+            </button>
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
+</div>
+
         </div>
       </div>
 
       {/* Add New Material Button */}
       <div className="flex justify-end mb-6">
         <button
-          onClick={() => navigate('/create-advertisement')}
-          className="py-3 bg-[#feb011] text-xs text-white rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+          onClick={() => navigate("/create-advertisement")}
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            setPos({ x, y });
+          }}
+          className="relative group inline-flex items-center justify-center overflow-hidden
+                     px-6 py-3 text-xs font-medium text-black/70
+                    transition-all duration-300 hover:scale-105"
+          style={{
+            // Base blue gradient background
+            backgroundImage: `linear-gradient(to right, #FFB877 0%, #FF9B45 100%),
+                              radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+          }}
         >
-          <Plus size={16} />
-          Add New Ads
+          <span className="inline-flex items-center gap-2">
+            <Plus size={16} />
+            Add New Ads
+          </span>
+
+          {/* Light-blue shine that follows the mouse on hover */}
+          <span
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{
+              background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+            }}
+          />
         </button>
       </div>
       
 
       {/* Ad Cards */}
-      <div className=" bg-white p-6 grid grid-cols-4 gap-6">
+      <div className="p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
               key={ad.id}
-              className=" overflow-hidden rounded-lg shadow-md cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
+              className=" overflow-hidden shadow-md cursor-pointer relative flex flex-col h-full hover:scale-105 transition-all duration-300"
             >
               <div className="w-full h-48 flex-shrink-0 relative">
                 {/* Fixed media display based on ManageAds.tsx */}
@@ -540,7 +578,7 @@ const Advertisements: React.FC = () => {
                 )}
               </div>
 
-              <div className="p-4 bg-white flex-grow flex flex-col">
+              <div className="p-4 bg-white/80 flex-grow flex flex-col">
                 <div
                   className="flex-grow cursor-pointer"
                   onClick={() => navigate(`/ad-details/${ad.id}`)}
@@ -567,10 +605,13 @@ const Advertisements: React.FC = () => {
                         e.stopPropagation();
                         navigate(`/ad-details/${ad.id}`);
                       }}
-                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                      className="text-gray-500 text-xs font-semibold px-4 py-2 flex items-center justify-center flex-1"
                     >
-                      View Details →
+                      <span className="relative after:absolute after:left-0 after:-bottom-1 after:h-[2px] after:w-full after:bg-[#1B5087] after:scale-x-0 after:origin-left after:transition-transform after:duration-300 hover:after:scale-x-100">
+                        View Details →
+                      </span>
                     </button>
+
                     {ad.status === 'PENDING' && (
                       <button
                         onClick={(e) => {
@@ -578,7 +619,7 @@ const Advertisements: React.FC = () => {
                           handleDeleteAd(ad.id);
                         }}
                         disabled={deleteLoading}
-                        className="text-red-600 text-xs font-semibold rounded-md px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-red-600 text-xs font-semibold  px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {deleteLoading ? '...' : 'Delete'}
                       </button>
@@ -589,7 +630,7 @@ const Advertisements: React.FC = () => {
 
 
               <div className="absolute top-2 left-2">
-                <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
+                <span className={`inline-block rounded-sm px-2 py-1 text-xs font-semibold  ${
                   ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
                   ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
                   ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
@@ -613,7 +654,7 @@ const Advertisements: React.FC = () => {
       </div>
 
       {/* Pagination */}
-      <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
+      <div className="p-4  mt-6 flex justify-between items-center">
         <span className="text-gray-500">
           Showing {startItem}-{endItem} of {filteredAds.length}
         </span>
@@ -645,14 +686,13 @@ const Advertisements: React.FC = () => {
           </button>
         </div>
       </div>
-      </div>
 
       {/* Toast Notifications */}
       <div className="fixed bottom-4 right-4 space-y-2 z-50">
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
+            className={`text-white px-4 py-2  shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
           >
             <span>{toast.message}</span>
             <button
@@ -675,7 +715,7 @@ const Advertisements: React.FC = () => {
           ></div>
 
           {/* Form container sliding in from right */}
-          <div className="relative w-full max-w-xl h-[730px] pb-6 rounded-3xl bg-gray-200 mt-2 shadow-lg animate-slideIn">
+          <div className="relative w-full max-w-xl h-[730px] pb-6 bg-gray-200 mt-2 shadow-lg animate-slideIn">
             <div className="p-6 h-full overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold">Create New Advertisement</h2>
@@ -691,7 +731,7 @@ const Advertisements: React.FC = () => {
                     name="title"
                     value={formData.title}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   />
                 </div>
@@ -704,7 +744,7 @@ const Advertisements: React.FC = () => {
                     name="description"
                     value={formData.description}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                     rows={3}
                   />
@@ -718,7 +758,7 @@ const Advertisements: React.FC = () => {
                     name="vehicleType"
                     value={formData.vehicleType}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Vehicle Type</option>
@@ -737,7 +777,7 @@ const Advertisements: React.FC = () => {
                     name="materialsUsed"
                     value={formData.materialsUsed}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                     disabled={!formData.vehicleType}
                   >
@@ -756,7 +796,7 @@ const Advertisements: React.FC = () => {
                     name="plan"
                     value={formData.plan}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Plan</option>
@@ -782,7 +822,7 @@ const Advertisements: React.FC = () => {
                     name="adFormat"
                     value={formData.adFormat}
                     onChange={handleChange}
-                    className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full bg-gray-200 border border-gray-300  p-2 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
                     required
                   >
                     <option value="">Select Format</option>
@@ -794,7 +834,7 @@ const Advertisements: React.FC = () => {
                 {/* Media Upload */}
                 <div className="flex flex-col space-y-1">
                   <label htmlFor="media" className="text-sm font-medium text-gray-700">Media Upload</label>
-                  <div className="w-full bg-gray-200 border border-gray-300 rounded-lg p-2 focus-within:ring-2 focus-within:ring-[#3674B5] focus:outline-none">
+                  <div className="w-full bg-gray-200 border border-gray-300  p-2 focus-within:ring-2 focus-within:ring-[#3674B5] focus:outline-none">
                     <input
                       id="media"
                       type="file"
@@ -811,14 +851,14 @@ const Advertisements: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCreateAdPopup(false)}
-                    className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
+                    className="px-5 py-2  hover:bg-gray-200 border border-gray-300 text-gray-700"
                   >
                     Cancel
                   </button>
                   <Link to='/payment'>
                     <button
                       type="submit"
-                      className="px-6 py-2 rounded-lg bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
+                      className="px-6 py-2  bg-[#3674B5] hover:bg-[#0E2A47] text-white font-semibold shadow hover:scale-105 transition-all duration-300"
                     >
                       Create Advertisement
                     </button>

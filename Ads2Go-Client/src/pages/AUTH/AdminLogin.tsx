@@ -38,7 +38,7 @@ const AdminLogin: React.FC = () => {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-black/30 to-gray-200">
       {/* Form Container */}
       <div className="w-full max-w-md p-10">
-        <h1 className="text-4xl font-extrabold text-black mb-6 text-center">Admin Log in</h1>
+        <h1 className="text-4xl font-bold text-black mb-6 text-center">Admin Log in</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
         {/* Email */}
         <div className="relative">
@@ -106,7 +106,7 @@ const AdminLogin: React.FC = () => {
         <button
           type="submit"
           disabled={isLoggingIn}
-          className="w-full py-3 rounded-lg bg-[#0A192F] text-white text-lg font-bold hover:bg-[#091a2c] transition disabled:bg-gray-400"
+          className="w-full py-2 bg-[#0A192F] text-white text-lg font-bold hover:bg-[#091a2c] transition disabled:bg-gray-400"
         >
           {isLoggingIn ? (
             <div className="flex items-center justify-center">

@@ -696,7 +696,7 @@ const nextMonth = () => {
             <div className="w-16 h-1 bg-gray-200 mx-2 mb-5">
               <div
                 className={`h-full ${
-                  currentStep > index + 1 ? 'bg-[#FF9B45]' : 'bg-gray-200'
+                  currentStep > index + 1 ? 'bg-[#1B5087]' : 'bg-gray-200'
                 }`}
                 style={{
                   width: currentStep > index + 1 ? '100%' : '0%',
@@ -747,7 +747,7 @@ useEffect(() => {
               {plans.map((plan, index) => {
                 let transformClass = "scale-90 -z-10"; // hidden in back
                 if (index === activePlanIndex) {
-                  transformClass = "scale-105 z-20"; // front card
+                  transformClass = "scale-105 z-20 bg-[#3674B5]/40 backdrop-blur-md"; // front card
                 } else if (index === (activePlanIndex + 1) % plans.length) {
                   transformClass = "translate-x-[60%] scale-95 z-10"; // right card
                 } else if (index === (activePlanIndex - 1 + plans.length) % plans.length) {
@@ -757,25 +757,35 @@ useEffect(() => {
                 return (
                   <div
                     key={plan._id}
-                    className={`absolute mb- w-full max-w-sm border border-gray-100 h-[550px] transform transition-all duration-500 ${transformClass}`}
+                    className={`absolute mb- w-full max-w-sm bg-white/30  border border-gray-100 h-[550px] transform transition-all duration-500 ${transformClass}`}
                     onClick={() => setActivePlanIndex(index)} // click side card to bring it front
                   >
                     <div
                       className={`p-6 cursor-pointer h-full flex flex-col justify-between transition-all
                         ${
                           selectedPlan?._id === plan._id
-                          ? "backdrop-blur-md bg-white/30 border border-white/40 shadow-xl"
-                          : "backdrop-blur-md bg-white/20 border border-white/30 hover:bg-white/30 shadow-lg"
+                          ? "backdrop-blur-md white/30 text-white border border-white/40 shadow-xl"
+                          : "backdrop-blur-md white/20 border border-white/30 hover:white/30 shadow-lg"
 
                         }`}
                     >
 
                       {/* Price Section */}
                       <div className="">
-                        <span className="text-4xl font-bold">
+                        <span
+                          className={`text-4xl font-bold transition-colors ${
+                            selectedPlan?._id === plan._id ? "text-white" : "text-gray-900"
+                          }`}
+                        >
                           ₱{plan.totalPrice?.toLocaleString() || "N/A"}
                         </span>
-                        <span className="ml-2 text-sm text-gray-500">/on this advertisement</span>
+                        <span
+                          className={`ml-2 text-sm transition-colors ${
+                            selectedPlan?._id === plan._id ? "text-white" : "text-gray-500"
+                          }`}
+                        >
+                          /on this advertisement
+                        </span>
                       </div>
 
                       {/* Plan Name */}
@@ -784,52 +794,72 @@ useEffect(() => {
                       </h3>
 
                       {/* Description */}
-                      <p className="text-gray-600 " 
-                          style={{
-                          overflow: 'hidden',
-                          display: '-webkit-box',
+                      <p
+                        className={`transition-colors text-sm ${
+                          selectedPlan?._id === plan._id ? "text-white/80" : "text-gray-600"
+                        }`}
+                        style={{
+                          overflow: "hidden",
+                          display: "-webkit-box",
                           WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          }}>
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
                         {plan.description ||
                           "Turn downtime into brand time! For 30 days, your 20-second ad plays 160 times daily on 1 headrest LCD device—keeping passengers engaged every trip."}
                       </p>
 
                       {/* What is included */}
                       <div className="mt-6">
-                        <p className="font-medium text-sm mb-3">What is included:</p>
-                        <ul className="space-y-3 text-gray-700">
+                        <p
+                          className={`font-medium text-sm mb-3 transition-colors ${
+                            selectedPlan?._id === plan._id ? "text-white" : "text-gray-800"
+                          }`}
+                        >
+                          What is included:
+                        </p>
+                        <ul
+                          className={`space-y-3 transition-colors ${
+                            selectedPlan?._id === plan._id ? "text-white" : "text-gray-700"
+                          }`}
+                        >
                           <li className="flex items-center">
                             <Clock className="w-5 h-5 mr-3" />
-                            <span className='text-sm'>{plan.durationDays || "30"} days Duration</span>
+                            <span className="text-sm">
+                              {plan.durationDays || "30"} days Duration
+                            </span>
                           </li>
                           <li className="flex items-center">
                             <Car className="w-5 h-5 mr-3" />
-                            <span className='text-sm'>{plan.vehicleType || "CAR"}</span>
+                            <span className="text-sm">{plan.vehicleType || "CAR"}</span>
                           </li>
                           <li className="flex items-center">
                             <Monitor className="w-5 h-5 mr-3" />
-                            <span className='text-sm'>{plan.materialType || "HEADREST"}</span>
+                            <span className="text-sm">{plan.materialType || "HEADREST"}</span>
                           </li>
                           <li className="flex items-center">
                             <TabletSmartphone className="w-5 h-5 mr-3" />
-                            <span className='text-sm'>{plan.numberOfDevices || "1"} Device</span>
+                            <span className="text-sm">
+                              {plan.numberOfDevices || "1"} Device
+                            </span>
                           </li>
                           <li className="flex items-center">
                             <Hourglass className="w-5 h-5 mr-3" />
-                            <span className='text-sm'>{plan.adLengthSeconds || "30"} seconds</span>
+                            <span className="text-sm">
+                              {plan.adLengthSeconds || "30"} seconds
+                            </span>
                           </li>
                         </ul>
                         {selectedPlan && index === activePlanIndex && (
                           <div className="mt-6 flex justify-center">
                             {formData.materialId ? (
-                              <div className="bg-blue-200 p-3 w-80 text-center rounded-md text-[#1B5087]">
+                              <div className="bg-white font-semibold p-3 w-80 text-center rounded-md text-[#1B5087]">
                                 <p className="text-sm">
                                   There is a compatible material on this plan
                                 </p>
                               </div>
                             ) : (
-                              <div className="bg-red-100 p-3 w-80 text-center rounded-md text-red-700">
+                              <div className="bg-white font-semibold p-3 w-80 text-center rounded-md text-red-700">
                                 <p className="text-sm">
                                   There is no compatible material on this ad
                                 </p>
@@ -989,7 +1019,7 @@ useEffect(() => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -10 }}
         transition={{ duration: 0.25 }}
-        className="bg-white p-14"
+        className=" p-14"
       >
         <div className="flex justify-between items-center mb-3">
           <button
@@ -1003,7 +1033,7 @@ useEffect(() => {
           <div className="relative">
             <button
               onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              className="flex items-center justify-between w-32 rounded-md text-[#1B5087] text-lg font-bold mb-7 bg-white border-none focus:outline-none cursor-pointer"
+              className="flex items-center justify-between w-32 rounded-md text-[#1B5087] text-lg font-bold mb-7  border-none focus:outline-none cursor-pointer"
             >
               {[
                 'January','February','March','April','May','June',
@@ -1021,7 +1051,7 @@ useEffect(() => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md overflow-hidden"
+                  className="absolute z-10 mt-1 w-full  shadow-lg rounded-md overflow-hidden"
                 >
                   {[
                     'January','February','March','April','May','June',
@@ -1038,7 +1068,7 @@ useEffect(() => {
                           setCurrentDate(new Date(currentDate.getFullYear(), idx, 1));
                           setShowMonthDropdown(false);
                         }}
-                        className={`block w-full bg-white text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${
+                        className={`block w-full  text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 ${
                           isDisabled ? 'opacity-40 cursor-not-allowed' : ''
                         }`}
                       >
@@ -1059,7 +1089,7 @@ useEffect(() => {
                 setShowYearDropdown(!showYearDropdown);
                 setShowMonthDropdown(false); // close month if open
               }}
-              className="flex items-center justify-between w-28 rounded-md text-[#1B5087] text-lg font-bold mb-7 bg-white border-none focus:outline-none cursor-pointer"
+              className="flex items-center justify-between w-28 rounded-md text-[#1B5087] text-lg font-bold mb-7  border-none focus:outline-none cursor-pointer"
             >
               {currentDate.getFullYear()}
               <ChevronDown
@@ -1077,7 +1107,7 @@ useEffect(() => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md overflow-hidden max-h-60 overflow-y-auto"
+                  className="absolute z-10 mt-1 w-full  shadow-lg rounded-md overflow-hidden max-h-60 overflow-y-auto"
                 >
                   {Array.from({ length: 6 }, (_, i) => today.getFullYear() - 1 + i).map(
                     (year) => (
@@ -1090,7 +1120,7 @@ useEffect(() => {
                             setShowYearDropdown(false);
                           }
                         }}
-                        className={`block w-full bg-white text-left px-4 py-2 text-sm transition-colors duration-150 ${
+                        className={`block w-full  text-left px-4 py-2 text-sm transition-colors duration-150 ${
                           year < today.getFullYear()
                             ? 'text-gray-300 cursor-not-allowed'
                             : 'text-gray-700 hover:bg-gray-100'
@@ -1205,7 +1235,7 @@ useEffect(() => {
           if (file) handleFileUpload({ target: { files: [file] } } as any);
         }}
         className={`flex flex-col justify-between flex-1 border-2 border-dashed shadow-inner rounded-md cursor-pointer transition p-8 min-h-[400px]
-          ${isDragging ? "border-[#1B5087] bg-blue-50" : "border-gray-300 bg-white"}
+          ${isDragging ? "border-[#1B5087] bg-blue-50" : "border-gray-300 "}
         `}
       >
         {/* Hidden file input for Browse button */}
@@ -1408,7 +1438,7 @@ useEffect(() => {
       <div className="grid grid-cols-1 md:grid-cols-[1.8fr_2fr] gap-4 mb-4">
         
         {/* LEFT COLUMN : Media + Campaign Schedule BELOW */}
-        <div className="bg-white p-4">
+        <div className=" p-4">
           {formData.mediaPreview && (
             <div className="mb-1">
               <div className="border border-gray-200 rounded-md overflow-hidden mt-1">
@@ -1454,7 +1484,7 @@ useEffect(() => {
         </div>
 
         {/* Title/Description/Duration */}
-        <div className="bg-white rounded-lg">
+        <div className=" rounded-lg">
           <div className="mb-4">
           </div>
           <div className="space-y-2 text-sm text-gray-700">
@@ -1468,9 +1498,9 @@ useEffect(() => {
 
 
         {/* Selected Plan & Material */}
-        <div className="bg-white">
+        <div className="">
           {/* === Selected Plan & Material (Updated UI) === */}
-          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8 mt-10 bg-white">
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-8 mt-10">
             {/* Left: Plan Details */}
             <div className="space-y-4 text-gray-800 mt-5">
               {/* Plan */}
@@ -1567,12 +1597,14 @@ useEffect(() => {
       </div>
     </div>
   );
-
-
   
   return (
-    <div className="min-h-screen bg-white pl-64 pr-5 p-10">
-      <div className="bg-white ">
+   <div
+  className="min-h-screen pl-64 pr-5 p-10 bg-cover bg-center bg-no-repeat"
+  style={{
+    backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)"
+  }}
+>
         <div className="flex items-center mb-6 pl-9">
           <button
             onClick={() => navigate('/advertisements')}
@@ -1583,7 +1615,7 @@ useEffect(() => {
           </button>
         </div>
         
-        <div className="max-w-5xl mx-auto bg-white">
+        <div className="max-w-5xl mx-auto ">
           {renderStepIndicator()}
           
           {errors.general && (
@@ -1707,7 +1739,6 @@ useEffect(() => {
             )}
           </div>
         </div>
-      </div>
       <div
         className={`fixed bottom-5 right-5 bg-[#251f70] text-white px-6 py-3  shadow-lg transform transition-all duration-500 ${
           showToast ? 'translate-x-0 opacity-100' : 'translate-x-32 opacity-0'
