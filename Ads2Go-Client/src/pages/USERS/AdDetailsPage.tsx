@@ -1,11 +1,13 @@
 // src/pages/AdDetailsPage.tsx
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { ChevronLeft, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
+import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // Ad type (updated to include startTime and endTime)
@@ -19,6 +21,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  reasonForReject?: string;
   createdAt: string;
   startTime: string;  // Campaign start date
   endTime: string;    // Campaign end date
@@ -115,6 +118,7 @@ const AdDetailsPage: React.FC = () => {
   const adOptions = ["Material 1", "Material 2", "Material 3"];
   const [selectedAd, setSelectedAd] = useState(adOptions[0]);
   const [showAdDropdown, setShowAdDropdown] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
@@ -123,6 +127,29 @@ const AdDetailsPage: React.FC = () => {
       console.error('Error fetching ads:', err);
     },
   });
+
+  // Delete ad mutation
+  const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
+    onCompleted: () => {
+      navigate('/advertisements');
+    },
+    onError: (err) => {
+      console.error('Error deleting ad:', err);
+      alert('Failed to delete advertisement. Please try again.');
+    },
+  });
+
+  const confirmDelete = () => {
+    if (ad) {
+      deleteAd({ variables: { id: ad.id } });
+      setShowDeleteModal(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+  };
 
   // Find the specific ad by ID
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
@@ -289,9 +316,17 @@ const AdDetailsPage: React.FC = () => {
           </button>
           
           <div>
-            <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-              {ad.status}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className={`inline-block px-3 py-1 text-sm font-semibold rounded-full ${ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ad.status === 'APPROVED' ? 'bg-green-100 text-green-800' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                {ad.status}
+              </span>
+              {ad.status === 'REJECTED' && ad.reasonForReject && (
+                <span className="text-red-600 text-sm flex items-center">
+                  <XCircle size={16} className="mr-1" />
+                  {ad.reasonForReject}
+                </span>
+              )}
+            </div>
             <h2 className="text-5xl font-bold mt-4 mb-2">{ad.title}</h2>
             <p className="text-3xl mt-3 text-gray-800 font-semibold">${ad.price.toFixed(2)}</p>
             <p className="text-gray-700 mt-6 mb-5 text-md leading-relaxed">{ad.description}</p>
@@ -331,13 +366,13 @@ const AdDetailsPage: React.FC = () => {
               </div>
 
               <button
-                onClick={() => {
-                  alert(`Deleting ad ${ad.id}`);
-                  navigate('/advertisements');
-                }}
-                className="ml-auto px-4 py-2 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-sm"
+                onClick={() => setShowDeleteModal(true)}
+                disabled={deleteLoading || ad?.status !== 'PENDING'}
+                className={`ml-auto px-4 py-2 border border-red-300 text-red-600 rounded-lg font-medium hover:bg-red-50 transition-colors shadow-sm ${
+                  deleteLoading || ad?.status !== 'PENDING' ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                Delete Ad
+                {deleteLoading ? 'Deleting...' : 'Delete Ad'}
               </button>
             </nav>
           </div>
@@ -572,6 +607,18 @@ const AdDetailsPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </div>
   );
 };

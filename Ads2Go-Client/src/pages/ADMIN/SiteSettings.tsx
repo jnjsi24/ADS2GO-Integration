@@ -283,7 +283,7 @@ const SiteSettings: React.FC = () => {
     
     // Phone number validation (if provided)
     if (accountForm.contactNumber && !/^[0-9+\-\s()]*$/.test(accountForm.contactNumber)) {
-      addToast('Please enter a valid phone number.', 'error');
+      addToast('Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)', 'error');
       isValid = false;
     }
     

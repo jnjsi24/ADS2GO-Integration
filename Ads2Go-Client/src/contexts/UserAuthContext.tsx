@@ -166,12 +166,21 @@ export const UserAuthProvider: React.FC<{
         deviceName: navigator.userAgent,
       };
 
-      const { data } = await loginMutation({
+      const result = await loginMutation({
         variables: { email, password, deviceInfo },
       });
 
-      const token = data?.loginUser?.token;
-      const userRaw = data?.loginUser?.user;
+      // Check for GraphQL errors first
+      if (result.errors && result.errors.length > 0) {
+        const errorMessage = result.errors[0].message;
+        if (errorMessage.includes('Account is temporarily locked')) {
+          throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+        }
+        throw new Error(errorMessage);
+      }
+
+      const token = result.data?.loginUser?.token;
+      const userRaw = result.data?.loginUser?.user;
 
       if (token && userRaw && userRaw.role === 'USER') {
         localStorage.setItem('userToken', token);
@@ -216,6 +225,12 @@ export const UserAuthProvider: React.FC<{
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'Login failed';
       console.error('User login error:', message);
+      
+      // Handle specific error cases
+      if (message.includes('Account is temporarily locked')) {
+        throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+      }
+      
       // Throw so the component can display the specific backend error
       throw new Error(message);
     }

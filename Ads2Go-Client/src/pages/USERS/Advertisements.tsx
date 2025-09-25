@@ -5,7 +5,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_ADS } from '../../graphql/user/queries/getMyAds';
 import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
+import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
 
 
 // Form data type
@@ -61,8 +63,8 @@ type Ad = {
   };
 };
 
-const planFilterOptions = ['All Plans', 'Basic Plan', 'Premium Plan'];
-const statusFilterOptions = ['All Status', 'PENDING', 'APPROVED', 'REJECTED', 'RUNNING'];
+const planFilterOptions = ['All Plans', 'Basic Plan', 'Backseat Spotlight Plan'];
+const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'Running'];
 
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
@@ -89,9 +91,30 @@ const Advertisements: React.FC = () => {
     status: 'PENDING' as const,
   });
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [adToDelete, setAdToDelete] = useState<string | null>(null);
   const { data, loading, error } = useQuery(GET_MY_ADS);
   const [createAd] = useMutation(CREATE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
+  });
+
+  const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
+    refetchQueries: [{ query: GET_MY_ADS }],
+    onCompleted: () => {
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Advertisement deleted successfully!', 
+        type: 'success' as const 
+      }]);
+    },
+    onError: (error) => {
+      console.error('Error deleting ad:', error);
+      setToasts((prev: Toast[]) => [...prev, { 
+        id: Date.now(), 
+        message: 'Failed to delete advertisement', 
+        type: 'error' as const 
+      }]);
+    },
   });
   
   const ads: Ad[] = data?.getMyAds || [];
@@ -196,23 +219,26 @@ const Advertisements: React.FC = () => {
     setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
   };
 
-  const handleDeleteAd = async (adId: string) => {
-    try {
-      // Handle delete ad logic here
-      console.log('Deleting ad:', adId);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
-        message: 'Ad deleted successfully!', 
-        type: 'success' as const 
-      }]);
-    } catch (error) {
-      console.error('Error deleting ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
-        message: 'Failed to delete ad', 
-        type: 'error' as const 
-      }]);
+  const handleDeleteAd = (adId: string) => {
+    setAdToDelete(adId);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (adToDelete) {
+      try {
+        await deleteAd({ variables: { id: adToDelete } });
+        setShowDeleteModal(false);
+        setAdToDelete(null);
+      } catch (error) {
+        console.error('Error deleting ad:', error);
+      }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setAdToDelete(null);
   };
 
   const handleViewAd = (ad: Ad) => {
@@ -274,8 +300,9 @@ const Advertisements: React.FC = () => {
       ad.title.toLowerCase().includes(searchLower) ||
       ad.description.toLowerCase().includes(searchLower);
     
-    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name === selectedPlanFilter;
-    const matchesStatus = selectedStatusFilter === 'All Status' || ad.status === selectedStatusFilter;
+    const matchesPlan = selectedPlanFilter === 'All Plans' || ad.planId.name.toLowerCase() === selectedPlanFilter.toLowerCase();
+    const matchesStatus = selectedStatusFilter === 'All Status' || ad.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+
     
     return matchesSearch && matchesStatus && matchesPlan;
   });
@@ -373,7 +400,7 @@ const Advertisements: React.FC = () => {
       <div className="flex justify-between items-center mb-6 pt-10">
         <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
         <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <input
               type="text"
               className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
@@ -386,7 +413,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -403,7 +430,7 @@ const Advertisements: React.FC = () => {
                       <button
                         key={plan}
                         onClick={() => handlePlanFilterChange(plan)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
                         {plan}
                       </button>
@@ -417,7 +444,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -434,7 +461,7 @@ const Advertisements: React.FC = () => {
                       <button
                         key={status}
                         onClick={() => handleStatusFilterChange(status)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
                         {status}
                       </button>
@@ -534,27 +561,48 @@ const Advertisements: React.FC = () => {
                 )}
 
                 <div className="mt-2 pt-2 border-t border-gray-200">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/ad-details/${ad.id}`);
-                    }}
-                    className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center w-full hover:bg-[#1B5087] hover:text-white transition-colors"
-                  >
-                    View Details →
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/ad-details/${ad.id}`);
+                      }}
+                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                    >
+                      View Details →
+                    </button>
+                    {ad.status === 'PENDING' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAd(ad.id);
+                        }}
+                        disabled={deleteLoading}
+                        className="text-red-600 text-xs font-semibold rounded-md px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deleteLoading ? '...' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
 
-              <span className={`absolute top-2 left-2 inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
-                ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
-                ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
-                ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
-                ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
-                'bg-gray-200 text-gray-800'}`}>
-                {formatStatus(ad.status)}
-              </span>
+              <div className="absolute top-2 left-2">
+                <span className={`inline-block px-2 py-1 text-xs font-semibold rounded-lg ${
+                  ad.status === 'PENDING' ? 'bg-yellow-200 text-yellow-800' : 
+                  ad.status === 'APPROVED' ? 'bg-blue-200 text-blue-800' :
+                  ad.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                  ad.status === 'RUNNING' ? 'bg-green-200 text-green-800' :
+                  'bg-gray-200 text-gray-800'}`}>
+                  {formatStatus(ad.status)}
+                </span>
+                {ad.status === 'REJECTED' && ad.reasonForReject && (
+                  <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
+                    {ad.reasonForReject}
+                  </div>
+                )}
+              </div>
             </div>
           ))
         ) : (
@@ -781,6 +829,19 @@ const Advertisements: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+      
       <style>
         {`
           @keyframes slideIn {

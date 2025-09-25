@@ -154,8 +154,57 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
   }
 };
 
+/**
+ * Deletes a file from Firebase Storage
+ * @param {string} fileUrl - The full URL of the file to delete
+ * @returns {Promise<boolean>} - Success status
+ */
+const deleteFromFirebase = async (fileUrl) => {
+  try {
+    if (!fileUrl) {
+      console.log('⚠️ No file URL provided for deletion');
+      return true; // Consider it successful if no URL
+    }
+
+    // Extract the file path from the Firebase Storage URL
+    // Firebase Storage URLs typically look like:
+    // https://firebasestorage.googleapis.com/v0/b/bucket-name/o/path%2Fto%2Ffile?alt=media&token=...
+    const urlPattern = /firebasestorage\.googleapis\.com\/v0\/b\/[^\/]+\/o\/([^?]+)/;
+    const match = fileUrl.match(urlPattern);
+    
+    if (!match) {
+      console.log('⚠️ Invalid Firebase Storage URL format:', fileUrl);
+      return false;
+    }
+
+    // Decode the path (URL encoded)
+    const filePath = decodeURIComponent(match[1]);
+    console.log(`🗑️ Deleting file from Firebase Storage: ${filePath}`);
+
+    const file = bucket.file(filePath);
+    
+    // Check if file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      console.log('⚠️ File does not exist in Firebase Storage:', filePath);
+      return true; // Consider it successful if file doesn't exist
+    }
+
+    // Delete the file
+    await file.delete();
+    console.log(`✅ Successfully deleted file from Firebase Storage: ${filePath}`);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Error deleting file from Firebase Storage:', error.message);
+    // Don't throw error - just log it and continue
+    return false;
+  }
+};
+
 module.exports = {
   uploadToFirebase,
+  deleteFromFirebase,
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE
 };

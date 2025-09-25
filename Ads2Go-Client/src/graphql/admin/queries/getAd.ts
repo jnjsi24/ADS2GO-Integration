@@ -12,6 +12,7 @@ export const GET_MY_ADS = gql`
       vehicleType
       price
       status
+      reasonForReject
       createdAt
       startTime
       endTime
