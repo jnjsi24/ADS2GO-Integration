@@ -5,6 +5,7 @@ const Tablet = require('../models/Tablet');
 const Material = require('../models/Material');
 const ScreenTracking = require('../models/screenTracking');
 const AdsDeployment = require('../models/adsDeployment'); // Added AdsDeployment import
+const AnalyticsService = require('../services/analyticsService');
 
 // Test route to verify tablet routes are working
 router.get('/test', (req, res) => {
@@ -128,6 +129,14 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
+    // Validate device ID contains "TABLET"
+    if (!deviceId.includes('TABLET')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Only devices with TABLET in their device ID can be registered'
+      });
+    }
+
     // Check if the slot is already occupied by another device
     const existingTablet = tablet.tablets.find(t => t.tabletNumber === slotNumber);
     if (existingTablet && existingTablet.deviceId && existingTablet.deviceId !== deviceId) {
@@ -192,12 +201,13 @@ router.post('/registerTablet', async (req, res) => {
         tabletTracking.devices = [];
       }
       
-      // Find existing device in the array
-      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
+      // Find existing device in the array by deviceId first, then by slotNumber
+      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.deviceId === deviceId);
+      const slotOccupiedIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
       
       if (existingDeviceIndex >= 0) {
-        // Update existing device
-        console.log(`Updating existing device in slot ${slotNumber}`);
+        // Device already exists, update its slot and status
+        console.log(`Device ${deviceId} already exists, updating slot to ${slotNumber}`);
         tabletTracking.devices[existingDeviceIndex] = {
           deviceId,
           slotNumber,
@@ -207,15 +217,55 @@ router.post('/registerTablet', async (req, res) => {
           totalHoursOnline: tabletTracking.devices[existingDeviceIndex].totalHoursOnline,
           totalDistanceTraveled: tabletTracking.devices[existingDeviceIndex].totalDistanceTraveled
         };
-      } else {
-        // Add new device
-        console.log(`Adding new device to slot ${slotNumber}`);
-        tabletTracking.devices.push({
+      } else if (slotOccupiedIndex >= 0) {
+        // Slot is occupied by a different device, replace it
+        console.log(`Slot ${slotNumber} is occupied by device ${tabletTracking.devices[slotOccupiedIndex].deviceId}, replacing with ${deviceId}`);
+        tabletTracking.devices[slotOccupiedIndex] = {
           deviceId,
           slotNumber,
           isOnline: true,
-          lastSeen: new Date()
-        });
+          lastSeen: new Date(),
+          currentLocation: tabletTracking.devices[slotOccupiedIndex].currentLocation,
+          totalHoursOnline: tabletTracking.devices[slotOccupiedIndex].totalHoursOnline,
+          totalDistanceTraveled: tabletTracking.devices[slotOccupiedIndex].totalDistanceTraveled
+        };
+      } else {
+        // Check if we've reached the maximum number of slots (2)
+        if (tabletTracking.devices.length >= 2) {
+          console.log(`⚠️ Warning: Material ${materialId} already has 2 devices. Replacing the oldest offline device.`);
+          
+          // Find the oldest offline device to replace
+          const offlineDevices = tabletTracking.devices.filter(d => !d.isOnline);
+          if (offlineDevices.length > 0) {
+            const oldestOfflineDevice = offlineDevices.sort((a, b) => new Date(a.lastSeen) - new Date(b.lastSeen))[0];
+            const oldestIndex = tabletTracking.devices.findIndex(d => d.deviceId === oldestOfflineDevice.deviceId);
+            
+            console.log(`Replacing oldest offline device ${oldestOfflineDevice.deviceId} with new device ${deviceId}`);
+            tabletTracking.devices[oldestIndex] = {
+              deviceId,
+              slotNumber,
+              isOnline: true,
+              lastSeen: new Date()
+            };
+          } else {
+            console.log(`⚠️ All devices are online. Adding new device anyway (this may cause issues).`);
+            tabletTracking.devices.push({
+              deviceId,
+              slotNumber,
+              isOnline: true,
+              lastSeen: new Date()
+            });
+          }
+        } else {
+          // Add new device normally
+          console.log(`Adding new device to slot ${slotNumber}`);
+          tabletTracking.devices.push({
+            deviceId,
+            slotNumber,
+            isOnline: true,
+            lastSeen: new Date()
+          });
+        }
       }
       
       // Update legacy fields (for backward compatibility)
@@ -241,6 +291,57 @@ router.post('/registerTablet', async (req, res) => {
     }
 
     await tabletTracking.save();
+
+    // Update analytics to link tablet device with deployment analytics
+    try {
+      console.log(`🔄 Updating analytics for tablet device: ${deviceId}`);
+      
+      // Find the deployment for this material
+      const deployment = await AdsDeployment.findOne({ materialId });
+      
+      if (deployment && deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+        // Find the slot that matches the slotNumber
+        const slot = deployment.lcdSlots.find(s => s.slotNumber === slotNumber);
+        
+        if (slot && slot.adId) {
+          // Get the ad details
+          const Ad = require('../models/Ad');
+          const ad = await Ad.findById(slot.adId);
+          
+          if (ad) {
+            // Update analytics with real device data
+            const analyticsData = {
+              carGroupId: material.carGroupId,
+              driverId: material.driverId,
+              adId: slot.adId,
+              userId: ad.userId,
+              adDeploymentId: deployment._id,
+              deviceInfo: {
+                deviceId: deviceId,
+                deviceName: 'Tablet Device',
+                deviceType: 'Tablet',
+                osName: 'Android',
+                osVersion: 'Unknown',
+                platform: 'Android',
+                brand: 'Unknown',
+                modelName: 'Unknown',
+                screenWidth: 0,
+                screenHeight: 0,
+                screenScale: 1
+              },
+              isOnline: true,
+              networkStatus: true
+            };
+            
+            await AnalyticsService.updateAnalytics(deviceId, materialId, slotNumber, analyticsData);
+            console.log(`✅ Analytics updated for tablet device: ${deviceId} -> Slot ${slotNumber} -> Ad ${slot.adId}`);
+          }
+        }
+      }
+    } catch (analyticsError) {
+      console.error('Error updating analytics for tablet:', analyticsError);
+      // Don't fail the registration if analytics update fails
+    }
 
     // Return success response with tablet info
     res.json({
@@ -318,6 +419,52 @@ router.post('/updateTabletStatus', async (req, res) => {
     };
 
     await tablet.save();
+
+    // Also update ScreenTracking collection to sync status
+    try {
+      const now = new Date();
+      
+      // Find the materialId from the tablet record
+      const materialId = tablet.materialId;
+      
+      if (materialId) {
+        // Update ScreenTracking collection
+        const screenTracking = await ScreenTracking.findOneAndUpdate(
+          { materialId },
+          {
+            $set: {
+              isOnline: isOnline,
+              lastSeen: now
+            },
+            $push: {
+              statusHistory: {
+                status: isOnline ? 'online' : 'offline',
+                timestamp: now
+              }
+            }
+          },
+          { upsert: true, new: true }
+        );
+
+        // Also update device-specific status in the devices array
+        if (screenTracking) {
+          await ScreenTracking.updateOne(
+            { 'devices.deviceId': deviceId },
+            {
+              $set: {
+                'devices.$.isOnline': isOnline,
+                'devices.$.lastSeen': now
+              }
+            }
+          );
+        }
+
+        console.log(`🔄 [updateTabletStatus] Updated ScreenTracking for materialId: ${materialId}, deviceId: ${deviceId}, status: ${isOnline ? 'online' : 'offline'}`);
+      }
+    } catch (screenTrackingError) {
+      console.error('Error updating ScreenTracking collection:', screenTrackingError);
+      // Don't fail the request if ScreenTracking update fails
+    }
 
     res.json({
       success: true,
@@ -512,6 +659,44 @@ router.post('/unregisterTablet', async (req, res) => {
 
   } catch (error) {
     console.error('Error unregistering tablet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /tablet/configuration/:materialId
+router.get('/configuration/:materialId', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+
+    // Find the tablet document for this material
+    const tablet = await Tablet.findOne({ materialId });
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'No tablet configuration found for this material'
+      });
+    }
+
+    res.json({
+      success: true,
+      tablet: {
+        materialId: tablet.materialId,
+        carGroupId: tablet.carGroupId,
+        tablets: tablet.tablets.map(t => ({
+          tabletNumber: t.tabletNumber,
+          deviceId: t.deviceId,
+          status: t.status,
+          lastSeen: t.lastSeen,
+          gps: t.gps
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting tablet configuration:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'

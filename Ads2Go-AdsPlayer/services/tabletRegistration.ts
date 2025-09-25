@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
+import playbackWebSocketService from './playbackWebSocketService';
+import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
 export interface ConnectionDetails {
@@ -57,6 +60,7 @@ export interface Ad {
   adTitle: string;
   adDescription: string;
   duration: number;
+  website?: string; // Optional advertiser website
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +78,23 @@ export interface LocationUpdate {
   speed?: number;
   heading?: number;
   accuracy?: number;
+  speedLimit?: number;
+  violation?: SpeedViolation;
+}
+
+export interface SpeedViolation {
+  type: 'SPEED_VIOLATION';
+  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  penalty: number;
+  currentSpeed: number;
+  speedLimit: number;
+  speedOverLimit: number;
+  timestamp: Date;
+  location: {
+    lat: number;
+    lng: number;
+    accuracy: number;
+  };
 }
 
 export interface TrackingStatus {
@@ -94,7 +115,18 @@ export class TabletRegistrationService {
   private registration: TabletRegistration | null = null;
   private locationUpdateInterval: ReturnType<typeof setInterval> | null = null;
   private isTracking = false;
+  private isSimulatingOffline = false;
   private appStateListener: any = null;
+  
+  // Speed violation tracking
+  private currentSpeedLimit: number = 50; // Default urban speed limit
+  private violationThresholds = {
+    grace: 5,      // 5 km/h tolerance
+    low: 10,      // 6-10 km/h over
+    medium: 20,    // 11-20 km/h over
+    high: 30,      // 21-30 km/h over
+    extreme: 50   // 31+ km/h over
+  };
 
   static getInstance(): TabletRegistrationService {
     if (!TabletRegistrationService.instance) {
@@ -156,6 +188,58 @@ export class TabletRegistrationService {
         this.registration = JSON.parse(registrationData);
         return this.registration;
       }
+      
+      // If no registration data found, try to create from environment variables
+      const envMaterialId = process.env.EXPO_PUBLIC_MATERIAL_ID || Constants.expoConfig?.extra?.EXPO_PUBLIC_MATERIAL_ID || 'DGL-HEADDRESS-CAR-001';
+      const envTabletId = process.env.EXPO_PUBLIC_TABLET_ID || Constants.expoConfig?.extra?.EXPO_PUBLIC_TABLET_ID || 'HEY2-W09';
+      
+      console.log('🔍 Environment variables in tabletRegistration:', {
+        EXPO_PUBLIC_MATERIAL_ID: process.env.EXPO_PUBLIC_MATERIAL_ID,
+        EXPO_PUBLIC_TABLET_ID: process.env.EXPO_PUBLIC_TABLET_ID,
+        EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+        ConstantsExtra: Constants.expoConfig?.extra,
+        finalMaterialId: envMaterialId,
+        finalTabletId: envTabletId
+      });
+      
+      if (envMaterialId && envTabletId) {
+        console.log('No registration data found, attempting to get tablet configuration from server');
+        
+        try {
+          // Try to get the tablet configuration from the server first
+          const response = await fetch(`${API_BASE_URL}/tablet/configuration/${envMaterialId}`);
+          if (response.ok) {
+            const config = await response.json();
+            if (config.success && config.tablet) {
+              console.log('Found tablet configuration on server:', config.tablet);
+              const fallbackRegistration: TabletRegistration = {
+                deviceId: envTabletId,
+                materialId: envMaterialId,
+                slotNumber: 1, // Default slot number
+                carGroupId: config.tablet.carGroupId,
+                isRegistered: true,
+                lastReportedAt: new Date().toISOString()
+              };
+              
+              // Save the fallback registration
+              await AsyncStorage.setItem('tabletRegistration', JSON.stringify(fallbackRegistration));
+              this.registration = fallbackRegistration;
+              
+              // Update WebSocket service with new device info
+              await playbackWebSocketService.updateDeviceInfo(fallbackRegistration.deviceId, fallbackRegistration.materialId);
+              
+              return fallbackRegistration;
+            }
+          }
+        } catch (error) {
+          console.error('Error getting tablet configuration from server:', error);
+        }
+        
+        console.warn('Could not get tablet configuration from server, skipping fallback registration');
+      } else {
+        console.warn('Environment variables not available:', { envMaterialId, envTabletId });
+      }
+      
       return null;
     } catch (error) {
       console.error('Error getting registration data:', error);
@@ -199,6 +283,9 @@ export class TabletRegistrationService {
 
         await AsyncStorage.setItem('tabletRegistration', JSON.stringify(registration));
         this.registration = registration;
+        
+        // Update WebSocket service with new device info
+        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId);
       }
 
       return result;
@@ -282,13 +369,21 @@ export class TabletRegistrationService {
         return false;
       }
 
+      // Detect speed limit for current location
+      this.currentSpeedLimit = await this.detectSpeedLimit(lat, lng);
+      
+      // Check for speed violations
+      const violation = this.checkForSpeedViolation(speed, lat, lng, accuracy);
+
       const locationUpdate: LocationUpdate = {
         deviceId: this.registration.deviceId,
         lat,
         lng,
         speed,
         heading,
-        accuracy
+        accuracy,
+        speedLimit: this.currentSpeedLimit,
+        violation: violation || undefined
       };
 
       console.log('Updating location tracking:', locationUpdate);
@@ -417,6 +512,12 @@ export class TabletRegistrationService {
       // Start periodic location updates (every 30 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
+          // Skip location updates if simulating offline
+          if (this.isSimulatingOffline) {
+            console.log('Skipping location update - simulating offline');
+            return;
+          }
+
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
             timeInterval: 30000,
@@ -467,6 +568,15 @@ export class TabletRegistrationService {
     }
   }
 
+  setSimulatingOffline(isOffline: boolean): void {
+    this.isSimulatingOffline = isOffline;
+    console.log(`Simulating offline: ${isOffline}`);
+  }
+
+  isSimulatingOfflineMode(): boolean {
+    return this.isSimulatingOffline;
+  }
+
   isLocationTrackingActive(): boolean {
     return this.isTracking;
   }
@@ -476,6 +586,151 @@ export class TabletRegistrationService {
       isActive: this.isTracking,
       interval: this.locationUpdateInterval
     };
+  }
+
+  // Speed limit detection based on location
+  private async detectSpeedLimit(lat: number, lng: number): Promise<number> {
+    try {
+      // Define speed limit zones based on coordinates (Manila area)
+      const speedLimitZones = [
+        {
+          name: 'School Zone',
+          bounds: { north: 14.57, south: 14.55, east: 121.01, west: 120.99 },
+          speedLimit: 30,
+          timeRestrictions: { start: 7, end: 17 } // School hours (7 AM - 5 PM)
+        },
+        {
+          name: 'Urban Area',
+          bounds: { north: 14.6, south: 14.5, east: 121.1, west: 120.9 },
+          speedLimit: 50
+        },
+        {
+          name: 'Highway',
+          bounds: { north: 14.7, south: 14.4, east: 121.2, west: 120.8 },
+          speedLimit: 80
+        },
+        {
+          name: 'Construction Zone',
+          bounds: { north: 14.56, south: 14.54, east: 121.0, west: 120.98 },
+          speedLimit: 30,
+          active: true // Currently active
+        }
+      ];
+      
+      const currentTime = new Date();
+      const currentHour = currentTime.getHours();
+      
+      for (const zone of speedLimitZones) {
+        if (this.isPointInBounds(lat, lng, zone.bounds)) {
+          // Check time restrictions
+          if (zone.timeRestrictions) {
+            if (currentHour >= zone.timeRestrictions.start && currentHour <= zone.timeRestrictions.end) {
+              console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name} - School hours)`);
+              return zone.speedLimit;
+            }
+          }
+          
+          console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name})`);
+          return zone.speedLimit;
+        }
+      }
+      
+      // Default speed limit based on location
+      const defaultLimit = this.getDefaultSpeedLimit(lat, lng);
+      console.log(`🚦 Default speed limit: ${defaultLimit} km/h`);
+      return defaultLimit;
+      
+    } catch (error) {
+      console.error('Error detecting speed limit:', error);
+      return 50; // Default urban speed limit
+    }
+  }
+
+  // Check if point is within bounds
+  private isPointInBounds(lat: number, lng: number, bounds: { north: number; south: number; east: number; west: number }): boolean {
+    return lat >= bounds.south && lat <= bounds.north && lng >= bounds.west && lng <= bounds.east;
+  }
+
+  // Get default speed limit based on location
+  private getDefaultSpeedLimit(lat: number, lng: number): number {
+    // Simple heuristic based on location
+    if (this.isInCityCenter(lat, lng)) {
+      return 40; // City center
+    } else if (this.isInResidentialArea(lat, lng)) {
+      return 30; // Residential
+    } else if (this.isOnHighway(lat, lng)) {
+      return 80; // Highway
+    } else {
+      return 50; // General urban
+    }
+  }
+
+  // Simple location type detection
+  private isInCityCenter(lat: number, lng: number): boolean {
+    // Manila city center bounds
+    return lat >= 14.55 && lat <= 14.6 && lng >= 120.98 && lng <= 121.02;
+  }
+
+  private isInResidentialArea(lat: number, lng: number): boolean {
+    // Residential areas in Manila
+    return lat >= 14.5 && lat <= 14.65 && lng >= 120.9 && lng <= 121.1;
+  }
+
+  private isOnHighway(lat: number, lng: number): boolean {
+    // Major highways in Manila
+    return lat >= 14.4 && lat <= 14.7 && lng >= 120.8 && lng <= 121.2;
+  }
+
+  // Check for speed violations
+  private checkForSpeedViolation(currentSpeed: number, lat: number, lng: number, accuracy: number): SpeedViolation | null {
+    const speedOverLimit = currentSpeed - this.currentSpeedLimit;
+    
+    // No violation if within grace tolerance
+    if (speedOverLimit <= this.violationThresholds.grace) {
+      return null;
+    }
+    
+    let level: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+    let penalty: number;
+    
+    if (speedOverLimit <= this.violationThresholds.low) {
+      level = 'LOW';
+      penalty = 2;
+    } else if (speedOverLimit <= this.violationThresholds.medium) {
+      level = 'MEDIUM';
+      penalty = 5;
+    } else if (speedOverLimit <= this.violationThresholds.high) {
+      level = 'HIGH';
+      penalty = 10;
+    } else {
+      level = 'EXTREME';
+      penalty = 20;
+    }
+    
+    const violation: SpeedViolation = {
+      type: 'SPEED_VIOLATION',
+      level,
+      penalty,
+      currentSpeed,
+      speedLimit: this.currentSpeedLimit,
+      speedOverLimit,
+      timestamp: new Date(),
+      location: {
+        lat,
+        lng,
+        accuracy
+      }
+    };
+    
+    console.log(`🚨 SPEED VIOLATION DETECTED:`, {
+      level,
+      currentSpeed: `${currentSpeed} km/h`,
+      speedLimit: `${this.currentSpeedLimit} km/h`,
+      overLimit: `${speedOverLimit} km/h`,
+      penalty: `${penalty} points`
+    });
+    
+    return violation;
   }
 
   async createScreenTrackingRecord(): Promise<boolean> {
@@ -541,6 +796,8 @@ export class TabletRegistrationService {
   }
 
   async clearRegistration(): Promise<void> {
+    console.log('Clearing registration data...');
+    
     // Stop any active tracking
     await this.stopLocationTracking();
     
@@ -550,8 +807,54 @@ export class TabletRegistrationService {
       this.appStateListener = null;
     }
     
+    // Clear registration data
     this.registration = null;
-    await AsyncStorage.removeItem('tabletRegistration');
+    
+    try {
+      await AsyncStorage.removeItem('tabletRegistration');
+      console.log('Registration data cleared from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing registration from AsyncStorage:', error);
+    }
+    
+    // Also clear any cached data
+    try {
+      await AsyncStorage.multiRemove(['tabletRegistration', 'device_material_id']);
+      console.log('All registration-related data cleared');
+    } catch (error) {
+      console.error('Error clearing all registration data:', error);
+    }
+  }
+
+  async clearAllCachedAds(): Promise<void> {
+    try {
+      console.log('Clearing all cached ads...');
+      
+      // Get all keys from AsyncStorage
+      const allKeys = await AsyncStorage.getAllKeys();
+      
+      // Filter keys that match the ad cache pattern: ads_${materialId}_${slotNumber}
+      const adCacheKeys = allKeys.filter(key => key.startsWith('ads_'));
+      
+      if (adCacheKeys.length > 0) {
+        await AsyncStorage.multiRemove(adCacheKeys);
+        console.log(`Cleared ${adCacheKeys.length} cached ad entries:`, adCacheKeys);
+      } else {
+        console.log('No cached ads found to clear');
+      }
+    } catch (error) {
+      console.error('Error clearing cached ads:', error);
+    }
+  }
+
+  async clearMaterialId(): Promise<void> {
+    try {
+      // Clear material ID from SecureStore
+      await SecureStore.deleteItemAsync('device_material_id');
+      console.log('Material ID cleared from SecureStore');
+    } catch (error) {
+      console.error('Error clearing material ID from SecureStore:', error);
+    }
   }
 
   async unregisterTablet(): Promise<{ success: boolean; message: string }> {

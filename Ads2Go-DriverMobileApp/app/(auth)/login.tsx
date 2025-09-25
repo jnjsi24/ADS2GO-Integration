@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, type Router } from "expo-router";
 import { useAuth } from '../../contexts/AuthContext';
-import { request, gql } from "graphql-request";
+// Using native fetch instead of graphql-request for better timeout control
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,8 +18,8 @@ import { Ionicons } from "@expo/vector-icons";
 import API_CONFIG from "../../config/api";
 const API_URL = API_CONFIG.API_URL;
 
-// ✅ Keep your GraphQL mutation
-const LOGIN_MUTATION = gql`
+// GraphQL mutation as string for native fetch
+const LOGIN_MUTATION = `
   mutation LoginDriver(
     $email: String!
     $password: String!
@@ -119,26 +119,50 @@ export default function Login() {
         },
       };
 
-      const response = await request<LoginResponse>(
-        API_URL,
-        LOGIN_MUTATION,
-        variables
-      );
+      // Use native fetch with timeout control like AndroidPlayerExpo
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: LOGIN_MUTATION,
+          variables: variables
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.errors) {
+        throw new Error(result.errors[0]?.message || 'GraphQL error');
+      }
+      
+      const loginResponse: LoginResponse = result.data;
 
-      if (response.loginDriver?.success && response.loginDriver.token) {
+      if (loginResponse.loginDriver?.success && loginResponse.loginDriver.token) {
         // Sign in using our auth context which will handle token storage
-        await signIn(response.loginDriver.token);
+        await signIn(loginResponse.loginDriver.token);
 
-        if (response.loginDriver.driver) {
+        if (loginResponse.loginDriver.driver) {
           // Store driver info in AsyncStorage
           await AsyncStorage.setItem(
             "driverInfo",
-            JSON.stringify(response.loginDriver.driver)
+            JSON.stringify(loginResponse.loginDriver.driver)
           );
           
           // Store driver ID separately for easy access
-          const driverId = response.loginDriver.driver.driverId || 
-                         response.loginDriver.driver.id;
+          const driverId = loginResponse.loginDriver.driver.driverId || 
+                         loginResponse.loginDriver.driver.id;
           if (driverId) {
             await AsyncStorage.setItem("driverId", driverId);
           }
@@ -146,17 +170,17 @@ export default function Login() {
 
         // Check if the account needs verification
         const needsVerification = 
-          response.loginDriver.driver?.accountStatus?.toLowerCase() === "pending" ||
-          !response.loginDriver.driver?.isEmailVerified;
+          loginResponse.loginDriver.driver?.accountStatus?.toLowerCase() === "pending" ||
+          !loginResponse.loginDriver.driver?.isEmailVerified;
 
-        if (needsVerification && response.loginDriver.driver) {
+        if (needsVerification && loginResponse.loginDriver.driver) {
           // Navigate to verification screen if needed
           const navParams = {
-            email: response.loginDriver.driver.email || "",
-            driverId: response.loginDriver.driver.driverId || 
-                     response.loginDriver.driver.id || "",
-            firstName: response.loginDriver.driver.firstName || "",
-            token: response.loginDriver.token,
+            email: loginResponse.loginDriver.driver.email || "",
+            driverId: loginResponse.loginDriver.driver.driverId || 
+                     loginResponse.loginDriver.driver.id || "",
+            firstName: loginResponse.loginDriver.driver.firstName || "",
+            token: loginResponse.loginDriver.token,
           };
         
           // Type assertion to handle Expo Router's navigation params
@@ -184,12 +208,25 @@ export default function Login() {
           }));
         }, 5000);
       }
-    } catch (err: any) {
-      console.error("Login error:", err);
-      Alert.alert(
-        "Login Error",
-        err.response?.errors?.[0]?.message || "Network error"
-      );
+    } catch (error: any) {
+      console.error("Login error:", error);
+      
+      let errorMessage = "An error occurred during login. Please try again.";
+      
+      // Handle specific error types like AndroidPlayerExpo
+      if (error.name === 'AbortError' || error.message?.includes("aborted")) {
+        errorMessage = "Request timed out. Please check your internet connection and try again.";
+      } else if (error.message?.includes("Network request timed out")) {
+        errorMessage = "Network request timed out. Please check your internet connection and try again.";
+      } else if (error.message?.includes("fetch")) {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (error.message?.includes("Invalid credentials")) {
+        errorMessage = "Invalid email or password. Please check your credentials and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert("Login Failed", errorMessage);
     } finally {
       setFormState(prev => ({ ...prev, loading: false }));
     }

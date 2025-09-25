@@ -24,12 +24,95 @@ const adsDeploymentResolvers = {
         })
         .populate('materialId')
         .populate('driverId')
-        .populate('removedBy')
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        })
         .sort({ createdAt: -1 });
 
-      deployments.forEach(d => {
+      // Process deployments and populate ad data for lcdSlots
+      await Promise.all(deployments.map(async (d) => {
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
-      });
+        
+        // Handle lcdSlots adId field - keep it as ID string, not populated object
+        if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
+          await Promise.all(d.lcdSlots.map(async (slot) => {
+            // Ensure ad object always exists with safe defaults
+            slot.ad = {
+              id: '',
+              title: 'Unknown Ad',
+              description: '',
+              adFormat: '',
+              mediaFile: ''
+            };
+            
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object
+              slot.ad = {
+                id: slot.adId._id ? slot.adId._id.toString() : '',
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+            } else if (slot.adId && typeof slot.adId === 'object' && slot.adId.toString) {
+              // Handle direct ObjectId case
+              slot.ad = {
+                id: slot.adId.toString(),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId.toString();
+            } else if (slot.adId && typeof slot.adId === 'string' && slot.adId.trim() !== '') {
+              // If adId is already a string, try to fetch the ad
+              try {
+                const ad = await Ad.findById(slot.adId);
+                if (ad) {
+                  slot.ad = {
+                    id: ad._id.toString(),
+                    title: ad.title || 'Unknown Ad',
+                    description: ad.description || '',
+                    adFormat: ad.adFormat || '',
+                    mediaFile: ad.mediaFile || ''
+                  };
+                } else {
+                  slot.ad = {
+                    id: slot.adId,
+                    title: 'Unknown Ad',
+                    description: '',
+                    adFormat: '',
+                    mediaFile: ''
+                  };
+                }
+              } catch (error) {
+                console.error('Error fetching ad for slot:', error);
+                slot.ad = {
+                  id: slot.adId || '',
+                  title: 'Unknown Ad',
+                  description: '',
+                  adFormat: '',
+                  mediaFile: ''
+                };
+              }
+            } else if (slot.adId && slot.adId !== null && slot.adId !== undefined) {
+              // Fallback for any other adId type
+              slot.ad = {
+                id: String(slot.adId),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            }
+          }));
+        }
+      }));
 
       return deployments;
     },
@@ -50,11 +133,60 @@ const adsDeploymentResolvers = {
           populate: { path: 'planId', model: 'AdsPlan' }
         })
         .populate('materialId')
-        .populate('removedBy')
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        })
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
+        
+        // Handle lcdSlots adId field - keep it as ID string, not populated object
+        if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
+          d.lcdSlots.forEach(slot => {
+            // Ensure ad object always exists with safe defaults
+            slot.ad = {
+              id: '',
+              title: 'Unknown Ad',
+              description: '',
+              adFormat: '',
+              mediaFile: ''
+            };
+            
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object
+              slot.ad = {
+                id: slot.adId._id ? slot.adId._id.toString() : '',
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+            } else if (slot.adId && typeof slot.adId === 'string' && slot.adId.trim() !== '') {
+              // If adId is already a string, create a minimal ad object
+              slot.ad = {
+                id: slot.adId,
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            } else if (slot.adId && slot.adId !== null && slot.adId !== undefined) {
+              // Fallback for any other adId type
+              slot.ad = {
+                id: String(slot.adId),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            }
+          });
+        }
       });
 
       return deployments;
@@ -81,11 +213,60 @@ const adsDeploymentResolvers = {
         })
         .populate('materialId')
         .populate('driverId')
-        .populate('removedBy')
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        })
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
+        
+        // Handle lcdSlots adId field - keep it as ID string, not populated object
+        if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
+          d.lcdSlots.forEach(slot => {
+            // Ensure ad object always exists with safe defaults
+            slot.ad = {
+              id: '',
+              title: 'Unknown Ad',
+              description: '',
+              adFormat: '',
+              mediaFile: ''
+            };
+            
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object
+              slot.ad = {
+                id: slot.adId._id ? slot.adId._id.toString() : '',
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+            } else if (slot.adId && typeof slot.adId === 'string' && slot.adId.trim() !== '') {
+              // If adId is already a string, create a minimal ad object
+              slot.ad = {
+                id: slot.adId,
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            } else if (slot.adId && slot.adId !== null && slot.adId !== undefined) {
+              // Fallback for any other adId type
+              slot.ad = {
+                id: String(slot.adId),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            }
+          });
+        }
       });
 
       return deployments;
@@ -109,11 +290,60 @@ const adsDeploymentResolvers = {
         })
         .populate('materialId')
         .populate('driverId')
-        .populate('removedBy')
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        })
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
+        
+        // Handle lcdSlots adId field - keep it as ID string, not populated object
+        if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
+          d.lcdSlots.forEach(slot => {
+            // Ensure ad object always exists with safe defaults
+            slot.ad = {
+              id: '',
+              title: 'Unknown Ad',
+              description: '',
+              adFormat: '',
+              mediaFile: ''
+            };
+            
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object
+              slot.ad = {
+                id: slot.adId._id ? slot.adId._id.toString() : '',
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+            } else if (slot.adId && typeof slot.adId === 'string' && slot.adId.trim() !== '') {
+              // If adId is already a string, create a minimal ad object
+              slot.ad = {
+                id: slot.adId,
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            } else if (slot.adId && slot.adId !== null && slot.adId !== undefined) {
+              // Fallback for any other adId type
+              slot.ad = {
+                id: String(slot.adId),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            }
+          });
+        }
       });
 
       return deployments;
@@ -138,11 +368,71 @@ const adsDeploymentResolvers = {
         })
         .populate('materialId')
         .populate('driverId')
-        .populate('removedBy')
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        })
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
+        
+        // Handle lcdSlots adId field - keep it as ID string, not populated object
+        if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
+          d.lcdSlots.forEach(slot => {
+            // Ensure ad object always exists with safe defaults
+            slot.ad = {
+              id: '',
+              title: 'Unknown Ad',
+              description: '',
+              adFormat: '',
+              mediaFile: ''
+            };
+            
+            if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+              // Create the 'ad' field from the populated adId object
+              slot.ad = {
+                id: slot.adId._id ? slot.adId._id.toString() : '',
+                title: slot.adId.title || 'Unknown Ad',
+                description: slot.adId.description || '',
+                adFormat: slot.adId.adFormat || '',
+                mediaFile: slot.adId.mediaFile || ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+            } else if (slot.adId && typeof slot.adId === 'object' && slot.adId.toString) {
+              // Handle direct ObjectId case
+              slot.ad = {
+                id: slot.adId.toString(),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+              // Keep adId as just the ID string
+              slot.adId = slot.adId.toString();
+            } else if (slot.adId && typeof slot.adId === 'string' && slot.adId.trim() !== '') {
+              // If adId is already a string, create a minimal ad object
+              slot.ad = {
+                id: slot.adId,
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            } else if (slot.adId && slot.adId !== null && slot.adId !== undefined) {
+              // Fallback for any other adId type
+              slot.ad = {
+                id: String(slot.adId),
+                title: 'Unknown Ad',
+                description: '',
+                adFormat: '',
+                mediaFile: ''
+              };
+            }
+          });
+        }
       });
 
       return deployments;
@@ -161,7 +451,11 @@ const adsDeploymentResolvers = {
         })
         .populate('materialId')
         .populate('driverId')
-        .populate('removedBy');
+        .populate({
+          path: 'removedBy',
+          model: 'User',
+          select: 'firstName lastName email'
+        });
 
       if (!deployment) throw new Error('Deployment not found');
 
@@ -284,7 +578,7 @@ const adsDeploymentResolvers = {
         { path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } },
         'materialId',
         'driverId',
-        'removedBy'
+        { path: 'removedBy', model: 'User', select: 'firstName lastName email' }
       ]);
 
       if (deployment.driverId && typeof deployment.driverId === 'object') deployment.driverId = deployment.driverId._id;
@@ -368,6 +662,54 @@ const adsDeploymentResolvers = {
 
       await AdsDeployment.findByIdAndDelete(id);
       return true;
+    }
+  },
+
+  // Field resolvers
+  LCDSlot: {
+    ad: async (parent) => {
+      console.log('🔍 LCDSlot.ad resolver called with parent:', JSON.stringify(parent, null, 2));
+      
+      // If the ad field is already populated and has an id, return it
+      if (parent.ad && parent.ad.id) {
+        console.log('✅ Using existing ad field:', parent.ad);
+        return parent.ad;
+      }
+      
+      // If adId exists, try to fetch the ad
+      if (parent.adId) {
+        try {
+          console.log('🔍 Fetching ad for adId:', parent.adId);
+          const ad = await Ad.findById(parent.adId);
+          if (ad) {
+            const adData = {
+              id: ad._id.toString(),
+              title: ad.title || 'Unknown Ad',
+              description: ad.description || '',
+              adFormat: ad.adFormat || '',
+              mediaFile: ad.mediaFile || ''
+            };
+            console.log('✅ Fetched ad data:', adData);
+            return adData;
+          } else {
+            console.log('❌ Ad not found for adId:', parent.adId);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching ad for LCDSlot:', error);
+        }
+      } else {
+        console.log('❌ No adId found in parent:', parent);
+      }
+      
+      // Return default ad object if nothing else works
+      console.log('⚠️ Returning default ad object');
+      return {
+        id: '',
+        title: 'Unknown Ad',
+        description: '',
+        adFormat: '',
+        mediaFile: ''
+      };
     }
   }
 };

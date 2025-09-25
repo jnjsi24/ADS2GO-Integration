@@ -1,12 +1,15 @@
-// AdsPanel API Service
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
+// Force correct API base URL for REST endpoints (not GraphQL)
+const API_BASE_URL = 'http://192.168.1.7:5000';
 
-// Cache busting - force browser to reload this file
-console.log('🔄 AdsPanelService loaded - Cache busted at:', new Date().toISOString());
+// Aggressive cache busting - force browser to reload this file
+const CACHE_BUST = Date.now();
+console.log('🔄 AdsPanelService V4 (REAL ADS) loaded - Cache busted at:', new Date().toISOString(), 'Cache bust ID:', CACHE_BUST);
 
 export interface ScreenData {
   deviceId: string;
   materialId: string;
+  displayId?: string; // Display identifier like "DGL-HEADDRESS-CAR-003-SLOT-1"
   screenType: string;
   carGroupId: string;
   slotNumber: number;
@@ -29,6 +32,9 @@ export interface ScreenData {
       adTitle: string;
       adDuration: number;
       startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
     };
     dailyAdStats: any;
     adPerformance: any[];
@@ -72,10 +78,12 @@ export interface AdAnalytics {
   }>;
 }
 
-class AdsPanelService {
+class AdsPanelServiceV4 {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log('🌐 Making API request to:', url);
+    console.log('🌐 [makeRequest] API_BASE_URL:', API_BASE_URL);
+    console.log('🌐 [makeRequest] endpoint:', endpoint);
+    console.log('🌐 [makeRequest] final URL:', url);
     
     const response = await fetch(url, {
       headers: {
@@ -100,14 +108,121 @@ class AdsPanelService {
     status?: string;
     materialId?: string;
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
-    const queryParams = new URLSearchParams();
-    if (filters?.screenType) queryParams.append('screenType', filters.screenType);
-    if (filters?.status) queryParams.append('status', filters.status);
-    if (filters?.materialId) queryParams.append('materialId', filters.materialId);
+    try {
+      // Use the compliance endpoint to get real-time screen data with displayId
+      console.log('🔍 [getScreens] Using compliance endpoint: /screenTracking/compliance');
+      // Add cache-busting parameter to ensure fresh data
+      const cacheBuster = `?t=${Date.now()}`;
+      const response = await this.makeRequest(`/screenTracking/compliance${cacheBuster}`);
+      
+      if (!response || !response.data || !response.data.screens) {
+        console.error('❌ Invalid response format from compliance endpoint:', response);
+        return {
+          screens: [],
+          totalScreens: 0,
+          onlineScreens: 0,
+          displayingScreens: 0,
+          maintenanceScreens: 0
+        };
+      }
+      
+      // Debug: Log current ad information from server response
+      console.log('🔍 Server response current ads:', response.data.screens.map((screen: any) => ({
+        deviceId: screen.deviceId,
+        currentAd: screen.screenMetrics?.currentAd?.adTitle || 'No ad'
+      })));
 
-    const endpoint = `/screenTracking/screens${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await this.makeRequest(endpoint);
-    return response.data;
+      // Transform compliance data to ScreenData format
+      const screens: ScreenData[] = await Promise.all(response.data.screens.map(async (screen: any) => {
+        // Use the current ad from compliance endpoint (this is the actually playing ad)
+        let currentAd = undefined;
+        if (screen.screenMetrics?.currentAd) {
+          currentAd = {
+            adId: screen.screenMetrics.currentAd.adId,
+            adTitle: screen.screenMetrics.currentAd.adTitle,
+            adDuration: screen.screenMetrics.currentAd.adDuration || 30,
+            startTime: screen.screenMetrics.currentAd.startTime
+          };
+          console.log(`🎯 Using current playing ad for ${screen.displayId}:`, currentAd);
+        } else {
+          console.log(`📭 No current ad playing for ${screen.displayId}`);
+        }
+
+        return {
+          deviceId: screen.deviceId,
+          materialId: screen.materialId,
+          displayId: screen.displayId, // Include the displayId from compliance endpoint
+          screenType: screen.screenType || 'HEADDRESS',
+          carGroupId: screen.carGroupId || '',
+          slotNumber: screen.slotNumber || 1,
+          isOnline: screen.isOnline,
+          currentLocation: screen.currentLocation?.address || 'Unknown Location',
+          lastSeen: screen.lastSeen,
+          currentHours: screen.currentHours || 0,
+          hoursRemaining: screen.hoursRemaining || 0,
+          isCompliant: screen.isCompliant || false,
+          totalDistanceToday: screen.totalDistanceToday || 0,
+          displayStatus: screen.isOnline ? 'ACTIVE' : 'OFFLINE',
+          screenMetrics: {
+            isDisplaying: screen.isOnline,
+            brightness: 100,
+            volume: 50,
+            adPlayCount: 0,
+            maintenanceMode: false,
+            currentAd: currentAd, // Use real ad data instead of demo
+            dailyAdStats: {
+              totalAdsPlayed: 0,
+              totalDisplayTime: 0,
+              uniqueAdsPlayed: 0,
+              averageAdDuration: 0,
+              adCompletionRate: 0
+            },
+            adPerformance: [],
+            displayHours: screen.currentHours || 0,
+            lastAdPlayed: screen.lastSeen
+          }
+        };
+      }));
+
+      // Apply filters
+      let filteredScreens = screens;
+      if (filters?.screenType) {
+        filteredScreens = filteredScreens.filter(screen => screen.screenType === filters.screenType);
+      }
+      if (filters?.status) {
+        filteredScreens = filteredScreens.filter(screen => {
+          if (filters.status === 'online') return screen.isOnline;
+          if (filters.status === 'offline') return !screen.isOnline;
+          return true;
+        });
+      }
+      if (filters?.materialId) {
+        filteredScreens = filteredScreens.filter(screen => screen.materialId.includes(filters.materialId!));
+      }
+
+      const onlineScreens = filteredScreens.filter(screen => screen.isOnline).length;
+      const displayingScreens = filteredScreens.filter(screen => screen.isOnline && screen.screenMetrics.isDisplaying).length;
+      const maintenanceScreens = filteredScreens.filter(screen => screen.screenMetrics.maintenanceMode).length;
+
+      console.log(`📊 Compliance data transformed: ${filteredScreens.length} screens, ${onlineScreens} online`);
+
+      return {
+        screens: filteredScreens,
+        totalScreens: filteredScreens.length,
+        onlineScreens,
+        displayingScreens,
+        maintenanceScreens
+      };
+    } catch (error) {
+      console.error('❌ Error fetching screens from compliance endpoint:', error);
+      return {
+        screens: [],
+        totalScreens: 0,
+        onlineScreens: 0,
+        displayingScreens: 0,
+        maintenanceScreens: 0
+      };
+    }
   }
 
   // Get compliance report
@@ -121,10 +236,11 @@ class AdsPanelService {
   }
 
   // Get ad analytics
-  async getAdAnalytics(date?: string, materialId?: string): Promise<AdAnalytics> {
+  async getAdAnalytics(date?: string, materialId?: string, userId?: string): Promise<AdAnalytics> {
     const queryParams = new URLSearchParams();
     if (date) queryParams.append('date', date);
     if (materialId) queryParams.append('materialId', materialId);
+    if (userId) queryParams.append('userId', userId);
 
     const endpoint = `/screenTracking/adAnalytics${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await this.makeRequest(endpoint);
@@ -281,4 +397,4 @@ class AdsPanelService {
   }
 }
 
-export const adsPanelService = new AdsPanelService();
+export const adsPanelService = new AdsPanelServiceV4();

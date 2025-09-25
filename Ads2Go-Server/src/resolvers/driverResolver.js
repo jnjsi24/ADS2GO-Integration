@@ -168,6 +168,7 @@ Upload: GraphQLUpload,
     getAllDrivers: async (_, __, { user }) => {
       checkAdmin(user);
       return Driver.find({})
+        .select('+createdAt +updatedAt +lastLogin +dateJoined +approvalDate')
         .populate({
           path: 'material',
           model: 'Material',
@@ -292,13 +293,21 @@ createDriver: async (_, { input }) => {
       throw new Error("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character");
     }
 
-    // Validate contact number (exactly 10 digits)
-    const contactNumberRegex = /^\d{10}$/;
+    // Validate contact number (Philippine format: 09XXXXXXXXX or +639XXXXXXXXX)
+    // Normalize the contact number before validation (same as Driver model)
+    let normalizedContact = input.contactNumber.replace(/[^\d+]/g, '');
+    if (/^9\d{9}$/.test(normalizedContact)) {
+      normalizedContact = '0' + normalizedContact;
+    } else if (/^639\d{9}$/.test(normalizedContact)) {
+      normalizedContact = '+' + normalizedContact;
+    }
+    
+    const contactNumberRegex = /^(09\d{9}|\+639\d{9})$/;
     if (!input.contactNumber || !input.contactNumber.trim()) {
       throw new Error("Contact number is required");
     }
-    if (!contactNumberRegex.test(input.contactNumber.trim())) {
-      throw new Error("Contact number must be exactly 10 digits");
+    if (!contactNumberRegex.test(normalizedContact)) {
+      throw new Error("Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)");
     }
 
     // Validate vehicle type
@@ -980,6 +989,26 @@ createDriver: async (_, { input }) => {
         console.error('Error fetching material:', error);
         return null;
       }
+    },
+    createdAt: (driver) => {
+      if (!driver.createdAt) return null;
+      return driver.createdAt.toISOString();
+    },
+    updatedAt: (driver) => {
+      if (!driver.updatedAt) return null;
+      return driver.updatedAt.toISOString();
+    },
+    lastLogin: (driver) => {
+      if (!driver.lastLogin) return null;
+      return driver.lastLogin.toISOString();
+    },
+    dateJoined: (driver) => {
+      if (!driver.dateJoined) return null;
+      return driver.dateJoined.toISOString();
+    },
+    approvalDate: (driver) => {
+      if (!driver.approvalDate) return null;
+      return driver.approvalDate.toISOString();
     }
   },
 };

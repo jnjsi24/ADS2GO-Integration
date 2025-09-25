@@ -62,6 +62,85 @@ const typeDefs = gql`
     hasSpecialChar: String
   }
 
+  # Analytics Types
+  type UserAnalyticsSummary {
+    totalAdImpressions: Int!
+    totalAdsPlayed: Int!
+    totalDisplayTime: Float!
+    averageCompletionRate: Float!
+    totalAds: Int!
+    activeAds: Int!
+  }
+
+  type UserAdPerformance {
+    adId: String!
+    adTitle: String!
+    impressions: Int!
+    totalPlayTime: Float!
+    averageCompletionRate: Float!
+    playCount: Int!
+    lastPlayed: String
+  }
+
+  type UserDailyStats {
+    date: String!
+    impressions: Int!
+    adsPlayed: Int!
+    displayTime: Float!
+  }
+
+  type UserDeviceStats {
+    deviceId: String!
+    materialId: String!
+    impressions: Int!
+    adsPlayed: Int!
+    displayTime: Float!
+    lastActivity: String
+    isOnline: Boolean!
+  }
+
+  type UserAnalytics {
+    summary: UserAnalyticsSummary!
+    adPerformance: [UserAdPerformance!]!
+    dailyStats: [UserDailyStats!]!
+    deviceStats: [UserDeviceStats!]!
+    period: String!
+    startDate: String
+    endDate: String
+  }
+
+  type UserAdDetails {
+    adId: String!
+    adTitle: String!
+    adDescription: String
+    adFormat: String!
+    status: String!
+    createdAt: String!
+    startTime: String
+    endTime: String
+    totalImpressions: Int!
+    totalPlayTime: Int!
+    averageCompletionRate: Float!
+    devicePerformance: [UserDevicePerformance!]!
+    dailyPerformance: [UserDailyPerformance!]!
+  }
+
+  type UserDevicePerformance {
+    deviceId: String!
+    materialId: String!
+    impressions: Int!
+    playTime: Int!
+    completionRate: Float!
+    lastPlayed: String
+  }
+
+  type UserDailyPerformance {
+    date: String!
+    impressions: Int!
+    playTime: Int!
+    completionRate: Float!
+  }
+
   # Inputs
   input CreateUserInput {
     firstName: String!
@@ -98,6 +177,8 @@ const typeDefs = gql`
     # User queries
     getOwnUserDetails: User
     checkPasswordStrength(password: String!): PasswordStrength!
+    getUserAnalytics(startDate: String, endDate: String, period: String): UserAnalytics
+    getUserAdDetails(adId: String!): UserAdDetails
   }
 
   # Mutations

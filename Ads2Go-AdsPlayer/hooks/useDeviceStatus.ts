@@ -18,11 +18,12 @@ interface DeviceStatus {
   maxReconnectAttempts: number;
 }
 
-const PING_INTERVAL = 25000; // 25 seconds
-const PONG_TIMEOUT = 60000;  // 60 seconds
-const MAX_RECONNECT_ATTEMPTS = 5;
+const PING_INTERVAL = 30000; // 30 seconds
+const PONG_TIMEOUT = 120000;  // 120 seconds (increased from 90s)
+const MAX_RECONNECT_ATTEMPTS = 10; // Increased from 5
 const BASE_RECONNECT_DELAY = 1000; // 1 second
 const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+const CONNECTION_HEALTH_CHECK_INTERVAL = 10000; // 10 seconds
 
 const useDeviceStatus = (materialId: string) => {
   // Refs
@@ -41,6 +42,13 @@ const useDeviceStatus = (materialId: string) => {
     isOnline: false,
     reconnectAttempts: 0,
     maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+  });
+
+  // Connection health monitoring
+  const [connectionHealth, setConnectionHealth] = useState({
+    lastPong: Date.now(),
+    consecutiveFailures: 0,
+    isHealthy: true
   });
 
   // Cleanup function to close WebSocket and clear intervals
@@ -153,10 +161,10 @@ const useDeviceStatus = (materialId: string) => {
         // Send initial status update
         sendStatusUpdate(ws);
         
-        // Set up ping interval (25 seconds)
+        // Set up ping interval (30 seconds)
         pingIntervalRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
-            // Check last pong time (60s timeout)
+            // Check last pong time (90s timeout)
             if (Date.now() - lastPongRef.current > PONG_TIMEOUT) {
               console.warn('[useDeviceStatus] No pong received, reconnecting...');
               ws.close();
@@ -166,6 +174,7 @@ const useDeviceStatus = (materialId: string) => {
             // Send ping
             try {
               ws.send(JSON.stringify({ type: 'ping' }));
+              console.log('[useDeviceStatus] Ping sent');
             } catch (error) {
               console.error('[useDeviceStatus] Error sending ping:', error);
               ws.close();
@@ -214,8 +223,10 @@ const useDeviceStatus = (materialId: string) => {
           const newReconnectAttempts = prev.reconnectAttempts + 1;
           const maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
           
-          // Schedule reconnection if we haven't exceeded max attempts
-          if (newReconnectAttempts < maxReconnectAttempts) {
+          // Determine if we should reconnect based on close code
+          const shouldReconnect = event.code !== 1000 || newReconnectAttempts < maxReconnectAttempts;
+          
+          if (shouldReconnect) {
             const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, newReconnectAttempts - 1), MAX_RECONNECT_DELAY);
             console.log(`[useDeviceStatus] Reconnecting in ${delay}ms (attempt ${newReconnectAttempts + 1}/${maxReconnectAttempts})`);
             
@@ -228,6 +239,8 @@ const useDeviceStatus = (materialId: string) => {
             reconnectTimeoutRef.current = setTimeout(() => {
               connect();
             }, delay) as unknown as NodeJS.Timeout;
+          } else {
+            console.log(`[useDeviceStatus] Not reconnecting - code: ${event.code}, attempts: ${newReconnectAttempts}/${maxReconnectAttempts}`);
           }
           
           return {
@@ -235,7 +248,8 @@ const useDeviceStatus = (materialId: string) => {
             isConnected: false,
             isOnline: false,
             reconnectAttempts: newReconnectAttempts,
-            error: newReconnectAttempts >= maxReconnectAttempts ? 'Max reconnection attempts reached' : prev.error,
+            error: newReconnectAttempts >= maxReconnectAttempts ? 'Max reconnection attempts reached' : 
+                   event.code === 1000 ? 'Connection closed normally' : prev.error,
           };
         });
       };

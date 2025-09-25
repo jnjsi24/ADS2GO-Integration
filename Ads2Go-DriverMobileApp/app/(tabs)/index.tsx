@@ -9,13 +9,14 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { request, gql } from 'graphql-request';
 import API_CONFIG from '../../config/api';
 
 const API_URL = API_CONFIG.API_URL;
+console.log('🔍 API_URL from config:', API_URL);
 
 // GraphQL query to get driver's materials
 const GET_DRIVER_MATERIALS = gql`
@@ -111,6 +112,7 @@ interface DriverProfile {
 
 export default function Home() {
   const navigation = useNavigation();
+  const router = useRouter();
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,6 +469,14 @@ export default function Home() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => router.push('/dashboard')}
+          >
+            <Ionicons name="analytics-outline" size={24} color="#007AFF" />
+            <Text style={styles.actionButtonText}>Analytics Dashboard</Text>
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.actionButton}>
             <Ionicons name="camera-outline" size={24} color="#007AFF" />
             <Text style={styles.actionButtonText}>Upload Photos</Text>
@@ -744,6 +754,7 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-around',
   },
   actionButton: {
@@ -752,6 +763,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
     minWidth: 80,
+    marginBottom: 12,
   },
   actionButtonText: {
     fontSize: 12,

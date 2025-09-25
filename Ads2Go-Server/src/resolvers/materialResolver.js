@@ -3,6 +3,8 @@ const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet');
 const ScreenTracking = require('../models/screenTracking');
 const MaterialTracking = require('../models/materialTracking');
+const MaterialAvailability = require('../models/MaterialAvailability');
+const AdsPlan = require('../models/AdsPlan');
 const { checkAdmin } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 
@@ -12,6 +14,84 @@ const allowedMaterialsByVehicle = {
   JEEP: ['POSTER', 'STICKER'],
   MOTORCYCLE: ['LCD', 'BANNER'],
   E_TRIKE: ['BANNER', 'LCD'],
+};
+
+/**
+ * Clean up all related records when a material is deleted
+ * @param {string} materialId - The ObjectId of the material
+ * @param {string} materialStringId - The string materialId for ScreenTracking and Tablet
+ */
+const cleanupMaterialRelatedRecords = async (materialId, materialStringId) => {
+  const cleanupResults = {
+    materialAvailability: false,
+    materialTracking: false,
+    screenTracking: false,
+    tablet: false,
+    plans: false
+  };
+
+  // Clean up MaterialAvailability record
+  try {
+    const availabilityResult = await MaterialAvailability.findOneAndDelete({ materialId });
+    if (availabilityResult) {
+      console.log(`✅ Cleaned up MaterialAvailability record for deleted material: ${materialStringId}`);
+      cleanupResults.materialAvailability = true;
+    }
+  } catch (availabilityError) {
+    console.error(`❌ Error cleaning up MaterialAvailability:`, availabilityError);
+  }
+  
+  // Clean up MaterialTracking record
+  try {
+    const trackingResult = await MaterialTracking.findOneAndDelete({ materialId });
+    if (trackingResult) {
+      console.log(`✅ Cleaned up MaterialTracking record for deleted material: ${materialStringId}`);
+      cleanupResults.materialTracking = true;
+    }
+  } catch (trackingError) {
+    console.error(`❌ Error cleaning up MaterialTracking:`, trackingError);
+  }
+  
+  // Clean up ScreenTracking record
+  try {
+    const screenTrackingResult = await ScreenTracking.findOneAndDelete({ materialId: materialStringId });
+    if (screenTrackingResult) {
+      console.log(`✅ Cleaned up ScreenTracking record for deleted material: ${materialStringId}`);
+      cleanupResults.screenTracking = true;
+    }
+  } catch (screenTrackingError) {
+    console.error(`❌ Error cleaning up ScreenTracking:`, screenTrackingError);
+  }
+  
+  // Clean up Tablet record
+  try {
+    const tabletResult = await Tablet.findOneAndDelete({ materialId: materialStringId });
+    if (tabletResult) {
+      console.log(`✅ Cleaned up Tablet record for deleted material: ${materialStringId}`);
+      cleanupResults.tablet = true;
+    }
+  } catch (tabletError) {
+    console.error(`❌ Error cleaning up Tablet:`, tabletError);
+  }
+
+  // Remove material from all plans
+  try {
+    const plans = await AdsPlan.find({ materials: materialId });
+    for (const plan of plans) {
+      plan.materials = plan.materials.filter(
+        planMaterialId => planMaterialId.toString() !== materialId.toString()
+      );
+      await plan.save();
+      console.log(`✅ Removed material from plan: ${plan.name}`);
+    }
+    if (plans.length > 0) {
+      cleanupResults.plans = true;
+    }
+  } catch (planCleanupError) {
+    console.error(`❌ Error removing material from plans:`, planCleanupError);
+  }
+
+  return cleanupResults;
 };
 
 const materialResolvers = {
@@ -46,6 +126,11 @@ const materialResolvers = {
     getMaterialsByCategoryAndVehicle: async (_, { category, vehicleType }, { user, driver }) => {
       if (!user && !driver) throw new Error("Unauthorized");
       return await Material.find({ category, vehicleType }).sort({ createdAt: -1 });
+    },
+
+    getMaterialsByCategoryVehicleAndType: async (_, { category, vehicleType, materialType }, { user, driver }) => {
+      if (!user && !driver) throw new Error("Unauthorized");
+      return await Material.find({ category, vehicleType, materialType }).sort({ createdAt: -1 });
     },
 
     getMaterialById: async (_, { id }, { user }) => {
@@ -133,6 +218,75 @@ const materialResolvers = {
       } catch (error) {
         console.error(`❌ Error saving material:`, error);
         throw new Error(`Failed to save material: ${error.message}`);
+      }
+
+      // Create MaterialAvailability record automatically
+      try {
+        // Check if availability already exists
+        const existingAvailability = await MaterialAvailability.findOne({ materialId: material._id });
+        if (!existingAvailability) {
+          const availability = new MaterialAvailability({
+            materialId: material._id,
+            totalSlots: 5,
+            occupiedSlots: 0,
+            availableSlots: 5,
+            nextAvailableDate: new Date(),
+            allSlotsFreeDate: new Date(),
+            status: 'AVAILABLE',
+            currentAds: []
+          });
+          
+          await availability.save();
+          console.log(`✅ Created MaterialAvailability record for material: ${material.materialId}`);
+        } else {
+          console.log(`ℹ️ MaterialAvailability already exists for material: ${material.materialId}`);
+        }
+      } catch (availabilityError) {
+        console.error(`❌ Error creating MaterialAvailability:`, availabilityError);
+        // Don't throw error - availability creation is important but shouldn't break material creation
+        console.log(`⚠️ Material created but availability record creation failed. Run sync script to fix.`);
+      }
+
+      // Automatically assign material to compatible plans
+      try {
+        console.log(`🔗 Auto-assigning material ${material.materialId} to compatible plans...`);
+        
+        // Find plans that match this material's criteria
+        const compatiblePlans = await AdsPlan.find({
+          materialType: material.materialType,
+          vehicleType: material.vehicleType,
+          category: material.category,
+          status: 'RUNNING'
+        });
+        
+        console.log(`📋 Found ${compatiblePlans.length} compatible plans for ${material.materialId}`);
+        
+        for (const plan of compatiblePlans) {
+          // Check if material is already assigned to this plan
+          const isAlreadyAssigned = plan.materials && plan.materials.some(
+            planMaterialId => planMaterialId.toString() === material._id.toString()
+          );
+          
+          if (!isAlreadyAssigned) {
+            // Add material to plan (limit to 3 materials per plan)
+            if (!plan.materials) plan.materials = [];
+            if (plan.materials.length < 3) {
+              plan.materials.push(material._id);
+              await plan.save();
+              console.log(`✅ Assigned ${material.materialId} to plan: ${plan.name}`);
+            } else {
+              console.log(`ℹ️ Plan ${plan.name} already has maximum materials (3), skipping assignment`);
+            }
+          } else {
+            console.log(`ℹ️ Material ${material.materialId} already assigned to plan: ${plan.name}`);
+          }
+        }
+        
+        console.log(`🎯 Auto-assignment completed for material: ${material.materialId}`);
+      } catch (planAssignmentError) {
+        console.error(`❌ Error auto-assigning material to plans:`, planAssignmentError);
+        // Don't throw error - plan assignment is helpful but shouldn't break material creation
+        console.log(`⚠️ Material created but plan assignment failed. Run sync script to fix.`);
       }
 
       // Create tablet pair if the material type is HEADDRESS
@@ -236,10 +390,14 @@ const materialResolvers = {
 
       // Create MaterialTracking record using GraphQL mutation approach
       try {
+        console.log(`🔍 Checking for existing MaterialTracking for material: ${material.materialId} (ID: ${material.id})`);
+        
         // Check if MaterialTracking record already exists
         const existingMaterialTracking = await MaterialTracking.findOne({ materialId: material.id });
         
         if (!existingMaterialTracking) {
+          console.log(`📝 Creating new MaterialTracking record for material: ${material.materialId}`);
+          
           const materialTracking = new MaterialTracking({
             materialId: material.id, // Use ObjectId reference
             driverId: null, // No driver assigned yet
@@ -252,14 +410,27 @@ const materialResolvers = {
             isOnline: false,
             lastSeen: new Date(),
             materialCondition: 'GOOD',
-            isActive: true
+            isActive: true,
+            // Add unique fields to avoid duplicate key errors
+            totalAdImpressions: 0,
+            totalViewCount: 0,
+            qrCodeScans: 0,
+            interactions: 0,
+            uptimePercentage: 0,
+            batteryLevel: 0,
+            signalStrength: 0,
+            totalDistanceTraveled: 0
           });
           
           await materialTracking.save();
           console.log(`✅ Created MaterialTracking record for material: ${material.materialId}`);
+        } else {
+          console.log(`ℹ️ MaterialTracking already exists for material: ${material.materialId}`);
         }
       } catch (error) {
         console.error(`❌ Error creating MaterialTracking:`, error);
+        console.error(`❌ Error details:`, error.message);
+        console.error(`❌ Stack trace:`, error.stack);
         // Don't throw error - MaterialTracking is optional
       }
 
@@ -276,12 +447,14 @@ const materialResolvers = {
       // Handle material dismounting (when driverId is set to null)
       if (input.driverId === null && material.driverId) {
         // Find and update the driver to clear the material reference
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.materialId = null;
-          driver.installedMaterialType = null;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            materialId: null,
+            installedMaterialType: null
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
         
         // Update material fields
         material.driverId = null;
@@ -295,12 +468,14 @@ const materialResolvers = {
         material.mountedAt = input.mountedAt;
         
         // Update the driver's installedMaterialType
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.installedMaterialType = material.materialType;
-          driver.materialId = material.id;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            installedMaterialType: material.materialType,
+            materialId: material.id
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
       }
       // Handle dismounting (when dismountedAt is set)
       else if (input.dismountedAt) {
@@ -310,12 +485,14 @@ const materialResolvers = {
         material.dismountedAt = input.dismountedAt;
         
         // Clear the driver's installedMaterialType
-        const driver = await Driver.findOne({ driverId: material.driverId });
-        if (driver) {
-          driver.installedMaterialType = null;
-          driver.materialId = null;
-          await driver.save();
-        }
+        await Driver.findOneAndUpdate(
+          { driverId: material.driverId },
+          { 
+            installedMaterialType: null,
+            materialId: null
+          },
+          { runValidators: false } // Skip validation to avoid contact number issues
+        );
       }
       else if (input.driverId !== undefined) {
         throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
@@ -330,7 +507,22 @@ const materialResolvers = {
 
       const deleted = await Material.findByIdAndDelete(id);
       if (!deleted) throw new Error('Material not found or already deleted');
-      return 'Material deleted successfully.';
+      
+      console.log(`🗑️ Deleting material: ${deleted.materialId} (ID: ${id})`);
+      
+      // Clean up all related records
+      const cleanupResults = await cleanupMaterialRelatedRecords(id, deleted.materialId);
+      
+      // Log cleanup summary
+      const cleanedRecords = Object.entries(cleanupResults)
+        .filter(([_, cleaned]) => cleaned)
+        .map(([record, _]) => record)
+        .join(', ');
+      
+      console.log(`🎯 Material deletion completed: ${deleted.materialId}`);
+      console.log(`🧹 Cleaned up records: ${cleanedRecords || 'none found'}`);
+      
+      return 'Material and all related records deleted successfully.';
     },
 
     assignMaterialToDriver: async (_, { driverId, materialId }, { user }) => {
@@ -339,6 +531,7 @@ const materialResolvers = {
       // Find the driver
       const driver = await Driver.findOne({ driverId });
       if (!driver) throw new Error('Driver not found');
+
 
       const allowedTypes = allowedMaterialsByVehicle[driver.vehicleType] || [];
       if (allowedTypes.length === 0) {

@@ -122,6 +122,7 @@ extend type Query {
   getMaterialsByCategory(category: MaterialCategory!): [Material!]!
   getMaterialsByVehicleType(vehicleType: VehicleType!): [Material!]!
   getMaterialsByCategoryAndVehicle(category: MaterialCategory!, vehicleType: VehicleType!): [Material!]!
+  getMaterialsByCategoryVehicleAndType(category: MaterialCategory!, vehicleType: VehicleType!, materialType: MaterialTypeEnum!): [Material!]!
 
   getMaterialWithDriver(materialId: ID!): MaterialWithDriver
   
@@ -136,7 +137,7 @@ extend type Query {
     deleteMaterial(id: ID!): String
 
     # Material Assignment (Admin-only)
-    assignMaterialToDriver(driverId: String!): MaterialAssignmentResult
+    assignMaterialToDriver(driverId: String!, materialId: ID): MaterialAssignmentResult
     unassignMaterialFromDriver(materialId: ID!): MaterialAssignmentResult
   }
 `;

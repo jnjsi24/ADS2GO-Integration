@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery, useMutation, gql } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { 
   X, 
   Trash,
@@ -12,83 +12,8 @@ import {
   Phone, 
   MapPin, 
   } from 'lucide-react';
-
-// === GraphQL ===
-const GET_ALL_DRIVERS = gql`
-  query GetAllDrivers {
-    getAllDrivers {
-      id
-      driverId
-      firstName
-      middleName
-      lastName
-      email
-      contactNumber
-      vehicleType
-      vehicleModel
-      vehiclePlateNumber
-      accountStatus
-      reviewStatus
-      installedMaterialType
-      address
-      licenseNumber
-      licensePictureURL
-      orCrPictureURL
-      vehiclePhotoURL
-      profilePicture
-      dateJoined
-      approvalDate
-      rejectedReason
-      material {
-        materialId
-        materialType
-        category
-        description
-      }
-    }
-  }
-`;
-
-const APPROVE_DRIVER = gql`
-  mutation ApproveDriver($driverId: ID!, $materialTypeOverride: [MaterialTypeEnum!]) {
-    approveDriver(driverId: $driverId, materialTypeOverride: $materialTypeOverride) {
-      success
-      message
-      driver {
-        id
-        driverId
-        accountStatus
-        reviewStatus
-        installedMaterialType
-      }
-    }
-  }
-`;
-
-const REJECT_DRIVER = gql`
-  mutation RejectDriver($driverId: ID!, $reason: String!) {
-    rejectDriver(driverId: $driverId, reason: $reason) {
-      success
-      message
-      driver {
-        id
-        driverId
-        accountStatus
-        reviewStatus
-        rejectedReason
-      }
-    }
-  }
-`;
-
-const DELETE_DRIVER = gql`
-  mutation DeleteDriver($driverId: ID!) {
-    deleteDriver(driverId: $driverId) {
-      success
-      message
-    }
-  }
-`;
+import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
+import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
 
 // === Types ===
 interface Driver {
@@ -114,6 +39,8 @@ interface Driver {
   dateJoined: string;
   approvalDate?: string;
   rejectedReason?: string;
+  createdAt: string;
+  lastLogin?: string;
   material?: {
     materialId: string;
     materialType: string;
@@ -425,9 +352,23 @@ const ManageRiders: React.FC = () => {
   const isAllSelected =
     selectedRiders.length === filteredRiders.length && filteredRiders.length > 0;
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   return (
@@ -677,7 +618,7 @@ const ManageRiders: React.FC = () => {
               {/* Vehicle & Material Information */}
               <div className="mb-6">
                 <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Vehicle & Material Information</h3>
-                <div className="overflow-x-auto rounded-lg border-b border-gray-200">
+                <div className="overflow-x-auto rounded-lg">
                   <table className="w-96 mx-auto divide-y divide-gray-200">
                     <tbody className="bg-white divide-y divide-gray-200">
                       <tr>
@@ -703,7 +644,7 @@ const ManageRiders: React.FC = () => {
 
               {/* Rider Details */}
               <div className="mb-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-4">Rider Details:</h3>
+                <h3 className="text-xl font-bold text-center text-gray-800 mb-4">Rider Details:</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
                   <div className="flex items-center space-x-3">
                     <IdCard size={20} className="text-gray-500" />
@@ -715,7 +656,7 @@ const ManageRiders: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <CalendarClock size={20} className="text-gray-500" />
-                    <p>{formatDate(selectedDriverDetails.dateJoined)}</p>
+                    <p>{formatDate(selectedDriverDetails.createdAt)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
@@ -723,15 +664,9 @@ const ManageRiders: React.FC = () => {
                     <p>{selectedDriverDetails.address || 'N/A'}</p>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    {selectedDriverDetails.approvalDate && (
-                      <>
-                        <CalendarCheck2 size={20} className="text-gray-500" />
-                        <span className="text-gray-700">
-                          {formatDate(selectedDriverDetails.approvalDate)}
-                        </span>
-                      </>
-                    )}
+                  <div className="flex items-center space-x-3">
+                    <CalendarCheck2 size={20} className="text-gray-500" />
+                    <p>{formatDate(selectedDriverDetails.lastLogin)}</p>
                   </div>
 
                   <div className="flex items-center space-x-3">

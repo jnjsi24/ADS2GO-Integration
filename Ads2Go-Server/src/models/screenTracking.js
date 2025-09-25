@@ -146,6 +146,33 @@ const ScreenTrackingSchema = new mongoose.Schema({
   totalDistanceTraveled: { type: Number, default: 0 }, // lifetime total
   averageDailyHours: { type: Number, default: 0 },
   complianceRate: { type: Number, default: 0 }, // percentage of days meeting 8-hour target
+  
+  // Safety and violations tracking
+  safetyScore: { type: Number, default: 100, min: 0, max: 100 },
+  violations: [{
+    type: { 
+      type: String, 
+      enum: ['SPEED_VIOLATION', 'ROUTE_VIOLATION', 'TIME_VIOLATION'],
+      required: true 
+    },
+    level: { 
+      type: String, 
+      enum: ['LOW', 'MEDIUM', 'HIGH', 'EXTREME'],
+      required: true 
+    },
+    penalty: { type: Number, required: true },
+    currentSpeed: { type: Number, required: true },
+    speedLimit: { type: Number, required: true },
+    speedOverLimit: { type: Number, required: true },
+    timestamp: { type: Date, default: Date.now },
+    location: {
+      type: { type: String, enum: ['Point'], default: 'Point' },
+      coordinates: [Number], // [lng, lat]
+      accuracy: Number
+    },
+    isResolved: { type: Boolean, default: false },
+    resolvedAt: { type: Date }
+  }],
 
   // Route tracking (for mobile screens only)
   currentRoute: {
@@ -182,6 +209,10 @@ const ScreenTrackingSchema = new mongoose.Schema({
       impressions: { type: Number, default: 0 }, // How many times this ad was shown
       totalViewTime: { type: Number, default: 0 }, // Total time viewed in seconds
       completionRate: { type: Number, default: 0 }, // Percentage of ad completed
+      // Real-time playback fields
+      currentTime: { type: Number, default: 0 }, // Current playback time in seconds
+      state: { type: String, enum: ['playing', 'paused', 'buffering', 'loading', 'ended'], default: 'loading' },
+      progress: { type: Number, default: 0, min: 0, max: 100 } // Progress percentage
     },
     
     // Daily ad statistics
@@ -247,15 +278,47 @@ ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
   
   const now = new Date();
   const startTime = new Date(this.currentSession.startTime);
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
   
-  return Math.round(hoursDiff * 100) / 100; // Round to 2 decimal places
+  // Check if this is a new day - if so, reset to 8 hours
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession.date);
+  sessionDate.setHours(0, 0, 0, 0);
+  
+  // If it's a new day, return 8 hours (fresh start)
+  if (sessionDate.getTime() !== today.getTime()) {
+    return 8;
+  }
+  
+  // Count hours if device is online (either WebSocket connected or database shows online)
+  // If not online, return the last recorded hours
+  if (!this.isOnline) {
+    return this.currentSession.totalHoursOnline || 0;
+  }
+  
+  // Calculate hours since session start, but only if online
+  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  
+  return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
 
 // Virtual for hours remaining to meet target
 ScreenTrackingSchema.virtual('hoursRemaining').get(function() {
   const targetHours = this.currentSession?.targetHours || 8;
   const currentHours = this.currentHoursToday;
+  
+  // If it's a new day, show 8 hours remaining
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      return 8;
+    }
+  }
+  
   return Math.max(0, targetHours - currentHours);
 });
 
@@ -271,6 +334,50 @@ ScreenTrackingSchema.virtual('displayStatus').get(function() {
   if (!this.screenMetrics?.isDisplaying) return 'DISPLAY_OFF';
   return 'ACTIVE';
 });
+
+// Method to reset daily session
+ScreenTrackingSchema.methods.resetDailySession = function() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Check if we need to reset (new day)
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      // Reset for new day
+      this.currentSession = {
+        date: today,
+        startTime: new Date(),
+        endTime: null,
+        totalHoursOnline: 0,
+        totalDistanceTraveled: 0,
+        isActive: true,
+        targetHours: 8,
+        complianceStatus: 'PENDING',
+        locationHistory: []
+      };
+      
+      // Also reset the current location to prevent invalid distance calculations
+      this.currentLocation = null;
+      
+      // Reset device-specific hours and distance
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          device.totalHoursOnline = 0;
+          device.totalDistanceTraveled = 0;
+        });
+      }
+      
+      // Reset total distance as well
+      this.totalDistanceTraveled = 0;
+      
+      return true; // Session was reset
+    }
+  }
+  
+  return false; // No reset needed
+};
 
 // Virtual for easy access to current location coordinates
 ScreenTrackingSchema.virtual('currentLat').get(function() {
@@ -300,7 +407,7 @@ ScreenTrackingSchema.methods.startDailySession = function() {
   return this.save();
 };
 
-ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '') {
+ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', violationData = null) {
   const locationPoint = {
     type: 'Point',
     coordinates: [lng, lat], // GeoJSON format: [longitude, latitude]
@@ -314,31 +421,79 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   // Update current location
   this.currentLocation = locationPoint;
   this.lastSeen = new Date();
+  
+  // Handle speed violation if present
+  if (violationData && violationData.type === 'SPEED_VIOLATION') {
+    // Add violation to the record
+    this.addViolation(violationData);
+  }
 
-  // Add to current session history
+  // Add to current session history (but limit entries to prevent database bloat)
   if (this.currentSession && this.currentSession.isActive) {
     this.currentSession.locationHistory.push(locationPoint);
     
-    // Calculate distance traveled
+    // Limit location history to last 100 entries to prevent database bloat
+    if (this.currentSession.locationHistory.length > 100) {
+      this.currentSession.locationHistory = this.currentSession.locationHistory.slice(-100);
+    }
+    
+    // Calculate distance traveled only if location actually changed
     if (this.currentSession.locationHistory.length > 1) {
       const prevPoint = this.currentSession.locationHistory[this.currentSession.locationHistory.length - 2];
       
-      // Check if previous point has valid coordinates
+      // Check if previous point has valid coordinates (not 0,0 which is in the ocean)
       if (prevPoint.coordinates && prevPoint.coordinates.length === 2 && 
           typeof prevPoint.coordinates[0] === 'number' && typeof prevPoint.coordinates[1] === 'number' &&
-          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1])) {
+          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1]) &&
+          !(prevPoint.coordinates[0] === 0 && prevPoint.coordinates[1] === 0)) {
         
         // Extract coordinates from GeoJSON format: [longitude, latitude]
         const prevLng = prevPoint.coordinates[0];
         const prevLat = prevPoint.coordinates[1];
-        const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
         
-        // Only add distance if it's a valid number
-        if (!isNaN(distance) && distance >= 0) {
-          this.currentSession.totalDistanceTraveled += distance;
-          this.totalDistanceTraveled += distance;
+        // Only calculate distance if coordinates are actually different
+        const latDiff = Math.abs(prevLat - lat);
+        const lngDiff = Math.abs(prevLng - lng);
+        const minChangeThreshold = 0.000001; // ~0.1 meters (very small threshold for actual movement)
+        
+        if (latDiff > minChangeThreshold || lngDiff > minChangeThreshold) {
+          const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
+          
+          // Only add distance if it's a valid number and greater than minimum threshold (10 meters)
+          if (!isNaN(distance) && distance >= 0 && distance > 0.01) {
+            this.currentSession.totalDistanceTraveled += distance;
+            this.totalDistanceTraveled += distance;
+            console.log(`📍 Distance calculated: ${distance.toFixed(3)}km (from [${prevLat.toFixed(6)}, ${prevLng.toFixed(6)}] to [${lat.toFixed(6)}, ${lng.toFixed(6)}])`);
+          }
+        } else {
+          console.log(`📍 No significant movement detected (${latDiff.toFixed(8)}, ${lngDiff.toFixed(8)}) - skipping distance calculation`);
         }
+      } else {
+        console.log(`📍 Previous location invalid or is 0,0 - skipping distance calculation`);
       }
+    }
+    
+    // Update hours tracking - only count when device is online (WebSocket connected)
+    if (this.isOnline && this.currentSession && this.currentSession.isActive) {
+      const now = new Date();
+      const startTime = new Date(this.currentSession.startTime);
+      const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+      
+      // Cap at 8 hours maximum
+      const totalHours = Math.min(8, Math.max(0, hoursDiff));
+      this.currentSession.totalHoursOnline = Math.round(totalHours * 100) / 100;
+      
+      // Update device-specific hours if devices array exists
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          if (device.deviceId === this.deviceId) { // Update the specific device
+            device.totalHoursOnline = this.currentSession.totalHoursOnline;
+            device.totalDistanceTraveled = this.currentSession.totalDistanceTraveled;
+          }
+        });
+      }
+      
+      console.log(`⏰ Hours updated: ${this.currentSession.totalHoursOnline}h (online: ${this.isOnline})`);
     }
   }
 
@@ -409,6 +564,10 @@ ScreenTrackingSchema.methods.deg2rad = function(deg) {
 };
 
 ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDIUM') {
+  // Clean up old alerts (older than 7 days) before adding new ones
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  this.alerts = this.alerts.filter(alert => alert.timestamp > sevenDaysAgo);
+  
   this.alerts.push({
     type,
     message,
@@ -416,6 +575,60 @@ ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDI
     isResolved: false,
     severity
   });
+  
+  return this.save();
+};
+
+// Safety score calculation methods
+ScreenTrackingSchema.methods.updateSafetyScore = function(violation) {
+  // Deduct points based on violation level
+  switch(violation.level) {
+    case 'LOW':
+      this.safetyScore = Math.max(0, this.safetyScore - 2);
+      break;
+    case 'MEDIUM':
+      this.safetyScore = Math.max(0, this.safetyScore - 5);
+      break;
+    case 'HIGH':
+      this.safetyScore = Math.max(0, this.safetyScore - 10);
+      break;
+    case 'EXTREME':
+      this.safetyScore = Math.max(0, this.safetyScore - 20);
+      break;
+  }
+  
+  console.log(`📊 Safety score updated: ${this.safetyScore} (deducted ${violation.penalty} points for ${violation.level} violation)`);
+  
+  return this.save();
+};
+
+// Add violation to the record
+ScreenTrackingSchema.methods.addViolation = function(violationData) {
+  // Add violation to the violations array
+  this.violations.push(violationData);
+  
+  // Update safety score
+  this.updateSafetyScore(violationData);
+  
+  // Create alert for the violation
+  this.addAlert(
+    'SPEED_VIOLATION',
+    `Driver exceeded speed limit by ${violationData.speedOverLimit} km/h (${violationData.currentSpeed}/${violationData.speedLimit} km/h)`,
+    violationData.level
+  );
+  
+  console.log(`🚨 Violation recorded: ${violationData.level} level - Speed: ${violationData.currentSpeed} km/h, Limit: ${violationData.speedLimit} km/h`);
+  
+  return this.save();
+};
+
+// Recovery mechanism - add points for safe driving
+ScreenTrackingSchema.methods.updateSafeDrivingTime = function(hours) {
+  // Add 1 point per hour of safe driving (no violations)
+  const pointsToAdd = Math.floor(hours);
+  this.safetyScore = Math.min(100, this.safetyScore + pointsToAdd);
+  
+  console.log(`📈 Safety score recovery: +${pointsToAdd} points for ${hours} hours of safe driving. New score: ${this.safetyScore}`);
   
   return this.save();
 };
@@ -501,7 +714,11 @@ ScreenTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
     endTime: null,
     impressions: (this.screenMetrics.currentAd?.impressions || 0) + 1,
     totalViewTime: (this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime,
-    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0
+    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0,
+    // Real-time playback fields
+    currentTime: 0,
+    state: 'playing',
+    progress: 0
   };
   
   // Update total ad play count

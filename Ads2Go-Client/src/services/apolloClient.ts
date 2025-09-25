@@ -7,7 +7,7 @@ import {
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
-const graphqlUri = process.env.REACT_APP_API_URL || 'http://localhost:5000/graphql';
+const graphqlUri = process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000/graphql';
 
 const httpLink = createHttpLink({
   uri: graphqlUri,

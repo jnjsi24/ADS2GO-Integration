@@ -34,26 +34,33 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-60 bg-[#1B5087] text-gray-300 flex flex-col justify-between fixed">
+    <div className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed">
       <div className="p-6">
         {/* Logo */}
         <div className="flex items-center pl-3 space-x-3 mb-10">
-          <img src="/image/blue-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-gray-300 font-bold">Ads2Go</span>
+          <img src="/image/white-logo.png" alt="Logo" className="w-8 h-8" />
+          <span className="text-2xl text-white font-bold">Ads2Go</span>
         </div>
 
         {/* Navigation */}
-        <ul className="space-y-2">
+        <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
-            <li key={link.label}>
+            <li key={link.label} className="relative group">
               <Link
                 to={link.path}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-md hover:text-white transition ${
-                  location.pathname === link.path ? 'text-white border-l-4 border-white font-semibold' : ''
+                className={`relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-colors ${
+                  location.pathname === link.path
+                    ? 'text-white font-bold bg-[#3367cc]'
+                    : 'text-gray-200 hover:text-gray-300'
                 }`}
               >
-                {link.icon}
-                <span>{link.label}</span>
+                {/* Background animation */}
+                <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
+
+                <span className="relative z-10 flex items-center space-x-3">
+                  {link.icon}
+                  <span>{link.label}</span>
+                </span>
               </Link>
             </li>
           ))}

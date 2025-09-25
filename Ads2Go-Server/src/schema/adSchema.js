@@ -22,6 +22,7 @@ const adTypeDefs = gql`
     planId: AdsPlan        
     title: String!
     description: String
+    website: String        # Optional advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!          # total price for the ad
@@ -34,11 +35,15 @@ const adTypeDefs = gql`
     totalPrice: Float!     
     adType: AdType!
     status: AdStatus!
+    adStatus: String!      # INACTIVE, ACTIVE, FINISHED
+    paymentStatus: String! # PENDING, PAID, FAILED, REFUNDED
+    impressions: Int!
     reasonForReject: String
     approveTime: String
     rejectTime: String
-    startTime: String!
+    startTime: String!     # Admin review time (7 days earlier)
     endTime: String!
+    userDesiredStartTime: String # User's desired start time
     createdAt: String!
     updatedAt: String!
   }
@@ -49,6 +54,7 @@ const adTypeDefs = gql`
     planId: ID!
     title: String!
     description: String
+    website: String         # Optional advertiser website
     adFormat: String!
     mediaFile: String!
     price: Float!

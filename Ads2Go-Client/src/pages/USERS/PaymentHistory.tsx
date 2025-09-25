@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import Payment from "./Payment";
+import { motion, AnimatePresence } from 'framer-motion';
+
 
 
 type Status = "Paid" | "Pending" | "Failed";
@@ -61,16 +63,21 @@ const getInitials = (firstName?: string, lastName?: string) => {
   return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
 };
 
+const planFilterOptions = ['All Plans', '30 Days', '60 Days', '90 Days', '120 Days'];
+const statusFilterOptions = ['All Status', 'Paid', 'Pending', 'Failed'];
+
+
 const PaymentHistory: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<Status | "All Status">(
-    "All Status"
-  );
-  const [planFilter, setPlanFilter] = useState("All Plans");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const navigate = useNavigate();
   const { user } = useUserAuth();
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+
   const [selectedPayment, setSelectedPayment] = useState<PaymentItem | null>(
     null
   );
@@ -157,9 +164,9 @@ const PaymentHistory: React.FC = () => {
         .toLowerCase()
         .includes(searchTerm.toLowerCase().trim()) ||
       item.id.toString().includes(searchTerm.trim());
-    const matchesStatus =
-      statusFilter === "All Status" || item.status === statusFilter;
-    const matchesPlan = planFilter === "All Plans" || item.plan === planFilter;
+      
+    const matchesPlan = selectedPlanFilter === 'All Plans' || item.plan === selectedPlanFilter;
+    const matchesStatus = selectedStatusFilter === 'All Status' || item.status === selectedStatusFilter;
 
     return matchesSearchTerm && matchesStatus && matchesPlan;
   });
@@ -182,9 +189,9 @@ const PaymentHistory: React.FC = () => {
   const getStatusStyle = (status: Status) => {
     switch (status) {
       case "Paid":
-        return "bg-green-300 text-green-800";
+        return "bg-green-200 text-green-700";
       case "Pending":
-        return "bg-yellow-300 text-yellow-800";
+        return "bg-yellow-200 text-yellow-700";
       case "Failed":
         return "bg-red-300 text-red-800";
       default:
@@ -205,6 +212,16 @@ const PaymentHistory: React.FC = () => {
       }
     };
 
+  const handlePlanFilterChange = (plan: string) => {
+    setSelectedPlanFilter(plan);
+    setShowPlanDropdown(false);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
+
   const handlePaymentClick = (type: string) => {
     setSelectedPaymentType(type);
     setIsModalOpen(true);
@@ -217,159 +234,140 @@ const PaymentHistory: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pl-72 p-10">
-      {/* Header with Search and Profile */}
-      <div className="flex flex-col md:flex-row items-center justify-between mb-6 space-y-4 md:space-y-0">
-        {/* Search Bar */}
-        <div className="relative w-full md:w-1/2">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search payments..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
-          />
-        </div>
-        {/* Profile */}
-        <div
-          className="flex items-center space-x-3 cursor-pointer md:ml-auto"
-          onClick={() => navigate("/account")}
-        >
-          <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-            <span className="text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : "..."}
-            </span>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-          </div>
-          <div>
-            {user ? (
-              <p className="font-semibold text-gray-800">
-                {`${user.firstName} ${user.lastName}`}
-              </p>
-            ) : (
-              <p className="font-semibold text-gray-800">Loading...</p>
-            )}
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
+      {/* Header with Title*/}
+      <div className="flex justify-between items-center mb-6 pt-10">
+        <h1 className="text-3xl ml-5 font-bold text-gray-800">Payment History</h1>
+        <div className="flex flex-col items-end gap-3">
+          <div className="flex gap-2">
+            <input type="text" 
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white" 
+              placeholder="Search Advertisements" 
+              value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
+            />
 
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800 whitespace-nowrap">
-          Payment History
-        </h1>
-        <div className="flex space-x-4">
-          <div className="relative">
-            <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as Status | "All Status")
-              }
-              className="text-xs text-black border-gray-400 rounded-xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none"
-            >
-              <option value="All Status">All Status</option>
-              <option value="Paid">Paid</option>
-              <option value="Pending">Pending</option>
-              <option value="Failed">Failed</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg
-                className="w-4 h-4 text-black"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
+            {/* Filter for Plans */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedPlanFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showPlanDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {planFilterOptions.map((plan) => (
+                      <button
+                        key={plan}
+                        onClick={() => handlePlanFilterChange(plan)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {plan}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Filter for Status */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
+                {selectedStatusFilter}
+                <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
-
-          <div className="relative">
-            <select
-              value={planFilter}
-              onChange={(e) => setPlanFilter(e.target.value)}
-              className="text-xs text-black  border-gray-400 rounded-xl pl-5 pr-10 py-3 shadow-md border border-black focus:outline-none appearance-none"
-            >
-              <option>All Plans</option>
-              <option>30 Days</option>
-              <option>60 Days</option>
-              <option>90 Days</option>
-              <option>120 Days</option>
-            </select>
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-            <svg
-                className="w-4 h-4 text-black"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </div>
-          </div>
-          </div>
+        </div>
       </div>
 
       {/* Payment Cards */}
-      <div className="bg-white pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-  {currentPayments.length > 0 ? (
-    currentPayments.map((item) => (
-      <div
-        key={item.id}
-         className="rounded-xl shadow-md bg-white overflow-hidden cursor-pointer relative"
-        onClick={() => setSelectedPayment(item)}
-      >
+      <div className="bg-white pt-6 ml-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {currentPayments.length > 0 ? (
+          currentPayments.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-lg shadow-md bg-white overflow-hidden relative flex flex-col cursor-pointer"
+              onClick={() => setSelectedPayment(item)}
+            >
               {/* Main Product Info Section */}
-        <div className="p-4 flex items-center space-x-4">
-          <div className="flex-grow">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm text-gray-600 mt-1">
-                  Plan ID: <span className="font-bold">{item.id}</span>
-                </p>
-                <h3 className="text-lg font-bold text-black">{item.productName}</h3>
+              <div className="p-4 flex-grow flex items-start space-x-4">
+                <div className="flex-grow">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        <span className="font-bold">{item.productName}</span>
+                      </p>
+                      <h3 className="text-2xl font-bold text-[#FF9B45]">{item.totalPrice}</h3>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {item.paymentType || "N/A"}
+                  </p>
+                  {item.status === "Pending" && (
+                    <p className="text-xs text-red-500 mt-5 font-semibold">
+                      Please pay before October 25, 2023
+                    </p>
+                  )}
+
+                </div>
+              </div>
+              <span
+                className={`absolute top-2 right-2 inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                  item.status
+                )}`}
+              >
+                {item.status} {/* Changed to display the full status text */}
+              </span>
+
+              {/* Footer for the button */}
+              <div className="p-1 bg-gray-100 hover:bg-gray-200 mt-auto transition-colors">
+                <button
+                  onClick={() => setSelectedPayment(item)}
+                  className="text-gray-500 text-xs font-semibold px-4 py-2 flex justify-center items-center text-center w-full"
+                  >
+                    View Details →
+                </button>
               </div>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
-              {item.paymentType || "N/A"}
-            </p>
-            <p className="text-xs text-gray-500 mt-5 font-semibold">
-              Please pay before October 25, 2023
-            </p>
+          ))
+        ) : (
+          <div className="col-span-full text-center text-gray-500 py-8">
+            No payments found for the selected filters.
           </div>
-        </div>
-        <span
-          className={`absolute top-2 right-2 inline-flex items-center justify-center w-6 h-6 rounded-full ${getStatusStyle(
-            item.status
-          )}`}
-        >
-           <span className="text-xs font-medium text-white">
-            {item.status.charAt(0)}
-          </span>
-        </span>
-        <button
-        className="absolute bottom-2 right-2 border border-gray-200 rounded-lg p-2 text-xs text-gray-600 hover:bg-[#FF9800] hover:text-white font-medium"
-        >
-           View Details
-        </button>
-        </div>
-    ))
-  ) : (
-    <div className="col-span-full text-center text-gray-500 py-8">
-      No payments found for the selected filters.
-    </div>
-  )}
-</div>
+        )}
+      </div>
 
       {/* Pagination */}
       <div className="p-4 rounded-lg mt-6 flex justify-between items-center">
@@ -417,7 +415,7 @@ const PaymentHistory: React.FC = () => {
 
       {/* Drawer */}
       <div
-        className={`fixed top-2 right-2 h-[97%] bottom-1 w-full max-w-sm bg-white shadow-lg rounded-xl transform transition-transform duration-500 ease-in-out z-50 overflow-y-auto
+        className={`fixed top-2 right-2 h-[97%] bottom-1 w-full max-w-sm bg-white shadow-lg rounded-lg transform transition-transform duration-500 ease-in-out z-50 overflow-y-auto
           ${selectedPayment ? "translate-x-0" : "translate-x-full"}`}
       >
         {selectedPayment && (
@@ -595,6 +593,7 @@ const PaymentHistory: React.FC = () => {
           onClose={closeModal}
         />
       )}
+      </div>
     </div>
   );
 };

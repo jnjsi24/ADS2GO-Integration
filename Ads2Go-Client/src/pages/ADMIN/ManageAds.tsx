@@ -1,125 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { X, Trash, Tablet, CalendarPlus, CalendarMinus, Mail, CalendarRange, Coins} from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  X, 
+  Trash, 
+  Tablet, 
+  CalendarPlus, 
+  CalendarMinus, 
+  Mail, 
+  CalendarRange, 
+  Coins,
+  Monitor,
+  Calendar,
+  PlayCircle,
+  BarChart3
+} from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { gql } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-
-// GraphQL Queries and Mutations
-const GET_ALL_ADS = gql`
-  query GetAllAds {
-    getAllAds {
-      id
-      title
-      description
-      adType
-      adFormat
-      status
-      startTime
-      endTime
-      mediaFile
-      reasonForReject
-      approveTime
-      rejectTime
-      price
-      totalPrice
-      durationDays
-      numberOfDevices
-      adLengthSeconds
-      playsPerDayPerDevice
-      totalPlaysPerDay
-      pricePerPlay
-      createdAt
-      updatedAt
-      userId {
-        id
-        firstName
-        lastName
-        email
-      }
-      materialId {
-        id
-      }
-      planId {
-        id
-        durationDays
-        numberOfDevices
-        adLengthSeconds
-        playsPerDayPerDevice
-        pricePerPlay
-      }
-    }
-  }
-`;
-
-const UPDATE_AD = gql`
-  mutation UpdateAd($id: ID!, $input: UpdateAdInput!) {
-    updateAd(id: $id, input: $input) {
-      id
-      status
-      reasonForReject
-      approveTime
-      rejectTime
-    }
-  }
-`;
-
-const DELETE_AD = gql`
-  mutation DeleteAd($id: ID!) {
-    deleteAd(id: $id)
-  }
-`;
-
-// === Types ===
-interface User {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-}
-
-interface Material {
-  id: string;
-}
-
-interface AdsPlan {
-  id: string;
-  durationDays: number;
-  numberOfDevices: number;
-  adLengthSeconds: number;
-  playsPerDayPerDevice: number;
-  pricePerPlay: number;
-}
-
-interface Ad {
-  id: string;
-  title: string;
-  description: string;
-  adType: 'DIGITAL' | 'NON_DIGITAL';
-  adFormat: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'ENDED';
-  startTime: string;
-  endTime: string;
-  mediaFile: string;
-  reasonForReject?: string;
-  approveTime?: string;
-  rejectTime?: string;
-  price: number;
-  totalPrice: number;
-  durationDays: number;
-  numberOfDevices: number;
-  adLengthSeconds: number;
-  playsPerDayPerDevice: number;
-  totalPlaysPerDay: number;
-  pricePerPlay: number;
-  createdAt: string;
-  updatedAt: string;
-  userId: User | null;
-  materialId: Material | null;
-  planId: AdsPlan | null;
-}
+import {
+  GET_ALL_ADS,
+  UPDATE_AD,
+  DELETE_AD,
+  type Ad,
+  type User
+} from '../../graphql/admin/ads';
+import ScheduleTab from './tabs/manageAds/ScheduleTab';
+import DeploymentTab from './tabs/manageAds/DeploymentTab';
+import AnalyticsTab from './tabs/dashboard/AnalyticsTab';
+import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
+  
+  // Tab management
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics' | 'availability'>('ads');
+  
+  // Existing state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'APPROVED' | 'PENDING' | 'REJECTED'>('all');
   const [showAdDetailsModal, setShowAdDetailsModal] = useState(false);
@@ -129,6 +43,7 @@ const ManageAds: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
   const [showRejectionNotification, setShowRejectionNotification] = useState(true);
+  
 
 
   // GraphQL Hooks
@@ -203,16 +118,6 @@ const ManageAds: React.FC = () => {
     );
   }
 
-  // Filtered ads
-  const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
-    const matchesSearch =
-      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      ad.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  }) || [];
 
   const formatDate = (date: string) => {
     if (!date) return 'N/A';
@@ -303,6 +208,26 @@ const ManageAds: React.FC = () => {
     setShowAdDetailsModal(true);
   };
 
+  // Tab management functions
+  const tabs = [
+    { id: 'ads', label: 'All Ads', icon: Monitor },
+    { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'deployment', label: 'Deployment', icon: PlayCircle },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'availability', label: 'Plan Availability', icon: CalendarRange }
+  ];
+
+  // Filter functions
+  const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
+    const matchesSearch =
+      ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      ad.id.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' || ad.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  }) || [];
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
@@ -338,154 +263,196 @@ const ManageAds: React.FC = () => {
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>
-        <div className="flex gap-4">
-          <input
-            type="text"
-            placeholder="Search by title, advertiser, or Ad ID..."
-            className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
+        {activeTab === 'ads' && (
+          <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Search by title, advertiser, or Ad ID..."
+              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
 
-          {/* Custom Dropdown with SVG */}
-          <div className="relative w-40">
-            <select
-              className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-              value={statusFilter}
-              onChange={e =>
-                setStatusFilter(e.target.value as 'all' | 'APPROVED' | 'PENDING' | 'REJECTED')
-              }
-            >
-              <option value="all">All Status</option>
-              <option value="APPROVED">Approved</option>
-              <option value="PENDING">Pending</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
-
-            {/* SVG Arrow */}
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <svg
-                className="w-4 h-4 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
+            {/* Custom Dropdown with SVG */}
+            <div className="relative w-40">
+              <select
+                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                value={statusFilter}
+                onChange={e =>
+                  setStatusFilter(e.target.value as 'all' | 'APPROVED' | 'PENDING' | 'REJECTED')
+                }
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
+                <option value="all">All Status</option>
+                <option value="APPROVED">Approved</option>
+                <option value="PENDING">Pending</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
 
-
-      {/* Stats Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Total Ads</h3>
-          <p className="text-2xl font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Pending</h3>
-          <p className="text-2xl font-bold text-yellow-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Approved</h3>
-          <p className="text-2xl font-bold text-green-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
-          </p>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow">
-          <h3 className="text-sm font-medium text-gray-500">Rejected</h3>
-          <p className="text-2xl font-bold text-red-600">
-            {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
-          </p>
-        </div>
-      </div>
-
-      {/* Table */}
-      {filteredAds.length === 0 ? (
-        <div className="text-center py-10 text-gray-500">
-          {searchTerm || statusFilter !== 'all' ? 'No ads match your search criteria' : 'No ads found'}
-        </div>
-      ) : (
-        <div className="rounded-md mb-4 overflow-hidden">
-          <div className="grid grid-cols-12 px-4 py-3 text-sm font-semibold text-gray-600">
-            <div className="col-span-3">Title</div>
-            <div className="col-span-3">Advertiser</div>
-            <div className="col-span-2">Ad Type</div>
-            <div className="col-span-2">Status</div>
-            <div className="col-span-2 text-center">Actions</div>
-          </div>
-
-          {filteredAds.map((ad: Ad) => (
-            <div key={ad.id} className="bg-white mb-3 rounded-lg shadow-md">
-              <div
-                className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                onClick={() => handleRowClick(ad)}
-              >
-
-                
-                <div className="col-span-3 truncate" title={ad.title}>{ad.title}</div>
-                <div className="col-span-3 truncate" title={getAdvertiserName(ad.userId)}>
-                  {getAdvertiserName(ad.userId)}
-                </div>
-                <div className="col-span-2">
-                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                    {ad.adType}
-                  </span>
-                </div>
-                <div className="col-span-2">
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      ad.status === 'APPROVED'
-                        ? 'bg-green-200 text-green-800'
-                        : ad.status === 'PENDING'
-                        ? 'bg-yellow-200 text-yellow-800'
-                        : ad.status === 'REJECTED'
-                        ? 'bg-red-200 text-red-800'
-                        : ad.status === 'RUNNING'
-                        ? 'bg-blue-200 text-blue-800'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    {ad.status}
-                  </span>
-                </div>
-                <div className="col-span-2 flex items-center justify-center gap-1">
-                  {ad.status === 'PENDING' && (
-                    <>
-                      <button
-                        className="bg-green-500 text-white text-xs px-3 py-1 rounded hover:bg-green-600 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                        title="Approve"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="bg-red-500 text-white text-xs px-3 py-1 rounded hover:bg-red-600 transition-colors"
-                        onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                        title="Reject"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="text-red-500 text-md hover:text-red-700"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
-                    title="Delete"
-                  >
-                    <Trash className="w-4 h-4" />
-                  </button>
-                </div>
+              {/* SVG Arrow */}
+              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                <svg
+                  className="w-4 h-4 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </div>
             </div>
-          ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-lg shadow-sm mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="w-4 h-4 mr-2" />
+                {tab.label}
+              </button>
+            ))}
+          </nav>
         </div>
-      )}
+      </div>
+
+
+      {/* Tab Content */}
+      <div className="bg-white rounded-lg shadow-sm">
+        {/* All Ads Tab */}
+        {activeTab === 'ads' && (
+          <div className="p-6">
+            {/* Stats Summary */}
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Total Ads</h3>
+                <p className="text-2xl font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Pending</h3>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Approved</h3>
+                <p className="text-2xl font-bold text-green-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500">Rejected</h3>
+                <p className="text-2xl font-bold text-red-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Table */}
+            {filteredAds.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                {searchTerm || statusFilter !== 'all' ? 'No ads match your search criteria' : 'No ads found'}
+              </div>
+            ) : (
+              <div className="rounded-md mb-4 overflow-hidden">
+                <div className="grid grid-cols-12 px-4 py-3 text-sm font-semibold text-gray-600 bg-gray-50">
+                  <div className="col-span-3">Title</div>
+                  <div className="col-span-3">Advertiser</div>
+                  <div className="col-span-2">Ad Type</div>
+                  <div className="col-span-2">Status</div>
+                  <div className="col-span-2 text-center">Actions</div>
+                </div>
+
+                {filteredAds.map((ad: Ad) => (
+                  <div key={ad.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                    <div
+                      className="grid grid-cols-12 items-center px-4 py-4 text-sm cursor-pointer"
+                      onClick={() => handleRowClick(ad)}
+                    >
+                      <div className="col-span-3 truncate" title={ad.title}>{ad.title}</div>
+                      <div className="col-span-3 truncate" title={getAdvertiserName(ad.userId)}>
+                        {getAdvertiserName(ad.userId)}
+                      </div>
+                      <div className="col-span-2">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                          {ad.adType}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            ad.status === 'APPROVED'
+                              ? 'bg-green-200 text-green-800'
+                              : ad.status === 'PENDING'
+                              ? 'bg-yellow-200 text-yellow-800'
+                              : ad.status === 'REJECTED'
+                              ? 'bg-red-200 text-red-800'
+                              : ad.status === 'RUNNING'
+                              ? 'bg-blue-200 text-blue-800'
+                              : 'bg-gray-200 text-gray-800'
+                          }`}
+                        >
+                          {ad.status}
+                        </span>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-center gap-1">
+                        {ad.status === 'PENDING' && (
+                          <>
+                            <button
+                              className="border border-green-500 text-green-500 text-xs px-2 py-1 rounded hover:bg-green-600 hover:text-white"
+                              onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
+                              title="Approve"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              className="border border-red-500 text-red-500 text-xs px-2 py-1 rounded hover:bg-red-600 hover:text-white"
+                              onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
+                              title="Reject"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        <button
+                          className="text-red-500 text-md hover:text-red-700"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(ad.id); }}
+                          title="Delete"
+                        >
+                          <Trash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Schedule Tab */}
+        {activeTab === 'schedule' && <ScheduleTab />}
+
+        {/* Deployment Tab */}
+        {activeTab === 'deployment' && <DeploymentTab />}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && <AnalyticsTab />}
+
+        {/* Plan Availability Tab */}
+        {activeTab === 'availability' && <PlanAvailabilityTab />}
+      </div>
 
       {/* Ad Details Modal */}
       {showAdDetailsModal && selectedAd && (

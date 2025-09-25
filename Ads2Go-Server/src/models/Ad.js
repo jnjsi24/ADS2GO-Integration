@@ -32,6 +32,17 @@ const AdSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  website: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true; // Allow empty website
+        return /^https?:\/\/.+/.test(v); // Must be a valid URL if provided
+      },
+      message: 'Website must be a valid URL starting with http:// or https://'
+    }
+  },
   adType: {
     type: String,
     enum: ['DIGITAL', 'NON_DIGITAL'],
@@ -78,10 +89,80 @@ const AdSchema = new mongoose.Schema({
   impressions: { type: Number, default: 0 },
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true }, // calculated based on startTime + plan duration
+  userDesiredStartTime: { type: Date, default: null }, // User's desired start time (7 days after admin review)
   reasonForReject: { type: String, default: null },
   approveTime: { type: Date, default: null },
-  rejectTime: { type: Date, default: null }
+  rejectTime: { type: Date, default: null },
+  
+  // Deployment tracking
+  deploymentStatus: { 
+    type: String, 
+    enum: ['PENDING', 'DEPLOYING', 'DEPLOYED', 'FAILED'], 
+    default: 'PENDING' 
+  },
+  deploymentAttempts: { type: Number, default: 0 },
+  lastDeploymentAttempt: { type: Date, default: null }
 }, { timestamps: true });
+
+/**
+ * Pre-validate: business validations that are not covered by simple schema types
+ */
+AdSchema.pre('validate', function (next) {
+  try {
+    // Validate media file extension (simple whitelist based on URL/filename)
+    if (this.mediaFile) {
+      const allowed = ['jpg', 'jpeg', 'png', 'mp4', 'mov', 'webm', 'avi'];
+      const match = String(this.mediaFile).toLowerCase().match(/\.([a-z0-9]+)(?:\?|#|$)/);
+      const ext = match ? match[1] : '';
+      if (!allowed.includes(ext)) {
+        return next(new Error('Unsupported media file type. Allowed: JPG, JPEG, PNG, MP4, MOV, WEBM, AVI'));
+      }
+    }
+
+    // Validate start and end times only if startTime was modified
+    if (this.startTime && this.endTime && this.isModified('startTime')) {
+      const now = new Date();
+      const end = new Date(this.endTime);
+      
+      // Get today's date in UTC to avoid timezone issues
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      
+      // Use startTime for validation (no 7-day buffer, so startTime = userDesiredStartTime)
+      const start = new Date(this.startTime);
+      const startDate = new Date(start);
+      startDate.setUTCHours(0, 0, 0, 0);
+
+      console.log('Date validation (startTime modified):', {
+        now: now.toISOString(),
+        today: today.toISOString(),
+        startTime: this.startTime ? new Date(this.startTime).toISOString() : 'null',
+        userDesiredStartTime: this.userDesiredStartTime ? new Date(this.userDesiredStartTime).toISOString() : 'null',
+        start: start.toISOString(),
+        startDate: startDate.toISOString(),
+        end: end.toISOString(),
+        startDateLessThanToday: startDate < today,
+        isModified: this.isModified('startTime')
+      });
+
+      if (startDate < today) {
+        return next(new Error('Start time must be today or later'));
+      }
+      if (end <= start) {
+        return next(new Error('End time must be after start time'));
+      }
+    } else if (this.startTime && this.endTime) {
+      console.log('Date validation skipped (startTime not modified):', {
+        isModified: this.isModified('startTime'),
+        startTime: this.startTime ? new Date(this.startTime).toISOString() : 'null'
+      });
+    }
+
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
 
 /**
  * Pre-save validation: ensure referenced docs exist
@@ -112,12 +193,48 @@ AdSchema.pre('save', async function (next) {
  * Post-save auto-deployment logic
  */
 AdSchema.post('save', async function (doc) {
+  // Skip deployment if we're in a transaction to prevent conflicts
+  if (this.$session) {
+    console.log('Skipping ad post-save deployment hook during transaction');
+    return;
+  }
+
   if (doc.adStatus === 'ACTIVE' && doc.paymentStatus === 'PAID') {
     const Material = require('./Material');
     const AdsDeployment = require('./adsDeployment');
 
     try {
       console.log(`🔄 Starting deployment for Ad ${doc._id}`);
+      
+      // Check deployment status to prevent race conditions
+      if (doc.deploymentStatus === 'DEPLOYING' || doc.deploymentStatus === 'DEPLOYED') {
+        console.log(`ℹ️ Ad ${doc._id} deployment already in progress or completed (status: ${doc.deploymentStatus}), skipping`);
+        return;
+      }
+      
+      // Check if this ad is already deployed to prevent duplicate deployments
+      const existingDeployment = await AdsDeployment.findOne({
+        $or: [
+          { 'lcdSlots.adId': doc._id },
+          { 'headressSlots.adId': doc._id }
+        ]
+      });
+      
+      if (existingDeployment) {
+        console.log(`ℹ️ Ad ${doc._id} is already deployed, updating status to DEPLOYED`);
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'DEPLOYED',
+          lastDeploymentAttempt: new Date()
+        });
+        return;
+      }
+      
+      // Mark as deploying to prevent race conditions
+      await Ad.findByIdAndUpdate(doc._id, { 
+        deploymentStatus: 'DEPLOYING',
+        deploymentAttempts: (doc.deploymentAttempts || 0) + 1,
+        lastDeploymentAttempt: new Date()
+      });
       
       const material = await Material.findById(doc.materialId);
       if (!material) {
@@ -158,8 +275,19 @@ AdSchema.post('save', async function (doc) {
               status: s.status
             }))
           });
+          
+          // Mark deployment as successful
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'DEPLOYED',
+            lastDeploymentAttempt: new Date()
+          });
         } catch (error) {
           console.error(`❌ Error deploying HEADDRESS Ad ${doc._id}:`, error.message);
+          // Mark deployment as failed
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'FAILED',
+            lastDeploymentAttempt: new Date()
+          });
         }
         return;
       }
@@ -191,27 +319,58 @@ AdSchema.post('save', async function (doc) {
               status: s.status
             }))
           });
+          
+          // Mark deployment as successful
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'DEPLOYED',
+            lastDeploymentAttempt: new Date()
+          });
         } catch (error) {
           console.error(`❌ Error deploying LCD Ad ${doc._id}:`, error.message);
+          // Mark deployment as failed
+          await Ad.findByIdAndUpdate(doc._id, { 
+            deploymentStatus: 'FAILED',
+            lastDeploymentAttempt: new Date()
+          });
         }
         return;
       }
       
       // Standard non-LCD ads → create new deployment directly
       console.log(`🔄 Deploying non-LCD Ad ${doc._id}`);
-      await AdsDeployment.create({
-        adId: doc._id,
-        materialId: material.materialId, // Use string materialId, not ObjectId _id
-        driverId: material.driverId,
-        startTime: doc.startTime,
-        endTime: doc.endTime,
-        deployedAt: new Date(),
-        currentStatus: 'DEPLOYED'
-      });
-      console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+      try {
+        await AdsDeployment.create({
+          adId: doc._id,
+          materialId: material.materialId, // Use string materialId, not ObjectId _id
+          driverId: material.driverId,
+          startTime: doc.startTime,
+          endTime: doc.endTime,
+          deployedAt: new Date(),
+          currentStatus: 'DEPLOYED'
+        });
+        console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
+        
+        // Mark deployment as successful
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'DEPLOYED',
+          lastDeploymentAttempt: new Date()
+        });
+      } catch (error) {
+        console.error(`❌ Error deploying non-LCD Ad ${doc._id}:`, error.message);
+        // Mark deployment as failed
+        await Ad.findByIdAndUpdate(doc._id, { 
+          deploymentStatus: 'FAILED',
+          lastDeploymentAttempt: new Date()
+        });
+      }
 
     } catch (err) {
       console.error(`❌ Failed to deploy Ad ${doc._id}: ${err.message}`);
+      // Mark deployment as failed
+      await Ad.findByIdAndUpdate(doc._id, { 
+        deploymentStatus: 'FAILED',
+        lastDeploymentAttempt: new Date()
+      });
     }
   }
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import QRCode from "react-native-qrcode-svg";
@@ -6,7 +6,10 @@ import { router } from "expo-router/build/imperative-api";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
+import deviceStatusService from '../../services/deviceStatusService';
 import AdPlayer from '../../components/AdPlayer';
+import DebugMaterialId from '../../debug-material-id';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen() {
 
@@ -18,6 +21,8 @@ export default function HomeScreen() {
   const [unregistering, setUnregistering] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
+  const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
+  const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
 
   useEffect(() => {
     initializeApp();
@@ -34,8 +39,53 @@ export default function HomeScreen() {
         clearInterval((window as any).adTrackingInterval);
         (window as any).adTrackingInterval = null;
       }
+      
+      // Cleanup device status service
+      deviceStatusService.cleanup();
     };
   }, []);
+
+  // Initialize device status service when registration data is available
+  useEffect(() => {
+    if (registrationData) {
+      (deviceStatusService as any).initialize({
+        materialId: registrationData.materialId,
+        forceReconnect: false, // Don't force reconnect on initial load
+        onStatusChange: (status: any) => {
+          console.log('Device status changed:', status);
+          setIsOnline(status.isOnline);
+        }
+      });
+    }
+  }, [registrationData]);
+
+  // Refresh registration data when screen becomes active
+  useFocusEffect(
+    useCallback(() => {
+      console.log('Screen focused, refreshing registration data...');
+      refreshRegistrationData();
+    }, [])
+  );
+
+  const refreshRegistrationData = async () => {
+    try {
+      console.log('Refreshing registration data...');
+      const registration = await tabletRegistrationService.getRegistrationData();
+      console.log('Refreshed registration data:', registration);
+      setRegistrationData(registration);
+      
+      // If we have registration data, update online status
+      if (registration) {
+        const online = await tabletRegistrationService.updateTabletStatus(true, {
+          lat: location?.coords.latitude || 0,
+          lng: location?.coords.longitude || 0
+        });
+        setIsOnline(online);
+      }
+    } catch (error) {
+      console.error('Error refreshing registration data:', error);
+    }
+  };
 
   const initializeApp = async () => {
     try {
@@ -166,6 +216,76 @@ export default function HomeScreen() {
     }
   };
 
+  const handleGoOffline = async () => {
+    try {
+      // Simulate offline
+      setIsSimulatingOffline(true);
+      setIsOnline(false);
+      setTrackingStatus('Simulating Offline');
+      
+      // Set offline simulation flag in tablet registration service
+      tabletRegistrationService.setSimulatingOffline(true);
+      
+      // Stop location tracking
+      await tabletRegistrationService.stopLocationTracking();
+      
+      // Disconnect WebSocket connection
+      (deviceStatusService as any).disconnect();
+      
+      // Send offline status to server
+      if (registrationData) {
+        await tabletRegistrationService.updateTabletStatus(false, { lat: 0, lng: 0 });
+      }
+      
+      // Ad playback will be stopped by the AdPlayer component when isSimulatingOffline is true
+      
+      // Clear any existing location tracking state
+      setIsTracking(false);
+      
+      console.log('Device simulation: Offline');
+    } catch (error) {
+      console.error('Error going offline:', error);
+    }
+  };
+
+  const handleGoOnline = async () => {
+    try {
+      // Go back online
+      setIsSimulatingOffline(false);
+      setIsOnline(true);
+      setTrackingStatus('Back Online');
+      
+      // Clear offline simulation flag in tablet registration service
+      tabletRegistrationService.setSimulatingOffline(false);
+      
+      // Reconnect WebSocket connection
+      if (registrationData) {
+        (deviceStatusService as any).initialize({
+          materialId: registrationData.materialId,
+          forceReconnect: true, // Force reconnect when going back online
+          onStatusChange: (status: any) => {
+            console.log('Device status changed:', status);
+            setIsOnline(status.isOnline);
+          }
+        });
+      }
+      
+      // Don't automatically restart location tracking - let user control it
+      // Location tracking will be started manually if needed
+      
+      // Send online status to server
+      if (registrationData) {
+        await tabletRegistrationService.updateTabletStatus(true, { lat: 0, lng: 0 });
+      }
+      
+      // Ad playback will be restarted by the AdPlayer component when isSimulatingOffline is false
+      
+      console.log('Device simulation: Back online');
+    } catch (error) {
+      console.error('Error going online:', error);
+    }
+  };
+
   const handleReRegister = () => {
     Alert.alert(
       'Re-register Tablet',
@@ -180,13 +300,25 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.unregisterTablet();
               if (result.success) {
+                // Clear local registration data, material ID, and cached ads before redirect
+                await tabletRegistrationService.clearRegistration();
+                await tabletRegistrationService.clearMaterialId();
+                await tabletRegistrationService.clearAllCachedAds();
+                
                 Alert.alert(
                   'Success',
                   'Tablet unregistered successfully. You will be redirected to the registration screen.',
                   [
                     {
                       text: 'OK',
-                      onPress: () => router.push('/registration')
+                      onPress: () => {
+                        // Force refresh the app state before redirect
+                        setRegistrationData(null);
+                        // Add a small delay to ensure cleanup is complete
+                        setTimeout(() => {
+                          router.push('/registration?force=true');
+                        }, 500);
+                      }
                     }
                   ]
                 );
@@ -204,13 +336,25 @@ export default function HomeScreen() {
                         try {
                           const forceResult = await tabletRegistrationService.forceUnregisterTablet();
                           if (forceResult.success) {
+                            // Clear local registration data, material ID, and cached ads before redirect
+                            await tabletRegistrationService.clearRegistration();
+                            await tabletRegistrationService.clearMaterialId();
+                            await tabletRegistrationService.clearAllCachedAds();
+                            
                             Alert.alert(
                               'Success',
                               'Tablet unregistered locally. You will be redirected to the registration screen.',
                               [
                                 {
                                   text: 'OK',
-                                  onPress: () => router.push('/registration')
+                                  onPress: () => {
+                                    // Force refresh the app state before redirect
+                                    setRegistrationData(null);
+                                    // Add a small delay to ensure cleanup is complete
+                                    setTimeout(() => {
+                                      router.push('/registration?force=true');
+                                    }, 500);
+                                  }
                                 }
                               ]
                             );
@@ -240,6 +384,12 @@ export default function HomeScreen() {
     router.push('/registration');
   };
 
+  // Toggle between video-only and full interface mode
+  const toggleInterfaceMode = () => {
+    setShowFullInterface(prev => !prev);
+  };
+
+
   const handleEmergencyUnregister = () => {
     Alert.alert(
       'Emergency Unregister',
@@ -254,13 +404,25 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.forceUnregisterTablet();
               if (result.success) {
+                // Clear local registration data, material ID, and cached ads before redirect
+                await tabletRegistrationService.clearRegistration();
+                await tabletRegistrationService.clearMaterialId();
+                await tabletRegistrationService.clearAllCachedAds();
+                
                 Alert.alert(
                   'Success',
                   'Local registration cleared. You will be redirected to the registration screen.',
                   [
                     {
                       text: 'OK',
-                      onPress: () => router.push('/registration')
+                      onPress: () => {
+                        // Force refresh the app state before redirect
+                        setRegistrationData(null);
+                        // Add a small delay to ensure cleanup is complete
+                        setTimeout(() => {
+                          router.push('/registration?force=true');
+                        }, 500);
+                      }
                     }
                   ]
                 );
@@ -308,20 +470,67 @@ export default function HomeScreen() {
     );
   }
 
+  // If not showing full interface, show only the video player
+  if (!showFullInterface) {
+    return (
+      <View style={styles.videoOnlyContainer}>
+        {registrationData ? (
+          <AdPlayer
+            materialId={registrationData.materialId}
+            slotNumber={registrationData.slotNumber}
+            isOffline={isSimulatingOffline}
+            onAdError={(error) => {
+              console.log('Ad Player Error:', error);
+            }}
+          />
+        ) : (
+          <View style={styles.notRegisteredContainer}>
+            <Text style={styles.notRegisteredTitle}>Tablet Not Registered</Text>
+            <Text style={styles.notRegisteredSubtitle}>
+              This tablet needs to be registered before it can display advertisements.
+            </Text>
+            <TouchableOpacity 
+              style={styles.registerButton}
+              onPress={handleGoToRegistration}
+            >
+              <Text style={styles.registerButtonText}>🔗 Register Tablet</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* Tap to show full interface - only visible after 10 taps */}
+        <TouchableOpacity 
+          style={styles.showInterfaceButton}
+          onPress={toggleInterfaceMode}
+        >
+          <Text style={styles.showInterfaceText}>⚙️ Settings</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Advertisement Player</Text>
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefreshStatus}
-          disabled={refreshing}
-        >
-          <Text style={styles.refreshButtonText}>
-            {refreshing ? '🔄' : '🔄'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={handleRefreshStatus}
+            disabled={refreshing}
+          >
+            <Text style={styles.refreshButtonText}>
+              {refreshing ? '🔄' : '🔄'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.videoModeButton}
+            onPress={toggleInterfaceMode}
+          >
+            <Text style={styles.videoModeButtonText}>📺 Video Mode</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Status Cards */}
@@ -402,6 +611,32 @@ export default function HomeScreen() {
                   <Text style={styles.trackingButtonText}>⏹️ Stop Tracking</Text>
                 </TouchableOpacity>
               )}
+              
+              <TouchableOpacity 
+                style={[
+                  styles.trackingButton, 
+                  isSimulatingOffline ? styles.disabledButton : styles.offlineButton
+                ]}
+                onPress={handleGoOffline}
+                disabled={isSimulatingOffline}
+              >
+                <Text style={[styles.trackingButtonText, isSimulatingOffline && styles.disabledButtonText]}>
+                  🔴 Go Offline
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.trackingButton, 
+                  !isSimulatingOffline ? styles.disabledButton : styles.onlineButton
+                ]}
+                onPress={handleGoOnline}
+                disabled={!isSimulatingOffline}
+              >
+                <Text style={[styles.trackingButtonText, !isSimulatingOffline && styles.disabledButtonText]}>
+                  🟢 Go Online
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -414,6 +649,7 @@ export default function HomeScreen() {
           <AdPlayer
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
+            isOffline={isSimulatingOffline}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -537,11 +773,47 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2c3e50',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   refreshButton: {
     padding: 8,
   },
   refreshButtonText: {
     fontSize: 20,
+  },
+  videoModeButton: {
+    backgroundColor: '#3498db',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  videoModeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoOnlyContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  showInterfaceButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    zIndex: 1000,
+  },
+  showInterfaceText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
   statusSection: {
     padding: 20,
@@ -610,6 +882,10 @@ const styles = StyleSheet.create({
   trackingControls: {
     marginTop: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   trackingButton: {
     paddingHorizontal: 20,
@@ -624,10 +900,24 @@ const styles = StyleSheet.create({
   stopButton: {
     backgroundColor: '#e74c3c',
   },
+  onlineButton: {
+    backgroundColor: '#3498db',
+  },
+  offlineButton: {
+    backgroundColor: '#e67e22',
+  },
+  disabledButton: {
+    backgroundColor: '#95a5a6',
+    opacity: 0.6,
+  },
   trackingButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  disabledButtonText: {
+    color: '#bdc3c7',
+    opacity: 0.6,
   },
   adSection: {
     backgroundColor: '#fff',

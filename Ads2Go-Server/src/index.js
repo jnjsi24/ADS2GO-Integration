@@ -28,6 +28,8 @@ const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
+const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
+const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -40,6 +42,8 @@ const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
+const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
+const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -55,9 +59,10 @@ const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
+const analyticsRoutes = require('./routes/analytics');
 
 // Import services
-const syncService = require('./services/syncService');
+// const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -88,6 +93,8 @@ const server = new ApolloServer({
     adsPlanTypeDefs,
     materialTrackingTypeDefs,
     tabletTypeDefs,
+    adsDeploymentTypeDefs,
+    screenTrackingTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -100,6 +107,8 @@ const server = new ApolloServer({
     adsPlanResolvers,
     materialTrackingResolvers,
     tabletResolvers,
+    adsDeploymentResolvers,
+    screenTrackingResolvers,
   ]),
 });
 
@@ -126,6 +135,8 @@ async function startServer() {
         'http://localhost',
         'http://127.0.0.1',
         'http://192.168.1.5:3000',
+        'http://192.168.100.22:3000',
+        'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
       ];
@@ -165,6 +176,9 @@ async function startServer() {
   // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   
+  // Serve public files statically
+  app.use(express.static(path.join(__dirname, '..', 'public')));
+  
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
@@ -174,6 +188,7 @@ async function startServer() {
   app.use('/material', materialRoutes);
   app.use('/ads', adsRoutes);
   app.use('/material-photos', materialPhotoUploadRoutes);
+  app.use('/analytics', analyticsRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -183,6 +198,11 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
+        // Debug GraphQL context
+        console.log('🔍 GraphQL Context Debug:');
+        console.log('  - Authorization header:', req.headers.authorization);
+        console.log('  - User-Agent:', req.headers['user-agent']);
+        
         // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
@@ -207,6 +227,14 @@ async function startServer() {
             console.log('✅ Set admin context for SUPERADMIN user');
           }
         }
+        
+        // Debug final context
+        console.log('🔧 Final GraphQL context:', {
+          hasDriver: !!context.driver,
+          hasUser: !!context.user,
+          hasAdmin: !!context.admin,
+          hasSuperAdmin: !!context.superAdmin
+        });
         
         if (!driver && !user) {
           console.log('❌ No authentication context found');
@@ -237,9 +265,9 @@ async function startServer() {
   deviceStatusService.initializeWebSocketServer(httpServer);
 
   // Start the server
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 Server ready at http://localhost:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://localhost:${PORT}/graphql`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
+    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
     startDeviceStatusJob();
@@ -254,9 +282,9 @@ async function startServer() {
     });
   });  
     // Start sync service in production (no longer needed - using MongoDB only)
-  if (process.env.NODE_ENV === 'production') {
-    syncService.start();
-  }
+  // if (process.env.NODE_ENV === 'production') {
+  //   syncService.start();
+  // }
   
   // Handle server errors
   httpServer.on('error', (error) => {

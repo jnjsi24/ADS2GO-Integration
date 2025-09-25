@@ -14,20 +14,40 @@ class DeviceStatusService {
     this.materialId = null;
     this.onStatusChange = null;
     this.isConnected = false;
+    this.backgroundTimeout = null;
   }
 
-  initialize = ({ materialId, onStatusChange }) => {
+  initialize = async ({ materialId, onStatusChange, forceReconnect = false }) => {
     // Store the previous materialId to check if it changed
     const previousMaterialId = this.materialId;
     this.materialId = materialId;
     this.onStatusChange = onStatusChange;
     
-    // Get device ID
-    this.deviceId = Application.androidId || Device.modelName || 'unknown-device';
+    // Get device ID from stored registration data
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const registrationData = await AsyncStorage.getItem('tabletRegistration');
+      if (registrationData) {
+        const registration = JSON.parse(registrationData);
+        this.deviceId = registration.deviceId;
+        console.log('Using stored device ID from registration:', this.deviceId);
+      } else {
+        // Fallback to generated device ID if no registration data
+        this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
+        console.log('No registration data found, using generated device ID:', this.deviceId);
+      }
+    } catch (error) {
+      console.error('Error getting device ID from registration:', error);
+      // Fallback to generated device ID
+      this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
+      console.log('Using fallback device ID:', this.deviceId);
+    }
     
-    // Only connect if we have a materialId and it's different from the previous one
-    if (materialId && materialId !== previousMaterialId) {
-      console.log('Initializing WebSocket with materialId:', materialId);
+    // Connect if we have a materialId and either:
+    // 1. It's different from the previous one, OR
+    // 2. Force reconnect is requested (for going back online)
+    if (materialId && (materialId !== previousMaterialId || forceReconnect)) {
+      console.log('Initializing WebSocket with materialId:', materialId, forceReconnect ? '(force reconnect)' : '');
       this.connect();
     } else if (!materialId) {
       console.warn('No materialId provided, cannot initialize WebSocket');
@@ -80,8 +100,14 @@ class DeviceStatusService {
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
       
       console.log('[WebSocket] Connecting to:', wsUrl);
+      console.log('[WebSocket] Device ID:', this.deviceId);
+      console.log('[WebSocket] Material ID:', this.materialId);
+      console.log('[WebSocket] WebSocket ready state before connection:', this.ws ? this.ws.readyState : 'null');
+      
       this.ws = new WebSocket(wsUrl);
       this.ws.binaryType = 'arraybuffer';
+      
+      console.log('[WebSocket] WebSocket created, ready state:', this.ws.readyState);
 
       this.ws.onopen = () => {
         console.log('[WebSocket] Connected successfully');
@@ -90,7 +116,11 @@ class DeviceStatusService {
         
         // Notify status change
         if (this.onStatusChange) {
-          this.onStatusChange({ isConnected: true });
+          this.onStatusChange({ 
+            isOnline: true, 
+            isConnected: true,
+            error: null 
+          });
         }
         
         // Start ping to keep connection alive
@@ -101,18 +131,71 @@ class DeviceStatusService {
       };
       
       this.ws.onclose = (e) => {
-        console.log('WebSocket disconnected:', e.code, e.reason);
+        console.log('[WebSocket] Disconnected - Code:', e.code, 'Reason:', e.reason, 'WasClean:', e.wasClean);
         this.isConnected = false;
         this.stopPing();
         
         // Notify status change
         if (this.onStatusChange) {
-          this.onStatusChange({ isOnline: false });
+          let errorMessage = 'Disconnected';
+          let shouldReconnect = true;
+          
+          if (e.code === 1006) {
+            errorMessage = 'Connection lost';
+          } else if (e.code === 1000) {
+            errorMessage = 'Connection closed normally';
+            // Don't auto-reconnect for normal closures unless it's unexpected
+            shouldReconnect = false;
+          } else if (e.code === 1001) {
+            errorMessage = 'Connection going away';
+          } else if (e.code === 1002) {
+            errorMessage = 'Protocol error';
+          } else if (e.code === 1003) {
+            errorMessage = 'Unsupported data';
+          } else if (e.code === 1004) {
+            errorMessage = 'Reserved';
+          } else if (e.code === 1005) {
+            errorMessage = 'No status code';
+          } else if (e.code === 1007) {
+            errorMessage = 'Invalid frame payload data';
+          } else if (e.code === 1008) {
+            errorMessage = 'Policy violation';
+          } else if (e.code === 1009) {
+            errorMessage = 'Message too big';
+          } else if (e.code === 1010) {
+            errorMessage = 'Missing extension';
+          } else if (e.code === 1011) {
+            errorMessage = 'Internal error';
+          } else if (e.code === 1012) {
+            errorMessage = 'Service restart';
+          } else if (e.code === 1013) {
+            errorMessage = 'Try again later';
+          } else if (e.code === 1014) {
+            errorMessage = 'Bad gateway';
+          } else if (e.code === 1015) {
+            errorMessage = 'TLS handshake';
+          }
+          
+          this.onStatusChange({ 
+            isOnline: false, 
+            isConnected: false,
+            error: errorMessage,
+            shouldReconnect: shouldReconnect,
+            closeCode: e.code,
+            closeReason: e.reason
+          });
         }
       };
       
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (this.onStatusChange) {
+          this.onStatusChange({ 
+            isOnline: false, 
+            isConnected: false,
+            error: 'Connection failed'
+          });
+        }
         this.handleDisconnect(error);
       };
       
@@ -129,11 +212,6 @@ class DeviceStatusService {
       
       // Send initial ping to establish connection
       this.sendPing();
-      
-      // Notify status change
-      if (this.onStatusChange) {
-        this.onStatusChange({ isOnline: true });
-      }
     } catch (error) {
       console.error('Error in WebSocket connection:', error);
       this.handleDisconnect(error);
@@ -147,10 +225,10 @@ class DeviceStatusService {
     
     this.lastPong = Date.now();
     
-    // Send ping every 25 seconds (server has 30s timeout)
+    // Send ping every 30 seconds (server has 30s timeout)
     this.pingInterval = setInterval(() => {
       this.sendPing();
-    }, 25000);
+    }, 30000);
   };
 
   stopPing = () => {
@@ -252,22 +330,76 @@ class DeviceStatusService {
     }
   };
 
+  disconnect = () => {
+    console.log('[WebSocket] Manually disconnecting...');
+    
+    // Clear ping interval
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    
+    // Clear reconnect timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+    
+    // Close WebSocket connection
+    if (this.ws) {
+      try {
+        this.ws.close(1000, 'Manual disconnect');
+      } catch (e) {
+        console.error('[WebSocket] Error closing connection:', e);
+      }
+      this.ws = null;
+    }
+    
+    this.isConnected = false;
+    this.reconnectAttempts = 0;
+    
+    // Notify status change
+    if (this.onStatusChange) {
+      this.onStatusChange({ 
+        isConnected: false,
+        isOnline: false,
+        error: 'Manually disconnected'
+      });
+    }
+  };
+
   handleAppStateChange = (nextAppState) => {
     console.log(`[AppState] Changed to: ${nextAppState}`);
     
     if (nextAppState === 'active') {
       // App came to foreground
+      // Clear any background timeout
+      if (this.backgroundTimeout) {
+        clearTimeout(this.backgroundTimeout);
+        this.backgroundTimeout = null;
+      }
+      
       if (!this.isConnected) {
         console.log('[AppState] App is active, reconnecting WebSocket...');
         this.reconnectAttempts = 0;
         this.connect();
+      } else {
+        console.log('[AppState] App is active, WebSocket already connected');
       }
     } else if (nextAppState === 'background' || nextAppState === 'inactive') {
       // App went to background or is inactive
-      console.log('[AppState] App is in background, cleaning up WebSocket...');
-      if (this.ws) {
-        this.ws.close();
+      // Don't close WebSocket immediately - let it try to maintain connection
+      console.log('[AppState] App is in background, maintaining WebSocket connection...');
+      // Only close if we've been in background for too long
+      if (this.backgroundTimeout) {
+        clearTimeout(this.backgroundTimeout);
       }
+      this.backgroundTimeout = setTimeout(() => {
+        console.log('[AppState] App has been in background too long, closing WebSocket...');
+        if (this.ws) {
+          this.ws.close();
+        }
+      }, 300000); // 5 minutes in background before closing
     }
   };
 
@@ -282,6 +414,11 @@ class DeviceStatusService {
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
+    }
+    
+    if (this.backgroundTimeout) {
+      clearTimeout(this.backgroundTimeout);
+      this.backgroundTimeout = null;
     }
     
     // Stop ping interval

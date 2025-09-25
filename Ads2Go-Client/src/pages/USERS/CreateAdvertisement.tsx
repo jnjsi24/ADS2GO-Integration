@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
+import { useQuery, useMutation, useApolloClient } from '@apollo/client';
 import { ChevronLeft, ChevronRight, Upload, Play, Pause, Loader2, Calendar } from 'lucide-react';
 import { storage } from '../../firebase/init';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GET_ALL_ADS_PLANS } from '../../graphql/admin';
-import { GET_MATERIALS_BY_CATEGORY_AND_VEHICLE } from '../../graphql/admin';
 import { CREATE_AD } from '../../graphql/admin';
+import { GET_PLAN_AVAILABILITY } from '../../graphql/admin/planAvailability';
+import { GET_SMART_MATERIAL_SELECTION } from '../../graphql/user/queries/getSmartMaterialSelection';
 
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
 type VehicleType = 'CAR' | 'MOTORCYCLE' | 'BUS' | 'JEEP' | 'E_TRIKE';
+
+type Material = {
+  id: string;
+  materialId: string;
+  materialType: string;
+  vehicleType: VehicleType;
+  category: MaterialCategory;
+};
 
 type AdsPlan = {
   _id: string;
@@ -23,11 +32,13 @@ type AdsPlan = {
   adLengthSeconds: number;
   category: MaterialCategory;
   status: string;
+  materials: Material[];
 };
 
 type AdvertisementForm = {
   title: string;
   description: string;
+  website?: string; // Optional advertiser website
   adType?: 'DIGITAL' | 'NON_DIGITAL';
   planId: string;
   materialId: string;
@@ -38,10 +49,12 @@ type AdvertisementForm = {
 
 const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
+  const apolloClient = useApolloClient();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState<AdsPlan | null>(null);
   const [activePlanIndex, setActivePlanIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
+  const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false); // New state to track submission
 
   // State for custom calendar
   const [currentDate, setCurrentDate] = useState(new Date()); // Initialize with today's date (September 5, 2025)
@@ -71,9 +84,11 @@ const today = new Date(); // Current date
 const handleDateClick = (day: number | null) => {
   if (day) {
     const newDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
 
     // Prevent selecting past dates
-    if (newDate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+    if (newDate < todayDate) {
       return;
     }
 
@@ -96,6 +111,7 @@ const nextMonth = () => {
   const [formData, setFormData] = useState<AdvertisementForm>({
     title: '',
     description: '',
+    website: '', // Optional advertiser website
     planId: '',
     materialId: '',
     startDate: new Date().toISOString().split('T')[0], // Default to today's date
@@ -103,6 +119,17 @@ const nextMonth = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [errors, setErrors] = useState<{ 
+    plan?: string; 
+    material?: string; 
+    title?: string; 
+    description?: string; 
+    website?: string;
+    startDate?: string; 
+    mediaFile?: string; 
+    general?: string;
+  }>({});
+  const [mediaDurationSec, setMediaDurationSec] = useState<number | null>(null);
 
   // Function to calculate end date based on start date and duration
   const calculateEndDate = (startDate: string, durationDays: number): string => {
@@ -124,39 +151,114 @@ const nextMonth = () => {
   
 
 
-  // Automatically fetch and select material based on selected plan
-  const { loading: loadingMaterials } = useQuery(GET_MATERIALS_BY_CATEGORY_AND_VEHICLE, {
-    variables: { 
-      category: selectedPlan?.category as any,
-      vehicleType: selectedPlan?.vehicleType as any
-    },
-    skip: !selectedPlan,
-    onCompleted: (data) => {
-      if (data?.getMaterialsByCategoryAndVehicle?.length > 0) {
-        setMaterials(data.getMaterialsByCategoryAndVehicle);
-    
-        // Try to find a material that matches the plan's materialType
-        const matchingMaterial = data.getMaterialsByCategoryAndVehicle.find(
-          (m: any) => m.materialType === selectedPlan?.materialType
-        );
-    
-        if (matchingMaterial) {
-          setFormData(prev => ({ ...prev, materialId: matchingMaterial.id }));
-        } else {
-          // fallback: pick first material if exact match not found
-          setFormData(prev => ({ ...prev, materialId: data.getMaterialsByCategoryAndVehicle[0]?.id || '' }));
+  // Automatically select material using smart selection from server
+  useEffect(() => {
+    if (selectedPlan) {
+      console.log('🔄 Selected plan:', selectedPlan.name, selectedPlan.materialType, selectedPlan.vehicleType, selectedPlan.category);
+      console.log('🔄 Plan ID:', selectedPlan.id, 'Timestamp:', Date.now());
+      
+      // Clear any existing materials first
+      setMaterials([]);
+      setFormData(prev => ({ ...prev, materialId: '' }));
+      
+      // Use smart material selection from server instead of plan's materials array
+      const fetchSmartMaterial = async () => {
+        // Small delay to ensure state is cleared
+        await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+          console.log('🚀 Calling smart material selection API...');
+          console.log('📋 Request details:', {
+            materialType: selectedPlan.materialType,
+            vehicleType: selectedPlan.vehicleType,
+            category: selectedPlan.category,
+            timestamp: Date.now().toString()
+          });
+          
+          // Use direct fetch to bypass Apollo Client cache completely
+          const response = await fetch('http://localhost:5000/graphql', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('userToken')}`
+            },
+            body: JSON.stringify({
+              query: `
+                query GetSmartMaterialSelection($materialType: String!, $vehicleType: String!, $category: String!, $timestamp: String, $requestId: String) {
+                  getSmartMaterialSelection(
+                    materialType: $materialType
+                    vehicleType: $vehicleType
+                    category: $category
+                    timestamp: $timestamp
+                    requestId: $requestId
+                  ) {
+                    id
+                    materialId
+                    materialType
+                    vehicleType
+                    category
+                    occupiedSlots
+                    availableSlots
+                    totalSlots
+                    priority
+                  }
+                }
+              `,
+              variables: {
+                materialType: selectedPlan.materialType,
+                vehicleType: selectedPlan.vehicleType,
+                category: selectedPlan.category,
+                timestamp: Date.now().toString(),
+                requestId: Math.random().toString(36).substring(7)
+              }
+            })
+          });
+          
+          const result = await response.json();
+          const data = result.data;
+
+          console.log('📡 Smart selection API response:', data);
+          console.log('📡 Raw response data:', JSON.stringify(data, null, 2));
+
+          if (data.getSmartMaterialSelection) {
+            const smartMaterial = data.getSmartMaterialSelection;
+            console.log('📡 Smart material details:', JSON.stringify(smartMaterial, null, 2));
+            setMaterials([smartMaterial]);
+            setFormData(prev => ({ ...prev, materialId: smartMaterial.id }));
+            console.log(`🎯 Smart selected material: ${smartMaterial.materialId} (${smartMaterial.occupiedSlots}/${smartMaterial.totalSlots} slots used)`);
+          } else {
+            console.log('⚠️ No smart material selection returned, using fallback');
+            // Fallback to plan's materials if smart selection fails
+            if (selectedPlan.materials && selectedPlan.materials.length > 0) {
+              const selectedMaterial = selectedPlan.materials[0];
+              setMaterials(selectedPlan.materials);
+              setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
+              console.log(`🎯 Fallback to plan material: ${selectedMaterial.materialId}`);
+            } else {
+              setMaterials([]);
+              setFormData(prev => ({ ...prev, materialId: '' }));
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error fetching smart material selection:', error);
+          // Fallback to plan's materials
+          if (selectedPlan.materials && selectedPlan.materials.length > 0) {
+            const selectedMaterial = selectedPlan.materials[0];
+            setMaterials(selectedPlan.materials);
+            setFormData(prev => ({ ...prev, materialId: selectedMaterial.id }));
+            console.log(`🎯 Fallback to plan material: ${selectedMaterial.materialId}`);
+          } else {
+            setMaterials([]);
+            setFormData(prev => ({ ...prev, materialId: '' }));
+          }
         }
-      } else {
-        setMaterials([]);
-        setFormData(prev => ({ ...prev, materialId: '' }));
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching materials:', error);
+      };
+
+      fetchSmartMaterial();
+    } else {
       setMaterials([]);
       setFormData(prev => ({ ...prev, materialId: '' }));
     }
-  });
+  }, [selectedPlan]);
 
   // Fetch ads plans
   const { data, loading, error } = useQuery(GET_ALL_ADS_PLANS, {
@@ -170,10 +272,18 @@ const nextMonth = () => {
 
   const [createAd, { loading: isSubmitting }] = useMutation(CREATE_AD, {
     onCompleted: () => {
-      navigate('/advertisements');
+      setIsSubmissionInProgress(false); // Reset submission state on success
+      setShowToast(true);
+      // Auto-hide after 3 seconds and navigate
+      setTimeout(() => {
+        setShowToast(false);
+        navigate('/advertisements');
+      }, 3000);
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
+      setIsSubmissionInProgress(false); // Reset submission state on error
+      alert('Failed to create advertisement. Please try again.');
     }
   });
 
@@ -185,6 +295,9 @@ const nextMonth = () => {
     
     return data.getAllAdsPlans
       .filter((plan: any) => {
+        // Add null check to prevent errors
+        if (!plan) return false;
+        
         const isRunning = plan.status === 'RUNNING';
         console.log(`Plan ${plan.id} (${plan.name}):`, { 
           status: plan.status, 
@@ -195,29 +308,98 @@ const nextMonth = () => {
         return isRunning;
       })
       .map((plan: any) => ({
-        _id: plan.id,
-        name: plan.name,
-        description: plan.description,
-        durationDays: plan.durationDays || 30,
-        totalPrice: plan.totalPrice || 0,
-        materialType: plan.materialType,
-        vehicleType: plan.vehicleType,
-        numberOfDevices: plan.numberOfDevices || 1,
-        adLengthSeconds: plan.adLengthSeconds || 30,
-        category: plan.category || 'STANDARD',
-        status: plan.status || 'ACTIVE'
+        _id: plan?.id || '',
+        name: plan?.name || '',
+        description: plan?.description || '',
+        durationDays: plan?.durationDays || 30,
+        totalPrice: plan?.totalPrice || 0,
+        materialType: plan?.materialType || '',
+        vehicleType: plan?.vehicleType || 'CAR',
+        numberOfDevices: plan?.numberOfDevices || 1,
+        adLengthSeconds: plan?.adLengthSeconds || 30,
+        category: plan?.category || 'DIGITAL',
+        status: plan?.status || 'ACTIVE',
+        materials: plan?.materials || []
       }));
   }, [data]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Require plan selected first to know allowed ad length for videos
+      if (!selectedPlan) {
+        setErrors(prev => ({ ...prev, mediaFile: 'Please select a plan first' }));
+        return;
+      }
+
+      // Validate file type by extension
+      const allowedExtensions = ['jpg', 'jpeg', 'png', 'mp4', 'mov', 'webm', 'avi'];
+      const extension = (file.name.split('.').pop() || '').toLowerCase();
+      if (!allowedExtensions.includes(extension)) {
+        setErrors(prev => ({ ...prev, mediaFile: 'Unsupported file type. Allowed types: JPG, JPEG, PNG, MP4, MOV, WEBM, AVI.' }));
+        return;
+      }
+
+      // Dynamic file size limit
+      let maxSizeMB = 50; // default for images and as baseline
+      if (file.type.startsWith('video/')) {
+        const adLen = selectedPlan?.adLengthSeconds || 30;
+        // Heuristic limits by ad length
+        if (adLen <= 20) maxSizeMB = 150;
+        else if (adLen <= 30) maxSizeMB = 250;
+        else if (adLen <= 60) maxSizeMB = 400;
+        else maxSizeMB = 500;
+      }
+      const maxSizeBytes = maxSizeMB * 1024 * 1024;
+      if (file.size > maxSizeBytes) {
+        setErrors(prev => ({ ...prev, mediaFile: `File is too large. Maximum allowed size for this plan is ${maxSizeMB} MB.` }));
+        return;
+      }
+
       const previewUrl = URL.createObjectURL(file);
+
+      // If video, check duration <= plan's adLengthSeconds
+      if (file.type.startsWith('video/')) {
+        const videoEl = document.createElement('video');
+        videoEl.preload = 'metadata';
+        videoEl.src = previewUrl;
+        videoEl.onloadedmetadata = () => {
+          const duration = videoEl.duration; // in seconds
+          setMediaDurationSec(duration);
+          const maxAllowed = selectedPlan?.adLengthSeconds || 0;
+          if (duration > maxAllowed + 0.2) { // small tolerance ~200ms
+            setErrors(prev => ({ 
+              ...prev, 
+              mediaFile: `Video is too long. Maximum allowed length for this plan is ${maxAllowed} seconds.` 
+            }));
+            // Do not set the invalid file
+            URL.revokeObjectURL(previewUrl);
+            return;
+          }
+
+          // Valid video: set state
+          setFormData({
+            ...formData,
+            mediaFile: file,
+            mediaPreview: previewUrl
+          });
+          setErrors(prev => ({ ...prev, mediaFile: undefined }));
+        };
+        videoEl.onerror = () => {
+          setErrors(prev => ({ ...prev, mediaFile: 'Could not load video metadata. Please try a different file.' }));
+          URL.revokeObjectURL(previewUrl);
+        };
+        return; // wait for metadata before setting state
+      }
+
+      // Non-video: set immediately
+      setMediaDurationSec(null);
       setFormData({
         ...formData,
         mediaFile: file,
         mediaPreview: previewUrl
       });
+      setErrors(prev => ({ ...prev, mediaFile: undefined }));
     }
   };
 
@@ -257,76 +439,217 @@ const nextMonth = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedPlan) {
-      alert('Please select a plan first');
+    console.log('Form submission started', { formData, selectedPlan, isSubmissionInProgress, isSubmitting });
+    
+    // Prevent multiple submissions
+    if (isSubmissionInProgress || isSubmitting) {
+      console.log('Submission already in progress, returning');
       return;
     }
-
+    
+    setIsSubmissionInProgress(true);
+    
+    const newErrors: typeof errors = {};
+    if (!selectedPlan) {
+      newErrors.plan = 'Please select a plan first';
+    }
     if (!formData.materialId) {
-      alert('No suitable material found for the selected plan');
-      return;
+      newErrors.material = 'No suitable material found for the selected plan';
+    }
+
+    // Trimmed checks for text fields
+    if (!formData.title || !formData.title.trim()) {
+      newErrors.title = 'Please fill out this field';
+    }
+    if (!formData.description || !formData.description.trim()) {
+      newErrors.description = 'Please fill out this field';
+    }
+
+    // Website validation (optional but must be valid URL if provided)
+    if (formData.website && formData.website.trim()) {
+      const urlPattern = /^https?:\/\/.+/;
+      if (!urlPattern.test(formData.website.trim())) {
+        newErrors.website = 'Please enter a valid URL starting with http:// or https://';
+      }
     }
 
     if (!formData.mediaFile) {
-      alert('Please upload a media file');
-      return;
+      newErrors.mediaFile = 'Please upload a media file';
     }
 
     if (!formData.startDate) {
-      alert('Please select a start date');
+      newErrors.startDate = 'Please select a start date';
+    }
+
+    // Ensure start date is not in the past
+    const startDateOnly = new Date(formData.startDate + 'T00:00:00.000Z');
+    const todayDateOnly = new Date();
+    todayDateOnly.setUTCHours(0, 0, 0, 0);
+    if (startDateOnly < todayDateOnly) {
+      newErrors.startDate = 'Please select a start date that is today or later';
+    }
+
+    console.log('Validation errors:', newErrors);
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      console.log('Validation failed, resetting submission state');
+      setIsSubmissionInProgress(false); // Reset submission state if validation fails
       return;
     }
 
     try {
+      console.log('Starting submission process...');
+      
+      // Check plan availability before uploading media to avoid wasted uploads
+      if (!selectedPlan) {
+        console.log('No selected plan, setting error');
+        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+
+      console.log('Checking plan availability for plan:', selectedPlan._id);
+      const desiredStartIso = new Date(formData.startDate).toISOString();
+      console.log('Desired start date ISO:', desiredStartIso);
+      
+      let availabilityData;
+      try {
+        const result = await apolloClient.query({
+          query: GET_PLAN_AVAILABILITY,
+          variables: { planId: selectedPlan._id, desiredStartDate: desiredStartIso },
+          fetchPolicy: 'network-only',
+        });
+        availabilityData = result.data;
+        console.log('Plan availability response:', availabilityData);
+      } catch (availabilityError) {
+        console.error('Error checking plan availability:', availabilityError);
+        setErrors(prev => ({
+          ...prev,
+          plan: 'Failed to check plan availability. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+
+      const canCreate = availabilityData?.getPlanAvailability?.canCreate;
+      console.log('Can create ad?', canCreate);
+      
+      if (!canCreate) {
+        const nextAvailable = availabilityData?.getPlanAvailability?.nextAvailableDate;
+        const nextMsg = nextAvailable ? new Date(nextAvailable).toLocaleDateString() : 'Unknown';
+        console.log('Plan not available, next available:', nextMsg);
+        setErrors(prev => ({
+          ...prev,
+          plan: `No available materials or slots for selected plan. Next available: ${nextMsg}`,
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+
+      console.log('Plan is available, proceeding with media upload...');
+      
       // Upload media file to Firebase Storage
-      const mediaFileURL = await uploadFileToFirebase(formData.mediaFile);
+      if (!formData.mediaFile) {
+        console.log('No media file found');
+        setErrors(prev => ({ ...prev, mediaFile: 'Please upload a media file' }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+      
+      console.log('Uploading media file to Firebase...');
+      let mediaFileURL;
+      try {
+        mediaFileURL = await uploadFileToFirebase(formData.mediaFile as File);
+        console.log('Media uploaded successfully, URL:', mediaFileURL);
+      } catch (uploadError) {
+        console.error('Error uploading media file:', uploadError);
+        setErrors(prev => ({
+          ...prev,
+          mediaFile: 'Failed to upload media file. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
 
       // Determine ad format based on file type
-      const fileExtension = formData.mediaFile?.name.split('.').pop()?.toLowerCase() || '';
+      const fileExtension = (formData.mediaFile.name.split('.').pop() || '').toLowerCase();
       const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(fileExtension);
       
       // Calculate start and end times
-      const startTime = new Date(formData.startDate).toISOString();
-      const endTime = new Date(
-        new Date(formData.startDate).getTime() + selectedPlan.durationDays * 24 * 60 * 60 * 1000
-      ).toISOString();
+      // Create date in UTC to avoid timezone conversion issues
+      const startDateStr = formData.startDate; // YYYY-MM-DD format
+      const [year, month, day] = startDateStr.split('-').map(Number);
+      
+      // Create date in UTC at midnight
+      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const startTime = startDate.toISOString();
+      
+      if (!selectedPlan) {
+        setErrors(prev => ({ ...prev, plan: 'Please select a plan first' }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
+      
+      // Calculate end date in UTC
+      const endDate = new Date(startDate);
+      endDate.setUTCDate(endDate.getUTCDate() + selectedPlan!.durationDays);
+      endDate.setUTCHours(23, 59, 59, 999); // Set to end of day in UTC
+      const endTime = endDate.toISOString();
       
       // Prepare the input for createAd mutation
       const input = {
         title: formData.title,
         description: formData.description,
+        website: formData.website || null, // Include website if provided
         materialId: formData.materialId,
         planId: selectedPlan._id,
         adType: selectedPlan.category === 'DIGITAL' ? 'DIGITAL' : 'NON_DIGITAL',
         adFormat: isVideo ? 'VIDEO' : 'IMAGE',
-        price: selectedPlan.totalPrice,
+        price: selectedPlan!.totalPrice,
         status: 'PENDING',
         startTime: startTime,
         endTime: endTime,
         mediaFile: mediaFileURL // Use Firebase download URL instead of local path
       };
+      
+      console.log('Date debugging:', {
+        formDataStartDate: formData.startDate,
+        startDate: startDate,
+        startTime: startTime,
+        endTime: endTime,
+        now: new Date().toISOString(),
+        today: new Date().toISOString().split('T')[0],
+        startDateUTC: startDate.toISOString(),
+        endDateUTC: endDate.toISOString()
+      });
 
       // Create the ad with the Firebase media URL
-       await createAd({
-    variables: { input },
-  });
+      console.log('Calling createAd mutation with input:', input);
+      console.log('Mutation variables:', { input });
+      
+      try {
+        const result = await createAd({
+          variables: { input },
+        });
+        console.log('createAd mutation completed successfully, result:', result);
+      } catch (mutationError) {
+        console.error('Error in createAd mutation:', mutationError);
+        setErrors(prev => ({
+          ...prev,
+          general: 'Failed to create advertisement. Please try again.',
+        }));
+        setIsSubmissionInProgress(false);
+        return;
+      }
 
-  // Show toast instead of alert
-  setShowToast(true);
-
-  // Auto-hide after 3 seconds
-  setTimeout(() => {
-    setShowToast(false);
-    navigate('/advertisements'); // navigate after toast disappears
-  }, 3000);
-
-} catch (error) {
-  console.error('Error creating advertisement:', error);
-  alert('Failed to create advertisement. Please try again.');
-}
+    } catch (error) {
+      console.error('Error creating advertisement:', error);
+      setIsSubmissionInProgress(false); // Reset submission state on error
+      // Error handling is done in the mutation's onError callback
+    }
   };
 
-  const canProceedToStep = (step: number) => {
+    const canProceedToStep = (step: number) => {
     switch (step) {
       case 2:
         return selectedPlan !== null && formData.materialId !== '';
@@ -420,7 +743,7 @@ useEffect(() => {
               <div
                 key={plan._id}
                 className={`absolute mb-8 w-full max-w-md h-[480px] transform transition-all duration-500 ${transformClass}`}
-                onClick={() => setActivePlanIndex(index)} // 🆕 click side card to bring it front
+                onClick={() => setActivePlanIndex(index)} // ðŸ†• click side card to bring it front
               >
                 <div
                   className={`border-2 rounded-lg p-6 cursor-pointer shadow-md h-full flex flex-col justify-between transition-all ${
@@ -502,12 +825,7 @@ useEffect(() => {
     {selectedPlan && (
       <div className="mt-8 p-4 bg-blue-50 max-w-2xl mx-auto rounded-lg">
         <h3 className="font-medium text-[#1B5087] mb-2">Automatic Material Selection</h3>
-        {loadingMaterials ? (
-          <div className="flex items-center text-blue-700">
-            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            Finding compatible materials...
-          </div>
-        ) : formData.materialId ? (
+        {formData.materialId ? (
           <div className="text-[#1B5087]">
             <p className="text-sm">
               ✓ Compatible material automatically selected for your {selectedPlan.category} plan
@@ -549,6 +867,9 @@ useEffect(() => {
             placeholder="Enter advertisement title"
             required
           />
+          {errors.title && (
+            <p className="text-sm text-red-600 mt-1">{errors.title}</p>
+          )}
         </div>
         
         <div>
@@ -563,6 +884,28 @@ useEffect(() => {
             placeholder="Describe your advertisement"
             required
           />
+          {errors.description && (
+            <p className="text-sm text-red-600 mt-1">{errors.description}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Website URL (Optional)
+          </label>
+          <input
+            type="url"
+            value={formData.website}
+            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+            className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-0 focus:border-gray-400"
+            placeholder="https://your-website.com"
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            If provided, QR codes will redirect to your website. Otherwise, they'll redirect to Ads2Go.
+          </p>
+          {errors.website && (
+            <p className="text-sm text-red-600 mt-1">{errors.website}</p>
+          )}
         </div>
 
         <div>
@@ -630,7 +973,9 @@ useEffect(() => {
               <div className="grid grid-cols-7 gap-1 text-center text-gray-700 pt-2">
   {getDaysInMonth(currentDate).map((day, index) => {
     const dayDate = day ? new Date(currentDate.getFullYear(), currentDate.getMonth(), day) : null;
-    const isPast = dayDate ? dayDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) : false;
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    const isPast = dayDate ? dayDate < todayDate : false;
 
     return (
       <div
@@ -663,6 +1008,9 @@ useEffect(() => {
               </span>
             </p>
           )}
+          {errors.startDate && (
+            <p className="text-sm text-red-600 mt-2">{errors.startDate}</p>
+          )}
         </div>
 
         {selectedPlan && (
@@ -692,7 +1040,7 @@ useEffect(() => {
         <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
           <input
             type="file"
-            accept="image/*,video/mp4"
+            accept="image/*,video/mp4,video/quicktime,video/webm,video/x-msvideo"
             onChange={handleFileUpload}
             className="hidden"
             id="media-upload"
@@ -706,9 +1054,18 @@ useEffect(() => {
               Click to upload media file
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              Supports: JPG, PNG, MP4 (Max file size: 50MB)
+              Supports: JPG, PNG, MP4. Max image size: 50MB. Max video size: {
+                selectedPlan ? (
+                  selectedPlan.adLengthSeconds <= 20 ? '150MB' :
+                  selectedPlan.adLengthSeconds <= 30 ? '250MB' :
+                  selectedPlan.adLengthSeconds <= 60 ? '400MB' : '500MB'
+                ) : 'based on plan'
+              }.
             </p>
           </label>
+          {errors.mediaFile && (
+            <p className="text-sm text-red-600 mt-3">{errors.mediaFile}</p>
+          )}
         </div>
 
         {/* Upload Progress Indicator */}
@@ -941,6 +1298,12 @@ useEffect(() => {
         <div className="max-w-5xl mx-auto bg-white">
           {renderStepIndicator()}
           
+          {errors.general && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm">{errors.general}</p>
+            </div>
+          )}
+          
           <div className="mb-8">
             {currentStep === 1 && renderStep1()}
             {currentStep === 2 && renderStep2()}
@@ -975,14 +1338,14 @@ useEffect(() => {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={!canProceedToStep(currentStep) || isSubmitting}
+                disabled={!canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress}
                 className={`px-4 py-2 rounded-md mr-44 w-60 ${
-                  !canProceedToStep(currentStep) || isSubmitting
+                  !canProceedToStep(currentStep) || isSubmitting || isSubmissionInProgress
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
                 }`}
               >
-                {isSubmitting ? (
+                {isSubmitting || isSubmissionInProgress ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Submitting...
