@@ -4,18 +4,13 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map, Icon } from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
+import { motion, AnimatePresence } from "framer-motion";
+
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
 import { 
-  Clock, 
-  Car, 
-  AlertTriangle, 
-  CheckCircle, 
-  XCircle,
-  RefreshCw,
-  Users,
-  Activity
+  Clock, Car, AlertTriangle, CheckCircle, XCircle, RefreshCw, Users, ChevronDown, Activity
 } from 'lucide-react';
 
 
@@ -134,6 +129,8 @@ const ScreenTracking: React.FC = () => {
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+
 
   const mapRef = useRef<Map | null>(null);
 
@@ -386,51 +383,116 @@ const ScreenTracking: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 ml-60">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div>
+        <div className="max-w-7xl p-5 mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Screen Tracking Dashboard</h1>
-              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Screen Tracking Dashboard
+              </h1>
             </div>
+
             <div className="flex items-center space-x-4">
+
+              {/* Connection Status */}
               <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-green-500' : 
-                  connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                }`}></div>
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    connectionStatus === "connected"
+                      ? "bg-green-500"
+                      : connectionStatus === "connecting"
+                      ? "bg-yellow-500"
+                      : "bg-red-500"
+                  }`}
+                ></div>
                 <span className="text-sm text-gray-600">
-                  {connectionStatus === 'connected' ? 'Connected' : 
-                   connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                  {connectionStatus === "connected"
+                    ? "Connected"
+                    : connectionStatus === "connecting"
+                    ? "Connecting..."
+                    : "Disconnected"}
                 </span>
               </div>
-                             <select
-                 value={selectedMaterial}
-                 onChange={(e) => setSelectedMaterial(e.target.value)}
-                 className="border border-gray-300 rounded-md px-3 py-2 bg-white"
-                 disabled={materialsLoading}
-               >
-                 <option value="all">
-                   {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
-                 </option>
-                 {materials?.map((material) => (
-                   <option key={material._id} value={material.materialId}>
-                     {material.title} - {material.materialId} ({material.materialType})
-                   </option>
-                 ))}
-               </select>
+
+              {/* ▼ Animated Dropdown for Materials */}
+              <div className="relative w-56 z-50">
+                <button
+                  onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  disabled={materialsLoading}
+                >
+                  {materialsLoading
+                    ? "Loading Materials..."
+                    : selectedMaterial === "all"
+                    ? `All Materials (${materials?.length || 0})`
+                    : (() => {
+                        const m = materials?.find(
+                          (m) => m.materialId === selectedMaterial
+                        );
+                        return m
+                          ? `${m.title} - ${m.materialId} (${m.materialType})`
+                          : "Select Material";
+                      })()}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${
+                      showMaterialDropdown ? "rotate-180" : "rotate-0"
+                    }`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {showMaterialDropdown && !materialsLoading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      <button
+                        key="all"
+                        onClick={() => {
+                          setSelectedMaterial("all");
+                          setShowMaterialDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        All Materials ({materials?.length || 0})
+                      </button>
+
+                      {materials?.map((material) => (
+                        <button
+                          key={material._id}
+                          onClick={() => {
+                            setSelectedMaterial(material.materialId);
+                            setShowMaterialDropdown(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {material.materialId}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              {/* Date Picker */}
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="border border-gray-300 rounded-md px-3 py-2"
               />
+
+              {/* Refresh Button */}
               <button
                 onClick={fetchData}
                 disabled={refreshing}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
               >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
                 <span>Refresh</span>
               </button>
             </div>
@@ -438,113 +500,15 @@ const ScreenTracking: React.FC = () => {
         </div>
       </div>
 
-             {/* Debug Info */}
-       {process.env.NODE_ENV === 'development' && (
-         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                            <p className="text-xs text-yellow-800">
-                 Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
-               </p>
-           </div>
-         </div>
-       )}
-
-       {/* Material Summary */}
-       {selectedMaterial !== 'all' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                                 <h3 className="text-lg font-semibold text-blue-900">
-                   Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
-                 </h3>
-                <p className="text-sm text-blue-700">
-                  {filteredScreens?.length || 0} screen(s) found for this material
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedMaterial('all')}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                View All Materials
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Compliance Summary */}
-      {complianceReport && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-                               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Total Screens</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <Activity className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Online</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isOnline).length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <CheckCircle className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isCompliant).length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Hours</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                   {filteredScreens && filteredScreens.length > 0 
-                     ? (filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) / filteredScreens.length).toFixed(1)
-                     : '0.0'
-                   }h
-                 </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Map */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow">
-              <div className="p-4 border-b">
-                <h2 className="text-lg font-semibold text-gray-900">Live Map</h2>
-                <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
-              </div>
-              <div className="h-96 relative">
-                <MapView 
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 pt-6 h-[calc(150vh-5rem)]">
+
+          {/* Map Container */}
+          <div className="absolute inset-0 z-0">
+            <div className="bg-white rounded-lg shadow h-full">
+              <div className="h-full relative">
+                <MapView
                   center={mapCenter}
                   zoom={zoom}
                   onMapLoad={(map: Map) => {
@@ -666,134 +630,199 @@ const ScreenTracking: React.FC = () => {
               </div>
             </div>
           </div>
-                       {/* Screen List */}
-             <div className="lg:col-span-1">
-               <div className="bg-white rounded-lg shadow">
-                 <div className="p-4 border-b">
-                   <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
-                   <p className="text-sm text-gray-600">Click to view details</p>
-                 </div>
-                 <div className="max-h-96 overflow-y-auto">
-                   {filteredScreens?.map((screen) => (
-                     <div
-                       key={screen.deviceId}
-                       onClick={() => handleScreenSelect(screen)}
-                       className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                         selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
-                       }`}
-                     >
-                       <div className="flex items-center justify-between mb-2">
-                         <div className="flex items-center space-x-2">
-                           <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
-                         </div>
-                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
-                           {getStatusIcon(screen.isOnline, screen.isCompliant)}
-                           <span className="text-xs">
-                             {screen.displayStatus}
-                           </span>
-                         </div>
-                       </div>
-                       
-                       <div className="space-y-1 text-sm text-gray-600">
-                         <div className="flex justify-between">
-                           <span>Hours Today:</span>
-                           <span className="font-medium">{formatTime(screen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Remaining:</span>
-                           <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Distance:</span>
-                           <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Last Seen:</span>
-                           <span className="font-medium">
-                             {new Date(screen.lastSeen).toLocaleTimeString()}
-                           </span>
-                         </div>
-                       </div>
+          
+          {/* Screen List & Details - Overlaid */}
+          <div className="relative z-10 flex justify-end h-full pointer-events-none">    
+            <div className="w-full sm:w-96 bg-white/90 backdrop-blur-md rounded-xl shadow-xl overflow-y-auto **pointer-events-auto**">
 
-                       {/* Alerts */}
-                       {screen.alerts?.length > 0 && (
-                         <div className="mt-2">
-                           <div className="flex items-center space-x-1 text-red-600">
-                             <AlertTriangle className="w-3 h-3" />
-                             <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   ))}
-                 </div>
-               </div>
+            {/* Compliance Summary – moved inside panel */}
+            {complianceReport && (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-white/70">
 
-               {/* Selected Screen Details */}
-               {selectedScreen && (
-                 <div className="mt-6 bg-white rounded-lg shadow">
-                   <div className="p-4 border-b">
-                     <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
-                   </div>
-                   <div className="p-4 space-y-4">
-                     <div>
-                       <h4 className="font-medium text-gray-900">Device Info</h4>
-                       <div className="mt-2 space-y-1 text-sm text-gray-600">
-                         <p>Device ID: {selectedScreen.deviceId}</p>
-                         <p>Material: {selectedScreen.materialId}</p>
-                         <p>Screen Type: {selectedScreen.screenType}</p>
-                         {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
-                         {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
-                       </div>
-                     </div>
+              {/* Total Screens */}
+              <div className="bg-white rounded-lg shadow p-3 flex items-center">
+                <div className="p-2 rounded-lg">
+                  <Users className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-xs font-medium text-gray-600">Total Screens</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {filteredScreens?.length || 0}
+                  </p>
+                </div>
+              </div>
 
-                     <div>
-                       <h4 className="font-medium text-gray-900">Today's Progress</h4>
-                       <div className="mt-2 space-y-2">
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Online:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Remaining:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Distance Traveled:</span>
-                           <span className="font-medium">{formatDistance(selectedScreen.totalDistanceToday)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Compliance Rate:</span>
-                           <span className="font-medium">{selectedScreen.complianceRate}%</span>
-                         </div>
-                       </div>
-                     </div>
+              {/* Online */}
+              <div className="bg-white rounded-lg shadow p-3 flex items-center">
+                <div className="p-2 rounded-lg">
+                  <Activity className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-xs font-medium text-gray-600">Online</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {filteredScreens?.filter(s => s.isOnline).length || 0}
+                  </p>
+                </div>
+              </div>
 
-                     {selectedScreen.currentLocation && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Current Location</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Address: {selectedScreen.currentLocation.address}</p>
-                           <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
-                           <p>Heading: {selectedScreen.currentLocation.heading}°</p>
-                           <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
-                         </div>
-                       </div>
-                     )}
+              {/* Compliant (8h) */}
+              <div className="bg-white rounded-lg shadow p-3 flex items-center">
+                <div className="p-2 rounded-lg">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-xs font-medium text-gray-600">Compliant (8h)</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {filteredScreens?.filter(s => s.isCompliant).length || 0}
+                  </p>
+                </div>
+              </div>
 
-                     {pathData && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Path Information</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Total Points: {pathData.totalPoints}</p>
-                           <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 </div>
-               )}
+              {/* Avg Hours */}
+              <div className="bg-white rounded-lg shadow p-3 flex items-center">
+                <div className="p-2 rounded-lg">
+                  <Clock className="w-5 h-5 text-yellow-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-xs font-medium text-gray-600">Avg Hours</p>
+                  <p className="text-xl font-bold text-gray-900">
+                    {filteredScreens && filteredScreens.length > 0
+                      ? (
+                          filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) /
+                          filteredScreens.length
+                        ).toFixed(1)
+                      : '0.0'
+                    }h
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+            {/* Screen List */}
+              <div className="p-4">
+                <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                {filteredScreens?.map((screen) => (
+                  <div
+                    key={screen.deviceId}
+                    onClick={() => handleScreenSelect(screen)}
+                    className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
+                      selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium">{screen.displayId || screen.materialId}</span>
+                      </div>
+                      <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
+                        {getStatusIcon(screen.isOnline, screen.isCompliant)}
+                        <span className="text-xs">
+                          {screen.displayStatus}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Hours Today:</span>
+                        <span className="font-medium">{formatTime(screen.currentHours)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Remaining:</span>
+                        <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Distance:</span>
+                        <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Seen:</span>
+                        <span className="font-medium">
+                          {new Date(screen.lastSeen).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Alerts */}
+                    {screen.alerts?.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center space-x-1 text-red-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Selected Screen Details */}
+            {selectedScreen && (
+              <div className="mt-6 bg-white rounded-lg shadow">
+                <div className="p-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900">Device Info</h4>
+                    <div className="mt-2 space-y-1 text-sm text-gray-600">
+                      <p>Device ID: {selectedScreen.deviceId}</p>
+                      <p>Material: {selectedScreen.materialId}</p>
+                      <p>Screen Type: {selectedScreen.screenType}</p>
+                      {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
+                      {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium text-gray-900">Today's Progress</h4>
+                    <div className="mt-2 space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Hours Online:</span>
+                        <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Hours Remaining:</span>
+                        <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Distance Traveled:</span>
+                        <span className="font-medium">{formatDistance(selectedScreen.totalDistanceToday)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-600">Compliance Rate:</span>
+                        <span className="font-medium">{selectedScreen.complianceRate}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedScreen.currentLocation && (
+                    <div>
+                      <h4 className="font-medium text-gray-900">Current Location</h4>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        <p>Address: {selectedScreen.currentLocation.address}</p>
+                        <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
+                        <p>Heading: {selectedScreen.currentLocation.heading}°</p>
+                        <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {pathData && (
+                    <div>
+                      <h4 className="font-medium text-gray-900">Path Information</h4>
+                      <div className="mt-2 space-y-1 text-sm text-gray-600">
+                        <p>Total Points: {pathData.totalPoints}</p>
+                        <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

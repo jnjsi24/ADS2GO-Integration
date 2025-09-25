@@ -454,8 +454,7 @@ const Advertisements: React.FC = () => {
   <div className="relative w-32">
     <button
       onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-      className="flex items-center rounded-md justify-between w-full text-xs text-black
-                 pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2">
+      className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2">
       {selectedStatusFilter}
       <ChevronDown
         size={16}

@@ -233,7 +233,7 @@ const AdDetailsPage: React.FC = () => {
       <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
         <div className="flex flex-col items-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-gray-600">Loading ad details...</p>
+          <p className="text-white/90">Loading ad details...</p>
         </div>
       </div>
     );
@@ -245,7 +245,7 @@ const AdDetailsPage: React.FC = () => {
       <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-red-600 mb-2">Error loading ad</h2>
-          <p className="text-gray-600 mb-4">{error.message}</p>
+          <p className="text-white/90 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -264,12 +264,12 @@ const AdDetailsPage: React.FC = () => {
   if (!ad) {
     return (
       <div className="flex-1 ml-60 p-6  h-screen flex items-center justify-center">
-        <div className="text-center text-gray-700">
+        <div className="text-center text-white/90">
           <h1 className="text-3xl font-bold mb-4">Ad Not Found</h1>
           <p className="mb-6">The advertisement you are looking for does not exist.</p>
           <button
             onClick={() => navigate('/advertisements')}
-            className="px-6 py-3 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors flex items-center justify-center mx-auto"
+            className="py-3 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors flex items-center justify-center mx-auto"
           >
             <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
           </button>
@@ -302,10 +302,14 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-  <div className="min-h-screen backdrop-blur-md bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC] ml-64 p-8 space-y-8">
-     <button
+<div
+    className="min-h-screen pl-72 pr-5 p-5 bg-cover bg-center bg-no-repeat"
+    style={{
+      backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)"
+    }}
+  >      <button
       onClick={() => navigate('/advertisements')}
-      className="py-2 px-4 text-gray-800 rounded-lg hover:text-gray-500 transition-colors flex items-center mb-4"
+      className="py-2 text-white/90 rounded-lg hover:text-white/90 transition-colors flex items-center mb-4"
     >
       <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
     </button>
@@ -332,7 +336,7 @@ const AdDetailsPage: React.FC = () => {
             </video>
           )
         ) : (
-          <div className="text-gray-500 text-xl">No Media Available</div>
+          <div className="text-white/90 text-xl">No Media Available</div>
         )}
       </div>
 
@@ -347,7 +351,7 @@ const AdDetailsPage: React.FC = () => {
               ? 'bg-green-100 text-green-800'
               : ad.status === 'REJECTED'
               ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-gray-800'
+              : 'bg-gray-100 text-white/90'
           }`}
         >
           {ad.status}
@@ -360,17 +364,17 @@ const AdDetailsPage: React.FC = () => {
           </span>
         )}
 
-        <h2 className="text-4xl font-bold">{ad.title}</h2>
-        <p className="text-2xl font-semibold mb-5">${ad.price.toFixed(2)}</p>
-        <p className="text-gray-700">{ad.description}</p>
+        <h2 className="text-4xl text-white/90 font-bold">{ad.title}</h2>
+        <p className="text-2xl text-white/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
+        <p className="text-white/70">{ad.description}</p>
       </div>
     </div>
 
     {/* Bottom Row: Left (Tabs + Delete) + Right (Tablet Activity) */}
-    <div className="grid grid-cols-2 gap-8">
+    <div className="grid grid-cols-2 gap-8 pt-10">
       {/* Left: Tabs + Delete */}
       <div className="space-y-4">
-  <div className="flex items-center justify-between mb-4">
+  <div className="flex items-center justify-between mb-4 ">
     {/* Tabs */}
     <div className="flex space-x-4 relative">
       {['Details', 'AdActivity'].map((tab) => (
@@ -380,7 +384,7 @@ const AdDetailsPage: React.FC = () => {
               setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
             }
             className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
-              activeTab === tab ? 'text-orange-600' : 'text-gray-500 hover:text-gray-700'
+              activeTab === tab ? 'text-orange-400' : 'text-white/60 hover:text-white/90'
             }`}
           >
             {tab === 'AdActivity' ? 'Ad Activity' : tab}
@@ -402,7 +406,7 @@ const AdDetailsPage: React.FC = () => {
     <button
       onClick={() => setShowDeleteModal(true)}
       disabled={deleteLoading || ad?.status !== 'PENDING'}
-      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="px-4 py-2 bg-red-300 text-red-900 font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
     >
       {deleteLoading ? 'Deleting...' : 'Delete Ad'}
     </button>
@@ -413,23 +417,19 @@ const AdDetailsPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-4 mt-6">
   {/* Left: Table-style info */}
   <div>
-    <table className="w-full text-sm mt-5 text-gray-700">
+    <table className="w-full text-sm mt-5 text-white/80">
       <tbody>
-        <tr className="border-b">
+        <tr>
           <td className="font-semibold py-2">Start Date:</td>
-          <td className="py-2">{formatDate(ad.startTime)}</td>
-        </tr>
-        <tr className="border-b">
-          <td className="font-semibold py-2">End Date:</td>
-          <td className="py-2">{formatDate(ad.endTime)}</td>
-        </tr>
-        <tr className="border-b">
-          <td className="font-semibold py-2">Duration:</td>
-          <td className="py-2">{ad.planId?.durationDays || 'N/A'} days</td>
+          <td className="py-2 text-right">{formatDate(ad.startTime)}</td>
         </tr>
         <tr>
-          <td className="font-semibold py-2">Campaign Period:</td>
-          <td className="py-2">{formatDateRange(ad.startTime, ad.endTime)}</td>
+          <td className="font-semibold py-2">End Date:</td>
+          <td className="py-2 text-right">{formatDate(ad.endTime)}</td>
+        </tr>
+        <tr>
+          <td className="font-semibold py-2">Duration:</td>
+          <td className="py-2 text-right">{ad.planId?.durationDays || 'N/A'} days</td>
         </tr>
       </tbody>
     </table>
@@ -437,13 +437,13 @@ const AdDetailsPage: React.FC = () => {
 
   {/* Right: Ad Properties */}
   <div className="flex flex-col mt-5 items-end space-y-2">
-    <p className="text-sm font-semibold text-center text-gray-900">{ad.materialId?.materialId || 'N/A'}</p>
+    <p className="text-sm font-semibold text-center text-white/90">{ad.materialId?.materialId || 'N/A'}</p>
 
-    <p className="text-sm font-semibold text-center text-gray-900">{ad.planId?.name}</p>
+    <p className="text-sm font-semibold text-center text-white/90">{ad.planId?.name}</p>
 
-    <p className="text-sm font-semibold text-center text-gray-900">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
+    <p className="text-sm font-semibold text-center text-white/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
 
-    <p className="text-sm font-semibold text-center text-gray-900">{ad.adFormat || 'N/A'}</p>
+    <p className="text-sm font-semibold text-center text-white/90">{ad.adFormat || 'N/A'}</p>
   </div>
 </div>
 
@@ -452,19 +452,19 @@ const AdDetailsPage: React.FC = () => {
         {activeTab === 'AdActivity' && (
           <div className="space-y-2 max-h-80 rounded-lg shadow-md overflow-y-auto custom-scrollbar">
             {sampleNotifications.map((notif) => (
-              <div key={notif.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg shadow-md">
+              <div key={notif.id} className="flex items-start bg-white/10 space-x-3 p-3 rounded-lg shadow-md">
                 {notif.type === 'avail' && <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />}
                 {notif.type === 'on_the_move' && <Truck size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />}
                 {notif.type === 'completed' && <Trophy size={20} className="text-purple-500 flex-shrink-0 mt-0.5" />}
                 {notif.type === 'cancelled' && <XCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />}
                 <div className="flex-1">
-                  <p className="text-[#1b5087] text-sm font-medium">{getNotificationText(notif)}</p>
-                  <p className="text-gray-500 text-xs">{notif.timestamp}</p>
+                  <p className="text-white/90 text-sm font-medium">{getNotificationText(notif)}</p>
+                  <p className="text-white/70 text-xs">{notif.timestamp}</p>
                 </div>
               </div>
             ))}
             {sampleNotifications.length === 0 && (
-              <p className="text-center text-gray-500 py-10">No activities found for this ad.</p>
+              <p className="text-center text-white/90 py-10">No activities found for this ad.</p>
             )}
           </div>
         )}
@@ -476,8 +476,7 @@ const AdDetailsPage: React.FC = () => {
         <div className="relative mb-4 w-60">
           <button
             onClick={() => setShowAdDropdown(!showAdDropdown)}
-            className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none gap-2"
-          >
+            className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
             {selectedAd}
             <ChevronDown
               size={16}
@@ -494,7 +493,7 @@ const AdDetailsPage: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute z-10 top-full mt-1 w-full rounded-lg shadow-lg overflow-hidden bg-white"
+                className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
               >
                 {adOptions.map((adOption) => (
                   <button
@@ -503,7 +502,7 @@ const AdDetailsPage: React.FC = () => {
                       setSelectedAd(adOption);
                       setShowAdDropdown(false);
                     }}
-                    className="block w-full text-left pl-6 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
                   >
                     {adOption}
                   </button>
@@ -530,16 +529,16 @@ const AdDetailsPage: React.FC = () => {
                     {index + 1}
                   </div>
                   <div className="flex flex-col">
-                    <p className="text-sm font-semibold text-gray-900">{activity.gps}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-semibold text-white/90">{activity.gps}</p>
+                    <p className="text-xs text-white/90">
                       {activity.lastSeen} | {activity.kmTraveled} km
                     </p>
-                    <p className="text-xs text-gray-400">{activity.timestamp}</p>
+                    <p className="text-xs text-white/90">{activity.timestamp}</p>
                   </div>
                 </div>
               ))}
             {tabletActivities.filter((activity) => activity.ad === selectedAd).length === 0 && (
-              <p className="text-center text-gray-500 py-10">No activity found for this ad.</p>
+              <p className="text-center text-white/90 py-10">No activity found for this ad.</p>
             )}
           </div>
         </div>
