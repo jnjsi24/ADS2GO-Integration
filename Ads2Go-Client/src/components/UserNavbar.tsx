@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -12,11 +12,48 @@ import {
   Bell
 } from 'lucide-react';
 
+const DrawOutlineLink = ({
+  to,
+  active,
+  children,
+  pos
+}: {
+  to: string;
+  active: boolean;
+  children: React.ReactNode;
+  pos: { x: number; y: number };
+}) => (
+  <Link
+    to={to}
+    className={`
+      group relative flex items-center px-4 py-2 font-medium 
+      transition-colors duration-[400ms] overflow-hidden
+      ${active ? 'text-black/80' : 'text-white/40 hover:text-white/70'}
+    `}
+    style={{
+      backgroundImage: active
+        ? `linear-gradient(to right, #E5E5E5 10%, #BFBFBF 100%)`
+        : ``,
+    }}
+  >
+    <span className="relative z-10 flex items-center space-x-3">{children}</span>
+
+    {/* Animated Outline */}
+    <span className="absolute left-0 top-0 h-[2px] w-0 bg-[#3674B5] transition-all duration-100 group-hover:w-full" />
+    <span className="absolute right-0 top-0 h-0 w-[2px] bg-[#3674B5] transition-all delay-100 duration-100 group-hover:h-full" />
+    <span className="absolute bottom-0 right-0 h-[2px] w-0 bg-[#3674B5] transition-all delay-200 duration-100 group-hover:w-full" />
+    <span className="absolute bottom-0 left-0 h-0 w-[2px] bg-[#3674B5] transition-all delay-300 duration-100 group-hover:h-full" />
+  </Link>
+);
+
+
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
   const { unreadCount, isLoading } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+    const [pos, setPos] = useState({ x: 50, y: 50 });
+  
 
   const handleLogout = async () => {
     await logout();
@@ -37,41 +74,34 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed">
-      <div className="p-6">
+<div className="bg-black/20 backdrop-blur-md shadow-inner fixed top-0 bottom-0 left-0 p-3 flex flex-col justify-between z-50 w-64">
+      <div className="p-3">
         {/* Logo */}
-        <div className="flex items-center pl-3 space-x-3 mb-10">
+        <div className="flex items-center pl-5 mt-6 space-x-3 mb-10">
           <img src="/image/white-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-white font-bold">Ads2Go</span>
+          <span className="text-white/80 text-2xl font-bold">Ads2Go</span>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation with Outline Animation */}
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
             <li key={link.label} className="relative group">
-              <Link
+              <DrawOutlineLink
                 to={link.path}
-                className={`relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-colors ${
-                  location.pathname === link.path
-                    ? 'text-white font-bold bg-[#3367cc]'
-                    : 'text-gray-200 hover:text-gray-300'
-                }`}
+                active={location.pathname === link.path}
+                pos={pos} // pass the pos state here
               >
-                {/* Background animation */}
-                <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
-
-                <span className="relative z-10 flex items-center space-x-3">
-                  {link.icon}
-                  <span>{link.label}</span>
-                </span>
-              </Link>
+                {link.icon}
+                <span>{link.label}</span>
+              </DrawOutlineLink>
             </li>
           ))}
         </ul>
+
       </div>
 
       {/* User Profile & Logout */}
-      <div className="p-6">
+      <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <div
             className="flex items-center space-x-3 cursor-pointer flex-1"
@@ -85,25 +115,23 @@ const SideNavbar: React.FC = () => {
             </div>
             <div>
               {user ? (
-                <p className="font-semibold text-white">
-                  {`${user.firstName} ${user.lastName}`}
-                </p>
+                <p className="font-semibold text-white/90">{`${user.firstName} ${user.lastName}`}</p>
               ) : (
                 <>
-                  <p className="font-semibold text-gray-800">Loading...</p>
-                  <p className="text-sm text-gray-500">Please wait</p>
+                  <p className="font-semibold text-gray-300">Loading...</p>
+                  <p className="text-sm text-gray-400">Please wait</p>
                 </>
               )}
             </div>
           </div>
           <button
             onClick={() => navigate('/notifications')}
-            className="relative p-2 text-gray-200 hover:text-white transition-colors"
+            className="relative p-2 text-white/80 hover:text-white transition-colors"
             disabled={isLoading}
             title="View notifications"
           >
             {isLoading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-200"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white/50"></div>
             ) : (
               <Bell size={20} />
             )}
@@ -117,7 +145,7 @@ const SideNavbar: React.FC = () => {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center space-x-2 text-sm text-[#FF2929] hover:text-red-500 transition px-4 py-2 rounded-lg bg-red-50"
+          className="w-full flex items-center space-x-2 text-sm text-red-300 hover:text-red-500 transition px-4 py-2 bg-red-50/10 border border-red-500/20"
         >
           <LogOut size={18} />
           <span>Logout</span>

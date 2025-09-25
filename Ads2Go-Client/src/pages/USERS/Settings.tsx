@@ -71,9 +71,9 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 pl-60 pr-1">
-      <div className="flex">
-        <div className="flex-1 bg-white p-6 rounded-lg shadow">
+    <div className="min-h-screen pl-72 pr-5 p-10 bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC]">
+  {/* Header */}
+      <div className="flex-1 justify-between items-start md:items-center mb-8 gap-4">
           <h2 className="text-xl font-semibold mb-2">Notifications</h2>
           <form className="space-y-6" onSubmit={handleNotificationSubmit}>
             <div className="border p-4 rounded-md">
@@ -176,7 +176,6 @@ const Settings: React.FC = () => {
             </div>
           </form>
         </div>
-      </div>
 
       <div className="fixed bottom-4 right-4 space-y-2 z-50">
         {toasts.map((toast) => (
