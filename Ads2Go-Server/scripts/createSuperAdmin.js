@@ -2,7 +2,7 @@ require('dotenv').config({ path: './.env' });
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const SuperAdmin = require('./src/models/SuperAdmin'); // Adjust path if needed
+const SuperAdmin = require('../src/models/SuperAdmin'); // Adjust path if needed
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
