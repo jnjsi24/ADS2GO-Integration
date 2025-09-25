@@ -8,4 +8,3 @@ export * from './manageRiders';
 export * from './manageUsers';
 export * from './materials';
 export * from './notificationQueries';
-export * from './screenTracking';
