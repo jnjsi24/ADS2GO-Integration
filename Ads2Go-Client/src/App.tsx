@@ -28,6 +28,9 @@ import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 import Notifications from './pages/USERS/Notifications';
+import Analytics from './pages/USERS/Analytics';
+import ProfitLossAnalytics from './pages/USERS/ProfitLossAnalytics';
+import QRAnalytics from './pages/USERS/QRAnalytics';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -306,6 +309,30 @@ const UserAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <Notifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <ProtectedRoute>
+              <Analytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profit-loss-analytics"
+          element={
+            <ProtectedRoute>
+              <ProfitLossAnalytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/qr-analytics"
+          element={
+            <ProtectedRoute>
+              <QRAnalytics />
             </ProtectedRoute>
           }
         />

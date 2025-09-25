@@ -1,4 +1,5 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AreaChart,
   Area,
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [selectedOption, setSelectedOption] = useState('Riders');
   const [selectedPeriod, setSelectedPeriod] = useState<'Monthly' | 'Weekly' | 'Daily'>('Monthly');
   const [qrSelectedPeriod, setQrSelectedPeriod] = useState<'Weekly' | 'Daily' | 'Today'>('Today');
@@ -100,48 +102,6 @@ const Dashboard = () => {
 
   const colors = ['#1e40af', '#3b82f6', '#ff7849', '#fb923c', '#fbbf24'];
 
-  const recentOrderData = [
-    {
-      orderId: '97174',
-      product: 'Apple MacBook Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/12/2023, 12:33',
-      status: 'Pending',
-      qty: 1,
-      totalPrice: 2092,
-      customer: 'Luca Rijal',
-    },
-    {
-      orderId: '97173',
-      product: 'iBox iPhone 14 Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/12/2023, 07:41',
-      status: 'Active',
-      qty: 1,
-      totalPrice: 1852,
-      customer: 'Lina Punk Oy Oy',
-    },
-    {
-      orderId: '97172',
-      product: 'Apple AirPods Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/10/2023, 23:01',
-      status: 'Rejected',
-      qty: 2,
-      totalPrice: 522,
-      customer: 'Cristiano Edgar',
-    },
-    {
-      orderId: '97171',
-      product: 'iBox iPhone 14 Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/10/2023, 21:42',
-      status: 'Rejected',
-      qty: 1,
-      totalPrice: 1852,
-      customer: 'Angkara Toldo',
-    },
-  ];
 
   const calculateFinancials = (period: 'Monthly' | 'Weekly' | 'Daily') => {
     let totalProfit = 0;
@@ -216,8 +176,11 @@ const Dashboard = () => {
     setQrSelectedPeriod(e.target.value as 'Weekly' | 'Daily' | 'Today');
   };
 
-  const StatCard = ({ title, value, change, changeType, icon, subtitle }: any) => (
-    <div className="bg-white  shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300 group">
+  const StatCard = ({ title, value, change, changeType, icon, subtitle, type }: any) => (
+    <div 
+      onClick={() => navigate('/analytics', { state: { type } })}
+      className="bg-white shadow-sm border border-gray-100 p-6 hover:shadow-lg transition-all duration-300 group cursor-pointer"
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="p-2  bg-gradient-to-br from-indigo-50 to-blue-50 group-hover:from-indigo-100 group-hover:to-blue-100 transition-colors duration-300">
           {icon}
@@ -286,7 +249,7 @@ const Dashboard = () => {
     change="+12.5%"
     changeType="positive"
     subtitle={displayPeriodLabel}
-    className="bg-white/80 backdrop-blur-md rounded-md p-6"
+    type="revenue"
     icon={<TrendingUp size={24} className="text-indigo-600" />}
   />
   <StatCard
@@ -295,7 +258,7 @@ const Dashboard = () => {
     change="-3.2%"
     changeType="positive"
     subtitle={displayPeriodLabel}
-    className="bg-white/80 backdrop-blur-md rounded-md p-6"
+    type="expenses"
     icon={<TrendingDown size={24} className="text-blue-600" />}
   />
   <StatCard
@@ -304,7 +267,7 @@ const Dashboard = () => {
     change="+20.1%"
     changeType="positive"
     subtitle="+2,123 today"
-    className="bg-white/80 backdrop-blur-md rounded-md p-6"
+    type="advertisements"
     icon={<Target size={24} className="text-purple-600" />}
   />
   <StatCard
@@ -313,7 +276,7 @@ const Dashboard = () => {
     change="-4%"
     changeType="negative"
     subtitle="-426 today"
-    className="bg-white/80 backdrop-blur-md rounded-md p-6"
+    type="riders"
     icon={<Users size={24} className="text-cyan-600" />}
   />
 </div>
@@ -323,9 +286,11 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profit & Loss Chart */}
           <div className="lg:col-span-2 shadow-sm border border-white/10 p-6 bg-white/80 backdrop-blur-md rounded-md">
-
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-              <div>
+              <div 
+                className="cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                onClick={() => navigate('/profit-loss-analytics')}
+              >
                 <h2 className="text-xl font-semibold text-gray-900 mb-1">Profit & Loss Overview</h2>
                 <p className="text-sm text-gray-600">Track your financial performance</p>
               </div>
@@ -422,9 +387,12 @@ const Dashboard = () => {
           </div>
 
           {/* QR Impressions */}
-          <div className="  backdrop-blur-md rounded-xl">
+          <div className="backdrop-blur-md rounded-xl">
             <div className="flex justify-between items-start">
-              <div>
+              <div 
+                className="cursor-pointer hover:opacity-80 transition-opacity duration-200"
+                onClick={() => navigate('/qr-analytics')}
+              >
                 <h2 className="text-3xl font-semibold text-white/90 mb-1">QR Impressions</h2>
               </div>
               <select
@@ -485,89 +453,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white/80 backdrop-blur-md rounded-md shadow-sm border border-gray-100 p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">Recent Activity</h2>
-              <p className="text-sm text-gray-600">Latest transactions and orders</p>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button className="flex items-center space-x-2 px-3 py-2 text-sm border border-gray-200  hover:bg-gray-50 transition-colors duration-200">
-                <Filter size={16} />
-                <span>Filter</span>
-              </button>
-              <select className="text-sm border border-gray-200  px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white">
-                <option value="This Week">This Week</option>
-                <option value="This Month">This Month</option>
-                <option value="Last Month">Last Month</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Order ID</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Product</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Time</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Status</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Qty</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Total</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-600 text-sm">Customer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrderData.map((order, index) => (
-                  <tr key={index} className="border-b border-gray-50 hover:bg-gray-50 transition-colors duration-200">
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-900">#{order.orderId}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gray-100  flex items-center justify-center">
-                          <Activity size={16} className="text-gray-500" />
-                        </div>
-                        <span className="text-sm font-medium text-gray-900">{order.product}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-600">{order.orderTime}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-medium  ${
-                          order.status === 'Pending'
-                            ? 'bg-amber-100 text-amber-700'
-                            : order.status === 'Active'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-600">×{order.qty}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm font-semibold text-gray-900">${order.totalPrice.toLocaleString()}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-6 h-6 bg-indigo-100  flex items-center justify-center">
-                          <span className="text-xs font-medium text-indigo-600">{order.customer.charAt(0)}</span>
-                        </div>
-                        <span className="text-sm text-gray-700">{order.customer}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   );
