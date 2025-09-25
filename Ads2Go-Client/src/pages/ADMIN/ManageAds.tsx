@@ -13,7 +13,10 @@ import {
   PlayCircle,
   BarChart3,
   ChevronDown,
-  Check
+  Check,
+  CheckCircle,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -53,6 +56,31 @@ const ManageAds: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
   const [showRejectionNotification, setShowRejectionNotification] = useState(true);
+
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove toast after duration (default 5 seconds)
+    setTimeout(() => {
+      removeToast(id);
+    }, toast.duration || 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
@@ -100,7 +128,12 @@ const ManageAds: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error updating ad:', error);
-      alert(`Error updating ad: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: `Error updating ad: ${error.message}`,
+        duration: 6000
+      });
     }
   });
 
@@ -110,7 +143,12 @@ const ManageAds: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error deleting ad:', error);
-      alert(`Error deleting ad: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Deletion Failed',
+        message: `Error deleting ad: ${error.message}`,
+        duration: 6000
+      });
     }
   });
 
@@ -171,9 +209,20 @@ const ManageAds: React.FC = () => {
           }
         }
       });
-      alert(`Ad ${adId} approved successfully!`);
+      addToast({
+        type: 'success',
+        title: 'Ad Approved',
+        message: `Ad ${adId} approved successfully!`,
+        duration: 4000
+      });
     } catch (error) {
       console.error('Error approving ad:', error);
+      addToast({
+        type: 'error',
+        title: 'Approval Failed',
+        message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 6000
+      });
     }
   };
 
@@ -184,7 +233,12 @@ const ManageAds: React.FC = () => {
 
   const submitReject = async () => {
     if (!adToReject || !rejectReason.trim()) {
-      alert('Please provide a reason for rejection');
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for rejection',
+        duration: 4000
+      });
       return;
     }
 
@@ -198,12 +252,23 @@ const ManageAds: React.FC = () => {
           }
         }
       });
-      alert(`Ad ${adToReject} rejected successfully!`);
+      addToast({
+        type: 'success',
+        title: 'Ad Rejected',
+        message: `Ad ${adToReject} rejected successfully!`,
+        duration: 4000
+      });
       setShowRejectModal(false);
       setRejectReason('');
       setAdToReject(null);
     } catch (error) {
       console.error('Error rejecting ad:', error);
+      addToast({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: `Failed to reject ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 6000
+      });
     }
   };
 
@@ -218,11 +283,22 @@ const ManageAds: React.FC = () => {
         await deleteAd({
           variables: { id: adToDelete }
         });
-        alert(`Ad ${adToDelete} deleted successfully!`);
+        addToast({
+          type: 'success',
+          title: 'Ad Deleted',
+          message: `Ad ${adToDelete} deleted successfully!`,
+          duration: 4000
+        });
         setShowDeleteModal(false);
         setAdToDelete(null);
       } catch (error) {
         console.error('Error deleting ad:', error);
+        addToast({
+          type: 'error',
+          title: 'Deletion Failed',
+          message: `Failed to delete ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          duration: 6000
+        });
       }
     }
   };
@@ -297,6 +373,50 @@ const ManageAds: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+      {/* Toast Notifications */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, scale: 0.3 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
+              className={`max-w-md w-full mx-4 bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden ${
+                toast.type === 'success' ? 'border-l-4 border-green-400' :
+                toast.type === 'error' ? 'border-l-4 border-red-400' :
+                toast.type === 'warning' ? 'border-l-4 border-yellow-400' :
+                'border-l-4 border-blue-400'
+              }`}
+            >
+              <div className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {toast.type === 'success' && <CheckCircle className="h-8 w-8 text-green-400" />}
+                    {toast.type === 'error' && <XCircle className="h-8 w-8 text-red-400" />}
+                    {toast.type === 'warning' && <AlertCircle className="h-8 w-8 text-yellow-400" />}
+                    {toast.type === 'info' && <AlertCircle className="h-8 w-8 text-blue-400" />}
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <p className="text-lg font-medium text-gray-900">{toast.title}</p>
+                    <p className="mt-1 text-sm text-gray-500">{toast.message}</p>
+                  </div>
+                  <div className="ml-4 flex-shrink-0">
+                    <button
+                      className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      onClick={() => removeToast(toast.id)}
+                    >
+                      <span className="sr-only">Close</span>
+                      <X className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>

@@ -29,7 +29,7 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Manage Admin', path: '/sadmin-admin', icon: <LayoutDashboard size={20} /> },
+    { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
     { label: 'Plans', path: '/sadmin-plans', icon: <FileText size={20} /> },
     { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];

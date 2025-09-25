@@ -9,7 +9,11 @@ import {
   PieLabelRenderProps,
 } from "recharts";
 import { useQuery } from '@apollo/client';
+import { Link } from 'react-router-dom';
+import { Bell, CheckCircle, AlertTriangle, Info, Clock, ArrowRight } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { GET_OWN_SUPERADMIN_DETAILS } from '../../graphql/superadmin';
+import { GET_SUPERADMIN_NOTIFICATIONS } from '../../graphql/superadmin/queries/sadminNotificationQueries';
 
 // GraphQL query to get superadmin details
 const GET_SUPERADMIN_DETAILS = GET_OWN_SUPERADMIN_DETAILS;
@@ -66,6 +70,16 @@ const Dashboard = () => {
     }
   });
 
+  // Fetch super admin notifications for unread count
+  const { data: notificationsData } = useQuery(GET_SUPERADMIN_NOTIFICATIONS, {
+    pollInterval: 30000, // Refresh every 30 seconds
+    onError: (error) => {
+      console.error("Error fetching super admin notifications:", error);
+    }
+  });
+
+  const unreadCount = notificationsData?.getSuperAdminNotifications?.unreadCount || 0;
+
   if (loading) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -91,7 +105,21 @@ const Dashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Calendar icon and 'This month' button - Removed profile section */}
+          {/* Notifications Button */}
+          <Link
+            to="/sadmin-notifications"
+            className="relative flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm hover:bg-gray-50 transition-colors"
+          >
+            <Bell className="h-5 w-5 mr-2 text-gray-500" />
+            <span>Notifications</span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </Link>
+          
+          {/* Calendar icon and 'This month' button */}
           <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -167,6 +195,110 @@ const Dashboard = () => {
             </p>
           </div>
         ))}
+      </div>
+
+      {/* Recent Notifications Section */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Recent Notifications
+          </h3>
+          <Link
+            to="/sadmin-notifications"
+            className="text-blue-600 text-sm flex items-center hover:text-blue-700 transition-colors"
+          >
+            View All
+            <ArrowRight className="h-4 w-4 ml-1" />
+          </Link>
+        </div>
+        
+        {notificationsData?.getSuperAdminNotifications?.notifications?.length > 0 ? (
+          <div className="space-y-3">
+            {notificationsData.getSuperAdminNotifications.notifications.slice(0, 5).map((notification: any) => {
+              const getNotificationIcon = (type: string) => {
+                switch (type) {
+                  case 'SUCCESS':
+                    return <CheckCircle className="w-4 h-4 text-green-500" />;
+                  case 'WARNING':
+                    return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
+                  case 'ERROR':
+                    return <AlertTriangle className="w-4 h-4 text-red-500" />;
+                  default:
+                    return <Info className="w-4 h-4 text-blue-500" />;
+                }
+              };
+
+              const getNotificationColor = (type: string) => {
+                switch (type) {
+                  case 'SUCCESS':
+                    return 'border-l-green-500 bg-green-50';
+                  case 'WARNING':
+                    return 'border-l-yellow-500 bg-yellow-50';
+                  case 'ERROR':
+                    return 'border-l-red-500 bg-red-50';
+                  default:
+                    return 'border-l-blue-500 bg-blue-50';
+                }
+              };
+
+              return (
+                <div
+                  key={notification.id}
+                  className={`p-4 rounded-lg border-l-4 ${getNotificationColor(notification.type)} ${
+                    !notification.read ? 'bg-white shadow-sm' : 'bg-gray-50'
+                  } hover:shadow-md transition-shadow`}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-shrink-0 mt-1">
+                      {getNotificationIcon(notification.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <h4 className="text-sm font-medium text-gray-900 truncate">
+                          {notification.title}
+                        </h4>
+                        {!notification.read && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            NEW
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700 mb-2 overflow-hidden" style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical'
+                      }}>
+                        {notification.message}
+                      </p>
+                      <div className="flex items-center space-x-3 text-xs text-gray-500">
+                        <div className="flex items-center space-x-1">
+                          <Clock className="w-3 h-3" />
+                          <span>{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
+                        </div>
+                        <span className="capitalize">{notification.category?.replace(/_/g, ' ')}</span>
+                        {notification.priority && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            notification.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
+                            notification.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {notification.priority}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <Bell size={32} className="mx-auto text-gray-300 mb-3" />
+            <h4 className="text-sm font-medium text-gray-900 mb-1">No notifications yet</h4>
+            <p className="text-xs text-gray-500">You'll see recent notifications here when they arrive.</p>
+          </div>
+        )}
       </div>
 
       {/* Ad Impressions & QR Scans Chart (now spans full width below stat cards) */}
