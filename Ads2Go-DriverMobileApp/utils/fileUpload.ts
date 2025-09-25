@@ -1,12 +1,13 @@
 import * as FileSystem from 'expo-file-system';
 import { Platform, Alert } from 'react-native';
 import { v4 as uuidv4 } from 'uuid';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 // Get auth token from AsyncStorage
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    const AsyncStorage = await import('@react-native-async-storage/async-storage');
-    return await AsyncStorage.default.getItem('token');
+    return await AsyncStorage.getItem('token');
   } catch (error) {
     console.error('Error getting auth token:', error);
     return null;
@@ -151,7 +152,7 @@ const uploadToServer = async (
 // Image Picker Helper for Driver Documents
 export const pickDriverDocument = async (documentType: 'license' | 'vehicle' | 'orcr' | 'profile') => {
   try {
-    const { launchImageLibraryAsync, MediaTypeOptions } = await import('expo-image-picker');
+    const { launchImageLibraryAsync, MediaTypeOptions } = ImagePicker;
     
     const result = await launchImageLibraryAsync({
       mediaTypes: MediaTypeOptions.Images,
