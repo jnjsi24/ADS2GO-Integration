@@ -32,7 +32,7 @@ import '../../services/testEndpoints';
 import Dashboard from './tabs/dashboard/Dashboard';
 import ScreenControl from './tabs/adminAdsControl/ScreenControl';
 import ContentManagement from './tabs/manageAds/ContentManagement';
-import Analytics from './tabs/dashboard/Analytics';
+import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
 
 const AdminAdsControl: React.FC = () => {
@@ -447,7 +447,6 @@ const AdminAdsControl: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
-            <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
           </div>
           <button 
             onClick={() => fetchData(true)}
@@ -459,9 +458,62 @@ const AdminAdsControl: React.FC = () => {
           </button>
         </div>
       </div>
+ 
+      {/* Status Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-2">
+        {/* Total Screens */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-16">
+            <Monitor className="w-8 h-8 text-blue-500" />
+            <div className="flex flex-col items-center">
+              <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
+              <p className="text-sm text-gray-600">Total Screens</p>
+            </div>
+          </div>
+        </div>
+        {/* Online Screens */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-green-600">
+                {screens.filter(s => s.isOnline).length}
+              </p>
+              <p className="text-sm text-gray-600">Online Screens</p>
+            </div>
+            <Wifi className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
 
+        {/* Playing Ads */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-blue-600">
+                {screens.filter(s => s.screenMetrics?.isDisplaying).length}
+              </p>
+              <p className="text-sm text-gray-600">Playing Ads</p>
+            </div>
+            <PlayCircle className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+
+        {/* Total Impressions */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-purple-600">
+                {adAnalytics?.summary.totalAdsPlayed || 0}
+              </p>
+              <p className="text-sm text-gray-600">Total Impressions</p>
+            </div>
+            <Eye className="w-8 h-8 text-purple-500" />
+          </div>
+        </div>
+      </div>
+
+      
       {/* Master Controls */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-3">
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <Monitor className="w-5 h-5 mr-2" />
           Master Controls
@@ -518,68 +570,32 @@ const AdminAdsControl: React.FC = () => {
         </div>
       </div>
 
-      {/* Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Screens</p>
-              <p className="text-2xl font-bold text-gray-900">{screens.length}</p>
-            </div>
-            <Monitor className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Online Screens</p>
-              <p className="text-2xl font-bold text-green-600">{screens.filter(s => s.isOnline).length}</p>
-            </div>
-            <Wifi className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Playing Ads</p>
-              <p className="text-2xl font-bold text-blue-600">{screens.filter(s => s.screenMetrics?.isDisplaying).length}</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Impressions</p>
-              <p className="text-2xl font-bold text-purple-600">{adAnalytics?.summary.totalAdsPlayed || 0}</p>
-            </div>
-            <Eye className="w-8 h-8 text-purple-500" />
-          </div>
-        </div>
-      </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-sm mb-8">
+      <div className="mb-8">
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'screens', label: 'Screen Control', icon: Monitor },
               { id: 'content', label: 'Content Management', icon: Upload },
-              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
               { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                  activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <tab.icon className="w-4 h-4 mr-2" />
                 {tab.label}
+                <span
+                  className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                    ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
+                  `}
+                />
               </button>
             ))}
           </nav>
@@ -625,10 +641,8 @@ const AdminAdsControl: React.FC = () => {
             />
           )}
 
-          {activeTab === 'analytics' && (
-            <Analytics
-              analytics={mockAnalytics}
-            />
+          {activeTab === 'notifications' && (
+            <NotificationDashboard />
           )}
 
           {activeTab === 'alerts' && (

@@ -250,11 +250,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                           e.target.value
                         )
                       }
-                      className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
-                    />
-                    <Calendar
-                      size={16}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                      className="w-full text-sm px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
                     />
                   </div>
                   <div className="flex gap-2 pt-2">
@@ -300,11 +296,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                         e.target.value
                       )
                     }
-                    className="w-full text-sm px-3 py-2 border rounded-lg pr-10 appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
-                  />
-                  <Calendar
-                    size={16}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
+                    className="w-full text-sm px-3 py-2 border rounded-lg  appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
                   />
                 </div>
               ) : (

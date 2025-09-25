@@ -9,6 +9,8 @@ const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const NotificationService = require('../services/notifications/NotificationService');
+const { deleteFromFirebase } = require('../utils/firebaseStorage');
 
 const adResolvers = {
   Query: {
@@ -195,6 +197,16 @@ const adResolvers = {
 
       const savedAd = await ad.save();
 
+      // Send notification to admins about new ad submission
+      try {
+        const AdminNotificationService = require('../services/notifications/AdminNotificationService');
+        await AdminNotificationService.sendNewAdSubmissionNotification(savedAd._id);
+        console.log(`✅ Sent new ad submission notification for ad: ${savedAd._id}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending new ad submission notification:', notificationError);
+        // Don't fail the ad creation if notification fails
+      }
+
       // Update material availability when ad is created
       try {
         console.log(`🔄 Updating material availability for ad: ${savedAd._id}`);
@@ -256,16 +268,37 @@ const adResolvers = {
 
       if (isAdmin) {
         if (input.status && input.status !== ad.status) {
+          const previousStatus = ad.status;
           ad.status = input.status;
 
           if (input.status === "APPROVED") {
             ad.approveTime = new Date();
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            
+            // Send approval notification
+            try {
+              console.log('🔔 AdResolver: Sending approval notification for ad:', ad._id);
+              await NotificationService.sendAdApprovalNotification(ad._id);
+              console.log('✅ AdResolver: Approval notification sent successfully');
+            } catch (notificationError) {
+              console.error('❌ AdResolver: Error sending approval notification:', notificationError);
+              console.error('❌ AdResolver: Error details:', notificationError.message);
+              console.error('❌ AdResolver: Stack trace:', notificationError.stack);
+              // Don't fail the ad update if notification fails
+            }
           } else if (input.status === "REJECTED") {
             ad.rejectTime = new Date();
             ad.approveTime = null;
             ad.reasonForReject = input.reasonForReject || "No reason provided";
+            
+            // Send rejection notification
+            try {
+              await NotificationService.sendAdRejectionNotification(ad._id, ad.reasonForReject);
+            } catch (notificationError) {
+              console.error('Error sending rejection notification:', notificationError);
+              // Don't fail the ad update if notification fails
+            }
           } else {
             ad.approveTime = null;
             ad.rejectTime = null;
@@ -331,13 +364,22 @@ const adResolvers = {
     },
 
     deleteAd: async (_, { id }, { user }) => {
-      checkAdmin(user);
+      checkAuth(user);
       
       try {
         // 1. Find the ad first to ensure it exists
         const ad = await Ad.findById(id);
         if (!ad) {
           throw new Error('Ad not found');
+        }
+
+        // 2. Check permissions: Admin can delete any ad, users can only delete their own pending ads
+        const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const isOwner = ad.userId.toString() === user.id;
+        const isPending = ad.status === 'PENDING';
+
+        if (!isAdmin && (!isOwner || !isPending)) {
+          throw new Error('You can only delete your own pending advertisements');
         }
 
         console.log(`🗑️ Starting cascade delete for ad: ${id} (${ad.title})`);
@@ -393,7 +435,21 @@ const adResolvers = {
           console.warn(`⚠️ Warning: Could not remove from material availability:`, availabilityError.message);
         }
 
-        // 6. Delete the ad itself
+        // 6. Delete media file from Firebase Storage
+        if (ad.mediaFile) {
+          try {
+            const deleteSuccess = await deleteFromFirebase(ad.mediaFile);
+            if (deleteSuccess) {
+              console.log(`🗑️ Successfully deleted media file from Firebase Storage`);
+            } else {
+              console.warn(`⚠️ Warning: Could not delete media file from Firebase Storage`);
+            }
+          } catch (firebaseError) {
+            console.warn(`⚠️ Warning: Error deleting media file from Firebase Storage:`, firebaseError.message);
+          }
+        }
+
+        // 7. Delete the ad itself
         await Ad.findByIdAndDelete(id);
         console.log(`✅ Ad ${id} deleted successfully`);
 

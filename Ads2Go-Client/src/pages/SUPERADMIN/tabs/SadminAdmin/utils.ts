@@ -159,7 +159,7 @@ export const validateNewAdminForm = (formData: AdminFormData): { isValid: boolea
       // Format as 09XXXXXXXXX if only 10 digits starting with 9
       formData.contactNumber = `0${cleanNumber}`;
     } else if (!/^09\d{9}$/.test(cleanNumber)) {
-      addError('contactNumber', 'Please provide a valid Philippine phone number (e.g., 9123456789 or 09123456789).');
+      addError('contactNumber', 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)');
     }
   }
   
@@ -214,7 +214,7 @@ export const validateEditForm = (formData: EditAdminFormData): boolean => {
   if (formData.contactNumber) {
     const phoneRegex = /^\+63\s?\d{10}$/;
     if (!phoneRegex.test(formData.contactNumber)) {
-      newErrors.contactNumber = 'Please provide a valid phone number (e.g., +63 9123456789).';
+      newErrors.contactNumber = 'Please enter a valid Philippine mobile number. Format: +639XXXXXXXXX (10 digits starting with 9)';
       isValid = false;
     }
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { TrashIcon, Edit } from 'lucide-react';
+import { Trash, Edit } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -18,6 +18,7 @@ import {
 import CreateMaterialModal from './tabs/materials/CreateMaterialModal';
 import MaterialDetailsModal from './tabs/materials/MaterialDetailsModal';
 import TabletConnectionModal from './tabs/materials/TabletConnectionModal';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 
@@ -127,6 +128,10 @@ const Materials: React.FC = () => {
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
   const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
 
   // Custom refresh function for connection status
   const handleRefetchConnectionStatus = async () => {
@@ -486,16 +491,30 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const handleDeleteMaterial = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this material?')) {
+  const handleDeleteMaterial = (id: string) => {
+    setMaterialToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (materialToDelete) {
       try {
-        await deleteMaterial({ variables: { id } });
+        await deleteMaterial({ variables: { id: materialToDelete } });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       } catch (error) {
         console.error('Error deleting material:', error);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setMaterialToDelete(null);
   };
 
   const handleCloseModal = () => {
@@ -503,12 +522,17 @@ const Materials: React.FC = () => {
     setSelectedMaterialDetails(null);
   };
 
-  const handleRemoveFromDriver = async (id: string) => {
-    if (window.confirm('Are you sure you want to remove this material from the driver?')) {
+  const handleRemoveFromDriver = (id: string) => {
+    setMaterialToRemove(id);
+    setShowRemoveModal(true);
+  };
+
+  const confirmRemove = async () => {
+    if (materialToRemove) {
       try {
         await updateMaterial({
           variables: {
-            id,
+            id: materialToRemove,
             input: {
               driverId: null
             }
@@ -516,10 +540,19 @@ const Materials: React.FC = () => {
         });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
       } catch (error) {
         console.error('Error removing material from driver:', error);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
       }
     }
+  };
+
+  const cancelRemove = () => {
+    setShowRemoveModal(false);
+    setMaterialToRemove(null);
   };
 
   const handleCreateSubmit = async (formData: CreateMaterialInput) => {
@@ -722,27 +755,37 @@ const Materials: React.FC = () => {
                   </div>
 
                   <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                  <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                  <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
-                  <div className="col-span-1 flex justify-center gap-1 ml-36">
+                  <div className="col-span-1 flex justify-center gap-1 ml-">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleViewDetails(material);
                       }}
-                      className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors"
+                      className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
                     >
-                      <Edit size={16} />
+                      <Edit 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Edit
+                        </span>
                     </button> 
+
                     <button
                       onClick={(e) => {
                       e.stopPropagation(); // ✅ stop row click
                       handleDeleteMaterial(material.id); // ✅ delete action
                     }}
-                      className="flex items-center px-1 py-2 text-red-500 rounded-lg hover:text-red-600 transition-colors"
+                      className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
                     >
-                      <TrashIcon size={16} />
-                      
+                      <Trash 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                        size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                        Delete
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -838,6 +881,30 @@ const Materials: React.FC = () => {
       onCancelEditingDates={cancelEditingDates}
       onSaveDateChanges={saveDateChanges}
       onUpdateEditingDate={updateEditingDate}
+    />
+    
+    {/* Delete Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showDeleteModal}
+      onClose={cancelDelete}
+      onConfirm={confirmDelete}
+      title="Delete Material"
+      message="Are you sure you want to delete this material? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+    />
+    
+    {/* Remove from Driver Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showRemoveModal}
+      onClose={cancelRemove}
+      onConfirm={confirmRemove}
+      title="Remove Material from Driver"
+      message="Are you sure you want to remove this material from the driver?"
+      confirmText="Remove"
+      cancelText="Cancel"
+      confirmButtonClass="bg-orange-600 hover:bg-orange-700"
     />
     </div>
   );

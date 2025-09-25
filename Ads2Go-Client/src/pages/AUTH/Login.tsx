@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { Link } from 'react-router-dom';
+import {EyeIcon, EyeOff, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Login: React.FC = () => {
   const { navigateToRegister, login } = useUserAuth();
@@ -10,10 +11,33 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [checked, setChecked] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+
   const [validationErrors, setValidationErrors] = useState({
     email: '',
     password: ''
   });
+
+  // Handle video loading and playback
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      // Ensure video plays on load
+      video.addEventListener('loadeddata', () => {
+        setVideoLoaded(true);
+        video.play().catch(console.error);
+      });
+      
+      // Handle video errors
+      video.addEventListener('error', () => {
+        console.log('Video failed to load, falling back to image background');
+        setVideoLoaded(false);
+      });
+    }
+  }, []);
 
   const validateForm = () => {
     const errors = {
@@ -105,6 +129,7 @@ const Login: React.FC = () => {
     }
   };
 
+  
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPassword(e.target.value);
     // Clear password validation error when user starts typing
@@ -118,143 +143,219 @@ const Login: React.FC = () => {
   }, [navigateToRegister]);
 
   return (
-    <div className="relative flex min-h-screen bg-[#fdfdfd]">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" style={{ minHeight: '100vh' }}>
       {/* Video Background */}
       <video
+        ref={videoRef}
         autoPlay
         loop
         muted
         playsInline
-        className="fixed top-1/2 left-1 -translate-y-1/2 w-[60vw] h-auto object-cover"
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        style={{
+          minWidth: '100%',
+          minHeight: '100%',
+          width: 'auto',
+          height: 'auto',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          objectFit: 'cover',
+          zIndex: -1
+        }}
       >
-        <source src="/image/login.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
+        <source src="/image/Ads2Go.mp4" type="video/mp4" />
+        {/* Fallback image if video doesn't load */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/image/login.png')" }}
+        />
       </video>
       
-      {/* Dark overlay for video */}
-      <div className="absolute inset-0"></div>
+      {/* Dark overlay for better text readability */}
+      <div className="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
+      
+      {/* Loading indicator for video */}
+      {!videoLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+        </div>
+      )}
 
-      {/* Form Container */}
-      <div className="relative z-10 w-full max-w-xl ml-auto mr-12 flex flex-col justify-center px-10">
-        <div className="p-8 rounded-xl shadow-2xl bg-[#fdfdfd]">
-          <div className="flex items-center space-x-2 mb-6">
-            <h1 className="text-5xl font-extrabold text-black">Log in</h1>
+      <div className="relative z-10 p-8 sm:p-10 
+                rounded-xl shadow-2xl w-full max-w-xl
+                bg-white/20 backdrop-blur-lg border border-white/30">
+        {/* Ads2Go Logo */}
+        <div className="flex justify-center mb-6">
+          <img 
+            src="/image/Ads2GoLogoText.png" 
+            alt="Ads2Go Logo" 
+            className="h-24 w-auto object-contain"
+          />
+        </div>
+        
+        {/* Login Title */}
+        <h1 className="text-3xl font-bold text-center mb-6 text-white">
+          Login
+        </h1>
+        
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+         <div className="relative mt-10">
+            <input
+              type="email"
+              id="email"
+              placeholder=""
+              required
+              value={email}
+              onChange={handleEmailChange}
+              className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.email ? 'border-red-400' : 'border-gray-300'}`}
+              style={{ backgroundColor: 'transparent' }}
+            />
+            <label
+              htmlFor="email"
+              className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${email
+                ? '-top-2 text-sm text-black font-bold' // 👈 If input has value, stay floated
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white peer-focus:font-bold`}
+            >
+              Enter your email 
+            </label>
+            {validationErrors.email && (
+              <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+            )}
           </div>
 
-          {/* Social Sign-in Buttons */}
-          <div className="flex space-x-2 mb-6">
-            <button
-              type="button"
-              className="flex-1 flex items-center justify-center py-2 px-4 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img
-                src="/image/g.png"
-                alt="Google logo"
-                className="h-5 w-5 mr-2"
-              />
-
-              <span>Sign in with Google</span>
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-             <img
-                src="/image/f.png"
-                alt="Facebook logo"
-                className="h-5 w-5"
-              />
-
-            </button>
-            <button
-              type="button"
-              className="py-2 px-3 border border-gray-300 rounded-lg shadow-sm bg-white hover:bg-gray-100 transition"
-            >
-              <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-5 w-5" />
-            </button>
-          </div>
-
-          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-            <div>
-              <label htmlFor="email" className="block text-md text-gray-700 font-semibold mb-1">
-                Email Address
-              </label>
+          <div>
+            <div className="relative mt-8">
               <input
-                type="email"
-                id="email"
+                type={showPassword ? 'text' : 'password'}
+                id="password"
+                placeholder=" "
                 required
-                value={email}
-                onChange={handleEmailChange}
-                className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
-                  validationErrors.email ? 'border-red-400' : 'border-gray-400'
-                }`}
+                value={password}
+                onChange={handlePasswordChange}
+                className={`peer w-full pr-8 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.password ? 'border-red-400' : 'border-gray-300'}`}
               />
-              {validationErrors.email && (
-                <p className="text-red-500 text-sm mt-1">{validationErrors.email}</p>
-              )}
-            </div>
 
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label htmlFor="password" className="block text-md text-gray-700 font-semibold">
-                  Password
-                </label>
-                <Link to="/forgot-password" className="text-blue-500 hover:underline text-sm font-semibold">
-                  Forgot Password?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  id="password"
-                  value={password}
-                  onChange={handlePasswordChange}
-                  className={`w-full px-4 py-3 border rounded-xl shadow-lg focus:outline-none ${
-                    validationErrors.password ? 'border-red-400' : 'border-gray-400'
-                  }`}
-                />
-                <button
-                  type="button"
-                  className="absolute inset-y-0 right-3 flex items-center"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeSlashIcon className="h-5 w-5 text-gray-500" />
-                  ) : (
-                    <EyeIcon className="h-5 w-5 text-gray-500" />
-                  )}
-                </button>
-              </div>
+              <label
+                htmlFor="password"
+                className={`absolute left-0 text-white transition-all duration-200 ${password
+                  ? '-top-2 text-sm text-white font-bold'
+                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white peer-focus:font-bold`}
+              >
+                Enter your password
+              </label>
+
+              {/* 👁 Single Show/Hide Button */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}   // ✅ toggle visibility
+                className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+              >
+                {showPassword ? (
+                  <EyeIcon className="h-5 w-5 text-white" />   
+                ) : (
+                  <EyeOff className="h-5 w-5 text-white" />
+                )}
+              </button>
+
               {validationErrors.password && (
-                <p className="text-red-500 text-sm mt-1">{validationErrors.password}</p>
+                <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
               )}
             </div>
 
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
 
-            <button
-              type="submit"
-              disabled={isLoggingIn}
-              className={`w-full py-3 px-4 rounded-lg shadow-md transition-colors ${
-                isLoggingIn ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#FF9800] hover:bg-[#FF9B45]'
-              } text-white font-semibold text-lg`}
-            >
-              {isLoggingIn ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Logging in...
+            <div className="flex justify-between items-center text-sm mt-5">
+              {/* ✅ Animated checkbox with label */}
+              <div
+                className="flex items-center space-x-2 cursor-pointer"
+                onClick={() => setChecked((prev) => !prev)}
+              >
+                <div
+                  className="relative w-5 h-5 border-2 border-gray-400 rounded-md flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
+                >
+                  <AnimatePresence>
+                    {checked && (
+                      <motion.div
+                        key="check"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        className="absolute text-blue-600"
+                      >
+                        <Check size={16} strokeWidth={3} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
-              ) : (
-                'Log in'
-              )}
-            </button>
-            <div className="text-center mt-6">
-              <span className="text-gray-800">Don't have an account?</span>
-              <a href="/register" className="text-blue-600 ml-1 hover:underline">
-                Sign up
-              </a>
+                <span className="text-white select-none">Keep me logged in</span>
+              </div>
+
+              {/* Forgot password link */}
+              <Link to="/forgot-password" className="text-[#1B5087] hover:underline">
+                Forgot password?
+              </Link>
             </div>
-          </form>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className={`w-full py-2 px-4 rounded-md shadow-sm transition-colors ${
+              isLoggingIn
+                ? 'bg-blue-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            } text-white font-semibold`}
+          >
+            {isLoggingIn ? (
+              <div className="flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Logging in...
+              </div>
+            ) : (
+              'Log in'
+            )}
+          </button>
+        </form>
+
+        <div className="flex items-center my-6">
+          <div className="flex-grow border-t border-gray-300"></div>
+          <span className="mx-4 text-white text-sm">
+            or continue with
+          </span>
+          <div className="flex-grow border-t border-gray-300"></div>
+        </div>
+
+
+        <div className="flex justify-center space-x-4">
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+            <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+            <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            <img
+              src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png"
+              alt="Instagram logo"
+              className="h-6 w-6"
+            />
+          </button>
+        </div>
+
+        <div className="text-center mt-6 text-sm">
+          <span className="text-white">Don't have an account?</span>
+          <Link to="/register" className="text-[#1B5087] ml-1 underline hover:font-semibold">
+            Create an account
+          </Link>
         </div>
       </div>
     </div>

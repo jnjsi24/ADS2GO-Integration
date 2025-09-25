@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Plus } from 'lucide-react';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { ChevronDown, Trash, Plus } from 'lucide-react';
 
 type TransactionStatus = 'Paid' | 'Failed' | 'Refunded' | 'all';
 
@@ -114,14 +113,14 @@ const Reports: React.FC = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               placeholder="Search by ID, Title, or User"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             <div className="relative w-40">
               <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
+                className="appearance-none w-full text-xs text-black rounded-lg pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
                 value={filterStatus}
                 onChange={(e) =>
                   setFilterStatus(e.target.value as TransactionStatus)
@@ -142,7 +141,7 @@ const Reports: React.FC = () => {
 
       {/* Add New Report Button */}
       <div className="flex justify-end mb-6">
-        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-xl w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
+        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-lg w-40 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
           <Plus size={16} />
           Add New Report
         </button>
@@ -213,10 +212,14 @@ const Reports: React.FC = () => {
                     e.stopPropagation();
                     handleDelete(tx.id);
                   }}
-                  className="text-red-500 text-md hover:text-red-700 flex items-center"
+                  className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
                 >
-                  <TrashIcon className="w-4 h-4 mr-1" />
-                  
+                  <Trash 
+                    className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                    size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                    Delete
+                  </span>
                 </button>
               </div>
             </div>

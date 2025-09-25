@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
 // CREATE USER
 const Register: React.FC = () => {
@@ -25,6 +26,8 @@ const Register: React.FC = () => {
   const [registrationError, setRegistrationError] = useState('');
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   // Add refs to track submission state and prevent multiple submissions
   const isSubmittingRef = useRef(false);
@@ -32,12 +35,58 @@ const Register: React.FC = () => {
   
   const { register } = useUserAuth();
 
+  // Helper function to check if address is valid (either hierarchical or free-form)
+  const isAddressValid = (address: string): boolean => {
+    if (!address || address.trim().length < 5) return false;
+    
+    // Check if it's just the placeholder text (not valid)
+    if (address.includes('Enter house number and street')) {
+      return false;
+    }
+    
+    // Check if it's a hierarchical location selection (Region, City, Barangay with postal code)
+    const hasRegion = address.includes('National Capital Region') || 
+                     address.includes('Region') ||
+                     address.includes('Province');
+    const hasPostalCode = address.includes('(') && address.includes(')');
+    const hasCommas = address.includes(',');
+    
+    // If it has region, postal code, and commas, check if it has actual address content
+    if (hasRegion && hasPostalCode && hasCommas) {
+      // Extract the part before the region to check for actual address
+      const regionIndex = address.indexOf('National Capital Region');
+      if (regionIndex > 0) {
+        const addressPart = address.substring(0, regionIndex).trim();
+        // Remove common prefixes and check if there's actual content
+        const cleanAddressPart = addressPart.replace(/^Enter house number and street,?\s*/i, '').trim();
+        return cleanAddressPart.length > 0 && cleanAddressPart !== 'Enter house number and street';
+      }
+      return true; // If no region found, assume it's valid
+    }
+    
+    // Otherwise, check if it's a valid free-form address
+    // Should have at least 5 characters and contain some address-like content
+    const trimmedAddress = address.trim();
+    if (trimmedAddress.length < 5) return false;
+    
+    // Check if it contains typical address elements (numbers, street indicators, etc.)
+    const hasNumbers = /\d/.test(trimmedAddress);
+    const hasStreetIndicators = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|way|drive|dr|lane|ln|place|pl|court|ct|circle|cir)\b/i.test(trimmedAddress);
+    const hasLocationIndicators = /\b(manila|quezon|makati|pasig|taguig|mandaluyong|san juan|marikina|caloocan|malabon|navotas|paranaque|las pinas|muntinlupa|pateros|valenzuela|binondo|ermita|intramuros|malate|paco|pandacan|port area|sampaloc|san andres|san miguel|san nicolas|santa ana|santa cruz|santa mesa|tondo|quiapo|santa ana|santa cruz|santa mesa|tondo|quiapo)\b/i.test(trimmedAddress);
+    
+    // Valid if it has numbers and either street indicators or location indicators
+    return hasNumbers && (hasStreetIndicators || hasLocationIndicators);
+  };
+
   const validateField = (name: string, value: string): string => {
     switch (name) {
       case 'firstName':
+      case 'middleName':
       case 'lastName':
         if (!value.trim()) return `${name.split(/(?=[A-Z])/).join(' ')} is required`;
-        if (!/^[a-zA-Z\s]+$/.test(value)) return 'Only letters and spaces allowed';
+        if (value.trim().length < 2) return `${name.split(/(?=[A-Z])/).join(' ')} must be at least 2 characters`;
+        if (!/^[a-zA-Z\s]+$/.test(value.trim())) return `${name.split(/(?=[A-Z])/).join(' ')} can only contain letters and spaces`;
+        if (value.trim().length > 50) return `${name.split(/(?=[A-Z])/).join(' ')} must be less than 50 characters`;
         return '';
       case 'companyName':
         if (!value.trim()) return 'Company/Business name is required';
@@ -46,15 +95,31 @@ const Register: React.FC = () => {
       case 'companyAddress':
         if (!value.trim()) return 'Company/Business address is required';
         if (value.length < 5) return 'Address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'houseAddress':
         if (!value.trim()) return 'House address is required';
         if (value.length < 5) return 'House address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-          return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
+          return 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)';
         }
         return '';
       case 'email':
@@ -79,12 +144,29 @@ const Register: React.FC = () => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (errors[name]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
+    // Validate the field in real-time
+    const error = validateField(name, value);
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      if (error) {
+        newErrors[name] = error;
+      } else {
         delete newErrors[name];
-        return newErrors;
-      });
+      }
+      return newErrors;
+    });
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const { name } = e.currentTarget;
+    
+    // Only apply character restrictions to name fields
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      const char = e.key;
+      // Allow letters, spaces, and backspace/delete
+      if (!/^[a-zA-Z\s]$/.test(char) && char !== 'Backspace' && char !== 'Delete' && char !== 'ArrowLeft' && char !== 'ArrowRight') {
+        e.preventDefault();
+      }
     }
   };
 
@@ -94,7 +176,7 @@ const Register: React.FC = () => {
     let fieldsToValidate: (keyof typeof formData)[] = [];
 
     if (step === 1) {
-      fieldsToValidate = ['firstName', 'lastName'];
+      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
     } else if (step === 2) {
       fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
     } else if (step === 3) {
@@ -111,6 +193,29 @@ const Register: React.FC = () => {
 
     setErrors(newErrors);
     return isValid;
+  };
+
+  // Check if current step is valid
+  const isCurrentStepValid = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    let fieldsToValidate: (keyof typeof formData)[] = [];
+
+    if (step === 1) {
+      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
+    } else if (step === 2) {
+      fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
+    } else if (step === 3) {
+      fieldsToValidate = ['contactNumber', 'email', 'password', 'confirmPassword'];
+    }
+
+    fieldsToValidate.forEach(field => {
+      const error = validateField(field, formData[field]);
+      if (error) {
+        newErrors[field] = error;
+      }
+    });
+
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleNext = () => {
@@ -191,6 +296,32 @@ const Register: React.FC = () => {
     }
   };
 
+  // Handle video loading and playback
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      console.log('🎬 Video element found, setting up event listeners');
+      
+      // Ensure video plays on load
+      video.addEventListener('loadeddata', () => {
+        console.log('🎬 Video loaded successfully');
+        setVideoLoaded(true);
+        video.play().catch(console.error);
+      });
+      
+      // Handle video errors
+      video.addEventListener('error', (e) => {
+        console.log('🎬 Video failed to load:', e);
+        setVideoLoaded(false);
+      });
+      
+      // Try to play immediately
+      video.play().catch(console.error);
+    } else {
+      console.log('🎬 Video element not found');
+    }
+  }, []);
+
   // Cleanup timeout on unmount
   React.useEffect(() => {
     return () => {
@@ -202,16 +333,60 @@ const Register: React.FC = () => {
 
   return (
     <div className="relative flex min-h-screen bg-[#fdfdfd]">
-      {/* Background Image on the Right */}
-      <img
-        src="/image/signup.png"
-        alt="Signup background"
-        className="absolute top-0 right-0 w-1/2 h-full object-cover hidden md:block"
-      />
+      {/* Video Background on the Right */}
+      <div className="absolute top-0 right-0 w-1/2 h-full z-0">
+        <video
+          ref={videoRef}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            minWidth: '100%',
+            minHeight: '100%',
+            width: 'auto',
+            height: 'auto',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            objectFit: 'cover'
+          }}
+        >
+          <source src="/image/Ads2Go.mp4" type="video/mp4" />
+          {/* Fallback image if video doesn't load */}
+          <img
+            src="/image/signup.png"
+            alt="Signup background"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        </video>
+        
+        {/* Dark overlay for better text readability */}
+        <div className="absolute inset-0 bg-black bg-opacity-40 z-10"></div>
+        
+        {/* Loading indicator for video */}
+        {!videoLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center z-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+          </div>
+        )}
+      </div>
+      
       {/* Form Container on the Left */}
-      <div className="relative z-10 w-full md:w-1/2 h-screen flex flex-col justify-center items-center">
-        <div className="p-20 rounded-3xl shadow-2xl bg-white h-full w-[85%] md:w-[790px] ml-4">
-          <h2 className="text-4xl font-extrabold text-black mb-8 mt-8">Sign up</h2>
+      <div className="relative z-20 w-full md:w-1/2 h-screen flex flex-col justify-center items-center">
+        <div className="p-8 md:p-12 rounded-3xl shadow-2xl bg-white h-full w-full max-w-none mx-4">
+          {/* Ads2Go Logo */}
+          <div className="flex justify-center mb-6 mt-8">
+            <img 
+              src="/image/Ads2GoLogoText.png" 
+              alt="Ads2Go Logo" 
+              className="h-24 w-auto object-contain"
+            />
+          </div>
+          
+          <h2 className="text-4xl font-extrabold text-black mb-8 text-center">Sign up</h2>
 
           {registrationError && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
@@ -237,54 +412,102 @@ const Register: React.FC = () => {
             </div>
           )}
 
-          <form className="mt-8 space-y-6" onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}>
+          <form className="mt-8 space-y-6 w-full" onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}>
             {step === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="firstName" className="block text-md font-bold text-gray-700 mb-1">
-                    First Name
-                  </label>
+              <div className="space-y-6 w-full">
+                <div className="w-full relative mt-10">
                   <input
                     id="firstName"
                     name="firstName"
                     type="text"
+                    placeholder=""
                     value={formData.firstName}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onKeyPress={handleKeyPress}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.firstName 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
+                  <label
+                    htmlFor="firstName"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.firstName
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    First Name
+                  </label>
                   {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                 </div>
-                <div>
-                  <label htmlFor="middleName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Middle Name
-                  </label>
+                <div className="w-full relative mt-10">
                   <input
                     id="middleName"
                     name="middleName"
                     type="text"
+                    placeholder=""
                     value={formData.middleName}
                     onChange={handleChange}
-                    className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
+                    onKeyPress={handleKeyPress}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.middleName 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
-                </div>
-                <div>
-                  <label htmlFor="lastName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Last Name
+                  <label
+                    htmlFor="middleName"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.middleName
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    Middle Name
                   </label>
+                  {errors.middleName && <p className="mt-1 text-sm text-red-600">{errors.middleName}</p>}
+                </div>
+                <div className="w-full relative mt-10">
                   <input
                     id="lastName"
                     name="lastName"
                     type="text"
+                    placeholder=""
                     value={formData.lastName}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onKeyPress={handleKeyPress}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.lastName 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
-                  {errors.lastName && <p className="mt-1 text-red-600">{errors.lastName}</p>}
+                  <label
+                    htmlFor="lastName"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.lastName
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    Last Name
+                  </label>
+                  {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
                 </div>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-full py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
+                  disabled={!isCurrentStepValid()}
+                  className={`w-full py-3 px-4 font-semibold rounded-full focus:outline-none ${
+                    isCurrentStepValid()
+                      ? 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   Next
                 </button>
@@ -292,48 +515,53 @@ const Register: React.FC = () => {
             )}
 
             {step === 2 && (
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="companyName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Company/Business Name
-                  </label>
+              <div className="space-y-6 w-full">
+                <div className="w-full relative mt-10">
                   <input
                     id="companyName"
                     name="companyName"
                     type="text"
+                    placeholder=""
                     value={formData.companyName}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.companyName 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
+                  <label
+                    htmlFor="companyName"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.companyName
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    Company/Business Name
+                  </label>
                   {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
                 </div>
                 <div>
-                  <label htmlFor="companyAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Company/Business Address
-                  </label>
-                  <input
-                    id="companyAddress"
-                    name="companyAddress"
-                    type="text"
+                  <LocationAutocomplete
+                    label="Company/Business Address"
                     value={formData.companyAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                    placeholder="Select company location or enter address..."
+                    required
+                    error={errors.companyAddress}
                   />
-                  {errors.companyAddress && <p className="mt-1 text-sm text-red-600">{errors.companyAddress}</p>}
                 </div>
                 <div>
-                  <label htmlFor="houseAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    House Address
-                  </label>
-                  <input
-                    id="houseAddress"
-                    name="houseAddress"
-                    type="text"
+                  <LocationAutocomplete
+                    label="House Address"
                     value={formData.houseAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                    placeholder="Select house location or enter address..."
+                    required
+                    error={errors.houseAddress}
                   />
-                  {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
                 </div>
                 <div className="flex justify-between">
                   <button
@@ -346,7 +574,12 @@ const Register: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] justify-end text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
+                    disabled={!isCurrentStepValid()}
+                    className={`w-full ml-2 py-3 px-4 justify-end font-semibold rounded-full focus:outline-none ${
+                      isCurrentStepValid()
+                        ? 'bg-[#FF9800] text-white hover:bg-[#FF9B45]'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     Next
                   </button>
@@ -355,106 +588,146 @@ const Register: React.FC = () => {
             )}
 
             {step === 3 && (
-              <div className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="contactNumber"
-                    className="block text-md font-bold text-gray-700 mb-1"
-                    style={{ color: '#000000' }}
-                  >
-                    Contact Number
-                  </label>
+              <div className="space-y-6 w-full">
+                <div className="w-full relative mt-10">
                   <input
                     id="contactNumber"
                     name="contactNumber"
                     type="text"
+                    placeholder=""
                     value={formData.contactNumber}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.contactNumber 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
+                  <label
+                    htmlFor="contactNumber"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.contactNumber
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    Contact Number
+                  </label>
                   {errors.contactNumber && (
                     <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>
                   )}
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-md font-bold text-gray-700 mb-1"
-                    style={{ color: '#000000' }}
-                  >
-                    Email Address
-                  </label>
+                <div className="w-full relative mt-10">
                   <input
                     id="email"
                     name="email"
                     type="email"
+                    placeholder=""
                     value={formData.email}
                     onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
+                    className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                      errors.email 
+                        ? 'border-red-400' 
+                        : 'border-gray-300'
+                    }`}
+                    style={{ backgroundColor: 'transparent' }}
                   />
+                  <label
+                    htmlFor="email"
+                    className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                      formData.email
+                        ? '-top-2 text-sm text-black font-bold'
+                        : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                    } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                  >
+                    Email Address
+                  </label>
                   {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
 
                 {/* Password + Confirm Password side by side */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Password */}
-                  <div>
-                    <label htmlFor="password" className="block text-md font-bold text-gray-700 mb-1">
+                  <div className="w-full relative mt-10">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder=""
+                      value={formData.password}
+                      onChange={handleChange}
+                      className={`peer w-full px-0 pt-5 pb-2 pr-8 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                        errors.password 
+                          ? 'border-red-400' 
+                          : 'border-gray-300'
+                      }`}
+                      style={{ backgroundColor: 'transparent' }}
+                    />
+                    <label
+                      htmlFor="password"
+                      className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                        formData.password
+                          ? '-top-2 text-sm text-black font-bold'
+                          : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                      } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                    >
                       Password
                     </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(prev => !prev)}
-                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? (
-                          <EyeSlashIcon className="h-5 w-5" />
-                        ) : (
-                          <EyeIcon className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeSlashIcon className="h-5 w-5 text-gray-500" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5 text-gray-500" />
+                      )}
+                    </button>
                     {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                   </div>
 
                   {/* Confirm Password */}
-                  <div>
-                    <label htmlFor="confirmPassword" className="block text-md font-bold text-gray-700 mb-1">
+                  <div className="w-full relative mt-10">
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      placeholder=""
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      className={`peer w-full px-0 pt-5 pb-2 pr-8 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+                        errors.confirmPassword 
+                          ? 'border-red-400' 
+                          : 'border-gray-300'
+                      }`}
+                      style={{ backgroundColor: 'transparent' }}
+                    />
+                    <label
+                      htmlFor="confirmPassword"
+                      className={`absolute left-0 text-gray-500 bg-transparent transition-all duration-200 ${
+                        formData.confirmPassword
+                          ? '-top-2 text-sm text-black font-bold'
+                          : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                      } peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-bold`}
+                    >
                       Confirm Password
                     </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(prev => !prev)}
-                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        tabIndex={-1}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeSlashIcon className="h-5 w-5" />
-                        ) : (
-                          <EyeIcon className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(prev => !prev)}
+                      className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeSlashIcon className="h-5 w-5 text-gray-500" />
+                      ) : (
+                        <EyeIcon className="h-5 w-5 text-gray-500" />
+                      )}
+                    </button>
                     {errors.confirmPassword && (
                       <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
                     )}
@@ -493,12 +766,26 @@ const Register: React.FC = () => {
             {/* Social Sign-in */}
             <div className="text-center">
               <p className="text-gray-500 text-sm mb-5 mt-10">or Log in With</p>
-              <div className="flex justify-center space-x-6">
-                <img src="/image/g.png" alt="Google" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/f.png" alt="Facebook" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/i.png" alt="Instagram" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/t.png" alt="Twitter" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/l.png" alt="LinkedIn" className="h-6 w-6 cursor-pointer" />
+              <div className="flex justify-center space-x-4">
+                <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+                  <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+                </button>
+                <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+                  <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />
+                </button>
+                <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-6 w-6" />
+                </button>
+                <button
+                  type="button"
+                  className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <img
+                    src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png"
+                    alt="Instagram logo"
+                    className="h-6 w-6"
+                  />
+                </button>
               </div>
             </div>
 

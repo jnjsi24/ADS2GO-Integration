@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PlayCircle, 
   Pause, 
@@ -23,12 +23,21 @@ import {
   type LCDSlot
 } from '../../../../graphql/admin/ads';
 
-interface DeploymentTabProps {
-  // Add any props you need for the deployment tab
-}
+type DeploymentTabProps = {
+  statusFilter: string; // or stricter union type
+  onStatusChange: (status: string) => void;
+};
 
-const DeploymentTab: React.FC<DeploymentTabProps> = () => {
-  const [deploymentFilter, setDeploymentFilter] = useState<'all' | 'RUNNING' | 'SCHEDULED' | 'COMPLETED' | 'PAUSED'>('all');
+
+const DeploymentTab: React.FC<DeploymentTabProps> = ({
+  statusFilter: parentFilter,
+  onStatusChange
+}) => {
+  const [deploymentFilter, setDeploymentFilter] = useState(parentFilter || 'all');
+
+  useEffect(() => {
+    if (parentFilter) setDeploymentFilter(parentFilter);
+  }, [parentFilter]);
 
   // GraphQL Hooks
   const { data: deploymentsData, loading: deploymentsLoading, refetch: refetchDeployments } = useQuery(GET_ALL_DEPLOYMENTS, {
@@ -102,8 +111,9 @@ const DeploymentTab: React.FC<DeploymentTabProps> = () => {
 
   // Filter deployments
   const filteredDeployments = deploymentsData?.getAllDeployments?.filter((deployment: AdDeployment) => {
-    return deploymentFilter === 'all' || deployment.currentStatus === deploymentFilter;
+    return parentFilter === 'all' || deployment.currentStatus === parentFilter;
   }) || [];
+
 
   if (deploymentsLoading) {
     return (
@@ -119,76 +129,42 @@ const DeploymentTab: React.FC<DeploymentTabProps> = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold text-gray-800">Ad Deployment</h2>
-        <div className="flex gap-2">
-          <button className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-            Deploy Ad
-          </button>
-          <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-            Bulk Actions
-          </button>
-        </div>
+    <div>
+      <div className="flex justify-end items-center mb-6 gap-2">
+        <button className="py-3 bg-green-500 text-xs text-white rounded-lg w-32 hover:bg-green-600 hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">
+          Deploy Ad
+        </button>
+        <button className="py-3 bg-[#3674B5] text-xs text-white rounded-lg w-32 hover:bg-[#1B5087] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2">            
+          Bulk Actions
+        </button>
       </div>
+
 
       {/* Deployment Stats */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-500">Active Deployments</h3>
-          <p className="text-2xl font-bold text-green-600">
-            {activeDeploymentsData?.getActiveDeployments?.length || 0}
-          </p>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-500">Total Deployments</h3>
-          <p className="text-2xl font-bold text-blue-600">
+        <div className="bg-white p-4 rounded-lg">
+          <p className="text-3xl text-center font-bold text-black">
             {deploymentsData?.getAllDeployments?.length || 0}
           </p>
+          <h3 className="text-sm text-center font-medium text-gray-500">Total Deployments</h3>
         </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-500">Running Ads</h3>
-          <p className="text-2xl font-bold text-purple-600">
+        <div className="bg-white p-4 rounded-lg">
+          <p className="text-3xl text-center font-bold text-green-600">
+            {activeDeploymentsData?.getActiveDeployments?.length || 0}
+          </p>
+          <h3 className="text-sm text-center font-medium text-gray-500">Active Deployments</h3>
+        </div>
+        <div className="bg-white p-4 rounded-lg">
+          <p className="text-3xl text-center font-bold text-blue-500">
             {deploymentsData?.getAllDeployments?.filter((d: AdDeployment) => d.currentStatus === 'RUNNING').length || 0}
           </p>
+          <h3 className="text-sm text-center font-medium text-gray-500">Running Ads</h3>
         </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-500">Scheduled</h3>
-          <p className="text-2xl font-bold text-yellow-600">
+        <div className="bg-white p-4 rounded-lg">
+          <p className="text-3xl text-center font-bold text-yellow-500">
             {deploymentsData?.getAllDeployments?.filter((d: AdDeployment) => d.currentStatus === 'SCHEDULED').length || 0}
           </p>
-        </div>
-      </div>
-
-      {/* Filter Dropdown */}
-      <div className="mb-6">
-        <div className="relative w-40">
-          <select
-            className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-            value={deploymentFilter}
-            onChange={e =>
-              setDeploymentFilter(e.target.value as 'all' | 'RUNNING' | 'SCHEDULED' | 'COMPLETED' | 'PAUSED')
-            }
-          >
-            <option value="all">All Status</option>
-            <option value="RUNNING">Running</option>
-            <option value="SCHEDULED">Scheduled</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="PAUSED">Paused</option>
-          </select>
-
-          {/* SVG Arrow */}
-          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-            <svg
-              className="w-4 h-4 text-gray-500"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
+          <h3 className="text-sm text-center font-medium text-gray-500">Scheduled</h3>
         </div>
       </div>
 
