@@ -54,6 +54,10 @@ class NotificationService {
     return await UserNotificationService.sendAdPerformanceNotification(userId, adTitle, impressions, plays);
   }
 
+  static async sendProfileChangeNotification(userId, changedFields, oldValues = {}) {
+    return await UserNotificationService.sendProfileChangeNotification(userId, changedFields, oldValues);
+  }
+
   // ==================== DRIVER NOTIFICATIONS ====================
 
   static async sendMaterialAssignmentNotification(driverId, materialId, materialName) {

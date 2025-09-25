@@ -23,7 +23,7 @@ const NotificationItemSchema = new mongoose.Schema({
     required: true,
     enum: [
       // User categories
-      'AD_APPROVAL', 'AD_REJECTION', 'PAYMENT_CONFIRMATION', 'AD_PERFORMANCE',
+      'AD_APPROVAL', 'AD_REJECTION', 'PAYMENT_CONFIRMATION', 'AD_PERFORMANCE', 'PROFILE_CHANGE',
       // Driver categories
       'MATERIAL_ASSIGNMENT', 'ROUTE_UPDATE', 'DEVICE_ISSUE', 'DRIVER_STATUS_CHANGE',
       // Admin categories
@@ -95,7 +95,7 @@ const UserNotificationsSchema = new mongoose.Schema({
     categories: [{
       type: String,
       enum: [
-        'AD_APPROVAL', 'AD_REJECTION', 'PAYMENT_CONFIRMATION', 'AD_PERFORMANCE',
+        'AD_APPROVAL', 'AD_REJECTION', 'PAYMENT_CONFIRMATION', 'AD_PERFORMANCE', 'PROFILE_CHANGE',
         'MATERIAL_ASSIGNMENT', 'ROUTE_UPDATE', 'DEVICE_ISSUE', 'DRIVER_STATUS_CHANGE',
         'NEW_AD_SUBMISSION', 'NEW_USER_REGISTRATION', 'NEW_DRIVER_APPLICATION', 'NEW_MATERIAL_CREATED', 'PAYMENT_ISSUE', 'SYSTEM_ALERT',
         'ADMIN_ACTIVITY', 'CRITICAL_ISSUE', 'SYSTEM_REPORT', 'SECURITY_ALERT', 'DATABASE_ISSUE'

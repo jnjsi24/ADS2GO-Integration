@@ -379,6 +379,21 @@ const paymentResolvers = {
           // Don't fail the payment if deployment fails
         }
 
+        // Send payment confirmation notification
+        try {
+          console.log('Sending payment confirmation notification...');
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendPaymentConfirmationNotification(
+            user.id,
+            ad.totalPrice,
+            ad.title
+          );
+          console.log('✅ Payment confirmation notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending payment confirmation notification:', notificationError);
+          // Don't fail the payment if notification fails
+        }
+
         return {
           success: true,
           message: 'Payment created and ad deployed successfully',

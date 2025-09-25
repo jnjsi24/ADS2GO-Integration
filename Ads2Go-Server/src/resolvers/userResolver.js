@@ -243,16 +243,76 @@ const resolvers = {
         userRecord.email = email.toLowerCase();
       }
 
-      if (firstName) userRecord.firstName = firstName.trim();
-      if (middleName !== undefined) userRecord.middleName = middleName ? middleName.trim() : null;
-      if (lastName) userRecord.lastName = lastName.trim();
-      if (companyName) userRecord.companyName = companyName.trim();
-      if (companyAddress) userRecord.companyAddress = companyAddress.trim();
-      if (normalizedNumber) userRecord.contactNumber = normalizedNumber;
-      if (houseAddress !== undefined) userRecord.houseAddress = houseAddress ? houseAddress.trim() : userRecord.houseAddress;
-      if (password) userRecord.password = await bcrypt.hash(password, 10);
+      // Track which fields are being changed for notifications and capture old values
+      const changedFields = [];
+      const oldValues = {};
+
+      if (firstName && firstName.trim() !== userRecord.firstName) {
+        oldValues.firstName = userRecord.firstName;
+        userRecord.firstName = firstName.trim();
+        changedFields.push('firstName');
+      }
+      if (middleName !== undefined) {
+        const newMiddleName = middleName ? middleName.trim() : null;
+        if (newMiddleName !== userRecord.middleName) {
+          oldValues.middleName = userRecord.middleName;
+          userRecord.middleName = newMiddleName;
+          changedFields.push('middleName');
+        }
+      }
+      if (lastName && lastName.trim() !== userRecord.lastName) {
+        oldValues.lastName = userRecord.lastName;
+        userRecord.lastName = lastName.trim();
+        changedFields.push('lastName');
+      }
+      if (companyName && companyName.trim() !== userRecord.companyName) {
+        oldValues.companyName = userRecord.companyName;
+        userRecord.companyName = companyName.trim();
+        changedFields.push('companyName');
+      }
+      if (companyAddress && companyAddress.trim() !== userRecord.companyAddress) {
+        oldValues.companyAddress = userRecord.companyAddress;
+        userRecord.companyAddress = companyAddress.trim();
+        changedFields.push('companyAddress');
+      }
+      if (normalizedNumber && normalizedNumber !== userRecord.contactNumber) {
+        oldValues.contactNumber = userRecord.contactNumber;
+        userRecord.contactNumber = normalizedNumber;
+        changedFields.push('contactNumber');
+      }
+      if (houseAddress !== undefined) {
+        const newHouseAddress = houseAddress ? houseAddress.trim() : null;
+        if (newHouseAddress !== userRecord.houseAddress) {
+          oldValues.houseAddress = userRecord.houseAddress;
+          userRecord.houseAddress = newHouseAddress;
+          changedFields.push('houseAddress');
+        }
+      }
+      if (password) {
+        oldValues.password = '[HIDDEN]';
+        userRecord.password = await bcrypt.hash(password, 10);
+        changedFields.push('password');
+      }
+      if (email && email !== userRecord.email) {
+        oldValues.email = userRecord.email;
+        changedFields.push('email');
+      }
 
       await userRecord.save();
+
+      // Send profile change notification if any fields were changed
+      if (changedFields.length > 0) {
+        try {
+          console.log('Sending profile change notification for fields:', changedFields);
+          console.log('Old values:', oldValues);
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendProfileChangeNotification(user.id, changedFields, oldValues);
+          console.log('✅ Profile change notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending profile change notification:', notificationError);
+          // Don't fail the update if notification fails
+        }
+      }
 
       return {
         success: true,
