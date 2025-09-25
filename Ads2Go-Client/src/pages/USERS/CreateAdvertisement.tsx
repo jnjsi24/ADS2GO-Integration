@@ -175,7 +175,7 @@ const nextMonth = () => {
           });
           
           // Use direct fetch to bypass Apollo Client cache completely
-          const response = await fetch('http://localhost:5000/graphql', {
+          const response = await fetch((process.env.REACT_APP_GRAPHQL_URL || (process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL + '/graphql' : 'http://localhost:5000/graphql')), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

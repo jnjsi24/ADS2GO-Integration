@@ -172,7 +172,7 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const materialsUrl = `${window.location.protocol}//${window.location.hostname}:5000/material`;
+      const materialsUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
@@ -206,7 +206,7 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/compliance?date=${selectedDate}`;
+      const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
       const complianceResponse = await fetch(apiUrl, {
@@ -266,7 +266,7 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const pathApiUrl = `${window.location.protocol}//${window.location.hostname}:5000/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      const pathApiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       
       const response = await fetch(pathApiUrl, {

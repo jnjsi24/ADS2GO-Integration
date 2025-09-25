@@ -108,7 +108,7 @@ export interface TrackingStatus {
 }
 
 // For device/emulator testing, use your computer's IP address
-const API_BASE_URL = 'http://192.168.1.7:5000'; // Updated to match your local IP
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000'; // Updated to use environment variable
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;

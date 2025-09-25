@@ -132,7 +132,7 @@ const useDeviceStatus = (materialId: string) => {
     isConnectingRef.current = true;
     
     try {
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${encodeURIComponent(deviceIdRef.current)}&materialId=${encodeURIComponent(currentMaterialId)}`;

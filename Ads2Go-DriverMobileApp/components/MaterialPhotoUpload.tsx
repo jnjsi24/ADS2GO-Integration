@@ -136,7 +136,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
         } as any);
       });
 
-      const response = await fetch('http://localhost:5000/material-photos/upload', {
+      const response = await fetch((process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000') + '/material-photos/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
