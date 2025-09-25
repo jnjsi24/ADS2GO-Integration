@@ -53,6 +53,7 @@ const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
 const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
@@ -275,6 +276,7 @@ async function startServer() {
     
     // Start the device status monitoring job
     startDeviceStatusJob();
+    startPaymentDeadlineJob();
   });
   
   // Handle server shutdown gracefully

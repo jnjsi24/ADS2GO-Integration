@@ -153,6 +153,10 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
         return <Users className="w-5 h-5 text-green-500" />;
       case 'NEW_DRIVER_APPLICATION':
         return <Users className="w-5 h-5 text-purple-500" />;
+      case 'PAYMENT_SUCCESS':
+        return <DollarSign className="w-5 h-5 text-green-600" />;
+      case 'PAYMENT_FAILURE':
+        return <DollarSign className="w-5 h-5 text-red-600" />;
       case 'PAYMENT_ISSUE':
         return <DollarSign className="w-5 h-5 text-red-500" />;
       case 'SYSTEM_ALERT':

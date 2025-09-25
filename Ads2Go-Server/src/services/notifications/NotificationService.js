@@ -90,6 +90,14 @@ class NotificationService {
     return await AdminNotificationService.sendNewUserRegistrationNotification(userId);
   }
 
+  static async sendPaymentSuccessNotification(paymentId) {
+    return await AdminNotificationService.sendPaymentSuccessNotification(paymentId);
+  }
+
+  static async sendPaymentFailureNotification(adId) {
+    return await AdminNotificationService.sendPaymentFailureNotification(adId);
+  }
+
   static async sendPaymentIssueNotification(issue, details) {
     return await AdminNotificationService.sendPaymentIssueNotification(issue, details);
   }
