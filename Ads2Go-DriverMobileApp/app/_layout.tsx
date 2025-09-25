@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NotificationService from '../services/notificationService';
 import 'react-native-reanimated';
 
 function RootLayoutNav() {
@@ -25,6 +26,36 @@ function RootLayoutNav() {
 
     checkAuth();
   }, []);
+
+  // Initialize notifications when user is authenticated
+  useEffect(() => {
+    if (state.token) {
+      const initializeNotifications = async () => {
+        try {
+          const notificationService = NotificationService.getInstance();
+          
+          // Register for push notifications
+          await notificationService.registerForPushNotifications();
+          
+          // Set up notification listeners
+          const cleanup = notificationService.setupNotificationListeners();
+          
+          // Return cleanup function
+          return cleanup;
+        } catch (error) {
+          console.error('❌ Error initializing notifications:', error);
+        }
+      };
+
+      const cleanupPromise = initializeNotifications();
+      
+      return () => {
+        cleanupPromise.then(cleanup => {
+          if (cleanup) cleanup();
+        });
+      };
+    }
+  }, [state.token]);
 
   return (
     <ThemeProvider value={DefaultTheme}>

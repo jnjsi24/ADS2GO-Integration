@@ -114,6 +114,9 @@ const DriverSchema = new mongoose.Schema(
     lastLogin: Date,
 
     tokenVersion: { type: Number, default: 0 },
+    
+    // Push notification token for mobile app
+    pushToken: { type: String, default: null },
 
     // Material-related fields - updated enum values to match GraphQL schema
     installedMaterialType: { 

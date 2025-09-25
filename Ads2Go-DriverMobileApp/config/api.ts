@@ -6,10 +6,10 @@ console.log('🔍 EXPO_PUBLIC_API_URL:', EXPO_PUBLIC_API_URL);
 
 const API_CONFIG = {
   // Use environment variable like AndroidPlayerExpo, fallback to Mac IP
-  API_URL: `${EXPO_PUBLIC_API_URL || 'http://192.168.100.121:5000'}/graphql`,
+  API_URL: `${EXPO_PUBLIC_API_URL || 'http://192.168.1.59:5000'}/graphql`,
   
   // Base URL for REST API calls (without /graphql)
-  BASE_URL: EXPO_PUBLIC_API_URL || 'http://192.168.100.121:5000',
+  BASE_URL: EXPO_PUBLIC_API_URL || 'http://192.168.1.59:5000',
 
   // For iOS simulator or Android emulator on the same machine
   // API_URL: "http://localhost:5000/graphql",
