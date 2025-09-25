@@ -38,7 +38,7 @@ import ManageRiders from './pages/ADMIN/ManageRiders';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
-import ManageAds from 'pages/ADMIN/ManageAds';
+import ManageAds from './pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
 
 // Super Admin pages
@@ -47,14 +47,10 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
-import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
+import SadminAdmin from './pages/SUPERADMIN/SadminAdmin';
 import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
 
-// Initialize Firebase when the app starts
-console.log('🚀 Initializing Firebase...');
-import('./firebase/init')
-  .then(() => console.log('🔥 Firebase initialization complete'))
-  .catch((error) => console.error('❌ Firebase initialization failed:', error));
+// Firebase initialization will be handled in useEffect
 
 // Separate components for admin and user routes to avoid conditional hooks
 const AdminAppContent: React.FC = () => {
@@ -365,6 +361,14 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Initialize Firebase when the app starts
+  useEffect(() => {
+    console.log('🚀 Initializing Firebase...');
+    import('./firebase/init')
+      .then(() => console.log('🔥 Firebase initialization complete'))
+      .catch((error) => console.error('❌ Firebase initialization failed:', error));
+  }, []);
   
   // Check if we're on admin-related routes
   const isAdminRoute = location.pathname.startsWith('/admin') || 

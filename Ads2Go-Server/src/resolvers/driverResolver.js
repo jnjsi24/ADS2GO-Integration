@@ -653,6 +653,16 @@ createDriver: async (_, { input }) => {
 
     console.log(`Driver ${driver.driverId} approved and material assigned.`);
 
+    // Send driver approval notification
+    try {
+      const NotificationService = require('../services/notifications/NotificationService');
+      await NotificationService.sendDriverStatusChangeNotification(driver._id, 'APPROVED');
+      console.log('✅ Driver approval notification sent successfully');
+    } catch (notificationError) {
+      console.error('❌ Error sending driver approval notification:', notificationError);
+      // Don't fail the approval if notification fails
+    }
+
     return { 
       success: true, 
       message: 'Driver approved and material assigned successfully',
@@ -701,6 +711,16 @@ createDriver: async (_, { input }) => {
 
         console.log(`Driver ${driver.driverId} rejected. Reason: ${reason}`);
 
+        // Send driver rejection notification
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendDriverStatusChangeNotification(driver._id, 'REJECTED', reason);
+          console.log('✅ Driver rejection notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending driver rejection notification:', notificationError);
+          // Don't fail the rejection if notification fails
+        }
+
         return {
           success: true,
           message: 'Driver rejected successfully',
@@ -728,8 +748,27 @@ createDriver: async (_, { input }) => {
           };
         }
 
+        // Track status changes for notifications
+        const oldStatus = driver.accountStatus;
+        const oldReviewStatus = driver.reviewStatus;
+
         Object.assign(driver, input);
         await driver.save();
+
+        // Send notification if status changed
+        if ((input.accountStatus && input.accountStatus !== oldStatus) || 
+            (input.reviewStatus && input.reviewStatus !== oldReviewStatus)) {
+          try {
+            const NotificationService = require('../services/notifications/NotificationService');
+            const newStatus = input.accountStatus || driver.accountStatus;
+            const reason = input.rejectedReason || driver.rejectedReason;
+            await NotificationService.sendDriverStatusChangeNotification(driver._id, newStatus, reason);
+            console.log('✅ Driver status change notification sent successfully');
+          } catch (notificationError) {
+            console.error('❌ Error sending driver status change notification:', notificationError);
+            // Don't fail the update if notification fails
+          }
+        }
 
         return { 
           success: true, 
