@@ -183,7 +183,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = (props) => {
   // Check if we're on admin routes to determine which protected route to use
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
-                      location.pathname === '/admin-login';
+                      location.pathname === '/admin-login' ||
+                      location.pathname === '/superadmin-login';
   
   if (isAdminRoute) {
     return <AdminProtectedRoute {...props} />;

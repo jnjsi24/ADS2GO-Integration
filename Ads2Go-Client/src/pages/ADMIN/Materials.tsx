@@ -35,6 +35,15 @@ interface DriverWithVehicleType extends Driver {
   preferredMaterialType?: ('POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER')[];
 }
 
+interface InspectionPhoto {
+  url: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  description?: string;
+  month: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
 interface Material {
   id: string;
   materialId: string;
@@ -49,6 +58,12 @@ interface Material {
   dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Material condition and inspection fields
+  materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
+  inspectionPhotos?: InspectionPhoto[];
+  photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
+  lastInspectionDate?: string;
+  nextInspectionDue?: string;
 }
 
 interface CreateMaterialInput {

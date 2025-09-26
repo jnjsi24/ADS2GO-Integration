@@ -3,6 +3,9 @@ const User = require('../models/User');
 const Ad = require('../models/Ad');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
+const Admin = require('../models/Admin');
+const AdsPlan = require('../models/AdsPlan');
+const Payment = require('../models/Payment');
 const { checkAuth } = require('../middleware/auth');
 const NotificationService = require('../services/notifications/NotificationService');
 
@@ -156,6 +159,7 @@ const notificationResolvers = {
           newUsersToday,
           totalDrivers,
           newDriversToday,
+          pendingDrivers,
           userNotifications
         ] = await Promise.all([
           Ad.countDocuments(),
@@ -173,6 +177,7 @@ const notificationResolvers = {
               $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
             } 
           }),
+          Driver.countDocuments({ accountStatus: 'PENDING', reviewStatus: 'PENDING' }),
           UserNotifications.findOne({ userId: user.id })
         ]);
 
@@ -192,6 +197,7 @@ const notificationResolvers = {
           newUsersToday,
           totalDrivers,
           newDriversToday,
+          pendingDrivers,
           totalRevenue,
           revenueToday,
           unreadNotifications,
@@ -204,6 +210,221 @@ const notificationResolvers = {
       } catch (error) {
         console.error('Error fetching admin dashboard stats:', error);
         throw new Error('Failed to fetch admin dashboard stats');
+      }
+    },
+
+    getSuperAdminNotifications: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        console.log('🔔 Backend: Fetching super admin notifications for user:', user.id);
+        
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        
+        if (!userNotifications) {
+          console.log('🔔 Backend: No notifications found for super admin');
+          return {
+            notifications: [],
+            unreadCount: 0
+          };
+        }
+        
+        // Return notifications array sorted by creation date (newest first)
+        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        console.log('🔔 Backend: Found super admin notifications:', notifications.length);
+        return {
+          notifications,
+          unreadCount: userNotifications.unreadCount
+        };
+      } catch (error) {
+        console.error('Error fetching super admin notifications:', error);
+        throw new Error('Failed to fetch super admin notifications');
+      }
+    },
+
+    getSuperAdminDashboardStats: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        console.log('🔔 Backend: Fetching super admin dashboard stats');
+        
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const [
+          totalUsers,
+          totalAdmins,
+          totalDrivers,
+          totalAds,
+          totalPlans,
+          userNotifications
+        ] = await Promise.all([
+          User.countDocuments(),
+          Admin.countDocuments(),
+          Driver.countDocuments(),
+          Ad.countDocuments(),
+          AdsPlan.countDocuments(),
+          UserNotifications.findOne({ userId: user.id })
+        ]);
+
+        const unreadNotifications = userNotifications ? userNotifications.unreadCount : 0;
+        const highPriorityNotifications = userNotifications ? 
+          userNotifications.notifications.filter(n => n.priority === 'HIGH' && !n.read).length : 0;
+
+        // Calculate revenue from payments
+        const revenueData = await Payment.aggregate([
+          { $match: { paymentStatus: 'PAID' } },
+          { $group: { _id: null, totalRevenue: { $sum: '$amount' } } }
+        ]);
+        const totalRevenue = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
+
+        // Get plan usage stats
+        const planUsageStats = await AdsPlan.aggregate([
+          {
+            $lookup: {
+              from: 'ads',
+              localField: '_id',
+              foreignField: 'planId',
+              as: 'ads'
+            }
+          },
+          {
+            $lookup: {
+              from: 'payments',
+              localField: '_id',
+              foreignField: 'planID',
+              as: 'payments'
+            }
+          },
+          {
+            $project: {
+              planId: '$_id',
+              planName: '$name',
+              userCount: { $size: { $setUnion: '$ads.userId' } },
+              activeAdsCount: { $size: { $filter: { input: '$ads', cond: { $eq: ['$$this.status', 'APPROVED'] } } } },
+              totalRevenue: { $sum: { $filter: { input: '$payments', cond: { $eq: ['$$this.paymentStatus', 'PAID'] } } } }
+            }
+          }
+        ]);
+
+        const stats = {
+          totalUsers,
+          totalAdmins,
+          totalDrivers,
+          totalAds,
+          totalPlans,
+          totalRevenue,
+          unreadNotifications,
+          highPriorityNotifications,
+          planUsageStats
+        };
+
+        console.log('🔔 Backend: Super admin dashboard stats:', stats);
+        return stats;
+      } catch (error) {
+        console.error('Error fetching super admin dashboard stats:', error);
+        throw new Error('Failed to fetch super admin dashboard stats');
+      }
+    },
+
+    getUserCountsByPlan: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        console.log('🔔 Backend: Fetching user counts by plan');
+        
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const planCounts = await AdsPlan.aggregate([
+          {
+            $lookup: {
+              from: 'ads',
+              localField: '_id',
+              foreignField: 'planId',
+              as: 'ads'
+            }
+          },
+          {
+            $lookup: {
+              from: 'payments',
+              localField: '_id',
+              foreignField: 'planID',
+              as: 'payments'
+            }
+          },
+          {
+            $project: {
+              planId: '$_id',
+              planName: '$name',
+              planDescription: '$description',
+              userCount: { $size: { $setUnion: '$ads.userId' } },
+              activeAdsCount: { $size: { $filter: { input: '$ads', cond: { $eq: ['$$this.status', 'APPROVED'] } } } },
+              totalRevenue: { $sum: { $filter: { input: '$payments', cond: { $eq: ['$$this.paymentStatus', 'PAID'] } } } },
+              planDetails: {
+                materialType: '$materialType',
+                vehicleType: '$vehicleType',
+                numberOfDevices: '$numberOfDevices',
+                durationDays: '$durationDays',
+                totalPrice: '$totalPrice'
+              }
+            }
+          }
+        ]);
+
+        console.log('🔔 Backend: User counts by plan:', planCounts);
+        return planCounts;
+      } catch (error) {
+        console.error('Error fetching user counts by plan:', error);
+        throw new Error('Failed to fetch user counts by plan');
+      }
+    },
+
+    getDriverNotifications: async (_, { driverId }, { user }) => {
+      try {
+        console.log('🔔 Fetching notifications for driver:', driverId);
+        
+        // Find driver by driverId
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          throw new Error('Driver not found');
+        }
+        
+        // Get notifications for this driver
+        const userNotifications = await UserNotifications.findOne({ 
+          userId: driver._id,
+          userRole: 'DRIVER'
+        });
+        
+        if (!userNotifications) {
+          console.log('🔔 No notifications found for driver');
+          return {
+            notifications: [],
+            unreadCount: 0
+          };
+        }
+        
+        // Return notifications array sorted by creation date (newest first)
+        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        console.log('🔔 Found notifications for driver:', notifications.length);
+        return {
+          notifications,
+          unreadCount: userNotifications.unreadCount || 0
+        };
+      } catch (error) {
+        console.error('Error fetching driver notifications:', error);
+        throw new Error('Failed to fetch driver notifications');
       }
     }
   },
@@ -511,6 +732,104 @@ const notificationResolvers = {
       } catch (error) {
         console.error('Error deleting notifications by category:', error);
         throw new Error(`Failed to delete notifications by category: ${error.message}`);
+      }
+    },
+
+    markSuperAdminNotificationRead: async (_, { notificationId }, { user }) => {
+      checkAuth(user);
+      
+      try {
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        
+        if (!userNotifications) {
+          return {
+            success: false,
+            message: 'User notifications not found'
+          };
+        }
+        
+        // Find the notification index
+        const notificationIndex = userNotifications.notifications.findIndex(n => n._id.toString() === notificationId);
+        
+        if (notificationIndex === -1) {
+          return {
+            success: false,
+            message: 'Notification not found'
+          };
+        }
+        
+        const notification = userNotifications.notifications[notificationIndex];
+        
+        // Mark notification as read
+        if (!notification.read) {
+          notification.read = true;
+          notification.readAt = new Date();
+          userNotifications.unreadCount = Math.max(0, userNotifications.unreadCount - 1);
+        }
+        
+        await userNotifications.save();
+        
+        return {
+          success: true,
+          message: 'Notification marked as read'
+        };
+      } catch (error) {
+        console.error('Error marking super admin notification as read:', error);
+        return {
+          success: false,
+          message: 'Failed to mark notification as read'
+        };
+      }
+    },
+
+    markAllSuperAdminNotificationsRead: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        // Check if user is super admin
+        if (user.role !== 'SUPERADMIN') {
+          throw new Error('Unauthorized: Super admin access required');
+        }
+
+        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        
+        if (!userNotifications) {
+          return {
+            success: true,
+            message: 'No notifications to mark as read'
+          };
+        }
+        
+        // Mark all notifications as read
+        let markedCount = 0;
+        userNotifications.notifications.forEach(notification => {
+          if (!notification.read) {
+            notification.read = true;
+            notification.readAt = new Date();
+            markedCount++;
+          }
+        });
+        
+        // Reset unread count
+        userNotifications.unreadCount = 0;
+        
+        await userNotifications.save();
+        
+        return {
+          success: true,
+          message: `All ${markedCount} notifications marked as read`
+        };
+      } catch (error) {
+        console.error('Error marking all super admin notifications as read:', error);
+        return {
+          success: false,
+          message: 'Failed to mark all notifications as read'
+        };
       }
     }
   },

@@ -57,6 +57,7 @@ const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
 const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
@@ -66,6 +67,7 @@ const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
+const newsletterRoutes = require('./routes/newsletter');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -106,6 +108,13 @@ const server = new ApolloServer({
     faqTypeDefs,
   ]),
   resolvers: mergeResolvers([
+    {
+      JSON: {
+        serialize: (value) => value,
+        parseValue: (value) => value,
+        parseLiteral: (ast) => ast.value,
+      },
+    },
     userResolvers,
     adminResolvers,
     superAdminResolvers,
@@ -201,6 +210,7 @@ async function startServer() {
   app.use('/ads', adsRoutes);
   app.use('/material-photos', materialPhotoUploadRoutes);
   app.use('/analytics', analyticsRoutes);
+  app.use('/api/newsletter', newsletterRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -283,6 +293,7 @@ async function startServer() {
     
     // Start the device status monitoring job
     startDeviceStatusJob();
+    startPaymentDeadlineJob();
   });
   
   // Handle server shutdown gracefully

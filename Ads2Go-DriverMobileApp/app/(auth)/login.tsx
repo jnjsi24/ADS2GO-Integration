@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  BackHandler,
 } from "react-native";
 import { useRouter, useLocalSearchParams, type Router } from "expo-router";
 import { useAuth } from '../../contexts/AuthContext';
@@ -66,6 +67,7 @@ type LoginFormState = {
   loading: boolean;
   rememberMe: boolean;
   successMessage: string | null;
+  errorMessage: string | null;
 };
 
 export default function Login() {
@@ -80,6 +82,7 @@ export default function Login() {
     loading: false,
     rememberMe: false,
     successMessage: null,
+    errorMessage: null,
   });
   
   // Handle success messages from navigation
@@ -104,6 +107,18 @@ export default function Login() {
       return () => clearTimeout(timer);
     }
   }, [params?.message]);
+
+  // Handle back button to prevent going back to authenticated screens
+  useEffect(() => {
+    const backAction = () => {
+      // Prevent going back from login screen
+      return true; // Return true to prevent default back behavior
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
+  }, []);
 
   const handleLogin = async () => {
     try {
@@ -168,13 +183,11 @@ export default function Login() {
           }
         }
 
-        // Check if the account needs verification
-        const needsVerification = 
-          loginResponse.loginDriver.driver?.accountStatus?.toLowerCase() === "pending" ||
-          !loginResponse.loginDriver.driver?.isEmailVerified;
+        // Check if the account needs email verification (but not pending status)
+        const needsEmailVerification = !loginResponse.loginDriver.driver?.isEmailVerified;
 
-        if (needsVerification && loginResponse.loginDriver.driver) {
-          // Navigate to verification screen if needed
+        if (needsEmailVerification && loginResponse.loginDriver.driver) {
+          // Navigate to verification screen if email needs verification
           const navParams = {
             email: loginResponse.loginDriver.driver.email || "",
             driverId: loginResponse.loginDriver.driver.driverId || 
@@ -197,14 +210,14 @@ export default function Login() {
         setFormState(prev => ({
           ...prev,
           loading: false,
-          successMessage: response.loginDriver?.message || "Login failed. Please try again."
+          errorMessage: loginResponse.loginDriver?.message || "Login failed. Please try again."
         }));
         
         // Clear the error message after 5 seconds
         setTimeout(() => {
           setFormState(prev => ({
             ...prev,
-            successMessage: null
+            errorMessage: null
           }));
         }, 5000);
       }
@@ -243,6 +256,12 @@ export default function Login() {
       {formState.successMessage && (
         <View style={styles.successContainer}>
           <Text style={styles.successText}>{formState.successMessage}</Text>
+        </View>
+      )}
+
+      {formState.errorMessage && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{formState.errorMessage}</Text>
         </View>
       )}
 
@@ -356,6 +375,18 @@ const styles = StyleSheet.create({
   },
   successText: {
     color: '#2e7d32',
+    fontSize: 14,
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  errorText: {
+    color: '#c62828',
     fontSize: 14,
   },
   subtitle: {

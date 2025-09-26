@@ -13,7 +13,10 @@ import {
   PlayCircle,
   BarChart3,
   ChevronDown,
-  Check
+  Check,
+  CheckCircle,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -29,14 +32,13 @@ import {
 } from '../../graphql/admin/ads';
 import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
-import AnalyticsTab from './tabs/dashboard/AnalyticsTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
   
   // Tab management
-  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics' | 'availability'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'availability'>('ads');
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,6 +55,34 @@ const ManageAds: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
   const [showRejectionNotification, setShowRejectionNotification] = useState(true);
+
+  // Loading states for approve/reject buttons
+  const [processingAds, setProcessingAds] = useState<Set<string>>(new Set());
+
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+    
+    // Auto remove toast after duration (default 5 seconds)
+    setTimeout(() => {
+      removeToast(id);
+    }, toast.duration || 5000);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
@@ -100,7 +130,12 @@ const ManageAds: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error updating ad:', error);
-      alert(`Error updating ad: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: `Error updating ad: ${error.message}`,
+        duration: 6000
+      });
     }
   });
 
@@ -110,7 +145,12 @@ const ManageAds: React.FC = () => {
     },
     onError: (error) => {
       console.error('Error deleting ad:', error);
-      alert(`Error deleting ad: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Deletion Failed',
+        message: `Error deleting ad: ${error.message}`,
+        duration: 6000
+      });
     }
   });
 
@@ -162,6 +202,14 @@ const ManageAds: React.FC = () => {
 
   // Actions
   const handleApprove = async (adId: string) => {
+    // Prevent multiple clicks
+    if (processingAds.has(adId)) {
+      return;
+    }
+
+    // Add to processing set
+    setProcessingAds(prev => new Set(prev).add(adId));
+
     try {
       await updateAd({
         variables: {
@@ -171,9 +219,27 @@ const ManageAds: React.FC = () => {
           }
         }
       });
-      alert(`Ad ${adId} approved successfully!`);
+      addToast({
+        type: 'success',
+        title: 'Ad Approved',
+        message: `Ad ${adId} approved successfully!`,
+        duration: 4000
+      });
     } catch (error) {
       console.error('Error approving ad:', error);
+      addToast({
+        type: 'error',
+        title: 'Approval Failed',
+        message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 6000
+      });
+    } finally {
+      // Remove from processing set
+      setProcessingAds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(adId);
+        return newSet;
+      });
     }
   };
 
@@ -184,9 +250,22 @@ const ManageAds: React.FC = () => {
 
   const submitReject = async () => {
     if (!adToReject || !rejectReason.trim()) {
-      alert('Please provide a reason for rejection');
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for rejection',
+        duration: 4000
+      });
       return;
     }
+
+    // Prevent multiple clicks
+    if (processingAds.has(adToReject)) {
+      return;
+    }
+
+    // Add to processing set
+    setProcessingAds(prev => new Set(prev).add(adToReject));
 
     try {
       await updateAd({
@@ -198,12 +277,30 @@ const ManageAds: React.FC = () => {
           }
         }
       });
-      alert(`Ad ${adToReject} rejected successfully!`);
+      addToast({
+        type: 'success',
+        title: 'Ad Rejected',
+        message: `Ad ${adToReject} rejected successfully!`,
+        duration: 4000
+      });
       setShowRejectModal(false);
       setRejectReason('');
       setAdToReject(null);
     } catch (error) {
       console.error('Error rejecting ad:', error);
+      addToast({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: `Failed to reject ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        duration: 6000
+      });
+    } finally {
+      // Remove from processing set
+      setProcessingAds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(adToReject);
+        return newSet;
+      });
     }
   };
 
@@ -218,11 +315,22 @@ const ManageAds: React.FC = () => {
         await deleteAd({
           variables: { id: adToDelete }
         });
-        alert(`Ad ${adToDelete} deleted successfully!`);
+        addToast({
+          type: 'success',
+          title: 'Ad Deleted',
+          message: `Ad ${adToDelete} deleted successfully!`,
+          duration: 4000
+        });
         setShowDeleteModal(false);
         setAdToDelete(null);
       } catch (error) {
         console.error('Error deleting ad:', error);
+        addToast({
+          type: 'error',
+          title: 'Deletion Failed',
+          message: `Failed to delete ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          duration: 6000
+        });
       }
     }
   };
@@ -248,8 +356,7 @@ const ManageAds: React.FC = () => {
     { id: 'ads', label: 'All Ads', icon: Monitor },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'deployment', label: 'Deployment', icon: PlayCircle },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'availability', label: 'Plan Availability', icon: CalendarRange }
+    { id: 'availability', label: 'Material Slot Checker', icon: CalendarRange }
   ];
 
   // Filter functions
@@ -297,6 +404,50 @@ const ManageAds: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+      {/* Toast Notifications */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, scale: 0.3 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
+              className={`max-w-md w-full mx-4 bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden ${
+                toast.type === 'success' ? 'border-l-4 border-green-400' :
+                toast.type === 'error' ? 'border-l-4 border-red-400' :
+                toast.type === 'warning' ? 'border-l-4 border-yellow-400' :
+                'border-l-4 border-blue-400'
+              }`}
+            >
+              <div className="p-6">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {toast.type === 'success' && <CheckCircle className="h-8 w-8 text-green-400" />}
+                    {toast.type === 'error' && <XCircle className="h-8 w-8 text-red-400" />}
+                    {toast.type === 'warning' && <AlertCircle className="h-8 w-8 text-yellow-400" />}
+                    {toast.type === 'info' && <AlertCircle className="h-8 w-8 text-blue-400" />}
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <p className="text-lg font-medium text-gray-900">{toast.title}</p>
+                    <p className="mt-1 text-sm text-gray-500">{toast.message}</p>
+                  </div>
+                  <div className="ml-4 flex-shrink-0">
+                    <button
+                      className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      onClick={() => removeToast(toast.id)}
+                    >
+                      <span className="sr-only">Close</span>
+                      <X className="h-6 w-6" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>
@@ -473,23 +624,41 @@ const ManageAds: React.FC = () => {
                         {ad.status === 'PENDING' && (
                           <>
                             <button
-                              className="group flex items-center bg-green-200 hover:bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
+                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                                processingAds.has(ad.id) 
+                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                  : 'bg-green-200 hover:bg-green-200 text-green-700'
+                              }`}
                               onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                              title="Approve"
+                              disabled={processingAds.has(ad.id)}
+                              title={processingAds.has(ad.id) ? "Processing..." : "Approve"}
                             >
-                              <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              {processingAds.has(ad.id) ? (
+                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                              ) : (
+                                <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              )}
                               <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                                Approve
+                                {processingAds.has(ad.id) ? 'Processing...' : 'Approve'}
                               </span>
                             </button>
                             <button
-                              className="group flex items-center bg-red-200 hover:bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
+                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
+                                processingAds.has(ad.id) 
+                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                  : 'bg-red-200 hover:bg-red-200 text-red-700'
+                              }`}
                               onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                              title="Reject"
+                              disabled={processingAds.has(ad.id)}
+                              title={processingAds.has(ad.id) ? "Processing..." : "Reject"}
                             >
-                              <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              {processingAds.has(ad.id) ? (
+                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                              ) : (
+                                <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              )}
                               <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
-                                Reject
+                                {processingAds.has(ad.id) ? 'Processing...' : 'Reject'}
                               </span>
                             </button>
                           </>
@@ -528,8 +697,6 @@ const ManageAds: React.FC = () => {
             onStatusChange={setDeploymentStatusFilter}
           />
         )}
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && <AnalyticsTab />}
 
         {/* Plan Availability Tab */}
         {activeTab === 'availability' && <PlanAvailabilityTab />}
@@ -726,10 +893,17 @@ const ManageAds: React.FC = () => {
               </button>
               <button
                 onClick={submitReject}
-                disabled={!rejectReason.trim()}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                disabled={!rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)}
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  !rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
               >
-                Reject Advertisement
+                {adToReject && processingAds.has(adToReject) && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {adToReject && processingAds.has(adToReject) ? 'Processing...' : 'Reject Advertisement'}
               </button>
             </div>
           </div>

@@ -7,22 +7,6 @@ import API_CONFIG from '../../config/api';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-interface SpeedViolation {
-  type: 'SPEED_VIOLATION';
-  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
-  penalty: number;
-  currentSpeed: number;
-  speedLimit: number;
-  speedOverLimit: number;
-  timestamp: string;
-  location: {
-    lat: number;
-    lng: number;
-    accuracy: number;
-  };
-  isResolved: boolean;
-  resolvedAt?: string;
-}
 
 interface DriverAnalytics {
   driverId: string;
@@ -36,32 +20,16 @@ interface DriverAnalytics {
   hoursRemaining: number;
   averageSpeed: number;
   maxSpeed: number;
-  speedViolations: number;
-  safetyScore: number;
-  complianceRate: number;
+  qrImpressions: number;
   totalRoutes: number;
   isOnline: boolean;
-  violations: SpeedViolation[];
-  violationStats: {
-    total: number;
-    today: number;
-    byLevel: {
-      low: number;
-      medium: number;
-      high: number;
-      extreme: number;
-    };
-    averageSpeedOverLimit: number;
-  };
   dailyPerformance: Array<{
     date: string;
     totalDistance: number;
     totalHours: number;
     averageSpeed: number;
     maxSpeed: number;
-    speedViolations: number;
-    complianceScore: number;
-    safetyScore: number;
+    qrImpressions: number;
   }>;
   monthlyTrends: Array<{
     month: string;
@@ -77,7 +45,7 @@ const Dashboard: React.FC = () => {
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'monthly'>('daily');
-  const [selectedMetric, setSelectedMetric] = useState<'distance' | 'hours' | 'speed' | 'compliance'>('distance');
+  const [selectedMetric, setSelectedMetric] = useState<'distance' | 'hours' | 'speed' | 'qrImpressions'>('distance');
 
 
   useEffect(() => {
@@ -170,27 +138,6 @@ const Dashboard: React.FC = () => {
       if (screenTrackingData.success) {
         const data = screenTrackingData.data;
         
-        // Calculate violation statistics
-        const violations = data.violations || [];
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        const todayViolations = violations.filter((v: any) => new Date(v.timestamp) >= today);
-        
-        const violationStats = {
-          total: violations.length,
-          today: todayViolations.length,
-          byLevel: {
-            low: violations.filter((v: any) => v.level === 'LOW').length,
-            medium: violations.filter((v: any) => v.level === 'MEDIUM').length,
-            high: violations.filter((v: any) => v.level === 'HIGH').length,
-            extreme: violations.filter((v: any) => v.level === 'EXTREME').length
-          },
-          averageSpeedOverLimit: violations.length > 0 
-            ? violations.reduce((sum: number, v: any) => sum + v.speedOverLimit, 0) / violations.length 
-            : 0
-        };
-
         // Helper function to sanitize numeric values
         const sanitizeNumeric = (value: any, defaultValue: number = 0): number => {
           if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
@@ -212,23 +159,16 @@ const Dashboard: React.FC = () => {
           hoursRemaining: sanitizeNumeric(data.hoursRemaining, 0),
           averageSpeed: sanitizeNumeric(data.averageSpeed, 0),
           maxSpeed: sanitizeNumeric(data.maxSpeed, 0),
-          speedViolations: sanitizeNumeric(violationStats.total, 0),
-          safetyScore: sanitizeNumeric(data.safetyScore, 0),
-          // Calculate real-time compliance rate to match admin client (currentHours / 8 * 100)
-          complianceRate: data.currentHours ? Math.min(100, (data.currentHours / 8) * 100) : 0,
+          qrImpressions: sanitizeNumeric(data.qrImpressions || data.totalQrScans || 0, 0),
           totalRoutes: 1, // Single route for current session
           isOnline: Boolean(data.isOnline),
-          violations: violations || [],
-          violationStats: violationStats,
           dailyPerformance: (data.dailyPerformance || []).map((day: any) => ({
             date: day.date || new Date().toISOString(),
             totalDistance: sanitizeNumeric(day.totalDistance, 0),
             totalHours: sanitizeNumeric(day.totalHours, 0),
             averageSpeed: sanitizeNumeric(day.averageSpeed, 0),
             maxSpeed: sanitizeNumeric(day.maxSpeed, 0),
-            speedViolations: sanitizeNumeric(day.speedViolations, 0),
-            complianceScore: sanitizeNumeric(day.complianceScore, 0),
-            safetyScore: sanitizeNumeric(day.safetyScore, 0)
+            qrImpressions: sanitizeNumeric(day.qrImpressions || day.totalQrScans || 0, 0)
           })),
           monthlyTrends: [] // Will be populated if needed
         };
@@ -288,7 +228,7 @@ const Dashboard: React.FC = () => {
               case 'distance': value = d.totalDistance; break;
               case 'hours': value = d.totalHours; break;
               case 'speed': value = d.averageSpeed; break;
-              case 'compliance': value = d.complianceScore; break;
+              case 'qrImpressions': value = d.qrImpressions; break;
               default: value = d.totalDistance; break;
             }
             return sanitizeChartValue(value);
@@ -327,7 +267,7 @@ const Dashboard: React.FC = () => {
               case 'distance': value = m.distance; break;
               case 'hours': value = m.hours; break;
               case 'speed': value = m.compliance; break; // Using compliance as proxy for speed in monthly
-              case 'compliance': value = m.compliance; break;
+              case 'qrImpressions': value = 0; break; // QR impressions not available in monthly trends yet
               default: value = m.distance; break;
             }
             return sanitizeChartValue(value);
@@ -344,32 +284,11 @@ const Dashboard: React.FC = () => {
       case 'distance': return 'Distance (km)';
       case 'hours': return 'Hours';
       case 'speed': return 'Speed (km/h)';
-      case 'compliance': return 'Compliance (%)';
+      case 'qrImpressions': return 'QR Impressions';
       default: return 'Distance (km)';
     }
   };
 
-  const getSafetyColor = (score: number) => {
-    if (score >= 90) return '#22c55e'; // Green
-    if (score >= 70) return '#eab308'; // Yellow
-    return '#ef4444'; // Red
-  };
-
-  const getComplianceColor = (rate: number) => {
-    if (rate >= 90) return '#22c55e'; // Green
-    if (rate >= 70) return '#eab308'; // Yellow
-    return '#ef4444'; // Red
-  };
-
-  const getViolationColor = (level: string) => {
-    switch (level) {
-      case 'LOW': return '#22c55e'; // Green
-      case 'MEDIUM': return '#f59e0b'; // Orange
-      case 'HIGH': return '#ef4444'; // Red
-      case 'EXTREME': return '#dc2626'; // Dark Red
-      default: return '#6b7280'; // Gray
-    }
-  };
 
   if (loading) {
     return (
@@ -476,82 +395,16 @@ const Dashboard: React.FC = () => {
           <Text style={styles.metricValue}>{analytics.hoursRemaining.toFixed(1)}h</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Safety Score</Text>
-          <Text style={[styles.metricValue, { color: getSafetyColor(analytics.safetyScore) }]}>
-            {analytics.safetyScore}/100
-          </Text>
+          <Text style={styles.metricLabel}>QR Impressions</Text>
+          <Text style={styles.metricValue}>{analytics.qrImpressions}</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Compliance</Text>
-          <Text style={[styles.metricValue, { color: getComplianceColor(analytics.complianceRate) }]}>
-            {analytics.complianceRate.toFixed(1)}%
-          </Text>
+          <Text style={styles.metricLabel}>Km Distance</Text>
+          <Text style={styles.metricValue}>{analytics.totalDistance.toFixed(1)} km</Text>
         </View>
       </View>
 
-      {/* Violations Section */}
-      <View style={styles.violationsSection}>
-        <Text style={styles.sectionTitle}>Speed Violations</Text>
-        <View style={styles.violationsGrid}>
-          <View style={styles.violationCard}>
-            <Ionicons name="warning-outline" size={20} color="#ef4444" />
-            <Text style={styles.violationLabel}>Total</Text>
-            <Text style={styles.violationValue}>{analytics.violationStats.total}</Text>
-          </View>
-          <View style={styles.violationCard}>
-            <Ionicons name="today-outline" size={20} color="#f59e0b" />
-            <Text style={styles.violationLabel}>Today</Text>
-            <Text style={styles.violationValue}>{analytics.violationStats.today}</Text>
-          </View>
-          <View style={styles.violationCard}>
-            <Ionicons name="speedometer-outline" size={20} color="#8b5cf6" />
-            <Text style={styles.violationLabel}>Avg Over</Text>
-            <Text style={styles.violationValue}>{analytics.violationStats.averageSpeedOverLimit.toFixed(1)} km/h</Text>
-          </View>
-        </View>
-        
-        {/* Violation Levels */}
-        <View style={styles.violationLevels}>
-          <View style={styles.violationLevel}>
-            <View style={[styles.levelDot, { backgroundColor: '#22c55e' }]} />
-            <Text style={styles.levelText}>Low: {analytics.violationStats.byLevel.low}</Text>
-          </View>
-          <View style={styles.violationLevel}>
-            <View style={[styles.levelDot, { backgroundColor: '#f59e0b' }]} />
-            <Text style={styles.levelText}>Medium: {analytics.violationStats.byLevel.medium}</Text>
-          </View>
-          <View style={styles.violationLevel}>
-            <View style={[styles.levelDot, { backgroundColor: '#ef4444' }]} />
-            <Text style={styles.levelText}>High: {analytics.violationStats.byLevel.high}</Text>
-          </View>
-          <View style={styles.violationLevel}>
-            <View style={[styles.levelDot, { backgroundColor: '#dc2626' }]} />
-            <Text style={styles.levelText}>Extreme: {analytics.violationStats.byLevel.extreme}</Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Recent Violations */}
-      {analytics.violations.length > 0 && (
-        <View style={styles.recentViolationsSection}>
-          <Text style={styles.sectionTitle}>Recent Violations</Text>
-          {analytics.violations.slice(0, 3).map((violation, index) => (
-            <View key={index} style={styles.violationItem}>
-              <View style={styles.violationHeader}>
-                <View style={[styles.violationBadge, { backgroundColor: getViolationColor(violation.level) }]}>
-                  <Text style={styles.violationBadgeText}>{violation.level}</Text>
-                </View>
-                <Text style={styles.violationTime}>
-                  {new Date(violation.timestamp).toLocaleTimeString()}
-                </Text>
-              </View>
-              <Text style={styles.violationDetails}>
-                {violation.currentSpeed} km/h in {violation.speedLimit} km/h zone (+{violation.speedOverLimit} km/h)
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
 
       {/* Chart Controls */}
       <View style={styles.chartControls}>
@@ -600,11 +453,11 @@ const Dashboard: React.FC = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.metricButton, selectedMetric === 'compliance' && styles.metricButtonActive]}
-            onPress={() => setSelectedMetric('compliance')}
+            style={[styles.metricButton, selectedMetric === 'qrImpressions' && styles.metricButtonActive]}
+            onPress={() => setSelectedMetric('qrImpressions')}
           >
-            <Text style={[styles.metricButtonText, selectedMetric === 'compliance' && styles.metricButtonTextActive]}>
-              Compliance
+            <Text style={[styles.metricButtonText, selectedMetric === 'qrImpressions' && styles.metricButtonTextActive]}>
+              QR Impressions
             </Text>
           </TouchableOpacity>
         </View>
@@ -642,19 +495,6 @@ const Dashboard: React.FC = () => {
         </View>
       )}
 
-      {/* Speed Violations */}
-      {analytics.speedViolations > 0 && (
-        <View style={styles.violationsCard}>
-          <View style={styles.violationsHeader}>
-            <Ionicons name="warning" size={20} color="#ef4444" />
-            <Text style={styles.violationsTitle}>Speed Violations</Text>
-          </View>
-          <Text style={styles.violationsText}>
-            You have {analytics.speedViolations} speed violation(s) this period.
-            Please drive safely and within speed limits.
-          </Text>
-        </View>
-      )}
 
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
@@ -820,113 +660,6 @@ const styles = StyleSheet.create({
     color: '#111827',
     textAlign: 'center',
   },
-  // Violations Section Styles
-  violationsSection: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  violationsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  violationCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    marginHorizontal: 4,
-  },
-  violationLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  violationValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  violationLevels: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  violationLevel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    width: '48%',
-  },
-  levelDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  levelText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  // Recent Violations Styles
-  recentViolationsSection: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  violationItem: {
-    padding: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  violationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  violationBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  violationBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#ffffff',
-  },
-  violationTime: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  violationDetails: {
-    fontSize: 14,
-    color: '#374151',
-  },
   chartControls: {
     marginHorizontal: 20,
     marginBottom: 20,
@@ -1003,30 +736,6 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 16,
-  },
-  violationsCard: {
-    margin: 20,
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#ef4444',
-  },
-  violationsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  violationsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#dc2626',
-    marginLeft: 8,
-  },
-  violationsText: {
-    fontSize: 14,
-    color: '#991b1b',
-    lineHeight: 20,
   },
   bottomSpacing: {
     height: 20,

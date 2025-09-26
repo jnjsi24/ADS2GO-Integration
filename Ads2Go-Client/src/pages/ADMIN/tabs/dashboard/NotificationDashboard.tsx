@@ -39,7 +39,7 @@ interface PendingAd {
   user: {
     firstName: string;
     lastName: string;
-  };
+  } | null;
   materialId?: string;
   planId?: string;
 }
@@ -153,6 +153,10 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
         return <Users className="w-5 h-5 text-green-500" />;
       case 'NEW_DRIVER_APPLICATION':
         return <Users className="w-5 h-5 text-purple-500" />;
+      case 'PAYMENT_SUCCESS':
+        return <DollarSign className="w-5 h-5 text-green-600" />;
+      case 'PAYMENT_FAILURE':
+        return <DollarSign className="w-5 h-5 text-red-600" />;
       case 'PAYMENT_ISSUE':
         return <DollarSign className="w-5 h-5 text-red-500" />;
       case 'SYSTEM_ALERT':
@@ -324,7 +328,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         <div>
                           <p className="font-medium text-gray-800">{ad.title}</p>
                           <p className="text-sm text-gray-600">
-                            by {ad.user.firstName} {ad.user.lastName} • {formatTimeAgo(ad.createdAt)}
+                            by {ad.user ? `${ad.user.firstName} ${ad.user.lastName}` : 'Unknown User'} • {formatTimeAgo(ad.createdAt)}
                           </p>
                         </div>
                       </div>

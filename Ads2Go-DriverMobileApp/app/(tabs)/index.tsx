@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { request, gql } from 'graphql-request';
 import API_CONFIG from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const API_URL = API_CONFIG.API_URL;
 console.log('🔍 API_URL from config:', API_URL);
@@ -113,6 +114,7 @@ interface DriverProfile {
 export default function Home() {
   const navigation = useNavigation();
   const router = useRouter();
+  const { signOut } = useAuth();
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,16 +255,9 @@ export default function Home() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            // Clear all stored data
-            await AsyncStorage.multiRemove([
-              'token',
-              'driverId',
-              'driverInfo',
-              'pendingDriver'
-            ]);
-            console.log('Logged out - cleared AsyncStorage');
-            // @ts-ignore
-            navigation.navigate('(auth)/login');
+            console.log('Logging out...');
+            // Use AuthContext signOut which properly handles navigation
+            await signOut();
           }
         }
       ]
@@ -363,6 +358,58 @@ export default function Home() {
           <Text style={styles.sectionTitle}>My Materials</Text>
           <Text style={styles.materialCount}>{materials.length} assigned</Text>
         </View>
+
+        {/* Photo Submission Notifications */}
+        {(() => {
+          const today = new Date();
+          const dayOfMonth = today.getDate();
+          const isFirstOfMonth = dayOfMonth === 1;
+          
+          const newMaterials = materials.filter(material => {
+            const mountedDate = new Date(material.mountedAt);
+            const daysSinceMounted = Math.floor((Date.now() - mountedDate.getTime()) / (1000 * 60 * 60 * 24));
+            return daysSinceMounted <= 7;
+          });
+          
+          const materialsNeedingMonthlyPhotos = materials.filter(material => {
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            const hasCurrentMonthPhoto = material.materialTracking?.monthlyPhotos?.some(photo => photo.month === currentMonth);
+            return isFirstOfMonth && !hasCurrentMonthPhoto;
+          });
+          
+          const needsPhotos = newMaterials.length > 0 || materialsNeedingMonthlyPhotos.length > 0;
+          
+          if (!needsPhotos) return null;
+          
+          return (
+            <View style={styles.photoNotification}>
+              <View style={styles.notificationHeader}>
+                <View style={styles.notificationIconContainer}>
+                  <Ionicons name="camera" size={20} color="#FF9500" />
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>!</Text>
+                  </View>
+                </View>
+                <Text style={styles.notificationTitle}>📸 Photo Submission Required</Text>
+              </View>
+              <Text style={styles.notificationText}>
+                {newMaterials.length > 0 && materialsNeedingMonthlyPhotos.length > 0
+                  ? `You have ${newMaterials.length} new material(s) and ${materialsNeedingMonthlyPhotos.length} material(s) needing monthly photos.`
+                  : newMaterials.length > 0
+                  ? `You have ${newMaterials.length} newly mounted material(s) that need photos.`
+                  : `You have ${materialsNeedingMonthlyPhotos.length} material(s) needing monthly photos.`
+                }
+              </Text>
+              <TouchableOpacity 
+                style={styles.notificationButton}
+                onPress={() => router.push('/photo-submission')}
+              >
+                <Text style={styles.notificationButtonText}>Submit Photos Now</Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {materials.length === 0 ? (
           <View style={styles.emptyState}>
@@ -465,34 +512,6 @@ export default function Home() {
         )}
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => router.push('/dashboard')}
-          >
-            <Ionicons name="analytics-outline" size={24} color="#007AFF" />
-            <Text style={styles.actionButtonText}>Analytics Dashboard</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="camera-outline" size={24} color="#007AFF" />
-            <Text style={styles.actionButtonText}>Upload Photos</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="document-outline" size={24} color="#007AFF" />
-            <Text style={styles.actionButtonText}>View Documents</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons name="settings-outline" size={24} color="#007AFF" />
-            <Text style={styles.actionButtonText}>Settings</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </ScrollView>
   );
 }
@@ -752,24 +771,63 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
   },
-  quickActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F8F9FA',
+  photoNotification: {
+    backgroundColor: '#FFF3E0',
     borderRadius: 12,
-    minWidth: 80,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9500',
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  notificationIconContainer: {
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF4444',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF9500',
+  },
+  notificationText: {
+    fontSize: 14,
+    color: '#E65100',
+    lineHeight: 20,
     marginBottom: 12,
   },
-  actionButtonText: {
-    fontSize: 12,
-    color: '#007AFF',
-    marginTop: 8,
-    textAlign: 'center',
+  notificationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  notificationButtonText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

@@ -65,6 +65,26 @@ const MaterialSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  // Material condition and inspection fields - these will be stored in materialTracking collection
+  // but we keep them here for backward compatibility and easy access
+  materialCondition: {
+    type: String,
+    enum: ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'],
+    default: 'GOOD'
+  },
+  photoComplianceStatus: {
+    type: String,
+    enum: ['COMPLIANT', 'NON_COMPLIANT', 'PENDING'],
+    default: 'PENDING'
+  },
+  lastInspectionDate: {
+    type: Date,
+    default: null
+  },
+  nextInspectionDue: {
+    type: Date,
+    default: null
+  }
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },

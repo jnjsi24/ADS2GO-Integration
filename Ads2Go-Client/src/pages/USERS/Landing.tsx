@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+// Import modal components
+import AboutUsModal from '../../components/modals/AboutUsModal';
+import ContactUsModal from '../../components/modals/ContactUsModal';
+import PricingModal from '../../components/modals/PricingModal';
+import TestimonialsModal from '../../components/modals/TestimonialsModal';
+import TermsOfServiceModal from '../../components/modals/TermsOfServiceModal';
+import PrivacyPolicyModal from '../../components/modals/PrivacyPolicyModal';
+import LegalModal from '../../components/modals/LegalModal';
+import BlogModal from '../../components/modals/BlogModal';
+import StatusModal from '../../components/modals/StatusModal';
+
+// Import newsletter service
+import { NewsletterService } from '../../services/newsletterService';
+
 // Define the Testimonial interface
 interface Testimonial {
   image: string;
@@ -21,6 +35,24 @@ export default function Home() {
 
   // State for the testimonial popup, typed as Testimonial | null
   const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
+
+  // State for newsletter subscription
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [newsletterMessage, setNewsletterMessage] = useState('');
+
+  // State for modal popups
+  const [modalStates, setModalStates] = useState({
+    aboutUs: false,
+    contactUs: false,
+    pricing: false,
+    testimonials: false,
+    termsOfService: false,
+    privacyPolicy: false,
+    legal: false,
+    blog: false,
+    status: false
+  });
 
   // Slides data for the hero section
   const slides = [
@@ -136,7 +168,45 @@ export default function Home() {
     },
   ];
 
-  // Handle email form submission for the popup
+  // Handle newsletter subscription
+  const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (!newsletterEmail.trim()) {
+      setNewsletterStatus('error');
+      setNewsletterMessage('Please enter your email address');
+      return;
+    }
+
+    if (!NewsletterService.validateEmail(newsletterEmail)) {
+      setNewsletterStatus('error');
+      setNewsletterMessage('Please enter a valid email address');
+      return;
+    }
+
+    setNewsletterStatus('loading');
+    setNewsletterMessage('');
+
+    try {
+      const result = await NewsletterService.subscribeToNewsletter(newsletterEmail);
+      
+      if (result.success) {
+        setNewsletterStatus('success');
+        setNewsletterMessage(result.message);
+        setNewsletterEmail(''); // Clear the input
+        setShowPopup(true);
+        setTimeout(() => setShowPopup(false), 5000); // Hide popup after 5 seconds
+      } else {
+        setNewsletterStatus('error');
+        setNewsletterMessage(result.message);
+      }
+    } catch (error) {
+      setNewsletterStatus('error');
+      setNewsletterMessage('Failed to subscribe. Please try again later.');
+    }
+  };
+
+  // Handle email form submission for the popup (legacy - keeping for compatibility)
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setShowPopup(true);
@@ -150,6 +220,15 @@ export default function Home() {
 
   const handleClosePopup = () => {
     setSelectedTestimonial(null);
+  };
+
+  // Modal handlers
+  const openModal = (modalName: keyof typeof modalStates) => {
+    setModalStates(prev => ({ ...prev, [modalName]: true }));
+  };
+
+  const closeModal = (modalName: keyof typeof modalStates) => {
+    setModalStates(prev => ({ ...prev, [modalName]: false }));
   };
 
   return (
@@ -468,49 +547,100 @@ export default function Home() {
             <div>
               <h3 className="pl-9 text-lg font-semibold mb-2">Company</h3>
               <ul className="pl-9 space-y-2">
-                <li><a href="#" className="hover:text-teal-400">About Us</a></li>
-                <li><a href="#" className="hover:text-teal-400">Blog</a></li>
-                <li><a href="#" className="hover:text-teal-400">Contact Us</a></li>
-                <li><a href="#" className="hover:text-teal-400">Pricing</a></li>
-                <li><a href="#" className="hover:text-teal-400">Testimonials</a></li>
+                <li><button onClick={() => openModal('aboutUs')} className="hover:text-teal-400 text-left">About Us</button></li>
+                <li><button onClick={() => openModal('blog')} className="hover:text-teal-400 text-left">Blog</button></li>
+                <li><button onClick={() => openModal('contactUs')} className="hover:text-teal-400 text-left">Contact Us</button></li>
+                <li><button onClick={() => openModal('pricing')} className="hover:text-teal-400 text-left">Pricing</button></li>
+                <li><button onClick={() => openModal('testimonials')} className="hover:text-teal-400 text-left">Testimonials</button></li>
               </ul>
             </div>
             <div>
               <h3 className="pl-9 text-lg font-semibold mb-2">Support</h3>
               <ul className="pl-9 space-y-2">
-                <li><a href="#" className="hover:text-teal-400">Help Center</a></li>
-                <li><a href="#" className="hover:text-teal-400">Terms of Service</a></li>
-                <li><a href="#" className="hover:text-teal-400">Legal</a></li>
-                <li><a href="#" className="hover:text-teal-400">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-teal-400">Status</a></li>
+                <li><Link to="/help" className="hover:text-teal-400">Help Center</Link></li>
+                <li><button onClick={() => openModal('termsOfService')} className="hover:text-teal-400 text-left">Terms of Service</button></li>
+                <li><button onClick={() => openModal('legal')} className="hover:text-teal-400 text-left">Legal</button></li>
+                <li><button onClick={() => openModal('privacyPolicy')} className="hover:text-teal-400 text-left">Privacy Policy</button></li>
+                <li><button onClick={() => openModal('status')} className="hover:text-teal-400 text-left">Status</button></li>
               </ul>
             </div>
             <div>
               <h3 className="pl-9 text-lg font-semibold mb-2">Stay up to date</h3>
-              <form onSubmit={handleSubmit} className="mt-2">
+              <form onSubmit={handleNewsletterSubmit} className="mt-2">
                 <div className="relative">
                   <input
                     type="email"
                     placeholder="Your email address"
-                    className="w-full p-2 pl-4 pr-10 bg-[#C9E6F0] text-black rounded focus:outline-none"
+                    value={newsletterEmail}
+                    onChange={(e) => setNewsletterEmail(e.target.value)}
+                    className={`w-full p-2 pl-4 pr-10 bg-[#C9E6F0] text-black rounded focus:outline-none ${
+                      newsletterStatus === 'error' ? 'border-2 border-red-500' : ''
+                    }`}
+                    disabled={newsletterStatus === 'loading'}
                   />
                   <button
                     type="submit"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-black hover:text-teal-400"
+                    disabled={newsletterStatus === 'loading'}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-black hover:text-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    ➣
+                    {newsletterStatus === 'loading' ? '⏳' : '➣'}
                   </button>
                 </div>
+                {newsletterMessage && (
+                  <div className={`mt-2 text-sm pl-4 ${
+                    newsletterStatus === 'success' ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {newsletterMessage}
+                  </div>
+                )}
               </form>
             </div>
           </div>
         </div>
         {showPopup && (
           <div className="fixed bottom-4 right-4 bg-[#CBF3F0] text-black p-3 rounded shadow-lg z-50">
-            Request sent. Please check your email after a while
+            {newsletterStatus === 'success' ? 'Successfully subscribed! Check your email for confirmation.' : 'Request sent. Please check your email after a while'}
           </div>
         )}
       </footer>
+
+      {/* Modal Components */}
+      <AboutUsModal 
+        isOpen={modalStates.aboutUs} 
+        onClose={() => closeModal('aboutUs')} 
+      />
+      <ContactUsModal 
+        isOpen={modalStates.contactUs} 
+        onClose={() => closeModal('contactUs')} 
+      />
+      <PricingModal 
+        isOpen={modalStates.pricing} 
+        onClose={() => closeModal('pricing')} 
+      />
+      <TestimonialsModal 
+        isOpen={modalStates.testimonials} 
+        onClose={() => closeModal('testimonials')} 
+      />
+      <TermsOfServiceModal 
+        isOpen={modalStates.termsOfService} 
+        onClose={() => closeModal('termsOfService')} 
+      />
+      <PrivacyPolicyModal 
+        isOpen={modalStates.privacyPolicy} 
+        onClose={() => closeModal('privacyPolicy')} 
+      />
+      <LegalModal 
+        isOpen={modalStates.legal} 
+        onClose={() => closeModal('legal')} 
+      />
+      <BlogModal 
+        isOpen={modalStates.blog} 
+        onClose={() => closeModal('blog')} 
+      />
+      <StatusModal 
+        isOpen={modalStates.status} 
+        onClose={() => closeModal('status')} 
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -10,7 +10,8 @@ import {
   CreditCard,
   HelpCircle,
   Bell,
-  Info
+  Info,
+  User
 } from 'lucide-react';
 
 const SideNavbar: React.FC = () => {
@@ -18,11 +19,38 @@ const SideNavbar: React.FC = () => {
   const { unreadCount, isLoading } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isDropupOpen, setIsDropupOpen] = useState(false);
+  const dropupRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
+
+  const toggleDropup = () => {
+    setIsDropupOpen(!isDropupOpen);
+  };
+
+  const closeDropup = () => {
+    setIsDropupOpen(false);
+  };
+
+  // Close dropup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropupRef.current && !dropupRef.current.contains(event.target as Node)) {
+        closeDropup();
+      }
+    };
+
+    if (isDropupOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropupOpen]);
 
   const getInitials = (firstName?: string, lastName?: string) => {
     if (!firstName && !lastName) return '?';
@@ -32,7 +60,7 @@ const SideNavbar: React.FC = () => {
   const navLinks = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
     { label: 'Advertisements', icon: <Megaphone size={20} />, path: '/advertisements' },
-    { label: 'Payment History', icon: <CreditCard size={20} />, path: '/history' },
+    { label: 'Payment', icon: <CreditCard size={20} />, path: '/history' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
     { label: 'About Us', icon: <Info size={20} />, path: '/about' },
@@ -72,12 +100,12 @@ const SideNavbar: React.FC = () => {
         </ul>
       </div>
 
-      {/* User Profile & Logout */}
-      <div className="p-6">
+      {/* User Profile & Dropup Menu */}
+      <div className="p-6 relative">
         <div className="flex items-center justify-between mb-4">
           <div
             className="flex items-center space-x-3 cursor-pointer flex-1"
-            onClick={() => navigate('/account')}
+            onClick={toggleDropup}
           >
             <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
               <span className="text-white font-semibold">
@@ -117,13 +145,52 @@ const SideNavbar: React.FC = () => {
           </button>
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center space-x-2 text-sm text-[#FF2929] hover:text-red-500 transition px-4 py-2 rounded-lg bg-red-50"
+        {/* Dropup Menu */}
+        <div 
+          ref={dropupRef}
+          className={`absolute bottom-20 left-6 right-6 bg-white rounded-lg shadow-lg border border-gray-200 transition-all duration-300 ease-in-out transform ${
+            isDropupOpen 
+              ? 'opacity-100 translate-y-0 scale-100' 
+              : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+          }`}
         >
-          <LogOut size={18} />
-          <span>Logout</span>
-        </button>
+          <div className="py-2">
+            <button
+              onClick={() => {
+                navigate('/account');
+                closeDropup();
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <User size={18} />
+              <span>Profile</span>
+            </button>
+            
+            <button
+              onClick={() => {
+                navigate('/settings');
+                closeDropup();
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Settings size={18} />
+              <span>Settings</span>
+            </button>
+            
+            <hr className="my-1" />
+            
+            <button
+              onClick={() => {
+                handleLogout();
+                closeDropup();
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut size={18} />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

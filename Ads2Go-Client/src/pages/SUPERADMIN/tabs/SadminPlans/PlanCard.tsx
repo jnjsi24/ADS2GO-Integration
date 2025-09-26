@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Square, Edit, Trash2, Car, Bike, Monitor, Crown } from 'lucide-react';
-import { Plan, getStatusBadgeClasses, getStatusIcon, getVehicleIcon, getMaterialIcon, formatCurrency } from './utils';
+import { Plan, getStatusBadgeClasses, getStatusIcon, getVehicleIcon, getMaterialIcon, formatCurrency, formatDate } from './utils';
 
 interface PlanCardProps {
   plan: Plan;
@@ -122,12 +122,12 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, onEdit, onDelete, onStart, on
           <div className="flex justify-between items-center text-sm text-gray-500">
             {plan.startDate && (
               <div>
-                <span className="font-medium">Started:</span> {new Date(plan.startDate).toLocaleDateString()}
+                <span className="font-medium">Started:</span> {formatDate(plan.startDate)}
               </div>
             )}
             {plan.endDate && (
               <div>
-                <span className="font-medium">Ended:</span> {new Date(plan.endDate).toLocaleDateString()}
+                <span className="font-medium">Ended:</span> {formatDate(plan.endDate)}
               </div>
             )}
           </div>

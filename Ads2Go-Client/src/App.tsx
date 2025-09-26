@@ -42,7 +42,7 @@ import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
 import FAQManagement from './pages/ADMIN/FAQManagement';
-
+import UserAdsPage from './pages/ADMIN/UserAdsPage';
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
@@ -50,6 +50,7 @@ import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPlans from './pages/SUPERADMIN/SadminPlans';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
+import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -153,6 +154,15 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/ads-by-user/:userId"
+          element={
+            <ProtectedRoute>
+              <UserAdsPage />
+            </ProtectedRoute>
+          }
+        />
+
 
         {/* Protected SuperAdmin Routes */}
         <Route
@@ -184,6 +194,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <SadminPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sadmin-notifications"
+          element={
+            <ProtectedRoute>
+              <SadminNotifications />
             </ProtectedRoute>
           }
         />

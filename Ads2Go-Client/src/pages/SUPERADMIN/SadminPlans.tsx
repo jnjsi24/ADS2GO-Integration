@@ -191,10 +191,7 @@ const SadminPlans: React.FC = () => {
       numberOfDevices: formData.numberOfDevices,
       adLengthSeconds: formData.adLengthSeconds,
       playsPerDayPerDevice: calculatedPlaysPerDay, // Use calculated value
-      totalPlaysPerDay: pricing.totalPlaysPerDay,
       pricePerPlay: formData.pricePerPlayOverride, // Required - no fallback
-      dailyRevenue: pricing.dailyRevenue,
-      totalPrice: pricing.totalPrice,
       status: planStatus,
       startDate: startDate,
       endDate: endDate,

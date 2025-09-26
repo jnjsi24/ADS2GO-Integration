@@ -379,7 +379,7 @@ const paymentResolvers = {
           // Don't fail the payment if deployment fails
         }
 
-        // Send payment confirmation notification
+        // Send payment confirmation notification to user
         try {
           console.log('Sending payment confirmation notification...');
           const NotificationService = require('../services/notifications/NotificationService');
@@ -391,6 +391,16 @@ const paymentResolvers = {
           console.log('✅ Payment confirmation notification sent successfully');
         } catch (notificationError) {
           console.error('❌ Error sending payment confirmation notification:', notificationError);
+          // Don't fail the payment if notification fails
+        }
+
+        // Send payment success notification to admins
+        try {
+          console.log('Sending payment success notification to admins...');
+          await NotificationService.sendPaymentSuccessNotification(newPayment._id);
+          console.log('✅ Payment success notification sent to admins successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending payment success notification to admins:', notificationError);
           // Don't fail the payment if notification fails
         }
 

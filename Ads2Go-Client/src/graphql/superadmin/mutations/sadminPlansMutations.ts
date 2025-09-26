@@ -101,10 +101,10 @@ export interface AdsPlanInput {
   numberOfDevices: number;
   adLengthSeconds: number;
   playsPerDayPerDevice: number;
-  totalPlaysPerDay: number;
   pricePerPlay: number;
-  dailyRevenue: number;
-  totalPrice: number;
+  status?: string;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
 }
 
 export interface AdsPlanUpdateInput {

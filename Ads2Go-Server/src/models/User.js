@@ -46,6 +46,11 @@ const UserSchema = new mongoose.Schema({
     trim: true,
     match: [/^(09\d{9}|\+639\d{9})$/, 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)']
   },
+  profilePicture: {
+    type: String,
+    default: null,
+    trim: true
+  },
   email: {
     type: String,
     required: [true, 'Email is required'],

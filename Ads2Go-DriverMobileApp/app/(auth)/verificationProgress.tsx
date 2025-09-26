@@ -188,9 +188,10 @@ const VerificationProgress = () => {
           </View>
         ) : (
           <View style={styles.statusContainer}>
-            <ActivityIndicator size="large" color="#3f51b5" />
-            <Text style={styles.statusText}>Your account is pending approval</Text>
-            <Text style={styles.subText}>We'll notify you once your account is reviewed.</Text>
+            <MaterialIcons name="hourglass-empty" size={48} color="#ff9800" style={styles.statusIcon} />
+            <Text style={[styles.statusText, styles.warningText]}>Account Still Under Review</Text>
+            <Text style={styles.subText}>Your account is currently being reviewed by our team. You will be notified once the review is complete.</Text>
+            <Text style={styles.subText}>Please do not attempt to login until your account is approved.</Text>
           </View>
         )}
         
@@ -280,6 +281,9 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#f44336',
+  },
+  warningText: {
+    color: '#ff9800',
   },
   errorContainer: {
     backgroundColor: '#ffebee',

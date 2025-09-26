@@ -77,6 +77,93 @@ class EmailService {
 
     return this.transporter.sendMail(mailOptions);
   }
+
+  // Send newsletter welcome email
+  static async sendNewsletterWelcomeEmail(email, subject = 'Welcome to Ads2Go Newsletter!') {
+    const mailOptions = {
+      from: `Ads2Go <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #3674B5; margin: 0; font-size: 28px;">Welcome to Ads2Go!</h1>
+              <p style="color: #666; margin: 10px 0 0 0; font-size: 16px;">Your mobile advertising journey starts here</p>
+            </div>
+            
+            <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3674B5;">
+              <h3 style="color: #3674B5; margin: 0 0 15px 0;">🎉 Thank you for subscribing!</h3>
+              <p style="margin: 0; color: #333; line-height: 1.6;">
+                You're now part of our community and will receive the latest updates about:
+              </p>
+              <ul style="margin: 15px 0 0 20px; color: #333;">
+                <li>New features and platform updates</li>
+                <li>Industry insights and mobile advertising trends</li>
+                <li>Exclusive promotions and special offers</li>
+                <li>Success stories from our clients</li>
+                <li>Tips for maximizing your advertising ROI</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/login" 
+                 style="background-color: #3674B5; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; font-size: 16px;">
+                Get Started with Ads2Go
+              </a>
+            </div>
+
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h4 style="color: #333; margin: 0 0 10px 0;">What's Next?</h4>
+              <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.5;">
+                • Create your account to start advertising<br>
+                • Choose from our vehicle plans (Motorcycle, Car, Bus, Jeepney)<br>
+                • Upload your ad content and launch your campaign<br>
+                • Track performance with real-time analytics
+              </p>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+              <p style="color: #999; font-size: 12px; margin: 0;">
+                You received this email because you subscribed to our newsletter at Ads2Go.<br>
+                If you no longer wish to receive these emails, you can 
+                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/unsubscribe?email=${email}" 
+                   style="color: #3674B5; text-decoration: none;">unsubscribe here</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`Newsletter welcome email sent to ${email}`);
+      return true;
+    } catch (error) {
+      console.error('Error sending newsletter welcome email:', error);
+      return false;
+    }
+  }
+
+  // Send newsletter email to all subscribers
+  static async sendNewsletterEmail(subject, content, subscribers) {
+    const mailOptions = {
+      from: `Ads2Go <${process.env.EMAIL_USER}>`,
+      bcc: subscribers.map(sub => sub.email).join(','),
+      subject: subject,
+      html: content
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      console.log(`Newsletter sent to ${subscribers.length} subscribers`);
+      return true;
+    } catch (error) {
+      console.error('Error sending newsletter email:', error);
+      return false;
+    }
+  }
 }
 
 module.exports = EmailService;

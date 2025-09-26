@@ -28,30 +28,6 @@ const adPerformanceData = [
   { month: "Jul", impressions: 6000, qrScans: 3500 },
 ];
 
-// Dummy data for Vehicle Status Overview
-const vehicles = [
-  {
-    date: "25 Jul 12:30",
-    amount: "- $10",
-    paymentName: "Youtube",
-    method: "VISA ****3254",
-    category: "Subscription",
-  },
-  {
-    date: "26 Jul 15:00",
-    amount: "- $150",
-    paymentName: "Reserved",
-    method: "Mastercard ****2154",
-    category: "Shopping",
-  },
-  {
-    date: "27 Jul 9:00",
-    amount: "- $80",
-    paymentName: "Yaposhka",
-    method: "Mastercard ****2154",
-    category: "Cafe & Restaurants",
-  },
-];
 
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("Admin");
@@ -142,32 +118,20 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Driver Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         {[
           { 
-            label: "Total Advertisements", 
-            value: stats?.totalAds || 0, 
-            change: `${stats?.newUsersToday || 0} new today`, 
+            label: "Total Drivers", 
+            value: stats?.totalDrivers || 0, 
+            change: `${stats?.newDriversToday || 0} new today`, 
             up: true 
           },
           { 
-            label: "Active Advertisements", 
-            value: stats?.activeAds || 0, 
-            change: "Currently running", 
-            up: true 
-          },
-          { 
-            label: "Pending Advertisements", 
-            value: stats?.pendingAds || 0, 
+            label: "Pending Drivers", 
+            value: stats?.pendingDrivers || 0, 
             change: "Awaiting review", 
             up: false 
-          },
-          { 
-            label: "Unread Notifications", 
-            value: stats?.unreadNotifications || 0, 
-            change: `${stats?.highPriorityNotifications || 0} high priority`, 
-            up: true 
           },
         ].map((stat, i) => (
           <div
@@ -215,69 +179,6 @@ const Dashboard = () => {
         <DeviceStatus />
       </div>
 
-      {/* Vehicle Status Overview */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4">Vehicle Status Overview</h3>
-        <div className="space-y-4">
-          <div className="flex items-center space-x-4">
-            <div className="relative">
-              <select className="appearance-none bg-white border border-gray-300 rounded-lg py-1 px-3 pr-8 text-gray-700 text-sm leading-tight focus:outline-none focus:border-blue-500">
-                <option>All accounts</option>
-                <option>Account A</option>
-                <option>Account B</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                <svg
-                  className="fill-current h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                </svg>
-              </div>
-            </div>
-            <button className="text-blue-600 text-sm flex items-center">
-              See all
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4 ml-1"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <table className="w-full table-auto text-sm">
-          <thead className="text-gray-500">
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 font-normal">DATE</th>
-              <th className="text-left py-3 px-4 font-normal">AMOUNT</th>
-              <th className="text-left py-3 px-4 font-normal">PAYMENT NAME</th>
-              <th className="text-left py-3 px-4 font-normal">METHOD</th>
-              <th className="text-left py-3 px-4 font-normal">CATEGORY</th>
-            </tr>
-          </thead>
-          <tbody>
-            {vehicles.map((row, i) => (
-              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4 text-gray-700">{row.date}</td>
-                <td className="py-3 px-4 text-gray-700">{row.amount}</td>
-                <td className="py-3 px-4 text-gray-700">{row.paymentName}</td>
-                <td className="py-3 px-4 text-gray-700">{row.method}</td>
-                <td className="py-3 px-4 text-gray-700">{row.category}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 };

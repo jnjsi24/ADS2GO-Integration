@@ -1,6 +1,8 @@
 const gql = require('graphql-tag');
 
 const notificationTypeDefs = gql`
+  scalar JSON
+
   enum NotificationType {
     SUCCESS
     INFO
@@ -20,7 +22,7 @@ const notificationTypeDefs = gql`
     readAt: String
     adId: ID
     adTitle: String
-    data: String
+    data: JSON
     createdAt: String!
     updatedAt: String!
   }
@@ -30,12 +32,55 @@ const notificationTypeDefs = gql`
     unreadCount: Int!
   }
 
+  type SuperAdminNotifications {
+    notifications: [Notification!]!
+    unreadCount: Int!
+  }
+
+  type SuperAdminDashboardStats {
+    totalUsers: Int!
+    totalAdmins: Int!
+    totalDrivers: Int!
+    totalAds: Int!
+    totalPlans: Int!
+    totalRevenue: Float!
+    unreadNotifications: Int!
+    highPriorityNotifications: Int!
+    planUsageStats: [PlanUsageStat!]!
+  }
+
+  type PlanUsageStat {
+    planId: ID!
+    planName: String!
+    userCount: Int!
+    activeAdsCount: Int!
+    totalRevenue: Float!
+  }
+
+  type UserCountByPlan {
+    planId: ID!
+    planName: String!
+    planDescription: String!
+    userCount: Int!
+    activeAdsCount: Int!
+    totalRevenue: Float!
+    planDetails: PlanDetails!
+  }
+
+  type PlanDetails {
+    materialType: String!
+    vehicleType: String!
+    numberOfDevices: Int!
+    durationDays: Int!
+    totalPrice: Float!
+  }
+
   type PendingAd {
     id: ID!
     title: String!
     status: String!
     createdAt: String!
-    user: User!
+    user: User
     materialId: ID
     planId: ID
   }
@@ -58,6 +103,7 @@ const notificationTypeDefs = gql`
     newUsersToday: Int!
     totalDrivers: Int!
     newDriversToday: Int!
+    pendingDrivers: Int!
     totalRevenue: Float!
     revenueToday: Float!
     unreadNotifications: Int!
@@ -86,6 +132,11 @@ const notificationTypeDefs = gql`
     notification: Notification
   }
 
+  type DriverNotifications {
+    notifications: [Notification!]!
+    unreadCount: Int!
+  }
+
   type Query {
     getUserNotifications: [Notification!]!
     getNotificationById(id: ID!): Notification
@@ -94,6 +145,10 @@ const notificationTypeDefs = gql`
     getPendingAds: [PendingAd!]!
     getPendingMaterials: [PendingMaterial!]!
     getAdminDashboardStats: AdminDashboardStats!
+    getSuperAdminNotifications: SuperAdminNotifications!
+    getSuperAdminDashboardStats: SuperAdminDashboardStats!
+    getUserCountsByPlan: [UserCountByPlan!]!
+    getDriverNotifications(driverId: ID!): DriverNotifications!
   }
 
   type Mutation {
@@ -107,6 +162,8 @@ const notificationTypeDefs = gql`
     markNotificationRead(notificationId: ID!): NotificationResponse!
     markAllNotificationsRead: NotificationResponse!
     deleteNotification(notificationId: ID!): NotificationResponse!
+    markSuperAdminNotificationRead(notificationId: ID!): NotificationResponse!
+    markAllSuperAdminNotificationsRead: NotificationResponse!
   }
 
   type Subscription {
