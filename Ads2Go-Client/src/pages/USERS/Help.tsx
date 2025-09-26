@@ -40,9 +40,7 @@ const FAQItem: React.FC<{ question: string; answer: string }> = ({
 
 const Help: React.FC = () => {
   return (
-    
-    <div className="min-h-screen pl-72 pr-5 p-10 bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC]">
-  {/* Header */}
+    <div className="min-h-screen bg-white pl-64 pr-5">
       {/* ✅ Inline CSS for accordion animation */}
       <style>{`
         .faq-open { max-height: 500px; }

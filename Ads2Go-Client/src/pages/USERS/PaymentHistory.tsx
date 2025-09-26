@@ -234,13 +234,12 @@ const PaymentHistory: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pl-72 pr-5 p-10 bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC]">
-  {/* Header */}
-  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-    <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
-
-    {/* Search + Filters */}
-    <div className="flex flex-col items-end gap-3">
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      <div className="bg-white w-full min-h-screen">
+      {/* Header with Title*/}
+      <div className="flex justify-between items-center mb-6 pt-10">
+        <h1 className="text-3xl ml-5 font-bold text-gray-800">Payment History</h1>
+        <div className="flex flex-col items-end gap-3">
           <div className="flex gap-2">
             <input type="text" 
               className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white" 
@@ -252,7 +251,7 @@ const PaymentHistory: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -283,7 +282,7 @@ const PaymentHistory: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -311,10 +310,10 @@ const PaymentHistory: React.FC = () => {
             </div>
           </div>
         </div>
-  </div>
+      </div>
 
-  {/* Payment Cards */}
-      <div className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Payment Cards */}
+      <div className="bg-white pt-6 ml-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
@@ -594,6 +593,7 @@ const PaymentHistory: React.FC = () => {
           onClose={closeModal}
         />
       )}
+      </div>
     </div>
   );
 };
