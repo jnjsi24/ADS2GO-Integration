@@ -53,11 +53,6 @@ const revenueData = [
   { month: "Jul", revenue: 52800, ads: 412 },
 ];
 
-const deviceStatusData = [
-  { name: "Online", value: 78, color: "#10B981" },
-  { name: "Offline", value: 15, color: "#EF4444" },
-  { name: "Maintenance", value: 7, color: "#F59E0B" },
-];
 
 const adPerformanceData = [
   { name: "Video Ads", value: 45, impressions: 12500, clicks: 890 },
@@ -198,44 +193,20 @@ const SadminAnalytics: React.FC = () => {
         </ResponsiveContainer>
       </div>
 
-      {/* Device Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Device Status</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie
-                data={deviceStatusData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={100}
-                paddingAngle={5}
-                dataKey="value"
-              >
-                {deviceStatusData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Locations</h3>
-          <div className="space-y-3">
-            {locationData.map((location, index) => (
-              <div key={index} className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700">{location.location}</span>
-                <div className="flex items-center space-x-4 text-sm text-gray-600">
-                  <span>{location.users} users</span>
-                  <span>{location.drivers} drivers</span>
-                  <span className="font-medium text-green-600">₱{location.revenue.toLocaleString()}</span>
-                </div>
+      {/* Top Locations */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Locations</h3>
+        <div className="space-y-3">
+          {locationData.map((location, index) => (
+            <div key={index} className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-700">{location.location}</span>
+              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                <span>{location.users} users</span>
+                <span>{location.drivers} drivers</span>
+                <span className="font-medium text-green-600">₱{location.revenue.toLocaleString()}</span>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
