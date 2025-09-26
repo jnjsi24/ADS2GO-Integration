@@ -28,6 +28,7 @@ import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 import Notifications from './pages/USERS/Notifications';
+import DetailedAnalytics from './pages/USERS/DetailedAnalytics';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -320,6 +321,14 @@ const UserAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <Notifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/detailed-analytics"
+          element={
+            <ProtectedRoute>
+              <DetailedAnalytics />
             </ProtectedRoute>
           }
         />
