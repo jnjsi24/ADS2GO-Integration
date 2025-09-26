@@ -142,32 +142,20 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* Driver Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
         {[
           { 
-            label: "Total Advertisements", 
-            value: stats?.totalAds || 0, 
-            change: `${stats?.newUsersToday || 0} new today`, 
+            label: "Total Drivers", 
+            value: stats?.totalDrivers || 0, 
+            change: `${stats?.newDriversToday || 0} new today`, 
             up: true 
           },
           { 
-            label: "Active Advertisements", 
-            value: stats?.activeAds || 0, 
-            change: "Currently running", 
-            up: true 
-          },
-          { 
-            label: "Pending Advertisements", 
-            value: stats?.pendingAds || 0, 
+            label: "Pending Drivers", 
+            value: stats?.pendingDrivers || 0, 
             change: "Awaiting review", 
             up: false 
-          },
-          { 
-            label: "Unread Notifications", 
-            value: stats?.unreadNotifications || 0, 
-            change: `${stats?.highPriorityNotifications || 0} high priority`, 
-            up: true 
           },
         ].map((stat, i) => (
           <div

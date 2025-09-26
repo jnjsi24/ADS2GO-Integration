@@ -159,6 +159,7 @@ const notificationResolvers = {
           newUsersToday,
           totalDrivers,
           newDriversToday,
+          pendingDrivers,
           userNotifications
         ] = await Promise.all([
           Ad.countDocuments(),
@@ -176,6 +177,7 @@ const notificationResolvers = {
               $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
             } 
           }),
+          Driver.countDocuments({ accountStatus: 'PENDING', reviewStatus: 'PENDING' }),
           UserNotifications.findOne({ userId: user.id })
         ]);
 
@@ -195,6 +197,7 @@ const notificationResolvers = {
           newUsersToday,
           totalDrivers,
           newDriversToday,
+          pendingDrivers,
           totalRevenue,
           revenueToday,
           unreadNotifications,
