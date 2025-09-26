@@ -294,7 +294,7 @@ const Dashboard = () => {
         <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white cursor-pointer hover:bg-[#0E2A47] transition-colors" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <span className="text-lg font-semibold">Ad Performance Overview</span>
-            <div className="relative">
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
               <select
                 className="text-xs text-white bg-[#1b5087] rounded-md pl-5 pr-10 py-3 border border-white focus:outline-none appearance-none"
                 value={analyticsPeriod}
@@ -383,7 +383,7 @@ const Dashboard = () => {
         <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mt-8 pl-4">
             <span className="text-gray-500 text-lg">Ad Impressions</span>
-            <div className="relative">
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
               <select
                 className="text-xs text-gray-600 bg-white rounded-md pl-3 pr-8 py-1 border border-gray-200 focus:outline-none appearance-none"
                 value={analyticsPeriod}
@@ -563,7 +563,7 @@ const Dashboard = () => {
         <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
-            <div className="relative pt-3">
+            <div className="relative pt-3" onClick={(e) => e.stopPropagation()}>
               <select
                 className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
                 value={qrSelectedPeriod}

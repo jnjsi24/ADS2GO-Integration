@@ -25,7 +25,7 @@ import { Link } from 'react-router-dom';
 const DetailedAnalytics: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d'>('7d');
   const [selectedMetric, setSelectedMetric] = useState<'impressions' | 'plays' | 'completion' | 'revenue'>('impressions');
-  const [selectedView, setSelectedView] = useState<'overview' | 'performance' | 'impressions' | 'display' | 'qr'>('overview');
+  const [selectedView, setSelectedView] = useState<'overview' | 'performance' | 'impressions' | 'display' | 'qr' | 'tablets' | 'ads'>('overview');
   const [userFirstName, setUserFirstName] = useState('User');
 
   // Fetch analytics data
@@ -132,6 +132,164 @@ const DetailedAnalytics: React.FC = () => {
     { day: 'Fri', impressions: 1600, plays: 1100, completion: 69, revenue: 330 },
     { day: 'Sat', impressions: 1800, plays: 1250, completion: 69, revenue: 375 },
     { day: 'Sun', impressions: 1500, plays: 1000, completion: 67, revenue: 300 },
+  ];
+
+  // Tablet Activity Data
+  const tabletActivityData = [
+    { 
+      id: 'TAB001', 
+      name: 'Tablet Downtown Mall', 
+      location: 'Downtown Mall, Floor 1', 
+      status: 'Online', 
+      lastSeen: '2 minutes ago',
+      impressions: 1250, 
+      plays: 890, 
+      completion: 85,
+      uptime: '99.2%',
+      battery: 87,
+      temperature: 'Normal'
+    },
+    { 
+      id: 'TAB002', 
+      name: 'Tablet Highway Station', 
+      location: 'Highway Bus Station', 
+      status: 'Online', 
+      lastSeen: '5 minutes ago',
+      impressions: 980, 
+      plays: 720, 
+      completion: 78,
+      uptime: '98.7%',
+      battery: 92,
+      temperature: 'Normal'
+    },
+    { 
+      id: 'TAB003', 
+      name: 'Tablet Shopping Center', 
+      location: 'City Shopping Center', 
+      status: 'Offline', 
+      lastSeen: '2 hours ago',
+      impressions: 0, 
+      plays: 0, 
+      completion: 0,
+      uptime: '95.1%',
+      battery: 15,
+      temperature: 'High'
+    },
+    { 
+      id: 'TAB004', 
+      name: 'Tablet Airport Terminal', 
+      location: 'International Airport, Terminal 2', 
+      status: 'Online', 
+      lastSeen: '1 minute ago',
+      impressions: 2100, 
+      plays: 1500, 
+      completion: 88,
+      uptime: '99.8%',
+      battery: 95,
+      temperature: 'Normal'
+    },
+    { 
+      id: 'TAB005', 
+      name: 'Tablet University Campus', 
+      location: 'State University, Main Hall', 
+      status: 'Online', 
+      lastSeen: '3 minutes ago',
+      impressions: 1650, 
+      plays: 1200, 
+      completion: 82,
+      uptime: '97.3%',
+      battery: 78,
+      temperature: 'Normal'
+    },
+  ];
+
+  // Detailed Ads Analytics Data
+  const detailedAdsData = [
+    {
+      id: 'AD001',
+      title: 'Summer Sale - Electronics Store',
+      status: 'Running',
+      impressions: 5420,
+      plays: 3890,
+      completionRate: 78.5,
+      clickThroughRate: 12.3,
+      revenue: 1250,
+      startDate: '2024-01-15',
+      endDate: '2024-02-15',
+      duration: '30 days',
+      targetAudience: '18-45 years',
+      locations: ['Downtown Mall', 'Shopping Center'],
+      devices: ['TAB001', 'TAB004'],
+      performance: 'Excellent'
+    },
+    {
+      id: 'AD002',
+      title: 'New Restaurant Opening',
+      status: 'Running',
+      impressions: 3200,
+      plays: 2400,
+      completionRate: 65.2,
+      clickThroughRate: 8.7,
+      revenue: 890,
+      startDate: '2024-01-20',
+      endDate: '2024-02-20',
+      duration: '30 days',
+      targetAudience: '25-55 years',
+      locations: ['Highway Station', 'Airport Terminal'],
+      devices: ['TAB002', 'TAB004'],
+      performance: 'Good'
+    },
+    {
+      id: 'AD003',
+      title: 'Fitness Center Membership',
+      status: 'Paused',
+      impressions: 1800,
+      plays: 1200,
+      completionRate: 58.9,
+      clickThroughRate: 6.2,
+      revenue: 450,
+      startDate: '2024-01-10',
+      endDate: '2024-01-25',
+      duration: '15 days',
+      targetAudience: '20-40 years',
+      locations: ['University Campus'],
+      devices: ['TAB005'],
+      performance: 'Average'
+    },
+    {
+      id: 'AD004',
+      title: 'Car Dealership Promotion',
+      status: 'Completed',
+      impressions: 4500,
+      plays: 3200,
+      completionRate: 82.1,
+      clickThroughRate: 15.8,
+      revenue: 2100,
+      startDate: '2023-12-01',
+      endDate: '2023-12-31',
+      duration: '30 days',
+      targetAudience: '30-60 years',
+      locations: ['Downtown Mall', 'Highway Station'],
+      devices: ['TAB001', 'TAB002'],
+      performance: 'Excellent'
+    },
+    {
+      id: 'AD005',
+      title: 'Tech Startup Launch',
+      status: 'Running',
+      impressions: 2800,
+      plays: 1900,
+      completionRate: 71.3,
+      clickThroughRate: 9.5,
+      revenue: 680,
+      startDate: '2024-01-25',
+      endDate: '2024-02-25',
+      duration: '30 days',
+      targetAudience: '22-35 years',
+      locations: ['University Campus', 'Shopping Center'],
+      devices: ['TAB005'],
+      performance: 'Good'
+    }
   ];
 
   const colors = ['#1b5087', '#3674B5', '#E78B48', '#FFAB5B', '#D4C9BE', '#EFEEEA'];
@@ -400,6 +558,271 @@ const DetailedAnalytics: React.FC = () => {
     </div>
   );
 
+  const renderTabletActivitySection = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Tablet Activity Overview</h3>
+        
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600">Online Tablets</p>
+                <p className="text-2xl font-bold text-green-700">
+                  {tabletActivityData.filter(t => t.status === 'Online').length}
+                </p>
+              </div>
+              <div className="text-green-500">📱</div>
+            </div>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-600">Offline Tablets</p>
+                <p className="text-2xl font-bold text-red-700">
+                  {tabletActivityData.filter(t => t.status === 'Offline').length}
+                </p>
+              </div>
+              <div className="text-red-500">📱</div>
+            </div>
+          </div>
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600">Total Impressions</p>
+                <p className="text-2xl font-bold text-blue-700">
+                  {tabletActivityData.reduce((sum, t) => sum + t.impressions, 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="text-blue-500">👁️</div>
+            </div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-purple-600">Avg. Completion</p>
+                <p className="text-2xl font-bold text-purple-700">
+                  {Math.round(tabletActivityData.reduce((sum, t) => sum + t.completion, 0) / tabletActivityData.length)}%
+                </p>
+              </div>
+              <div className="text-purple-500">🎯</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tablet Activity Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tablet</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Seen</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impressions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plays</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completion</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uptime</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Battery</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Temperature</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {tabletActivityData.map((tablet) => (
+                <tr key={tablet.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0 h-10 w-10">
+                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-700">📱</span>
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{tablet.name}</div>
+                        <div className="text-sm text-gray-500">{tablet.id}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tablet.location}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      tablet.status === 'Online' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {tablet.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tablet.lastSeen}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tablet.impressions.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tablet.plays.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tablet.completion}%</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{tablet.uptime}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            tablet.battery > 50 ? 'bg-green-500' : 
+                            tablet.battery > 20 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${tablet.battery}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm text-gray-900">{tablet.battery}%</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      tablet.temperature === 'Normal' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {tablet.temperature}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDetailedAdsSection = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Ads Analytics</h3>
+        
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600">Total Ads</p>
+                <p className="text-2xl font-bold text-blue-700">{detailedAdsData.length}</p>
+              </div>
+              <div className="text-blue-500">📺</div>
+            </div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600">Running Ads</p>
+                <p className="text-2xl font-bold text-green-700">
+                  {detailedAdsData.filter(ad => ad.status === 'Running').length}
+                </p>
+              </div>
+              <div className="text-green-500">▶️</div>
+            </div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-purple-600">Total Revenue</p>
+                <p className="text-2xl font-bold text-purple-700">
+                  ${detailedAdsData.reduce((sum, ad) => sum + ad.revenue, 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="text-purple-500">💰</div>
+            </div>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-600">Avg. CTR</p>
+                <p className="text-2xl font-bold text-orange-700">
+                  {(detailedAdsData.reduce((sum, ad) => sum + ad.clickThroughRate, 0) / detailedAdsData.length).toFixed(1)}%
+                </p>
+              </div>
+              <div className="text-orange-500">🎯</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Ads Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ad Title</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impressions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plays</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completion</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CTR</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Performance</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {detailedAdsData.map((ad) => (
+                <tr key={ad.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{ad.title}</div>
+                      <div className="text-sm text-gray-500">ID: {ad.id}</div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      ad.status === 'Running' ? 'bg-green-100 text-green-800' :
+                      ad.status === 'Paused' ? 'bg-yellow-100 text-yellow-800' :
+                      ad.status === 'Completed' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {ad.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ad.impressions.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ad.plays.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ad.completionRate}%</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{ad.clickThroughRate}%</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${ad.revenue.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{ad.duration}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      ad.performance === 'Excellent' ? 'bg-green-100 text-green-800' :
+                      ad.performance === 'Good' ? 'bg-blue-100 text-blue-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {ad.performance}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button className="text-blue-600 hover:text-blue-900 mr-3">View</button>
+                    <button className="text-green-600 hover:text-green-900">Edit</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Ad Performance Chart */}
+        <div className="mt-8">
+          <h4 className="text-md font-medium text-gray-700 mb-4">Ad Performance Comparison</h4>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={detailedAdsData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="title" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={100} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="impressions" fill="#1b5087" name="Impressions" />
+              <Bar dataKey="plays" fill="#3674B5" name="Plays" />
+              <Bar dataKey="revenue" fill="#E78B48" name="Revenue ($)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 pl-72 pr-5 p-10">
       {/* Header Section */}
@@ -445,13 +868,15 @@ const DetailedAnalytics: React.FC = () => {
 
       {/* Navigation Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200">
+        <div className="flex border-b border-gray-200 overflow-x-auto">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
             { id: 'performance', label: 'Performance', icon: TrendingUp },
             { id: 'impressions', label: 'Impressions', icon: Eye },
             { id: 'display', label: 'Display Time', icon: Clock },
-            { id: 'qr', label: 'QR Impressions', icon: Target }
+            { id: 'qr', label: 'QR Impressions', icon: Target },
+            { id: 'tablets', label: 'Tablet Activity', icon: Users },
+            { id: 'ads', label: 'Detailed Ads', icon: BarChart3 }
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -475,6 +900,8 @@ const DetailedAnalytics: React.FC = () => {
       {selectedView === 'impressions' && renderImpressionsSection()}
       {selectedView === 'display' && renderDisplayTimeSection()}
       {selectedView === 'qr' && renderQRSection()}
+      {selectedView === 'tablets' && renderTabletActivitySection()}
+      {selectedView === 'ads' && renderDetailedAdsSection()}
 
       {/* Top Performing Ads */}
       {analyticsData?.getUserAnalytics?.adPerformance && analyticsData.getUserAnalytics.adPerformance.length > 0 && (
