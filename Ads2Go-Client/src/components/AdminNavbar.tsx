@@ -10,6 +10,7 @@ import {
   Megaphone,
   LogOut,
   MapPin,
+  Mail,
 } from 'lucide-react';
 
 const AdminSidebar: React.FC = () => {
@@ -33,6 +34,7 @@ const AdminSidebar: React.FC = () => {
     { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> },
     { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> },
     { label: 'Screen Tracking', path: '/admin/tablet-tracking', icon: <MapPin size={20} /> },
+    { label: 'Newsletter', path: '/admin/newsletter', icon: <Mail size={20} /> },
     { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
     { label: 'AdsPanel', path: '/admin/ads', icon: <Megaphone size={20} /> },
     { label: 'Manage Ads', path: '/admin/manage-ads', icon: <Megaphone size={20} /> },

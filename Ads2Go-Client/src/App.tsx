@@ -40,6 +40,7 @@ import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
+import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -141,6 +142,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <ScreenTracking />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/newsletter"
+          element={
+            <ProtectedRoute>
+              <NewsletterManagement />
             </ProtectedRoute>
           }
         />

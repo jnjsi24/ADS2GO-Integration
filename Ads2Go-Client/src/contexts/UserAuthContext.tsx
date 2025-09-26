@@ -15,6 +15,7 @@ import {
   GET_OWN_USER_DETAILS,
 } from '../graphql/user';
 import { jwtDecode } from 'jwt-decode';
+import { NewsletterService } from '../services/newsletterService';
 
 // Types
 type UserRole = 'USER';
@@ -266,6 +267,14 @@ export const UserAuthProvider: React.FC<{
 
       setUser(user);
       setUserEmail(user.email);
+
+      // Automatically subscribe user to newsletter
+      try {
+        await NewsletterService.subscribeToNewsletter(user.email, 'registration');
+      } catch (error) {
+        console.error('Failed to subscribe user to newsletter:', error);
+        // Don't fail registration if newsletter subscription fails
+      }
 
       if (!user.isEmailVerified) {
         navigate('/verify-email');

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { NewsletterService } from '../../services/newsletterService';
 
 // Toast notification type
 type Toast = {
@@ -22,6 +23,10 @@ const Settings: React.FC = () => {
     disableNotificationSounds: true,
   });
 
+  // State for newsletter subscription
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
+  const [newsletterLoading, setNewsletterLoading] = useState(false);
+
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -39,6 +44,61 @@ const Settings: React.FC = () => {
   // Handle toggle button change for notifications
   const handleToggleChange = (field: keyof typeof notificationForm) => {
     setNotificationForm((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  // Check newsletter subscription status on component mount
+  useEffect(() => {
+    if (user?.email) {
+      checkNewsletterStatus();
+    }
+  }, [user?.email]);
+
+  const checkNewsletterStatus = async () => {
+    try {
+      const isSubscribed = await NewsletterService.checkSubscriptionStatus(user?.email || '');
+      setNewsletterSubscribed(isSubscribed);
+    } catch (error) {
+      console.error('Error checking newsletter status:', error);
+    }
+  };
+
+  const handleNewsletterToggle = async () => {
+    if (!user?.email) return;
+
+    setNewsletterLoading(true);
+    try {
+      if (newsletterSubscribed) {
+        // Unsubscribe
+        const response = await fetch(`http://192.168.100.22:5000/api/newsletter/unsubscribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: user.email }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setNewsletterSubscribed(false);
+          addToast('Successfully unsubscribed from newsletter', 'success');
+        } else {
+          addToast('Failed to unsubscribe: ' + data.message, 'error');
+        }
+      } else {
+        // Subscribe
+        const result = await NewsletterService.subscribeToNewsletter(user.email, 'user_settings');
+        if (result.success) {
+          setNewsletterSubscribed(true);
+          addToast('Successfully subscribed to newsletter', 'success');
+        } else {
+          addToast('Failed to subscribe: ' + result.message, 'error');
+        }
+      }
+    } catch (error) {
+      addToast('An error occurred. Please try again.', 'error');
+    } finally {
+      setNewsletterLoading(false);
+    }
   };
 
   // Handle Notification Settings form submission
@@ -155,6 +215,39 @@ const Settings: React.FC = () => {
                   <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
                 </button>
               </div>
+            </div>
+
+            <h2 className="text-xl font-semibold mt-6">Newsletter Subscription</h2>
+
+            <div className="border p-4 rounded-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">Company Newsletter</h3>
+                  <p className="text-sm text-gray-600">
+                    {newsletterSubscribed 
+                      ? 'You are subscribed to our newsletter and will receive company updates, industry insights, and exclusive offers.'
+                      : 'Subscribe to receive company updates, industry insights, and exclusive offers via email.'
+                    }
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={newsletterLoading}
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    newsletterSubscribed ? 'bg-[#F3A26D]' : 'bg-gray-300'
+                  }`}
+                  onClick={handleNewsletterToggle}
+                >
+                  <span className={`w-5 h-5 bg-white rounded-full transform transition-transform duration-300 ${
+                    newsletterSubscribed ? 'translate-x-7' : 'translate-x-0'
+                  }`}></span>
+                </button>
+              </div>
+              {newsletterLoading && (
+                <div className="mt-2 text-sm text-gray-500">
+                  {newsletterSubscribed ? 'Unsubscribing...' : 'Subscribing...'}
+                </div>
+              )}
             </div>
 
             <h2 className="text-xl font-semibold mt-6">Sounds</h2>
