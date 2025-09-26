@@ -74,6 +74,49 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Date display helper
+export const formatDate = (dateInput: any): string => {
+  if (!dateInput) return 'N/A';
+  
+  try {
+    // Handle different date formats
+    let date: Date;
+    
+    if (typeof dateInput === 'number') {
+      // If it's a timestamp (milliseconds)
+      date = new Date(dateInput);
+    } else if (typeof dateInput === 'string') {
+      // If it's a date string, try to parse it
+      // First, try to parse as ISO string
+      date = new Date(dateInput);
+      
+      // If that fails, try to parse as timestamp string
+      if (isNaN(date.getTime()) && /^\d+$/.test(dateInput)) {
+        date = new Date(parseInt(dateInput));
+      }
+    } else {
+      // If it's already a Date object
+      date = dateInput;
+    }
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date input:', dateInput, 'Type:', typeof dateInput);
+      return 'Invalid Date';
+    }
+    
+    // Format the date as "MMM DD, YYYY" (e.g., "Jan 15, 2024")
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, 'Input:', dateInput);
+    return 'Invalid Date';
+  }
+};
+
 // Get status badge classes
 export const getStatusBadgeClasses = (status: string): string => {
   switch (status) {

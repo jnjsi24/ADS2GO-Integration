@@ -1039,6 +1039,34 @@ createDriver: async (_, { input }) => {
         };
       }
     },
+
+    // ===== UPDATE DRIVER PUSH TOKEN =====
+    updateDriverPushToken: async (_, { driverId, pushToken }, { user }) => {
+      try {
+        console.log(`Updating push token for driver ${driverId}`);
+        
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          throw new Error('Driver not found');
+        }
+
+        driver.pushToken = pushToken;
+        await driver.save();
+
+        console.log(`✅ Push token updated for driver ${driverId}`);
+        
+        return { 
+          success: true, 
+          message: 'Push token updated successfully' 
+        };
+      } catch (error) {
+        console.error('updateDriverPushToken error:', error);
+        return { 
+          success: false, 
+          message: error.message || 'Failed to update push token'
+        };
+      }
+    },
   },
 
   Driver: {
@@ -1073,39 +1101,6 @@ createDriver: async (_, { input }) => {
       if (!driver.approvalDate) return null;
       return driver.approvalDate.toISOString();
     }
-  },
-
-  // ===== MUTATIONS =====
-  Mutation: {
-    ...resolvers.Mutation,
-    
-    // ===== UPDATE DRIVER PUSH TOKEN =====
-    updateDriverPushToken: async (_, { driverId, pushToken }, { user }) => {
-      try {
-        console.log(`Updating push token for driver ${driverId}`);
-        
-        const driver = await Driver.findOne({ driverId });
-        if (!driver) {
-          throw new Error('Driver not found');
-        }
-
-        driver.pushToken = pushToken;
-        await driver.save();
-
-        console.log(`✅ Push token updated for driver ${driverId}`);
-        
-        return { 
-          success: true, 
-          message: 'Push token updated successfully' 
-        };
-      } catch (error) {
-        console.error('updateDriverPushToken error:', error);
-        return { 
-          success: false, 
-          message: error.message || 'Failed to update push token'
-        };
-      }
-    },
   },
 };
 

@@ -83,7 +83,7 @@ const PlanAvailabilityTab: React.FC = () => {
       {/* Right Side: Availability Details */}
       <div className="w-full lg:w-2/3">
         <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Plan Availability Check</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Material Slot Checker</h2>
           
           {/* Summary Stats */}
           {selectedPlanId && availability && (
