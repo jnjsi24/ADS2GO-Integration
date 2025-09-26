@@ -342,9 +342,9 @@ const Dashboard = () => {
                 value={analyticsPeriod}
                 onChange={handleAnalyticsPeriodChange}
               >
-                <option className="rounded-lg" value="1d">Last 24h</option>
-                <option className="rounded-lg" value="7d">Last 7 days</option>
-                <option className="rounded-lg" value="30d">Last 30 days</option>
+                <option className="rounded-lg" value="1d">Daily</option>
+                <option className="rounded-lg" value="7d">Weekly</option>
+                <option className="rounded-lg" value="30d">Monthly</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

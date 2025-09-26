@@ -233,7 +233,7 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, password, houseAddress
+        contactNumber, email, password, houseAddress, profilePicture
       } = input;
 
       let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
@@ -306,6 +306,14 @@ const resolvers = {
       if (email && email !== userRecord.email) {
         oldValues.email = userRecord.email;
         changedFields.push('email');
+      }
+      if (profilePicture !== undefined) {
+        const newProfilePicture = profilePicture ? profilePicture.trim() : null;
+        if (newProfilePicture !== userRecord.profilePicture) {
+          oldValues.profilePicture = userRecord.profilePicture;
+          userRecord.profilePicture = newProfilePicture;
+          changedFields.push('profilePicture');
+        }
       }
 
       await userRecord.save();

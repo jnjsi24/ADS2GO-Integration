@@ -164,6 +164,7 @@ const typeDefs = gql`
     email: String
     houseAddress: String
     password: String
+    profilePicture: String
   }
 
   input DeviceInfoInput {

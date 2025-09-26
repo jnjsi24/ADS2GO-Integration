@@ -28,3 +28,7 @@ export const uploadProfilePicture = async (file: File): Promise<string> => {
 export const uploadAdminProfilePicture = async (file: File): Promise<string> => {
   return uploadFileToFirebase(file, 'admin');
 };
+
+export const uploadUserProfilePicture = async (file: File): Promise<string> => {
+  return uploadFileToFirebase(file, 'users');
+};

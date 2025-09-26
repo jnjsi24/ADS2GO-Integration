@@ -452,7 +452,7 @@ const ScreenTracking: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Screen Tracking Dashboard</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Device Tracking Dashboard</h1>
               <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
             </div>
             <div className="flex items-center space-x-4">

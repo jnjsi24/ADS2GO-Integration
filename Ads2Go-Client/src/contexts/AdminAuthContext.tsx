@@ -113,8 +113,6 @@ export const AdminAuthProvider: React.FC<{
       return;
     }
     
-
-    
     const initializeAuth = async () => {
       
       console.log('🔄 AdminAuthContext: Starting initialization...');
@@ -254,7 +252,7 @@ export const AdminAuthProvider: React.FC<{
       setIsLoading(false);
       setIsInitialized(true);
     });
-  }, [navigate]); // Removed admin and isLoading to prevent infinite loops
+  }, []); // Empty dependency array to prevent infinite loops
 
   const login = async (email: string, password: string): Promise<Admin | null> => {
     try {

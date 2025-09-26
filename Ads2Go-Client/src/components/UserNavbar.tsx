@@ -31,7 +31,7 @@ const SideNavbar: React.FC = () => {
   const navLinks = [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
     { label: 'Advertisements', icon: <Megaphone size={20} />, path: '/advertisements' },
-    { label: 'Payment History', icon: <CreditCard size={20} />, path: '/history' },
+    { label: 'Payment', icon: <CreditCard size={20} />, path: '/history' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
   ];

@@ -1,59 +1,37 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, gql } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import { LOGIN_SUPERADMIN_MUTATION } from '../../graphql/superadmin'; // ✅ UPDATED
 
 
 
 
 const SuperAdminLogin: React.FC = () => {
   const navigate = useNavigate();
-  const { setAdmin } = useAdminAuth();
+  const { login } = useAdminAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const [loginSuperAdmin, { loading }] = useMutation(LOGIN_SUPERADMIN_MUTATION, {
-    onCompleted: (data) => {
-      console.log('SuperAdmin login successful:', data);
-      
-      if (data?.loginSuperAdmin?.token) {
-        localStorage.setItem('adminToken', data.loginSuperAdmin.token);
-        localStorage.setItem('role', data.loginSuperAdmin.superAdmin.role || 'SUPERADMIN'); // from backend
-
-        // Transform the GraphQL response to match the Admin interface
-        const adminData = {
-          ...data.loginSuperAdmin.superAdmin,
-          userId: data.loginSuperAdmin.superAdmin.id, // Map id to userId
-        };
-        setAdmin(adminData); // use backend role
-
-        navigate('/sadmin-dashboard');
-      } else {
-        setErrorMsg('Invalid login response.');
-      }
-    },
-    onError: (error) => {
-      setErrorMsg(error.message || 'Login failed');
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setLoading(true);
 
-    // You can generate a better deviceId (e.g., uuid), here is a simple placeholder:
-    const deviceInfo = {
-      deviceId: 'device_web_' + Date.now(),
-      deviceType: 'web',
-      deviceName: window.navigator.userAgent || 'browser',
-    };
-
-    loginSuperAdmin({ variables: { email, password, deviceInfo } });
+    try {
+      const result = await login(email, password);
+      if (result) {
+        // Navigation is handled by AdminAuthContext
+        console.log('SuperAdmin login successful, navigating...');
+      }
+    } catch (error: any) {
+      setErrorMsg(error.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
