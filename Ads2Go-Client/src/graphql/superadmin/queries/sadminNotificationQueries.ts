@@ -53,6 +53,7 @@ export const GET_SUPERADMIN_DASHBOARD_STATS = gql`
     getSuperAdminDashboardStats {
       totalUsers
       totalAdmins
+      totalDrivers
       totalAds
       totalPlans
       totalRevenue
@@ -113,6 +114,7 @@ export interface SuperAdminNotificationsResponse {
 export interface SuperAdminDashboardStats {
   totalUsers: number;
   totalAdmins: number;
+  totalDrivers: number;
   totalAds: number;
   totalPlans: number;
   totalRevenue: number;

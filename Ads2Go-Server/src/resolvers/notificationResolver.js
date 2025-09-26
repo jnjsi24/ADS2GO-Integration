@@ -262,12 +262,14 @@ const notificationResolvers = {
         const [
           totalUsers,
           totalAdmins,
+          totalDrivers,
           totalAds,
           totalPlans,
           userNotifications
         ] = await Promise.all([
           User.countDocuments(),
           Admin.countDocuments(),
+          Driver.countDocuments(),
           Ad.countDocuments(),
           AdsPlan.countDocuments(),
           UserNotifications.findOne({ userId: user.id })
@@ -316,6 +318,7 @@ const notificationResolvers = {
         const stats = {
           totalUsers,
           totalAdmins,
+          totalDrivers,
           totalAds,
           totalPlans,
           totalRevenue,

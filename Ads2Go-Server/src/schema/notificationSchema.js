@@ -38,6 +38,7 @@ const notificationTypeDefs = gql`
   type SuperAdminDashboardStats {
     totalUsers: Int!
     totalAdmins: Int!
+    totalDrivers: Int!
     totalAds: Int!
     totalPlans: Int!
     totalRevenue: Float!
