@@ -14,6 +14,7 @@ export const GET_OWN_USER_DETAILS = gql`
       companyName
       companyAddress
       houseAddress
+      profilePicture
       createdAt
       updatedAt
     }

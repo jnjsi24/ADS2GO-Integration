@@ -108,7 +108,7 @@ const Reports: React.FC = () => {
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Reports</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Reports Management</h1>
         <div className="flex flex-col items-end gap-3">
           <div className="flex gap-2">
             <input
