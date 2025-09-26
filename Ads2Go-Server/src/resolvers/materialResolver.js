@@ -167,7 +167,14 @@ const materialResolvers = {
                 photoComplianceStatus: tracking.photoComplianceStatus,
                 nextPhotoDue: tracking.nextPhotoDue,
                 lastPhotoUpload: tracking.lastPhotoUpload,
-                monthlyPhotos: tracking.monthlyPhotos || []
+                monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
+                  month: photo.month,
+                  status: photo.status,
+                  photoUrls: photo.photoUrls,
+                  uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+                  uploadedBy: photo.uploadedBy,
+                  adminNotes: photo.adminNotes
+                }))
               } : null
             };
           })
@@ -659,6 +666,63 @@ const materialResolvers = {
         }
       };
     },
+
+    // Driver photo upload mutation
+    uploadMonthlyPhoto: async (_, { materialId, photoUrls, month, description }, { user, driver }) => {
+      // Check if user is authenticated (either admin or driver)
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        console.log(`📸 Uploading monthly photo for material ${materialId}, month: ${month}`);
+        
+        // Find the material
+        const material = await Material.findById(materialId);
+        if (!material) {
+          throw new Error('Material not found');
+        }
+
+        // If it's a driver, verify they own this material
+        if (driver && material.driverId !== driver.driverId) {
+          throw new Error('You can only upload photos for your assigned materials');
+        }
+
+        // Find or create material tracking record
+        let materialTracking = await MaterialTracking.findOne({ materialId: material._id });
+        
+        if (!materialTracking) {
+          console.log(`📝 Creating new MaterialTracking record for material ${material.materialId}`);
+          materialTracking = new MaterialTracking({
+            materialId: material._id,
+            driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
+            location: {
+              type: 'Point',
+              coordinates: [0, 0] // Default coordinates
+            },
+            address: 'Location not set',
+            materialCondition: 'GOOD',
+            monthlyPhotos: [],
+            photoComplianceStatus: 'PENDING'
+          });
+        }
+
+        // Add monthly photo using the existing method
+        await materialTracking.addMonthlyPhoto(month, photoUrls, driver?.driverId || user?.id);
+
+        console.log(`✅ Monthly photo uploaded for material ${material.materialId}, month: ${month}`);
+
+        return {
+          success: true,
+          message: 'Monthly photo uploaded successfully',
+          materialTracking: materialTracking
+        };
+
+      } catch (error) {
+        console.error('Error uploading monthly photo:', error);
+        throw new Error(error.message || 'Failed to upload monthly photo');
+      }
+    }
   },
 
   Material: {
@@ -715,6 +779,70 @@ const materialResolvers = {
     dismountedAt: (parent) => {
       if (!parent.dismountedAt) return null;
       return parent.dismountedAt.toISOString();
+    },
+    
+    // Material condition and inspection fields - fetch from materialTracking collection
+    materialCondition: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        return tracking?.materialCondition || parent.materialCondition || 'GOOD';
+      } catch (error) {
+        console.error('Error fetching material condition:', error);
+        return parent.materialCondition || 'GOOD';
+      }
+    },
+    
+    inspectionPhotos: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        if (!tracking?.monthlyPhotos || tracking.monthlyPhotos.length === 0) return [];
+        
+        return tracking.monthlyPhotos.map(photo => ({
+          url: photo.photoUrls?.[0] || '', // Get first photo URL
+          uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+          uploadedBy: photo.uploadedBy,
+          description: photo.adminNotes || '',
+          month: photo.month,
+          status: photo.status || 'PENDING'
+        }));
+      } catch (error) {
+        console.error('Error fetching inspection photos:', error);
+        return [];
+      }
+    },
+    
+    photoComplianceStatus: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        return tracking?.photoComplianceStatus || parent.photoComplianceStatus || 'PENDING';
+      } catch (error) {
+        console.error('Error fetching photo compliance status:', error);
+        return parent.photoComplianceStatus || 'PENDING';
+      }
+    },
+    
+    lastInspectionDate: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const date = tracking?.lastPhotoUpload || parent.lastInspectionDate;
+        if (!date) return null;
+        return date.toISOString();
+      } catch (error) {
+        console.error('Error fetching last inspection date:', error);
+        return parent.lastInspectionDate ? parent.lastInspectionDate.toISOString() : null;
+      }
+    },
+    
+    nextInspectionDue: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const date = tracking?.nextPhotoDue || parent.nextInspectionDue;
+        if (!date) return null;
+        return date.toISOString();
+      } catch (error) {
+        console.error('Error fetching next inspection due:', error);
+        return parent.nextInspectionDue ? parent.nextInspectionDue.toISOString() : null;
+      }
     }
   },
 };

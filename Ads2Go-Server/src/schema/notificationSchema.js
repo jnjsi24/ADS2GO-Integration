@@ -1,6 +1,8 @@
 const gql = require('graphql-tag');
 
 const notificationTypeDefs = gql`
+  scalar JSON
+
   enum NotificationType {
     SUCCESS
     INFO
@@ -20,7 +22,7 @@ const notificationTypeDefs = gql`
     readAt: String
     adId: ID
     adTitle: String
-    data: String
+    data: JSON
     createdAt: String!
     updatedAt: String!
   }
@@ -78,7 +80,7 @@ const notificationTypeDefs = gql`
     title: String!
     status: String!
     createdAt: String!
-    user: User!
+    user: User
     materialId: ID
     planId: ID
   }
@@ -101,6 +103,7 @@ const notificationTypeDefs = gql`
     newUsersToday: Int!
     totalDrivers: Int!
     newDriversToday: Int!
+    pendingDrivers: Int!
     totalRevenue: Float!
     revenueToday: Float!
     unreadNotifications: Int!

@@ -9,6 +9,15 @@ interface Driver {
   vehiclePlateNumber: string;
 }
 
+interface InspectionPhoto {
+  url: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  description?: string;
+  month: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
 interface Material {
   id: string;
   materialId: string;
@@ -23,6 +32,12 @@ interface Material {
   dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Material condition and inspection fields
+  materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
+  inspectionPhotos?: InspectionPhoto[];
+  photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
+  lastInspectionDate?: string;
+  nextInspectionDue?: string;
 }
 
 interface MaterialDetailsModalProps {
@@ -353,6 +368,120 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Material Condition and Inspection Photos Section */}
+          <div className="mt-6 space-y-4">
+            <h4 className="text-md font-semibold text-gray-800 border-b pb-2">
+              Material Condition & Inspection
+            </h4>
+            
+            {/* Material Condition */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm font-semibold text-gray-700">Condition:</span>
+                <div className="mt-1">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    material.materialCondition === 'EXCELLENT' ? 'bg-green-200 text-green-800' :
+                    material.materialCondition === 'GOOD' ? 'bg-blue-200 text-blue-800' :
+                    material.materialCondition === 'FAIR' ? 'bg-yellow-200 text-yellow-800' :
+                    material.materialCondition === 'POOR' ? 'bg-orange-200 text-orange-800' :
+                    material.materialCondition === 'DAMAGED' ? 'bg-red-200 text-red-800' :
+                    'bg-gray-200 text-gray-800'
+                  }`}>
+                    {material.materialCondition || 'GOOD'}
+                  </span>
+                </div>
+              </div>
+              
+              <div>
+                <span className="text-sm font-semibold text-gray-700">Photo Compliance:</span>
+                <div className="mt-1">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    material.photoComplianceStatus === 'COMPLIANT' ? 'bg-green-200 text-green-800' :
+                    material.photoComplianceStatus === 'NON_COMPLIANT' ? 'bg-red-200 text-red-800' :
+                    'bg-yellow-200 text-yellow-800'
+                  }`}>
+                    {material.photoComplianceStatus || 'PENDING'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Inspection Dates */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <span className="text-sm font-semibold text-gray-700">Last Inspection:</span>
+                <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
+                  {formatDate(material.lastInspectionDate) || 'N/A'}
+                </div>
+              </div>
+              
+              <div>
+                <span className="text-sm font-semibold text-gray-700">Next Inspection Due:</span>
+                <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg mt-1">
+                  {formatDate(material.nextInspectionDue) || 'N/A'}
+                </div>
+              </div>
+            </div>
+
+            {/* Inspection Photos */}
+            <div>
+              <span className="text-sm font-semibold text-gray-700">Monthly Inspection Photos:</span>
+              {material.inspectionPhotos && material.inspectionPhotos.length > 0 ? (
+                <div className="mt-2 space-y-3">
+                  {material.inspectionPhotos.map((photo, index) => (
+                    <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            {photo.month}
+                          </span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            photo.status === 'APPROVED' ? 'bg-green-200 text-green-800' :
+                            photo.status === 'REJECTED' ? 'bg-red-200 text-red-800' :
+                            'bg-yellow-200 text-yellow-800'
+                          }`}>
+                            {photo.status}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {formatDate(photo.uploadedAt)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={photo.url}
+                          alt={`Inspection photo for ${photo.month}`}
+                          className="w-20 h-20 object-cover rounded border"
+                          onError={(e) => {
+                            e.currentTarget.src = '/placeholder-image.png';
+                          }}
+                        />
+                        <div className="flex-1">
+                          {photo.description && (
+                            <p className="text-sm text-gray-600 mb-1">
+                              {photo.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500">
+                            Uploaded by: {photo.uploadedBy}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                  <p className="text-sm text-gray-500">No inspection photos available</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Monthly photos will appear here once uploaded by drivers
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

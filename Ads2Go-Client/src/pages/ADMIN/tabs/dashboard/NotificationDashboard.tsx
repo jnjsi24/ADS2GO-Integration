@@ -39,7 +39,7 @@ interface PendingAd {
   user: {
     firstName: string;
     lastName: string;
-  };
+  } | null;
   materialId?: string;
   planId?: string;
 }
@@ -328,7 +328,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         <div>
                           <p className="font-medium text-gray-800">{ad.title}</p>
                           <p className="text-sm text-gray-600">
-                            by {ad.user.firstName} {ad.user.lastName} • {formatTimeAgo(ad.createdAt)}
+                            by {ad.user ? `${ad.user.firstName} ${ad.user.lastName}` : 'Unknown User'} • {formatTimeAgo(ad.createdAt)}
                           </p>
                         </div>
                       </div>

@@ -102,6 +102,13 @@ const server = new ApolloServer({
     notificationTypeDefs,
   ]),
   resolvers: mergeResolvers([
+    {
+      JSON: {
+        serialize: (value) => value,
+        parseValue: (value) => value,
+        parseLiteral: (ast) => ast.value,
+      },
+    },
     userResolvers,
     adminResolvers,
     superAdminResolvers,
