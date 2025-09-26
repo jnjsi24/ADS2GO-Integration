@@ -7,6 +7,7 @@ import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
 import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { Link } from 'react-router-dom';
 
 interface User {
   id: string;
@@ -603,10 +604,12 @@ const handleCityFilterChange = (city: string) => {
 
                 {/* Counts Section (Ads/Riders) */}
                 <div className="mb-6">
-                  <div className="bg-gray-100 p-4 rounded-lg text-center">
-                    <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
-                    <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
-                  </div>
+                  <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
+                    <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
+                      <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
+                      <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
+                    </div>
+                  </Link>
                 </div>
 
                 {/* Account Details - Now a table */}
@@ -690,17 +693,6 @@ const handleCityFilterChange = (city: string) => {
                       </div>
                     )}
                   </div>
-                </div>
-
-
-                {/* Button group */}
-                <div className="flex gap-3 justify-end mt-10">
-                  <button 
-                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50" 
-                    onClick={handleCloseModal}
-                  >
-                    Close
-                  </button>
                 </div>
               </div>
             </div>

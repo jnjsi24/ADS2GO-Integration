@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Pencil, FileUp } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
-import { uploadUserProfilePicture } from "../../utils/fileUpload";
 
 // GraphQL Mutation (update user)
 const UPDATE_USER = gql`
@@ -21,7 +20,6 @@ const UPDATE_USER = gql`
         contactNumber
         email
         houseAddress
-        profilePicture
       }
     }
   }
@@ -97,7 +95,7 @@ const Account: React.FC = () => {
   setIsEditing(false);
 };
 
-const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
+const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
   if (e.target.files && e.target.files[0]) {
     const file = e.target.files[0];
     const allowedExtensions = ["jpg", "jpeg", "png"];
@@ -108,27 +106,13 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
       return;
     }
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File size too large. Maximum size is 5MB");
-      return;
-    }
-
-    try {
-      // Show loading state
-      setFormData(prev => ({ ...prev, profilePicture: "uploading..." }));
-      
-      // Upload to Firebase
-      const downloadURL = await uploadUserProfilePicture(file);
-      
-      // Update form data with Firebase URL
-      setFormData(prev => ({ ...prev, profilePicture: downloadURL }));
-    } catch (error) {
-      console.error("Error uploading profile picture:", error);
-      alert("Failed to upload profile picture. Please try again.");
-      // Reset to previous value on error
-      setFormData(prev => ({ ...prev, profilePicture: user?.profilePicture || "" }));
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const updatedProfile = reader.result as string;
+      setFormData(prev => ({ ...prev, profilePicture: updatedProfile }));
+      // ❌ Remove setUser from here
+    };
+    reader.readAsDataURL(file);
   }
 };
 
@@ -187,24 +171,15 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
         {/* Left Section: Profile Card */}
         <div className="flex flex-col items-center justify-center p-8 bg-white/10 bg-opacity-70 sm:w-1/3">
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">
-            {formData.profilePicture && formData.profilePicture !== "uploading..." ? (
+            {formData.profilePicture ? (
               <img
                 src={formData.profilePicture}
                 alt="Profile"
                 className="object-cover w-full h-full"
-                onError={(e) => {
-                  // Fallback to initials if image fails to load
-                  e.currentTarget.style.display = 'none';
-                  const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (nextElement) {
-                    nextElement.style.display = 'flex';
-                  }
-                }}
               />
-            ) : null}
-            {(!formData.profilePicture || formData.profilePicture === "uploading...") && (
-              <span className={formData.profilePicture === "uploading..." ? "text-blue-300" : ""}>
-                {formData.profilePicture === "uploading..." ? "Uploading..." : `${formData.firstName?.[0] || ""}${formData.lastName?.[0] || ""}`.toUpperCase()}
+            ) : (
+              <span>
+                {`${formData.firstName?.[0] || ""}${formData.lastName?.[0] || ""}`.toUpperCase()}
               </span>
             )}
 
