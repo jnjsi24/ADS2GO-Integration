@@ -863,9 +863,9 @@ const ManageRiders: React.FC = () => {
 
             {/* Content Section (Scrollable) */}
             <div className="p-6 overflow-y-auto flex-1">
-              {/* Vehicle Information */}
+              {/* Vehicle & Material Information */}
               <div className="mb-6">
-                <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Vehicle Information</h3>
+                <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Vehicle & Material Information</h3>
                 <div className="overflow-x-auto rounded-lg">
                   <table className="w-96 mx-auto divide-y divide-gray-200">
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -881,32 +881,9 @@ const ManageRiders: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Plate Number</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.vehiclePlateNumber}</td>
                       </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Material Information */}
-              <div className="mb-6">
-                <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Material Information</h3>
-                <div className="overflow-x-auto rounded-lg">
-                  <table className="w-96 mx-auto divide-y divide-gray-200">
-                    <tbody className="bg-white divide-y divide-gray-200">
                       <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Assigned Material</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Material Type</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.installedMaterialType || 'N/A'}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Assigned Date</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.approvalDate ? formatDate(selectedDriverDetails.approvalDate) : 'N/A'}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Material Category</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.material?.category || 'N/A'}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Material ID</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.material?.materialId || 'N/A'}</td>
                       </tr>
                     </tbody>
                   </table>
