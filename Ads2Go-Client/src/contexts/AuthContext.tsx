@@ -52,8 +52,7 @@ interface AuthContextType {
   isInitialized: boolean;
   navigate: (path: string) => void;
   debugToken: (token: string) => User | null;
-  navigateToRegister: () => void;
-}
+  navigateToRegister: () => void;}
 
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

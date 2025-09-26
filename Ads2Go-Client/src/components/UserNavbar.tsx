@@ -15,13 +15,11 @@ import {
 const DrawOutlineLink = ({
   to,
   active,
-  children,
-  pos
+  children
 }: {
   to: string;
   active: boolean;
   children: React.ReactNode;
-  pos: { x: number; y: number };
 }) => (
   <Link
     to={to}
@@ -46,14 +44,11 @@ const DrawOutlineLink = ({
   </Link>
 );
 
-
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
   const { unreadCount, isLoading } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
-    const [pos, setPos] = useState({ x: 50, y: 50 });
-  
 
   const handleLogout = async () => {
     await logout();
@@ -74,7 +69,7 @@ const SideNavbar: React.FC = () => {
   ];
 
   return (
-<div className="bg-black/20 backdrop-blur-md shadow-inner fixed top-0 bottom-0 left-0 p-3 flex flex-col justify-between z-50 w-64">
+    <div className="bg-black/20 backdrop-blur-md shadow-inner fixed top-0 bottom-0 left-0 p-3 flex flex-col justify-between z-50 w-64">
       <div className="p-3">
         {/* Logo */}
         <div className="flex items-center pl-5 mt-6 space-x-3 mb-10">
@@ -82,14 +77,13 @@ const SideNavbar: React.FC = () => {
           <span className="text-white/80 text-2xl font-bold">Ads2Go</span>
         </div>
 
-        {/* Navigation with Outline Animation */}
+        {/* Navigation */}
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
             <li key={link.label} className="relative group">
               <DrawOutlineLink
                 to={link.path}
                 active={location.pathname === link.path}
-                pos={pos} // pass the pos state here
               >
                 {link.icon}
                 <span>{link.label}</span>
@@ -97,7 +91,6 @@ const SideNavbar: React.FC = () => {
             </li>
           ))}
         </ul>
-
       </div>
 
       {/* User Profile & Logout */}
@@ -107,12 +100,21 @@ const SideNavbar: React.FC = () => {
             className="flex items-center space-x-3 cursor-pointer flex-1"
             onClick={() => navigate('/account')}
           >
-            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-              <span className="text-white font-semibold">
-                {user ? getInitials(user.firstName, user.lastName) : '...'}
-              </span>
+            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative overflow-hidden">
+              {user?.profilePicture ? (
+                <img
+                  src={user.profilePicture}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-white font-semibold">
+                  {user ? getInitials(user.firstName, user.lastName) : '?'}
+                </span>
+              )}
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
             </div>
+
             <div>
               {user ? (
                 <p className="font-semibold text-white/90">{`${user.firstName} ${user.lastName}`}</p>
@@ -124,6 +126,7 @@ const SideNavbar: React.FC = () => {
               )}
             </div>
           </div>
+
           <button
             onClick={() => navigate('/notifications')}
             className="relative p-2 text-white/80 hover:text-white transition-colors"

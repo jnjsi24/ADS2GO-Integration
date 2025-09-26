@@ -2,13 +2,27 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { ChevronLeft, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, QrCode, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 
+
+type QrImpression = {
+  id: number;
+  timestamp: string;
+  scans: number;
+};
+
+const sampleQrImpressions: QrImpression[] = [
+  { id: 1, timestamp: '2025-09-25 08:00 AM', scans: 15 },
+  { id: 2, timestamp: '2025-09-25 09:30 AM', scans: 22 },
+  { id: 3, timestamp: '2025-09-25 11:15 AM', scans: 18 },
+  { id: 4, timestamp: '2025-09-25 01:00 PM', scans: 30 },
+  { id: 5, timestamp: '2025-09-25 02:45 PM', scans: 25 },
+];
 
 // Ad type (updated to include startTime and endTime)
 type Ad = {
@@ -448,23 +462,24 @@ const AdDetailsPage: React.FC = () => {
 </div>
 
         )}
-
+        
         {activeTab === 'AdActivity' && (
           <div className="space-y-2 max-h-80 rounded-lg shadow-md overflow-y-auto custom-scrollbar">
-            {sampleNotifications.map((notif) => (
-              <div key={notif.id} className="flex items-start bg-white/10 space-x-3 p-3 rounded-lg shadow-md">
-                {notif.type === 'avail' && <CheckCircle size={20} className="text-green-500 flex-shrink-0 mt-0.5" />}
-                {notif.type === 'on_the_move' && <Truck size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />}
-                {notif.type === 'completed' && <Trophy size={20} className="text-purple-500 flex-shrink-0 mt-0.5" />}
-                {notif.type === 'cancelled' && <XCircle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />}
+            {/* Replace sampleNotifications with sampleQrImpressions */}
+            {sampleQrImpressions.map((impression) => (
+              <div key={impression.id} className="flex items-start bg-white/10 space-x-3 p-3 rounded-lg shadow-md">
+                {/* You can use an icon to represent a QR code, e.g., QrCode from lucide-react */}
+                <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-white/90 text-sm font-medium">{getNotificationText(notif)}</p>
-                  <p className="text-white/70 text-xs">{notif.timestamp}</p>
+                  {/* Display the impression details */}
+                  <p className="text-white/90 text-sm font-medium">QR code scanned {impression.scans} times.</p>
+                  <p className="text-white/70 text-xs">{impression.timestamp}</p>
                 </div>
               </div>
             ))}
-            {sampleNotifications.length === 0 && (
-              <p className="text-center text-white/90 py-10">No activities found for this ad.</p>
+            {/* Update the empty state message */}
+            {sampleQrImpressions.length === 0 && (
+              <p className="text-center text-white/90 py-10">No QR impressions found for this ad.</p>
             )}
           </div>
         )}

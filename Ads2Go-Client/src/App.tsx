@@ -40,6 +40,7 @@ import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
+import UserAdsPage from './pages/ADMIN/UserAdsPage';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -144,6 +145,15 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/ads-by-user/:userId"
+          element={
+            <ProtectedRoute>
+              <UserAdsPage />
+            </ProtectedRoute>
+          }
+        />
+
 
         {/* Protected SuperAdmin Routes */}
         <Route
