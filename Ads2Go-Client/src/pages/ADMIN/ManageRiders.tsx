@@ -141,10 +141,33 @@ const DocumentImage: React.FC<{
 
 const statusFilterOptions = ['All Status', 'Active', 'Pending', 'Rejected'];
 
+// Generate month options
+const monthOptions = [
+  'All Months',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+// Generate year options (current year and previous 5 years)
+const generateYearOptions = () => {
+  const currentYear = new Date().getFullYear();
+  const years = ['All Years'];
+  for (let i = 0; i < 6; i++) {
+    years.push((currentYear - i).toString());
+  }
+  return years;
+};
+
+const yearOptions = generateYearOptions();
+
 const ManageRiders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState('All Months');
+  const [selectedYear, setSelectedYear] = useState('All Years');
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -231,9 +254,20 @@ const ManageRiders: React.FC = () => {
     
     const matchesStatus = selectedStatusFilter === 'All Status' || r.accountStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
 
+    // Date filter logic
+    let matchesDate = true;
+    if (selectedMonth !== 'All Months' || selectedYear !== 'All Years') {
+      const createdAt = new Date(r.createdAt);
+      const riderMonth = createdAt.toLocaleString('default', { month: 'long' });
+      const riderYear = createdAt.getFullYear().toString();
+      
+      const matchesMonth = selectedMonth === 'All Months' || riderMonth === selectedMonth;
+      const matchesYear = selectedYear === 'All Years' || riderYear === selectedYear;
+      
+      matchesDate = matchesMonth && matchesYear;
+    }
 
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   // Actions
@@ -501,7 +535,7 @@ const ManageRiders: React.FC = () => {
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
-          {/* Custom Dropdown with SVG */}
+          {/* Status Filter Dropdown */}
           <div className="relative w-32">
             <button
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
@@ -525,6 +559,74 @@ const ManageRiders: React.FC = () => {
                       className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                     >
                       {status}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Month Filter Dropdown */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedMonth}
+              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showMonthDropdown ? 'rotate-180' : 'rotate-0'}`} />
+            </button>
+            <AnimatePresence>
+              {showMonthDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                >
+                  {monthOptions.map((month) => (
+                    <button
+                      key={month}
+                      onClick={() => {
+                        setSelectedMonth(month);
+                        setShowMonthDropdown(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {month}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Year Filter Dropdown */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowYearDropdown(!showYearDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedYear}
+              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : 'rotate-0'}`} />
+            </button>
+            <AnimatePresence>
+              {showYearDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                >
+                  {yearOptions.map((year) => (
+                    <button
+                      key={year}
+                      onClick={() => {
+                        setSelectedYear(year);
+                        setShowYearDropdown(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {year}
                     </button>
                   ))}
                 </motion.div>
