@@ -9,7 +9,8 @@ import {
   LogOut,
   CreditCard,
   HelpCircle,
-  Bell
+  Bell,
+  Info
 } from 'lucide-react';
 
 const SideNavbar: React.FC = () => {
@@ -34,6 +35,7 @@ const SideNavbar: React.FC = () => {
     { label: 'Payment History', icon: <CreditCard size={20} />, path: '/history' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
+    { label: 'About Us', icon: <Info size={20} />, path: '/about' },
   ];
 
   return (

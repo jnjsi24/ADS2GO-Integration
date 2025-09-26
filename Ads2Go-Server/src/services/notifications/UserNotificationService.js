@@ -425,6 +425,138 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
+   * Send report status update notification to user
+   */
+  static async sendReportStatusUpdateNotification(userId, reportId, reportTitle, oldStatus, newStatus, adminNotes = null) {
+    try {
+      console.log('🔔 UserNotificationService: Starting report status update notification for user:', userId);
+      
+      // Get user details
+      const User = require('../../models/User');
+      const user = await User.findById(userId);
+      if (!user) {
+        console.error('❌ UserNotificationService: User not found:', userId);
+        throw new Error('User not found');
+      }
+
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+
+      // Create status-specific messages
+      let title, message, type, priority;
+      
+      switch (newStatus) {
+        case 'IN_PROGRESS':
+          title = '🔧 Report Update';
+          message = `Your report "${reportTitle}" is now being reviewed by our team.`;
+          type = 'INFO';
+          priority = 'MEDIUM';
+          break;
+        case 'RESOLVED':
+          title = '✅ Report Resolved';
+          message = `Great news! Your report "${reportTitle}" has been resolved.`;
+          type = 'SUCCESS';
+          priority = 'HIGH';
+          break;
+        case 'CLOSED':
+          title = '📋 Report Closed';
+          message = `Your report "${reportTitle}" has been closed.`;
+          type = 'INFO';
+          priority = 'MEDIUM';
+          break;
+        default:
+          title = '📋 Report Status Update';
+          message = `Your report "${reportTitle}" status has been updated to ${newStatus.replace('_', ' ').toLowerCase()}.`;
+          type = 'INFO';
+          priority = 'MEDIUM';
+      }
+
+      // Add admin notes to message if provided
+      if (adminNotes && adminNotes.trim()) {
+        message += ` Admin message: "${adminNotes}"`;
+      }
+
+      // Create in-app notification
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        userId,
+        title,
+        message,
+        type,
+        {
+          userRole: 'USER',
+          category: 'REPORT_STATUS_UPDATE',
+          priority: priority,
+          reportId: reportId,
+          reportTitle: reportTitle,
+          data: { 
+            oldStatus, 
+            newStatus, 
+            adminNotes: adminNotes || null 
+          }
+        }
+      );
+      console.log('✅ UserNotificationService: In-app notification created');
+
+      // Send email notification
+      console.log('📧 UserNotificationService: Sending email notification...');
+      await this.sendReportStatusUpdateEmail(user.email, user.firstName, reportTitle, newStatus, adminNotes);
+      console.log('✅ UserNotificationService: Email notification sent');
+
+      return notification;
+    } catch (error) {
+      console.error('❌ UserNotificationService: Error sending report status update notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send admin response notification to user
+   */
+  static async sendReportAdminResponseNotification(userId, reportId, reportTitle, adminNotes) {
+    try {
+      console.log('🔔 UserNotificationService: Starting admin response notification for user:', userId);
+      
+      // Get user details
+      const User = require('../../models/User');
+      const user = await User.findById(userId);
+      if (!user) {
+        console.error('❌ UserNotificationService: User not found:', userId);
+        throw new Error('User not found');
+      }
+
+      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+
+      // Create in-app notification
+      console.log('🔔 UserNotificationService: Creating in-app notification...');
+      const notification = await this.createNotification(
+        userId,
+        '💬 Admin Response',
+        `You received a response from our admin team regarding your report "${reportTitle}". Message: "${adminNotes}"`,
+        'INFO',
+        {
+          userRole: 'USER',
+          category: 'REPORT_ADMIN_RESPONSE',
+          priority: 'HIGH',
+          reportId: reportId,
+          reportTitle: reportTitle,
+          data: { adminNotes }
+        }
+      );
+      console.log('✅ UserNotificationService: In-app notification created');
+
+      // Send email notification
+      console.log('📧 UserNotificationService: Sending email notification...');
+      await this.sendReportAdminResponseEmail(user.email, user.firstName, reportTitle, adminNotes);
+      console.log('✅ UserNotificationService: Email notification sent');
+
+      return notification;
+    } catch (error) {
+      console.error('❌ UserNotificationService: Error sending admin response notification:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send email notification for profile changes
    */
   static async sendProfileChangeEmail(email, firstName, changeMessages, changedFields) {
@@ -482,6 +614,121 @@ class UserNotificationService extends BaseNotificationService {
       console.log(`✅ Profile change email sent to ${email}`);
     } catch (error) {
       console.error('Error sending profile change email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send email notification for report status updates
+   */
+  static async sendReportStatusUpdateEmail(email, firstName, reportTitle, newStatus, adminNotes = null) {
+    try {
+      const statusText = newStatus.replace('_', ' ').toLowerCase();
+      const statusColor = newStatus === 'RESOLVED' ? '#28a745' : '#4A90E2';
+      const statusIcon = newStatus === 'RESOLVED' ? '✅' : newStatus === 'IN_PROGRESS' ? '🔧' : '📋';
+
+      const mailOptions = {
+        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: `${statusIcon} Report Status Update - ${statusText}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+            <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <h2 style="color: #333; text-align: center;">${statusIcon} Report Status Update</h2>
+              <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+              
+              <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${statusColor};">
+                <h3 style="color: ${statusColor}; margin: 0 0 10px 0;">Report Details:</h3>
+                <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${reportTitle}</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${statusText.toUpperCase()} ${statusIcon}</span></p>
+                <p style="margin: 5px 0; color: #333;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+              </div>
+              
+              ${adminNotes ? `
+              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #6c757d;">
+                <h3 style="color: #495057; margin: 0 0 10px 0;">Admin Message:</h3>
+                <p style="margin: 0; color: #495057; font-style: italic;">"${adminNotes}"</p>
+              </div>
+              ` : ''}
+              
+              <p style="color: #666; text-align: center; margin: 20px 0;">
+                ${newStatus === 'RESOLVED' ? 'Great news! Your report has been resolved.' : 
+                  newStatus === 'IN_PROGRESS' ? 'Our team is now reviewing your report.' : 
+                  'Your report status has been updated.'}
+              </p>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/help" 
+                   style="background-color: ${statusColor}; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  View Reports
+                </a>
+              </div>
+              
+              <p style="text-align: center; color: #999; margin-top: 20px; font-size: 14px;">
+                Thank you for using Ads2Go!
+              </p>
+            </div>
+          </div>
+        `
+      };
+
+      await EmailService.transporter.sendMail(mailOptions);
+      console.log(`✅ Report status update email sent to ${email}`);
+    } catch (error) {
+      console.error('Error sending report status update email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send email notification for admin responses
+   */
+  static async sendReportAdminResponseEmail(email, firstName, reportTitle, adminNotes) {
+    try {
+      const mailOptions = {
+        from: `Ads2Go <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: '💬 Admin Response to Your Report',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+            <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+              <h2 style="color: #333; text-align: center;">💬 Admin Response</h2>
+              <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+              
+              <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
+                <h3 style="color: #4A90E2; margin: 0 0 10px 0;">Report Details:</h3>
+                <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${reportTitle}</p>
+                <p style="margin: 5px 0; color: #333;"><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+              </div>
+              
+              <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+                <h3 style="color: #856404; margin: 0 0 10px 0;">Admin Response:</h3>
+                <p style="margin: 0; color: #856404; font-style: italic;">"${adminNotes}"</p>
+              </div>
+              
+              <p style="color: #666; text-align: center; margin: 20px 0;">
+                Our admin team has responded to your report. Please review their message above.
+              </p>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.CLIENT_URL || 'http://localhost:3000'}/help" 
+                   style="background-color: #4A90E2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  View Reports
+                </a>
+              </div>
+              
+              <p style="text-align: center; color: #999; margin-top: 20px; font-size: 14px;">
+                Thank you for using Ads2Go!
+              </p>
+            </div>
+          </div>
+        `
+      };
+
+      await EmailService.transporter.sendMail(mailOptions);
+      console.log(`✅ Admin response email sent to ${email}`);
+    } catch (error) {
+      console.error('Error sending admin response email:', error);
       throw error;
     }
   }

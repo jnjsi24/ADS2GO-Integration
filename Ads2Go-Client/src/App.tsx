@@ -24,6 +24,7 @@ import Payment from './pages/USERS/Payment';
 import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
 import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
+import About from './pages/USERS/About';
 import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
@@ -40,6 +41,7 @@ import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
+import FAQManagement from './pages/ADMIN/FAQManagement';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -132,6 +134,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <ManageAds />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/faq"
+          element={
+            <ProtectedRoute>
+              <FAQManagement />
             </ProtectedRoute>
           }
         />
@@ -273,6 +283,14 @@ const UserAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <Help />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/about"
+          element={
+            <ProtectedRoute>
+              <About />
             </ProtectedRoute>
           }
         />

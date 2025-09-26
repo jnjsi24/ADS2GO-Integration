@@ -228,6 +228,50 @@ class AdminNotificationService extends BaseNotificationService {
       throw error;
     }
   }
+
+  /**
+   * Send new user report notification to admins
+   */
+  static async sendNewUserReportNotification(userId, reportId, reportType, title) {
+    try {
+      const User = require('../../models/User');
+      const Admin = require('../../models/Admin');
+      
+      const user = await User.findById(userId);
+      if (!user) throw new Error('User not found');
+
+      // Get all active admins
+      const admins = await Admin.find({ isActive: true });
+      
+      const notifications = [];
+      for (const admin of admins) {
+        const notification = await this.createNotification(
+          admin._id,
+          '📋 New User Report',
+          `New ${reportType.replace('_', ' ').toLowerCase()} report "${title}" submitted by ${user.firstName} ${user.lastName}`,
+          'INFO',
+          {
+            userRole: 'ADMIN',
+            category: 'NEW_USER_REPORT',
+            priority: 'MEDIUM',
+            reportId: reportId,
+            reportType: reportType,
+            reportTitle: title,
+            data: { 
+              submitterName: `${user.firstName} ${user.lastName}`,
+              submitterEmail: user.email
+            }
+          }
+        );
+        notifications.push(notification);
+      }
+
+      return notifications;
+    } catch (error) {
+      console.error('Error sending new user report notification:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = AdminNotificationService;

@@ -31,6 +31,8 @@ const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
 const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 const notificationTypeDefs = require('./schema/notificationSchema');
+const userReportTypeDefs = require('./schema/userReportSchema');
+const faqTypeDefs = require('./schema/faqSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -46,6 +48,8 @@ const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
 const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 const notificationResolvers = require('./resolvers/notificationResolver');
+const userReportResolvers = require('./resolvers/userReportResolver');
+const faqResolvers = require('./resolvers/faqResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -98,6 +102,8 @@ const server = new ApolloServer({
     adsDeploymentTypeDefs,
     screenTrackingTypeDefs,
     notificationTypeDefs,
+    userReportTypeDefs,
+    faqTypeDefs,
   ]),
   resolvers: mergeResolvers([
     userResolvers,
@@ -113,6 +119,8 @@ const server = new ApolloServer({
     adsDeploymentResolvers,
     screenTrackingResolvers,
     notificationResolvers,
+    userReportResolvers,
+    faqResolvers,
   ]),
 });
 

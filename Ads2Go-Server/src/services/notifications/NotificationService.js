@@ -98,6 +98,10 @@ class NotificationService {
     return await AdminNotificationService.sendSystemAlertNotification(alert, description);
   }
 
+  static async sendNewUserReportNotification(userId, reportId, reportType, title) {
+    return await AdminNotificationService.sendNewUserReportNotification(userId, reportId, reportType, title);
+  }
+
   // ==================== SUPERADMIN NOTIFICATIONS ====================
 
   static async sendCriticalSystemIssueNotification(issue, description) {
