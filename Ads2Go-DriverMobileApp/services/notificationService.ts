@@ -1,19 +1,39 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../config/api';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// Conditional import for notifications - handle Expo Go limitations
+let Notifications: any = null;
+let isNotificationsAvailable = false;
+
+try {
+  // Try to import notifications
+  Notifications = require('expo-notifications');
+  
+  // Check if we're in Expo Go (which has limited notification support)
+  const isExpoGo = __DEV__ && !Device.isDevice;
+  
+  if (!isExpoGo) {
+    isNotificationsAvailable = true;
+    
+    // Configure notification behavior only if available
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } else {
+    console.log('⚠️ Running in Expo Go - notifications will be limited');
+  }
+} catch (error) {
+  console.log('⚠️ expo-notifications not available:', error instanceof Error ? error.message : 'Unknown error');
+  isNotificationsAvailable = false;
+}
 
 export interface NotificationData {
   materialId?: string;
@@ -45,6 +65,11 @@ class NotificationService {
    */
   async registerForPushNotifications(): Promise<string | null> {
     try {
+      if (!isNotificationsAvailable || !Notifications) {
+        console.log('⚠️ Notifications not available in this environment');
+        return null;
+      }
+
       if (!Device.isDevice) {
         console.log('❌ Must use physical device for push notifications');
         return null;
@@ -74,10 +99,14 @@ class NotificationService {
       console.log('✅ Expo push token:', this.expoPushToken);
 
       // Store token in AsyncStorage
-      await AsyncStorage.setItem('expoPushToken', this.expoPushToken);
+      if (this.expoPushToken) {
+        await AsyncStorage.setItem('expoPushToken', this.expoPushToken);
+      }
 
       // Send token to server
-      await this.sendTokenToServer(this.expoPushToken);
+      if (this.expoPushToken) {
+        await this.sendTokenToServer(this.expoPushToken);
+      }
 
       return this.expoPushToken;
     } catch (error) {
@@ -137,29 +166,39 @@ class NotificationService {
    * Set up notification listeners
    */
   setupNotificationListeners(): () => void {
-    // Listener for notifications received while app is foregrounded
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      console.log('📱 Notification received:', notification);
-      this.handleNotificationReceived(notification);
-    });
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - returning empty cleanup function');
+      return () => {}; // Return empty cleanup function
+    }
 
-    // Listener for when user taps on notification
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('👆 Notification tapped:', response);
-      this.handleNotificationTapped(response);
-    });
+    try {
+      // Listener for notifications received while app is foregrounded
+      const notificationListener = Notifications.addNotificationReceivedListener((notification: any) => {
+        console.log('📱 Notification received:', notification);
+        this.handleNotificationReceived(notification);
+      });
 
-    // Return cleanup function
-    return () => {
-      notificationListener.remove();
-      responseListener.remove();
-    };
+      // Listener for when user taps on notification
+      const responseListener = Notifications.addNotificationResponseReceivedListener((response: any) => {
+        console.log('👆 Notification tapped:', response);
+        this.handleNotificationTapped(response);
+      });
+
+      // Return cleanup function
+      return () => {
+        notificationListener.remove();
+        responseListener.remove();
+      };
+    } catch (error) {
+      console.error('❌ Error setting up notification listeners:', error);
+      return () => {}; // Return empty cleanup function
+    }
   }
 
   /**
    * Handle notification received (app in foreground)
    */
-  private handleNotificationReceived(notification: Notifications.Notification): void {
+  private handleNotificationReceived(notification: any): void {
     const { title, body, data } = notification.request.content;
     
     console.log('📱 Handling notification:', { title, body, data });
@@ -179,7 +218,7 @@ class NotificationService {
   /**
    * Handle notification tapped
    */
-  private handleNotificationTapped(response: Notifications.NotificationResponse): void {
+  private handleNotificationTapped(response: any): void {
     const { data } = response.notification.request.content;
     
     console.log('👆 Handling notification tap:', data);
@@ -281,6 +320,11 @@ class NotificationService {
    * Schedule a local notification (for testing)
    */
   async scheduleLocalNotification(title: string, body: string, data?: NotificationData): Promise<void> {
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - cannot schedule local notification');
+      return;
+    }
+
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -300,6 +344,11 @@ class NotificationService {
    * Clear all notifications
    */
   async clearAllNotifications(): Promise<void> {
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - cannot clear notifications');
+      return;
+    }
+
     try {
       await Notifications.dismissAllNotificationsAsync();
     } catch (error) {
@@ -310,15 +359,35 @@ class NotificationService {
   /**
    * Get notification permissions status
    */
-  async getPermissionsStatus(): Promise<Notifications.NotificationPermissionsStatus> {
-    return await Notifications.getPermissionsAsync();
+  async getPermissionsStatus(): Promise<any> {
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - returning default permissions status');
+      return { status: 'undetermined' };
+    }
+
+    try {
+      return await Notifications.getPermissionsAsync();
+    } catch (error) {
+      console.error('❌ Error getting permissions status:', error);
+      return { status: 'undetermined' };
+    }
   }
 
   /**
    * Request notification permissions
    */
-  async requestPermissions(): Promise<Notifications.NotificationPermissionsStatus> {
-    return await Notifications.requestPermissionsAsync();
+  async requestPermissions(): Promise<any> {
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - returning default permissions status');
+      return { status: 'undetermined' };
+    }
+
+    try {
+      return await Notifications.requestPermissionsAsync();
+    } catch (error) {
+      console.error('❌ Error requesting permissions:', error);
+      return { status: 'undetermined' };
+    }
   }
 }
 
