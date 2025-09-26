@@ -16,6 +16,7 @@ import {
 } from '../graphql/user';
 import { jwtDecode } from 'jwt-decode';
 import { NewsletterService } from '../services/newsletterService';
+import { signInWithGoogle } from '../firebase/init';
 
 // Types
 type UserRole = 'USER';
@@ -40,7 +41,8 @@ interface UserAuthContextType {
   userEmail: string;
   setUser: (user: User | null) => void;
   setUserEmail: (email: string) => void;
-  login: (email: string, password: string) => Promise<User | null>;
+  login: (email: string, password: string, keepLoggedIn?: boolean) => Promise<User | null>;
+  loginWithGoogle: () => Promise<User | null>;
   register: (userData: any) => Promise<boolean>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -81,7 +83,11 @@ export const UserAuthProvider: React.FC<{
       setIsInitialized(false);
 
       const token = localStorage.getItem('userToken');
+      const keepLoggedIn = localStorage.getItem('keepLoggedIn') === 'true';
+      const loginTimestamp = localStorage.getItem('loginTimestamp');
+      
       console.log('🔍 UserAuthContext: Token from localStorage:', token ? 'Token exists' : 'No token');
+      console.log('🔍 UserAuthContext: Keep logged in:', keepLoggedIn);
 
       if (!token) {
         console.log('❌ UserAuthContext: No token found, setting user to null');
@@ -90,6 +96,53 @@ export const UserAuthProvider: React.FC<{
         setIsLoading(false);
         setIsInitialized(true);
         return;
+      }
+
+      // Check if persistent login has expired (30 days)
+      if (keepLoggedIn && loginTimestamp) {
+        const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+        const isExpired = Date.now() - parseInt(loginTimestamp) > thirtyDaysInMs;
+        
+        if (isExpired) {
+          console.log('❌ UserAuthContext: Persistent login expired, clearing data');
+          localStorage.removeItem('userToken');
+          localStorage.removeItem('keepLoggedIn');
+          localStorage.removeItem('loginTimestamp');
+          setUser(null);
+          setUserEmail('');
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+      } else if (!keepLoggedIn) {
+        // If not persistent login, check if token is expired (24 hours)
+        try {
+          const decoded = jwtDecode<any>(token);
+          const tokenExpiry = decoded.exp * 1000; // Convert to milliseconds
+          const isTokenExpired = Date.now() > tokenExpiry;
+          
+          if (isTokenExpired) {
+            console.log('❌ UserAuthContext: Token expired, clearing data');
+            localStorage.removeItem('userToken');
+            localStorage.removeItem('keepLoggedIn');
+            localStorage.removeItem('loginTimestamp');
+            setUser(null);
+            setUserEmail('');
+            setIsLoading(false);
+            setIsInitialized(true);
+            return;
+          }
+        } catch (error) {
+          console.log('❌ UserAuthContext: Invalid token format, clearing data');
+          localStorage.removeItem('userToken');
+          localStorage.removeItem('keepLoggedIn');
+          localStorage.removeItem('loginTimestamp');
+          setUser(null);
+          setUserEmail('');
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
+        }
       }
 
       try {
@@ -159,7 +212,7 @@ export const UserAuthProvider: React.FC<{
     });
   }, [fetchUserDetails, navigate]);
 
-  const login = async (email: string, password: string): Promise<User | null> => {
+  const login = async (email: string, password: string, keepLoggedIn: boolean = false): Promise<User | null> => {
     try {
       const deviceInfo = {
         deviceId: 'web-client',
@@ -168,7 +221,7 @@ export const UserAuthProvider: React.FC<{
       };
 
       const result = await loginMutation({
-        variables: { email, password, deviceInfo },
+        variables: { email, password, deviceInfo, keepLoggedIn },
       });
 
       // Check for GraphQL errors first
@@ -185,6 +238,15 @@ export const UserAuthProvider: React.FC<{
 
       if (token && userRaw && userRaw.role === 'USER') {
         localStorage.setItem('userToken', token);
+        
+        // Store persistent login preference
+        if (keepLoggedIn) {
+          localStorage.setItem('keepLoggedIn', 'true');
+          localStorage.setItem('loginTimestamp', Date.now().toString());
+        } else {
+          localStorage.removeItem('keepLoggedIn');
+          localStorage.removeItem('loginTimestamp');
+        }
 
         const user: User = {
           userId: userRaw.id,
@@ -234,6 +296,44 @@ export const UserAuthProvider: React.FC<{
       
       // Throw so the component can display the specific backend error
       throw new Error(message);
+    }
+  };
+
+  const loginWithGoogle = async (): Promise<User | null> => {
+    try {
+      console.log('🔄 Starting Google OAuth login...');
+      
+      // Use Firebase Auth to sign in with Google
+      const firebaseUser = await signInWithGoogle();
+      console.log('✅ Firebase Google Auth successful:', firebaseUser.email);
+      
+      // Extract user data from Firebase Auth
+      const googleUserData = {
+        email: firebaseUser.email!,
+        firstName: firebaseUser.displayName?.split(' ')[0] || '',
+        lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
+        profilePicture: firebaseUser.photoURL || '',
+        isEmailVerified: firebaseUser.emailVerified,
+        googleId: firebaseUser.uid,
+        authProvider: 'google'
+      };
+
+      // Check if this is a new Google OAuth user or existing user
+      // For now, we'll assume it's a new user and redirect to completion form
+      // In a real implementation, you'd check your database first
+      
+      // Store Google user data temporarily for the completion form
+      console.log('🔄 Storing Google OAuth data:', googleUserData);
+      sessionStorage.setItem('googleOAuthData', JSON.stringify(googleUserData));
+      
+      // Redirect to completion form
+      console.log('🔄 Redirecting to completion form...');
+      navigate('/auth/google/complete');
+      
+      return null; // We'll return the user after completion
+    } catch (error: any) {
+      console.error('Google OAuth login error:', error);
+      throw new Error(error.message || 'Google login failed');
     }
   };
 
@@ -292,6 +392,8 @@ export const UserAuthProvider: React.FC<{
   const logout = async (): Promise<void> => {
     try {
       localStorage.removeItem('userToken');
+      localStorage.removeItem('keepLoggedIn');
+      localStorage.removeItem('loginTimestamp');
 
       try {
         await logoutMutation();
@@ -324,6 +426,7 @@ export const UserAuthProvider: React.FC<{
       setUser,
       setUserEmail,
       login,
+      loginWithGoogle,
       register,
       logout,
       isAuthenticated: !!user,
@@ -339,6 +442,7 @@ export const UserAuthProvider: React.FC<{
       isLoading,
       isInitialized,
       login,
+      loginWithGoogle,
       register,
       logout,
       navigate,

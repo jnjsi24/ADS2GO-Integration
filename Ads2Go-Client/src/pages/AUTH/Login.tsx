@@ -5,13 +5,17 @@ import {EyeIcon, EyeOff, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Login: React.FC = () => {
-  const { navigateToRegister, login } = useUserAuth();
+  const { navigateToRegister, login, loginWithGoogle } = useUserAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [checked, setChecked] = useState(false);
+  const [isGoogleLoggingIn, setIsGoogleLoggingIn] = useState(false);
+  const [checked, setChecked] = useState(() => {
+    // Restore checkbox state from localStorage
+    return localStorage.getItem('keepLoggedIn') === 'true';
+  });
   const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -101,7 +105,7 @@ const Login: React.FC = () => {
     setIsLoggingIn(true);
 
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, checked);
       if (user) {
         // Store user data immediately after successful login
         storeUserData(user);
@@ -118,6 +122,28 @@ const Login: React.FC = () => {
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleLoggingIn(true);
+      setError('');
+      
+      console.log('🔄 Starting Google OAuth login...');
+      const user = await loginWithGoogle();
+      
+      if (user) {
+        console.log('✅ Google login successful, user:', user);
+        // The UserAuthContext will handle navigation
+      } else {
+        setError('Google login failed. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Google login error:', error);
+      setError(error.message || 'Google login failed');
+    } finally {
+      setIsGoogleLoggingIn(false);
     }
   };
 
@@ -330,8 +356,19 @@ const Login: React.FC = () => {
 
 
         <div className="flex justify-center space-x-4">
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
-            <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+          <button 
+            type="button" 
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoggingIn || isLoggingIn}
+            className={`p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors ${
+              isGoogleLoggingIn ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {isGoogleLoggingIn ? (
+              <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+            )}
           </button>
           <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
             <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />

@@ -128,7 +128,68 @@ const resolvers = {
       }
     },
 
-    loginUser: async (_, { email, password, deviceInfo }) => {
+    completeGoogleOAuthProfile: async (_, { input }) => {
+      try {
+        const {
+          googleId, email, firstName, lastName, profilePicture,
+          middleName, companyName, companyAddress, contactNumber, houseAddress
+        } = input;
+
+        // Check if user already exists
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          throw new Error('User with this email already exists');
+        }
+
+        // Validate phone number
+        let normalizedNumber = contactNumber.replace(/\s/g, '');
+        const phoneRegex = /^(\+63|0)?\d{10}$/;
+        if (!phoneRegex.test(normalizedNumber)) {
+          throw new Error('Invalid Philippine mobile number');
+        }
+        if (!normalizedNumber.startsWith('+63')) {
+          normalizedNumber = normalizedNumber.startsWith('0') ? '+63' + normalizedNumber.substring(1) : '+63' + normalizedNumber;
+        }
+
+        // Create new user with Google OAuth data
+        const newUser = new User({
+          firstName: firstName.trim(),
+          middleName: middleName?.trim() || null,
+          lastName: lastName.trim(),
+          companyName: companyName.trim(),
+          companyAddress: companyAddress.trim(),
+          houseAddress: houseAddress?.trim() || null,
+          contactNumber: normalizedNumber,
+          email: email.toLowerCase().trim(),
+          password: null, // No password for OAuth users
+          role: 'USER',
+          isEmailVerified: true, // Google emails are pre-verified
+          profilePicture: profilePicture || null,
+          googleId: googleId,
+          authProvider: 'google',
+          emailVerificationCode: null,
+          emailVerificationCodeExpires: null,
+        });
+
+        await newUser.save();
+
+        // Generate JWT token
+        const token = jwt.sign({
+          userId: newUser.id,
+          email: newUser.email,
+          role: newUser.role,
+          isEmailVerified: newUser.isEmailVerified,
+          tokenVersion: newUser.tokenVersion,
+        }, JWT_SECRET, { expiresIn: '30d' }); // 30 days for OAuth users
+
+        return { token, user: newUser };
+      } catch (error) {
+        console.error('Complete Google OAuth profile error:', error);
+        throw error;
+      }
+    },
+
+    loginUser: async (_, { email, password, deviceInfo, keepLoggedIn = false }) => {
       console.log(`User login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
       const user = await User.findOne({ email });
@@ -159,7 +220,7 @@ const resolvers = {
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         tokenVersion: user.tokenVersion,
-      }, JWT_SECRET, { expiresIn: '1d' });
+      }, JWT_SECRET, { expiresIn: keepLoggedIn ? '30d' : '1d' });
 
       return { token, user };
     },

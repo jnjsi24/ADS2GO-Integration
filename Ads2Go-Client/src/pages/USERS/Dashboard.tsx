@@ -14,8 +14,10 @@ import {
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 const Dashboard = () => {
+  const { user } = useUserAuth();
   const [selectedOption, setSelectedOption] = useState('Riders');
   // Explicitly type selectedPeriod to the union of its possible values
   const [selectedPeriod, setSelectedPeriod] = useState<'Monthly' | 'Weekly' | 'Daily'>('Monthly');
@@ -37,80 +39,15 @@ const Dashboard = () => {
     }
   });
 
-  // Get user's first name from localStorage on component mount
+  // Get user's first name from UserAuthContext
   useEffect(() => {
-    const fetchUserData = () => {
-      try {
-        // First, try to get user data from localStorage
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          const user = JSON.parse(userData);
-          console.log('User data from localStorage:', user);
-          
-          // Check various possible property names for first name
-          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
-          
-          if (firstName) {
-            setUserFirstName(firstName);
-            console.log('First name found:', firstName);
-            return;
-          }
-        }
-
-        // Alternative: Try to get from sessionStorage
-        const sessionUserData = sessionStorage.getItem('user');
-        if (sessionUserData) {
-          const user = JSON.parse(sessionUserData);
-          console.log('User data from sessionStorage:', user);
-          
-          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
-          
-          if (firstName) {
-            setUserFirstName(firstName);
-            console.log('First name found in session:', firstName);
-            return;
-          }
-        }
-
-        // Alternative: Try to get from other common storage keys
-        const authData = localStorage.getItem('authData') || localStorage.getItem('currentUser') || localStorage.getItem('userInfo');
-        if (authData) {
-          const user = JSON.parse(authData);
-          console.log('User data from alternative storage:', user);
-          
-          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
-          
-          if (firstName) {
-            setUserFirstName(firstName);
-            console.log('First name found in alternative storage:', firstName);
-            return;
-          }
-        }
-
-        console.log('No user data found in any storage, keeping default "User"');
-        
-      } catch (error) {
-        console.error('Error parsing user data from storage:', error);
-        // Keep default 'User' if there's an error
-      }
-    };
-
-    // Call immediately
-    fetchUserData();
-
-    // Set up an interval to check periodically in case data is loaded after component mount
-    const interval = setInterval(fetchUserData, 1000);
-
-    // Clean up interval after 5 seconds (5 checks)
-    setTimeout(() => {
-      clearInterval(interval);
-    }, 5000);
-
-    // Cleanup function
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
+    if (user?.firstName) {
+      setUserFirstName(user.firstName);
+      console.log('✅ Dashboard: User first name from context:', user.firstName);
+    } else {
+      console.log('⚠️ Dashboard: No user firstName found in context');
+    }
+  }, [user]);
 
   const barData = [
     { day: 'JAN', profit: 5000, loss: 8000 },

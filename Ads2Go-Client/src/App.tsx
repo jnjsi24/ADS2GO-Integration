@@ -29,6 +29,7 @@ import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 import Notifications from './pages/USERS/Notifications';
+import GoogleOAuthCompletion from './pages/AUTH/GoogleOAuthCompletion';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -42,6 +43,7 @@ import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
 import FAQManagement from './pages/ADMIN/FAQManagement';
+import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
 import UserAdsPage from './pages/ADMIN/UserAdsPage';
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -147,6 +149,14 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
+          path="/admin/newsletter"
+          element={
+            <ProtectedRoute>
+              <NewsletterManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/tablet-tracking"
           element={
             <ProtectedRoute>
@@ -238,6 +248,22 @@ const UserAppContent: React.FC = () => {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/landing" element={<Landing />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
+        <Route path="/auth/google/complete" element={
+          <GoogleOAuthCompletion 
+            googleUserData={(() => {
+              try {
+                const data = sessionStorage.getItem('googleOAuthData');
+                console.log('🔍 Raw sessionStorage data:', data);
+                const parsed = data ? JSON.parse(data) : null;
+                console.log('🔍 Parsed Google OAuth data:', parsed);
+                return parsed;
+              } catch (error) {
+                console.error('Error parsing Google OAuth data:', error);
+                return null;
+              }
+            })()}
+          />
+        } />
 
         {/* Protected user routes */}
         <Route

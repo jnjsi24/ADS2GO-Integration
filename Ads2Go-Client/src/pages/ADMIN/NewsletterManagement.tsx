@@ -31,7 +31,10 @@ const NewsletterManagement: React.FC = () => {
   const fetchSubscribers = async () => {
     try {
       setLoading(true);
-      const apiUrl = `http://192.168.100.22:5000/api/newsletter/subscribers?t=${Date.now()}`;
+      setError(''); // Clear previous errors
+      const apiUrl = `http://localhost:5000/api/newsletter/subscribers?t=${Date.now()}`;
+      
+      console.log('Fetching subscribers from:', apiUrl);
       
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -40,38 +43,45 @@ const NewsletterManagement: React.FC = () => {
         },
       });
       
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('API Error:', errorText);
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
+      console.log('API Response:', data);
       
       if (data.success) {
-        setSubscribers(data.subscribers);
+        setSubscribers(data.subscribers || []);
         
-        const activeCount = data.subscribers.filter((sub: Subscriber) => sub.isActive).length;
-        const inactiveCount = data.subscribers.filter((sub: Subscriber) => !sub.isActive).length;
+        const subscribers = data.subscribers || [];
+        const activeCount = subscribers.filter((sub: Subscriber) => sub.isActive).length;
+        const inactiveCount = subscribers.filter((sub: Subscriber) => !sub.isActive).length;
         
         // Categorize by source
-        const userSubscribers = data.subscribers.filter((sub: Subscriber) => 
+        const userSubscribers = subscribers.filter((sub: Subscriber) => 
           sub.isActive && (sub.source === 'registration' || sub.source === 'existing_user_migration')
         ).length;
-        const nonUserSubscribers = data.subscribers.filter((sub: Subscriber) => 
+        const nonUserSubscribers = subscribers.filter((sub: Subscriber) => 
           sub.isActive && !['registration', 'existing_user_migration'].includes(sub.source)
         ).length;
         
         setStats({
-          total: data.subscribers.length,
+          total: subscribers.length,
           active: activeCount,
           inactive: inactiveCount,
           userSubscribers,
           nonUserSubscribers
         });
       } else {
-        setError('Failed to fetch subscribers');
+        setError(`Failed to fetch subscribers: ${data.message || 'Unknown error'}`);
       }
     } catch (err) {
-      setError('Failed to fetch subscribers');
+      console.error('Fetch error:', err);
+      setError(`Failed to fetch subscribers: ${err instanceof Error ? err.message : 'Network error'}`);
     } finally {
       setLoading(false);
     }
@@ -87,7 +97,7 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const response = await fetch(`http://192.168.100.22:5000/api/newsletter/unsubscribe`, {
+      const response = await fetch(`http://localhost:5000/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,8 +132,51 @@ const NewsletterManagement: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-white pl-64 pr-5">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Loading newsletter subscribers...</div>
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-[#3674B5] mb-2">Newsletter Management</h1>
+            <p className="text-gray-600">Manage newsletter subscribers and send updates</p>
+          </div>
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="text-lg mb-2">Loading newsletter subscribers...</div>
+              <div className="text-sm text-gray-500">Please check the browser console for any errors</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white pl-64 pr-5">
+        <div className="max-w-7xl mx-auto p-6">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-[#3674B5] mb-2">Newsletter Management</h1>
+            <p className="text-gray-600">Manage newsletter subscribers and send updates</p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center">
+              <div className="text-red-600 font-semibold text-lg mb-2">Error Loading Newsletter Data</div>
+            </div>
+            <div className="text-red-700 mb-4">{error}</div>
+            <div className="text-sm text-red-600 mb-4">
+              <strong>Possible causes:</strong>
+              <ul className="list-disc list-inside mt-2">
+                <li>Server is not running on http://192.168.100.22:5000</li>
+                <li>Network connectivity issues</li>
+                <li>API endpoint not accessible</li>
+                <li>Database connection issues</li>
+              </ul>
+            </div>
+            <button
+              onClick={fetchSubscribers}
+              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );

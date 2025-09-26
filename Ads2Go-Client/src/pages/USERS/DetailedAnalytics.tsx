@@ -21,8 +21,10 @@ import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 import { ArrowLeft, Download, RefreshCw, TrendingUp, Eye, Play, Clock, Target, Users, MapPin, Calendar, BarChart3 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useUserAuth } from '../../contexts/UserAuthContext';
 
 const DetailedAnalytics: React.FC = () => {
+  const { user } = useUserAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d'>('7d');
   const [selectedMetric, setSelectedMetric] = useState<'impressions' | 'plays' | 'completion' | 'revenue'>('impressions');
   const [selectedView, setSelectedView] = useState<'overview' | 'performance' | 'impressions' | 'display' | 'qr' | 'tablets' | 'ads'>('overview');
@@ -37,26 +39,15 @@ const DetailedAnalytics: React.FC = () => {
     }
   });
 
-  // Get user's first name from localStorage on component mount
+  // Get user's first name from UserAuthContext
   useEffect(() => {
-    const fetchUserData = () => {
-      try {
-        const userData = localStorage.getItem('user');
-        if (userData) {
-          const user = JSON.parse(userData);
-          const firstName = user.firstName || user.first_name || user.name?.split(' ')[0] || user.displayName?.split(' ')[0];
-          if (firstName) {
-            setUserFirstName(firstName);
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing user data from storage:', error);
-      }
-    };
-
-    fetchUserData();
-  }, []);
+    if (user?.firstName) {
+      setUserFirstName(user.firstName);
+      console.log('✅ DetailedAnalytics: User first name from context:', user.firstName);
+    } else {
+      console.log('⚠️ DetailedAnalytics: No user firstName found in context');
+    }
+  }, [user]);
 
   // Get analytics summary data
   const analyticsSummary = analyticsData?.getUserAnalytics?.summary || {

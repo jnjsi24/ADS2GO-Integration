@@ -154,6 +154,22 @@ const typeDefs = gql`
     houseAddress: String!
   }
 
+  input CompleteGoogleOAuthInput {
+    # Google OAuth data
+    googleId: String!
+    email: String!
+    firstName: String!
+    lastName: String!
+    profilePicture: String
+    
+    # Additional required fields
+    middleName: String
+    companyName: String!
+    companyAddress: String!
+    contactNumber: String!
+    houseAddress: String
+  }
+
   input UpdateUserInput {
     firstName: String
     middleName: String
@@ -186,7 +202,8 @@ const typeDefs = gql`
   type Mutation {
     # User authentication
     createUser(input: CreateUserInput!): AuthPayload!
-    loginUser(email: String!, password: String!, deviceInfo: DeviceInfoInput!): AuthPayload!
+    loginUser(email: String!, password: String!, deviceInfo: DeviceInfoInput!, keepLoggedIn: Boolean): AuthPayload!
+    completeGoogleOAuthProfile(input: CompleteGoogleOAuthInput!): AuthPayload!
     logout: Boolean!
     logoutAllSessions: Boolean!
 
