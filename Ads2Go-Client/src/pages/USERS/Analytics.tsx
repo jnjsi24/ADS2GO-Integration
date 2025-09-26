@@ -169,119 +169,48 @@ const Analytics = () => {
           </div>
         </div>
 
-        {/* Screen Activity */}
-        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Screen Activity</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-indigo-600">92%</p>
-              <p className="text-sm text-gray-600 font-medium">Active Screens</p>
-              <p className="text-xs text-gray-500">Currently online</p>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-emerald-600">85%</p>
-              <p className="text-sm text-gray-600 font-medium">Screen Health</p>
-              <p className="text-xs text-gray-500">Average status</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-sky-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">95%</p>
-              <p className="text-sm text-gray-600 font-medium">Connection Status</p>
-              <p className="text-xs text-gray-500">Network stability</p>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-rose-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-red-600">0.5%</p>
-              <p className="text-sm text-gray-600 font-medium">Error Rate</p>
-              <p className="text-xs text-gray-500">Last 24 hours</p>
+        {/* Additional Analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Distribution by Time */}
+          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-sm p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Distribution by Time</h3>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={hourlyDistribution}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {hourlyDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={getChartData()} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="activeGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="period" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#10b981"
-                  fillOpacity={1}
-                  fill="url(#activeGradient)"
-                  name="Active Screens"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
-        {/* Advertisement Analytics */}
-        <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-sm p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Advertisement Analytics</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-indigo-600">55K</p>
-              <p className="text-sm text-gray-600 font-medium">Total Views</p>
-              <p className="text-xs text-gray-500">Last 30 days</p>
+          {/* Trend Analysis */}
+          <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-sm p-6">
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Trend Analysis</h3>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={getChartData()}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                  <XAxis dataKey="period" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="value" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">2:15</p>
-              <p className="text-sm text-gray-600 font-medium">Avg. View Time</p>
-              <p className="text-xs text-gray-500">Per session</p>
-            </div>
-            <div className="bg-gradient-to-br from-blue-50 to-sky-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">68.5%</p>
-              <p className="text-sm text-gray-600 font-medium">Engagement Rate</p>
-              <p className="text-xs text-gray-500">Interaction rate</p>
-            </div>
-            <div className="bg-gradient-to-br from-emerald-50 to-green-50 p-4 rounded-lg">
-              <p className="text-2xl font-bold text-emerald-600">32.4K</p>
-              <p className="text-sm text-gray-600 font-medium">Unique Viewers</p>
-              <p className="text-xs text-gray-500">Distinct users</p>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={getChartData()} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="period" stroke="#6b7280" />
-                <YAxis stroke="#6b7280" />
-                <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#3b82f6"
-                  fillOpacity={1}
-                  fill="url(#viewsGradient)"
-                  name="Views"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
           </div>
         </div>
       </div>

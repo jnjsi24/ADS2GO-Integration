@@ -31,8 +31,6 @@ import Notifications from './pages/USERS/Notifications';
 import Analytics from './pages/USERS/Analytics';
 import ProfitLossAnalytics from './pages/USERS/ProfitLossAnalytics';
 import QRAnalytics from './pages/USERS/QRAnalytics';
-import AdsAnalytics from './pages/USERS/AdsAnalytics';
-import TabletAnalytics from './pages/USERS/TabletAnalytics';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -335,22 +333,6 @@ const UserAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <QRAnalytics />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/ads-analytics"
-          element={
-            <ProtectedRoute>
-              <AdsAnalytics />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/tablet-analytics"
-          element={
-            <ProtectedRoute>
-              <TabletAnalytics />
             </ProtectedRoute>
           }
         />
