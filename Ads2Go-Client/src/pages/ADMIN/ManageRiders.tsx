@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle} from 'lucide-react';
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
@@ -141,24 +141,10 @@ const DocumentImage: React.FC<{
 
 const statusFilterOptions = ['All Status', 'Active', 'Pending', 'Rejected'];
 
-// Month and year filter options
-const monthOptions = [
-  'All Months', 'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-
-const yearOptions = [
-  'All Years', '2025', '2024', '2023', '2022', '2021', '2020', '2019', '2018', '2017', '2016', '2015'
-];
-
 const ManageRiders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
-  const [selectedMonthFilter, setSelectedMonthFilter] = useState('All Months');
-  const [showYearDropdown, setShowYearDropdown] = useState(false);
-  const [selectedYearFilter, setSelectedYearFilter] = useState('All Years');
   const [selectedRiders, setSelectedRiders] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -245,17 +231,9 @@ const ManageRiders: React.FC = () => {
     
     const matchesStatus = selectedStatusFilter === 'All Status' || r.accountStatus.toLowerCase() === selectedStatusFilter.toLowerCase();
 
-    // Month and year filtering
-    const createdAt = new Date(r.createdAt);
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
-    const riderMonth = monthNames[createdAt.getMonth()];
-    const riderYear = createdAt.getFullYear().toString();
-    
-    const matchesMonth = selectedMonthFilter === 'All Months' || riderMonth === selectedMonthFilter;
-    const matchesYear = selectedYearFilter === 'All Years' || riderYear === selectedYearFilter;
 
-    return matchesSearch && matchesStatus && matchesMonth && matchesYear;
+
+    return matchesSearch && matchesStatus;
   });
 
   // Actions
@@ -432,40 +410,6 @@ const ManageRiders: React.FC = () => {
     setShowStatusDropdown(false);
   };
 
-  const handleMonthFilterChange = (month: string) => {
-    setSelectedMonthFilter(month);
-    setShowMonthDropdown(false);
-  };
-
-  const handleYearFilterChange = (year: string) => {
-    setSelectedYearFilter(year);
-    setShowYearDropdown(false);
-  };
-
-  // Close dropdowns when clicking outside
-  const handleClickOutside = () => {
-    setShowStatusDropdown(false);
-    setShowMonthDropdown(false);
-    setShowYearDropdown(false);
-  };
-
-  // Add event listener for clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target.closest('.dropdown-container')) {
-        setShowStatusDropdown(false);
-        setShowMonthDropdown(false);
-        setShowYearDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   // Selection
   const handleSelect = (id: string) => {
     setSelectedRiders(prev =>
@@ -557,8 +501,8 @@ const ManageRiders: React.FC = () => {
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
           />
-          {/* Status Filter Dropdown */}
-          <div className="relative w-32 dropdown-container">
+          {/* Custom Dropdown with SVG */}
+          <div className="relative w-32">
             <button
               onClick={() => setShowStatusDropdown(!showStatusDropdown)}
               className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
@@ -587,66 +531,6 @@ const ManageRiders: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
-          {/* Month Filter Dropdown */}
-          <div className="relative w-32 dropdown-container">
-            <button
-              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-              {selectedMonthFilter}
-              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showMonthDropdown ? 'rotate-180' : 'rotate-0'}`} />
-            </button>
-            <AnimatePresence>
-              {showMonthDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                >
-                  {monthOptions.map((month) => (
-                    <button
-                      key={month}
-                      onClick={() => handleMonthFilterChange(month)}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                    >
-                      {month}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          {/* Year Filter Dropdown */}
-          <div className="relative w-32 dropdown-container">
-            <button
-              onClick={() => setShowYearDropdown(!showYearDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-              {selectedYearFilter}
-              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : 'rotate-0'}`} />
-            </button>
-            <AnimatePresence>
-              {showYearDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                >
-                  {yearOptions.map((year) => (
-                    <button
-                      key={year}
-                      onClick={() => handleYearFilterChange(year)}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                    >
-                      {year}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </div>
       </div>
 
@@ -657,9 +541,7 @@ const ManageRiders: React.FC = () => {
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredRiders.length === 0 ? (
         <div className="text-center py-10 text-gray-500">
-          {searchTerm || selectedStatusFilter !== 'All Status' || selectedMonthFilter !== 'All Months' || selectedYearFilter !== 'All Years' 
-            ? 'No riders match your search criteria' 
-            : 'No riders found'}
+          {searchTerm ? 'No riders match your search criteria' : 'No riders found'}
         </div>
       ) : (
         <div className="rounded-md mb-4 overflow-hidden">
