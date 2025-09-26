@@ -94,6 +94,7 @@ export const GET_ADMIN_DASHBOARD_STATS = gql`
       newUsersToday
       totalDrivers
       newDriversToday
+      pendingDrivers
       totalRevenue
       revenueToday
       unreadNotifications
