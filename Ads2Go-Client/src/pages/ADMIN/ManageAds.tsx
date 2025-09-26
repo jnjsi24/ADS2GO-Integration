@@ -32,14 +32,13 @@ import {
 } from '../../graphql/admin/ads';
 import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
-import AnalyticsTab from './tabs/dashboard/AnalyticsTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
   
   // Tab management
-  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'analytics' | 'availability'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'availability'>('ads');
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,6 +55,9 @@ const ManageAds: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
   const [showRejectionNotification, setShowRejectionNotification] = useState(true);
+
+  // Loading states for approve/reject buttons
+  const [processingAds, setProcessingAds] = useState<Set<string>>(new Set());
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
@@ -200,6 +202,14 @@ const ManageAds: React.FC = () => {
 
   // Actions
   const handleApprove = async (adId: string) => {
+    // Prevent multiple clicks
+    if (processingAds.has(adId)) {
+      return;
+    }
+
+    // Add to processing set
+    setProcessingAds(prev => new Set(prev).add(adId));
+
     try {
       await updateAd({
         variables: {
@@ -223,6 +233,13 @@ const ManageAds: React.FC = () => {
         message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
         duration: 6000
       });
+    } finally {
+      // Remove from processing set
+      setProcessingAds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(adId);
+        return newSet;
+      });
     }
   };
 
@@ -241,6 +258,14 @@ const ManageAds: React.FC = () => {
       });
       return;
     }
+
+    // Prevent multiple clicks
+    if (processingAds.has(adToReject)) {
+      return;
+    }
+
+    // Add to processing set
+    setProcessingAds(prev => new Set(prev).add(adToReject));
 
     try {
       await updateAd({
@@ -268,6 +293,13 @@ const ManageAds: React.FC = () => {
         title: 'Rejection Failed',
         message: `Failed to reject ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
         duration: 6000
+      });
+    } finally {
+      // Remove from processing set
+      setProcessingAds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(adToReject);
+        return newSet;
       });
     }
   };
@@ -324,8 +356,7 @@ const ManageAds: React.FC = () => {
     { id: 'ads', label: 'All Ads', icon: Monitor },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'deployment', label: 'Deployment', icon: PlayCircle },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'availability', label: 'Plan Availability', icon: CalendarRange }
+    { id: 'availability', label: 'Material Slot Checker', icon: CalendarRange }
   ];
 
   // Filter functions
@@ -593,23 +624,41 @@ const ManageAds: React.FC = () => {
                         {ad.status === 'PENDING' && (
                           <>
                             <button
-                              className="group flex items-center bg-green-200 hover:bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
+                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300 ${
+                                processingAds.has(ad.id) 
+                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                  : 'bg-green-200 hover:bg-green-200 text-green-700'
+                              }`}
                               onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                              title="Approve"
+                              disabled={processingAds.has(ad.id)}
+                              title={processingAds.has(ad.id) ? "Processing..." : "Approve"}
                             >
-                              <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              {processingAds.has(ad.id) ? (
+                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                              ) : (
+                                <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              )}
                               <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                                Approve
+                                {processingAds.has(ad.id) ? 'Processing...' : 'Approve'}
                               </span>
                             </button>
                             <button
-                              className="group flex items-center bg-red-200 hover:bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
+                              className={`group flex items-center rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300 ${
+                                processingAds.has(ad.id) 
+                                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
+                                  : 'bg-red-200 hover:bg-red-200 text-red-700'
+                              }`}
                               onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                              title="Reject"
+                              disabled={processingAds.has(ad.id)}
+                              title={processingAds.has(ad.id) ? "Processing..." : "Reject"}
                             >
-                              <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              {processingAds.has(ad.id) ? (
+                                <div className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 animate-spin border-2 border-gray-400 border-t-transparent rounded-full" />
+                              ) : (
+                                <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              )}
                               <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
-                                Reject
+                                {processingAds.has(ad.id) ? 'Processing...' : 'Reject'}
                               </span>
                             </button>
                           </>
@@ -648,8 +697,6 @@ const ManageAds: React.FC = () => {
             onStatusChange={setDeploymentStatusFilter}
           />
         )}
-        {/* Analytics Tab */}
-        {activeTab === 'analytics' && <AnalyticsTab />}
 
         {/* Plan Availability Tab */}
         {activeTab === 'availability' && <PlanAvailabilityTab />}
@@ -846,10 +893,17 @@ const ManageAds: React.FC = () => {
               </button>
               <button
                 onClick={submitReject}
-                disabled={!rejectReason.trim()}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                disabled={!rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)}
+                className={`px-4 py-2 text-white rounded transition-colors flex items-center gap-2 ${
+                  !rejectReason.trim() || (adToReject ? processingAds.has(adToReject) : false)
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
               >
-                Reject Advertisement
+                {adToReject && processingAds.has(adToReject) && (
+                  <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                )}
+                {adToReject && processingAds.has(adToReject) ? 'Processing...' : 'Reject Advertisement'}
               </button>
             </div>
           </div>

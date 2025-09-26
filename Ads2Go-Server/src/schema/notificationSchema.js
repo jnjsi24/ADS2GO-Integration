@@ -132,6 +132,11 @@ const notificationTypeDefs = gql`
     notification: Notification
   }
 
+  type DriverNotifications {
+    notifications: [Notification!]!
+    unreadCount: Int!
+  }
+
   type Query {
     getUserNotifications: [Notification!]!
     getNotificationById(id: ID!): Notification
@@ -143,6 +148,7 @@ const notificationTypeDefs = gql`
     getSuperAdminNotifications: SuperAdminNotifications!
     getSuperAdminDashboardStats: SuperAdminDashboardStats!
     getUserCountsByPlan: [UserCountByPlan!]!
+    getDriverNotifications(driverId: ID!): DriverNotifications!
   }
 
   type Mutation {

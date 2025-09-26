@@ -7,6 +7,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// Import notification service with error handling
+let NotificationService: any = null;
+try {
+  NotificationService = require('../services/notificationService').default;
+} catch (error) {
+  console.log('⚠️ Notification service not available:', error instanceof Error ? error.message : 'Unknown error');
+}
 import 'react-native-reanimated';
 
 function RootLayoutNav() {
@@ -25,6 +32,38 @@ function RootLayoutNav() {
 
     checkAuth();
   }, []);
+
+  // Initialize notifications when user is authenticated
+  useEffect(() => {
+    if (state.token && NotificationService) {
+      const initializeNotifications = async () => {
+        try {
+          const notificationService = NotificationService.getInstance();
+          
+          // Register for push notifications
+          await notificationService.registerForPushNotifications();
+          
+          // Set up notification listeners
+          const cleanup = notificationService.setupNotificationListeners();
+          
+          // Return cleanup function
+          return cleanup;
+        } catch (error) {
+          console.error('❌ Error initializing notifications:', error);
+        }
+      };
+
+      const cleanupPromise = initializeNotifications();
+      
+      return () => {
+        cleanupPromise.then(cleanup => {
+          if (cleanup) cleanup();
+        });
+      };
+    } else if (state.token && !NotificationService) {
+      console.log('⚠️ Notification service not available - skipping notification initialization');
+    }
+  }, [state.token]);
 
   return (
     <ThemeProvider value={DefaultTheme}>

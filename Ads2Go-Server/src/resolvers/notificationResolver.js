@@ -388,6 +388,44 @@ const notificationResolvers = {
         console.error('Error fetching user counts by plan:', error);
         throw new Error('Failed to fetch user counts by plan');
       }
+    },
+
+    getDriverNotifications: async (_, { driverId }, { user }) => {
+      try {
+        console.log('🔔 Fetching notifications for driver:', driverId);
+        
+        // Find driver by driverId
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          throw new Error('Driver not found');
+        }
+        
+        // Get notifications for this driver
+        const userNotifications = await UserNotifications.findOne({ 
+          userId: driver._id,
+          userRole: 'DRIVER'
+        });
+        
+        if (!userNotifications) {
+          console.log('🔔 No notifications found for driver');
+          return {
+            notifications: [],
+            unreadCount: 0
+          };
+        }
+        
+        // Return notifications array sorted by creation date (newest first)
+        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        console.log('🔔 Found notifications for driver:', notifications.length);
+        return {
+          notifications,
+          unreadCount: userNotifications.unreadCount || 0
+        };
+      } catch (error) {
+        console.error('Error fetching driver notifications:', error);
+        throw new Error('Failed to fetch driver notifications');
+      }
     }
   },
 
