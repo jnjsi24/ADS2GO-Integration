@@ -291,7 +291,7 @@ const Dashboard = () => {
       {/* Metrics Section - Adjusted Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* Profit & Loss Overview - Now spans 2 columns */}
-        <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white">
+        <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white cursor-pointer hover:bg-[#0E2A47] transition-colors" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <span className="text-lg font-semibold">Ad Performance Overview</span>
             <div className="relative">
@@ -380,7 +380,7 @@ const Dashboard = () => {
         </div>
 
         {/* Ad Impressions */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mt-8 pl-4">
             <span className="text-gray-500 text-lg">Ad Impressions</span>
             <div className="relative">
@@ -419,7 +419,7 @@ const Dashboard = () => {
         </div>
 
         {/* Total Display Time */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mt-8 pl-4">
             <span className="text-gray-500 text-lg">Display Time</span>
           </div>
@@ -444,7 +444,7 @@ const Dashboard = () => {
 
       {/* Analytics Section */}
       {analyticsData?.getUserAnalytics && (
-        <div className="bg-white p-6 rounded-lg shadow-lg mb-6">
+        <div className="bg-white p-6 rounded-lg shadow-lg mb-6 cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">Ad Performance Analytics</h2>
             <div className="text-sm text-gray-500">
@@ -560,7 +560,7 @@ const Dashboard = () => {
       {/* QR Impressions Section */}
       <div className="grid grid-cols-1 gap-6">
         {/* QR Impressions - Now spans full width */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
             <div className="relative pt-3">
