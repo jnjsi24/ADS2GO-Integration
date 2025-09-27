@@ -209,14 +209,14 @@ const Login: React.FC = () => {
               required
               value={email}
               onChange={handleEmailChange}
-              className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.email ? 'border-red-400' : 'border-gray-300'}`}
+              className={`peer w-full px-0 pt-5 pb-2 text-white border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.email ? 'border-red-400' : 'border-gray-300'}`}
               style={{ backgroundColor: 'transparent' }}
             />
             <label
               htmlFor="email"
-              className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${email
-                ? '-top-2 text-sm text-black font-bold' // 👈 If input has value, stay floated
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white peer-focus:font-bold`}
+              className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${email
+                ? '-top-2 text-sm text-black/70 font-bold' // 👈 If input has value, stay floated
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
             >
               Enter your email 
             </label>
@@ -234,14 +234,14 @@ const Login: React.FC = () => {
                 required
                 value={password}
                 onChange={handlePasswordChange}
-                className={`peer w-full pr-8 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.password ? 'border-red-400' : 'border-gray-300'}`}
+                className={`peer w-full pr-8 pt-5 text-white pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.password ? 'border-red-400' : 'border-gray-300'}`}
               />
 
               <label
                 htmlFor="password"
-                className={`absolute left-0 text-white transition-all duration-200 ${password
-                  ? '-top-2 text-sm text-white font-bold'
-                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white peer-focus:font-bold`}
+                className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${password
+                  ? '-top-2 text-sm text-black/70 font-bold' // 👈 If input has value, stay floated
+                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
               >
                 Enter your password
               </label>
@@ -294,7 +294,7 @@ const Login: React.FC = () => {
               </div>
 
               {/* Forgot password link */}
-              <Link to="/forgot-password" className="text-[#1B5087] hover:underline">
+              <Link to="/forgot-password" className="text-white/90 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -352,8 +352,8 @@ const Login: React.FC = () => {
         </div>
 
         <div className="text-center mt-6 text-sm">
-          <span className="text-white">Don't have an account?</span>
-          <Link to="/register" className="text-[#1B5087] ml-1 underline hover:font-semibold">
+          <span className="text-white/70">Don't have an account?</span>
+          <Link to="/register" className="text-white/90 ml-1 underline hover:font-semibold">
             Create an account
           </Link>
         </div>
