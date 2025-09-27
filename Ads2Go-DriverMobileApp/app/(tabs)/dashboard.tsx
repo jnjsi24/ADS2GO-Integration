@@ -23,6 +23,7 @@ interface DriverAnalytics {
   qrImpressions: number;
   totalRoutes: number;
   isOnline: boolean;
+  complianceRate: number;
   dailyPerformance: Array<{
     date: string;
     totalDistance: number;
@@ -162,6 +163,7 @@ const Dashboard: React.FC = () => {
           qrImpressions: sanitizeNumeric(data.qrImpressions || data.totalQrScans || 0, 0),
           totalRoutes: 1, // Single route for current session
           isOnline: Boolean(data.isOnline),
+          complianceRate: sanitizeNumeric(data.complianceRate, 0),
           dailyPerformance: (data.dailyPerformance || []).map((day: any) => ({
             date: day.date || new Date().toISOString(),
             totalDistance: sanitizeNumeric(day.totalDistance, 0),
@@ -393,6 +395,10 @@ const Dashboard: React.FC = () => {
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Hours Remaining</Text>
           <Text style={styles.metricValue}>{analytics.hoursRemaining.toFixed(1)}h</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Compliance Rate</Text>
+          <Text style={styles.metricValue}>{analytics.complianceRate.toFixed(0)}%</Text>
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>QR Impressions</Text>
@@ -636,7 +642,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   metricCard: {
-    width: '31%',
+    width: '30%',
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 12,

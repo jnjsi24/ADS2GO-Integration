@@ -10,7 +10,7 @@ const Driver = require('../models/Driver');
 // POST /updateLocation - Update tablet location and start/continue daily session
 router.post('/updateLocation', async (req, res) => {
   try {
-    const { deviceId, lat, lng, speed = 0, heading = 0, accuracy = 0, speedLimit, violation } = req.body;
+    const { deviceId, lat, lng, speed = 0, heading = 0, accuracy = 0, speedLimit } = req.body;
 
     // Validate required fields
     if (!deviceId || lat === undefined || lng === undefined) {
@@ -83,22 +83,8 @@ router.post('/updateLocation', async (req, res) => {
 
     // Update location and online status
     try {
-      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address, violation);
+      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
       console.log('Location updated successfully for device:', deviceId);
-      
-      // Log violation if present
-      if (violation) {
-        console.log(`🚨 Violation processed: ${violation.level} level - Speed: ${violation.currentSpeed} km/h, Limit: ${violation.speedLimit} km/h`);
-      } else {
-        // No violation - check for safe driving time recovery
-        const lastViolation = screenTracking.violations[screenTracking.violations.length - 1];
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        
-        if (!lastViolation || lastViolation.timestamp < oneHourAgo) {
-          // Add 1 point per hour of safe driving (no violations)
-          await screenTracking.updateSafeDrivingTime(1);
-        }
-      }
       
       // Check if device has active WebSocket connection before marking as online
       const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
@@ -154,24 +140,6 @@ router.post('/updateLocation', async (req, res) => {
         }
       }
 
-      // Alert for speed violations (over 80 km/h) - Only for HEADDRESS
-      // Only create alert if device is actually online and we don't already have a recent SPEED_VIOLATION alert (within last 10 minutes)
-      if (screenTracking.screenType === 'HEADDRESS' && screenTracking.isOnline && speed > 80) {
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-        const recentSpeedAlert = screenTracking.alerts.find(alert => 
-          alert.type === 'SPEED_VIOLATION' && 
-          alert.timestamp > tenMinutesAgo && 
-          !alert.isResolved
-        );
-        
-        if (!recentSpeedAlert) {
-          await screenTracking.addAlert(
-            'SPEED_VIOLATION',
-            `Speed violation detected: ${speed} km/h`,
-            'MEDIUM'
-          );
-        }
-      }
     } catch (error) {
       console.warn('Error processing alerts:', error.message);
       // Continue processing even if alerts fail
@@ -729,32 +697,7 @@ router.get('/compliance', async (req, res) => {
               maintenanceMode: tablet.screenMetrics?.maintenanceMode || false,
               currentAd: tablet.screenMetrics?.currentAd || null
             },
-            alerts: tablet.alerts || [],
-            // Safety and violation tracking
-            safetyScore: tablet.safetyScore || 0,
-            violations: tablet.violations || [],
-            violationStats: tablet.violations ? {
-              total: tablet.violations.length,
-              today: tablet.violations.filter(v => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                return new Date(v.timestamp) >= today;
-              }).length,
-              byLevel: {
-                low: tablet.violations.filter(v => v.level === 'LOW').length,
-                medium: tablet.violations.filter(v => v.level === 'MEDIUM').length,
-                high: tablet.violations.filter(v => v.level === 'HIGH').length,
-                extreme: tablet.violations.filter(v => v.level === 'EXTREME').length
-              },
-              averageSpeedOverLimit: tablet.violations.length > 0 
-                ? tablet.violations.reduce((sum, v) => sum + v.speedOverLimit, 0) / tablet.violations.length 
-                : 0
-            } : {
-              total: 0,
-              today: 0,
-              byLevel: { low: 0, medium: 0, high: 0, extreme: 0 },
-              averageSpeedOverLimit: 0
-            }
+            alerts: tablet.alerts || []
           });
         });
       } else {
@@ -818,32 +761,7 @@ router.get('/compliance', async (req, res) => {
           totalDistanceTraveled: tablet.totalDistanceTraveled || legacyDistance,
           displayStatus: tablet.displayStatus || (isLegacyOnline ? 'ACTIVE' : 'OFFLINE'),
           screenMetrics: tablet.screenMetrics,
-          alerts: tablet.alerts,
-          // Safety and violation tracking
-          safetyScore: tablet.safetyScore || 0,
-          violations: tablet.violations || [],
-          violationStats: tablet.violations ? {
-            total: tablet.violations.length,
-            today: tablet.violations.filter(v => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return new Date(v.timestamp) >= today;
-            }).length,
-            byLevel: {
-              low: tablet.violations.filter(v => v.level === 'LOW').length,
-              medium: tablet.violations.filter(v => v.level === 'MEDIUM').length,
-              high: tablet.violations.filter(v => v.level === 'HIGH').length,
-              extreme: tablet.violations.filter(v => v.level === 'EXTREME').length
-            },
-            averageSpeedOverLimit: tablet.violations.length > 0 
-              ? tablet.violations.reduce((sum, v) => sum + v.speedOverLimit, 0) / tablet.violations.length 
-              : 0
-          } : {
-            total: 0,
-            today: 0,
-            byLevel: { low: 0, medium: 0, high: 0, extreme: 0 },
-            averageSpeedOverLimit: 0
-          }
+          alerts: tablet.alerts
         });
       }
     });
@@ -1888,12 +1806,9 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
         averageSpeed: screenTracking.currentSession?.averageSpeed || 0,
         maxSpeed: screenTracking.currentSession?.maxSpeed || 0,
         
-        // Compliance and safety
-        complianceRate: screenTracking.complianceRate || 0,
-        safetyScore: screenTracking.safetyScore || 0, // Start at 0, not 100
+        // Compliance
+        complianceRate: screenTracking.complianceRate || 0
         
-        // Violations data
-        violations: screenTracking.violations || [],
         
         // Daily performance
         dailyPerformance: screenTracking.dailyPerformance || [],
