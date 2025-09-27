@@ -97,12 +97,12 @@ async function assignMaterialToDriver(driver) {
   try {
     // Assign material to driver
     materialToAssign.driverId = driver.driverId;
-    materialToAssign.mountedAt = new Date();
+    materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     await materialToAssign.save({ session });
 
     // Update driver's material reference
     driver.materialId = materialToAssign._id;
-    driver.installedMaterialType = materialToAssign.materialType;
+    driver.installedMaterialType = null; // Will be set when material is actually mounted
     await driver.save({ session });
 
     await session.commitTransaction();
@@ -656,7 +656,7 @@ createDriver: async (_, { input }) => {
     // Assign the first available material first to ensure it's available
     const materialToAssign = availableMaterials[0];
     materialToAssign.driverId = driver.driverId;
-    materialToAssign.mountedAt = new Date();
+    materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     materialToAssign.dismountedAt = null;
     await materialToAssign.save();
 
@@ -670,7 +670,7 @@ createDriver: async (_, { input }) => {
     driver.reviewStatus = 'APPROVED';
     driver.approvalDate = new Date();
     driver.materialId = materialToAssign._id;
-    driver.installedMaterialType = materialToAssign.materialType;
+    driver.installedMaterialType = null; // Will be set when material is actually mounted
 
     if (materialTypeOverride?.length > 0) {
       driver.adminOverride = true;

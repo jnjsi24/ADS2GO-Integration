@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Check, Calendar, UserPlus, UserX, QrCode, Edit } from 'lucide-react';
+import { X, Check, Calendar, UserPlus, UserX, QrCode, Edit, History } from 'lucide-react';
+import MaterialUsageHistoryModal from './MaterialUsageHistoryModal';
 
 interface Driver {
   driverId: string;
@@ -70,6 +71,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
   onUpdateEditingDate
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showUsageHistory, setShowUsageHistory] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -134,21 +136,31 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
               {material.materialId}
             </h2>
           </div>
-          <span
-            className={`px-3 py-1 text-xs mr-40 font-medium rounded-full ${
-              getStatus(material) === "Used"
-                ? "bg-red-200 text-red-800"
-                : "bg-green-200 text-green-800"
-            }`}
-          >
-            {getStatus(material)}
-          </span>
-          <button
-            onClick={handleClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowUsageHistory(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+              title="View driver usage history"
+            >
+              <History size={16} />
+              Usage History
+            </button>
+            <span
+              className={`px-3 py-1 text-xs font-medium rounded-full ${
+                getStatus(material) === "Used"
+                  ? "bg-red-200 text-red-800"
+                  : "bg-green-200 text-green-800"
+              }`}
+            >
+              {getStatus(material)}
+            </span>
+            <button
+              onClick={handleClose}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -298,7 +310,18 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
 
             {/* Dismounted Date */}
             <div>
-              <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-700">Dismounted Date:</span>
+                {!editingDates[material.id] && (
+                  <button
+                    onClick={() => onStartEditingDates(material.id, material)}
+                    className="text-blue-500 hover:text-blue-600 text-xs flex items-center gap-1"
+                  >
+                    <Edit size={12} />
+                    Edit
+                  </button>
+                )}
+              </div>
               {editingDates[material.id] ? (
                 <div className="relative mt-1">
                   <input
@@ -507,6 +530,14 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Usage History Modal */}
+      <MaterialUsageHistoryModal
+        isOpen={showUsageHistory}
+        onClose={() => setShowUsageHistory(false)}
+        materialId={material.id}
+        materialName={material.materialId}
+      />
     </div>
   );
 };
