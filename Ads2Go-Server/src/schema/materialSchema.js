@@ -153,6 +153,9 @@ extend type Query {
   
   # Get materials assigned to a specific driver
   getDriverMaterials(driverId: ID!): DriverMaterialsResponse!
+  
+  # Get usage history for a specific material (Admin-only)
+  getMaterialUsageHistory(materialId: ID!): MaterialUsageHistoryResponse!
 }
 
   type Mutation {
@@ -184,5 +187,29 @@ extend type Query {
     success: Boolean!
     message: String!
     materialTracking: MaterialPhotoTracking
+  }
+
+  type MaterialUsageHistory {
+    id: ID!
+    materialId: ID!
+    driverId: String!
+    driverInfo: DriverInfo!
+    assignedAt: String!
+    unassignedAt: String
+    mountedAt: String
+    dismountedAt: String
+    usageDuration: Int # in days
+    assignmentReason: String!
+    unassignmentReason: String
+    notes: String
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type MaterialUsageHistoryResponse {
+    success: Boolean!
+    message: String!
+    usageHistory: [MaterialUsageHistory!]!
   }
 `;
