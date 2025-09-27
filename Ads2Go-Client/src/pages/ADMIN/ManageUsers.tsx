@@ -8,6 +8,7 @@ import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 
 interface User {
   id: string;
@@ -153,7 +154,11 @@ const ManageUsers: React.FC = () => {
   const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
-
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Show 10 advertisers per page
+ 
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
     fetchPolicy: 'network-only',
@@ -291,6 +296,17 @@ const handleCityFilterChange = (city: string) => {
     return matchesSearch && matchesStatus && matchesCity;
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatusFilter, selectedCityFilter]);
+
   // View details in modal
   const handleViewDetails = (user: User) => {
     setSelectedUser(user);
@@ -320,17 +336,112 @@ const handleCityFilterChange = (city: string) => {
     );
   };
 
-  // Handle select all users
-  const handleSelectAll = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedUsers.length === filteredUsers.length) {
-      setSelectedUsers([]);
-    } else {
-      setSelectedUsers(filteredUsers.map(user => user.id));
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
     }
   };
 
-  const isAllSelected = selectedUsers.length === filteredUsers.length && filteredUsers.length > 0;
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Handle select all users (only for current page)
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentPageUserIds = paginatedUsers.map(user => user.id);
+    const allCurrentPageSelected = currentPageUserIds.every(id => selectedUsers.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect all users on current page
+      setSelectedUsers(prev => prev.filter(id => !currentPageUserIds.includes(id)));
+    } else {
+      // Select all users on current page
+      setSelectedUsers(prev => {
+        const newSelection = [...prev];
+        currentPageUserIds.forEach(id => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id);
+          }
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const isAllSelected = paginatedUsers.length > 0 && paginatedUsers.every(user => selectedUsers.includes(user.id));
+
+  // Export to Excel function
+  const exportToExcel = () => {
+    try {
+      // Get the users to export (selected users or all users if none selected)
+      const usersToExport = selectedUsers.length > 0 
+        ? users.filter(user => selectedUsers.includes(user.id))
+        : filteredUsers;
+
+      // Prepare data for Excel
+      const excelData = usersToExport.map(user => ({
+        'First Name': user.firstName,
+        'Middle Name': user.middleName,
+        'Last Name': user.lastName,
+        'Email': user.email,
+        'Company': user.company,
+        'Contact': user.contact,
+        'Address': user.address,
+        'City': user.city,
+        'Status': user.status.charAt(0).toUpperCase() + user.status.slice(1),
+        'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
+        'Last Login': user.lastLogin ? formatLastAccess(user.lastLogin) : 'Never',
+        'Created At': user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
+        'Role': user.role
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // First Name
+        { wch: 15 }, // Middle Name
+        { wch: 15 }, // Last Name
+        { wch: 25 }, // Email
+        { wch: 20 }, // Company
+        { wch: 15 }, // Contact
+        { wch: 30 }, // Address
+        { wch: 15 }, // City
+        { wch: 10 }, // Status
+        { wch: 12 }, // Email Verified
+        { wch: 15 }, // Last Login
+        { wch: 12 }, // Created At
+        { wch: 10 }  // Role
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Advertisers');
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `advertisers_export_${timestamp}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      // Show success message
+      alert(`Successfully exported ${usersToExport.length} advertiser(s) to ${filename}`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Error exporting to Excel. Please try again.');
+    }
+  };
 
   // Show loading state while authentication is being checked
   if (authLoading || !isInitialized) {
@@ -385,7 +496,7 @@ const handleCityFilterChange = (city: string) => {
 
   return (
     <AdminLayout>
-      <div className="min-h-screen bg-gray-100 pr-5 p-10">
+      <div className="min-h-screen bg-gray-100 pr-5 p-10 flex flex-col">
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
@@ -471,7 +582,8 @@ const handleCityFilterChange = (city: string) => {
       
 
         {/* User List */}
-        <div className="rounded-xl mb-4 overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <div className="rounded-xl mb-4 overflow-hidden flex-1">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
             <div className="flex items-center gap-2 ml-1 col-span-3">
@@ -496,7 +608,7 @@ const handleCityFilterChange = (city: string) => {
           </div>
 
           {/* User Cards */}
-          {filteredUsers.map((user) => (
+          {paginatedUsers.map((user) => (
             <div
               key={user.id}
               className="bg-white mb-3 rounded-lg shadow-md"
@@ -562,11 +674,12 @@ const handleCityFilterChange = (city: string) => {
               </div>
             </div>
           ))}
-          {filteredUsers.length === 0 && (
+          {paginatedUsers.length === 0 && (
             <div className="p-4 text-center text-gray-500">
-              {users.length === 0 ? 'No users found' : 'No users match your search criteria'}
+              {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
             </div>
           )}
+          </div>
         </div>
 
         {/* Details Modal */}
@@ -699,16 +812,101 @@ const handleCityFilterChange = (city: string) => {
           </div>
         )}
 
-        {/* Footer with user count */}
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-gray-600">Found: {filteredUsers.length} user(s) - Selected: {selectedUsers.length}</span>
-          <div className="flex space-x-2">
+        {/* Footer with pagination controls - Fixed at bottom */}
+        <div className="mt-auto">
+          {/* Action buttons */}
+          <div className="flex space-x-2 mb-4">
             <button 
+              onClick={exportToExcel}
               className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={selectedUsers.length === 0}
+              disabled={filteredUsers.length === 0}
             >
-              Export {selectedUsers.length > 0 ? `${selectedUsers.length} Selected Users` : 'to Excel'}
+              Export {selectedUsers.length > 0 ? `${selectedUsers.length} Selected Advertisers` : 'All Advertisers to Excel'}
             </button>
+          </div>
+
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} advertisers
+              </span>
+              <span className="text-sm text-gray-600">Selected: {selectedUsers.length}</span>
+            </div>
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center space-x-4">
+              {/* Page size selector */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Pagination buttons */}
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers - show only a few pages around current page */}
+                  <div className="flex space-x-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-1 text-sm border rounded ${
+                              currentPage === i
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+                      return pages;
+                    })()}
+                  </div>
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
