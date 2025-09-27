@@ -61,14 +61,14 @@ export default function Home() {
       description: "Boost your brand with mobile advertising solutions that drive visibility, engagement, and growth — anytime, anywhere.",
       buttonText: "+ Register Ad Campaign",
       buttonLink: "/login",
-      videoSrc: "/image/home.mp4",
+      imageSrc: "/image/AdsMobile.jpg",
     },
     {
       title: "Drive Your Brand Forward with Mobile Advertising",
       description: "Reach your audience on the go with our innovative mobile ad solutions, designed to maximize impact and engagement.",
       buttonText: "Learn More",
       buttonLink: "/login",
-      videoSrc: "/image/home2.mp4", 
+      imageSrc: "/image/Dashboard_Driver.jpg", 
     },
   ];
 
@@ -149,19 +149,19 @@ export default function Home() {
   // Testimonial data
   const testimonials: Testimonial[] = [
     {
-      image: '/image/client1.jpg',
+      image: '/image/Rajesh_Kumar.jpg',
       name: 'Rajesh Kumar',
       title: 'Business Owner',
       quote: 'Increased my sales by 30% with mobile ads!',
     },
     {
-      image: '/image/client1.jpg',
+      image: '/image/Priya_Sharma.jpg',
       name: 'Priya Sharma',
       title: 'Marketing Manager',
       quote: 'Amazing reach and easy to manage campaigns.',
     },
     {
-      image: '/image/client1.jpg',
+      image: '/image/Amit_Singh.jpg',
       name: 'Amit Singh',
       title: 'Driver',
       quote: 'I earned extra income by displaying digital ads on my vehicle while doing my regular driving routes. It was a great way to make passive money without changing my routine—I just drove like I normally do, and the ads ran automatically.',
@@ -235,15 +235,11 @@ export default function Home() {
     <div className="min-h-screen relative">
   {/* Hero Section - Slideshow */}
   <section className="relative py-20 px-2 pr-44 text-black min-h-[90vh] flex items-center overflow-hidden">
-    <video
-      autoPlay
-      muted
-      loop
+    <img
+      src={slides[currentSlide].imageSrc}
+      alt="Hero background"
       className="absolute top-0 left-0 w-full h-full object-cover z-0"
-      src={slides[currentSlide].videoSrc}
-    >
-      Your browser does not support the video tag.
-    </video>
+    />
     <div className="container mx-auto max-w-screen-xl relative z-10">
       {slides.map((slide, index) => (
         <div
@@ -303,60 +299,44 @@ export default function Home() {
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
         <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
-          <video
-            autoPlay
-            muted
-            loop
+          <img
             className="w-full h-full object-cover rounded-lg"
-            src="/image/first.mp4"
-          >
-            Your browser does not support the video tag.
-          </video>
+            src="/image/RegisterAdsHere.jpg"
+            alt="Register Your Ad"
+          />
         </div>
         <h3 className="text-xl font-semibold mb-2">Register Your Ad</h3>
         <p className="text-gray-600 mt-8">Submit your ad content, choose your preferred vehicle type (motorcycle, car, jeepney, bus), and select your campaign duration.</p>
       </div>
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
         <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
-          <video
-            autoPlay
-            muted
-            loop
+          <img
             className="w-full h-full object-cover rounded-lg"
-            src="/image/second.mp4"
-          >
-            Your browser does not support the video tag.
-          </video>
+            src="/image/CampaignAds.jpg"
+            alt="Launch Your Campaign"
+          />
         </div>
         <h3 className="text-xl font-semibold mb-2">Launch Your Campaign</h3>
         <p className="text-gray-600 mt-8">Once approved, your ad goes live on vehicle LCDs or vinyl wraps, reaching thousands daily.</p>
       </div>
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
         <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
-          <video
-            autoPlay
-            muted
-            loop
+          <img
             className="w-full h-full object-cover rounded-lg"
-            src="/image/third.mp4"
-          >
-            Your browser does not support the video tag.
-          </video>
+            src="/image/Drivers.jpg"
+            alt="View Drivers"
+          />
         </div>
         <h3 className="text-xl font-semibold mb-2">View Drivers</h3>
         <p className="text-gray-600 mt-8">Browse available drivers or vehicles based on your preferred route or area. Assign your ad to the one that best fits your goals.</p>
       </div>
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
         <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
-          <video
-            autoPlay
-            muted
-            loop
+          <img
             className="w-full h-full object-cover rounded-lg"
-            src="/image/fourth.mp4"
-          >
-            Your browser does not support the video tag.
-          </video>
+            src="/image/Track_Monitor.jpg"
+            alt="Track & Monitor Performance"
+          />
         </div>
         <h3 className="text-xl font-semibold mb-2">Track & Monitor Performance</h3>
         <p className="text-gray-600 mt-8">Use the dashboard to track your ad in real-time, view routes, impressions, and get performance reports.</p>
