@@ -214,8 +214,8 @@ const ManageUsers: React.FC = () => {
   useEffect(() => {
     if (usersError) {
       const errorMessage = usersError.message || 'Unknown error';
-      setError('Failed to fetch users: ' + errorMessage);
-      console.error('Error fetching users:', usersError);
+      setError('Failed to fetch advertisers: ' + errorMessage);
+      console.error('Error fetching advertisers:', usersError);
       setLoading(false);
     }
   }, [usersError]);
@@ -244,15 +244,15 @@ const ManageUsers: React.FC = () => {
 
           // Remove from selected users if it was selected
           setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
-          alert('User deleted successfully');
+          alert('Advertiser deleted successfully');
         } else {
-          alert('Failed to delete user: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
         }
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (err: any) {
-        alert('Error deleting user: ' + (err.message || 'Unknown error'));
-        console.error('Error deleting user:', err);
+        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        console.error('Error deleting advertiser:', err);
         setShowDeleteModal(false);
         setUserToDelete(null);
       }
@@ -356,7 +356,7 @@ const handleCityFilterChange = (city: string) => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
-        <div className="text-lg">Loading users...</div>
+        <div className="text-lg">Loading advertisers...</div>
       </div>
     );
   }
@@ -388,12 +388,12 @@ const handleCityFilterChange = (city: string) => {
       <div className="min-h-screen bg-gray-100 pr-5 p-10">
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Users Management</h1>
+        <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
         <div className="flex gap-2">
           <input
             type="text"
             className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-            placeholder="Search by name..."
+            placeholder="Search advertisers by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
