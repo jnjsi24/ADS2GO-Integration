@@ -16,7 +16,7 @@ import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 
 const Dashboard = () => {
-  const [selectedOption, setSelectedOption] = useState('Riders');
+  const [selectedOption, setSelectedOption] = useState('Drivers');
   // Explicitly type selectedPeriod to the union of its possible values
   const [selectedPeriod, setSelectedPeriod] = useState<'Monthly' | 'Weekly' | 'Daily'>('Monthly');
   // Changed initial state from 'All time' to 'Today'

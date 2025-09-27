@@ -34,7 +34,7 @@ import AdminLogin from './pages/AUTH/AdminLogin';
 import AdminDashboard from './pages/ADMIN/AdminDashboard';
 import ManageUsers from './pages/ADMIN/ManageUsers';
 import SiteSettings from './pages/ADMIN/SiteSettings';
-import ManageRiders from './pages/ADMIN/ManageRiders';
+import ManageDrivers from './pages/ADMIN/ManageDrivers';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
@@ -98,10 +98,10 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/admin/riders"
+          path="/admin/drivers"
           element={
             <ProtectedRoute>
-              <ManageRiders />
+              <ManageDrivers />
             </ProtectedRoute>
           }
         />

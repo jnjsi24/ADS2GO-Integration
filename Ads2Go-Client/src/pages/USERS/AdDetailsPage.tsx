@@ -58,7 +58,7 @@ type Ad = {
     dismountedAt: string;
   };
   // Additional fields for display
-  riders?: number;
+  drivers?: number;
   plan?: string;
   format?: string;
   imagePath?: string;
@@ -69,14 +69,14 @@ type Ad = {
 // Type for notifications
 type Notification = {
   id: number;
-  riderName: string;
+  driverName: string;
   type: 'avail' | 'on_the_move' | 'completed' | 'cancelled';
   timestamp: string;
 };
 
 // Sample notification data
 const sampleNotifications: Notification[] = [
-  { id: 1, riderName: 'Jose Pascual', type: 'avail', timestamp: '2024-07-20 10:00 AM' },
+  { id: 1, driverName: 'Jose Pascual', type: 'avail', timestamp: '2024-07-20 10:00 AM' },
   // ... rest of the notifications
 ];
 
@@ -111,16 +111,16 @@ const maskName = (fullName: string): string => {
 
 // Helper function to generate notification text
 const getNotificationText = (notification: Notification) => {
-  const maskedRiderName = maskName(notification.riderName); // Mask the rider's name
+  const maskedDriverName = maskName(notification.driverName); // Mask the driver's name
   switch (notification.type) {
     case 'avail':
-      return `Rider ${maskedRiderName} has availed this ad.`;
+      return `Driver ${maskedDriverName} has availed this ad.`;
     case 'on_the_move':
-      return `Rider ${maskedRiderName} is on the move.`;
+      return `Driver ${maskedDriverName} is on the move.`;
     case 'completed':
-      return `Rider ${maskedRiderName} has completed the ad task.`;
+      return `Driver ${maskedDriverName} has completed the ad task.`;
     case 'cancelled':
-      return `Rider ${maskedRiderName} cancelled the ad task.`;
+      return `Driver ${maskedDriverName} cancelled the ad task.`;
     default:
       return '';
   }

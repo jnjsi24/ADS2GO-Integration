@@ -602,7 +602,7 @@ const handleCityFilterChange = (city: string) => {
                   </div>
                 </div>
 
-                {/* Counts Section (Ads/Riders) */}
+                {/* Counts Section (Ads/Drivers) */}
                 <div className="mb-6">
                   <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
                     <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
