@@ -8,6 +8,7 @@ import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import RouteMap from '../../components/RouteMap';
 
 
 type QrImpression = {
@@ -133,6 +134,7 @@ const AdDetailsPage: React.FC = () => {
   const [selectedAd, setSelectedAd] = useState(adOptions[0]);
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
@@ -168,7 +170,30 @@ const AdDetailsPage: React.FC = () => {
   // Find the specific ad by ID
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
   
-  // Debug logging
+  // Function to fetch device ID from material ID
+  const fetchDeviceId = async (materialId: string) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/deviceByMaterial/${materialId}`
+      );
+      const result = await response.json();
+      
+      if (result.success && result.data && result.data.deviceId) {
+        setDeviceId(result.data.deviceId);
+        console.log('🔍 Found device ID:', result.data.deviceId, 'for material:', materialId);
+      } else {
+        // Fallback to hardcoded device ID if not found
+        setDeviceId('TABLET-21G93-1758642873206');
+        console.log('⚠️ Using fallback device ID for material:', materialId);
+      }
+    } catch (error) {
+      console.error('Error fetching device ID:', error);
+      // Fallback to hardcoded device ID
+      setDeviceId('TABLET-21G93-1758642873206');
+    }
+  };
+
+  // Debug logging and fetch device ID
   React.useEffect(() => {
     if (ad) {
       console.log('🔍 Ad Details Debug:', {
@@ -179,6 +204,14 @@ const AdDetailsPage: React.FC = () => {
         materialId: ad.materialId?.materialId,
         planName: ad.planId?.name
       });
+      
+      // Fetch device ID if material ID is available
+      if (ad.materialId?.materialId) {
+        fetchDeviceId(ad.materialId.materialId);
+      } else {
+        // Use fallback device ID
+        setDeviceId('TABLET-21G93-1758642873206');
+      }
     }
   }, [ad]);
 
@@ -530,8 +563,21 @@ const AdDetailsPage: React.FC = () => {
         {/* Map + Activity List */}
         <div className="flex items-start space-x-6">
           {/* Map */}
-          <div className="rounded-lg overflow-hidden shadow border border-gray-200">
-            <img src="/image/gps.jpg" alt="Map preview" className="w-96 h-64 object-cover" />
+          <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
+            {deviceId ? (
+              <RouteMap 
+                deviceId={deviceId} 
+                style={{ height: '100%', width: '100%' }}
+                showMetrics={false}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full bg-gray-100">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                  <p className="text-xs text-gray-600">Loading device...</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Activity List */}

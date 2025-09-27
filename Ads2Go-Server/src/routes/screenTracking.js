@@ -101,6 +101,7 @@ router.post('/updateLocation', async (req, res) => {
       }
       
       // Check if device has active WebSocket connection before marking as online
+      const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
       
       // Only mark as online if device has active WebSocket connection
       await ScreenTracking.updateOne(
@@ -195,6 +196,187 @@ router.post('/updateLocation', async (req, res) => {
 
   } catch (error) {
     console.error('Error updating location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// GET /route/:deviceId - Get GPS route data for a device
+router.get('/route/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { date, limit = 1000 } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: deviceId'
+      });
+    }
+
+    // Find screen tracking record
+    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Screen tracking record not found'
+      });
+    }
+
+    // Get location history from current session
+    let locationHistory = [];
+    
+    if (screenTracking.currentSession && screenTracking.currentSession.locationHistory) {
+      locationHistory = screenTracking.currentSession.locationHistory;
+      
+      // Filter by date if provided
+      if (date) {
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        locationHistory = locationHistory.filter(point => {
+          const pointDate = new Date(point.timestamp);
+          return pointDate >= targetDate && pointDate < nextDay;
+        });
+      }
+      
+      // Limit results
+      if (limit && parseInt(limit) > 0) {
+        locationHistory = locationHistory.slice(-parseInt(limit));
+      }
+    }
+
+    // Convert to route format for frontend
+    const routeData = locationHistory.map(point => ({
+      lat: point.coordinates[1], // Convert from GeoJSON [lng, lat] to [lat, lng]
+      lng: point.coordinates[0],
+      timestamp: point.timestamp,
+      speed: point.speed || 0,
+      heading: point.heading || 0,
+      accuracy: point.accuracy || 0,
+      address: point.address || ''
+    }));
+
+    // Calculate route metrics
+    let totalDistance = 0;
+    let totalDuration = 0;
+    let averageSpeed = 0;
+    
+    if (routeData.length > 1) {
+      // Calculate total distance using Haversine formula
+      for (let i = 1; i < routeData.length; i++) {
+        const prev = routeData[i - 1];
+        const curr = routeData[i];
+        const distance = calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+        totalDistance += distance;
+      }
+      
+      // Calculate duration
+      const startTime = new Date(routeData[0].timestamp);
+      const endTime = new Date(routeData[routeData.length - 1].timestamp);
+      totalDuration = (endTime.getTime() - startTime.getTime()) / 1000; // seconds
+      
+      // Calculate average speed
+      if (totalDuration > 0) {
+        averageSpeed = (totalDistance / totalDuration) * 3600; // km/h
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Route data retrieved successfully',
+      data: {
+        deviceId,
+        materialId: screenTracking.materialId,
+        route: routeData,
+        metrics: {
+          totalDistance: Math.round(totalDistance * 1000) / 1000, // Round to 3 decimal places
+          totalDuration: Math.round(totalDuration),
+          averageSpeed: Math.round(averageSpeed * 100) / 100, // Round to 2 decimal places
+          pointCount: routeData.length,
+          startTime: routeData.length > 0 ? routeData[0].timestamp : null,
+          endTime: routeData.length > 0 ? routeData[routeData.length - 1].timestamp : null
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching route data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Helper function to calculate distance between two points using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const distance = R * c; // Distance in kilometers
+  return distance;
+}
+
+// GET /deviceByMaterial/:materialId - Get device ID from material ID
+router.get('/deviceByMaterial/:materialId', async (req, res) => {
+  try {
+    const { materialId } = req.params;
+
+    if (!materialId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameter: materialId'
+      });
+    }
+
+    // Find screen tracking record by material ID
+    const screenTracking = await ScreenTracking.findOne({ materialId });
+    
+    if (!screenTracking) {
+      return res.status(404).json({
+        success: false,
+        message: 'No device found for this material ID'
+      });
+    }
+
+    // Get the primary device ID (first device in the devices array or legacy deviceId)
+    const deviceId = screenTracking.devices && screenTracking.devices.length > 0 
+      ? screenTracking.devices[0].deviceId 
+      : screenTracking.deviceId;
+
+    if (!deviceId) {
+      return res.status(404).json({
+        success: false,
+        message: 'No device ID found for this material'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Device ID retrieved successfully',
+      data: {
+        materialId,
+        deviceId,
+        screenType: screenTracking.screenType,
+        carGroupId: screenTracking.carGroupId,
+        isOnline: screenTracking.isOnline,
+        lastSeen: screenTracking.lastSeen
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching device by material ID:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
