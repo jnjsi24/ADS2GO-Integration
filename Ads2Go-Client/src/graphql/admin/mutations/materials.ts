@@ -92,6 +92,31 @@ export const UNREGISTER_TABLET = gql`
   }
 `;
 
+export const UNASSIGN_MATERIAL_FROM_DRIVER = gql`
+  mutation UnassignMaterialFromDriver($materialId: ID!, $dismountReason: String!) {
+    unassignMaterialFromDriver(materialId: $materialId, dismountReason: $dismountReason) {
+      success
+      message
+      material {
+        id
+        materialId
+        vehicleType
+        materialType
+        driverId
+        mountedAt
+        dismountedAt
+      }
+      driver {
+        driverId
+        fullName
+        email
+        contactNumber
+        vehiclePlateNumber
+      }
+    }
+  }
+`;
+
 export const CREATE_TABLET_CONFIGURATION = gql`
   mutation CreateTabletConfiguration($input: CreateTabletConfigurationInput!) {
     createTabletConfiguration(input: $input) {
