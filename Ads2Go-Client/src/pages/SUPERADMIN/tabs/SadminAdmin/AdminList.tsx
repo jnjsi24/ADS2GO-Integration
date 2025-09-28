@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Pencil } from 'lucide-react';
+import { Trash, Pencil } from 'lucide-react';
 import { Admin } from './types';
 
 interface AdminListProps {
@@ -17,7 +17,8 @@ const AdminList: React.FC<AdminListProps> = ({
 }) => {
   return (
     <div className="mx-6 mt-4 rounded-xl overflow-hidden">
-      <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_0.5fr] gap-4 px-6 py-3 text-sm font-semibold text-[#3674B5] bg-gray-100">
+      {/* Header */}
+      <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-3 text-sm font-semibold text-[#3674B5] bg-gray-100">
         <span>Name</span>
         <span>Company</span>
         <span>Contact</span>
@@ -25,22 +26,23 @@ const AdminList: React.FC<AdminListProps> = ({
         <span>Date Created</span>
         <span className="text-center">Actions</span>
       </div>
+
       {admins.length > 0 ? (
         <ul className="space-y-3 pb-5">
           {admins.map((admin) => (
             <li
               key={admin.id}
-              className="group grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_0.5fr] gap-4 px-6 py-4 bg-white rounded-xl h-20 shadow-md items-center hover:bg-[#3674B5] transition-colors"
+              className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-4 bg-white rounded-xl shadow-md items-center hover:bg-gray-100 transition-colors"
             >
+              {/* Name + Avatar */}
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold group-hover:bg-white group-hover:text-[#3674B5] overflow-hidden">
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-semibold overflow-hidden">
                   {admin.profilePicture ? (
-                    <img 
-                      src={admin.profilePicture} 
+                    <img
+                      src={admin.profilePicture}
                       alt={`${admin.firstName} ${admin.lastName}`}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        // Fallback to initials if image fails to load
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
                         const parent = target.parentElement;
@@ -53,28 +55,41 @@ const AdminList: React.FC<AdminListProps> = ({
                     `${admin.firstName.charAt(0)}${admin.lastName.charAt(0)}`
                   )}
                 </div>
-                <p className="font-medium text-gray-900 group-hover:text-white">
+                <p className="font-medium text-gray-900">
                   {admin.firstName} {admin.lastName}
                 </p>
               </div>
-              <p className="text-sm text-gray-900 group-hover:text-white">{admin.companyName || 'N/A'}</p>
-              <p className="text-sm text-gray-900 group-hover:text-white">{admin.contactNumber || 'N/A'}</p>
-              <p className="text-sm text-gray-900 truncate group-hover:text-white">{admin.email}</p>
-              <div className="text-sm text-gray-600 group-hover:text-white">
-                <span>{admin.createdAt ? formatDate(admin.createdAt) : 'N/A'}</span>
+
+              {/* Other Columns */}
+              <p className="text-sm text-gray-900">{admin.companyName || 'N/A'}</p>
+              <p className="text-sm text-gray-900">{admin.contactNumber || 'N/A'}</p>
+              <p className="text-sm text-gray-900 truncate">{admin.email}</p>
+              <div className="text-sm text-gray-600">
+                {admin.createdAt ? formatDate(admin.createdAt) : 'N/A'}
               </div>
-              <div className="flex justify-center space-x-2">
+
+              {/* Actions */}
+              <div className="flex items-center justify-center gap-2">
+                {/* Edit */}
                 <button
                   onClick={() => onEditAdmin(admin)}
-                  className="p-2 rounded-full hover:bg-[#0E2A47] group-hover:text-white"
-                >
-                  <Pencil size={18} />
+                  className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-16 transition-[width] duration-300"
+                  >
+                  <Pencil className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                    Edit
+                  </span>
                 </button>
+
+                {/* Delete */}
                 <button
                   onClick={() => onDeleteAdmin(admin)}
-                  className="p-2 rounded-full hover:bg-[#0E2A47] group-hover:text-white"
-                >
-                  <Trash2 size={18} />
+                  className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-16 transition-[width] duration-300"
+                  >
+                  <Trash className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                    Delete
+                  </span>
                 </button>
               </div>
             </li>

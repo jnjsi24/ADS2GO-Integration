@@ -274,7 +274,7 @@ const SadminPlans: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen ml-64 bg-gray-50">
+    <div className="min-h-screen ml-64 mb-5 bg-gray-50">
       {/* Header */}
       <PlansHeader onCreatePlanClick={handleCreatePlan} />
 
