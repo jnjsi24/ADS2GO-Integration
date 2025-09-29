@@ -8,79 +8,42 @@ class AnalyticsService {
   // Update analytics when Android player sends data
   static async updateAnalytics(deviceId, materialId, slotNumber, data) {
     try {
-      // Always prioritize active deployment devices for analytics updates
-      let analytics = await Analytics.findOne({ 
-        materialId, 
-        slotNumber, 
-        deviceId: { $regex: '^DEPLOYMENT-' } 
-      });
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      if (analytics) {
-        console.log(`✅ Found active deployment device for analytics update: ${analytics.deviceId}`);
-      } else {
-        // Only create new document if no deployment device exists
-        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
-        
-        if (!analytics) {
-          analytics = new Analytics({
-            deviceId,
-            materialId,
-            slotNumber,
-            carGroupId: data.carGroupId,
-            driverId: data.driverId,
-            adId: data.adId,
-            userId: data.userId,
-            adDeploymentId: data.adDeploymentId,
-            deviceInfo: data.deviceInfo,
-            isOnline: data.isOnline || false,
-            currentLocation: data.gpsData ? {
-              type: 'Point',
-              coordinates: [data.gpsData.lng, data.gpsData.lat],
-              accuracy: data.gpsData.accuracy,
-              speed: data.gpsData.speed,
-              heading: data.gpsData.heading,
-              altitude: data.gpsData.altitude,
-              timestamp: new Date()
-            } : null,
-            networkStatus: {
-              isOnline: data.networkStatus || false,
-              lastSeen: new Date()
-            }
-          });
+      // Use the new createOrUpdateAdAnalytics method
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        data.adId,
+        data.adTitle || `Ad ${data.adId}`,
+        materialId,
+        slotNumber,
+        deviceId,
+        {
+          userId: data.userId,
+          adDeploymentId: data.adDeploymentId,
+          carGroupId: data.carGroupId,
+          driverId: data.driverId,
+          materialType: materialType,
+          isOnline: data.isOnline,
+          currentLocation: data.gpsData ? {
+            type: 'Point',
+            coordinates: [data.gpsData.lng, data.gpsData.lat],
+            accuracy: data.gpsData.accuracy,
+            speed: data.gpsData.speed,
+            heading: data.gpsData.heading,
+            altitude: data.gpsData.altitude,
+            timestamp: new Date()
+          } : null,
+          networkStatus: {
+            isOnline: data.networkStatus || false,
+            lastSeen: new Date()
+          },
+          deviceInfo: data.deviceInfo
         }
-      }
-      
-      if (analytics) {
-        // Update existing analytics
-        analytics.isOnline = data.isOnline || false;
-        analytics.lastUpdated = new Date();
-        
-        // Update ad and user references if provided
-        if (data.adId) analytics.adId = data.adId;
-        if (data.userId) analytics.userId = data.userId;
-        if (data.adDeploymentId) analytics.adDeploymentId = data.adDeploymentId;
-        
-        if (data.gpsData) {
-          await analytics.updateLocation(
-            data.gpsData.lat,
-            data.gpsData.lng,
-            data.gpsData.speed,
-            data.gpsData.heading,
-            data.gpsData.accuracy
-          );
-        }
-        
-        if (data.deviceInfo) {
-          analytics.deviceInfo = { ...analytics.deviceInfo, ...data.deviceInfo };
-        }
-        
-        if (data.networkStatus !== undefined) {
-          analytics.networkStatus.isOnline = data.networkStatus;
-          analytics.networkStatus.lastSeen = new Date();
-        }
-      }
-      
-      await analytics.save();
+      );
+
       return analytics;
     } catch (error) {
       console.error('Error updating analytics:', error);
@@ -91,49 +54,28 @@ class AnalyticsService {
   // Track ad playback
   static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
     try {
-      // Get the ad to find the userId - require Ad model locally to avoid OverwriteModelError
+      // Get the ad to find the userId
       const Ad = mongoose.models.Ad || require('../models/ad');
       const ad = await Ad.findById(adId);
       const userId = ad ? ad.userId : null;
       
-      // Always prioritize active deployment devices for ad playback tracking
-      let analytics = await Analytics.findOne({ 
-        materialId, 
-        slotNumber, 
-        deviceId: { $regex: '^DEPLOYMENT-' } 
-      });
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      if (analytics) {
-        console.log(`✅ Found active deployment device for ad playback: ${analytics.deviceId}`);
-        // Update userId if not set
-        if (!analytics.userId && userId) {
-          analytics.userId = userId;
-          await analytics.save();
-        }
-      } else {
-        // Only create new document if no deployment device exists
-        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
-        
-        if (!analytics) {
-          analytics = new Analytics({
-            deviceId,
-            materialId,
-            slotNumber,
-            userId: userId, // Set the userId from the ad
-            adPlaybacks: [],
-            totalAdPlayTime: 0,
-            totalAdImpressions: 0
-          });
-        } else {
-          // Update userId if not set
-          if (!analytics.userId && userId) {
-            analytics.userId = userId;
-            await analytics.save();
-          }
-        }
-      }
+      // Create or update analytics for this ad
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        adId,
+        adTitle,
+        materialId,
+        slotNumber,
+        deviceId,
+        { userId, materialType }
+      );
       
-      await analytics.addAdPlayback(adId, adTitle, adDuration, viewTime);
+      // Add ad playback to the specific material
+      await analytics.addAdPlayback(materialId, slotNumber, adId, adTitle, adDuration, viewTime);
       
       // Also update screen tracking
       console.log(`🔍 [analyticsService] Updating ScreenTracking for device ${deviceId}...`);
@@ -172,19 +114,23 @@ class AnalyticsService {
   // Track QR scan
   static async trackQRScan(deviceId, materialId, slotNumber, qrScanData) {
     try {
-      let analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      if (!analytics) {
-        analytics = new Analytics({
-          deviceId,
-          materialId,
-          slotNumber,
-          qrScans: [],
-          totalQRScans: 0
-        });
-      }
+      // Create or update analytics for this ad
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        qrScanData.adId,
+        qrScanData.adTitle || `Ad ${qrScanData.adId}`,
+        materialId,
+        slotNumber,
+        deviceId,
+        { materialType }
+      );
       
-      await analytics.addQRScan(qrScanData);
+      // Add QR scan to the specific material
+      await analytics.addQRScan(materialId, slotNumber, qrScanData);
       
       // QR scan tracking is now handled directly in the ads.js route
       // No need to create separate QRScanTracking documents here

@@ -51,8 +51,12 @@ const AdPlaybackSchema = new mongoose.Schema({
 const QRScanSchema = new mongoose.Schema({
   adId: { type: String, required: true },
   adTitle: { type: String, required: true },
+  materialId: { type: String, required: true },
+  slotNumber: { type: Number, required: true },
   scanTimestamp: { type: Date, default: Date.now },
   qrCodeUrl: { type: String },
+  website: { type: String },
+  redirectUrl: { type: String },
   userAgent: { type: String },
   deviceType: { type: String },
   browser: { type: String },
@@ -64,7 +68,15 @@ const QRScanSchema = new mongoose.Schema({
   timeOnPage: { type: Number, default: 0 },
   converted: { type: Boolean, default: false },
   conversionType: { type: String },
-  conversionValue: { type: Number, default: 0 }
+  conversionValue: { type: Number, default: 0 },
+  // Additional fields from Android player
+  deviceInfo: { type: mongoose.Schema.Types.Mixed },
+  gpsData: { type: mongoose.Schema.Types.Mixed },
+  registrationData: { type: mongoose.Schema.Types.Mixed },
+  networkStatus: { type: mongoose.Schema.Types.Mixed },
+  isOffline: { type: Boolean, default: false },
+  screenData: { type: mongoose.Schema.Types.Mixed },
+  metadata: { type: mongoose.Schema.Types.Mixed }
 }, { _id: false });
 
 // Network Status Schema
@@ -88,16 +100,23 @@ const DailySessionSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }
 }, { _id: false });
 
-// Main Analytics Schema
-const AnalyticsSchema = new mongoose.Schema({
-  // Device and Material Identification
-  deviceId: { 
+// Location History Schema
+const LocationHistorySchema = new mongoose.Schema({
+  location: LocationSchema,
+  timestamp: { type: Date, default: Date.now },
+  eventType: { type: String, enum: ['GPS_UPDATE', 'MANUAL_UPDATE', 'SYSTEM_UPDATE'] }
+}, { _id: false });
+
+// Material Analytics Schema - for tracking individual material performance
+const MaterialAnalyticsSchema = new mongoose.Schema({
+  materialId: { 
     type: String, 
     required: true,
     index: true
   },
-  materialId: { 
+  materialType: {
     type: String, 
+    enum: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
     required: true,
     index: true
   },
@@ -105,7 +124,12 @@ const AnalyticsSchema = new mongoose.Schema({
     type: Number, 
     required: true,
     min: 1,
-    max: 2,
+    max: 5, // LCD can have up to 5 slots, others will be validated in application logic
+    index: true
+  },
+  deviceId: { 
+    type: String, 
+    required: true,
     index: true
   },
   carGroupId: { 
@@ -113,16 +137,78 @@ const AnalyticsSchema = new mongoose.Schema({
     index: true
   },
   driverId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Driver',
+    type: String,
     index: true
   },
+  isOnline: { type: Boolean, default: false },
+  currentLocation: LocationSchema,
   
+  // Ad Playback Analytics for this material
+  adPlaybacks: [AdPlaybackSchema],
+  totalAdPlayTime: { type: Number, default: 0 },
+  totalAdImpressions: { type: Number, default: 0 },
+  averageAdCompletionRate: { type: Number, default: 0 },
+  currentAd: AdPlaybackSchema,
+  
+  // QR Scan Analytics for this material
+  qrScans: [QRScanSchema],
+  totalQRScans: { type: Number, default: 0 },
+  qrScanConversionRate: { type: Number, default: 0 },
+  lastQRScan: { type: Date },
+  
+  // QR Scans per specific ad for this material
+  qrScansByAd: [{
+    adId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    scanCount: { type: Number, default: 0 },
+    lastScanned: { type: Date },
+    firstScanned: { type: Date }
+  }],
+  
+  // Location and Movement Analytics for this material
+  totalDistanceTraveled: { type: Number, default: 0 },
+  averageSpeed: { type: Number, default: 0 },
+  maxSpeed: { type: Number, default: 0 },
+  uptimePercentage: { type: Number, default: 0 },
+  complianceRate: { type: Number, default: 0 },
+  averageDailyHours: { type: Number, default: 0 },
+  
+  // Interaction Analytics for this material
+  totalInteractions: { type: Number, default: 0 },
+  totalScreenTaps: { type: Number, default: 0 },
+  totalDebugActivations: { type: Number, default: 0 },
+  
+  // Daily Sessions for this material
+  dailySessions: [DailySessionSchema],
+  
+  // Location History for this material
+  locationHistory: [LocationHistorySchema],
+  
+  // Network Status for this material
+  networkStatus: NetworkStatusSchema,
+  
+  // Device Information for this material
+  deviceInfo: DeviceInfoSchema,
+  
+  // System Fields
+  isActive: { type: Boolean, default: true },
+  lastSeen: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+}, { _id: true });
+
+// Main Analytics Schema - now focused on ad-level analytics
+const AnalyticsSchema = new mongoose.Schema({
   // Ad and User References
   adId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Ad',
+    required: true,
     index: true
+  },
+  adTitle: {
+    type: String,
+    required: true
   },
   userId: { 
     type: mongoose.Schema.Types.ObjectId, 
@@ -134,56 +220,32 @@ const AnalyticsSchema = new mongoose.Schema({
     ref: 'AdsDeployment',
     index: true
   },
-
-  // Current Status
-  isOnline: { type: Boolean, default: false },
-  currentLocation: LocationSchema,
-  networkStatus: NetworkStatusSchema,
   
-  // Device Information
-  deviceInfo: DeviceInfoSchema,
+  // Materials array - each ad can have multiple materials
+  materials: [MaterialAnalyticsSchema],
   
-  // Ad Playback Analytics
-  adPlaybacks: [AdPlaybackSchema],
-  totalAdPlayTime: { type: Number, default: 0 }, // lifetime total in seconds
+  // Ad-level aggregated analytics
+  totalMaterials: { type: Number, default: 0 },
+  totalDevices: { type: Number, default: 0 },
+  totalAdPlayTime: { type: Number, default: 0 },
   totalAdImpressions: { type: Number, default: 0 },
-  averageAdCompletionRate: { type: Number, default: 0 },
-  currentAd: AdPlaybackSchema,
-  
-  // QR Scan Analytics
-  qrScans: [QRScanSchema],
   totalQRScans: { type: Number, default: 0 },
+  averageAdCompletionRate: { type: Number, default: 0 },
   qrScanConversionRate: { type: Number, default: 0 },
-  lastQRScan: { type: Date },
   
-  // QR Scans per specific ad
-  qrScansByAd: [{
-    adId: { type: String, required: true },
-    adTitle: { type: String, required: true },
-    scanCount: { type: Number, default: 0 },
-    lastScanned: { type: Date },
-    firstScanned: { type: Date }
+  // Ad performance by material
+  materialPerformance: [{
+    materialId: { type: String, required: true },
+    slotNumber: { type: Number, required: true },
+    materialName: { type: String },
+    totalDevices: { type: Number, default: 0 },
+    onlineDevices: { type: Number, default: 0 },
+    totalAdPlayTime: { type: Number, default: 0 },
+    totalAdImpressions: { type: Number, default: 0 },
+    totalQRScans: { type: Number, default: 0 },
+    averageCompletionRate: { type: Number, default: 0 },
+    lastActivity: { type: Date }
   }],
-  
-  // Location and Movement Analytics
-  totalDistanceTraveled: { type: Number, default: 0 }, // lifetime total in km
-  averageSpeed: { type: Number, default: 0 }, // km/h
-  maxSpeed: { type: Number, default: 0 }, // km/h
-  locationHistory: [LocationSchema],
-  
-  // Daily Sessions
-  currentSession: DailySessionSchema,
-  dailySessions: [DailySessionSchema],
-  
-  // Performance Metrics
-  uptimePercentage: { type: Number, min: 0, max: 100, default: 0 },
-  complianceRate: { type: Number, min: 0, max: 100, default: 0 },
-  averageDailyHours: { type: Number, default: 0 },
-  
-  // Engagement Metrics
-  totalInteractions: { type: Number, default: 0 },
-  totalScreenTaps: { type: Number, default: 0 },
-  totalDebugActivations: { type: Number, default: 0 },
   
   // Error Tracking
   errorLogs: [{
@@ -205,55 +267,94 @@ const AnalyticsSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-AnalyticsSchema.index({ deviceId: 1, lastUpdated: -1 });
-AnalyticsSchema.index({ materialId: 1, lastUpdated: -1 });
-AnalyticsSchema.index({ driverId: 1, lastUpdated: -1 });
-AnalyticsSchema.index({ userId: 1, lastUpdated: -1 });
 AnalyticsSchema.index({ adId: 1, lastUpdated: -1 });
+AnalyticsSchema.index({ userId: 1, lastUpdated: -1 });
 AnalyticsSchema.index({ adDeploymentId: 1, lastUpdated: -1 });
-AnalyticsSchema.index({ 'currentLocation.coordinates': '2dsphere' });
-AnalyticsSchema.index({ 'dailySessions.date': -1 });
-AnalyticsSchema.index({ isOnline: 1 });
-AnalyticsSchema.index({ 'adPlaybacks.adId': 1 });
-AnalyticsSchema.index({ 'qrScans.adId': 1 });
+AnalyticsSchema.index({ 'materials.materialId': 1 });
+AnalyticsSchema.index({ 'materials.deviceId': 1 });
+AnalyticsSchema.index({ 'materials.slotNumber': 1 });
+AnalyticsSchema.index({ 'materials.driverId': 1 });
+AnalyticsSchema.index({ 'materials.isOnline': 1 });
+AnalyticsSchema.index({ 'materials.currentLocation.coordinates': '2dsphere' });
+AnalyticsSchema.index({ 'materials.adPlaybacks.adId': 1 });
+AnalyticsSchema.index({ 'materials.qrScans.adId': 1 });
 
-// Virtual for current hours today
-AnalyticsSchema.virtual('currentHoursToday').get(function() {
-  if (!this.currentSession || !this.currentSession.startTime) return 0;
+// Virtual for online devices across all materials
+AnalyticsSchema.virtual('onlineDevices').get(function() {
+  return this.materials.filter(material => material.isOnline).length;
+});
+
+// Methods for ad-level analytics
+AnalyticsSchema.methods.addMaterial = function(materialData) {
+  // Check if material already exists
+  const existingMaterial = this.materials.find(m => 
+    m.materialId === materialData.materialId && 
+    m.slotNumber === materialData.slotNumber
+  );
   
-  const now = new Date();
-  const startTime = new Date(this.currentSession.startTime);
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+  if (existingMaterial) {
+    // Update existing material - preserve analytics data
+    const preservedData = {
+      totalQRScans: existingMaterial.totalQRScans || 0,
+      totalAdPlayTime: existingMaterial.totalAdPlayTime || 0,
+      totalAdImpressions: existingMaterial.totalAdImpressions || 0,
+      averageAdCompletionRate: existingMaterial.averageAdCompletionRate || 0,
+      qrScanConversionRate: existingMaterial.qrScanConversionRate || 0,
+      lastQRScan: existingMaterial.lastQRScan,
+      qrScans: existingMaterial.qrScans || [],
+      qrScansByAd: existingMaterial.qrScansByAd || [],
+      adPlaybacks: existingMaterial.adPlaybacks || [],
+      totalDistanceTraveled: existingMaterial.totalDistanceTraveled || 0,
+      averageSpeed: existingMaterial.averageSpeed || 0,
+      maxSpeed: existingMaterial.maxSpeed || 0,
+      uptimePercentage: existingMaterial.uptimePercentage || 0,
+      complianceRate: existingMaterial.complianceRate || 0,
+      averageDailyHours: existingMaterial.averageDailyHours || 0,
+      totalInteractions: existingMaterial.totalInteractions || 0,
+      totalScreenTaps: existingMaterial.totalScreenTaps || 0,
+      totalDebugActivations: existingMaterial.totalDebugActivations || 0,
+      dailySessions: existingMaterial.dailySessions || [],
+      locationHistory: existingMaterial.locationHistory || [],
+      lastSeen: existingMaterial.lastSeen || new Date(),
+      createdAt: existingMaterial.createdAt || new Date()
+    };
+    
+    // Merge new data with preserved analytics data
+    Object.assign(existingMaterial, materialData, preservedData);
+  } else {
+    // Add new material
+    this.materials.push(materialData);
+  }
   
-  return Math.round(hoursDiff * 100) / 100;
-});
+  // Update aggregated stats
+  this.updateAggregatedStats();
+  
+  return this.save();
+};
 
-// Virtual for hours remaining to meet target
-AnalyticsSchema.virtual('hoursRemaining').get(function() {
-  const targetHours = this.currentSession?.targetHours || 8;
-  const currentHours = this.currentHoursToday;
-  return Math.max(0, targetHours - currentHours);
-});
+AnalyticsSchema.methods.updateMaterial = function(materialId, slotNumber, updateData) {
+  const material = this.materials.find(m => 
+    m.materialId === materialId && m.slotNumber === slotNumber
+  );
+  
+  if (material) {
+    Object.assign(material, updateData);
+    this.updateAggregatedStats();
+    return this.save();
+  }
+  
+  return Promise.reject(new Error('Material not found'));
+};
 
-// Virtual for compliance status
-AnalyticsSchema.virtual('isCompliantToday').get(function() {
-  return this.currentHoursToday >= (this.currentSession?.targetHours || 8);
-});
-
-// Virtual for ad performance score
-AnalyticsSchema.virtual('adPerformanceScore').get(function() {
-  if (this.totalAdImpressions === 0) return 0;
-  return Math.round((this.averageAdCompletionRate * this.uptimePercentage) / 100);
-});
-
-// Virtual for QR scan performance score
-AnalyticsSchema.virtual('qrPerformanceScore').get(function() {
-  if (this.totalQRScans === 0) return 0;
-  return Math.round((this.qrScanConversionRate * this.uptimePercentage) / 100);
-});
-
-// Methods
-AnalyticsSchema.methods.addAdPlayback = function(adId, adTitle, adDuration, viewTime = 0) {
+AnalyticsSchema.methods.addAdPlayback = function(materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
+  const material = this.materials.find(m => 
+    m.materialId === materialId && m.slotNumber === slotNumber
+  );
+  
+  if (!material) {
+    return Promise.reject(new Error('Material not found'));
+  }
+  
   const playback = {
     adId,
     adTitle,
@@ -263,35 +364,44 @@ AnalyticsSchema.methods.addAdPlayback = function(adId, adTitle, adDuration, view
     viewTime,
     completionRate: adDuration > 0 ? Math.min(100, (viewTime / adDuration) * 100) : 0,
     impressions: 1,
-    slotNumber: this.slotNumber
+    slotNumber: slotNumber
   };
   
-  this.adPlaybacks.push(playback);
-  this.currentAd = playback;
-  this.totalAdImpressions += 1;
-  this.totalAdPlayTime += viewTime;
+  material.adPlaybacks.push(playback);
+  material.currentAd = playback;
+  material.totalAdImpressions += 1;
+  material.totalAdPlayTime += viewTime;
   
-  // Update average completion rate
-  const totalCompletion = this.adPlaybacks.reduce((sum, ad) => sum + ad.completionRate, 0);
-  this.averageAdCompletionRate = this.adPlaybacks.length > 0 ? totalCompletion / this.adPlaybacks.length : 0;
+  // Update average completion rate for this material
+  const totalCompletion = material.adPlaybacks.reduce((sum, ad) => sum + ad.completionRate, 0);
+  material.averageAdCompletionRate = material.adPlaybacks.length > 0 ? totalCompletion / material.adPlaybacks.length : 0;
+  
+  // Update aggregated stats
+  this.updateAggregatedStats();
   
   return this.save();
 };
 
-AnalyticsSchema.methods.addQRScan = function(qrScanData) {
-  this.qrScans.push(qrScanData);
-  this.totalQRScans += 1;
-  this.lastQRScan = new Date();
+AnalyticsSchema.methods.addQRScan = function(materialId, slotNumber, qrScanData) {
+  const material = this.materials.find(m => 
+    m.materialId === materialId && m.slotNumber === slotNumber
+  );
   
-  // Update QR scans per specific ad
-  const existingAdIndex = this.qrScansByAd.findIndex(ad => ad.adId === qrScanData.adId);
-  if (existingAdIndex >= 0) {
-    // Update existing ad scan count
-    this.qrScansByAd[existingAdIndex].scanCount += 1;
-    this.qrScansByAd[existingAdIndex].lastScanned = new Date();
+  if (!material) {
+    return Promise.reject(new Error('Material not found'));
+  }
+  
+  material.qrScans.push(qrScanData);
+  material.totalQRScans += 1;
+  material.lastQRScan = new Date();
+  
+  // Update QR scans per specific ad for this material
+  const existingAdScan = material.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+  if (existingAdScan) {
+    existingAdScan.scanCount += 1;
+    existingAdScan.lastScanned = new Date();
   } else {
-    // Add new ad to QR scans tracking
-    this.qrScansByAd.push({
+    material.qrScansByAd.push({
       adId: qrScanData.adId,
       adTitle: qrScanData.adTitle,
       scanCount: 1,
@@ -300,38 +410,154 @@ AnalyticsSchema.methods.addQRScan = function(qrScanData) {
     });
   }
   
-  // Update conversion rate
-  const totalConversions = this.qrScans.filter(scan => scan.converted).length;
-  this.qrScanConversionRate = this.totalQRScans > 0 ? (totalConversions / this.totalQRScans) * 100 : 0;
+  // Update aggregated stats
+  this.updateAggregatedStats();
   
   return this.save();
 };
 
-AnalyticsSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0) {
-  const location = {
-    type: 'Point',
-    coordinates: [lng, lat],
-    accuracy,
-    speed,
-    heading,
-    timestamp: new Date()
+AnalyticsSchema.methods.updateAggregatedStats = function() {
+  // Update material performance array
+  this.materialPerformance = this.materials.map(material => {
+    // Ensure we're accessing the material properties correctly
+    const materialId = material.materialId || material._doc?.materialId;
+    const slotNumber = material.slotNumber || material._doc?.slotNumber;
+    const totalQRScans = material.totalQRScans || material._doc?.totalQRScans || 0;
+    const totalAdPlayTime = material.totalAdPlayTime || material._doc?.totalAdPlayTime || 0;
+    const totalAdImpressions = material.totalAdImpressions || material._doc?.totalAdImpressions || 0;
+    const averageAdCompletionRate = material.averageAdCompletionRate || material._doc?.averageAdCompletionRate || 0;
+    const isOnline = material.isOnline || material._doc?.isOnline || false;
+    const lastSeen = material.lastSeen || material._doc?.lastSeen || new Date();
+    
+    return {
+      materialId: materialId,
+      slotNumber: slotNumber,
+      materialName: `${materialId}-SLOT-${slotNumber}`,
+      totalDevices: 1, // Each material entry represents one device
+      onlineDevices: isOnline ? 1 : 0,
+      totalAdPlayTime: totalAdPlayTime,
+      totalAdImpressions: totalAdImpressions,
+      totalQRScans: totalQRScans,
+      averageCompletionRate: averageAdCompletionRate,
+      lastActivity: lastSeen
+    };
+  });
+  
+  // Update ad-level aggregated stats
+  this.totalMaterials = this.materials.length;
+  this.totalDevices = this.materials.length;
+  this.totalAdPlayTime = this.materials.reduce((total, material) => total + (material.totalAdPlayTime || 0), 0);
+  this.totalAdImpressions = this.materials.reduce((total, material) => total + (material.totalAdImpressions || 0), 0);
+  this.totalQRScans = this.materials.reduce((total, material) => total + (material.totalQRScans || 0), 0);
+  
+  const totalCompletion = this.materials.reduce((total, material) => total + (material.averageAdCompletionRate || 0), 0);
+  this.averageAdCompletionRate = this.materials.length > 0 ? totalCompletion / this.materials.length : 0;
+  
+  const totalConversion = this.materials.reduce((total, material) => total + (material.qrScanConversionRate || 0), 0);
+  this.qrScanConversionRate = this.materials.length > 0 ? totalConversion / this.materials.length : 0;
+};
+
+// Helper method to get correct slot count for material type
+AnalyticsSchema.statics.getSlotsForMaterialType = function(materialType) {
+  switch (materialType) {
+    case 'HEADDRESS':
+      return [1, 2]; // 2 slots
+    case 'LCD':
+      return [1, 2, 3, 4, 5]; // 5 slots
+    case 'POSTER':
+    case 'STICKER':
+    case 'BANNER':
+    default:
+      return [1]; // 1 slot
+  }
+};
+
+// Validation method to ensure correct slot count per material type
+AnalyticsSchema.methods.validateSlotCounts = function() {
+  const materialGroups = {};
+  
+  // Group materials by materialId
+  this.materials.forEach(material => {
+    if (!materialGroups[material.materialId]) {
+      materialGroups[material.materialId] = [];
+    }
+    materialGroups[material.materialId].push(material);
+  });
+  
+  // Validate each material group
+  for (const [materialId, materials] of Object.entries(materialGroups)) {
+    // Get material type from first material (assuming all slots have same type)
+    const materialType = materials[0].materialType || 'HEADDRESS'; // Default to HEADDRESS if not set
+    const expectedSlots = this.constructor.getSlotsForMaterialType(materialType);
+    const actualSlots = materials.map(m => m.slotNumber).sort((a, b) => a - b);
+    
+    if (JSON.stringify(actualSlots) !== JSON.stringify(expectedSlots)) {
+      console.warn(`⚠️  Material ${materialId} has incorrect slots. Expected: [${expectedSlots.join(', ')}], Actual: [${actualSlots.join(', ')}]`);
+    }
+  }
+};
+
+// Static methods for creating and managing analytics
+AnalyticsSchema.statics.createOrUpdateAdAnalytics = async function(adId, adTitle, materialId, slotNumber, deviceId, additionalData = {}) {
+  // Find existing analytics document for this ad
+  let analytics = await this.findOne({ adId });
+  
+  if (!analytics) {
+    // Create new analytics document for this ad
+    analytics = new this({
+      adId,
+      adTitle,
+      userId: additionalData.userId || null,
+      adDeploymentId: additionalData.adDeploymentId || null,
+      materials: [],
+      materialPerformance: [],
+      isActive: true
+    });
+  }
+  
+  // Create or update material data
+  const materialData = {
+    materialId,
+    materialType: additionalData.materialType || 'HEADDRESS', // Default to HEADDRESS if not provided
+    slotNumber,
+    deviceId,
+    carGroupId: additionalData.carGroupId || null,
+    driverId: additionalData.driverId || null,
+    isOnline: additionalData.isOnline || false,
+    currentLocation: additionalData.currentLocation || null,
+    networkStatus: additionalData.networkStatus || { isOnline: false, lastSeen: new Date() },
+    deviceInfo: additionalData.deviceInfo || null,
+    adPlaybacks: [],
+    totalAdPlayTime: 0,
+    totalAdImpressions: 0,
+    averageAdCompletionRate: 0,
+    currentAd: null,
+    qrScans: [],
+    totalQRScans: 0,
+    qrScanConversionRate: 0,
+    lastQRScan: null,
+    qrScansByAd: [],
+    totalDistanceTraveled: 0,
+    averageSpeed: 0,
+    maxSpeed: 0,
+    uptimePercentage: 0,
+    complianceRate: 0,
+    averageDailyHours: 0,
+    totalInteractions: 0,
+    totalScreenTaps: 0,
+    totalDebugActivations: 0,
+    dailySessions: [],
+    locationHistory: [],
+    isActive: true,
+    lastSeen: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date()
   };
   
-  this.currentLocation = location;
-  this.locationHistory.push(location);
+  // Add or update material
+  await analytics.addMaterial(materialData);
   
-  // Update speed metrics
-  if (speed > this.maxSpeed) {
-    this.maxSpeed = speed;
-  }
-  
-  // Calculate average speed
-  const validSpeeds = this.locationHistory.filter(loc => loc.speed > 0);
-  if (validSpeeds.length > 0) {
-    this.averageSpeed = validSpeeds.reduce((sum, loc) => sum + loc.speed, 0) / validSpeeds.length;
-  }
-  
-  return this.save();
+  return analytics;
 };
 
 AnalyticsSchema.methods.addError = function(errorType, errorMessage, severity = 'MEDIUM') {
@@ -345,49 +571,6 @@ AnalyticsSchema.methods.addError = function(errorType, errorMessage, severity = 
   return this.save();
 };
 
-AnalyticsSchema.methods.startDailySession = function() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  this.currentSession = {
-    date: today,
-    startTime: new Date(),
-    totalHoursOnline: 0,
-    totalDistanceTraveled: 0,
-    totalAdPlayTime: 0,
-    totalQRScans: 0,
-    totalAdImpressions: 0,
-    isActive: true
-  };
-  
-  return this.save();
-};
-
-AnalyticsSchema.methods.endDailySession = function() {
-  if (this.currentSession && this.currentSession.isActive) {
-    this.currentSession.endTime = new Date();
-    this.currentSession.isActive = false;
-    
-    // Calculate total hours
-    const startTime = new Date(this.currentSession.startTime);
-    const endTime = new Date(this.currentSession.endTime);
-    const hoursDiff = (endTime - startTime) / (1000 * 60 * 60);
-    this.currentSession.totalHoursOnline = Math.round(hoursDiff * 100) / 100;
-    
-    // Add to daily sessions history
-    this.dailySessions.push(this.currentSession);
-    
-    // Update compliance rate
-    const compliantDays = this.dailySessions.filter(session => 
-      session.totalHoursOnline >= 8
-    ).length;
-    
-    this.complianceRate = this.dailySessions.length > 0 ? 
-      Math.round((compliantDays / this.dailySessions.length) * 100) : 0;
-  }
-  
-  return this.save();
-};
 
 // Static methods for analytics queries
 AnalyticsSchema.statics.getDeviceAnalytics = function(deviceId, startDate, endDate) {

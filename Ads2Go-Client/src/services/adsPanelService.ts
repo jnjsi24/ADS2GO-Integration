@@ -1,6 +1,6 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
@@ -80,7 +80,10 @@ export interface AdAnalytics {
 
 class AdsPanelServiceV4 {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    // Ensure no double slashes in URL construction
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
     console.log('🌐 [makeRequest] API_BASE_URL:', API_BASE_URL);
     console.log('🌐 [makeRequest] endpoint:', endpoint);
     console.log('🌐 [makeRequest] final URL:', url);
