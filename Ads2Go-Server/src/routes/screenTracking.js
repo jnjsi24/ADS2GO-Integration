@@ -1802,7 +1802,7 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
         maxSpeed: screenTracking.currentSession?.maxSpeed || 0,
         
         // Compliance
-        complianceRate: screenTracking.complianceRate || 0
+        complianceRate: screenTracking.complianceRate || 0,
         
         
         // Daily performance
