@@ -80,12 +80,17 @@ const Register: React.FC = () => {
   const validateField = useCallback((name: string, value: string): string => {
     switch (name) {
       case 'firstName':
-      case 'middleName':
       case 'lastName':
         if (!value.trim()) return `${name.split(/(?=[A-Z])/).join(' ')} is required`;
         if (value.trim().length < 2) return `${name.split(/(?=[A-Z])/).join(' ')} must be at least 2 characters`;
         if (!/^[a-zA-Z\s]+$/.test(value.trim())) return `${name.split(/(?=[A-Z])/).join(' ')} can only contain letters and spaces`;
         if (value.trim().length > 50) return `${name.split(/(?=[A-Z])/).join(' ')} must be less than 50 characters`;
+        return '';
+      case 'middleName':
+        // Middle name is optional, but if provided, validate it
+        if (value.trim() && value.trim().length < 2) return 'Middle name must be at least 2 characters';
+        if (value.trim() && !/^[a-zA-Z\s]+$/.test(value.trim())) return 'Middle name can only contain letters and spaces';
+        if (value.trim() && value.trim().length > 50) return 'Middle name must be less than 50 characters';
         return '';
       case 'companyName':
         if (!value.trim()) return 'Company/Business name is required';
@@ -175,7 +180,7 @@ const Register: React.FC = () => {
     let fieldsToValidate: (keyof typeof formData)[] = [];
 
     if (step === 1) {
-      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
+      fieldsToValidate = ['firstName', 'lastName']; // Only require firstName and lastName
     } else if (step === 2) {
       fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
     } else if (step === 3) {
@@ -200,7 +205,7 @@ const Register: React.FC = () => {
     let fieldsToValidate: (keyof typeof formData)[] = [];
 
     if (step === 1) {
-      fieldsToValidate = ['firstName', 'middleName', 'lastName'];
+      fieldsToValidate = ['firstName', 'lastName']; // Only require firstName and lastName
     } else if (step === 2) {
       fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
     } else if (step === 3) {
@@ -400,7 +405,7 @@ const Register: React.FC = () => {
 
       <div className="relative z-10 p-8 sm:p-10 
                 rounded-xl shadow-2xl w-full max-w-xl
-                bg-white/20 backdrop-blur-lg border border-white/30">
+                bg-transparent backdrop-blur-lg border border-white/30">
         <h1 className="text-5xl font-bold text-center mb-6 text-white">
           Sign up
         </h1>
