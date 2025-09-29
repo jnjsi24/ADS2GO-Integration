@@ -410,35 +410,75 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Ad Impressions */}
+        {/* QR Impressions Chart */}
         <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Ad Impressions</span>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">QR Impressions (Today)</h2>
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <select
-                className="text-xs text-gray-600 bg-white rounded-md pl-3 pr-8 py-1 border border-gray-200 focus:outline-none appearance-none"
-                value={analyticsPeriod}
-                onChange={handleAnalyticsPeriodChange}
+                className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
+                value={qrSelectedPeriod}
+                onChange={handleQrPeriodChange}
               >
-                <option value="1d">Last 24h</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
+                <option value="Today">Today</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
               </select>
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
             </div>
           </div>
-          <p className="text-5xl font-bold text-[#1b5087] pl-4">
-            {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-          </p>
-          <p className="text-sm pt-2 pl-4">
-            <span className="text-green-600">↑ Active</span>
-            <span className="text-black"> {analyticsSummary.activeAds} ads</span>
-          </p>
-          <div className="mt-32">
+
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={getQrChartData()}>
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [value + '%', 'QR Impressions']}
+                  labelFormatter={(label) => `Time: ${label}`}
+                />
+                <Line 
+                  type="monotone"
+                  dataKey="value" 
+                  stroke="#0E2A47"
+                  strokeWidth={3}
+                  dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {qrSelectedPeriod === 'Today' && (
+            <ul className="text-sm text-gray-600 space-y-1 pl-10">
+              {qrTodayData.map((item, index) => (
+                <li key={index} className="flex items-center space-x-2">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: colors[index % colors.length] }}
+                  ></span>
+                  <span>
+                    {item.name}: {item.value}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-6">
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
             <Link
               to="/advertisements"
@@ -588,140 +628,6 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* QR Impressions Section */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* QR Impressions - Now spans full width */}
-        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
-            <div className="relative pt-3" onClick={(e) => e.stopPropagation()}>
-              <select
-                className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
-                value={qrSelectedPeriod}
-                onChange={handleQrPeriodChange}
-              >
-                {/* Removed 'All time' option */}
-                <option value="Weekly">Weekly</option>
-                <option value="Daily">Daily</option>
-                <option value="Today">Today</option>
-              </select>
-              <div className="absolute right-3 top-1/2 pt-3 transform -translate-y-1/2 pointer-events-none">
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={getQrChartData()}>
-                <XAxis 
-                  dataKey="name" 
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis 
-                  tick={{ fontSize: 12 }}
-                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
-                />
-                <Tooltip 
-                  formatter={(value, name) => [value + '%', 'QR Impressions']}
-                  labelFormatter={(label) => `Time: ${label}`}
-                />
-                <Line 
-                  type="monotone"
-                  dataKey="value" 
-                  stroke="#0E2A47"
-                  strokeWidth={3}
-                  dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
-                  activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-
-          {qrSelectedPeriod === 'Daily' && (
-            <div className="flex justify-around text-sm text-gray-600">
-              <ul className="space-y-1">
-                {qrDailyData.slice(0, 4).map((item, index) => (
-                  <li key={index} className="flex items-center space-x-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[index % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="space-y-1">
-                {qrDailyData.slice(4).map((item, index) => (
-                  <li key={index + 4} className="flex items-center space-x-2 pl-10"> {/* Use a unique key */}
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[(index + 4) % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {qrSelectedPeriod === 'Weekly' && (
-            <div className="flex justify-around text-sm text-gray-600">
-              <ul className="space-y-1">
-                {qrWeeklyData.slice(0, 3).map((item, index) => (
-                  <li key={index} className="flex items-center space-x-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[index % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="space-y-1">
-                {qrWeeklyData.slice(3).map((item, index) => (
-                  <li key={index + 3} className="flex items-center space-x-2"> {/* Use a unique key */}
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[(index + 3) % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {qrSelectedPeriod === 'Today' && (
-            <ul className="text-sm text-gray-600 space-y-1 pl-10">
-              {qrTodayData.map((item, index) => (
-                <li key={index} className="flex items-center space-x-2">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: colors[index % colors.length] }}
-                  ></span>
-                  <span>
-                    {item.name}: {item.value}%
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
     </div>
   );
 };
