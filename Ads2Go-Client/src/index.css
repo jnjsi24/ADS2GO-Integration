@@ -113,3 +113,35 @@ input[type="password"]:autofill {
   background-color: transparent !important;
   color: #000000 !important;
 }
+
+/* Fix label positioning when fields are autofilled */
+input:-webkit-autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+input:autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+/* Specific targeting for email and password labels */
+#email:-webkit-autofill + label,
+#password:-webkit-autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+#email:autofill + label,
+#password:autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}

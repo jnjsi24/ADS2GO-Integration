@@ -43,6 +43,48 @@ const Login: React.FC = () => {
     }
   }, []);
 
+  // Handle autofill detection
+  useEffect(() => {
+    const checkAutofill = () => {
+      const emailInput = document.getElementById('email') as HTMLInputElement;
+      const passwordInput = document.getElementById('password') as HTMLInputElement;
+      
+      if (emailInput && emailInput.value && !email) {
+        setEmail(emailInput.value);
+      }
+      if (passwordInput && passwordInput.value && !password) {
+        setPassword(passwordInput.value);
+      }
+    };
+
+    // Check immediately
+    checkAutofill();
+    
+    // Check after a short delay to catch autofill
+    const timeoutId = setTimeout(checkAutofill, 100);
+    
+    // Listen for animation events that might indicate autofill
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    
+    if (emailInput) {
+      emailInput.addEventListener('animationstart', checkAutofill);
+    }
+    if (passwordInput) {
+      passwordInput.addEventListener('animationstart', checkAutofill);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (emailInput) {
+        emailInput.removeEventListener('animationstart', checkAutofill);
+      }
+      if (passwordInput) {
+        passwordInput.removeEventListener('animationstart', checkAutofill);
+      }
+    };
+  }, [email, password]);
+
   const validateForm = () => {
     const errors = {
       email: '',
