@@ -28,6 +28,7 @@ import About from './pages/USERS/About';
 import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
+import DetailedAnalytics from './pages/USERS/DetailedAnalytics';
 import Notifications from './pages/USERS/Notifications';
 import GoogleOAuthCompletion from './pages/AUTH/GoogleOAuthCompletion';
 
@@ -353,6 +354,14 @@ const UserAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/detailed-analytics"
+          element={
+            <ProtectedRoute>
+              <DetailedAnalytics />
             </ProtectedRoute>
           }
         />
