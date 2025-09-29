@@ -164,6 +164,25 @@ export const UserAuthProvider: React.FC<{
           throw new Error('User not found');
         }
 
+        // Helper function to construct full image URL
+        const getImageUrl = (imagePath: string | undefined | null) => {
+          if (!imagePath) return null;
+          // If it's already a full URL, return as is
+          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+          }
+          // If it starts with /uploads, prepend server URL
+          if (imagePath.startsWith('/uploads')) {
+            const serverUrl = process.env.REACT_APP_SERVER_URL;
+            if (!serverUrl) {
+              console.error('REACT_APP_SERVER_URL not configured');
+              return imagePath; // Return original path as fallback
+            }
+            return `${serverUrl}${imagePath}`;
+          }
+          return imagePath;
+        };
+
         const freshUser: User = {
           userId: freshUserRaw.id,
           email: freshUserRaw.email,
@@ -176,7 +195,7 @@ export const UserAuthProvider: React.FC<{
           companyName: freshUserRaw.companyName,
           companyAddress: freshUserRaw.companyAddress,
           contactNumber: freshUserRaw.contactNumber,
-          profilePicture: freshUserRaw.profilePicture,
+          profilePicture: getImageUrl(freshUserRaw.profilePicture),
         };
 
         console.log('🔄 UserAuthContext: Setting user from initialization:', freshUser);
