@@ -12,7 +12,7 @@ import {
   CreateAdminModal,
   EditAdminModal,
   DeleteAdminModal,
-  ToastNotifications,
+  ToastNotifications, 
   AdminFormData,
   EditAdminFormData,
   FormErrors,
@@ -500,18 +500,18 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
 
       <style>
         {`
-          @keyframes slideIn {
+          @keyframes popUp {
             from {
-              transform: translateX(100%);
+              transform: scale(0.8);
               opacity: 0;
             }
             to {
-              transform: translateX(0);
+              transform: scale(1);
               opacity: 1;
             }
           }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
+          .animate-popUp {
+            animation: popUp 0.3s ease-out;
           }
         `}
       </style>

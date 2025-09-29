@@ -163,11 +163,12 @@ const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
 
   return (
 <div
-      className="min-h-screen pl-72 pr-5 p-10 bg-cover bg-center bg-no-repeat flex items-center justify-center"
+      className="min-h-screen pl-72 pr-5 bg-cover bg-center bg-no-repeat flex items-center justify-center"
       style={{
         backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)",
       }}
-    >      <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
+    >      
+    <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
         {/* Left Section: Profile Card */}
         <div className="flex flex-col items-center justify-center p-8 bg-white/10 bg-opacity-70 sm:w-1/3">
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">

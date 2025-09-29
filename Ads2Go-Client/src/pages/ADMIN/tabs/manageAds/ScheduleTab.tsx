@@ -150,32 +150,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange 
     <div className="">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Ad Schedule</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setScheduleView('month')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'month' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Month
-          </button>
-          <button
-            onClick={() => setScheduleView('week')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'week' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Week
-          </button>
-          <button
-            onClick={() => setScheduleView('day')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'day' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Day
-          </button>
-        </div>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex items-center justify-between">
