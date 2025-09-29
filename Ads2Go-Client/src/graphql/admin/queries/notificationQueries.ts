@@ -50,6 +50,15 @@ export const DELETE_NOTIFICATION = gql`
   }
 `;
 
+export const DELETE_ALL_ADMIN_NOTIFICATIONS = gql`
+  mutation DeleteAllAdminNotifications {
+    deleteAllNotifications {
+      success
+      message
+    }
+  }
+`;
+
 export const GET_PENDING_ADS = gql`
   query GetPendingAds {
     getPendingAds {

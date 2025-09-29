@@ -52,5 +52,5 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     </div>
   );
 };
-
 export default ConfirmationModal;
+

@@ -83,7 +83,7 @@ router.post('/updateLocation', async (req, res) => {
 
     // Update location and online status
     try {
-      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
+      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address, deviceId);
       console.log('Location updated successfully for device:', deviceId);
       
       // Check if device has active WebSocket connection before marking as online

@@ -20,7 +20,8 @@ import {
   Wifi,
   Sun,
   Upload,
-  Loader2
+  Loader2,
+  FileVideo
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
@@ -31,6 +32,7 @@ import playbackWebSocketService from '../../services/playbackWebSocketService';
 import Dashboard from './tabs/dashboard/Dashboard';
 import ScreenControl from './tabs/adminAdsControl/ScreenControl';
 import ContentManagement from './tabs/manageAds/ContentManagement';
+import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
 
@@ -578,6 +580,7 @@ const AdminAdsControl: React.FC = () => {
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'screens', label: 'Screen Control', icon: Monitor },
               { id: 'content', label: 'Content Management', icon: Upload },
+              { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
               { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
               { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
             ].map(tab => (
@@ -638,6 +641,10 @@ const AdminAdsControl: React.FC = () => {
                 // Handle ad deployment logic here
               }}
             />
+          )}
+
+          {activeTab === 'company-ads' && (
+            <CompanyAdsManagement />
           )}
 
           {activeTab === 'notifications' && (

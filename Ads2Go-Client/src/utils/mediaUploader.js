@@ -3,11 +3,7 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from '../firebase';
 
 // Base URL for server-side uploads
-const API_BASE_URL = process.env.REACT_APP_API_URL;
-if (!API_BASE_URL) {
-  throw new Error('REACT_APP_API_URL environment variable is not set');
-}
-const FULL_API_URL = API_BASE_URL + '/api';
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '') + '/api';
 
 /**
  * Uploads a file directly to Firebase Storage (for non-sensitive content)
@@ -172,7 +168,7 @@ export const uploadDriverDocument = async (file, documentType, userId, onProgres
         });
       };
 
-      xhr.open('POST', `${FULL_API_URL}/upload/driver-documents`, true);
+      xhr.open('POST', `${API_BASE_URL}/upload/driver-documents`, true);
       
       // Add authorization header if user is authenticated
       const token = localStorage.getItem('authToken');

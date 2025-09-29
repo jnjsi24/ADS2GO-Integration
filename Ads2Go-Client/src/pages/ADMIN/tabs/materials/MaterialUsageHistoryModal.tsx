@@ -11,6 +11,12 @@ interface DriverInfo {
   vehiclePlateNumber: string;
 }
 
+interface AdminInfo {
+  adminId: string;
+  adminName: string;
+  adminEmail: string;
+}
+
 interface UsageHistoryEntry {
   id: string;
   materialId: string;
@@ -23,6 +29,9 @@ interface UsageHistoryEntry {
   usageDuration?: number;
   assignmentReason: string;
   unassignmentReason?: string | null;
+  customDismountReason?: string | null;
+  assignedByAdmin?: AdminInfo | null;
+  unassignedByAdmin?: AdminInfo | null;
   notes?: string | null;
   isActive: boolean;
   createdAt: string;
@@ -123,7 +132,8 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
       'DRIVER_LEAVE': 'bg-red-100 text-red-800',
       'MATERIAL_DAMAGE': 'bg-red-100 text-red-800',
       'MANUAL_REMOVAL': 'bg-gray-100 text-gray-800',
-      'SYSTEM_UPDATE': 'bg-yellow-100 text-yellow-800'
+      'SYSTEM_UPDATE': 'bg-yellow-100 text-yellow-800',
+      'CUSTOM': 'bg-indigo-100 text-indigo-800'
     };
 
     return (
@@ -243,11 +253,25 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
                           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assigned</p>
                           <p className="text-sm text-gray-900">{formatDate(entry.assignedAt)}</p>
                           {getReasonBadge(entry.assignmentReason, 'assignment')}
+                          {entry.assignedByAdmin && (
+                            <div className="mt-1">
+                              <p className="text-xs text-blue-600 font-medium">
+                                Assigned by: {entry.assignedByAdmin.adminName}
+                              </p>
+                            </div>
+                          )}
                         </div>
                         <div>
                           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Unassigned</p>
                           <p className="text-sm text-gray-900">{formatDate(entry.unassignedAt)}</p>
                           {entry.unassignmentReason && getReasonBadge(entry.unassignmentReason, 'unassignment')}
+                          {entry.unassignedByAdmin && (
+                            <div className="mt-1">
+                              <p className="text-xs text-red-600 font-medium">
+                                Unassigned by: {entry.unassignedByAdmin.adminName}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -280,6 +304,14 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
                         <div className="mt-3 pt-3 border-t border-gray-100">
                           <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</p>
                           <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">{entry.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Custom Dismount Reason */}
+                      {entry.customDismountReason && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Dismount Reason</p>
+                          <p className="text-sm text-gray-700 bg-orange-50 p-2 rounded border-l-4 border-orange-200">{entry.customDismountReason}</p>
                         </div>
                       )}
                     </div>

@@ -12,10 +12,13 @@ import {
   Eye,
   TrendingUp,
   X,
-  RefreshCw
+  RefreshCw,
+  CheckSquare,
+  Square,
+  Trash2
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
+import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, DELETE_NOTIFICATION, DELETE_ALL_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
 
 interface Notification {
   id: string;
@@ -64,6 +67,10 @@ interface NotificationDashboardProps {
 const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAdsCount }) => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'high'>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
+  const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
@@ -102,6 +109,32 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     }
   });
 
+  // Delete notification
+  const [deleteNotification] = useMutation(DELETE_NOTIFICATION, {
+    onCompleted: () => {
+      refetchNotifications();
+      setShowDeleteModal(false);
+      setNotificationToDelete(null);
+    },
+    onError: (error) => {
+      console.error('Error deleting notification:', error);
+      alert('Failed to delete notification: ' + error.message);
+    }
+  });
+
+  // Delete all notifications
+  const [deleteAllNotifications] = useMutation(DELETE_ALL_ADMIN_NOTIFICATIONS, {
+    onCompleted: () => {
+      refetchNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    },
+    onError: (error) => {
+      console.error('Error deleting all notifications:', error);
+      alert('Failed to delete all notifications: ' + error.message);
+    }
+  });
+
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await markAsRead({
@@ -109,6 +142,74 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       });
     } catch (error) {
       console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const handleDeleteNotification = (notification: Notification) => {
+    setNotificationToDelete(notification);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (notificationToDelete) {
+      try {
+        await deleteNotification({
+          variables: { notificationId: notificationToDelete.id }
+        });
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+      }
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setNotificationToDelete(null);
+  };
+
+  // Selection helper functions
+  const toggleSelectAll = () => {
+    if (selectedNotifications.size === filteredNotifications.length) {
+      setSelectedNotifications(new Set());
+    } else {
+      setSelectedNotifications(new Set(filteredNotifications.map(n => n.id)));
+    }
+  };
+
+  const toggleSelectNotification = (notificationId: string) => {
+    const newSelected = new Set(selectedNotifications);
+    if (newSelected.has(notificationId)) {
+      newSelected.delete(notificationId);
+    } else {
+      newSelected.add(notificationId);
+    }
+    setSelectedNotifications(newSelected);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedNotifications.size === 0) return;
+    
+    if (selectedNotifications.size === filteredNotifications.length) {
+      // If all notifications are selected, use deleteAllNotifications
+      await deleteAllNotifications();
+    } else {
+      // Delete selected notifications one by one
+      for (const notificationId of selectedNotifications) {
+        await deleteNotification({
+          variables: { notificationId }
+        });
+      }
+    }
+    
+    setSelectedNotifications(new Set());
+    setIsSelectMode(false);
+  };
+
+  const handleDeleteAll = async () => {
+    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+      await deleteAllNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
     }
   };
 
@@ -385,7 +486,61 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       {/* Notifications List */}
       <div className="bg-white rounded-lg shadow-sm">
         <div className="p-4 border-b border-gray-200">
-          <h4 className="text-lg font-semibold text-gray-800">Recent Notifications</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-lg font-semibold text-gray-800">Recent Notifications</h4>
+            {filteredNotifications.length > 0 && (
+              <div className="flex items-center space-x-2">
+                {!isSelectMode ? (
+                  <button
+                    onClick={() => setIsSelectMode(true)}
+                    className="flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    <span>Select</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={toggleSelectAll}
+                      className="flex items-center space-x-2 px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+                    >
+                      {selectedNotifications.size === filteredNotifications.length ? (
+                        <CheckSquare className="w-4 h-4" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                      <span>{selectedNotifications.size === filteredNotifications.length ? 'Deselect All' : 'Select All'}</span>
+                    </button>
+                    {selectedNotifications.size > 0 && (
+                      <button
+                        onClick={handleDeleteSelected}
+                        className="flex items-center space-x-2 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete Selected ({selectedNotifications.size})</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={handleDeleteAll}
+                      className="flex items-center space-x-2 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Delete All</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsSelectMode(false);
+                        setSelectedNotifications(new Set());
+                      }}
+                      className="flex items-center space-x-2 px-3 py-1 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm"
+                    >
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="divide-y divide-gray-200">
           {filteredNotifications.length === 0 ? (
@@ -403,6 +558,18 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
+                    {isSelectMode && (
+                      <button
+                        onClick={() => toggleSelectNotification(notification.id)}
+                        className="mt-1 p-1 hover:bg-gray-100 rounded transition-colors"
+                      >
+                        {selectedNotifications.has(notification.id) ? (
+                          <CheckSquare size={20} className="text-blue-600" />
+                        ) : (
+                          <Square size={20} className="text-gray-400" />
+                        )}
+                      </button>
+                    )}
                     {getNotificationIcon(notification.category, notification.type)}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -429,26 +596,78 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {!notification.read && (
-                      <button
-                        onClick={() => handleMarkAsRead(notification.id)}
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        title="Mark as read"
+                  {!isSelectMode && (
+                    <div className="flex items-center gap-2">
+                      {!notification.read && (
+                        <button
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="p-1 text-gray-400 hover:text-gray-600"
+                          title="Mark as read"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDeleteNotification(notification)}
+                        className="p-1 text-gray-400 hover:text-red-600"
+                        title="Delete notification"
                       >
-                        <CheckCircle className="w-4 h-4" />
+                        <X className="w-4 h-4" />
                       </button>
-                    )}
-                    <button className="p-1 text-gray-400 hover:text-gray-600">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Delete Notification
+                </h3>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to delete this notification?
+              </p>
+              {notificationToDelete && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                  <p className="font-medium text-gray-900">{notificationToDelete.title}</p>
+                  <p className="text-sm text-gray-600 mt-1">{notificationToDelete.message}</p>
+                </div>
+              )}
+              <p className="text-sm text-gray-500 mt-2">
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

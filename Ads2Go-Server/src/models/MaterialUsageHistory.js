@@ -47,8 +47,22 @@ const MaterialUsageHistorySchema = new mongoose.Schema({
   },
   unassignmentReason: {
     type: String,
-    enum: ['DRIVER_LEAVE', 'MATERIAL_DAMAGE', 'REASSIGNMENT', 'MANUAL_REMOVAL', 'SYSTEM_UPDATE'],
+    enum: ['DRIVER_LEAVE', 'MATERIAL_DAMAGE', 'REASSIGNMENT', 'MANUAL_REMOVAL', 'SYSTEM_UPDATE', 'CUSTOM'],
     default: null
+  },
+  customDismountReason: {
+    type: String,
+    trim: true
+  },
+  assignedByAdmin: {
+    adminId: String,
+    adminName: String,
+    adminEmail: String
+  },
+  unassignedByAdmin: {
+    adminId: String,
+    adminName: String,
+    adminEmail: String
   },
   notes: {
     type: String,
@@ -80,12 +94,13 @@ MaterialUsageHistorySchema.virtual('calculatedUsageDuration').get(function() {
 });
 
 // Static method to create a usage history entry
-MaterialUsageHistorySchema.statics.createUsageEntry = async function(materialId, driverId, driverInfo, assignmentReason = 'INITIAL_ASSIGNMENT') {
+MaterialUsageHistorySchema.statics.createUsageEntry = async function(materialId, driverId, driverInfo, assignmentReason = 'INITIAL_ASSIGNMENT', assignedByAdmin = null) {
   const usageEntry = new this({
     materialId,
     driverId,
     driverInfo,
-    assignmentReason
+    assignmentReason,
+    assignedByAdmin
     // mountedAt will be set when the material is actually mounted
   });
   
@@ -93,7 +108,7 @@ MaterialUsageHistorySchema.statics.createUsageEntry = async function(materialId,
 };
 
 // Static method to end a usage entry
-MaterialUsageHistorySchema.statics.endUsageEntry = async function(materialId, driverId, unassignmentReason = 'REASSIGNMENT', notes = '', dismountedDate = null) {
+MaterialUsageHistorySchema.statics.endUsageEntry = async function(materialId, driverId, unassignmentReason = 'REASSIGNMENT', notes = '', dismountedDate = null, customDismountReason = null, unassignedByAdmin = null) {
   const usageEntry = await this.findOne({
     materialId,
     driverId,
@@ -105,6 +120,8 @@ MaterialUsageHistorySchema.statics.endUsageEntry = async function(materialId, dr
     // Use the provided dismounted date or the current date if not provided
     usageEntry.dismountedAt = dismountedDate || new Date();
     usageEntry.unassignmentReason = unassignmentReason;
+    usageEntry.customDismountReason = customDismountReason;
+    usageEntry.unassignedByAdmin = unassignedByAdmin;
     usageEntry.notes = notes;
     usageEntry.isActive = false;
     usageEntry.usageDuration = usageEntry.calculatedUsageDuration;

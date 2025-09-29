@@ -35,6 +35,7 @@ const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
+const companyAdTypeDefs = require('./schema/companyAdSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -54,6 +55,7 @@ const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
+const companyAdResolvers = require('./resolvers/companyAdResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -62,16 +64,19 @@ const { driverMiddleware } = require('./middleware/driverAuth');
 // Import jobs
 const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
 const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
+const cronJobs = require('./jobs/cronJobs');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
 const screenTrackingRoutes = require('./routes/screenTracking');
+const deviceTrackingRoutes = require('./routes/deviceTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
 const newsletterRoutes = require('./routes/newsletter');
+const cleanupRoutes = require('./routes/cleanup');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -112,6 +117,7 @@ const server = new ApolloServer({
     notificationTypeDefs,
     userReportTypeDefs,
     faqTypeDefs,
+    companyAdTypeDefs,
   ]),
   resolvers: mergeResolvers([
     {
@@ -138,6 +144,7 @@ const server = new ApolloServer({
     notificationResolvers,
     userReportResolvers,
     faqResolvers,
+    companyAdResolvers,
   ]),
 });
 
@@ -208,14 +215,16 @@ async function startServer() {
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
-  // Routes
-  app.use('/tablet', tabletRoutes);
-  app.use('/screenTracking', screenTrackingRoutes);
-  app.use('/material', materialRoutes);
-  app.use('/ads', adsRoutes);
-  app.use('/material-photos', materialPhotoUploadRoutes);
-  app.use('/analytics', analyticsRoutes);
-  app.use('/api/newsletter', newsletterRoutes);
+// Routes
+app.use('/tablet', tabletRoutes);
+app.use('/screenTracking', screenTrackingRoutes);
+app.use('/deviceTracking', deviceTrackingRoutes);
+app.use('/material', materialRoutes);
+app.use('/ads', adsRoutes);
+app.use('/material-photos', materialPhotoUploadRoutes);
+app.use('/analytics', analyticsRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/cleanup', cleanupRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -277,6 +286,10 @@ async function startServer() {
     // Start the device status monitoring job
     startDeviceStatusJob();
     startPaymentDeadlineJob();
+    
+    // Start cron jobs for daily data archiving
+    cronJobs.start();
+    console.log('📅 Cron jobs started for daily data archiving');
   });
   
   // Handle server shutdown gracefully

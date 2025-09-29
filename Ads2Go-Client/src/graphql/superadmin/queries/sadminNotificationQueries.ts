@@ -47,6 +47,26 @@ export const MARK_ALL_SUPERADMIN_NOTIFICATIONS_READ = gql`
   }
 `;
 
+// Delete super admin notification
+export const DELETE_SUPERADMIN_NOTIFICATION = gql`
+  mutation DeleteSuperAdminNotification($notificationId: ID!) {
+    deleteNotification(notificationId: $notificationId) {
+      success
+      message
+    }
+  }
+`;
+
+// Delete all super admin notifications
+export const DELETE_ALL_SUPERADMIN_NOTIFICATIONS = gql`
+  mutation DeleteAllSuperAdminNotifications {
+    deleteAllNotifications {
+      success
+      message
+    }
+  }
+`;
+
 // Get super admin dashboard stats
 export const GET_SUPERADMIN_DASHBOARD_STATS = gql`
   query GetSuperAdminDashboardStats {

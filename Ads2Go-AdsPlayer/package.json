@@ -19,7 +19,7 @@
     "@react-navigation/native": "^7.1.6",
     "dotenv": "^17.2.2",
     "eslint-config-expo": "~10.0.0",
-    "expo": "~54.0.0",
+    "expo": "~54.0.10",
     "expo-application": "~7.0.7",
     "expo-av": "~16.0.7",
     "expo-barcode-scanner": "~12.9.3",

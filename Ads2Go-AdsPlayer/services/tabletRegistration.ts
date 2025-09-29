@@ -107,8 +107,40 @@ export interface TrackingStatus {
   lastSeen: string;
 }
 
-// For device/emulator testing, use your computer's IP address
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000'; // Updated to use environment variable
+// Get API base URL with environment variable support and platform detection
+const getAPIBaseURL = () => {
+  // Check environment variables first
+  const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.API_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  // Use environment variables for IP and port
+  const serverIp = process.env.EXPO_PUBLIC_SERVER_IP;
+  const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT;
+  
+  if (!envUrl && (!serverIp || !serverPort)) {
+    console.error('❌ Missing required environment variables:');
+    console.error('   EXPO_PUBLIC_API_URL:', envUrl);
+    console.error('   EXPO_PUBLIC_SERVER_IP:', serverIp);
+    console.error('   EXPO_PUBLIC_SERVER_PORT:', serverPort);
+    console.error('   Please check your .env file');
+    throw new Error('Missing required environment variables for API configuration');
+  }
+  
+  const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
+
+  // Platform-specific defaults
+  if (typeof navigator !== 'undefined') {
+    // Browser environment
+    return serverUrl;
+  }
+
+  // Default fallback
+  return serverUrl;
+};
+
+const API_BASE_URL = getAPIBaseURL();
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
@@ -387,8 +419,26 @@ export class TabletRegistrationService {
       };
 
       console.log('Updating location tracking:', locationUpdate);
-      console.log('API URL:', `${API_BASE_URL}/screenTracking/updateLocation`);
+      console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
 
+      // Send to new device tracking endpoint (daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: locationUpdate.deviceId,
+          deviceSlot: 1, // Default slot for now
+          lat: locationUpdate.lat,
+          lng: locationUpdate.lng,
+          speed: locationUpdate.speed,
+          heading: locationUpdate.heading,
+          accuracy: locationUpdate.accuracy
+        }),
+      });
+
+      // Also send to existing screen tracking for backward compatibility
       const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
         method: 'POST',
         headers: {

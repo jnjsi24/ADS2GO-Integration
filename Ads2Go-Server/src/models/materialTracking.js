@@ -92,15 +92,7 @@ const MaterialTrackingSchema = new mongoose.Schema({
 
   // 4. Ad Performance Metrics
   totalAdImpressions: { type: Number, min: 0 },
-  totalViewCount: { type: Number, min: 0 },
-  averageViewTime: { type: Number, min: 0 }, // seconds
-
-  // 5. Engagement Metrics
-  qrCodeScans: { type: Number, min: 0 },
-  interactions: { type: Number, min: 0 },
-
-  // 6. Operational Analytics
-  uptimePercentage: { type: Number, min: 0, max: 100 },
+  // 4. Operational Status (Non-Analytics)
   lastMaintenanceDate: Date,
   errorLogs: [ErrorLogSchema],
 

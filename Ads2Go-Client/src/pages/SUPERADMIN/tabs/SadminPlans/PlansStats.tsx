@@ -10,7 +10,7 @@ const PlansStats: React.FC<PlansStatsProps> = ({ plans }) => {
   return (
     <div className="px-8 py-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Plans</p>
@@ -22,7 +22,7 @@ const PlansStats: React.FC<PlansStatsProps> = ({ plans }) => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Running Plans</p>
@@ -34,7 +34,7 @@ const PlansStats: React.FC<PlansStatsProps> = ({ plans }) => {
           </div>
         </div>
         
-        <div className="bg-white rounded-xl p-6 shadow-sm border">
+        <div className="bg-white rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Pending Plans</p>

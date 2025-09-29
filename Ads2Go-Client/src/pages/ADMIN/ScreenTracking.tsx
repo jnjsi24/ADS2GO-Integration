@@ -142,12 +142,8 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const materialsUrl = `${apiUrl}/material`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const materialsUrl = `${baseUrl}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
@@ -181,15 +177,11 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const complianceUrl = `${apiUrl}/screenTracking/compliance?date=${selectedDate}`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
-      const complianceResponse = await fetch(complianceUrl, {
+      const complianceResponse = await fetch(apiUrl, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -246,12 +238,8 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const pathApiUrl = `${apiUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const pathApiUrl = `${baseUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       
       const response = await fetch(pathApiUrl, {

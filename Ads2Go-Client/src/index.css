@@ -48,3 +48,100 @@ code {
 .success-message {
   @apply text-green-600 text-sm mt-1;
 }
+
+/* Autofill styles to maintain consistent appearance */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #F1F5F9 inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: #F1F5F9 !important;
+}
+
+/* For transparent input fields (like in login forms) */
+input[style*="background-color: transparent"]:-webkit-autofill,
+input[style*="background-color: transparent"]:-webkit-autofill:hover,
+input[style*="background-color: transparent"]:-webkit-autofill:focus,
+input[style*="background-color: transparent"]:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: transparent !important;
+}
+
+/* Specific rules for password fields */
+input[type="password"]:-webkit-autofill,
+input[type="password"]:-webkit-autofill:hover,
+input[type="password"]:-webkit-autofill:focus,
+input[type="password"]:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: transparent !important;
+}
+
+/* For login form specifically */
+#password:-webkit-autofill,
+#password:-webkit-autofill:hover,
+#password:-webkit-autofill:focus,
+#password:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+  -webkit-text-fill-color: #000000 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  background-color: transparent !important;
+}
+
+/* For browsers that support autofill pseudo-class */
+input:autofill {
+  background-color: #F1F5F9 !important;
+  color: #000000 !important;
+}
+
+input[style*="background-color: transparent"]:autofill {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
+
+input[type="password"]:autofill {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
+
+#password:autofill {
+  background-color: transparent !important;
+  color: #000000 !important;
+}
+
+/* Fix label positioning when fields are autofilled */
+input:-webkit-autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+input:autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+/* Specific targeting for email and password labels */
+#email:-webkit-autofill + label,
+#password:-webkit-autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}
+
+#email:autofill + label,
+#password:autofill + label {
+  top: -8px !important;
+  font-size: 0.875rem !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  font-weight: bold !important;
+}

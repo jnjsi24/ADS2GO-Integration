@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Pencil, FileUp } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
+import { uploadUserProfilePicture } from "../../utils/fileUpload";
 
 // GraphQL Mutation (update user)
 const UPDATE_USER = gql`
@@ -20,6 +21,7 @@ const UPDATE_USER = gql`
         contactNumber
         email
         houseAddress
+        profilePicture
       }
     }
   }
@@ -95,7 +97,7 @@ const Account: React.FC = () => {
   setIsEditing(false);
 };
 
-const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
   if (e.target.files && e.target.files[0]) {
     const file = e.target.files[0];
     const allowedExtensions = ["jpg", "jpeg", "png"];
@@ -106,13 +108,14 @@ const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const updatedProfile = reader.result as string;
-      setFormData(prev => ({ ...prev, profilePicture: updatedProfile }));
-      // ❌ Remove setUser from here
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Upload the file to Firebase Storage
+      const uploadedUrl = await uploadUserProfilePicture(file);
+      setFormData(prev => ({ ...prev, profilePicture: uploadedUrl }));
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Error uploading profile picture. Please try again.');
+    }
   }
 };
 
@@ -163,11 +166,12 @@ const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
 
   return (
 <div
-      className="min-h-screen pl-72 pr-5 p-10 bg-cover bg-center bg-no-repeat flex items-center justify-center"
+      className="min-h-screen pl-72 pr-5 bg-cover bg-center bg-no-repeat flex items-center justify-center"
       style={{
         backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)",
       }}
-    >      <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
+    >      
+    <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
         {/* Left Section: Profile Card */}
         <div className="flex flex-col items-center justify-center p-8 bg-white/10 bg-opacity-70 sm:w-1/3">
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">

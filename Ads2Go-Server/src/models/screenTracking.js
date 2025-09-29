@@ -381,7 +381,7 @@ ScreenTrackingSchema.methods.startDailySession = function() {
   return this.save();
 };
 
-ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '') {
+ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', deviceId = null) {
   const locationPoint = {
     type: 'Point',
     coordinates: [lng, lat], // GeoJSON format: [longitude, latitude]
@@ -397,9 +397,9 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   this.lastSeen = new Date();
   
   // Also update location for the specific device in devices array
-  if (this.devices && this.devices.length > 0) {
+  if (this.devices && this.devices.length > 0 && deviceId) {
     this.devices.forEach(device => {
-      if (device.deviceId === this.deviceId) { // Update the specific device
+      if (device.deviceId === deviceId) { // Update the specific device using the passed deviceId
         device.currentLocation = locationPoint;
         device.lastSeen = new Date();
       }

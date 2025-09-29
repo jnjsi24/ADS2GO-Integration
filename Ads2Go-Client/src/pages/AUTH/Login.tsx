@@ -43,6 +43,48 @@ const Login: React.FC = () => {
     }
   }, []);
 
+  // Handle autofill detection
+  useEffect(() => {
+    const checkAutofill = () => {
+      const emailInput = document.getElementById('email') as HTMLInputElement;
+      const passwordInput = document.getElementById('password') as HTMLInputElement;
+      
+      if (emailInput && emailInput.value && !email) {
+        setEmail(emailInput.value);
+      }
+      if (passwordInput && passwordInput.value && !password) {
+        setPassword(passwordInput.value);
+      }
+    };
+
+    // Check immediately
+    checkAutofill();
+    
+    // Check after a short delay to catch autofill
+    const timeoutId = setTimeout(checkAutofill, 100);
+    
+    // Listen for animation events that might indicate autofill
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    
+    if (emailInput) {
+      emailInput.addEventListener('animationstart', checkAutofill);
+    }
+    if (passwordInput) {
+      passwordInput.addEventListener('animationstart', checkAutofill);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (emailInput) {
+        emailInput.removeEventListener('animationstart', checkAutofill);
+      }
+      if (passwordInput) {
+        passwordInput.removeEventListener('animationstart', checkAutofill);
+      }
+    };
+  }, [email, password]);
+
   const validateForm = () => {
     const errors = {
       email: '',
@@ -261,6 +303,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={handlePasswordChange}
                 className={`peer w-full pr-8 pt-5 text-white pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.password ? 'border-red-400' : 'border-gray-300'}`}
+                style={{ backgroundColor: 'transparent' }}
               />
 
               <label

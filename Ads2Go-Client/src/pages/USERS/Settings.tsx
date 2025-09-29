@@ -70,9 +70,10 @@ const Settings: React.FC = () => {
       if (newsletterSubscribed) {
         // Unsubscribe
         const apiUrl = process.env.REACT_APP_API_URL;
+        
         if (!apiUrl) {
-          addToast('API URL not configured', 'error');
-          return;
+          console.error('❌ Missing REACT_APP_API_URL environment variable');
+          throw new Error('REACT_APP_API_URL is required in .env file');
         }
         const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
           method: 'POST',
