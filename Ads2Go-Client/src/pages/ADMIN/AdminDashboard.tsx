@@ -13,6 +13,7 @@ import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
 import { GET_ADMIN_DASHBOARD_STATS } from '../../graphql/admin/queries';
 import DeviceStatus from '../../components/DeviceStatus';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
+import AirtimeAvailability from '../../components/AirtimeAvailability';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -172,6 +173,11 @@ const Dashboard = () => {
       {/* Notification Dashboard */}
       <div className="mb-8">
         <NotificationDashboard pendingAdsCount={stats?.pendingAds} />
+      </div>
+
+      {/* Airtime Availability */}
+      <div className="mb-8">
+        <AirtimeAvailability />
       </div>
 
       {/* Device Status */}
