@@ -261,6 +261,7 @@ const Login: React.FC = () => {
                 value={password}
                 onChange={handlePasswordChange}
                 className={`peer w-full pr-8 pt-5 text-white pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.password ? 'border-red-400' : 'border-gray-300'}`}
+                style={{ backgroundColor: 'transparent' }}
               />
 
               <label

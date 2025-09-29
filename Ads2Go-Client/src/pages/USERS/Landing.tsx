@@ -540,9 +540,13 @@ export default function Home() {
                     placeholder="Your email address"
                     value={newsletterEmail}
                     onChange={(e) => setNewsletterEmail(e.target.value)}
-                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none autofill:bg-[#F1F5F9] autofill:text-black autofill:shadow-[inset_0_0_0px_1000px_#F1F5F9] ${
                       newsletterStatus === 'error' ? 'border-2 border-red-500' : ''
                     }`}
+                    style={{
+                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
+                      WebkitTextFillColor: '#000000'
+                    }}
                     disabled={newsletterStatus === 'loading'}
                   />
                   <button
