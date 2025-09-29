@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { formatDistanceToNow } from 'date-fns';
-import { Bell, Check, CheckCheck, Trash2, RefreshCw } from 'lucide-react';
+import { Bell, Check, CheckCheck, Trash2, RefreshCw, CheckSquare, Square } from 'lucide-react';
 
 const Notifications: React.FC = () => {
   const { 
@@ -10,10 +10,58 @@ const Notifications: React.FC = () => {
     markAsRead, 
     markAllAsRead, 
     removeNotification,
+    deleteAllNotifications,
     refreshNotifications,
     isLoading,
     error
   } = useNotifications();
+
+  const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
+
+  // Selection helper functions
+  const toggleSelectAll = () => {
+    if (selectedNotifications.size === notifications.length) {
+      setSelectedNotifications(new Set());
+    } else {
+      setSelectedNotifications(new Set(notifications.map(n => n.id)));
+    }
+  };
+
+  const toggleSelectNotification = (notificationId: string) => {
+    const newSelected = new Set(selectedNotifications);
+    if (newSelected.has(notificationId)) {
+      newSelected.delete(notificationId);
+    } else {
+      newSelected.add(notificationId);
+    }
+    setSelectedNotifications(newSelected);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedNotifications.size === 0) return;
+    
+    if (selectedNotifications.size === notifications.length) {
+      // If all notifications are selected, use deleteAllNotifications
+      await deleteAllNotifications();
+    } else {
+      // Delete selected notifications one by one
+      for (const notificationId of selectedNotifications) {
+        await removeNotification(notificationId);
+      }
+    }
+    
+    setSelectedNotifications(new Set());
+    setIsSelectMode(false);
+  };
+
+  const handleDeleteAll = async () => {
+    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+      await deleteAllNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -65,6 +113,58 @@ const Notifications: React.FC = () => {
           )}
         </div>
         <div className="flex items-center space-x-2">
+          {notifications.length > 0 && (
+            <>
+              {!isSelectMode ? (
+                <button
+                  onClick={() => setIsSelectMode(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <CheckSquare size={16} />
+                  <span>Select</span>
+                </button>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  >
+                    {selectedNotifications.size === notifications.length ? (
+                      <CheckSquare size={16} />
+                    ) : (
+                      <Square size={16} />
+                    )}
+                    <span>{selectedNotifications.size === notifications.length ? 'Deselect All' : 'Select All'}</span>
+                  </button>
+                  {selectedNotifications.size > 0 && (
+                    <button
+                      onClick={handleDeleteSelected}
+                      className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                      <span>Delete Selected ({selectedNotifications.size})</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDeleteAll}
+                    className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    <span>Delete All</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsSelectMode(false);
+                      setSelectedNotifications(new Set());
+                    }}
+                    className="flex items-center space-x-2 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    <span>Cancel</span>
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           <button
             onClick={refreshNotifications}
             className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -102,6 +202,18 @@ const Notifications: React.FC = () => {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start space-x-3 flex-1">
+                  {isSelectMode && (
+                    <button
+                      onClick={() => toggleSelectNotification(notification.id)}
+                      className="mt-1 p-1 hover:bg-gray-100 rounded transition-colors"
+                    >
+                      {selectedNotifications.has(notification.id) ? (
+                        <CheckSquare size={20} className="text-blue-600" />
+                      ) : (
+                        <Square size={20} className="text-gray-400" />
+                      )}
+                    </button>
+                  )}
                   <span className="text-2xl">{getNotificationIcon(notification.type)}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center space-x-2 mb-1">
@@ -131,24 +243,26 @@ const Notifications: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2 ml-4">
-                  {!notification.read && (
+                {!isSelectMode && (
+                  <div className="flex items-center space-x-2 ml-4">
+                    {!notification.read && (
+                      <button
+                        onClick={() => markAsRead(notification.id)}
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Mark as read"
+                      >
+                        <Check size={16} />
+                      </button>
+                    )}
                     <button
-                      onClick={() => markAsRead(notification.id)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Mark as read"
+                      onClick={() => removeNotification(notification.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      title="Delete notification"
                     >
-                      <Check size={16} />
+                      <Trash2 size={16} />
                     </button>
-                  )}
-                  <button
-                    onClick={() => removeNotification(notification.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                    title="Delete notification"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           ))
