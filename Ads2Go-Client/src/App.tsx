@@ -53,6 +53,7 @@ import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPricing from './pages/SUPERADMIN/SadminPricing';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
+import SadminAnalytics from './pages/SUPERADMIN/SadminAnalytics';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -223,6 +224,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         /> 
+        <Route
+          path="/sadmin-analytics"
+          element={
+            <ProtectedRoute>
+              <SadminAnalytics />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
