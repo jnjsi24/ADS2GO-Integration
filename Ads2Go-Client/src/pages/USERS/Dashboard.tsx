@@ -357,6 +357,34 @@ const Dashboard = () => {
             </AreaChart>
           </ResponsiveContainer>
 
+          {/* Playing Ad Section - Aesthetic Enhancement */}
+          <div className="mt-6 mb-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-white/90">Currently Playing</h4>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-white/70">LIVE</span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h5 className="text-sm font-medium text-white truncate">Summer Sale Campaign</h5>
+                  <p className="text-xs text-white/60">Duration: 30s • Views: 1,234</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-white/60">Next in</p>
+                  <p className="text-sm font-medium text-white">15s</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4 mt-4 text-center">
             <div className="bg-[#1b5087] p-3 rounded-lg">
               <p className="text-2xl font-bold">
