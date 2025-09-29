@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
-import { useNotifications } from '../contexts/NotificationContext';
 import {
   LayoutDashboard,
   Megaphone,
@@ -15,25 +14,24 @@ import {
 } from 'lucide-react';
 
 const SideNavbar: React.FC = () => {
-  const { logout, user } = useUserAuth();
-  const { unreadCount, isLoading } = useNotifications();
+  // Only get user data for profile display - navigation stays static
+  const { user, logout } = useUserAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [isDropupOpen, setIsDropupOpen] = useState(false);
   const dropupRef = useRef<HTMLDivElement>(null);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
     navigate('/login');
-  };
+  }, [logout, navigate]);
 
-  const toggleDropup = () => {
-    setIsDropupOpen(!isDropupOpen);
-  };
+  const toggleDropup = useCallback(() => {
+    setIsDropupOpen(prev => !prev);
+  }, []);
 
-  const closeDropup = () => {
+  const closeDropup = useCallback(() => {
     setIsDropupOpen(false);
-  };
+  }, []);
 
   // Close dropup when clicking outside
   useEffect(() => {
@@ -52,22 +50,78 @@ const SideNavbar: React.FC = () => {
     };
   }, [isDropupOpen]);
 
-  const getInitials = (firstName?: string, lastName?: string) => {
+  const getInitials = useCallback((firstName?: string, lastName?: string) => {
     if (!firstName && !lastName) return '?';
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
-  };
+  }, []);
 
-  const navLinks = [
+  const navLinks = useMemo(() => [
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/dashboard' },
     { label: 'Advertisements', icon: <Megaphone size={20} />, path: '/advertisements' },
     { label: 'Payment', icon: <CreditCard size={20} />, path: '/history' },
     { label: 'Settings', icon: <Settings size={20} />, path: '/settings' },
     { label: 'Help', icon: <HelpCircle size={20} />, path: '/help' },
     { label: 'About Us', icon: <Info size={20} />, path: '/about' },
-  ];
+  ], []);
+
+  // Navigation item with smooth animations but static behavior
+  const NavigationItem = React.memo(({ link }: { link: typeof navLinks[0] }) => (
+    <li className="relative group">
+      <Link
+        to={link.path}
+        className="nav-link relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-all duration-300 ease-out text-gray-200 hover:text-white hover:bg-[#3367cc]"
+      >
+        {/* Background animation */}
+        <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
+
+        <span className="relative z-10 flex items-center space-x-3">
+          {link.icon}
+          <span>{link.label}</span>
+        </span>
+      </Link>
+    </li>
+  ));
+
+
+  // Only show navbar for authenticated users
+  if (!user || user.role !== 'USER') {
+    return null;
+  }
 
   return (
-    <div className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed">
+    <>
+      {/* CSS for smooth animations without flicker */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .nav-link {
+            text-decoration: none !important;
+            border: none !important;
+            outline: none !important;
+            will-change: transform, background-color, color;
+            backface-visibility: hidden;
+          }
+          .nav-link:focus {
+            outline: none !important;
+          }
+          .nav-link:visited {
+            color: inherit !important;
+          }
+        `
+      }} />
+      
+      {/* Static navbar with smooth animations */}
+      <div 
+        className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed transition-all duration-500 ease-in-out"
+        style={{
+          willChange: 'auto',
+          transform: 'translateZ(0)',
+          backfaceVisibility: 'hidden',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          zIndex: 1000,
+        }}
+      >
       <div className="p-6">
         {/* Logo */}
         <div className="flex items-center pl-3 space-x-3 mb-10">
@@ -75,36 +129,22 @@ const SideNavbar: React.FC = () => {
           <span className="text-2xl text-white font-bold">Ads2Go</span>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation - Completely Static */}
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
-            <li key={link.label} className="relative group">
-              <Link
-                to={link.path}
-                className={`relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-colors ${
-                  location.pathname === link.path
-                    ? 'text-white font-bold bg-[#3367cc]'
-                    : 'text-gray-200 hover:text-gray-300'
-                }`}
-              >
-                {/* Background animation */}
-                <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
-
-                <span className="relative z-10 flex items-center space-x-3">
-                  {link.icon}
-                  <span>{link.label}</span>
-                </span>
-              </Link>
-            </li>
+            <NavigationItem 
+              key={link.label} 
+              link={link} 
+            />
           ))}
         </ul>
       </div>
 
-      {/* User Profile & Dropup Menu */}
+      {/* User Profile & Dropup Menu - Static */}
       <div className="p-6 relative">
         <div className="flex items-center justify-between mb-4">
           <div
-            className="flex items-center space-x-3 cursor-pointer flex-1"
+            className="flex items-center space-x-3 cursor-pointer flex-1 hover:bg-gray-700 rounded-lg p-2 transition-all duration-300 ease-out"
             onClick={toggleDropup}
           >
             <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
@@ -119,29 +159,19 @@ const SideNavbar: React.FC = () => {
                   {`${user.firstName} ${user.lastName}`}
                 </p>
               ) : (
-                <>
-                  <p className="font-semibold text-gray-800">Loading...</p>
-                  <p className="text-sm text-gray-500">Please wait</p>
-                </>
+                <div className="space-y-1">
+                  <div className="w-32 h-4 bg-gray-400 rounded animate-pulse"></div>
+                  <div className="w-24 h-3 bg-gray-400 rounded animate-pulse"></div>
+                </div>
               )}
             </div>
           </div>
           <button
             onClick={() => navigate('/notifications')}
-            className="relative p-2 text-gray-200 hover:text-white transition-colors"
-            disabled={isLoading}
+            className="relative p-2 text-gray-200 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300 ease-out"
             title="View notifications"
           >
-            {isLoading ? (
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-200"></div>
-            ) : (
-              <Bell size={20} />
-            )}
-            {!isLoading && unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
+            <Bell size={20} />
           </button>
         </div>
 
@@ -192,7 +222,8 @@ const SideNavbar: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -233,15 +233,17 @@ const AdminAppContent: React.FC = () => {
 };
 
 const UserAppContent: React.FC = () => {
-  const { user } = useUserAuth();
+  const { user, isLoading, isInitialized } = useUserAuth();
   
   return (
     <NotificationProvider>
       <div className="min-h-screen bg-white text-black">
-        {/* Show navbar depending on user role */}
-        {user?.role === 'USER' && <UserNavbar />}
+        {/* Always show navbar for users, with loading state handled inside */}
+        <UserNavbar />
         
-        <Routes>
+        {/* Main content with smooth transition */}
+        <div className="transition-all duration-300 ease-in-out">
+          <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -367,7 +369,8 @@ const UserAppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </div>
+        </div>
+      </div>
     </NotificationProvider>
   );
 };
