@@ -395,6 +395,8 @@ const adResolvers = {
         console.log(`📦 Found ${deployments.length} deployments to update`);
 
         for (const deployment of deployments) {
+          let shouldDeleteDeployment = false;
+          
           // Remove from LCD slots
           if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
             const originalLength = deployment.lcdSlots.length;
@@ -404,15 +406,33 @@ const adResolvers = {
             
             if (deployment.lcdSlots.length < originalLength) {
               console.log(`  ✅ Removed ad from LCD slot in deployment ${deployment._id}`);
-              await deployment.save();
+              
+              // If no LCD slots remain and no adId, delete the entire deployment
+              if (deployment.lcdSlots.length === 0 && !deployment.adId) {
+                shouldDeleteDeployment = true;
+              } else {
+                await deployment.save();
+              }
             }
           }
           
           // Remove from non-LCD deployment
           if (deployment.adId && deployment.adId.toString() === id.toString()) {
-            deployment.adId = null;
-            console.log(`  ✅ Removed ad from non-LCD deployment ${deployment._id}`);
-            await deployment.save();
+            // If this is the only ad in the deployment, delete the entire deployment
+            if (deployment.lcdSlots.length === 0) {
+              shouldDeleteDeployment = true;
+            } else {
+              // If there are LCD slots, just remove the adId
+              deployment.adId = null;
+              console.log(`  ✅ Removed ad from non-LCD deployment ${deployment._id}`);
+              await deployment.save();
+            }
+          }
+          
+          // Delete deployment if it should be removed
+          if (shouldDeleteDeployment) {
+            console.log(`  🗑️ Deleting entire deployment ${deployment._id} (no remaining ads)`);
+            await AdsDeployment.findByIdAndDelete(deployment._id);
           }
         }
 

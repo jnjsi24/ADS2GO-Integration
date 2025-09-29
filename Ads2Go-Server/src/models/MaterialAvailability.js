@@ -118,12 +118,10 @@ MaterialAvailabilitySchema.methods.canAcceptAd = function(startTime, endTime) {
   if (this.status !== 'AVAILABLE') return false;
   if (this.availableSlots <= 0) return false;
   
-  // Check for time conflicts
-  const hasConflict = this.currentAds.some(ad => {
-    return (startTime < ad.endTime && endTime > ad.startTime);
-  });
-  
-  return !hasConflict;
+  // A material can accept ads as long as it has available slots
+  // Time conflicts are handled at the slot level, not the material level
+  // Multiple ads can run on the same material at the same time if there are enough slots
+  return true;
 };
 
 // Method to add ad to material
