@@ -107,10 +107,26 @@ const SideNavbar: React.FC = () => {
             className="flex items-center space-x-3 cursor-pointer flex-1"
             onClick={toggleDropup}
           >
-            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-              <span className="text-white font-semibold">
-                {user ? getInitials(user.firstName, user.lastName) : '...'}
-              </span>
+            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative overflow-hidden">
+              {user?.profilePicture ? (
+                <img
+                  src={user.profilePicture}
+                  alt={`${user.firstName} ${user.lastName}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to initials if image fails to load
+                    const target = e.currentTarget as HTMLImageElement;
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<span class="text-white font-semibold">${getInitials(user.firstName, user.lastName)}</span>`;
+                    }
+                  }}
+                />
+              ) : (
+                <span className="text-white font-semibold">
+                  {user ? getInitials(user.firstName, user.lastName) : '...'}
+                </span>
+              )}
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
             </div>
             <div>

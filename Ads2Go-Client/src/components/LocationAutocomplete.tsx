@@ -72,6 +72,75 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
   const [isLocationSelected, setIsLocationSelected] = useState(false);
   const [userAddress, setUserAddress] = useState('');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
+
+  // Get the location part string
+  const getLocationPart = () => {
+    if (selectedRegion && selectedCity && selectedBarangay) {
+      const regionName = locationData.find(r => r.id === selectedRegion)?.name;
+      const cityName = locationData.find(c => c.id === selectedCity)?.name;
+      const barangayName = locationData.find(b => b.id === selectedBarangay)?.name;
+      const barangayPostalCode = locationData.find(b => b.id === selectedBarangay)?.postalCode;
+      return `${barangayName}${barangayPostalCode ? ` (${barangayPostalCode})` : ''}, ${cityName}, ${regionName}`;
+    }
+    return '';
+  };
+
+  // Extract location parts and user address from value when component mounts or value changes
+  useEffect(() => {
+    if (value) {
+      const locationPart = getLocationPart();
+      
+      // If we have a complete location selected and the value contains it
+      if (locationPart && value.includes(locationPart)) {
+        // Extract user address (house number and street) - part before the location
+        const addressPart = value.replace(locationPart, '').replace(/,\s*$/, '').trim();
+        if (addressPart && addressPart !== userAddress) {
+          setUserAddress(addressPart);
+        }
+      } else {
+        // Try to extract location from value and set selections
+        const regions = locationData.filter(item => item.type === 'region');
+        const cities = locationData.filter(item => item.type === 'city');
+        const barangays = locationData.filter(item => item.type === 'barangay');
+        
+        // Find region
+        const foundRegion = regions.find(region => 
+          value.includes(region.name)
+        );
+        
+        if (foundRegion) {
+          setSelectedRegion(foundRegion.id);
+          
+          // Find city
+          const foundCity = cities.find(city => 
+            city.parentId === foundRegion.id && value.includes(city.name)
+          );
+          
+          if (foundCity) {
+            setSelectedCity(foundCity.id);
+            
+            // Find barangay
+            const foundBarangay = barangays.find(barangay => 
+              barangay.parentId === foundCity.id && value.includes(barangay.name)
+            );
+            
+            if (foundBarangay) {
+              setSelectedBarangay(foundBarangay.id);
+              setIsLocationSelected(true);
+              
+              // Extract user address
+              const extractedLocationPart = `${foundBarangay.name}${foundBarangay.postalCode ? ` (${foundBarangay.postalCode})` : ''}, ${foundCity.name}, ${foundRegion.name}`;
+              const addressPart = value.replace(extractedLocationPart, '').replace(/,\s*$/, '').trim();
+              if (addressPart && addressPart !== userAddress) {
+                setUserAddress(addressPart);
+              }
+            }
+          }
+        }
+      }
+    }
+  }, [value]); // Only depend on value, not userAddress
+
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isClickingDropdown = useRef(false);
@@ -177,14 +246,11 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     setIsOpen(false);
   };
 
-  const updateMainValue = () => {
+  const updateMainValue = (customAddress?: string) => {
     if (selectedRegion && selectedCity && selectedBarangay) {
-      const regionName = locationData.find(r => r.id === selectedRegion)?.name;
-      const cityName = locationData.find(c => c.id === selectedCity)?.name;
-      const barangayName = locationData.find(b => b.id === selectedBarangay)?.name;
-      const barangayPostalCode = locationData.find(b => b.id === selectedBarangay)?.postalCode;
-      const locationPart = `${regionName}, ${cityName}, ${barangayName}${barangayPostalCode ? ` (${barangayPostalCode})` : ''}`;
-      const fullAddress = userAddress ? `${userAddress}, ${locationPart}` : locationPart;
+      const locationPart = getLocationPart();
+      const addressToUse = customAddress ?? userAddress;
+      const fullAddress = addressToUse ? `${addressToUse}, ${locationPart}` : locationPart;
       onChange(fullAddress);
     }
   };
@@ -193,7 +259,21 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     const newAddress = e.target.value;
     setUserAddress(newAddress);
     setIsEditingAddress(true);
-    updateMainValue();
+
+    if (selectedRegion && selectedCity && selectedBarangay) {
+      const locationPart = getLocationPart();
+      
+      // ✅ FIX: Only update with the new address + location
+      // Don't check if it contains location, just always format it properly
+      if (newAddress.trim() === '') {
+        onChange(locationPart);
+      } else {
+        onChange(`${newAddress}, ${locationPart}`);
+      }
+    } else {
+      // Fallback: just pass the address
+      onChange(newAddress);
+    }
   };
 
   const handleOptionSelect = (option: LocationOption) => {
@@ -210,7 +290,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
       setSelectedCity(option.id);
       setSelectedBarangay(null);
       const regionName = locationData.find(r => r.id === selectedRegion)?.name;
-      const displayValue = `${regionName}, ${option.name}${option.postalCode ? ` (${option.postalCode})` : ''}`;
+      // Format: City, Region (temporary display while selecting)
+      const displayValue = `${option.name}, ${regionName}`;
       onChange(displayValue);
       // Keep dropdown open to show barangays
       setTimeout(() => setIsOpen(true), 0);
@@ -254,17 +335,13 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
   const getLocationDisplay = () => {
     if (selectedRegion && selectedCity && selectedBarangay) {
-      const regionName = locationData.find(r => r.id === selectedRegion)?.name;
-      const cityName = locationData.find(c => c.id === selectedCity)?.name;
-      const barangayName = locationData.find(b => b.id === selectedBarangay)?.name;
-      const barangayPostalCode = locationData.find(b => b.id === selectedBarangay)?.postalCode;
-      return `${regionName}, ${cityName}, ${barangayName}${barangayPostalCode ? ` (${barangayPostalCode})` : ''}`;
+      return getLocationPart();
     } else if (selectedRegion && selectedCity) {
       const regionName = locationData.find(r => r.id === selectedRegion)?.name;
       const city = locationData.find(c => c.id === selectedCity);
       const cityName = city?.name;
-      const cityPostalCode = city?.postalCode;
-      return `${regionName}, ${cityName}${cityPostalCode ? ` (${cityPostalCode})` : ''}`;
+      // Format: City, Region (while selecting)
+      return `${cityName}, ${regionName}`;
     } else if (selectedRegion) {
       const regionName = locationData.find(r => r.id === selectedRegion)?.name;
       return regionName;
@@ -272,15 +349,29 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     return '';
   };
 
+  // Determine if we should show the address input field
+  const shouldShowAddressInput = (selectedRegion && selectedCity && selectedBarangay) || 
+    (value && value.includes('(') && value.includes(')') && value.includes(',') && 
+     (value.includes('National Capital Region') || value.includes('Region') || value.includes('Province')));
+
   return (
-    <div className="relative">
-      {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
-        </label>
-      )}
-      
+    <>
+      <style>
+        {`
+          .location-input input[type="text"] {
+            background-color: transparent !important;
+            color: white !important;
+          }
+          .location-input input[type="text"]:focus {
+            background-color: transparent !important;
+            color: white !important;
+          }
+          .location-input input::placeholder {
+            color: rgba(255, 255, 255, 0.7) !important;
+          }
+        `}
+      </style>
+      <div className="relative location-input">
       {/* Inline Address Builder */}
       <div className="space-y-3">
         {/* Location Selection */}
@@ -294,11 +385,19 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onFocus={handleInputFocus}
             onBlur={handleInputBlur}
             onClick={handleInputClick}
-            placeholder="Select location..."
-            className={`w-full px-3 py-2 pr-20 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+            placeholder=""
+            className={`peer w-full px-3 py-4 pr-20 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-transparent text-white placeholder-transparent transition ${
               error ? 'border-red-300' : 'border-gray-300'
             }`}
           />
+          <label
+            className={`absolute left-3 text-white bg-transparent transition-all duration-200 ${
+              (getLocationDisplay() || value) ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-3 peer-placeholder-shown:text-base'
+            } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+          >
+            {label}
+            {required && <span className="text-red-500 ml-1">*</span>}
+          </label>
           
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-1">
             {(selectedRegion || selectedCity) && (
@@ -315,26 +414,23 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
           </div>
         </div>
 
-        {/* Address Input - Only show when location is selected */}
-        {isLocationSelected && selectedRegion && selectedCity && selectedBarangay && (
-          <div className="flex items-center space-x-2">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={userAddress}
-                onChange={handleAddressChange}
-                placeholder="Enter your house number and street..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div className="flex items-center text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-md border">
-              <span className="font-medium">+</span>
-            </div>
-            <div className="flex-1">
-              <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
-                {getLocationDisplay()}
-              </div>
-            </div>
+        {/* Address Input - Show when location is selected OR when value contains complete address */}
+        {shouldShowAddressInput && (
+          <div className="relative mt-8">
+            <input
+              type="text"
+              value={userAddress}
+              onChange={handleAddressChange}
+              placeholder=""
+              className="peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
+            />
+            <label
+              className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
+                userAddress ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base'
+              } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+            >
+              Enter your house number and street...
+            </label>
           </div>
         )}
       </div>
@@ -343,7 +439,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         <div
           ref={dropdownRef}
           onMouseDown={handleDropdownMouseDown}
-          className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+          className="absolute z-10 w-full mt-1 bg-white/90 backdrop-blur-sm border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
         >
           {/* Breadcrumb navigation */}
           {(selectedRegion || selectedCity) && (
@@ -414,7 +510,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
       {error && (
         <p className="mt-1 text-sm text-red-600">{error}</p>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
