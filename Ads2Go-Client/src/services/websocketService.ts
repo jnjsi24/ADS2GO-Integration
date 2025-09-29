@@ -20,11 +20,13 @@ class WebSocketService {
 
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use REACT_APP_API_URL and extract host from it
     const apiUrl = process.env.REACT_APP_API_URL;
+    
     if (!apiUrl) {
-      throw new Error('REACT_APP_API_URL environment variable is not set');
+      console.error('❌ Missing REACT_APP_API_URL environment variable');
+      throw new Error('REACT_APP_API_URL is required in .env file');
     }
+    
     const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     // Cache bust to force reload
     const cacheBust = Date.now();

@@ -63,7 +63,7 @@ const PlanAvailabilityTab: React.FC = () => {
                   className={`p-4 border shadow-md rounded-lg cursor-pointer transition-colors ${
                     selectedPlanId === plan.id
                        ? 'border-gray-400 bg-white/10'
-                      : 'hover:border-gray-400 hover:bg-white/10 bg-white'
+                      : 'hover:border-gray-500 bg-white'
                   }`}
                   onClick={() => handlePlanChange(plan.id)}
                 >

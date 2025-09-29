@@ -13,7 +13,8 @@ import {
   ASSIGN_MATERIAL_TO_DRIVER, 
   UPDATE_MATERIAL, 
   UNREGISTER_TABLET, 
-  CREATE_TABLET_CONFIGURATION 
+  CREATE_TABLET_CONFIGURATION,
+  UNASSIGN_MATERIAL_FROM_DRIVER
 } from '../../graphql/admin/mutations/materials';
 import CreateMaterialModal from './tabs/materials/CreateMaterialModal';
 import MaterialDetailsModal from './tabs/materials/MaterialDetailsModal';
@@ -147,6 +148,7 @@ const Materials: React.FC = () => {
   const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
+  const [dismountReason, setDismountReason] = useState('');
 
   // Custom refresh function for connection status
   const handleRefetchConnectionStatus = async () => {
@@ -393,6 +395,28 @@ const Materials: React.FC = () => {
     }
   });
 
+  const [unassignMaterialFromDriver, { loading: unassigning }] = useMutation(UNASSIGN_MATERIAL_FROM_DRIVER, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    onCompleted: (data) => {
+      if (data.unassignMaterialFromDriver.success) {
+        alert(data.unassignMaterialFromDriver.message);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
+        setDismountReason('');
+        refetch();
+      } else {
+        alert(`Unassignment failed: ${data.unassignMaterialFromDriver.message}`);
+      }
+    },
+    onError: (error) => {
+      alert(`Error unassigning material: ${error.message}`);
+    }
+  });
+
   const [unregisterTablet] = useMutation(UNREGISTER_TABLET, {
     context: {
       headers: {
@@ -543,31 +567,34 @@ const Materials: React.FC = () => {
   };
 
   const confirmRemove = async () => {
-    if (materialToRemove) {
+    if (materialToRemove && dismountReason.trim()) {
       try {
-        await updateMaterial({
+        await unassignMaterialFromDriver({
           variables: {
-            id: materialToRemove,
-            input: {
-              driverId: null
-            }
+            materialId: materialToRemove,
+            dismountReason: dismountReason.trim()
           }
         });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
         setShowRemoveModal(false);
         setMaterialToRemove(null);
+        setDismountReason('');
       } catch (error) {
         console.error('Error removing material from driver:', error);
         setShowRemoveModal(false);
         setMaterialToRemove(null);
+        setDismountReason('');
       }
+    } else if (!dismountReason.trim()) {
+      alert('Please provide a reason for removing the material from the driver.');
     }
   };
 
   const cancelRemove = () => {
     setShowRemoveModal(false);
     setMaterialToRemove(null);
+    setDismountReason('');
   };
 
   const handleCreateSubmit = async (formData: CreateMaterialInput) => {
@@ -913,16 +940,48 @@ const Materials: React.FC = () => {
     />
     
     {/* Remove from Driver Confirmation Modal */}
-    <ConfirmationModal
-      isOpen={showRemoveModal}
-      onClose={cancelRemove}
-      onConfirm={confirmRemove}
-      title="Remove Material from Driver"
-      message="Are you sure you want to remove this material from the driver?"
-      confirmText="Remove"
-      cancelText="Cancel"
-      confirmButtonClass="bg-orange-600 hover:bg-orange-700"
-    />
+    {showRemoveModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Remove Material from Driver
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Are you sure you want to remove this material from the driver? Please provide a reason for this action.
+          </p>
+          <div className="mb-4">
+            <label htmlFor="dismountReason" className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for Removal *
+            </label>
+            <textarea
+              id="dismountReason"
+              value={dismountReason}
+              onChange={(e) => setDismountReason(e.target.value)}
+              placeholder="Please provide a reason for removing this material from the driver..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={cancelRemove}
+              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              disabled={unassigning}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmRemove}
+              disabled={!dismountReason.trim() || unassigning}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {unassigning ? 'Removing...' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

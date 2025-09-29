@@ -32,16 +32,11 @@ const NewsletterManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(''); // Clear previous errors
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        setError('API URL not configured');
-        return;
-      }
-      const fullUrl = `${apiUrl}/api/newsletter/subscribers?t=${Date.now()}`;
+      const apiUrl = `http://localhost:5000/api/newsletter/subscribers?t=${Date.now()}`;
       
-      console.log('Fetching subscribers from:', fullUrl);
+      console.log('Fetching subscribers from:', apiUrl);
       
-      const response = await fetch(fullUrl, {
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -102,12 +97,7 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        alert('API URL not configured');
-        return;
-      }
-      const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
+      const response = await fetch(`http://localhost:5000/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -174,7 +164,7 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Server is not running on {process.env.REACT_APP_API_URL || 'API URL not configured'}</li>
+                <li>Server is not running on {process.env.REACT_APP_API_URL || 'REACT_APP_API_URL not set in .env'}</li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>

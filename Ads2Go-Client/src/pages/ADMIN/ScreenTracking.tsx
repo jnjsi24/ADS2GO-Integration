@@ -4,8 +4,6 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map, Icon } from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -122,8 +120,6 @@ const ScreenTracking: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
-  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
-
   
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
@@ -146,12 +142,7 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const materialsUrl = `${apiUrl}/material`;
+      const materialsUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
@@ -185,15 +176,10 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const complianceUrl = `${apiUrl}/screenTracking/compliance?date=${selectedDate}`;
+      const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
-      const complianceResponse = await fetch(complianceUrl, {
+      const complianceResponse = await fetch(apiUrl, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -250,12 +236,7 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        console.error('API URL not configured');
-        return;
-      }
-      const pathApiUrl = `${apiUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      const pathApiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       
       const response = await fetch(pathApiUrl, {
@@ -411,12 +392,14 @@ const ScreenTracking: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10">
+    <div className="min-h-screen bg-gray-50 ml-60">
       {/* Header */}
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center mb-6">
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Screen Tracking Dashboard</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Device Tracking Dashboard</h1>
+              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -429,55 +412,21 @@ const ScreenTracking: React.FC = () => {
                    connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
-              <div className="relative inline-block text-left">
-                  <button
-                      onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
-                      className="flex items-center justify-between min-w-[220px] border border-gray-300 rounded-md px-3 py-3 bg-white"
-                      disabled={materialsLoading}
-                  >
-                      <span className="text-gray-700 text-sm">
-                        {selectedMaterial === 'all' 
-                            ? `All Materials` 
-                            : materials?.find(m => m.materialId === selectedMaterial)?.materialId || selectedMaterial}
-                      </span>
-                      <ChevronDown size={16} className={`transform transition-transform duration-200 ${showMaterialDropdown ? 'rotate-180' : 'rotate-0'}`} />
-                  </button>
-                  <AnimatePresence>
-                      {showMaterialDropdown && (
-                          <motion.div
-                              initial={{ opacity: 0, y: -10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -10 }}
-                              transition={{ duration: 0.2 }}
-                              className="absolute z-10 top-full mt-1 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none max-h-60 overflow-y-auto"
-                          >
-                              <div className="py-1">
-                                  <button
-                                      onClick={() => {
-                                          setSelectedMaterial('all');
-                                          setShowMaterialDropdown(false);
-                                      }}
-                                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                  >
-                                      {materialsLoading ? 'Loading Materials...' : `All Materials`}
-                                  </button>
-                                  {materials?.map((material) => (
-                                      <button
-                                          key={material._id}
-                                          onClick={() => {
-                                              setSelectedMaterial(material.materialId);
-                                              setShowMaterialDropdown(false);
-                                          }}
-                                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                      >
-                                          {material.materialId}
-                                      </button>
-                                  ))}
-                              </div>
-                          </motion.div>
-                      )}
-                  </AnimatePresence>
-              </div>
+                             <select
+                 value={selectedMaterial}
+                 onChange={(e) => setSelectedMaterial(e.target.value)}
+                 className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+                 disabled={materialsLoading}
+               >
+                 <option value="all">
+                   {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
+                 </option>
+                 {materials?.map((material) => (
+                   <option key={material._id} value={material.materialId}>
+                     {material.title} - {material.materialId} ({material.materialType})
+                   </option>
+                 ))}
+               </select>
               <input
                 type="date"
                 value={selectedDate}
@@ -495,6 +444,42 @@ const ScreenTracking: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+             {/* Debug Info */}
+       {process.env.NODE_ENV === 'development' && (
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
+                            <p className="text-xs text-yellow-800">
+                 Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
+               </p>
+           </div>
+         </div>
+       )}
+
+       {/* Material Summary */}
+       {selectedMaterial !== 'all' && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                                 <h3 className="text-lg font-semibold text-blue-900">
+                   Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
+                 </h3>
+                <p className="text-sm text-blue-700">
+                  {filteredScreens?.length || 0} screen(s) found for this material
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedMaterial('all')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View All Materials
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Compliance Summary */}
       {complianceReport && (
@@ -721,8 +706,7 @@ const ScreenTracking: React.FC = () => {
               </div>
             </div>
           </div>
-          
-          {/* Screen List */}
+                       {/* Screen List */}
              <div className="lg:col-span-1">
                <div className="bg-white rounded-lg shadow">
                  <div className="p-4 border-b">

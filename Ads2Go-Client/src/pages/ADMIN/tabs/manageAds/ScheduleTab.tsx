@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, CalendarPlus, ChevronLeft, ChevronRight, Clock, Monitor, RefreshCw } from 'lucide-react';
+import { Calendar, CalendarPlus, ChevronLeft, ChevronRight, Clock, Monitor } from 'lucide-react';
 import { useQuery } from '@apollo/client';
 import { GET_ALL_ADS, type Ad } from '../../../../graphql/admin/ads';
 
@@ -150,11 +150,40 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange 
     <div className="">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Ad Schedule</h2>
+      </div>
 
-        <div className="flex items-center space-x-1">
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex items-center justify-between">
+        {/* Date Filter Group */}
+        <div className="flex items-center gap-3">
           {/* Filter Type Buttons */}
-          <div className="flex items-center gap-1">
-            {/* Date Picker */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFilterType("day")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "day" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Day
+            </button>
+            <button
+              onClick={() => setFilterType("month")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Month
+            </button>
+            <button
+              onClick={() => setFilterType("year")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "year" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Year
+            </button>
+          </div>
+
+          {/* Date Picker */}
           <input
             type={
               filterType === "day"
@@ -165,45 +194,20 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange 
             }
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+            className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
             placeholder={filterType === "year" ? "YYYY" : ""}
             min={filterType === "year" ? "1900" : undefined}
             max={filterType === "year" ? "2100" : undefined}
           />
-            <button
-              onClick={() => setFilterType("day")}
-              className={`px-3 py-2 text-sm rounded ${
-                filterType === "day" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Day
-            </button>
-            <button
-              onClick={() => setFilterType("month")}
-              className={`px-3 py-2 text-sm rounded ${
-                filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Month
-            </button>
-            <button
-              onClick={() => setFilterType("year")}
-              className={`px-3 py-2 text-sm rounded ${
-                filterType === "year" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Year
-            </button>
-          </div>
-          {/* Refresh Button */}
-          <button
-            onClick={() => refetch()}
-            className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
         </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={() => refetch()}
+          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Refresh
+        </button>
       </div>
 
 

@@ -15,7 +15,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
+import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, DELETE_NOTIFICATION, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
 
 interface Notification {
   id: string;
@@ -64,6 +64,8 @@ interface NotificationDashboardProps {
 const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAdsCount }) => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'high'>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
 
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
@@ -102,6 +104,19 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     }
   });
 
+  // Delete notification
+  const [deleteNotification] = useMutation(DELETE_NOTIFICATION, {
+    onCompleted: () => {
+      refetchNotifications();
+      setShowDeleteModal(false);
+      setNotificationToDelete(null);
+    },
+    onError: (error) => {
+      console.error('Error deleting notification:', error);
+      alert('Failed to delete notification: ' + error.message);
+    }
+  });
+
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await markAsRead({
@@ -110,6 +125,28 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
+  };
+
+  const handleDeleteNotification = (notification: Notification) => {
+    setNotificationToDelete(notification);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (notificationToDelete) {
+      try {
+        await deleteNotification({
+          variables: { notificationId: notificationToDelete.id }
+        });
+      } catch (error) {
+        console.error('Error deleting notification:', error);
+      }
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setNotificationToDelete(null);
   };
 
   const handleRefresh = async () => {
@@ -439,7 +476,11 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         <CheckCircle className="w-4 h-4" />
                       </button>
                     )}
-                    <button className="p-1 text-gray-400 hover:text-gray-600">
+                    <button 
+                      onClick={() => handleDeleteNotification(notification)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                      title="Delete notification"
+                    >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -449,6 +490,52 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Delete Notification
+                </h3>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to delete this notification?
+              </p>
+              {notificationToDelete && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                  <p className="font-medium text-gray-900">{notificationToDelete.title}</p>
+                  <p className="text-sm text-gray-600 mt-1">{notificationToDelete.message}</p>
+                </div>
+              )}
+              <p className="text-sm text-gray-500 mt-2">
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelDelete}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

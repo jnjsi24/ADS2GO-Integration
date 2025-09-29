@@ -54,12 +54,8 @@ const getImageUrl = (imagePath: string | undefined | null) => {
   }
   // If it starts with /uploads, prepend your server URL
   if (imagePath.startsWith('/uploads')) {
-    const serverUrl = process.env.REACT_APP_SERVER_URL;
-    if (!serverUrl) {
-      console.error('REACT_APP_SERVER_URL not configured');
-      return imagePath; // Return original path as fallback
-    }
-    return `${serverUrl}${imagePath}`;
+    // Replace with your actual server URL
+    return `${process.env.REACT_APP_SERVER_URL || 'http://localhost:4000'}${imagePath}`;
   }
   return imagePath;
 };

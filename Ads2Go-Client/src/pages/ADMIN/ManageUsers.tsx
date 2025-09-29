@@ -690,7 +690,7 @@ const handleCityFilterChange = (city: string) => {
             onClick={handleCloseModal} // This closes the modal on outside click
           >
             <div
-              className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}
               onClick={(e) => e.stopPropagation()} // This stops the click from bubbling up and closing the modal
             >
               

@@ -710,7 +710,7 @@ const ManageAds: React.FC = () => {
           onClick={handleCloseAdModal} // closes the modal on outside click
         >
           <div
-            className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${
+            className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${
               isAdModalOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
             onClick={(e) => e.stopPropagation()} // stops click from closing modal
@@ -745,7 +745,7 @@ const ManageAds: React.FC = () => {
 
                       <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-200 text-blue-800">{selectedAd.adType}</span>
                     </div>
-                    <p className="text-sm text-gray-500">User ID: <span className="text-black/90">{selectedAd.id}</span></p>
+                    <p className="text-sm text-gray-500">{selectedAd.id}</p>
                   </div>
                 </div>
               </div>
@@ -776,20 +776,16 @@ const ManageAds: React.FC = () => {
                 </div>
 
                 {/* Details */}
-                <div className="flex flex-col h-full space-y-4">
-                  <div className="flex-1">
-                    <h3 className="text-3xl mt-2 font-bold text-[#1B5087]">{selectedAd.title || 'N/A'}</h3>
-                    <p className="text-gray-600 mt-3 text-sm">{selectedAd.description || 'No description provided'}</p>
+                <div className="flex flex-col space-y-4">
+                  <h3 className="text-3xl mt-2 font-bold text-[#1B5087]">{selectedAd.title || 'N/A'}</h3>
+                  <p className="text-gray-600 pb-16 text-sm">{selectedAd.description || 'No description provided'}</p>
+                  <div className="flex items-center space-x-3">
+                  <Tablet size={24} className="text-gray-500" />
+                    <span className="truncate">{selectedAd.materialId?.id || 'N/A'}</span>
                   </div>
-                  <div className="space-y-4 mt-auto">
-                    <div className="flex items-center space-x-3">
-                      <Tablet size={24} className="text-gray-500" />
-                      <span className="truncate">{selectedAd.materialId?.id || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <Coins size={24} className="text-gray-500" />
-                      <span className="font-semibold text-lg text-[#FF9B45]">{formatCurrency(selectedAd.price)}</span>
-                    </div>
+                  <div className="flex items-center space-x-3">
+                    <Coins size={24} className="text-gray-500" />
+                    <span className="font-semibold text-lg text-[#FF9B45]">{formatCurrency(selectedAd.price)}</span>
                   </div>
                 </div>
               </div>

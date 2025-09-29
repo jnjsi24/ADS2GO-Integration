@@ -488,7 +488,7 @@ const notificationResolvers = {
       }
     },
 
-    markNotificationAsRead: async (_, { id }, { user }) => {
+    markNotificationAsRead: async (_, { notificationId }, { user }) => {
       checkAuth(user);
       
       try {
@@ -499,7 +499,7 @@ const notificationResolvers = {
         }
         
         // Find the notification in the array
-        const notification = userNotifications.notifications.find(n => n._id.toString() === id);
+        const notification = userNotifications.notifications.find(n => n._id.toString() === notificationId);
         
         if (!notification) {
           throw new Error('Notification not found');
@@ -619,19 +619,24 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
+        console.log('🗑️ Deleting notification:', notificationId, 'for user:', user.id);
         const userNotifications = await UserNotifications.findOne({ userId: user.id });
         
         if (!userNotifications) {
+          console.log('❌ User notifications not found for user:', user.id);
           return {
             success: false,
             message: 'User notifications not found'
           };
         }
         
+        console.log('🔍 Available notification IDs:', userNotifications.notifications.map(n => n._id.toString()));
+        
         // Find the notification index
         const notificationIndex = userNotifications.notifications.findIndex(n => n._id.toString() === notificationId);
         
         if (notificationIndex === -1) {
+          console.log('❌ Notification not found:', notificationId);
           return {
             success: false,
             message: 'Notification not found'
@@ -639,6 +644,7 @@ const notificationResolvers = {
         }
         
         const notification = userNotifications.notifications[notificationIndex];
+        console.log('✅ Found notification to delete:', notification.title);
         
         // Remove notification from array
         userNotifications.notifications.splice(notificationIndex, 1);
@@ -649,13 +655,14 @@ const notificationResolvers = {
         }
         
         await userNotifications.save();
+        console.log('✅ Notification deleted successfully');
         
         return {
           success: true,
           message: 'Notification deleted successfully'
         };
       } catch (error) {
-        console.error('Error deleting notification:', error);
+        console.error('❌ Error deleting notification:', error);
         return {
           success: false,
           message: 'Failed to delete notification'
@@ -699,17 +706,6 @@ const notificationResolvers = {
       }
     },
 
-    deleteNotification: async (_, { id }, { user }) => {
-      checkAuth(user);
-      
-      try {
-        const result = await NotificationService.deleteNotification(user.id, id);
-        return result;
-      } catch (error) {
-        console.error('Error deleting notification:', error);
-        throw new Error(`Failed to delete notification: ${error.message}`);
-      }
-    },
 
     deleteAllNotifications: async (_, __, { user }) => {
       checkAuth(user);
@@ -845,6 +841,9 @@ const notificationResolvers = {
   // },
 
   Notification: {
+    id: (notification) => {
+      return notification._id.toString();
+    },
     userId: async (notification) => {
       return await User.findById(notification.userId);
     }

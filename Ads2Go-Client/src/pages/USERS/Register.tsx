@@ -25,14 +25,13 @@ const Register: React.FC = () => {
   const [step, setStep] = useState(1);
   const [registrationError, setRegistrationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isGoogleLoggingIn, setIsGoogleLoggingIn] = useState(false);
   const [checked, setChecked] = useState(false);
   
   const isSubmittingRef = useRef(false);
   const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const navigate = useNavigate();
-  const { register, loginWithGoogle } = useUserAuth();
+  const { register } = useUserAuth();
 
   // Helper function to check if address is valid (either hierarchical or free-form)
   const isAddressValid = (address: string): boolean => {
@@ -232,28 +231,6 @@ const Register: React.FC = () => {
     setStep(prevStep => Math.max(1, prevStep - 1));
   }, []);
 
-  const handleGoogleLogin = async () => {
-    try {
-      setIsGoogleLoggingIn(true);
-      setRegistrationError('');
-      
-      console.log('🔄 Starting Google OAuth registration...');
-      const user = await loginWithGoogle();
-      
-      if (user) {
-        console.log('✅ Google registration successful, user:', user);
-        // The UserAuthContext will handle navigation
-      } else {
-        setRegistrationError('Google registration failed. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Google registration error:', error);
-      setRegistrationError(error.message || 'Google registration failed');
-    } finally {
-      setIsGoogleLoggingIn(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -401,7 +378,7 @@ const Register: React.FC = () => {
       className="min-h-screen flex items-center justify-center bg-cover bg-center"
       style={{ backgroundImage: "url('/image/signup.png')" }}
     >
-      <div className="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
+      <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
       <div className="relative z-10 p-8 sm:p-10 
                 rounded-xl shadow-2xl w-full max-w-xl
@@ -522,27 +499,23 @@ const Register: React.FC = () => {
                 label="Company/Business Name"
               />
 
-              <div className="relative mt-8">
-                <LocationAutocomplete
-                  label="Company/Business Address"
-                  value={formData.companyAddress}
-                  onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
-                  placeholder="Select company location or enter address..."
-                  required
-                  error={errors.companyAddress}
-                />
-              </div>
+              <LocationAutocomplete
+                label="Company/Business Address"
+                value={formData.companyAddress}
+                onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                placeholder="Select company location or enter address..."
+                required
+                error={errors.companyAddress}
+              />
 
-              <div className="relative mt-8">
-                <LocationAutocomplete
-                  label="House Address"
-                  value={formData.houseAddress}
-                  onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
-                  placeholder="Select house location or enter address..."
-                  required
-                  error={errors.houseAddress}
-                />
-              </div>
+              <LocationAutocomplete
+                label="House Address"
+                value={formData.houseAddress}
+                onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                placeholder="Select house location or enter address..."
+                required
+                error={errors.houseAddress}
+              />
 
               <div className="flex gap-4 mt-6">
                 <button
@@ -683,19 +656,8 @@ const Register: React.FC = () => {
         </div>
 
         <div className="flex justify-center space-x-4">
-          <button 
-            type="button" 
-            onClick={handleGoogleLogin}
-            disabled={isGoogleLoggingIn || isSubmitting}
-            className={`p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors ${
-              isGoogleLoggingIn ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isGoogleLoggingIn ? (
-              <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
-            )}
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
           </button>
           <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
             <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />

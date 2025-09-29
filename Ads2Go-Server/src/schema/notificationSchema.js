@@ -154,14 +154,13 @@ const notificationTypeDefs = gql`
   type Mutation {
     createNotification(input: CreateNotificationInput!): Notification!
     updateNotification(id: ID!, input: UpdateNotificationInput!): Notification!
-    markNotificationAsRead(id: ID!): Notification!
+    markNotificationAsRead(notificationId: ID!): Notification!
     markAllNotificationsAsRead: NotificationResponse!
-    deleteNotification(id: ID!): NotificationResponse!
+    deleteNotification(notificationId: ID!): NotificationResponse!
     deleteAllNotifications: NotificationResponse!
     deleteNotificationsByCategory(category: String!): NotificationResponse!
     markNotificationRead(notificationId: ID!): NotificationResponse!
     markAllNotificationsRead: NotificationResponse!
-    deleteNotification(notificationId: ID!): NotificationResponse!
     markSuperAdminNotificationRead(notificationId: ID!): NotificationResponse!
     markAllSuperAdminNotificationsRead: NotificationResponse!
   }
