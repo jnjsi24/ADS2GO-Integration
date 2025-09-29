@@ -158,14 +158,17 @@ async function startServer() {
         .map(o => o.trim())
         .filter(Boolean);
 
+      const serverIp = process.env.SERVER_IP || '192.168.100.22';
+      const serverPort = process.env.SERVER_PORT || '5000';
+      const clientPort = process.env.CLIENT_PORT || '3000';
+      
       const defaultAllowed = [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost',
         'http://127.0.0.1',
-        'http://192.168.1.5:3000',
-        'http://192.168.100.22:3000',
-        'http://192.168.100.22:5000',
+        `http://${serverIp}:${clientPort}`,
+        `http://${serverIp}:${serverPort}`,
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
       ];
@@ -286,7 +289,8 @@ async function startServer() {
     });
   });
 
-  const PORT = process.env.PORT || 5000;
+  const PORT = process.env.PORT || process.env.SERVER_PORT || 5000;
+  const serverIp = process.env.SERVER_IP || '192.168.100.22';
   
   // Create HTTP server
   const httpServer = http.createServer(app);
@@ -297,7 +301,8 @@ async function startServer() {
   // Start the server
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
+    console.log(`\n🚀 Server accessible at http://${serverIp}:${PORT}`);
+    console.log(`\n🚀 GraphQL server ready at http://${serverIp}:${PORT}/graphql`);
     
     // Start the device status monitoring job
     startDeviceStatusJob();

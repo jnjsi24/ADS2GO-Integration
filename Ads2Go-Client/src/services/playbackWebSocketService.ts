@@ -27,7 +27,9 @@ class PlaybackWebSocketService {
 
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.REACT_APP_API_HOST || '192.168.100.22:5000';
+    const serverIp = process.env.REACT_APP_SERVER_IP || '192.168.100.22';
+    const serverPort = process.env.REACT_APP_SERVER_PORT || '5000';
+    const host = process.env.REACT_APP_API_HOST || `${serverIp}:${serverPort}`;
     return `${protocol}//${host}/ws/playback?admin=true`;
   }
 

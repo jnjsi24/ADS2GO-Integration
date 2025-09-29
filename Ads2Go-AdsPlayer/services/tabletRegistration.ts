@@ -107,8 +107,30 @@ export interface TrackingStatus {
   lastSeen: string;
 }
 
-// For device/emulator testing, use your computer's IP address
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000'; // Updated to use environment variable
+// Get API base URL with environment variable support and platform detection
+const getAPIBaseURL = () => {
+  // Check environment variables first
+  const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.API_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+
+  // Use environment variables for IP and port
+  const serverIp = process.env.EXPO_PUBLIC_SERVER_IP || '192.168.100.22';
+  const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT || '5000';
+  const serverUrl = `http://${serverIp}:${serverPort}`;
+
+  // Platform-specific defaults
+  if (typeof navigator !== 'undefined') {
+    // Browser environment
+    return serverUrl;
+  }
+
+  // Default fallback
+  return serverUrl;
+};
+
+const API_BASE_URL = getAPIBaseURL();
 
 export class TabletRegistrationService {
   private static instance: TabletRegistrationService;
