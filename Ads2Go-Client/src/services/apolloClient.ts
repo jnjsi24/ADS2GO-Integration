@@ -8,9 +8,17 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
 // Get server configuration from environment variables
-const serverIp = process.env.REACT_APP_SERVER_IP || '192.168.100.22';
-const serverPort = process.env.REACT_APP_SERVER_PORT || '5000';
-const serverUrl = `http://${serverIp}:${serverPort}`;
+const serverIp = process.env.REACT_APP_SERVER_IP;
+const serverPort = process.env.REACT_APP_SERVER_PORT;
+const serverUrl = process.env.REACT_APP_API_URL;
+
+if (!serverIp || !serverPort || !serverUrl) {
+  console.error('❌ Missing required environment variables:');
+  console.error('   REACT_APP_SERVER_IP:', serverIp);
+  console.error('   REACT_APP_SERVER_PORT:', serverPort);
+  console.error('   REACT_APP_API_URL:', serverUrl);
+  console.error('   Please check your .env file');
+}
 
 const graphqlUri = process.env.REACT_APP_GRAPHQL_URL || `${serverUrl}/graphql`;
 

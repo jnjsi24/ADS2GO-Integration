@@ -28,7 +28,12 @@ export class NewsletterService {
 
       // For now, we'll use a simple fetch to the backend
       // In a real implementation, you'd use Apollo Client with the mutation above
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.REACT_APP_API_URL;
+      
+      if (!apiUrl) {
+        console.error('❌ Missing REACT_APP_API_URL environment variable');
+        throw new Error('REACT_APP_API_URL is required in .env file');
+      }
       const response = await fetch(`${apiUrl}/api/newsletter/subscribe`, {
         method: 'POST',
         headers: {
@@ -66,7 +71,12 @@ export class NewsletterService {
    */
   static async checkSubscriptionStatus(email: string): Promise<boolean> {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000';
+      const apiUrl = process.env.REACT_APP_API_URL;
+      
+      if (!apiUrl) {
+        console.error('❌ Missing REACT_APP_API_URL environment variable');
+        throw new Error('REACT_APP_API_URL is required in .env file');
+      }
       const response = await fetch(`${apiUrl}/api/newsletter/status?email=${encodeURIComponent(email)}`);
       const data = await response.json();
       return data.isSubscribed || false;

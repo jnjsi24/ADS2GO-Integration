@@ -116,9 +116,19 @@ const getAPIBaseURL = () => {
   }
 
   // Use environment variables for IP and port
-  const serverIp = process.env.EXPO_PUBLIC_SERVER_IP || '192.168.100.22';
-  const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT || '5000';
-  const serverUrl = `http://${serverIp}:${serverPort}`;
+  const serverIp = process.env.EXPO_PUBLIC_SERVER_IP;
+  const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT;
+  
+  if (!envUrl && (!serverIp || !serverPort)) {
+    console.error('❌ Missing required environment variables:');
+    console.error('   EXPO_PUBLIC_API_URL:', envUrl);
+    console.error('   EXPO_PUBLIC_SERVER_IP:', serverIp);
+    console.error('   EXPO_PUBLIC_SERVER_PORT:', serverPort);
+    console.error('   Please check your .env file');
+    throw new Error('Missing required environment variables for API configuration');
+  }
+  
+  const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
 
   // Platform-specific defaults
   if (typeof navigator !== 'undefined') {

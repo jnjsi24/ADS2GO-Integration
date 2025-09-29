@@ -158,9 +158,18 @@ async function startServer() {
         .map(o => o.trim())
         .filter(Boolean);
 
-      const serverIp = process.env.SERVER_IP || '192.168.100.22';
-      const serverPort = process.env.SERVER_PORT || '5000';
-      const clientPort = process.env.CLIENT_PORT || '3000';
+      const serverIp = process.env.SERVER_IP;
+      const serverPort = process.env.SERVER_PORT;
+      const clientPort = process.env.CLIENT_PORT;
+
+      if (!serverIp || !serverPort || !clientPort) {
+        console.error('❌ Missing required environment variables:');
+        console.error('   SERVER_IP:', serverIp);
+        console.error('   SERVER_PORT:', serverPort);
+        console.error('   CLIENT_PORT:', clientPort);
+        console.error('   Please check your .env file');
+        process.exit(1);
+      }
       
       const defaultAllowed = [
         'http://localhost:3000',
@@ -289,8 +298,16 @@ async function startServer() {
     });
   });
 
-  const PORT = process.env.PORT || process.env.SERVER_PORT || 5000;
-  const serverIp = process.env.SERVER_IP || '192.168.100.22';
+  const PORT = process.env.PORT || process.env.SERVER_PORT;
+  const serverIp = process.env.SERVER_IP;
+
+  if (!PORT || !serverIp) {
+    console.error('❌ Missing required environment variables:');
+    console.error('   SERVER_PORT:', process.env.SERVER_PORT);
+    console.error('   SERVER_IP:', serverIp);
+    console.error('   Please check your .env file');
+    process.exit(1);
+  }
   
   // Create HTTP server
   const httpServer = http.createServer(app);

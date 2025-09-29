@@ -2,9 +2,19 @@ import Constants from 'expo-constants';
 
 // API configuration - Updated to use environment variables for IP address
 const EXPO_PUBLIC_API_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL;
-const serverIp = process.env.EXPO_PUBLIC_SERVER_IP || '192.168.100.22';
-const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT || '5000';
-const serverUrl = `http://${serverIp}:${serverPort}`;
+const serverIp = process.env.EXPO_PUBLIC_SERVER_IP;
+const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT;
+
+if (!EXPO_PUBLIC_API_URL && (!serverIp || !serverPort)) {
+  console.error('❌ Missing required environment variables:');
+  console.error('   EXPO_PUBLIC_API_URL:', EXPO_PUBLIC_API_URL);
+  console.error('   EXPO_PUBLIC_SERVER_IP:', serverIp);
+  console.error('   EXPO_PUBLIC_SERVER_PORT:', serverPort);
+  console.error('   Please check your .env file');
+  throw new Error('Missing required environment variables for API configuration');
+}
+
+const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
 
 console.log('🔍 EXPO_PUBLIC_API_URL:', EXPO_PUBLIC_API_URL);
 console.log('🔍 Server IP:', serverIp);
