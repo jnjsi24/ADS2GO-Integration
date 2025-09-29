@@ -3,6 +3,7 @@ import {
   AreaChart,
   Area,
   XAxis,
+  YAxis,
   Tooltip,
   ResponsiveContainer,
   PieChart,
@@ -10,6 +11,8 @@ import {
   Cell,
   BarChart,
   Bar,
+  LineChart,
+  Line,
 } from 'recharts';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
@@ -148,9 +151,9 @@ const Dashboard = () => {
 
   // QR Impressions data
   const qrTodayData = [
-    { name: 'Morning', value: 55 },
-    { name: 'Afternoon', value: 25 },
-    { name: 'Evening', value: 20 },
+    { name: '12am-8am', value: 55 },
+    { name: '8am-4pm', value: 25 },
+    { name: '4pm-12am', value: 20 },
   ];
 
   const qrWeeklyData = [
@@ -584,21 +587,31 @@ const Dashboard = () => {
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={getQrChartData()} // Use the dynamic data
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  dataKey="value"
-                >
-                  {getQrChartData().map((entry, index) => ( // Use dynamic data for cells too
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+              <LineChart data={getQrChartData()}>
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [value + '%', 'QR Impressions']}
+                  labelFormatter={(label) => `Time: ${label}`}
+                />
+                <Line 
+                  type="monotone"
+                  dataKey="value" 
+                  stroke="#0E2A47"
+                  strokeWidth={3}
+                  dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
 

@@ -110,9 +110,9 @@ const DetailedAnalytics: React.FC = () => {
   ];
 
   const qrImpressionsData = [
-    { name: 'Morning', value: 55, impressions: 1870 },
-    { name: 'Afternoon', value: 25, impressions: 850 },
-    { name: 'Evening', value: 20, impressions: 680 },
+    { name: '12am-8am', value: 55, impressions: 1870 },
+    { name: '8am-4pm', value: 25, impressions: 850 },
+    { name: '4pm-12am', value: 20, impressions: 680 },
   ];
 
   const weeklyData = [
@@ -506,22 +506,31 @@ const DetailedAnalytics: React.FC = () => {
           <div>
             <h4 className="text-md font-medium text-gray-700 mb-3">Time Distribution</h4>
             <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={qrImpressionsData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}%`}
-                >
-                  {qrImpressionsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value, name) => [value, 'Percentage']} />
-              </PieChart>
+              <LineChart data={qrImpressionsData}>
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [value + '%', 'QR Impressions']}
+                  labelFormatter={(label) => `Time: ${label}`}
+                />
+                <Line 
+                  type="monotone"
+                  dataKey="value" 
+                  stroke="#0E2A47"
+                  strokeWidth={3}
+                  dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
           <div>
