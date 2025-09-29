@@ -170,7 +170,7 @@ const SadminNotifications: React.FC = () => {
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center space-x-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1B5087] disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 <span>Refresh</span>
@@ -241,82 +241,66 @@ const SadminNotifications: React.FC = () => {
           </div>
         </div>
 
-        {/* Plan Usage Statistics */}
-        {planCounts.length > 0 && (
-          <div className="bg-white rounded-lg shadow mb-8">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Plan Usage Statistics</h2>
-              <p className="text-gray-600 mt-1">User counts and revenue by plan</p>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {planCounts.map((plan: any) => (
-                  <div key={plan.planId} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium text-gray-900">{plan.planName}</h3>
-                      <span className="text-sm text-gray-500">{plan.planDetails.materialType}</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Users:</span>
-                        <span className="font-medium">{plan.userCount}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Active Ads:</span>
-                        <span className="font-medium">{plan.activeAdsCount}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Revenue:</span>
-                        <span className="font-medium text-green-600">₱{plan.totalRevenue.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Filter Tabs */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
-              <button
-                onClick={() => setSelectedFilter('all')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  selectedFilter === 'all'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                All ({notifications.length})
-              </button>
-              <button
-                onClick={() => setSelectedFilter('unread')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  selectedFilter === 'unread'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Unread ({unreadCount})
-              </button>
-              <button
-                onClick={() => setSelectedFilter('high')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  selectedFilter === 'high'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                High Priority ({notifications.filter((n: SuperAdminNotification) => n.priority === 'HIGH').length})
-              </button>
-            </nav>
-          </div>
-        </div>
+        {/* Filter Tabs */}
+<div className="mb-6">
+  <div className="border-gray-200">
+    <nav className="flex space-x-8 px-6">
+      {/* All */}
+      <button
+        onClick={() => setSelectedFilter('all')}
+        className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+          selectedFilter === 'all' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+        }`}
+      >
+        All ({notifications.length})
+        <span
+          className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+            ${selectedFilter === 'all' ? 'w-full' : 'w-0 group-hover:w-full'}
+          `}
+        />
+      </button>
+
+      {/* Unread */}
+      <button
+        onClick={() => setSelectedFilter('unread')}
+        className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+          selectedFilter === 'unread' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+        }`}
+      >
+        Unread ({unreadCount})
+        <span
+          className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+            ${selectedFilter === 'unread' ? 'w-full' : 'w-0 group-hover:w-full'}
+          `}
+        />
+      </button>
+
+      {/* High Priority */}
+      <button
+        onClick={() => setSelectedFilter('high')}
+        className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+          selectedFilter === 'high' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+        }`}
+      >
+        High Priority (
+        {notifications.filter(
+          (n: SuperAdminNotification) => n.priority === 'HIGH'
+        ).length}
+        )
+        <span
+          className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+            ${selectedFilter === 'high' ? 'w-full' : 'w-0 group-hover:w-full'}
+          `}
+        />
+      </button>
+    </nav>
+  </div>
+</div>
+
 
         {/* Notifications List */}
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-6">
             {filteredNotifications.length === 0 ? (
               <div className="text-center py-12">
@@ -385,6 +369,42 @@ const SadminNotifications: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Plan Usage Statistics */}
+        {planCounts.length > 0 && (
+          <div className="mb-8">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Plan Usage Statistics</h2>
+              <p className="text-gray-600 mt-1 mb-5">User counts and revenue by plan</p>
+            </div>
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {planCounts.map((plan: any) => (
+                  <div key={plan.planId} className="bg-white shadow-md border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-medium text-gray-900">{plan.planName}</h3>
+                      <span className="text-sm bg-gray-100 px-2 py-1 rounded-xl text-gray-500">{plan.planDetails.materialType}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Users:</span>
+                        <span className="font-medium">{plan.userCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Active Ads:</span>
+                        <span className="font-medium">{plan.activeAdsCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Revenue:</span>
+                        <span className="font-medium text-green-600">₱{plan.totalRevenue.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

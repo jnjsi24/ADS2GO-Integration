@@ -183,6 +183,7 @@ const ManageDrivers: React.FC = () => {
   const [modalImageSrc, setModalImageSrc] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
