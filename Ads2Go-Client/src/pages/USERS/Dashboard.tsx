@@ -280,6 +280,17 @@ const Dashboard = () => {
     return `${hours}h ${minutes}m`;
   };
 
+  // Calculate average mileage per car per hour
+  const calculateAverageMileage = () => {
+    // Mock calculation - in real app, this would come from analytics data
+    const totalDistance = analyticsSummary?.totalDistance || 0; // in km
+    const totalHours = analyticsSummary?.totalHours || 1; // total hours
+    const activeCars = analyticsSummary?.activeCars || 1; // number of active cars
+    
+    const averageMileage = totalDistance / (totalHours * activeCars);
+    return Math.round(averageMileage * 10) / 10; // Round to 1 decimal place
+  };
+
 
   return (
     <div className="min-h-screen bg-white pl-72 pr-5 p-10">
@@ -489,17 +500,18 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Total Display Time */}
+        {/* Average Mileage */}
         <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Display Time</span>
+            <span className="text-gray-500 text-lg">Average Mileage</span>
           </div>
           <p className="text-3xl font-bold text-[#1b5087] pl-4">
-            {analyticsLoading ? '...' : formatDisplayTime(analyticsSummary.totalDisplayTime)}
+            {analyticsLoading ? '...' : calculateAverageMileage()}
+            <span className="text-lg text-gray-500 ml-1">km/h</span>
           </p>
           <p className="text-sm pt-2 pl-4">
-            <span className="text-blue-600">📺 Playing</span>
-            <span className="text-black"> {analyticsSummary.totalAdsPlayed} ads</span>
+            <span className="text-green-600">🚗 Per Car</span>
+            <span className="text-black"> {analyticsSummary?.activeCars || 0} active vehicles</span>
           </p>
           <div className="mt-32">
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
