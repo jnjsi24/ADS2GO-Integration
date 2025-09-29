@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ } from '../graphql/notifications';
+import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION } from '../graphql/notifications';
 import { useUserAuth } from './UserAuthContext';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 export interface Notification {
   id: string;
@@ -20,7 +21,7 @@ interface NotificationContextType {
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
-  removeNotification: (notificationId: string) => void;
+  removeNotification: (notificationId: string) => Promise<void>;
   refreshNotifications: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
@@ -44,11 +45,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
   const { user, isAuthenticated } = useUserAuth();
 
   // GraphQL mutations
   const [markNotificationAsReadMutation] = useMutation(MARK_NOTIFICATION_AS_READ);
   const [markAllNotificationsAsReadMutation] = useMutation(MARK_ALL_NOTIFICATIONS_AS_READ);
+  const [deleteNotificationMutation] = useMutation(DELETE_NOTIFICATION);
 
   // Debug user authentication
   console.log('🔔 NotificationContext: User auth state:', { user, isAuthenticated });
@@ -157,8 +161,80 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     setNotifications(prev => [newNotification, ...prev]);
   };
 
-  const removeNotification = (notificationId: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+  const removeNotification = async (notificationId: string) => {
+    // Find the notification to get its details for the confirmation dialog
+    const notification = notifications.find(n => n.id === notificationId);
+    
+    if (!notification) {
+      console.error('❌ Notification not found:', notificationId);
+      return;
+    }
+
+    // Set the notification to delete and show confirmation modal
+    setNotificationToDelete(notification);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!notificationToDelete) return;
+
+    try {
+      console.log('🗑️ Deleting notification:', notificationToDelete.id);
+      
+      // Update local state immediately for better UX
+      setNotifications(prev => prev.filter(n => n.id !== notificationToDelete.id));
+
+      // Call backend mutation
+      const result = await deleteNotificationMutation({
+        variables: { notificationId: notificationToDelete.id }
+      });
+      
+      console.log('🔍 Delete notification result:', result);
+      
+      if (result.data?.deleteNotification?.success) {
+        console.log('✅ Notification deleted successfully from server');
+      } else {
+        const errorMessage = result.data?.deleteNotification?.message || 'Failed to delete notification';
+        console.error('❌ Delete notification failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting notification:', error);
+      
+      // Revert local state on error - add the notification back
+      setNotifications(prev => {
+        const updated = [...prev];
+        // Insert back in the same position or at the beginning
+        updated.unshift(notificationToDelete);
+        return updated;
+      });
+      
+      // Extract meaningful error message
+      let errorMessage = 'Failed to delete notification. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const apolloError = error as any;
+        if (apolloError.graphQLErrors && apolloError.graphQLErrors.length > 0) {
+          errorMessage = apolloError.graphQLErrors[0].message;
+        } else if (apolloError.networkError) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+      }
+      
+      console.error('Failed to delete notification:', errorMessage);
+      alert(errorMessage);
+    } finally {
+      // Close the modal and reset state
+      setShowDeleteConfirmation(false);
+      setNotificationToDelete(null);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    console.log('🚫 User cancelled notification deletion');
+    setShowDeleteConfirmation(false);
+    setNotificationToDelete(null);
   };
 
   const refreshNotifications = async () => {
@@ -192,6 +268,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   return (
     <NotificationContext.Provider value={contextValue}>
       {children}
+      <ConfirmationModal
+        isOpen={showDeleteConfirmation}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        title="Delete Notification"
+        message={notificationToDelete ? `Are you sure you want to delete this notification?\n\n"${notificationToDelete.title}"\n\nThis action cannot be undone.` : ''}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </NotificationContext.Provider>
   );
 };

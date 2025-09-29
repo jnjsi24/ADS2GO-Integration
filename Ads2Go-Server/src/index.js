@@ -158,26 +158,14 @@ async function startServer() {
         .map(o => o.trim())
         .filter(Boolean);
 
-      const serverIp = process.env.SERVER_IP;
-      const serverPort = process.env.SERVER_PORT;
-      const clientPort = process.env.CLIENT_PORT;
-
-      if (!serverIp || !serverPort || !clientPort) {
-        console.error('❌ Missing required environment variables:');
-        console.error('   SERVER_IP:', serverIp);
-        console.error('   SERVER_PORT:', serverPort);
-        console.error('   CLIENT_PORT:', clientPort);
-        console.error('   Please check your .env file');
-        process.exit(1);
-      }
-      
       const defaultAllowed = [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost',
         'http://127.0.0.1',
-        `http://${serverIp}:${clientPort}`,
-        `http://${serverIp}:${serverPort}`,
+        'http://192.168.1.5:3000',
+        'http://192.168.100.22:3000',
+        'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
       ];
@@ -298,16 +286,7 @@ async function startServer() {
     });
   });
 
-  const PORT = process.env.PORT || process.env.SERVER_PORT;
-  const serverIp = process.env.SERVER_IP;
-
-  if (!PORT || !serverIp) {
-    console.error('❌ Missing required environment variables:');
-    console.error('   SERVER_PORT:', process.env.SERVER_PORT);
-    console.error('   SERVER_IP:', serverIp);
-    console.error('   Please check your .env file');
-    process.exit(1);
-  }
+  const PORT = process.env.PORT || 5000;
   
   // Create HTTP server
   const httpServer = http.createServer(app);
@@ -318,8 +297,7 @@ async function startServer() {
   // Start the server
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
-    console.log(`\n🚀 Server accessible at http://${serverIp}:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://${serverIp}:${PORT}/graphql`);
+    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
     startDeviceStatusJob();
