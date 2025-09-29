@@ -69,7 +69,11 @@ const Settings: React.FC = () => {
     try {
       if (newsletterSubscribed) {
         // Unsubscribe
-        const apiUrl = process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000';
+        const apiUrl = process.env.REACT_APP_API_URL;
+        if (!apiUrl) {
+          addToast('API URL not configured', 'error');
+          return;
+        }
         const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
           method: 'POST',
           headers: {

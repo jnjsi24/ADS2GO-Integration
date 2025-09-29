@@ -173,8 +173,14 @@ const AdDetailsPage: React.FC = () => {
   // Function to fetch device ID from material ID
   const fetchDeviceId = async (materialId: string) => {
     try {
+      const apiUrl = process.env.REACT_APP_API_URL;
+      if (!apiUrl) {
+        console.error('API URL not configured');
+        setDeviceId('TABLET-21G93-1758642873206');
+        return;
+      }
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/deviceByMaterial/${materialId}`
+        `${apiUrl}/screenTracking/deviceByMaterial/${materialId}`
       );
       const result = await response.json();
       

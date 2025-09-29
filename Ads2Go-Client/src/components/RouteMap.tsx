@@ -90,9 +90,14 @@ const RouteMap: React.FC<RouteMapProps> = ({
         setLoading(true);
         setError(null);
 
-        const response = await fetch(
-          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/route/${deviceId}`
-        );
+          const apiUrl = process.env.REACT_APP_API_URL;
+          if (!apiUrl) {
+            console.error('API URL not configured');
+            return;
+          }
+          const response = await fetch(
+            `${apiUrl}/screenTracking/route/${deviceId}`
+          );
         
         const result = await response.json();
         
