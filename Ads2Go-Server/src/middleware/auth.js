@@ -12,11 +12,12 @@ const getUser = async (token) => {
 
     // Check for admin token
     if (decoded.adminId) {
-      const admin = await Admin.findById(decoded.adminId).select('id email role isEmailVerified tokenVersion');
+      const admin = await Admin.findById(decoded.adminId).select('id firstName lastName email role isEmailVerified tokenVersion');
       if (!admin || admin.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: admin.id,
+        name: `${admin.firstName} ${admin.lastName}`.trim(),
         email: admin.email,
         role: admin.role,
         isEmailVerified: admin.isEmailVerified,
@@ -26,11 +27,12 @@ const getUser = async (token) => {
 
     // Check for superadmin token
     if (decoded.superAdminId) {
-      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id email role isEmailVerified tokenVersion');
+      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id firstName lastName email role isEmailVerified tokenVersion');
       if (!superAdmin || superAdmin.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: superAdmin.id,
+        name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
         email: superAdmin.email,
         role: superAdmin.role,
         isEmailVerified: superAdmin.isEmailVerified,
@@ -40,11 +42,12 @@ const getUser = async (token) => {
 
     // Check for regular user token
     if (decoded.userId) {
-      const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
+      const user = await User.findById(decoded.userId).select('id firstName lastName email role isEmailVerified tokenVersion');
       if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: user.id,
+        name: `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified,

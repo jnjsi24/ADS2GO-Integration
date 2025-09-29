@@ -157,6 +157,17 @@ export const GET_MATERIAL_USAGE_HISTORY = gql`
         usageDuration
         assignmentReason
         unassignmentReason
+        customDismountReason
+        assignedByAdmin {
+          adminId
+          adminName
+          adminEmail
+        }
+        unassignedByAdmin {
+          adminId
+          adminName
+          adminEmail
+        }
         notes
         isActive
         createdAt

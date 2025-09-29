@@ -244,6 +244,9 @@ const materialResolvers = {
             usageDuration: record.usageDuration,
             assignmentReason: record.assignmentReason,
             unassignmentReason: record.unassignmentReason || null,
+            customDismountReason: record.customDismountReason || null,
+            assignedByAdmin: record.assignedByAdmin || null,
+            unassignedByAdmin: record.unassignedByAdmin || null,
             notes: record.notes || null,
             isActive: record.isActive,
             createdAt: record.createdAt?.toISOString(),
@@ -555,8 +558,14 @@ const materialResolvers = {
             material._id,
             previousDriverId,
             'MANUAL_REMOVAL',
-            'Material dismounted via admin update',
-            dismountDate
+            `Material dismounted via admin update by ${user.name || user.email}`,
+            dismountDate,
+            null,
+            {
+              adminId: user.id,
+              adminName: user.name || user.email,
+              adminEmail: user.email
+            }
           );
         } catch (error) {
           console.error('Error updating usage history for dismount:', error);
@@ -759,7 +768,13 @@ const materialResolvers = {
           previousDriver.driverId,
           'REASSIGNMENT',
           `Material reassigned to driver ${driver.driverId}`,
-          dismountDate
+          dismountDate,
+          null,
+          {
+            adminId: user.id,
+            adminName: user.name || user.email,
+            adminEmail: user.email
+          }
         );
           
           previousDriver.materialId = null;
@@ -794,7 +809,12 @@ const materialResolvers = {
           contactNumber: driver.contactNumber,
           vehiclePlateNumber: driver.vehiclePlateNumber
         },
-        'MANUAL_ASSIGNMENT'
+        'MANUAL_ASSIGNMENT',
+        {
+          adminId: user.id,
+          adminName: user.name || user.email,
+          adminEmail: user.email
+        }
       );
 
       return {
@@ -811,8 +831,13 @@ const materialResolvers = {
       };
     },
 
-    unassignMaterialFromDriver: async (_, { materialId }, { user }) => {
+    unassignMaterialFromDriver: async (_, { materialId, dismountReason }, { user }) => {
       checkAdmin(user);
+
+      // Validate dismount reason
+      if (!dismountReason || dismountReason.trim().length === 0) {
+        throw new Error('Dismount reason is required');
+      }
 
       const material = await Material.findById(materialId);
       if (!material) throw new Error('Material not found');
@@ -831,13 +856,19 @@ const materialResolvers = {
       material.dismountedAt = dismountDate; // Set dismounted date to now
       await material.save();
 
-      // Create usage history entry for the unassignment with dismounted date
+      // Create usage history entry for the unassignment with dismounted date and custom reason
       await MaterialUsageHistory.endUsageEntry(
         material._id,
         driver.driverId,
-        'MANUAL_REMOVAL',
-        'Material manually unassigned by admin',
-        dismountDate
+        'CUSTOM',
+        `Material manually unassigned by ${user.name || user.email}: ${dismountReason.trim()}`,
+        dismountDate,
+        dismountReason.trim(),
+        {
+          adminId: user.id,
+          adminName: user.name || user.email,
+          adminEmail: user.email
+        }
       );
 
       // Update driver

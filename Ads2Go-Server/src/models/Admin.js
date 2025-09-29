@@ -134,6 +134,11 @@ const AdminSchema = new mongoose.Schema({
   }
 });
 
+// Virtual for full name
+AdminSchema.virtual('fullName').get(function() {
+  return `${this.firstName} ${this.lastName}`.trim();
+});
+
 // Pre-save hook to update updatedAt
 AdminSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

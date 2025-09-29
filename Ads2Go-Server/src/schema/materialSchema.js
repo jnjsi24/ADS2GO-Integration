@@ -166,7 +166,7 @@ extend type Query {
 
     # Material Assignment (Admin-only)
     assignMaterialToDriver(driverId: String!, materialId: ID): MaterialAssignmentResult
-    unassignMaterialFromDriver(materialId: ID!): MaterialAssignmentResult
+    unassignMaterialFromDriver(materialId: ID!, dismountReason: String!): MaterialAssignmentResult
 
     # Driver photo upload
     uploadMonthlyPhoto(materialId: ID!, photoUrls: [String!]!, month: String!, description: String): MaterialPhotoUploadResult
@@ -189,6 +189,12 @@ extend type Query {
     materialTracking: MaterialPhotoTracking
   }
 
+  type AdminInfo {
+    adminId: String!
+    adminName: String!
+    adminEmail: String!
+  }
+
   type MaterialUsageHistory {
     id: ID!
     materialId: ID!
@@ -201,6 +207,9 @@ extend type Query {
     usageDuration: Int # in days
     assignmentReason: String!
     unassignmentReason: String
+    customDismountReason: String
+    assignedByAdmin: AdminInfo
+    unassignedByAdmin: AdminInfo
     notes: String
     isActive: Boolean!
     createdAt: String!
