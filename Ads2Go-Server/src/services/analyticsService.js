@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Analytics = require('../models/analytics');
 const ScreenTracking = require('../models/screenTracking');
-const MaterialTracking = require('../models/materialTracking');
 
 class AnalyticsService {
   
@@ -54,6 +53,18 @@ class AnalyticsService {
   // Track ad playback
   static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
     try {
+      // Skip processing if materialId is invalid or unknown
+      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
+        console.log(`⚠️  Skipping ad playback analytics - invalid materialId: ${materialId}`);
+        return null;
+      }
+
+      // Skip processing if slotNumber is invalid
+      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
+        console.log(`⚠️  Skipping ad playback analytics - invalid slotNumber: ${slotNumber}`);
+        return null;
+      }
+
       // Get the ad to find the userId
       const Ad = mongoose.models.Ad || require('../models/ad');
       const ad = await Ad.findById(adId);
@@ -114,6 +125,18 @@ class AnalyticsService {
   // Track QR scan
   static async trackQRScan(deviceId, materialId, slotNumber, qrScanData) {
     try {
+      // Skip processing if materialId is invalid or unknown
+      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
+        console.log(`⚠️  Skipping QR scan analytics - invalid materialId: ${materialId}`);
+        return null;
+      }
+
+      // Skip processing if slotNumber is invalid
+      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
+        console.log(`⚠️  Skipping QR scan analytics - invalid slotNumber: ${slotNumber}`);
+        return null;
+      }
+
       // Get the material to find the material type
       const Material = mongoose.models.Material || require('../models/Material');
       const material = await Material.findOne({ materialId: materialId });
@@ -135,21 +158,8 @@ class AnalyticsService {
       // QR scan tracking is now handled directly in the ads.js route
       // No need to create separate QRScanTracking documents here
       
-      // Update material tracking - skip if materialId is not a valid ObjectId
-      try {
-        // Check if materialId is a valid ObjectId format
-        if (mongoose.Types.ObjectId.isValid(materialId)) {
-          await MaterialTracking.findOneAndUpdate(
-            { materialId },
-            { $inc: { qrCodeScans: 1 } },
-            { upsert: false }
-          );
-        } else {
-          console.log(`Skipping MaterialTracking update - materialId "${materialId}" is not a valid ObjectId`);
-        }
-      } catch (materialTrackingError) {
-        console.log('Could not update material tracking QR count:', materialTrackingError.message);
-      }
+      // MaterialTracking is now PHOTOS ONLY - no analytics data
+      // QR scan analytics are handled by DeviceTracking and Analytics collections
       
       return analytics;
     } catch (error) {

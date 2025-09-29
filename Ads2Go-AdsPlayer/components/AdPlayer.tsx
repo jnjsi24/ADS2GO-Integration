@@ -112,7 +112,29 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         isOffline: isOffline
       };
       
-      // Send to analytics endpoint
+      // Send to device tracking endpoint (new daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: analyticsData.deviceId,
+          deviceSlot: analyticsData.slotNumber,
+          adId: analyticsData.adId,
+          adTitle: analyticsData.adTitle,
+          adDuration: analyticsData.adDuration,
+          viewTime: analyticsData.viewTime
+        }),
+      });
+      
+      if (deviceTrackingResponse.ok) {
+        console.log(`✅ Ad playback tracked in device tracking: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track ad playback in device tracking: ${adTitle}`);
+      }
+      
+      // Also send to analytics endpoint for backward compatibility
       const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
         method: 'POST',
         headers: {
@@ -384,7 +406,26 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
       console.log('QR display data to send:', qrDisplayData);
 
-      // Send to QR scan tracking endpoint (treating display as a scan)
+      // Send to device tracking endpoint (new daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+          deviceSlot: adSlotNumber,
+          qrScanData: qrDisplayData
+        }),
+      });
+
+      if (deviceTrackingResponse.ok) {
+        console.log(`✅ QR display tracked in device tracking: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track QR display in device tracking: ${adTitle}`);
+      }
+
+      // Also send to existing QR scan tracking endpoint for backward compatibility
       const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
         method: 'POST',
         headers: {
@@ -400,9 +441,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         console.error(`❌ Failed to track QR display: ${response.status} ${response.statusText}`);
       }
       
-      // QR display is already tracked in the /ads/qr-scan endpoint above
-      // No need for duplicate analytics call - everything is handled in analytics collection
-      console.log(`✅ QR display fully tracked via /ads/qr-scan endpoint: ${adTitle}`);
+      console.log(`✅ QR display fully tracked via both endpoints: ${adTitle}`);
     } catch (error) {
       console.error('Error tracking QR display:', error);
     }

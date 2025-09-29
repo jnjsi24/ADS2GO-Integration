@@ -51,8 +51,8 @@ const AdPlaybackSchema = new mongoose.Schema({
 const QRScanSchema = new mongoose.Schema({
   adId: { type: String, required: true },
   adTitle: { type: String, required: true },
-  materialId: { type: String, required: true },
-  slotNumber: { type: Number, required: true },
+  materialId: { type: String, required: false }, // Made optional for backward compatibility
+  slotNumber: { type: Number, required: false }, // Made optional for backward compatibility
   scanTimestamp: { type: Date, default: Date.now },
   qrCodeUrl: { type: String },
   website: { type: String },

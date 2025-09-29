@@ -419,8 +419,26 @@ export class TabletRegistrationService {
       };
 
       console.log('Updating location tracking:', locationUpdate);
-      console.log('API URL:', `${API_BASE_URL}/screenTracking/updateLocation`);
+      console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
 
+      // Send to new device tracking endpoint (daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: locationUpdate.deviceId,
+          deviceSlot: 1, // Default slot for now
+          lat: locationUpdate.lat,
+          lng: locationUpdate.lng,
+          speed: locationUpdate.speed,
+          heading: locationUpdate.heading,
+          accuracy: locationUpdate.accuracy
+        }),
+      });
+
+      // Also send to existing screen tracking for backward compatibility
       const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
         method: 'POST',
         headers: {

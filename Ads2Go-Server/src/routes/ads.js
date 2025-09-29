@@ -435,33 +435,8 @@ router.post('/qr-scan', async (req, res) => {
 
     // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
 
-    // Update material tracking QR scan count - find Material by materialId string first
-    try {
-      const MaterialTracking = require('../models/materialTracking');
-      const Material = require('../models/Material');
-      const mongoose = require('mongoose');
-      
-      // First find the Material document to get its ObjectId
-      const material = await Material.findOne({ materialId: materialId });
-      if (material) {
-        // Update using the ObjectId
-        const materialUpdate = await MaterialTracking.findOneAndUpdate(
-          { materialId: material._id },
-          { $inc: { qrCodeScans: 1 } },
-          { upsert: false }
-        );
-        
-        if (materialUpdate) {
-          console.log(`✅ Updated material tracking for ${materialId}`);
-        } else {
-          console.log(`⚠️  No material tracking document found for ${materialId}`);
-        }
-      } else {
-        console.log(`⚠️  Material not found for materialId: ${materialId}`);
-      }
-    } catch (materialTrackingError) {
-      console.log('❌ Could not update material tracking QR count:', materialTrackingError.message);
-    }
+    // MaterialTracking is now PHOTOS ONLY - no analytics data
+    // QR scan analytics are handled by DeviceTracking and Analytics collections
 
     // Process registration data
     
@@ -517,6 +492,8 @@ router.post('/qr-scan', async (req, res) => {
         const qrScanData = {
           adId: adId,
           adTitle: adTitle || `Ad ${adId}`,
+          materialId: materialId, // Add required field
+          slotNumber: parseInt(slotNumber), // Add required field
           scanTimestamp: timestamp ? new Date(timestamp) : new Date(),
           qrCodeUrl: qrCodeUrl,
           userAgent: userAgent || 'Android App',
