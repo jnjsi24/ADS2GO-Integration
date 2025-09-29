@@ -388,9 +388,9 @@ const Dashboard = () => {
           <div className="grid grid-cols-3 gap-4 mt-4 text-center">
             <div className="bg-[#1b5087] p-3 rounded-lg">
               <p className="text-2xl font-bold">
-                {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
+                {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
               </p>
-              <p className="text-sm text-gray-300">Total Ad Impressions</p>
+              <p className="text-sm text-gray-300">Total Airtime (Minutes)</p>
               <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
             </div>
               <div className="bg-[#2876c7] p-3 rounded-lg">
