@@ -18,18 +18,18 @@ export const REJECT_AD_FORM = gql`
   }
 `;
 
-export const APPROVE_RIDER_APPLICATION = gql`
-  mutation ApproveRiderApplication($formId: ID!) {
-    approveRiderApplication(formId: $formId) {
+export const APPROVE_DRIVER_APPLICATION = gql`
+  mutation ApproveDriverApplication($formId: ID!) {
+    approveDriverApplication(formId: $formId) {
       success
       message
     }
   }
 `;
 
-export const REJECT_RIDER_APPLICATION = gql`
-  mutation RejectRiderApplication($formId: ID!) {
-    rejectRiderApplication(formId: $formId) {
+export const REJECT_DRIVER_APPLICATION = gql`
+  mutation RejectDriverApplication($formId: ID!) {
+    rejectDriverApplication(formId: $formId) {
       success
       message
     }

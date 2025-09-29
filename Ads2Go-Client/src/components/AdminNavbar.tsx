@@ -33,7 +33,7 @@ const AdminSidebar: React.FC = () => {
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
     { label: 'Advertisers ', path: '/admin/users', icon: <Users size={20} /> },
     { label: 'Advertisements', path: '/admin/manage-ads', icon: <Megaphone size={20} /> }, 
-    { label: 'Drivers ', path: '/admin/riders', icon: <Bike size={20} /> },
+    { label: 'Drivers ', path: '/admin/drivers', icon: <Bike size={20} /> },
     { label: 'Devices ', path: '/admin/materials', icon: <Package size={20} /> },
     { label: 'Devices Tracking', path: '/admin/tablet-tracking', icon: <MapPin size={20} /> },
     { label: 'Screen Control', path: '/admin/ads', icon: <Megaphone size={20} /> },

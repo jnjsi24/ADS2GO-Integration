@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle} from 'lucide-react';
-import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageRiders';
-import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageRiders';
+import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageDrivers';
+import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 
@@ -258,11 +258,11 @@ const ManageDrivers: React.FC = () => {
     let matchesDate = true;
     if (selectedMonth !== 'All Months' || selectedYear !== 'All Years') {
       const createdAt = new Date(r.createdAt);
-      const riderMonth = createdAt.toLocaleString('default', { month: 'long' });
-      const riderYear = createdAt.getFullYear().toString();
+      const driverMonth = createdAt.toLocaleString('default', { month: 'long' });
+      const driverYear = createdAt.getFullYear().toString();
       
-      const matchesMonth = selectedMonth === 'All Months' || riderMonth === selectedMonth;
-      const matchesYear = selectedYear === 'All Years' || riderYear === selectedYear;
+      const matchesMonth = selectedMonth === 'All Months' || driverMonth === selectedMonth;
+      const matchesYear = selectedYear === 'All Years' || driverYear === selectedYear;
       
       matchesDate = matchesMonth && matchesYear;
     }

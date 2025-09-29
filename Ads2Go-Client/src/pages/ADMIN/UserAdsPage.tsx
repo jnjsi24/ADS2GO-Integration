@@ -212,7 +212,7 @@ const UserAdsPage: React.FC = () => {
             className="flex items-center text-gray-600 hover:text-gray-800"
           >
             <ChevronLeft size={24} />
-            <span className="ml-2 font-semibold">Back to Users</span>
+            <span className="ml-2 font-semibold">Back to Advertisers</span>
           </Link>
         </div>
 

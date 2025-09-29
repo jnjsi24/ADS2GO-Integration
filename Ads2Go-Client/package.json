@@ -34,7 +34,8 @@
     "serve": "^14.2.1",
     "sonner": "^2.0.7",
     "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "react-scripts start",

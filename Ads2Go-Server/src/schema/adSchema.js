@@ -19,6 +19,7 @@ const adTypeDefs = gql`
     userId: User!          
     driverId: ID
     materialId: Material   
+    targetDevices: [Material!]  # Array of devices where this ad should be deployed
     planId: AdsPlan        
     title: String!
     description: String
@@ -44,6 +45,10 @@ const adTypeDefs = gql`
     startTime: String!     # Admin review time (7 days earlier)
     endTime: String!
     userDesiredStartTime: String # User's desired start time
+    # Flexible ad fields
+    materialType: String
+    vehicleType: String
+    category: String
     createdAt: String!
     updatedAt: String!
   }

@@ -19,7 +19,8 @@ const AdSchema = new mongoose.Schema({
   planId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AdsPlan',
-    required: true
+    required: false,
+    default: null
   },
 
   // Ad details
@@ -60,6 +61,10 @@ const AdSchema = new mongoose.Schema({
 
   // Plan-related fields
   numberOfDevices: { type: Number, required: true },
+  targetDevices: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Material' 
+  }], // Array of device IDs where this ad should be deployed
   adLengthSeconds: { type: Number, required: true },
   playsPerDayPerDevice: { type: Number, required: true },
   totalPlaysPerDay: { type: Number, required: true },
@@ -101,7 +106,12 @@ const AdSchema = new mongoose.Schema({
     default: 'PENDING' 
   },
   deploymentAttempts: { type: Number, default: 0 },
-  lastDeploymentAttempt: { type: Date, default: null }
+  lastDeploymentAttempt: { type: Date, default: null },
+
+  // Flexible ad fields
+  materialType: { type: String },
+  vehicleType: { type: String },
+  category: { type: String }
 }, { timestamps: true });
 
 /**
@@ -175,7 +185,7 @@ AdSchema.pre('save', async function (next) {
 
     const [materialExists, planExists, userExists] = await Promise.all([
       Material.exists({ _id: this.materialId }),
-      Plan.exists({ _id: this.planId }),
+      this.planId ? Plan.exists({ _id: this.planId }) : true, // Allow null planId for flexible ads
       User.exists({ _id: this.userId })
     ]);
 
@@ -236,132 +246,119 @@ AdSchema.post('save', async function (doc) {
         lastDeploymentAttempt: new Date()
       });
       
-      const material = await Material.findById(doc.materialId);
-      if (!material) {
-        console.error(`❌ Cannot deploy Ad ${doc._id}: Material not found`);
-        return;
+      // Get target devices for deployment
+      let targetMaterials = [];
+      
+      if (doc.targetDevices && doc.targetDevices.length > 0) {
+        // Multi-device ad: deploy to all target devices
+        console.log(`🔄 Deploying multi-device Ad ${doc._id} to ${doc.targetDevices.length} devices`);
+        targetMaterials = await Material.find({ _id: { $in: doc.targetDevices } });
+      } else {
+        // Single device ad: deploy to primary material
+        const material = await Material.findById(doc.materialId);
+        if (!material) {
+          console.error(`❌ Cannot deploy Ad ${doc._id}: Material not found`);
+          return;
+        }
+        targetMaterials = [material];
       }
       
-      if (!material.driverId) {
-        console.error(`❌ Cannot deploy Ad ${doc._id}: No driver assigned to material`);
+      if (targetMaterials.length === 0) {
+        console.error(`❌ Cannot deploy Ad ${doc._id}: No target materials found`);
         return;
       }
 
-      // Determine deployment method based on material type
-      if (material.materialType === 'HEADDRESS') {
-        // HEADDRESS ads → use addToHEADDRESS method (shared across tablet slots)
-        console.log(`🔄 Deploying HEADDRESS Ad ${doc._id} to material ${material.materialId}`);
-        try {
-          const deployment = await AdsDeployment.addToHEADDRESS(
-            material.materialId, // Use string materialId, not ObjectId _id
-            material.driverId,
-            doc._id,
-            doc.startTime,
-            doc.endTime
-          );
-          
-          if (!deployment) {
-            throw new Error('Deployment returned null');
-          }
-          
-          console.log(`✅ HEADDRESS Ad ${doc._id} added to deployment ${deployment.adDeploymentId || deployment._id}`);
-          console.log(`📋 Deployment details:`, {
-            materialId: deployment.materialId,
-            driverId: deployment.driverId,
-            lcdSlotsCount: deployment.lcdSlots.length,
-            slots: deployment.lcdSlots.map(s => ({
-              slotNumber: s.slotNumber,
-              adId: s.adId,
-              status: s.status
-            }))
-          });
-          
-          // Mark deployment as successful
-          await Ad.findByIdAndUpdate(doc._id, { 
-            deploymentStatus: 'DEPLOYED',
-            lastDeploymentAttempt: new Date()
-          });
-        } catch (error) {
-          console.error(`❌ Error deploying HEADDRESS Ad ${doc._id}:`, error.message);
-          // Mark deployment as failed
-          await Ad.findByIdAndUpdate(doc._id, { 
-            deploymentStatus: 'FAILED',
-            lastDeploymentAttempt: new Date()
-          });
+      // Deploy to each target device
+      let deploymentSuccess = true;
+      const deploymentResults = [];
+      
+      for (const material of targetMaterials) {
+        if (!material.driverId) {
+          console.error(`❌ Cannot deploy Ad ${doc._id} to ${material.materialId}: No driver assigned`);
+          deploymentSuccess = false;
+          continue;
         }
-        return;
+
+        // Determine deployment method based on material type
+        if (material.materialType === 'HEADDRESS') {
+          // HEADDRESS ads → use addToHEADDRESS method (shared across tablet slots)
+          console.log(`🔄 Deploying HEADDRESS Ad ${doc._id} to material ${material.materialId}`);
+          try {
+            const deployment = await AdsDeployment.addToHEADDRESS(
+              material.materialId, // Use string materialId, not ObjectId _id
+              material.driverId,
+              doc._id,
+              doc.startTime,
+              doc.endTime
+            );
+            
+            if (!deployment) {
+              throw new Error('Deployment returned null');
+            }
+            
+            console.log(`✅ HEADDRESS Ad ${doc._id} added to deployment ${deployment.adDeploymentId || deployment._id} for device ${material.materialId}`);
+            deploymentResults.push({
+              materialId: material.materialId,
+              success: true,
+              deploymentId: deployment.adDeploymentId || deployment._id
+            });
+          } catch (error) {
+            console.error(`❌ Error deploying HEADDRESS Ad ${doc._id} to ${material.materialId}:`, error.message);
+            deploymentSuccess = false;
+            deploymentResults.push({
+              materialId: material.materialId,
+              success: false,
+              error: error.message
+            });
+          }
+        } else if (material.materialType === 'LCD') {
+          // LCD ads → use addToLCD method
+          console.log(`🔄 Deploying LCD Ad ${doc._id} to material ${material.materialId}`);
+          try {
+            const deployment = await AdsDeployment.addToLCD(
+              material.materialId,
+              material.driverId,
+              doc._id,
+              doc.startTime,
+              doc.endTime
+            );
+            
+            if (!deployment) {
+              throw new Error('Deployment returned null');
+            }
+            
+            console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId || deployment._id} for device ${material.materialId}`);
+            deploymentResults.push({
+              materialId: material.materialId,
+              success: true,
+              deploymentId: deployment.adDeploymentId || deployment._id
+            });
+          } catch (error) {
+            console.error(`❌ Error deploying LCD Ad ${doc._id} to ${material.materialId}:`, error.message);
+            deploymentSuccess = false;
+            deploymentResults.push({
+              materialId: material.materialId,
+              success: false,
+              error: error.message
+            });
+          }
+        }
       }
       
-      if (material.materialType === 'LCD') {
-        // LCD ads → use addToLCD method for single deployment doc
-        console.log(`🔄 Deploying LCD Ad ${doc._id} to material ${material.materialId}`);
-        try {
-          const deployment = await AdsDeployment.addToLCD(
-            material.materialId, // Use string materialId, not ObjectId _id
-            material.driverId,
-            doc._id,
-            doc.startTime,
-            doc.endTime
-          );
-        
-          if (!deployment) {
-            throw new Error('Deployment returned null');
-          }
-          
-          console.log(`✅ LCD Ad ${doc._id} added to deployment ${deployment.adDeploymentId || deployment._id}`);
-          console.log(`📋 Deployment details:`, {
-            materialId: deployment.materialId,
-            driverId: deployment.driverId,
-            lcdSlotsCount: deployment.lcdSlots.length,
-            slots: deployment.lcdSlots.map(s => ({
-              slotNumber: s.slotNumber,
-              adId: s.adId,
-              status: s.status
-            }))
-          });
-          
-          // Mark deployment as successful
-          await Ad.findByIdAndUpdate(doc._id, { 
-            deploymentStatus: 'DEPLOYED',
-            lastDeploymentAttempt: new Date()
-          });
-        } catch (error) {
-          console.error(`❌ Error deploying LCD Ad ${doc._id}:`, error.message);
-          // Mark deployment as failed
-          await Ad.findByIdAndUpdate(doc._id, { 
-            deploymentStatus: 'FAILED',
-            lastDeploymentAttempt: new Date()
-          });
-        }
-        return;
-      }
-      
-      // Standard non-LCD ads → create new deployment directly
-      console.log(`🔄 Deploying non-LCD Ad ${doc._id}`);
-      try {
-        await AdsDeployment.create({
-          adId: doc._id,
-          materialId: material.materialId, // Use string materialId, not ObjectId _id
-          driverId: material.driverId,
-          startTime: doc.startTime,
-          endTime: doc.endTime,
-          deployedAt: new Date(),
-          currentStatus: 'DEPLOYED'
-        });
-        console.log(`✅ Non-LCD Ad ${doc._id} deployed successfully`);
-        
-        // Mark deployment as successful
+      // Mark deployment status based on results
+      if (deploymentSuccess) {
         await Ad.findByIdAndUpdate(doc._id, { 
           deploymentStatus: 'DEPLOYED',
           lastDeploymentAttempt: new Date()
         });
-      } catch (error) {
-        console.error(`❌ Error deploying non-LCD Ad ${doc._id}:`, error.message);
-        // Mark deployment as failed
+        console.log(`✅ Multi-device Ad ${doc._id} deployed successfully to ${deploymentResults.filter(r => r.success).length}/${targetMaterials.length} devices`);
+      } else {
         await Ad.findByIdAndUpdate(doc._id, { 
           deploymentStatus: 'FAILED',
           lastDeploymentAttempt: new Date()
         });
+        console.log(`❌ Multi-device Ad ${doc._id} deployment failed for some devices`);
+        return;
       }
 
     } catch (err) {

@@ -456,12 +456,7 @@ router.post('/qr-scan', async (req, res) => {
       console.log('❌ Could not update material tracking QR count:', materialTrackingError.message);
     }
 
-    // Debug registration data
-    console.log('\u001b[33m🔍 DEBUGGING REGISTRATION DATA:\u001b[0m');
-    console.log(`   Registration Data: ${JSON.stringify(registrationData, null, 2)}`);
-    console.log(`   Has Registration Data: ${!!registrationData}`);
-    console.log(`   Has Device ID: ${!!(registrationData && registrationData.deviceId)}`);
-    console.log(`   Device ID Value: ${registrationData?.deviceId || 'undefined'}`);
+    // Process registration data
     
     // Always prioritize active deployment devices for QR scans
     console.log('\u001b[33m🔍 LOOKING FOR ACTIVE DEPLOYMENT DEVICES...\u001b[0m');

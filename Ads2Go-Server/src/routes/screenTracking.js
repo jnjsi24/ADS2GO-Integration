@@ -1646,12 +1646,7 @@ router.get('/screens', async (req, res) => {
       const lastSeen = new Date(screen.lastSeen);
       const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
       
-      // Log the status for debugging
-      console.log(`🔍 [SCREEN TRACKING DEBUG] Device ${screen.deviceId} (${screen.materialId}):`);
-      console.log(`  - Last seen: ${lastSeen.toISOString()}`);
-      console.log(`  - Time since last seen: ${timeSinceLastSeen} seconds`);
-      console.log(`  - Database isOnline: ${screen.isOnline}`);
-      console.log(`  - Devices array:`, screen.devices);
+      // Check device status based on last seen time
       console.log(`  - Has online device: ${hasOnlineDevice}`);
       console.log(`  - Final isOnline: ${isActuallyOnline}`);
       console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);

@@ -36,7 +36,7 @@ import AdminLogin from './pages/AUTH/AdminLogin';
 import AdminDashboard from './pages/ADMIN/AdminDashboard';
 import ManageUsers from './pages/ADMIN/ManageUsers';
 import SiteSettings from './pages/ADMIN/SiteSettings';
-import ManageRiders from './pages/ADMIN/ManageRiders';
+import ManageDrivers from './pages/ADMIN/ManageDrivers';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
@@ -50,7 +50,7 @@ import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
-import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+import SadminPricing from './pages/SUPERADMIN/SadminPricing';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
 
@@ -101,10 +101,10 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/admin/riders"
+          path="/admin/drivers"
           element={
             <ProtectedRoute>
-              <ManageRiders />
+              <ManageDrivers />
             </ProtectedRoute>
           }
         />
@@ -200,10 +200,10 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/sadmin-plans"
+          path="/sadmin-pricing"
           element={
             <ProtectedRoute>
-              <SadminPlans />
+              <SadminPricing />
             </ProtectedRoute>
           }
         />

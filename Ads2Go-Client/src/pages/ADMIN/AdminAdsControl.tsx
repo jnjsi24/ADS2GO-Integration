@@ -26,7 +26,6 @@ import {
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
 import { adsPanelService } from '../../services/adsPanelService';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
-import '../../services/testEndpoints';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';

@@ -613,12 +613,14 @@ const Materials: React.FC = () => {
     try {
       const input: any = {};
       
-      if (editData.mountedAt) {
-        input.mountedAt = new Date(editData.mountedAt).toISOString();
+      // Always send mountedAt if it's in the edit data (even if empty to clear it)
+      if (editData.mountedAt !== undefined) {
+        input.mountedAt = editData.mountedAt ? new Date(editData.mountedAt).toISOString() : null;
       }
       
-      if (editData.dismountedAt) {
-        input.dismountedAt = new Date(editData.dismountedAt).toISOString();
+      // Always send dismountedAt if it's in the edit data (even if empty to clear it)
+      if (editData.dismountedAt !== undefined) {
+        input.dismountedAt = editData.dismountedAt ? new Date(editData.dismountedAt).toISOString() : null;
       }
 
       await updateMaterial({
