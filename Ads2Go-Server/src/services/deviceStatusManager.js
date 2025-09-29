@@ -39,7 +39,6 @@ class DeviceStatusManager {
     }
     
     this.updateCachedStatus(deviceId);
-    console.log(`📊 [DeviceStatusManager] Current WebSocket connections: ${Array.from(this.webSocketConnections.keys()).join(', ')}`);
   }
 
   /**
@@ -89,9 +88,7 @@ class DeviceStatusManager {
   calculateDeviceStatus(deviceId) {
     const now = Date.now();
     
-    console.log(`🔍 [DeviceStatusManager] Calculating status for ${deviceId}`);
-    console.log(`  - WebSocket connections: ${Array.from(this.webSocketConnections.keys()).join(', ')}`);
-    console.log(`  - Database status: ${Array.from(this.databaseStatus.keys()).join(', ')}`);
+    // Debug: console.log(`🔍 [DeviceStatusManager] Calculating status for ${deviceId}`);
     
     // Priority 1: Active WebSocket connection (highest priority)
     const wsStatus = this.webSocketConnections.get(deviceId);

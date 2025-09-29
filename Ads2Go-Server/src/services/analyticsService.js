@@ -541,7 +541,7 @@ class AnalyticsService {
   // Get user-specific analytics
   static async getUserAnalytics(userId, startDate, endDate, period = '7d') {
     try {
-      console.log(`Getting analytics for user ${userId} for period ${period}`);
+      // Debug: console.log(`Getting analytics for user ${userId} for period ${period}`);
       
       // Calculate date range based on period
       const now = new Date();

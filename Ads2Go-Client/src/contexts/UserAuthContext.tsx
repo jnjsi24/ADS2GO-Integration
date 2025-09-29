@@ -16,7 +16,7 @@ import {
 } from '../graphql/user';
 import { jwtDecode } from 'jwt-decode';
 import { NewsletterService } from '../services/newsletterService';
-import { signInWithGoogle } from '../firebase/init';
+import { generateGoogleOAuthURL } from '../config/googleOAuth';
 
 // Types
 type UserRole = 'USER';
@@ -303,34 +303,15 @@ export const UserAuthProvider: React.FC<{
     try {
       console.log('🔄 Starting Google OAuth login...');
       
-      // Use Firebase Auth to sign in with Google
-      const firebaseUser = await signInWithGoogle();
-      console.log('✅ Firebase Google Auth successful:', firebaseUser.email);
+      // Generate Google OAuth URL and redirect to Google
+      const oauthUrl = generateGoogleOAuthURL();
+      console.log('🔄 Redirecting to Google OAuth...');
       
-      // Extract user data from Firebase Auth
-      const googleUserData = {
-        email: firebaseUser.email!,
-        firstName: firebaseUser.displayName?.split(' ')[0] || '',
-        lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-        profilePicture: firebaseUser.photoURL || '',
-        isEmailVerified: firebaseUser.emailVerified,
-        googleId: firebaseUser.uid,
-        authProvider: 'google'
-      };
-
-      // Check if this is a new Google OAuth user or existing user
-      // For now, we'll assume it's a new user and redirect to completion form
-      // In a real implementation, you'd check your database first
+      // Redirect to Google OAuth
+      window.location.href = oauthUrl;
       
-      // Store Google user data temporarily for the completion form
-      console.log('🔄 Storing Google OAuth data:', googleUserData);
-      sessionStorage.setItem('googleOAuthData', JSON.stringify(googleUserData));
-      
-      // Redirect to completion form
-      console.log('🔄 Redirecting to completion form...');
-      navigate('/auth/google/complete');
-      
-      return null; // We'll return the user after completion
+      // This function won't return normally as we're redirecting
+      return null;
     } catch (error: any) {
       console.error('Google OAuth login error:', error);
       throw new Error(error.message || 'Google login failed');

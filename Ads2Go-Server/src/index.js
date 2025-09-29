@@ -176,10 +176,8 @@ async function startServer() {
                            /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
 
       if (allowedOrigins.has(origin) || isRailwayApp) {
-        console.log('✅ CORS: Allowing origin:', origin);
         callback(null, true);
       } else {
-        console.log('❌ CORS: Blocking origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -191,7 +189,6 @@ async function startServer() {
 
   // Handle preflight requests manually
   app.options('*', (req, res) => {
-    console.log('🔄 Handling preflight request for:', req.headers.origin);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -228,11 +225,6 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
-        // Debug GraphQL context
-        console.log('🔍 GraphQL Context Debug:');
-        console.log('  - Authorization header:', req.headers.authorization);
-        console.log('  - User-Agent:', req.headers['user-agent']);
-        
         // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
@@ -241,36 +233,19 @@ async function startServer() {
         let context = { driver, user };
         
         if (driver) {
-          console.log('🚗 Driver context:', { id: driver.id, driverId: driver.driverId, email: driver.email, role: driver.role });
           context.driver = driver;
         }
         
         if (user) {
-          console.log('🔐 User context:', { id: user.id, email: user.email, role: user.role });
           if (user.role === 'ADMIN') {
             context.admin = user;
-            console.log('✅ Set admin context for ADMIN user');
           } else if (user.role === 'SUPERADMIN') {
             context.superAdmin = user;
             // SuperAdmin should also have admin access
             context.admin = user;
-            console.log('✅ Set admin context for SUPERADMIN user');
           }
         }
         
-        // Debug final context
-        console.log('🔧 Final GraphQL context:', {
-          hasDriver: !!context.driver,
-          hasUser: !!context.user,
-          hasAdmin: !!context.admin,
-          hasSuperAdmin: !!context.superAdmin
-        });
-        
-        if (!driver && !user) {
-          console.log('❌ No authentication context found');
-        }
-        
-        console.log('🔧 Final context:', Object.keys(context));
         return context;
       },
     })

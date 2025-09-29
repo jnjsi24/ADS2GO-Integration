@@ -90,13 +90,13 @@ class DeviceStatusService {
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
         const isAdmin = url.searchParams.get('admin') === 'true' || request.headers['admin'] === 'true';
         
-        console.log('WebSocket playback upgrade request details:');
+        console.log('WebSocket Playback Upgrade Request Details:');
         console.log('- Pathname:', pathname);
-        console.log('- Device ID from query:', url.searchParams.get('deviceId'));
-        console.log('- Material ID from query:', url.searchParams.get('materialId'));
+        console.log('- Device ID from Query:', url.searchParams.get('deviceId'));
+        console.log('- Material ID from Query:', url.searchParams.get('materialId'));
         console.log('- Is Admin:', isAdmin);
-        console.log('- Final device ID:', deviceId);
-        console.log('- Final material ID:', materialId);
+        console.log('- Final Device ID:', deviceId);
+        console.log('- Final Material ID:', materialId);
         
         if (!deviceId && !isAdmin) {
           console.error('No device ID provided in WebSocket playback upgrade request');
@@ -104,7 +104,11 @@ class DeviceStatusService {
           return;
         }
         
-        console.log(`WebSocket playback upgrade request for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        if (isAdmin) {
+          console.log(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
+        } else {
+          console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+        }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
           // Store the device and material IDs with the connection
@@ -168,7 +172,7 @@ class DeviceStatusService {
     // Broadcast updated device list to all clients
     this.broadcastDeviceList();
     console.log(`Device connected: ${deviceId}`);
-    console.log(`Active connections: ${this.activeConnections.size}`);
+    console.log(`📱 Online Device: ${this.activeConnections.size}`);
     
     // Update device status in the database
     this.updateDeviceStatus(deviceId, true).catch(err => {
@@ -224,7 +228,7 @@ class DeviceStatusService {
           });
         }
       }
-      console.log(`Active connections: ${this.activeConnections.size}`);
+      console.log(`📱 Online Device: ${this.activeConnections.size}`);
     });
     
     // Handle ping/pong to detect dead connections
@@ -260,18 +264,29 @@ class DeviceStatusService {
   }
 
   async handlePlaybackConnection(ws, request) {
-    const deviceId = ws.deviceId || request.headers['device-id'];
-    const materialId = ws.materialId || request.headers['material-id'];
+    let deviceId, materialId;
     
-    console.log(`🎬 New WebSocket playback connection from device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
+    if (ws.isAdmin) {
+      console.log(`🔧 Admin WebSocket Connection Established for Real-Time Monitoring`);
+      // For admin connections, use 'ADMIN' as the key
+      deviceId = 'ADMIN';
+      materialId = null;
+    } else {
+      deviceId = ws.deviceId || request.headers['device-id'];
+      materialId = ws.materialId || request.headers['material-id'];
+      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
+    }
 
     // Store the connection with its device ID and material ID
     ws.deviceId = deviceId;
     ws.materialId = materialId;
     this.activeConnections.set(deviceId, ws);
     
-    console.log(`Playback connection established: ${deviceId}`);
-    console.log(`Active connections: ${this.activeConnections.size}`);
+    if (ws.isAdmin) {
+      console.log(`🔧 Admin real-time monitoring connection established`);
+    } else {
+      console.log(`Playback connection established: ${deviceId}`);
+    }
     
     // Handle incoming messages (including ping and playback updates)
     ws.on('message', (data) => {
@@ -294,16 +309,15 @@ class DeviceStatusService {
           this.handlePlaybackUpdate(deviceId, message);
         }
       } catch (error) {
-        console.error('Error processing WebSocket playback message:', error);
+        console.error('Error processing WebSocket Playback Message:', error);
       }
     });
 
     ws.on('close', (code, reason) => {
-      console.log(`🎬 [WebSocket] Playback connection closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
+      console.log(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
         this.removeConnection(deviceId);
       }
-      console.log(`Active connections: ${this.activeConnections.size}`);
     });
   }
 
@@ -719,7 +733,7 @@ class DeviceStatusService {
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       });
 
-      console.log(`Active WebSocket connections: ${this.activeConnections.size}`);
+      console.log(`🔄 Real-Time Connection Check: ${this.activeConnections.size}`);
     }, 10000); // 10 seconds for faster real-time checking
   }
 
