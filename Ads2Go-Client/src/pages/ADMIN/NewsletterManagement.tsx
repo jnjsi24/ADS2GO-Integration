@@ -164,7 +164,7 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Server is not running on http://192.168.100.22:5000</li>
+                <li>Server is not running on {process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000'}</li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>

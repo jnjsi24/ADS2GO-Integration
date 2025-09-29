@@ -69,9 +69,8 @@ const Settings: React.FC = () => {
     try {
       if (newsletterSubscribed) {
         // Unsubscribe
-        const serverIp = process.env.REACT_APP_SERVER_IP || '192.168.100.22';
-        const serverPort = process.env.REACT_APP_SERVER_PORT || '5000';
-        const response = await fetch(`http://${serverIp}:${serverPort}/api/newsletter/unsubscribe`, {
+        const apiUrl = process.env.REACT_APP_API_URL || 'http://192.168.1.7:5000';
+        const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
