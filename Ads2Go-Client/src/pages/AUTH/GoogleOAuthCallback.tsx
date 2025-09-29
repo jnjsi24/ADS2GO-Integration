@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useMutation } from '@apollo/client';
 import { exchangeCodeForToken, getGoogleUserInfo } from '../../config/googleOAuth';
+import { COMPLETE_GOOGLE_OAUTH_MUTATION } from '../../graphql/user/mutations/CompleteGoogleOAuth';
 
 const GoogleOAuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [completeGoogleOAuth] = useMutation(COMPLETE_GOOGLE_OAUTH_MUTATION);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(true);
 
@@ -52,6 +55,65 @@ const GoogleOAuthCallback: React.FC = () => {
           googleId: userInfo.id,
           authProvider: 'google'
         };
+
+        // Check if user already exists by attempting to complete OAuth
+        try {
+          console.log('🔍 Checking if user already exists...');
+          const checkResult = await completeGoogleOAuth({
+            variables: {
+              input: {
+                googleId: googleUserData.googleId,
+                email: googleUserData.email,
+                firstName: googleUserData.firstName,
+                lastName: googleUserData.lastName,
+                profilePicture: googleUserData.profilePicture,
+                middleName: '', // Empty for existing user check
+                companyName: 'Google', // Placeholder
+                companyAddress: 'Google', // Placeholder
+                contactNumber: '09123456789', // Placeholder
+                houseAddress: '', // Optional
+              }
+            }
+          });
+
+          if (checkResult.data?.completeGoogleOAuthProfile?.token && checkResult.data?.completeGoogleOAuthProfile?.user) {
+            console.log('✅ User already exists, logging in directly');
+            const { token, user: userRaw } = checkResult.data.completeGoogleOAuthProfile;
+            
+            // Store token
+            localStorage.setItem('userToken', token);
+            localStorage.setItem('keepLoggedIn', 'true');
+            localStorage.setItem('loginTimestamp', Date.now().toString());
+
+            // Create user object
+            const user = {
+              userId: userRaw.id,
+              email: userRaw.email,
+              role: userRaw.role,
+              isEmailVerified: userRaw.isEmailVerified,
+              firstName: userRaw.firstName,
+              middleName: userRaw.middleName,
+              lastName: userRaw.lastName,
+              houseAddress: userRaw.houseAddress,
+              companyName: userRaw.companyName,
+              companyAddress: userRaw.companyAddress,
+              contactNumber: userRaw.contactNumber,
+              profilePicture: userRaw.profilePicture,
+            };
+
+            // Store user data in localStorage
+            localStorage.setItem('user', JSON.stringify(user));
+
+            // Clear session storage
+            sessionStorage.removeItem('googleOAuthData');
+
+            // Navigate to dashboard
+            navigate('/dashboard');
+            return;
+          }
+        } catch (checkError) {
+          console.log('🆕 User does not exist, proceeding to completion form');
+        }
 
         // Store Google user data temporarily for the completion form
         console.log('🔄 Storing Google OAuth data:', googleUserData);

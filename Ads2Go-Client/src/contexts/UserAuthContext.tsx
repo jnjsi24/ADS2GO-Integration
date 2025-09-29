@@ -372,22 +372,39 @@ export const UserAuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
+      // First, clear user state to prevent any new authenticated requests
+      setUser(null);
+      setUserEmail('');
+
+      // Clear localStorage
       localStorage.removeItem('userToken');
       localStorage.removeItem('keepLoggedIn');
       localStorage.removeItem('loginTimestamp');
+      localStorage.removeItem('user');
 
+      // Try to call logout mutation (but don't fail if it doesn't work)
       try {
         await logoutMutation();
       } catch (error) {
         console.error('Logout mutation error:', error);
+        // Continue with logout even if mutation fails
       }
 
-      setUser(null);
-      setUserEmail('');
+      // Reset Apollo store AFTER clearing tokens and state
       await apolloClient.resetStore();
+      
+      // Navigate to login
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if there's an error, ensure we clear everything and navigate
+      setUser(null);
+      setUserEmail('');
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('keepLoggedIn');
+      localStorage.removeItem('loginTimestamp');
+      localStorage.removeItem('user');
+      navigate('/login');
     }
   };
 

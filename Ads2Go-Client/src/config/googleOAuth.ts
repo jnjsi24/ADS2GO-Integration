@@ -8,6 +8,15 @@ export const GOOGLE_OAUTH_CONFIG = {
   includeGrantedScopes: true
 };
 
+// Debug: Log OAuth configuration
+console.log('🔍 OAuth Config:', {
+  clientId: GOOGLE_OAUTH_CONFIG.clientId || 'EMPTY',
+  redirectUri: GOOGLE_OAUTH_CONFIG.redirectUri,
+  hasClientSecret: !!process.env.REACT_APP_GOOGLE_CLIENT_SECRET,
+  clientSecretValue: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || 'NOT_FOUND',
+  allEnvKeys: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
+});
+
 // Google OAuth URLs
 export const GOOGLE_OAUTH_URLS = {
   auth: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -44,18 +53,26 @@ export const exchangeCodeForToken = async (code: string): Promise<{
   expires_in: number;
   token_type: string;
 }> => {
+  // Debug: Log the parameters being sent
+  const tokenParams = {
+    client_id: GOOGLE_OAUTH_CONFIG.clientId,
+    client_secret: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || '',
+    code,
+    grant_type: 'authorization_code',
+    redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
+  };
+  
+  console.log('🔍 Token exchange parameters:', {
+    ...tokenParams,
+    client_secret: tokenParams.client_secret ? '***HIDDEN***' : 'EMPTY'
+  });
+
   const response = await fetch(GOOGLE_OAUTH_URLS.token, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: new URLSearchParams({
-      client_id: GOOGLE_OAUTH_CONFIG.clientId,
-      client_secret: process.env.REACT_APP_GOOGLE_CLIENT_SECRET || '',
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: GOOGLE_OAUTH_CONFIG.redirectUri,
-    }),
+    body: new URLSearchParams(tokenParams),
   });
 
   if (!response.ok) {
