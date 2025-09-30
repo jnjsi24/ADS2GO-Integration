@@ -584,28 +584,28 @@ const handleCityFilterChange = (city: string) => {
         {/* User List */}
         <div className="flex-1 flex flex-col">
           <div className="rounded-xl mb-4 overflow-hidden flex-1">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
-            <div className="flex items-center gap-2 ml-1 col-span-3">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                onChange={(e) => {}}
-                onClick={handleSelectAll}
-                checked={isAllSelected}
-              />
-              <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
-              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+              <div className="flex items-center gap-2 ml-1 col-span-3">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  onChange={(e) => {}}
+                  onClick={handleSelectAll}
+                  checked={isAllSelected}
+                />
+                <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
+                <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+              </div>
+              <div className="col-span-3 ml-16">Email</div>
+              <div className="col-span-2">Company</div>
+              <div className="col-span-1 flex items-center gap-1 ml-7">
+                <span>Status</span>
+                <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+              </div>
+              <div className="col-span-2 ml-20">Last Access</div>
+              <div className="col-span-1 text-center">Action</div>
             </div>
-            <div className="col-span-3 ml-16">Email</div>
-            <div className="col-span-2">Company</div>
-            <div className="col-span-1 flex items-center gap-1 ml-7">
-              <span>Status</span>
-              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-            </div>
-            <div className="col-span-2 ml-20">Last Access</div>
-            <div className="col-span-1 text-center">Action</div>
-          </div>
 
           {/* User Cards */}
           {paginatedUsers.map((user) => (
