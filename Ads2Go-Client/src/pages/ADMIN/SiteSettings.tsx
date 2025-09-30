@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { useAdminNotificationSettings } from '../../contexts/AdminNotificationSettingsContext';
 import { toast } from 'sonner';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/admin/queries/getAdminNotificationPreferences';
-import { UPDATE_ADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/admin/mutations/updateAdminNotificationPreferences';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -39,17 +37,10 @@ interface AccountFormState {
 
 const SiteSettings: React.FC = () => {
   const { admin, setAdmin } = useAdminAuth();
+  const { notificationSettings, updateNotificationSetting, isLoading: notificationLoading, error: notificationError } = useAdminNotificationSettings();
   const navigate = useNavigate();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Account Settings');
-  // State for Notification Settings form
-  const [notificationForm, setNotificationForm] = useState({
-    enableDesktopNotifications: false,
-    enableNotificationBadge: true,
-    pushNotificationTimeout: '10',
-    communicationEmails: false,
-    announcementsEmails: true,
-  });
   // State for Account Settings form
   const [accountForm, setAccountForm] = useState<AccountFormState>({
     firstName: admin?.firstName || '',
@@ -70,37 +61,6 @@ const SiteSettings: React.FC = () => {
 
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
-
-  // GraphQL queries and mutations
-  const { data: notificationPreferencesData, loading: notificationPreferencesLoading } = useQuery(GET_ADMIN_NOTIFICATION_PREFERENCES, {
-    onCompleted: (data) => {
-      if (data?.getAdminNotificationPreferences) {
-        setNotificationForm({
-          enableDesktopNotifications: data.getAdminNotificationPreferences.enableDesktopNotifications,
-          enableNotificationBadge: data.getAdminNotificationPreferences.enableNotificationBadge,
-          pushNotificationTimeout: data.getAdminNotificationPreferences.pushNotificationTimeout,
-          communicationEmails: data.getAdminNotificationPreferences.communicationEmails,
-          announcementsEmails: data.getAdminNotificationPreferences.announcementsEmails,
-        });
-      }
-    },
-    onError: (error) => {
-      console.error('Error fetching notification preferences:', error);
-      addToast('Failed to load notification preferences', 'error');
-    }
-  });
-
-  const [updateNotificationPreferences] = useMutation(UPDATE_ADMIN_NOTIFICATION_PREFERENCES, {
-    onCompleted: (data) => {
-      if (data?.updateAdminNotificationPreferences?.success) {
-        addToast('Notification preferences updated successfully', 'success');
-      }
-    },
-    onError: (error) => {
-      console.error('Error updating notification preferences:', error);
-      addToast('Failed to update notification preferences', 'error');
-    }
-  });
 
   // Update form when admin data changes
   useEffect(() => {
@@ -181,42 +141,24 @@ const SiteSettings: React.FC = () => {
   };
 
   // Handle notification preference changes
-  const handleNotificationToggle = async (field: keyof typeof notificationForm) => {
-    const newValue = !notificationForm[field];
-    const updatedForm = { ...notificationForm, [field]: newValue };
-    setNotificationForm(updatedForm);
-
+  const handleNotificationToggle = async (field: keyof typeof notificationSettings) => {
+    const newValue = !notificationSettings[field];
     try {
-      await updateNotificationPreferences({
-        variables: {
-          input: {
-            [field]: newValue
-          }
-        }
-      });
+      await updateNotificationSetting(field, newValue);
+      addToast('Notification preference updated successfully', 'success');
     } catch (error) {
       console.error('Error updating notification preference:', error);
-      // Revert the change on error
-      setNotificationForm(notificationForm);
+      addToast('Failed to update notification preference', 'error');
     }
   };
 
-  const handleNotificationSelectChange = async (field: keyof typeof notificationForm, value: string) => {
-    const updatedForm = { ...notificationForm, [field]: value };
-    setNotificationForm(updatedForm);
-
+  const handleNotificationSelectChange = async (field: keyof typeof notificationSettings, value: string) => {
     try {
-      await updateNotificationPreferences({
-        variables: {
-          input: {
-            [field]: value
-          }
-        }
-      });
+      await updateNotificationSetting(field, value);
+      addToast('Notification preference updated successfully', 'success');
     } catch (error) {
       console.error('Error updating notification preference:', error);
-      // Revert the change on error
-      setNotificationForm(notificationForm);
+      addToast('Failed to update notification preference', 'error');
     }
   };
 
@@ -422,10 +364,11 @@ const SiteSettings: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableDesktopNotifications ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationSettings.enableDesktopNotifications ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
                     onClick={() => handleNotificationToggle('enableDesktopNotifications')}
+                    disabled={notificationLoading}
                   >
-                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationSettings.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
                 </div>
               </div>
@@ -438,10 +381,11 @@ const SiteSettings: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableNotificationBadge ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationSettings.enableNotificationBadge ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
                     onClick={() => handleNotificationToggle('enableNotificationBadge')}
+                    disabled={notificationLoading}
                   >
-                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationSettings.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
                 </div>
               </div>
@@ -450,9 +394,10 @@ const SiteSettings: React.FC = () => {
                 <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
                 <select
                   name="pushNotificationTimeout"
-                  value={notificationForm.pushNotificationTimeout}
+                  value={notificationSettings.pushNotificationTimeout}
                   className="mt-2 block w-32 border-gray-300 rounded-md bg-white"
                   onChange={(e) => handleNotificationSelectChange('pushNotificationTimeout', e.target.value)}
+                  disabled={notificationLoading}
                 >
                   <option value="5">5 Minutes</option>
                   <option value="10">10 Minutes</option>
@@ -471,10 +416,11 @@ const SiteSettings: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.communicationEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationSettings.communicationEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
                     onClick={() => handleNotificationToggle('communicationEmails')}
+                    disabled={notificationLoading}
                   >
-                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationSettings.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
                 </div>
               </div>
@@ -487,10 +433,11 @@ const SiteSettings: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.announcementsEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationSettings.announcementsEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
                     onClick={() => handleNotificationToggle('announcementsEmails')}
+                    disabled={notificationLoading}
                   >
-                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationSettings.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
                 </div>
               </div>

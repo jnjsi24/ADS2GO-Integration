@@ -4,6 +4,8 @@ import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { AdminNotificationSettingsProvider } from './contexts/AdminNotificationSettingsContext';
+import { AdminNotificationProvider } from './contexts/AdminNotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 
@@ -65,10 +67,12 @@ const AdminAppContent: React.FC = () => {
   const { admin } = useAdminAuth();
   
   return (
-    <div className="min-h-screen bg-white text-black">
-      {/* Show navbar depending on admin role */}
-      {admin?.role === 'SUPERADMIN' && <SadminNavbar />}
-      {admin?.role === 'ADMIN' && <AdminNavbar />}
+    <AdminNotificationSettingsProvider>
+      <AdminNotificationProvider>
+        <div className="min-h-screen bg-white text-black">
+          {/* Show navbar depending on admin role */}
+          {admin?.role === 'SUPERADMIN' && <SadminNavbar />}
+          {admin?.role === 'ADMIN' && <AdminNavbar />}
       
       <Routes>
         {/* Public routes */}
@@ -228,7 +232,9 @@ const AdminAppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="*" element={<Navigate to="/admin-login" replace />} />
       </Routes>
-    </div>
+      </div>
+      </AdminNotificationProvider>
+    </AdminNotificationSettingsProvider>
   );
 };
 

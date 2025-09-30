@@ -13,6 +13,7 @@ import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
 import { GET_ADMIN_DASHBOARD_STATS } from '../../graphql/admin/queries';
 import DeviceStatus from '../../components/DeviceStatus';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
+import { useAdminNotificationSettings } from '../../contexts/AdminNotificationSettingsContext';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -31,6 +32,7 @@ const adPerformanceData = [
 
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("Admin");
+  const { notificationSettings } = useAdminNotificationSettings();
   
   // Fetch admin details from the backend
   const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
@@ -169,10 +171,12 @@ const Dashboard = () => {
         ))}
       </div>
 
-      {/* Notification Dashboard */}
-      <div className="mb-8">
-        <NotificationDashboard pendingAdsCount={stats?.pendingAds} />
-      </div>
+      {/* Notification Dashboard - Only show if desktop notifications are enabled */}
+      {notificationSettings.enableDesktopNotifications && (
+        <div className="mb-8">
+          <NotificationDashboard pendingAdsCount={stats?.pendingAds} />
+        </div>
+      )}
 
       {/* Device Status */}
       <div className="bg-white p-6 rounded-lg shadow">
