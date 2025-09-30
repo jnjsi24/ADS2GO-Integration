@@ -49,6 +49,19 @@ const SuperAdminSchema = new mongoose.Schema({
     trim: true,
     match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email']
   },
+  recoveryEmail: {
+    type: String,
+    required: false,
+    lowercase: true,
+    trim: true,
+    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid recovery email'],
+    default: null
+  },
+  profilePicture: {
+    type: String,
+    required: false,
+    default: null
+  },
   password: {
     type: String,
     required: [true, 'Password is required'],
@@ -129,6 +142,32 @@ const SuperAdminSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  notificationPreferences: {
+    enableDesktopNotifications: {
+      type: Boolean,
+      default: false
+    },
+    enableNotificationBadge: {
+      type: Boolean,
+      default: true
+    },
+    pushNotificationTimeout: {
+      type: String,
+      default: '10'
+    },
+    communicationEmails: {
+      type: Boolean,
+      default: false
+    },
+    announcementsEmails: {
+      type: Boolean,
+      default: true
+    },
+    disableNotificationSounds: {
+      type: Boolean,
+      default: true
+    }
   },
   createdAt: {
     type: Date,

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { toast } from 'sonner';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_ADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/admin/queries/getAdminNotificationPreferences';
+import { UPDATE_ADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/admin/mutations/updateAdminNotificationPreferences';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -46,7 +49,6 @@ const SiteSettings: React.FC = () => {
     pushNotificationTimeout: '10',
     communicationEmails: false,
     announcementsEmails: true,
-    disableNotificationSounds: true,
   });
   // State for Account Settings form
   const [accountForm, setAccountForm] = useState<AccountFormState>({
@@ -69,6 +71,36 @@ const SiteSettings: React.FC = () => {
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // GraphQL queries and mutations
+  const { data: notificationPreferencesData, loading: notificationPreferencesLoading } = useQuery(GET_ADMIN_NOTIFICATION_PREFERENCES, {
+    onCompleted: (data) => {
+      if (data?.getAdminNotificationPreferences) {
+        setNotificationForm({
+          enableDesktopNotifications: data.getAdminNotificationPreferences.enableDesktopNotifications,
+          enableNotificationBadge: data.getAdminNotificationPreferences.enableNotificationBadge,
+          pushNotificationTimeout: data.getAdminNotificationPreferences.pushNotificationTimeout,
+          communicationEmails: data.getAdminNotificationPreferences.communicationEmails,
+          announcementsEmails: data.getAdminNotificationPreferences.announcementsEmails,
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching notification preferences:', error);
+      addToast('Failed to load notification preferences', 'error');
+    }
+  });
+
+  const [updateNotificationPreferences] = useMutation(UPDATE_ADMIN_NOTIFICATION_PREFERENCES, {
+    onCompleted: (data) => {
+      if (data?.updateAdminNotificationPreferences?.success) {
+        addToast('Notification preferences updated successfully', 'success');
+      }
+    },
+    onError: (error) => {
+      console.error('Error updating notification preferences:', error);
+      addToast('Failed to update notification preferences', 'error');
+    }
+  });
 
   // Update form when admin data changes
   useEffect(() => {
@@ -146,6 +178,46 @@ const SiteSettings: React.FC = () => {
     setActiveTab(tab);
     // Reset form state when switching tabs
     setToasts([]);
+  };
+
+  // Handle notification preference changes
+  const handleNotificationToggle = async (field: keyof typeof notificationForm) => {
+    const newValue = !notificationForm[field];
+    const updatedForm = { ...notificationForm, [field]: newValue };
+    setNotificationForm(updatedForm);
+
+    try {
+      await updateNotificationPreferences({
+        variables: {
+          input: {
+            [field]: newValue
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error updating notification preference:', error);
+      // Revert the change on error
+      setNotificationForm(notificationForm);
+    }
+  };
+
+  const handleNotificationSelectChange = async (field: keyof typeof notificationForm, value: string) => {
+    const updatedForm = { ...notificationForm, [field]: value };
+    setNotificationForm(updatedForm);
+
+    try {
+      await updateNotificationPreferences({
+        variables: {
+          input: {
+            [field]: value
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error updating notification preference:', error);
+      // Revert the change on error
+      setNotificationForm(notificationForm);
+    }
   };
 
 
@@ -351,7 +423,7 @@ const SiteSettings: React.FC = () => {
                   <button
                     type="button"
                     className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableDesktopNotifications ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
-                    disabled
+                    onClick={() => handleNotificationToggle('enableDesktopNotifications')}
                   >
                     <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
@@ -367,7 +439,7 @@ const SiteSettings: React.FC = () => {
                   <button
                     type="button"
                     className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.enableNotificationBadge ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
-                    disabled
+                    onClick={() => handleNotificationToggle('enableNotificationBadge')}
                   >
                     <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
@@ -379,8 +451,8 @@ const SiteSettings: React.FC = () => {
                 <select
                   name="pushNotificationTimeout"
                   value={notificationForm.pushNotificationTimeout}
-                  className="mt-2 block w-32 border-gray-300 rounded-md bg-gray-100"
-                  disabled
+                  className="mt-2 block w-32 border-gray-300 rounded-md bg-white"
+                  onChange={(e) => handleNotificationSelectChange('pushNotificationTimeout', e.target.value)}
                 >
                   <option value="5">5 Minutes</option>
                   <option value="10">10 Minutes</option>
@@ -400,7 +472,7 @@ const SiteSettings: React.FC = () => {
                   <button
                     type="button"
                     className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.communicationEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
-                    disabled
+                    onClick={() => handleNotificationToggle('communicationEmails')}
                   >
                     <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
@@ -416,27 +488,9 @@ const SiteSettings: React.FC = () => {
                   <button
                     type="button"
                     className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.announcementsEmails ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
-                    disabled
+                    onClick={() => handleNotificationToggle('announcementsEmails')}
                   >
                     <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
-                  </button>
-                </div>
-              </div>
-
-              <h2 className="text-xl font-semibold mt-6">Sounds</h2>
-
-              <div className="border p-4 rounded-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">Disable All Notification Sounds</h3>
-                    <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents</p>
-                  </div>
-                  <button
-                    type="button"
-                    className={`w-14 h-7 rounded-full flex items-center px-1 ${notificationForm.disableNotificationSounds ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
-                    disabled
-                  >
-                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
                   </button>
                 </div>
               </div>

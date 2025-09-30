@@ -29,6 +29,39 @@ const resolvers = {
 
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
 
+    getUserNotificationPreferences: async (_, __, { user }) => {
+      try {
+        console.log('🔔 getUserNotificationPreferences called for user:', user?.id);
+        checkAuth(user);
+        
+        const userRecord = await User.findById(user.id);
+        if (!userRecord) {
+          console.error('❌ User not found for ID:', user.id);
+          throw new Error('User not found');
+        }
+        
+        console.log('✅ User found:', userRecord.email);
+        console.log('📋 Current notification preferences:', userRecord.notificationPreferences);
+        
+        // Return default preferences if none exist
+        if (!userRecord.notificationPreferences) {
+          console.log('🔧 Returning default preferences');
+          return {
+            enableDesktopNotifications: false,
+            enableNotificationBadge: true,
+            pushNotificationTimeout: '10',
+            communicationEmails: false,
+            announcementsEmails: true
+          };
+        }
+        
+        return userRecord.notificationPreferences;
+      } catch (error) {
+        console.error('❌ Error in getUserNotificationPreferences:', error);
+        throw error;
+      }
+    },
+
         getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
           checkAuth(user);
           try {
@@ -451,6 +484,54 @@ const resolvers = {
   await user.save();
   return true;
 },
+
+    updateUserNotificationPreferences: async (_, { input }, { user }) => {
+      try {
+        console.log('🔔 updateUserNotificationPreferences called with:', { input, userId: user?.id });
+        
+        checkAuth(user);
+        
+        const userRecord = await User.findById(user.id);
+        if (!userRecord) {
+          console.error('❌ User not found for ID:', user.id);
+          throw new Error('User not found');
+        }
+
+        console.log('✅ User found:', userRecord.email);
+
+        // Initialize notification preferences if they don't exist
+        if (!userRecord.notificationPreferences) {
+          console.log('🔧 Initializing notification preferences');
+          userRecord.notificationPreferences = {
+            enableDesktopNotifications: false,
+            enableNotificationBadge: true,
+            pushNotificationTimeout: '10',
+            communicationEmails: false,
+            announcementsEmails: true
+          };
+        }
+
+        // Update only the provided fields
+        Object.keys(input).forEach(key => {
+          if (input[key] !== undefined && input[key] !== null) {
+            console.log(`🔄 Updating ${key} from ${userRecord.notificationPreferences[key]} to ${input[key]}`);
+            userRecord.notificationPreferences[key] = input[key];
+          }
+        });
+
+        await userRecord.save();
+        console.log('✅ Notification preferences saved successfully');
+
+        return {
+          success: true,
+          message: 'Notification preferences updated successfully',
+          user: userRecord
+        };
+      } catch (error) {
+        console.error('❌ Error in updateUserNotificationPreferences:', error);
+        throw error;
+      }
+    }
   },
 
   User: {

@@ -24,6 +24,7 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     ads: [Ad!]
+    notificationPreferences: UserNotificationPreferences!
   }
 
   type AuthPayload {
@@ -46,6 +47,14 @@ const typeDefs = gql`
     success: Boolean!
     message: String!
     user: User!
+  }
+
+  type UserNotificationPreferences {
+    enableDesktopNotifications: Boolean!
+    enableNotificationBadge: Boolean!
+    pushNotificationTimeout: String!
+    communicationEmails: Boolean!
+    announcementsEmails: Boolean!
   }
 
   type PasswordStrength {
@@ -189,6 +198,14 @@ const typeDefs = gql`
     deviceName: String!
   }
 
+  input UpdateUserNotificationPreferencesInput {
+    enableDesktopNotifications: Boolean
+    enableNotificationBadge: Boolean
+    pushNotificationTimeout: String
+    communicationEmails: Boolean
+    announcementsEmails: Boolean
+  }
+
   # Queries
   type Query {
     # User queries
@@ -196,6 +213,7 @@ const typeDefs = gql`
     checkPasswordStrength(password: String!): PasswordStrength!
     getUserAnalytics(startDate: String, endDate: String, period: String): UserAnalytics
     getUserAdDetails(adId: String!): UserAdDetails
+    getUserNotificationPreferences: UserNotificationPreferences!
   }
 
   # Mutations
@@ -218,6 +236,9 @@ const typeDefs = gql`
     requestPasswordReset(email: String!): Boolean!
     resetPassword(token: String!, newPassword: String!): Boolean!
     changePassword(currentPassword: String!, newPassword: String!): Boolean!
+
+    # Notification preferences
+    updateUserNotificationPreferences(input: UpdateUserNotificationPreferencesInput!): UserUpdateResponse!
   }
 `;
 

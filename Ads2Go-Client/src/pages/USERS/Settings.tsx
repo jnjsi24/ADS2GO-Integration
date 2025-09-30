@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { NewsletterService } from '../../services/newsletterService';
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/queries/getUserNotificationPreferences';
+import { UPDATE_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/mutations/updateUserNotificationPreferences';
 
 // Toast notification type
 type Toast = {
@@ -13,6 +16,7 @@ type Toast = {
 const Settings: React.FC = () => {
   const { user } = useUserAuth();
   const navigate = useNavigate();
+  
   // State for Notification Settings form
   const [notificationForm, setNotificationForm] = useState({
     enableDesktopNotifications: false,
@@ -20,7 +24,6 @@ const Settings: React.FC = () => {
     pushNotificationTimeout: '10',
     communicationEmails: false,
     announcementsEmails: true,
-    disableNotificationSounds: true,
   });
 
   // State for newsletter subscription
@@ -29,6 +32,42 @@ const Settings: React.FC = () => {
 
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // GraphQL hooks
+  const { data: notificationPreferencesData, loading: notificationPreferencesLoading, refetch: refetchNotifications } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
+    onCompleted: (data) => {
+      if (data?.getUserNotificationPreferences) {
+        setNotificationForm({
+          enableDesktopNotifications: data.getUserNotificationPreferences.enableDesktopNotifications,
+          enableNotificationBadge: data.getUserNotificationPreferences.enableNotificationBadge,
+          pushNotificationTimeout: data.getUserNotificationPreferences.pushNotificationTimeout,
+          communicationEmails: data.getUserNotificationPreferences.communicationEmails,
+          announcementsEmails: data.getUserNotificationPreferences.announcementsEmails,
+        });
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching notification preferences:', error);
+      addToast('Failed to load notification preferences', 'error');
+    }
+  });
+
+  const [updateNotificationPreferences, { loading: updateLoading }] = useMutation(UPDATE_USER_NOTIFICATION_PREFERENCES, {
+    onCompleted: (data) => {
+      console.log('Mutation completed:', data);
+      if (data?.updateUserNotificationPreferences?.success) {
+        addToast('Notification preferences saved successfully!', 'success');
+      } else {
+        addToast('Failed to save notification preferences', 'error');
+      }
+    },
+    onError: (error) => {
+      console.error('Error updating notification preferences:', error);
+      console.error('GraphQL errors:', error.graphQLErrors);
+      console.error('Network error:', error.networkError);
+      addToast(`Failed to save notification preferences: ${error.message}`, 'error');
+    }
+  });
 
   // Handle form input changes for Notification Settings
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -113,10 +152,15 @@ const Settings: React.FC = () => {
     setToasts([]);
 
     try {
-      // Simulate an API call to save notification settings
-      console.log('Saving notification settings:', notificationForm);
-      addToast('Notification settings saved successfully!', 'success');
+      console.log('Submitting notification form:', notificationForm);
+      const result = await updateNotificationPreferences({
+        variables: {
+          input: notificationForm
+        }
+      });
+      console.log('Mutation result:', result);
     } catch (err) {
+      console.error('Error saving notification settings:', err);
       addToast('Failed to save notification settings. Please try again.', 'error');
     }
   };
@@ -135,6 +179,22 @@ const Settings: React.FC = () => {
   const removeToast = (id: number) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
+
+  // Show loading state while fetching preferences
+  if (notificationPreferencesLoading) {
+    return (
+      <div className="flex-1 pl-60 pr-1">
+        <div className="flex">
+          <div className="flex-1 bg-white p-6 rounded-lg shadow">
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F3A26D]"></div>
+              <span className="ml-3 text-gray-600">Loading settings...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 pl-60 pr-1">
@@ -256,22 +316,20 @@ const Settings: React.FC = () => {
               )}
             </div>
 
-            <h2 className="text-xl font-semibold mt-6">Sounds</h2>
 
-            <div className="border p-4 rounded-md">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Disable All Notification Sounds</h3>
-                  <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents</p>
-                </div>
-                <button
-                  type="button"
-                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.disableNotificationSounds ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
-                  onClick={() => handleToggleChange('disableNotificationSounds')}
-                >
-                  <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
-                </button>
-              </div>
+            {/* Save Button */}
+            <div className="flex justify-end pt-4">
+              <button
+                type="submit"
+                disabled={updateLoading || notificationPreferencesLoading}
+                className={`px-6 py-2 rounded-md font-medium transition-colors duration-200 ${
+                  updateLoading || notificationPreferencesLoading
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-[#F3A26D] text-white hover:bg-[#E8915A]'
+                }`}
+              >
+                {updateLoading ? 'Saving...' : 'Save Settings'}
+              </button>
             </div>
           </form>
         </div>
