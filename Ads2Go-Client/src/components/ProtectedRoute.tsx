@@ -65,13 +65,19 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (requireAuth && !admin) {
-        // No auth, redirecting to admin-login
-    return <Navigate to="/admin-login" state={{ from: location }} replace />;
+    // Determine redirect based on current route
+    const isSuperAdminRoute = location.pathname.startsWith('/sadmin');
+    const redirectPath = isSuperAdminRoute ? '/sadmin-login' : '/admin-login';
+    console.log('🔄 AdminProtectedRoute: No auth, redirecting to:', redirectPath);
+    return <Navigate to={redirectPath} state={{ from: location }} replace />;
   }
 
   if (requireAuth && admin && isAuthorized === false) {
-    console.log('🚫 AdminProtectedRoute: Unauthorized, redirecting to admin-login');
-    return <Navigate to="/admin-login" replace />;
+    // Determine redirect based on current route
+    const isSuperAdminRoute = location.pathname.startsWith('/sadmin');
+    const redirectPath = isSuperAdminRoute ? '/sadmin-login' : '/admin-login';
+    console.log('🚫 AdminProtectedRoute: Unauthorized, redirecting to:', redirectPath);
+    return <Navigate to={redirectPath} replace />;
   }
 
   if (!requireAuth && admin) {
