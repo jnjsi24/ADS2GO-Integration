@@ -138,7 +138,7 @@ const UserProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [user, isLoading, isInitialized, requireAuth, allowedRoles]);
 
-  if (isLoading || !isInitialized || isLoggingOut || isAuthorized === null) {
+  if (isLoading || !isInitialized || isAuthorized === null) {
     console.log('⏳ UserProtectedRoute loading...');
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
