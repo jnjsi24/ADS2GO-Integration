@@ -9,15 +9,33 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { getAnalytics, isSupported } from "firebase/analytics";
 
+// Validate required environment variables
+const requiredEnvVars = [
+  'REACT_APP_FIREBASE_API_KEY',
+  'REACT_APP_FIREBASE_AUTH_DOMAIN',
+  'REACT_APP_FIREBASE_PROJECT_ID',
+  'REACT_APP_FIREBASE_STORAGE_BUCKET',
+  'REACT_APP_FIREBASE_MESSAGING_SENDER_ID',
+  'REACT_APP_FIREBASE_APP_ID',
+  'REACT_APP_FIREBASE_MEASUREMENT_ID'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  throw new Error(`Missing required Firebase environment variables: ${missingVars.join(', ')}`);
+}
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBcJD2Ttm5ykalj-PK8T4ttgodGqVNc-Do",
-  authDomain: "ads2go-6ead4.firebaseapp.com",
-  projectId: "ads2go-6ead4",
-  storageBucket: "ads2go-6ead4.firebasestorage.app",
-  messagingSenderId: "380830146533",
-  appId: "1:380830146533:web:86708e4a57a07ab59f590c",
-  measurementId: "G-P0TNVP9BEX"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
 };
+
+// Firebase config loaded from environment variables
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig);
@@ -32,6 +50,7 @@ let analytics;
 isSupported().then((analyticsSupported) => {
   if (analyticsSupported) {
     try {
+      // Initialize analytics with the correct measurement ID
       analytics = getAnalytics(app);
       console.log("📊 Firebase Analytics initialized");
     } catch (error) {

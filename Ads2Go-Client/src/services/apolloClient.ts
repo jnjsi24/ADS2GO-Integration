@@ -8,14 +8,10 @@ import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
 // Get server configuration from environment variables
-const serverIp = process.env.REACT_APP_SERVER_IP;
-const serverPort = process.env.REACT_APP_SERVER_PORT;
 const serverUrl = process.env.REACT_APP_API_URL;
 
-if (!serverIp || !serverPort || !serverUrl) {
+if (!serverUrl) {
   console.error('❌ Missing required environment variables:');
-  console.error('   REACT_APP_SERVER_IP:', serverIp);
-  console.error('   REACT_APP_SERVER_PORT:', serverPort);
   console.error('   REACT_APP_API_URL:', serverUrl);
   console.error('   Please check your .env file');
 }
@@ -49,9 +45,19 @@ const authLink = setContext((_, { headers }) => {
   }
 });
 
-const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path, extensions }) => {
+      // Don't log authentication errors during logout process
+      if (message === 'Not authenticated' && 
+          (operation.operationName === 'logout' || 
+           operation.operationName === 'getOwnUserDetails' ||
+           operation.operationName === 'getUserNotifications' ||
+           operation.operationName === 'getUserAnalytics')) {
+        console.log(`[GraphQL]: Expected auth error during ${operation.operationName} - user is logging out`);
+        return;
+      }
+      
       console.error(
         `[GraphQL error]: Message: ${message}, Location: ${JSON.stringify(locations)}, Path: ${path}`
       );

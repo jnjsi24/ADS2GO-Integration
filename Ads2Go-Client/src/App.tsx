@@ -30,6 +30,7 @@ import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
 import Notifications from './pages/USERS/Notifications';
 import GoogleOAuthCompletion from './pages/AUTH/GoogleOAuthCompletion';
+import GoogleOAuthCallback from './pages/AUTH/GoogleOAuthCallback';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -257,6 +258,7 @@ const UserAppContent: React.FC = () => {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/landing" element={<Landing />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
+        <Route path="/auth/google/callback" element={<GoogleOAuthCallback />} />
         <Route path="/auth/google/complete" element={
           <GoogleOAuthCompletion 
             googleUserData={(() => {
