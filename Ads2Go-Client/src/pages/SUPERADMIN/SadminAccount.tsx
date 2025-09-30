@@ -6,6 +6,7 @@ import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useMutation } from "@apollo/client";
 import { toast } from 'sonner';
 import { UPDATE_SUPER_ADMIN_DETAIL } from "../../graphql/superadmin";
+import { uploadSuperAdminProfilePicture } from "../../utils/fileUpload";
 
 // Define the structure for admin data from useAdminAuth
 interface AdminData {
@@ -43,6 +44,7 @@ interface FormData {
 const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const navigate = useNavigate();
   const { admin, setAdmin } = useAdminAuth() as { admin: AdminData | null; setAdmin: (admin: AdminData | null) => void };
   
@@ -70,14 +72,34 @@ const Account: React.FC = () => {
     return initials.toUpperCase();
   };
 
+  // Helper to format contact number for display
+  const formatContactNumberForDisplay = (contactNumber?: string) => {
+    if (!contactNumber) return "+63 ";
+    
+    const cleanNumber = contactNumber.replace(/\D/g, ''); // Remove all non-digits
+    
+    if (cleanNumber.startsWith('639') && cleanNumber.length === 12) {
+      // Already in correct format: 639XXXXXXXXX
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 9XXXXXXXXX (10 digits)
+    } else if (cleanNumber.startsWith('09') && cleanNumber.length === 11) {
+      // Format: 09XXXXXXXXX
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 XXXXXXXXX
+    } else if (cleanNumber.startsWith('63') && cleanNumber.length === 12) {
+      // Format: 63XXXXXXXXXX (missing +)
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 XXXXXXXXX
+    } else if (cleanNumber.length === 10) {
+      // Just the 10 digits
+      return `+63 ${cleanNumber}`;
+    } else {
+      // Fallback to original
+      return contactNumber.startsWith("+63 ") ? contactNumber : `+63 ${cleanNumber}`;
+    }
+  };
+
   // Populate form with user data from AuthContext
   useEffect(() => {
-    console.log('Admin object from AdminAuthContext:', admin);
     if (admin) {
-      console.log('Admin ID:', admin.userId);
-      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
-        ? admin.contactNumber
-        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+      const initialContactNumber = formatContactNumberForDisplay(admin.contactNumber);
 
       setFormData({
         firstName: admin.firstName || "",
@@ -97,56 +119,91 @@ const Account: React.FC = () => {
   }, [admin]);
 
   useEffect(() => {
-    console.log('Admin object updated:', admin);
-    if (admin) {
-      console.log('Admin ID in effect:', admin.userId);
-      console.log('Admin keys:', Object.keys(admin));
-    }
-  }, [admin]);
-
-  useEffect(() => {
-    console.log('Form validation errors:', errors);
-    console.log('Is form valid?', Object.keys(errors).length === 0);
+    // Form validation errors tracking
   }, [errors]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // Auto-fix phone number format if user enters 9-digit number starting with 7
+    if (name === 'contactNumber' && value) {
+      const cleanNumber = value.replace(/\D/g, '');
+      if (cleanNumber.length === 9 && cleanNumber.startsWith('7')) {
+        // Auto-add the leading 9 to make it 10 digits
+        const fixedNumber = `+63 9${cleanNumber}`;
+        setFormData(prev => ({
+          ...prev,
+          [name]: fixedNumber
+        }));
+        return;
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setFormData(prev => ({
-            ...prev,
-            profilePicture: event.target?.result as string
-          }));
-        }
-      };
-      reader.readAsDataURL(e.target.files[0]);
+      const file = e.target.files[0];
+      
+      // Validate file type
+      const allowedExtensions = ["jpg", "jpeg", "png"];
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      
+      if (!extension || !allowedExtensions.includes(extension)) {
+        toast.error("Unsupported file type. Allowed types: JPG, JPEG, PNG");
+        return;
+      }
+      
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
+      
+      setIsUploadingImage(true);
+      
+      try {
+        const uploadedUrl = await uploadSuperAdminProfilePicture(file);
+        setFormData(prev => ({
+          ...prev,
+          profilePicture: uploadedUrl
+        }));
+        toast.success("Profile picture uploaded successfully!");
+      } catch (error) {
+        console.error('Error uploading profile picture:', error);
+        toast.error("Error uploading profile picture. Please try again.");
+      } finally {
+        setIsUploadingImage(false);
+      }
     }
   };
 
   // Add the mutation hook
-  const [updateAdminDetails] = useMutation(UPDATE_SUPER_ADMIN_DETAIL, {
+  const [updateSuperAdminDetails] = useMutation(UPDATE_SUPER_ADMIN_DETAIL, {
     onCompleted: (data) => {
-      if (data.updateAdminDetails.success) {
+      // Profile update response received
+      // Profile picture in response
+      
+      if (data.updateSuperAdmin.success) {
         // Update the admin in the auth context
         if (admin) {
-          setAdmin({
+          const updatedAdmin = {
             ...admin,
-            ...data.updateAdminDetails.user,
-          });
+            ...data.updateSuperAdmin.superAdmin,
+          };
+          // Updated admin object
+          // Profile picture in updated admin
+          setAdmin(updatedAdmin);
         }
         toast.success("Profile updated successfully!");
         setIsEditing(false);
       } else {
-        toast.error(data.updateAdminDetails.message || "Failed to update profile");
+        toast.error(data.updateSuperAdmin.message || "Failed to update profile");
       }
       setIsSubmitting(false);
     },
@@ -159,7 +216,7 @@ const Account: React.FC = () => {
 
   const handleUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault(); // Prevent default form submission
-    console.log('Update button clicked');
+    // Update button clicked
     
     if (!admin?.userId) {
       console.error('Admin ID is missing');
@@ -167,13 +224,9 @@ const Account: React.FC = () => {
       return;
     }
     
-    console.log('Validating form...');
     const isValid = validateForm();
-    console.log('Form validation result:', isValid);
-    console.log('Current errors:', errors);
     
     if (isValid) {
-      console.log('Form is valid, preparing to submit...');
       setIsSubmitting(true);
       
       try {
@@ -190,41 +243,36 @@ const Account: React.FC = () => {
         }
         if (formData.companyName) input.companyName = formData.companyName;
         if (formData.companyAddress) input.companyAddress = formData.companyAddress;
+        if (formData.profilePicture) {
+          input.profilePicture = formData.profilePicture;
+        }
         
-        console.log('Sending update request with:', { adminId: admin.userId, input });
-        
-        const { data } = await updateAdminDetails({
+        const { data } = await updateSuperAdminDetails({
           variables: {
-            adminId: admin.userId,
+            superAdminId: admin.userId,
             input
           },
         });
 
-        console.log('Update response:', data);
-
-        if (data?.updateAdminDetails?.success) {
-          console.log('Update successful, updating user context...');
+        if (data?.updateSuperAdmin?.success) {
           // Update the admin context with the new data
           setAdmin({
             ...admin,
-            ...data.updateAdminDetails.user,
+            ...data.updateSuperAdmin.superAdmin,
           });
           
           toast.success("Profile updated successfully!");
           setIsEditing(false);
         } else {
-          console.error('Update failed:', data?.updateAdminDetails?.message);
-          toast.error(data?.updateAdminDetails?.message || "Failed to update profile");
+          console.error('Update failed:', data?.updateSuperAdmin?.message);
+          toast.error(data?.updateSuperAdmin?.message || "Failed to update profile");
         }
       } catch (error) {
         console.error("Error in handleUpdate:", error);
         toast.error("An error occurred while updating your profile");
       } finally {
-        console.log('Update process completed');
         setIsSubmitting(false);
       }
-    } else {
-      console.log('Form validation failed, not submitting');
     }
   };
 
@@ -241,9 +289,15 @@ const Account: React.FC = () => {
 
     // Phone number validation (only if provided and not just the default +63 )
     if (formData.contactNumber && formData.contactNumber !== "+63 " && formData.contactNumber.trim() !== '') {
-      const phoneRegex = /^\+63\s?\d{10}$/;
-      if (!phoneRegex.test(formData.contactNumber)) {
-        newErrors.contactNumber = "Please enter a valid Philippine mobile number. Format: +639XXXXXXXXX (10 digits starting with 9)";
+      // Clean the number and check if it's a valid Philippine mobile number
+      const cleanNumber = formData.contactNumber.replace(/\D/g, ''); // Remove all non-digits
+      
+      // Check if it's a valid Philippine mobile number format
+      // Should be exactly 10 digits starting with 9 (e.g., 9748717212)
+      if (cleanNumber.length !== 10) {
+        newErrors.contactNumber = "Philippine mobile numbers must be exactly 10 digits. Format: +639XXXXXXXXX (e.g., +639748717212)";
+      } else if (!cleanNumber.startsWith('9')) {
+        newErrors.contactNumber = "Philippine mobile numbers must start with 9. Format: +639XXXXXXXXX (e.g., +639748717212)";
       }
     }
 
@@ -254,9 +308,7 @@ const Account: React.FC = () => {
   const handleCancel = () => {
     // Reset form data to current admin data if available
     if (admin) {
-      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
-        ? admin.contactNumber
-        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+      const initialContactNumber = formatContactNumberForDisplay(admin.contactNumber);
 
       setFormData({
         firstName: admin.firstName || "",
@@ -287,7 +339,12 @@ const Account: React.FC = () => {
         <aside className="flex flex-col items-center justify-center p-8 bg-black/10 bg-opacity-70 lg:w-1/3">
           {/* Profile Picture */}
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">
-            {formData.profilePicture ? (
+            {isUploadingImage ? (
+              <div className="flex flex-col items-center justify-center w-full h-full bg-black/50">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
+                <span className="text-xs text-white">Uploading...</span>
+              </div>
+            ) : formData.profilePicture ? (
               <img
                 src={formData.profilePicture}
                 alt="Profile"
@@ -308,7 +365,7 @@ const Account: React.FC = () => {
             )}
   
             {/* Upload button */}
-            {isEditing && (
+            {isEditing && !isUploadingImage && (
               <label className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/50 opacity-80 cursor-pointer transition-all">
                 <input
                   type="file"

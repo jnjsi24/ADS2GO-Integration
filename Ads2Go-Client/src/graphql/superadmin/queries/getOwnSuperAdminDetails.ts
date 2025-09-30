@@ -14,6 +14,7 @@ export const GET_OWN_SUPERADMIN_DETAILS = gql`
       companyName
       companyAddress
       contactNumber
+      profilePicture
       lastLogin
       createdAt
       updatedAt

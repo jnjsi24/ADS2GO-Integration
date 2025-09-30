@@ -4,7 +4,7 @@ import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const AdminLogin: React.FC = () => {
-  const { login } = useAdminAuth();
+  const { loginAdmin } = useAdminAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,7 +36,7 @@ const AdminLogin: React.FC = () => {
     setIsLoggingIn(true);
 
     try {
-      const admin = await login(email, password);
+      const admin = await loginAdmin(email, password);
       if (admin) {
         console.log('Admin login successful:', admin);
         // The AdminAuthContext will handle navigation

@@ -37,7 +37,7 @@ const Dashboard = () => {
   const { data: statsData, loading: statsLoading } = useQuery(GET_SUPERADMIN_DASHBOARD_STATS, {
     pollInterval: 30000, // Refresh every 30 seconds
     onCompleted: (data) => {
-      console.log('🔔 Frontend: SuperAdmin dashboard stats received:', data);
+      // SuperAdmin dashboard stats received
     },
     onError: (error) => {
       console.error("Error fetching super admin dashboard stats:", error);

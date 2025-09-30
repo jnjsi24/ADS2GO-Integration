@@ -24,6 +24,7 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     permissions: SuperAdminPermissions!
+    profilePicture: String
   }
 
   type SuperAdminPermissions {
@@ -90,6 +91,7 @@ const typeDefs = gql`
     contactNumber: String
     email: String
     password: String
+    profilePicture: String
     isActive: Boolean
     permissions: UpdateSuperAdminPermissionsInput
   }

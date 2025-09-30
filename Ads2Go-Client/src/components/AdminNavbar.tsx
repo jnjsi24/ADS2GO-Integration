@@ -21,7 +21,7 @@ const AdminSidebar: React.FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/admin-login');
+    // Navigation is handled by AdminAuthContext.logout() based on user role
   };
 
   const getInitials = (firstName?: string, lastName?: string) => {
