@@ -16,7 +16,7 @@ import {
 
 const SideNavbar: React.FC = () => {
   const { logout, user } = useUserAuth();
-  const { unreadCount, isLoading } = useNotifications();
+  const { displayBadgeCount, isLoading } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [isDropupOpen, setIsDropupOpen] = useState(false);
@@ -153,9 +153,9 @@ const SideNavbar: React.FC = () => {
             ) : (
               <Bell size={20} />
             )}
-            {!isLoading && unreadCount > 0 && (
+            {!isLoading && displayBadgeCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
+                {displayBadgeCount > 9 ? '9+' : displayBadgeCount}
               </span>
             )}
           </button>

@@ -306,10 +306,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send ad approval email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Ad approval email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending ad approval email:', error);
+      console.error('❌ Error sending ad approval email:', error.message);
       throw error;
     }
   }
@@ -360,10 +366,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send ad rejection email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Ad rejection email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending ad rejection email:', error);
+      console.error('❌ Error sending ad rejection email:', error.message);
       throw error;
     }
   }
@@ -416,10 +428,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send payment confirmation email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Payment confirmation email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending payment confirmation email:', error);
+      console.error('❌ Error sending payment confirmation email:', error.message);
       throw error;
     }
   }
@@ -610,10 +628,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send profile change email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Profile change email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending profile change email:', error);
+      console.error('❌ Error sending profile change email:', error.message);
       throw error;
     }
   }
@@ -672,10 +696,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send report status update email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Report status update email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending report status update email:', error);
+      console.error('❌ Error sending report status update email:', error.message);
       throw error;
     }
   }
@@ -725,10 +755,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send admin response email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Admin response email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending admin response email:', error);
+      console.error('❌ Error sending admin response email:', error.message);
       throw error;
     }
   }

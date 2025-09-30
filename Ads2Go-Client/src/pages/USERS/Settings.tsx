@@ -131,7 +131,7 @@ const Settings: React.FC = () => {
         }
       } else {
         // Subscribe
-        const result = await NewsletterService.subscribeToNewsletter(user.email, 'user_settings');
+        const result = await NewsletterService.subscribeToNewsletter(user.email, 'manual');
         if (result.success) {
           setNewsletterSubscribed(true);
           addToast('Successfully subscribed to newsletter', 'success');
