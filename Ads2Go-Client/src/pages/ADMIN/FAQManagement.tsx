@@ -508,7 +508,7 @@ const FAQManagement: React.FC = () => {
           <div className="flex justify-end">
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+              className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
             >
               <Plus className="w-5 h-5" />
               Add FAQ
@@ -534,7 +534,7 @@ const FAQManagement: React.FC = () => {
                     onDragOver={(e) => handleCategoryDragOver(e, group.category)}
                     onDrop={(e) => handleCategoryDrop(e, group.category)}
                     onDragEnd={handleCategoryDragEnd}
-                    className={` px-6 py-4 border-b cursor-move hover:bg-gray-100 transition-colors ${
+                    className={`px-6 py-4 border-b cursor-move hover:bg-gray-100 transition-colors ${
                       draggedCategory === group.category ? 'opacity-50' : ''
                     } ${
                       draggedCategory && draggedCategory !== group.category ? 'border-blue-300 bg-blue-50' : ''
@@ -543,7 +543,7 @@ const FAQManagement: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <GripVertical className="w-5 h-5 text-gray-400" />
-                        <span className={`px-3 py-1 text-sm font-medium ${getCategoryColor(group.category)}`}>
+                        <span className={` py-1 text-lg font-semibold ${(group.category)}`}>
                           {getCategoryLabel(group.category)}
                         </span>
                         <span className="text-sm text-gray-500">
@@ -576,27 +576,16 @@ const FAQManagement: React.FC = () => {
                                 {getCategoryLabel(faq.category)}
                               </span>
                               <div className="flex items-center gap-1">
-                                {faq.isActive ? (
-                                  <CheckCircle className="w-4 h-4 text-green-500" />
-                                ) : (
-                                  <EyeOff className="w-4 h-4 text-gray-400" />
-                                )}
-                                <span className="text-xs text-gray-500">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  faq.isActive 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-gray-100 text-gray-600'
+                                }`}>
                                   {faq.isActive ? 'Active' : 'Inactive'}
                                 </span>
                               </div>
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">{faq.question}</h3>
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                faq.isActive 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {faq.isActive ? 'Active' : 'Inactive'}
-                              </span>
-                              <span>Order: {faq.order}</span>
-                            </div>
+                            <h3 className="text-md font-semibold text-gray-700 mb-2">{faq.question}</h3>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
                             <button
