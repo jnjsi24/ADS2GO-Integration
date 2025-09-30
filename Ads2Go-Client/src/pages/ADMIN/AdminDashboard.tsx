@@ -48,7 +48,7 @@ const Dashboard = () => {
 
   // Fetch admin dashboard stats
   const { data: statsData, loading: statsLoading } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onCompleted: (data) => {
       console.log('🔔 Frontend: Dashboard stats received:', data);
     },

@@ -34,7 +34,7 @@ const Dashboard = () => {
   // Fetch analytics data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { period: analyticsPeriod },
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onError: (error) => {
       console.error('Analytics fetch error:', error);
     }

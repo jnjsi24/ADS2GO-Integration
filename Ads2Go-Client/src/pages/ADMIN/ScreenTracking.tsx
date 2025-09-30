@@ -309,7 +309,7 @@ const ScreenTracking: React.FC = () => {
     fetchData();
     fetchMaterials();
     
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds for faster updates
     return () => clearInterval(interval);
   }, [selectedDate, fetchData]);
 

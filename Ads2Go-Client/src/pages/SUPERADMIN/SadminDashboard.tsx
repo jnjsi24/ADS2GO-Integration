@@ -27,7 +27,7 @@ const Dashboard = () => {
 
   // Fetch super admin notifications for unread count
   const { data: notificationsData } = useQuery(GET_SUPERADMIN_NOTIFICATIONS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onError: (error) => {
       console.error("Error fetching super admin notifications:", error);
     }
@@ -35,7 +35,7 @@ const Dashboard = () => {
 
   // Fetch super admin dashboard stats
   const { data: statsData, loading: statsLoading } = useQuery(GET_SUPERADMIN_DASHBOARD_STATS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onCompleted: (data) => {
       console.log('🔔 Frontend: SuperAdmin dashboard stats received:', data);
     },

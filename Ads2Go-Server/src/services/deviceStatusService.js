@@ -219,34 +219,40 @@ class DeviceStatusService {
 
     ws.on('close', (code, reason) => {
       console.log(`🔌 [WebSocket] Device disconnected: ${deviceId} - Code: ${code}, Reason: ${reason}`);
-      if (this.activeConnections.get(deviceId) === ws) {
-        this.removeConnection(deviceId);
-        this.handleDisconnect(deviceId).catch(err => {
-          console.error(`Failed to update status for device ${deviceId}:`, err);
+      console.log(`🔍 [WebSocket] Checking if device ${deviceId} is in activeConnections:`, this.activeConnections.has(deviceId));
+      console.log(`🔍 [WebSocket] Active connections count: ${this.activeConnections.size}`);
+      
+      // Always handle disconnect regardless of activeConnections check
+      // The activeConnections check was preventing database updates
+      console.log(`🔄 [WebSocket] Processing disconnect for device: ${deviceId}`);
+      
+      this.removeConnection(deviceId);
+      this.handleDisconnect(deviceId).catch(err => {
+        console.error(`Failed to update status for device ${deviceId}:`, err);
+      });
+      
+      // Update DeviceStatusManager with WebSocket disconnection
+      console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
+      deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
+      
+      // Immediately broadcast status update for real-time response
+      this.broadcastDeviceUpdate(deviceId, false);
+      
+      // Also update with the full device ID if they're different
+      if (deviceId !== ws.materialId) {
+        console.log(`🔍 [DeviceStatusManager] Looking for full device ID for short ID: ${deviceId}, material: ${ws.materialId}`);
+        this.findFullDeviceId(deviceId, ws.materialId).then(fullDeviceId => {
+          if (fullDeviceId && fullDeviceId !== deviceId) {
+            console.log(`🔄 [DeviceStatusManager] Also updating full device ID: ${fullDeviceId} as offline`);
+            deviceStatusManager.setWebSocketStatus(fullDeviceId, false, new Date());
+          } else {
+            console.log(`⚠️ [DeviceStatusManager] No full device ID found for ${deviceId}`);
+          }
+        }).catch(err => {
+          console.error('Error finding full device ID on disconnect:', err);
         });
-        
-        // Update DeviceStatusManager with WebSocket disconnection
-        console.log(`🔄 [DeviceStatusManager] Updating WebSocket status for ${deviceId} as offline`);
-        deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
-        
-        // Immediately broadcast status update for real-time response
-        this.broadcastDeviceUpdate(deviceId, false);
-        
-        // Also update with the full device ID if they're different
-        if (deviceId !== ws.materialId) {
-          console.log(`🔍 [DeviceStatusManager] Looking for full device ID for short ID: ${deviceId}, material: ${ws.materialId}`);
-          this.findFullDeviceId(deviceId, ws.materialId).then(fullDeviceId => {
-            if (fullDeviceId && fullDeviceId !== deviceId) {
-              console.log(`🔄 [DeviceStatusManager] Also updating full device ID: ${fullDeviceId} as offline`);
-              deviceStatusManager.setWebSocketStatus(fullDeviceId, false, new Date());
-            } else {
-              console.log(`⚠️ [DeviceStatusManager] No full device ID found for ${deviceId}`);
-            }
-          }).catch(err => {
-            console.error('Error finding full device ID on disconnect:', err);
-          });
-        }
       }
+      
       console.log(`📱 Online Device: ${this.activeConnections.size}`);
     });
     
@@ -489,14 +495,16 @@ class DeviceStatusService {
       const connection = this.activeConnections.get(deviceId);
       const materialId = connection?.materialId || deviceId;
       
-      console.log(`🔄 Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
+      console.log(`🔄 [updateDeviceStatus] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
       // First, try to find and update existing record by deviceId
+      console.log(`🔍 [updateDeviceStatus] Searching for device by deviceId: ${deviceId}`);
       let updatedDevice = await DeviceTracking.findOneAndUpdate(
         { deviceId: deviceId },
         {
           $set: {
             isOnline: status,
+            isActive: status, // Set isActive to match online status
             lastSeen: now
           },
           $push: {
@@ -508,10 +516,12 @@ class DeviceStatusService {
         },
         { new: true }
       );
+      
+      console.log(`🔍 [updateDeviceStatus] Device found by deviceId: ${updatedDevice ? 'YES' : 'NO'}`);
 
       // If not found by deviceId, try to find by materialId and update
       if (!updatedDevice) {
-        console.log(`🔍 Device ${deviceId} not found, searching by materialId: ${materialId}`);
+        console.log(`🔍 [updateDeviceStatus] Device ${deviceId} not found, searching by materialId: ${materialId}`);
         
         updatedDevice = await DeviceTracking.findOneAndUpdate(
           { materialId },
@@ -519,6 +529,7 @@ class DeviceStatusService {
             $set: {
               deviceId: deviceId, // Set the deviceId if it wasn't set
               isOnline: status,
+              isActive: status, // Set isActive to match online status
               lastSeen: now
             },
             $push: {
@@ -530,14 +541,19 @@ class DeviceStatusService {
           },
           { upsert: true, new: true }
         );
+        
+        console.log(`🔍 [updateDeviceStatus] Device found by materialId: ${updatedDevice ? 'YES' : 'NO'}`);
       }
 
       // Device status is already set correctly in the previous update
       if (updatedDevice) {
-        console.log(`✅ Device ${deviceId} status updated successfully`);
+        console.log(`✅ [updateDeviceStatus] Device ${deviceId} status updated successfully`);
+        console.log(`📊 [updateDeviceStatus] Final device status: isOnline=${updatedDevice.isOnline}, isActive=${updatedDevice.isActive}`);
+      } else {
+        console.log(`❌ [updateDeviceStatus] Failed to find or update device ${deviceId}`);
       }
 
-      console.log(`✅ Device ${deviceId} marked as ${status ? 'online' : 'offline'} (root isOnline: ${updatedDevice?.isOnline})`);
+      console.log(`✅ [updateDeviceStatus] Device ${deviceId} marked as ${status ? 'online' : 'offline'} (root isOnline: ${updatedDevice?.isOnline})`);
       
       // Update DeviceStatusManager with database status
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
@@ -564,11 +580,12 @@ class DeviceStatusService {
   async handleDisconnect(deviceId) {
     this.removeConnection(deviceId);
     try {
+      console.log(`🔄 [handleDisconnect] Starting disconnect process for device: ${deviceId}`);
       await this.updateDeviceStatus(deviceId, false);
-      console.log(`Successfully handled disconnect for device ${deviceId}`);
+      console.log(`✅ [handleDisconnect] Successfully handled disconnect for device ${deviceId}`);
       return true;
     } catch (error) {
-      console.error(`Error handling disconnect for device ${deviceId}:`, error);
+      console.error(`❌ [handleDisconnect] Error handling disconnect for device ${deviceId}:`, error);
       throw error;
     }
   }
