@@ -534,25 +534,7 @@ router.post('/qr-scan', async (req, res) => {
       }
     }
 
-    // Update screen tracking with QR scan data if we have a device ID
-    if (deviceIdToUse) {
-      try {
-        const ScreenTracking = require('../models/screenTracking');
-        await ScreenTracking.findOneAndUpdate(
-          { 'devices.deviceId': deviceIdToUse },
-          { 
-            $inc: { 'screenMetrics.qrCodeScans': 1 },
-            $set: { 
-              'screenMetrics.lastQRScan': new Date(),
-              'screenMetrics.lastQRScanAdId': adId
-            }
-          }
-        );
-        console.log('\u001b[32m✅ Updated screen tracking QR scan count\u001b[0m');
-      } catch (screenTrackingError) {
-        console.log('\u001b[31m❌ Could not update screen tracking QR count:\u001b[0m', screenTrackingError.message);
-      }
-    }
+    // ScreenTracking collection deprecated: skip screen-level QR scan updates
 
     // Note: QR scan is already tracked in device analytics above
 

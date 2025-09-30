@@ -643,6 +643,12 @@ router.get('/compliance', async (req, res) => {
       const materialId = device.materialId || device.deviceId || 'UNKNOWN';
       const displayId = `${materialId}-SLOT-${device.deviceSlot || 1}`;
       
+      // Skip devices without proper materialId for now (they need to be linked to materials)
+      if (!device.materialId) {
+        console.log(`⚠️ Skipping device ${device.deviceId} - no materialId assigned`);
+        return;
+      }
+      
       // Skip if we've already seen this display ID (deduplication)
       if (seenDisplayIds.has(displayId)) {
         console.log(`Skipping duplicate display ID: ${displayId}`);

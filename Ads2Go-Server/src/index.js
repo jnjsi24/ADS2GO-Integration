@@ -31,7 +31,7 @@ const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
-const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
+// const screenTrackingTypeDefs = require('./schema/screenTrackingSchema'); // deprecated
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
@@ -51,7 +51,7 @@ const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
-const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
+// const screenTrackingResolvers = require('./resolvers/screenTrackingResolver'); // deprecated
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
@@ -62,13 +62,13 @@ const { authMiddleware } = require('./middleware/auth');
 const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
-const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+// const { startDeviceStatusJob } = require('./jobs/deviceStatusJob'); // deprecated with ScreenTracking
 const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
 const cronJobs = require('./jobs/cronJobs');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
-const screenTrackingRoutes = require('./routes/screenTracking');
+const screenTrackingRoutes = require('./routes/screenTracking'); // Now uses DeviceTracking
 const deviceTrackingRoutes = require('./routes/deviceTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
@@ -113,7 +113,7 @@ const server = new ApolloServer({
     materialTrackingTypeDefs,
     tabletTypeDefs,
     adsDeploymentTypeDefs,
-    screenTrackingTypeDefs,
+    // screenTrackingTypeDefs, // deprecated
     notificationTypeDefs,
     userReportTypeDefs,
     faqTypeDefs,
@@ -140,7 +140,7 @@ const server = new ApolloServer({
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
-    screenTrackingResolvers,
+    // screenTrackingResolvers, // deprecated
     notificationResolvers,
     userReportResolvers,
     faqResolvers,
@@ -234,7 +234,7 @@ async function startServer() {
   
 // Routes
 app.use('/tablet', tabletRoutes);
-app.use('/screenTracking', screenTrackingRoutes);
+app.use('/screenTracking', screenTrackingRoutes); // Now uses DeviceTracking
 app.use('/deviceTracking', deviceTrackingRoutes);
 app.use('/material', materialRoutes);
 app.use('/ads', adsRoutes);
@@ -301,7 +301,7 @@ app.use('/cleanup', cleanupRoutes);
     console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
-    startDeviceStatusJob();
+    // startDeviceStatusJob(); // deprecated
     startPaymentDeadlineJob();
     
     // Start cron jobs for daily data archiving
