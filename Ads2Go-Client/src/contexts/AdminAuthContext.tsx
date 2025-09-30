@@ -60,6 +60,7 @@ export const AdminAuthProvider: React.FC<{
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Admin state tracking
   useEffect(() => {
@@ -401,10 +402,20 @@ export const AdminAuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
+      // Set logout flag to prevent ProtectedRoute from redirecting
+      setIsLoggingOut(true);
+      
       // Store the current admin role before clearing state
       const currentAdminRole = admin?.role;
       
-      // First, clear admin state to prevent any new authenticated requests
+      // Navigate first based on the user's role
+      if (currentAdminRole === 'SUPERADMIN') {
+        navigate('/sadmin-login');
+      } else {
+        navigate('/admin-login');
+      }
+      
+      // Then clear admin state
       setAdminWithDebug(null);
       setAdminEmail('');
 
@@ -413,26 +424,23 @@ export const AdminAuthProvider: React.FC<{
 
       // Reset Apollo store AFTER clearing tokens and state
       await apolloClient.resetStore();
-      
-      // Navigate based on the user's role
-      if (currentAdminRole === 'SUPERADMIN') {
-        navigate('/sadmin-login');
-      } else {
-        navigate('/admin-login');
-      }
     } catch (error) {
       console.error('Logout error:', error);
       // Even if there's an error, ensure we clear everything and navigate
       const currentAdminRole = admin?.role;
-      setAdminWithDebug(null);
-      setAdminEmail('');
-      localStorage.removeItem('adminToken');
       
       if (currentAdminRole === 'SUPERADMIN') {
         navigate('/sadmin-login');
       } else {
         navigate('/admin-login');
       }
+      
+      setAdminWithDebug(null);
+      setAdminEmail('');
+      localStorage.removeItem('adminToken');
+    } finally {
+      // Reset logout flag
+      setIsLoggingOut(false);
     }
   };
 
@@ -460,6 +468,7 @@ export const AdminAuthProvider: React.FC<{
         isAuthenticated: !!admin,
         isLoading,
         isInitialized,
+        isLoggingOut,
         navigate,
         debugToken,
       };
@@ -469,6 +478,7 @@ export const AdminAuthProvider: React.FC<{
       adminEmail,
       isLoading,
       isInitialized,
+      isLoggingOut,
       loginAdmin,
       loginSuperAdmin,
       logout,

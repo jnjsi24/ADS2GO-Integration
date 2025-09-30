@@ -19,7 +19,7 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const location = useLocation();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const { admin, isLoading, isInitialized } = useAdminAuth();
+  const { admin, isLoading, isInitialized, isLoggingOut } = useAdminAuth();
   
   // AdminProtectedRoute render
 
@@ -30,7 +30,7 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     // AdminProtectedRoute effect
     
-    if (!isLoading && isInitialized) {
+    if (!isLoading && isInitialized && !isLoggingOut) {
       if (!requireAuth) {
         // No auth required
         setIsAuthorized(true);
@@ -55,7 +55,7 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [admin, isLoading, isInitialized, requireAuth, allowedRoles]);
 
-  if (isLoading || !isInitialized || isAuthorized === null) {
+  if (isLoading || !isInitialized || isLoggingOut || isAuthorized === null) {
     // AdminProtectedRoute loading
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
@@ -132,7 +132,7 @@ const UserProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [user, isLoading, isInitialized, requireAuth, allowedRoles]);
 
-  if (isLoading || !isInitialized || isAuthorized === null) {
+  if (isLoading || !isInitialized || isLoggingOut || isAuthorized === null) {
     console.log('⏳ UserProtectedRoute loading...');
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
