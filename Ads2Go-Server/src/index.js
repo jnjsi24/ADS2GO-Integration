@@ -159,6 +159,12 @@ async function startServer() {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
 
+      // In development, allow all origins for easier debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔓 Development mode: Allowing origin ${origin}`);
+        return callback(null, true);
+      }
+
       // Allowlist from env (comma-separated)
       const envAllowed = (process.env.ALLOWED_ORIGINS || '')
         .split(',')
@@ -175,6 +181,15 @@ async function startServer() {
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        // Additional development origins
+        'http://localhost:3001',
+        'http://localhost:5000',
+        'http://localhost:8080',
+        'http://localhost:8000',
+        'http://10.0.2.2:3000', // Android emulator
+        'http://10.0.2.2:5000', // Android emulator
+        'exp://192.168.1.5:19000', // Expo development
+        'exp://192.168.100.22:19000', // Expo development
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
@@ -185,6 +200,8 @@ async function startServer() {
       if (allowedOrigins.has(origin) || isRailwayApp) {
         callback(null, true);
       } else {
+        console.log(`🚫 CORS blocked origin: ${origin}`);
+        console.log(`📋 Allowed origins:`, Array.from(allowedOrigins));
         callback(new Error('Not allowed by CORS'));
       }
     },

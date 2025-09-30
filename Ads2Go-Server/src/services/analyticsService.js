@@ -158,7 +158,7 @@ class AnalyticsService {
       // QR scan tracking is now handled directly in the ads.js route
       // No need to create separate QRScanTracking documents here
       
-      // MaterialTracking is now PHOTOS ONLY - no analytics data
+      // DeviceCompliance is now PHOTOS ONLY - no analytics data
       // QR scan analytics are handled by DeviceTracking and Analytics collections
       
       return analytics;

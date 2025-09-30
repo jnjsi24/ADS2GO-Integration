@@ -1,7 +1,8 @@
 
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
-const ScreenTracking = require('../models/screenTracking');
+const DeviceTracking = require('../models/deviceTracking');
+const deviceStatusService = require('../services/deviceStatusService');
 const AnalyticsService = require('../services/analyticsService');
 const AdsDeployment = require('../models/adsDeployment');
 const Material = require('../models/Material');
@@ -89,16 +90,23 @@ module.exports = {
           };
         }
 
-        const isConnected = tabletUnit.deviceId && tabletUnit.status === 'ONLINE';
+        // Determine online status via DeviceStatusManager for real-time accuracy
+        const statusInfo = deviceStatusService.getDeviceStatus(tabletUnit.deviceId);
+        const isConnected = !!statusInfo.isOnline;
+
+        // Fetch latest tracking info for lastSeen/GPS
+        const tracking = await DeviceTracking.findOne({ deviceId: tabletUnit.deviceId });
+        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || null;
+        const gps = tracking?.currentLocation || null;
         
         return {
           isConnected,
-          connectedDevice: isConnected ? {
+          connectedDevice: {
             deviceId: tabletUnit.deviceId,
-            status: tabletUnit.status,
-            lastSeen: tabletUnit.lastSeen,
-            gps: tabletUnit.gps
-          } : null,
+            status: isConnected ? 'ONLINE' : 'OFFLINE',
+            lastSeen,
+            gps
+          },
           materialId,
           slotNumber,
           carGroupId: tablet.carGroupId || null

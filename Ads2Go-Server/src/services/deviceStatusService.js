@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const ScreenTracking = require('../models/ScreenTracking');
+const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusManager = require('./deviceStatusManager');
 
 class DeviceStatusService {
@@ -41,8 +41,13 @@ class DeviceStatusService {
     
     // Handle WebSocket upgrade
     server.on('upgrade', (request, socket, head) => {
+      console.log(`🔌 WebSocket upgrade request received: ${request.url}`);
+      console.log(`🔌 Headers:`, request.headers);
+      
       const url = new URL(request.url, `http://${request.headers.host}`);
       const pathname = url.pathname;
+      
+      console.log(`🔌 Parsed URL - Pathname: ${pathname}, Search: ${url.search}`);
       
       if (pathname === '/ws/status') {
         // Get device ID from query params or headers
@@ -69,6 +74,8 @@ class DeviceStatusService {
         console.log(`WebSocket upgrade request for device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
+          console.log(`✅ WebSocket upgrade successful for device: ${deviceId}`);
+          
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId;
           if (materialId) ws.materialId = materialId;
@@ -80,6 +87,11 @@ class DeviceStatusService {
           ws.on('pong', () => {
             ws.isAlive = true;
             ws.lastPong = Date.now();
+          });
+          
+          // Add error handling
+          ws.on('error', (error) => {
+            console.error(`❌ WebSocket error for device ${deviceId}:`, error);
           });
           
           this.handleConnection(ws, request);
@@ -111,6 +123,8 @@ class DeviceStatusService {
         }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
+          console.log(`✅ WebSocket playback upgrade successful for device: ${deviceId || 'ADMIN'}`);
+          
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
           if (materialId) ws.materialId = materialId;
@@ -118,6 +132,11 @@ class DeviceStatusService {
           ws.lastPong = Date.now();
           ws.connectionType = 'playback'; // Mark as playback connection
           ws.isAdmin = isAdmin; // Mark as admin connection
+          
+          // Add error handling
+          ws.on('error', (error) => {
+            console.error(`❌ WebSocket playback error for device ${ws.deviceId}:`, error);
+          });
           
           // Set up ping-pong handler
           ws.on('pong', () => {
@@ -349,7 +368,7 @@ class DeviceStatusService {
       const connection = this.activeConnections.get(deviceId);
       const materialId = connection?.materialId || deviceId;
 
-      console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in ScreenTracking...`);
+      console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in DeviceTracking...`);
 
       // Handle different states appropriately
       let updateData = {};
@@ -396,8 +415,8 @@ class DeviceStatusService {
       }
 
       // Update the current ad information in the database
-      const result = await ScreenTracking.findOneAndUpdate(
-        { 'devices.deviceId': deviceId },
+      const result = await DeviceTracking.findOneAndUpdate(
+        { deviceId: deviceId },
         { $set: updateData },
         { new: true }
       );
@@ -406,11 +425,11 @@ class DeviceStatusService {
         console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
         console.log(`📊 Current ad data:`, result.screenMetrics?.currentAd);
       } else {
-        console.log(`❌ No ScreenTracking document found for device ${deviceId}`);
+        console.log(`❌ No DeviceTracking document found for device ${deviceId}`);
         
         // Try alternative query by materialId
         console.log(`🔍 Trying alternative query by materialId: ${materialId}`);
-        const altResult = await ScreenTracking.findOneAndUpdate(
+        const altResult = await DeviceTracking.findOneAndUpdate(
           { materialId },
           { $set: updateData },
           { new: true }
@@ -419,7 +438,7 @@ class DeviceStatusService {
         if (altResult) {
           console.log(`✅ Updated current ad via materialId ${materialId}: ${playbackData.adTitle}`);
         } else {
-          console.log(`❌ No ScreenTracking document found for materialId ${materialId} either`);
+          console.log(`❌ No DeviceTracking document found for materialId ${materialId} either`);
         }
       }
 
@@ -472,14 +491,12 @@ class DeviceStatusService {
       
       console.log(`🔄 Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
-      // First, try to find and update existing record by deviceId in devices array
-      let updatedDevice = await ScreenTracking.findOneAndUpdate(
-        { 'devices.deviceId': deviceId },
+      // First, try to find and update existing record by deviceId
+      let updatedDevice = await DeviceTracking.findOneAndUpdate(
+        { deviceId: deviceId },
         {
           $set: {
-            'devices.$.isOnline': status,
-            'devices.$.lastSeen': now,
-            isOnline: status, // CRITICAL: Always update root level isOnline
+            isOnline: status,
             lastSeen: now
           },
           $push: {
@@ -492,24 +509,19 @@ class DeviceStatusService {
         { new: true }
       );
 
-      // If not found by deviceId, try to find by materialId and update/add device
+      // If not found by deviceId, try to find by materialId and update
       if (!updatedDevice) {
-        console.log(`🔍 Device ${deviceId} not found in devices array, searching by materialId: ${materialId}`);
+        console.log(`🔍 Device ${deviceId} not found, searching by materialId: ${materialId}`);
         
-        updatedDevice = await ScreenTracking.findOneAndUpdate(
+        updatedDevice = await DeviceTracking.findOneAndUpdate(
           { materialId },
           {
             $set: {
-              isOnline: status, // CRITICAL: Always update root level isOnline
+              deviceId: deviceId, // Set the deviceId if it wasn't set
+              isOnline: status,
               lastSeen: now
             },
             $push: {
-              devices: {
-                deviceId: deviceId,
-                slotNumber: 1, // Default slot number
-                isOnline: status,
-                lastSeen: now
-              },
               statusHistory: {
                 status: status ? 'online' : 'offline',
                 timestamp: now
@@ -520,25 +532,9 @@ class DeviceStatusService {
         );
       }
 
-      // CRITICAL: Ensure root level isOnline matches the device status
+      // Device status is already set correctly in the previous update
       if (updatedDevice) {
-        // Check if any device in the array is online
-        const hasOnlineDevice = updatedDevice.devices && updatedDevice.devices.some(device => device.isOnline);
-        
-        // Update root level isOnline to match the devices array
-        if (updatedDevice.isOnline !== hasOnlineDevice) {
-          console.log(`🔄 Syncing root isOnline: ${updatedDevice.isOnline} -> ${hasOnlineDevice}`);
-          updatedDevice = await ScreenTracking.findByIdAndUpdate(
-            updatedDevice._id,
-            { 
-              $set: { 
-                isOnline: hasOnlineDevice,
-                lastSeen: now
-              }
-            },
-            { new: true }
-          );
-        }
+        console.log(`✅ Device ${deviceId} status updated successfully`);
       }
 
       console.log(`✅ Device ${deviceId} marked as ${status ? 'online' : 'offline'} (root isOnline: ${updatedDevice?.isOnline})`);
@@ -620,14 +616,14 @@ class DeviceStatusService {
   async findFullDeviceId(shortDeviceId, materialId) {
     try {
       // First try to find by materialId
-      const screen = await ScreenTracking.findOne({ materialId });
+      const screen = await DeviceTracking.findOne({ materialId });
       if (screen && screen.deviceId) {
         console.log(`🔍 [DeviceStatusManager] Found full device ID: ${screen.deviceId} for material: ${materialId}`);
         return screen.deviceId;
       }
 
       // If not found by materialId, try to find by partial deviceId match
-      const screens = await ScreenTracking.find({ 
+      const screens = await DeviceTracking.find({ 
         deviceId: { $regex: shortDeviceId, $options: 'i' } 
       });
       
@@ -774,8 +770,8 @@ class DeviceStatusService {
         console.log(`🧹 [AdCleanup] Clearing currentAd for device ${deviceId} after 5 seconds`);
         
         // Try to clear currentAd by deviceId first
-        let result = await ScreenTracking.findOneAndUpdate(
-          { 'devices.deviceId': deviceId },
+        let result = await DeviceTracking.findOneAndUpdate(
+          { deviceId: deviceId },
           { 
             $unset: { 'screenMetrics.currentAd': 1 },
             $set: { lastSeen: new Date() }
@@ -785,7 +781,7 @@ class DeviceStatusService {
         
         // If not found, try by materialId
         if (!result) {
-          result = await ScreenTracking.findOneAndUpdate(
+          result = await DeviceTracking.findOneAndUpdate(
             { materialId },
             { 
               $unset: { 'screenMetrics.currentAd': 1 },

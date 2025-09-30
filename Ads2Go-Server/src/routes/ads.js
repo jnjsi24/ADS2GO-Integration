@@ -435,7 +435,7 @@ router.post('/qr-scan', async (req, res) => {
 
     // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
 
-    // MaterialTracking is now PHOTOS ONLY - no analytics data
+    // DeviceCompliance is now PHOTOS ONLY - no analytics data
     // QR scan analytics are handled by DeviceTracking and Analytics collections
 
     // Process registration data

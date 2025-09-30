@@ -2,7 +2,7 @@ const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet');
 const ScreenTracking = require('../models/screenTracking');
-const MaterialTracking = require('../models/materialTracking');
+const DeviceCompliance = require('../models/deviceCompliance');
 const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const MaterialAvailability = require('../models/MaterialAvailability');
 const AdsPlan = require('../models/AdsPlan');
@@ -42,15 +42,15 @@ const cleanupMaterialRelatedRecords = async (materialId, materialStringId) => {
     console.error(`❌ Error cleaning up MaterialAvailability:`, availabilityError);
   }
   
-  // Clean up MaterialTracking record
+  // Clean up DeviceCompliance record
   try {
-    const trackingResult = await MaterialTracking.findOneAndDelete({ materialId });
+    const trackingResult = await DeviceCompliance.findOneAndDelete({ materialId });
     if (trackingResult) {
-      console.log(`✅ Cleaned up MaterialTracking record for deleted material: ${materialStringId}`);
-      cleanupResults.materialTracking = true;
+      console.log(`✅ Cleaned up DeviceCompliance record for deleted material: ${materialStringId}`);
+      cleanupResults.deviceCompliance = true;
     }
   } catch (trackingError) {
-    console.error(`❌ Error cleaning up MaterialTracking:`, trackingError);
+    console.error(`❌ Error cleaning up DeviceCompliance:`, trackingError);
   }
   
   // Clean up ScreenTracking record
@@ -161,7 +161,7 @@ const materialResolvers = {
         // Get material tracking information for each material
         const materialsWithTracking = await Promise.all(
           materials.map(async (material) => {
-            const tracking = await MaterialTracking.findOne({ materialId: material.id });
+            const tracking = await DeviceCompliance.findOne({ materialId: material.id });
             return {
               ...material.toObject(),
               materialTracking: tracking ? {
@@ -477,17 +477,17 @@ const materialResolvers = {
         }
       }
 
-      // Create MaterialTracking record using GraphQL mutation approach
+      // Create DeviceCompliance record using GraphQL mutation approach
       try {
-        console.log(`🔍 Checking for existing MaterialTracking for material: ${material.materialId} (ID: ${material.id})`);
+        console.log(`🔍 Checking for existing DeviceCompliance for material: ${material.materialId} (ID: ${material.id})`);
         
-        // Check if MaterialTracking record already exists
-        const existingMaterialTracking = await MaterialTracking.findOne({ materialId: material.id });
+        // Check if DeviceCompliance record already exists
+        const existingDeviceCompliance = await DeviceCompliance.findOne({ materialId: material.id });
         
-        if (!existingMaterialTracking) {
-          console.log(`📝 Creating new MaterialTracking record for material: ${material.materialId}`);
+        if (!existingDeviceCompliance) {
+          console.log(`📝 Creating new DeviceCompliance record for material: ${material.materialId}`);
           
-          const materialTracking = new MaterialTracking({
+          const deviceCompliance = new DeviceCompliance({
             materialId: material.id, // Use ObjectId reference
             driverId: null, // No driver assigned yet
             location: {
@@ -511,16 +511,16 @@ const materialResolvers = {
             totalDistanceTraveled: 0
           });
           
-          await materialTracking.save();
-          console.log(`✅ Created MaterialTracking record for material: ${material.materialId}`);
+          await deviceCompliance.save();
+          console.log(`✅ Created DeviceCompliance record for material: ${material.materialId}`);
         } else {
-          console.log(`ℹ️ MaterialTracking already exists for material: ${material.materialId}`);
+          console.log(`ℹ️ DeviceCompliance already exists for material: ${material.materialId}`);
         }
       } catch (error) {
-        console.error(`❌ Error creating MaterialTracking:`, error);
+        console.error(`❌ Error creating DeviceCompliance:`, error);
         console.error(`❌ Error details:`, error.message);
         console.error(`❌ Stack trace:`, error.stack);
-        // Don't throw error - MaterialTracking is optional
+        // Don't throw error - DeviceCompliance is optional
       }
 
               console.log(`🎯 Returning created material: ${material.materialId} with ID: ${material.id}`);
@@ -911,12 +911,12 @@ const materialResolvers = {
           throw new Error('You can only upload photos for your assigned materials');
         }
 
-        // Find or create material tracking record
-        let materialTracking = await MaterialTracking.findOne({ materialId: material._id });
+        // Find or create device compliance record
+        let deviceCompliance = await DeviceCompliance.findOne({ materialId: material._id });
         
-        if (!materialTracking) {
-          console.log(`📝 Creating new MaterialTracking record for material ${material.materialId}`);
-          materialTracking = new MaterialTracking({
+        if (!deviceCompliance) {
+          console.log(`📝 Creating new DeviceCompliance record for material ${material.materialId}`);
+          deviceCompliance = new DeviceCompliance({
             materialId: material._id,
             driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
             location: {
@@ -931,14 +931,14 @@ const materialResolvers = {
         }
 
         // Add monthly photo using the existing method
-        await materialTracking.addMonthlyPhoto(month, photoUrls, driver?.driverId || user?.id);
+        await deviceCompliance.addMonthlyPhoto(month, photoUrls, driver?.driverId || user?.id);
 
         console.log(`✅ Monthly photo uploaded for material ${material.materialId}, month: ${month}`);
 
         return {
           success: true,
           message: 'Monthly photo uploaded successfully',
-          materialTracking: materialTracking
+          deviceCompliance: deviceCompliance
         };
 
       } catch (error) {
@@ -1004,10 +1004,10 @@ const materialResolvers = {
       return parent.dismountedAt.toISOString();
     },
     
-    // Material condition and inspection fields - fetch from materialTracking collection
+    // Material condition and inspection fields - fetch from deviceCompliance collection
     materialCondition: async (parent) => {
       try {
-        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
         return tracking?.materialCondition || parent.materialCondition || 'GOOD';
       } catch (error) {
         console.error('Error fetching material condition:', error);
@@ -1017,7 +1017,7 @@ const materialResolvers = {
     
     inspectionPhotos: async (parent) => {
       try {
-        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
         if (!tracking?.monthlyPhotos || tracking.monthlyPhotos.length === 0) return [];
         
         return tracking.monthlyPhotos.map(photo => ({
@@ -1036,7 +1036,7 @@ const materialResolvers = {
     
     photoComplianceStatus: async (parent) => {
       try {
-        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
         return tracking?.photoComplianceStatus || parent.photoComplianceStatus || 'PENDING';
       } catch (error) {
         console.error('Error fetching photo compliance status:', error);
@@ -1046,7 +1046,7 @@ const materialResolvers = {
     
     lastInspectionDate: async (parent) => {
       try {
-        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
         const date = tracking?.lastPhotoUpload || parent.lastInspectionDate;
         if (!date) return null;
         return date.toISOString();
@@ -1058,7 +1058,7 @@ const materialResolvers = {
     
     nextInspectionDue: async (parent) => {
       try {
-        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
         const date = tracking?.nextPhotoDue || parent.nextInspectionDue;
         if (!date) return null;
         return date.toISOString();

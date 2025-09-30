@@ -143,16 +143,38 @@ router.post('/ad-playback', async (req, res) => {
       });
     }
 
-    // Find or create device tracking record
-    let device = await DeviceTracking.findByDeviceId(deviceId);
+    // Find or create device tracking record for today
+    const today = new Date().toISOString().split('T')[0];
+    const todayDate = new Date(today + 'T00:00:00.000Z'); // Create proper date object for comparison
+    let device = await DeviceTracking.findOne({ 
+      deviceId, 
+      date: { 
+        $gte: todayDate, 
+        $lt: new Date(todayDate.getTime() + 24 * 60 * 60 * 1000) 
+      } 
+    });
     
     if (!device) {
+      // Check if there's an old record to copy data from
+      const oldDevice = await DeviceTracking.findOne({ deviceId }).sort({ date: -1 });
+      
+      // Create new device record for today
       device = new DeviceTracking({
         deviceId,
         deviceSlot,
-        date: new Date().toISOString().split('T')[0],
+        date: today,
+        deviceInfo: oldDevice?.deviceInfo || {},
         isOnline: true,
-        lastSeen: new Date()
+        lastSeen: new Date(),
+        // Reset daily counters for new day
+        totalAdPlays: 0,
+        totalQRScans: 0,
+        totalAdImpressions: 0,
+        totalAdPlayTime: 0,
+        totalDistanceTraveled: 0,
+        adPlaybacks: [],
+        qrScans: [],
+        hourlyStats: []
       });
       await device.save(); // Save the new device first
     }
