@@ -3,6 +3,7 @@ import {
   AreaChart,
   Area,
   XAxis,
+  YAxis,
   Tooltip,
   ResponsiveContainer,
   PieChart,
@@ -10,6 +11,8 @@ import {
   Cell,
   BarChart,
   Bar,
+  LineChart,
+  Line,
 } from 'recharts';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
@@ -148,9 +151,9 @@ const Dashboard = () => {
 
   // QR Impressions data
   const qrTodayData = [
-    { name: 'Morning', value: 55 },
-    { name: 'Afternoon', value: 25 },
-    { name: 'Evening', value: 20 },
+    { name: '12am-8am', value: 55 },
+    { name: '8am-4pm', value: 25 },
+    { name: '4pm-12am', value: 20 },
   ];
 
   const qrWeeklyData = [
@@ -277,6 +280,17 @@ const Dashboard = () => {
     return `${hours}h ${minutes}m`;
   };
 
+  // Calculate average mileage per car per hour
+  const calculateAverageMileage = () => {
+    // Mock calculation - in real app, this would come from analytics data
+    const totalDistance = analyticsSummary?.totalDistance || 0; // in km
+    const totalHours = analyticsSummary?.totalHours || 1; // total hours
+    const activeCars = analyticsSummary?.activeCars || 1; // number of active cars
+    
+    const averageMileage = totalDistance / (totalHours * activeCars);
+    return Math.round(averageMileage * 10) / 10; // Round to 1 decimal place
+  };
+
 
   return (
     <div className="min-h-screen bg-white pl-72 pr-5 p-10">
@@ -354,12 +368,40 @@ const Dashboard = () => {
             </AreaChart>
           </ResponsiveContainer>
 
+          {/* Playing Ad Section - Aesthetic Enhancement */}
+          <div className="mt-6 mb-4">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-white/90">Currently Playing</h4>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-white/70">LIVE</span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                  <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h5 className="text-sm font-medium text-white truncate">Summer Sale Campaign</h5>
+                  <p className="text-xs text-white/60">Duration: 30s • Views: 1,234</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-white/60">Next in</p>
+                  <p className="text-sm font-medium text-white">15s</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4 mt-4 text-center">
             <div className="bg-[#1b5087] p-3 rounded-lg">
               <p className="text-2xl font-bold">
-                {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
+                {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
               </p>
-              <p className="text-sm text-gray-300">Total Ad Impressions</p>
+              <p className="text-sm text-gray-300">Total Airtime (Minutes)</p>
               <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
             </div>
               <div className="bg-[#2876c7] p-3 rounded-lg">
@@ -379,203 +421,22 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Ad Impressions */}
+        {/* QR Impressions Chart */}
         <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Ad Impressions</span>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">QR Impressions (Today)</h2>
             <div className="relative" onClick={(e) => e.stopPropagation()}>
-              <select
-                className="text-xs text-gray-600 bg-white rounded-md pl-3 pr-8 py-1 border border-gray-200 focus:outline-none appearance-none"
-                value={analyticsPeriod}
-                onChange={handleAnalyticsPeriodChange}
-              >
-                <option value="1d">Last 24h</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-              </select>
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <p className="text-5xl font-bold text-[#1b5087] pl-4">
-            {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-          </p>
-          <p className="text-sm pt-2 pl-4">
-            <span className="text-green-600">↑ Active</span>
-            <span className="text-black"> {analyticsSummary.activeAds} ads</span>
-          </p>
-          <div className="mt-32">
-            <div className="pt-6 border-t border-gray-300 mb-2"></div>
-            <Link
-              to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
-            >
-              View Analytics <span>→</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Total Display Time */}
-        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Display Time</span>
-          </div>
-          <p className="text-3xl font-bold text-[#1b5087] pl-4">
-            {analyticsLoading ? '...' : formatDisplayTime(analyticsSummary.totalDisplayTime)}
-          </p>
-          <p className="text-sm pt-2 pl-4">
-            <span className="text-blue-600">📺 Playing</span>
-            <span className="text-black"> {analyticsSummary.totalAdsPlayed} ads</span>
-          </p>
-          <div className="mt-32">
-            <div className="pt-6 border-t border-gray-300 mb-2"></div>
-            <Link
-              to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
-            >
-              View Performance <span>→</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Analytics Section */}
-      {analyticsData?.getUserAnalytics && (
-        <div className="bg-white p-6 rounded-lg shadow-lg mb-6 cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Ad Performance Analytics</h2>
-            <div className="text-sm text-gray-500">
-              Last updated: {new Date().toLocaleTimeString()}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-blue-600">Completion Rate</p>
-                  <p className="text-2xl font-bold text-blue-700">
-                    {analyticsSummary.averageCompletionRate.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-blue-500">📊</div>
-              </div>
-            </div>
-            
-            <div className="bg-green-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-green-600">Completion Rate</p>
-                  <p className="text-2xl font-bold text-green-700">
-                    {analyticsSummary.averageCompletionRate.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-green-500">📊</div>
-              </div>
-            </div>
-            
-            <div className="bg-purple-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-purple-600">Total Ads</p>
-                  <p className="text-2xl font-bold text-purple-700">
-                    {analyticsSummary.totalAds}
-                  </p>
-                </div>
-                <div className="text-purple-500">📺</div>
-              </div>
-            </div>
-            
-            <div className="bg-orange-50 p-4 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-orange-600">Active Ads</p>
-                  <p className="text-2xl font-bold text-orange-700">
-                    {analyticsSummary.activeAds}
-                  </p>
-                </div>
-                <div className="text-orange-500">🎬</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Daily Stats Chart */}
-          {analyticsData.getUserAnalytics.dailyStats && analyticsData.getUserAnalytics.dailyStats.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Daily Performance</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={analyticsData.getUserAnalytics.dailyStats}>
-                  <XAxis 
-                    dataKey="date" 
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  />
-                  <Tooltip 
-                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
-                    formatter={(value, name) => [
-                      name === 'impressions' ? value.toLocaleString() : 
-                      name === 'displayTime' ? formatDisplayTime(value) : value,
-                      name === 'impressions' ? 'Impressions' :
-                      name === 'displayTime' ? 'Display Time' : 'Ads Played'
-                    ]}
-                  />
-                  <Bar dataKey="impressions" fill="#1b5087" name="impressions" />
-                  <Bar dataKey="adsPlayed" fill="#3674B5" name="adsPlayed" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Top Performing Ads */}
-          {analyticsData.getUserAnalytics.adPerformance && analyticsData.getUserAnalytics.adPerformance.length > 0 && (
-            <div>
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Top Performing Ads</h3>
-              <div className="space-y-3">
-                {analyticsData.getUserAnalytics.adPerformance.slice(0, 5).map((ad, index) => (
-                  <div key={ad.adId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-[#1b5087] text-white rounded-full flex items-center justify-center text-sm font-bold">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-800">{ad.adTitle}</p>
-                        <p className="text-sm text-gray-500">{ad.playCount} plays • {ad.impressions} impressions</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-gray-800">{ad.averageCompletionRate.toFixed(1)}%</p>
-                      <p className="text-sm text-gray-500">completion</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* QR Impressions Section */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* QR Impressions - Now spans full width */}
-        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
-            <div className="relative pt-3" onClick={(e) => e.stopPropagation()}>
               <select
                 className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
                 value={qrSelectedPeriod}
                 onChange={handleQrPeriodChange}
               >
-                {/* Removed 'All time' option */}
-                <option value="Weekly">Weekly</option>
-                <option value="Daily">Daily</option>
                 <option value="Today">Today</option>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
               </select>
-              <div className="absolute right-3 top-1/2 pt-3 transform -translate-y-1/2 pointer-events-none">
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
@@ -584,85 +445,33 @@ const Dashboard = () => {
 
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={getQrChartData()} // Use the dynamic data
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  dataKey="value"
-                >
-                  {getQrChartData().map((entry, index) => ( // Use dynamic data for cells too
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+              <LineChart data={getQrChartData()}>
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [value + '%', 'QR Impressions']}
+                  labelFormatter={(label) => `Time: ${label}`}
+                />
+                <Line 
+                  type="monotone"
+                  dataKey="value" 
+                  stroke="#0E2A47"
+                  strokeWidth={3}
+                  dot={{ fill: '#0E2A47', strokeWidth: 2, r: 6 }}
+                  activeDot={{ r: 8, stroke: '#0E2A47', strokeWidth: 2 }}
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
-
-          {qrSelectedPeriod === 'Daily' && (
-            <div className="flex justify-around text-sm text-gray-600">
-              <ul className="space-y-1">
-                {qrDailyData.slice(0, 4).map((item, index) => (
-                  <li key={index} className="flex items-center space-x-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[index % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="space-y-1">
-                {qrDailyData.slice(4).map((item, index) => (
-                  <li key={index + 4} className="flex items-center space-x-2 pl-10"> {/* Use a unique key */}
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[(index + 4) % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {qrSelectedPeriod === 'Weekly' && (
-            <div className="flex justify-around text-sm text-gray-600">
-              <ul className="space-y-1">
-                {qrWeeklyData.slice(0, 3).map((item, index) => (
-                  <li key={index} className="flex items-center space-x-2">
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[index % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <ul className="space-y-1">
-                {qrWeeklyData.slice(3).map((item, index) => (
-                  <li key={index + 3} className="flex items-center space-x-2"> {/* Use a unique key */}
-                    <span
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: colors[(index + 3) % colors.length] }}
-                    ></span>
-                    <span>
-                      {item.name}: {item.value}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           {qrSelectedPeriod === 'Today' && (
             <ul className="text-sm text-gray-600 space-y-1 pl-10">
@@ -679,8 +488,159 @@ const Dashboard = () => {
               ))}
             </ul>
           )}
+
+          <div className="mt-6">
+            <div className="pt-6 border-t border-gray-300 mb-2"></div>
+            <Link
+              to="/advertisements"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+            >
+              View Analytics <span>→</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Average Mileage */}
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
+          <div className="flex justify-between items-center mt-8 pl-4">
+            <span className="text-gray-500 text-lg">Average Mileage</span>
+          </div>
+          <p className="text-3xl font-bold text-[#1b5087] pl-4">
+            {analyticsLoading ? '...' : calculateAverageMileage()}
+            <span className="text-lg text-gray-500 ml-1">km/h</span>
+          </p>
+          <p className="text-sm pt-2 pl-4">
+            <span className="text-green-600">🚗 Per Car</span>
+            <span className="text-black"> {analyticsSummary?.activeCars || 0} active vehicles</span>
+          </p>
+          <div className="mt-32">
+            <div className="pt-6 border-t border-gray-300 mb-2"></div>
+            <Link
+              to="/advertisements"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+            >
+              View Performance <span>→</span>
+            </Link>
+          </div>
         </div>
       </div>
+
+      {/* Car Location Heat Map */}
+      <div className="bg-white p-6 rounded-lg shadow-lg mb-6 cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-800">Car Location Heat Map</h2>
+          <div className="text-sm text-gray-500">
+            Last updated: {new Date().toLocaleTimeString()}
+          </div>
+        </div>
+        
+        {/* Heat Map Container */}
+        <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ height: '400px' }}>
+          {/* Map Background */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
+            {/* Grid Pattern */}
+            <div className="absolute inset-0 opacity-20">
+              <svg width="100%" height="100%" className="w-full h-full">
+                <defs>
+                  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid)" />
+              </svg>
+            </div>
+            
+            {/* Heat Map Points */}
+            <div className="absolute inset-0 p-4">
+              {/* High Activity Areas (Red/Orange) */}
+              <div className="absolute top-8 left-12 w-16 h-16 bg-red-500 rounded-full opacity-60 animate-pulse"></div>
+              <div className="absolute top-20 right-16 w-12 h-12 bg-orange-500 rounded-full opacity-50"></div>
+              <div className="absolute bottom-16 left-20 w-14 h-14 bg-red-400 rounded-full opacity-55"></div>
+              
+              {/* Medium Activity Areas (Yellow) */}
+              <div className="absolute top-32 left-1/3 w-10 h-10 bg-yellow-500 rounded-full opacity-45"></div>
+              <div className="absolute bottom-32 right-1/4 w-8 h-8 bg-yellow-400 rounded-full opacity-40"></div>
+              <div className="absolute top-1/2 left-1/4 w-12 h-12 bg-yellow-500 rounded-full opacity-50"></div>
+              
+              {/* Low Activity Areas (Green) */}
+              <div className="absolute top-16 left-2/3 w-6 h-6 bg-green-500 rounded-full opacity-35"></div>
+              <div className="absolute bottom-20 left-1/2 w-8 h-8 bg-green-400 rounded-full opacity-30"></div>
+              <div className="absolute top-2/3 right-8 w-7 h-7 bg-green-500 rounded-full opacity-40"></div>
+              
+              {/* Additional scattered points */}
+              <div className="absolute top-40 right-1/3 w-5 h-5 bg-blue-500 rounded-full opacity-25"></div>
+              <div className="absolute bottom-40 left-1/5 w-6 h-6 bg-purple-500 rounded-full opacity-30"></div>
+              <div className="absolute top-1/4 right-1/5 w-4 h-4 bg-indigo-500 rounded-full opacity-35"></div>
+            </div>
+            
+            {/* Map Labels */}
+            <div className="absolute top-4 left-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              Downtown Area
+            </div>
+            <div className="absolute top-4 right-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              Mall District
+            </div>
+            <div className="absolute bottom-4 left-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              Residential Zone
+            </div>
+            <div className="absolute bottom-4 right-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              Highway Access
+            </div>
+          </div>
+          
+          {/* Legend */}
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded-lg shadow-sm">
+            <div className="flex items-center space-x-4 text-xs">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                <span>High Activity</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                <span>Medium Activity</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span>Low Activity</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Stats Summary */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-red-50 p-3 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-600">High Traffic Zones</p>
+                <p className="text-lg font-bold text-red-700">3</p>
+              </div>
+              <div className="text-red-500">🔥</div>
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 p-3 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-600">Medium Traffic</p>
+                <p className="text-lg font-bold text-yellow-700">3</p>
+              </div>
+              <div className="text-yellow-500">⚡</div>
+            </div>
+          </div>
+          
+          <div className="bg-green-50 p-3 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600">Low Traffic</p>
+                <p className="text-lg font-bold text-green-700">3</p>
+              </div>
+              <div className="text-green-500">📍</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 };
