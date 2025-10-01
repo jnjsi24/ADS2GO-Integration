@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION } from '../graphql/notifications';
-import { GET_USER_NOTIFICATION_PREFERENCES } from '../graphql/user/queries/getUserNotificationPreferences';
 import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION, DELETE_ALL_NOTIFICATIONS } from '../graphql/notifications';
+import { GET_USER_NOTIFICATION_PREFERENCES } from '../graphql/user/queries/getUserNotificationPreferences';
 import { useUserAuth } from './UserAuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
