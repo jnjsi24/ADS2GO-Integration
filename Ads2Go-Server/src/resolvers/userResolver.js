@@ -134,7 +134,13 @@ const resolvers = {
           emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
         });
 
-        await EmailService.sendVerificationEmail(newUser.email, verificationCode);
+        // Try to send verification email
+        const emailSent = await EmailService.sendVerificationEmail(newUser.email, verificationCode);
+        if (!emailSent) {
+          console.error(`❌ Failed to send verification email to ${newUser.email}`);
+          console.error('   User will still be created, but they may need to request a new verification code');
+        }
+        
         await newUser.save();
 
         // Send notification to admins about new user registration

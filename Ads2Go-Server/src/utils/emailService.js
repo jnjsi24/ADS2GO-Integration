@@ -89,9 +89,20 @@ class EmailService {
 
   // Send verification email
   static async sendVerificationEmail(email, code) {
+    console.log(`📧 Attempting to send verification email to: ${email}`);
+    
     const transporter = this.getTransporter();
     if (!transporter) {
       console.error('❌ Cannot send email: Email service not configured');
+      console.error('   Please check your .env file for EMAIL_USER and EMAIL_PASSWORD');
+      console.error('   Run: node verify-gmail-setup.js to test email configuration');
+      return false;
+    }
+
+    // Verify configuration before sending
+    const isConfigured = await this.verifyConfiguration();
+    if (!isConfigured) {
+      console.error('❌ Cannot send email: Email service configuration verification failed');
       return false;
     }
 
@@ -123,11 +134,28 @@ class EmailService {
     };
 
     try {
-      await transporter.sendMail(mailOptions);
-      console.log(`✅ Verification email sent to ${email}`);
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`✅ Verification email sent successfully to ${email}`);
+      console.log(`   Message ID: ${result.messageId}`);
       return true;
     } catch (error) {
       console.error('❌ Error sending verification email:', error.message);
+      
+      // Provide specific error guidance
+      if (error.message.includes('535-5.7.8') || error.message.includes('Invalid login')) {
+        console.error('💡 Gmail authentication failed. Please check:');
+        console.error('   1. Enable 2-Factor Authentication on your Gmail account');
+        console.error('   2. Generate an App Password (not your regular password)');
+        console.error('   3. Use the App Password as EMAIL_PASSWORD in your .env file');
+        console.error('   📖 Guide: GMAIL_SETUP_GUIDE.md');
+        console.error('   🔧 Test: node verify-gmail-setup.js');
+      } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+        console.error('💡 Network connection failed. Please check:');
+        console.error('   1. Internet connection');
+        console.error('   2. Firewall settings');
+        console.error('   3. SMTP server settings');
+      }
+      
       return false;
     }
   }
