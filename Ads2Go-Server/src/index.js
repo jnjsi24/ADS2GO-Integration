@@ -156,8 +156,13 @@ async function startServer() {
   // ✅ Global CORS
   app.use(cors({
     origin: function (origin, callback) {
+      console.log(`🌐 CORS Check - Origin: ${origin || 'no-origin'}`);
+      
       // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log(`✅ CORS: Allowing request with no origin`);
+        return callback(null, true);
+      }
 
       // Allowlist from env (comma-separated)
       const envAllowed = (process.env.ALLOWED_ORIGINS || '')
@@ -179,13 +184,20 @@ async function startServer() {
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
+      console.log(`📋 CORS: Default allowed origins:`, Array.from(defaultAllowed));
+      console.log(`📋 CORS: Env allowed origins:`, envAllowed);
+      console.log(`📋 CORS: All allowed origins:`, Array.from(allowedOrigins));
 
       const isRailwayApp = /^https?:\/\/([a-z0-9-]+)\.up\.railway\.app$/i.test(origin) ||
                            /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
+      
+      console.log(`🚂 CORS: Is Railway app: ${isRailwayApp}`);
 
       if (allowedOrigins.has(origin) || isRailwayApp) {
+        console.log(`✅ CORS: Allowing origin: ${origin}`);
         callback(null, true);
       } else {
+        console.log(`❌ CORS: Blocking origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -197,10 +209,12 @@ async function startServer() {
 
   // Handle preflight requests manually
   app.options('*', (req, res) => {
+    console.log(`🔄 Preflight request from origin: ${req.headers.origin || 'no-origin'}`);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
     res.header('Access-Control-Allow-Credentials', 'true');
+    console.log(`✅ Preflight response sent for origin: ${req.headers.origin || 'no-origin'}`);
     res.sendStatus(200);
   });
 
