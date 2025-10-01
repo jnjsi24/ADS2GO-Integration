@@ -9,6 +9,7 @@ import * as Device from 'expo-device';
 import tabletRegistrationService from '../services/tabletRegistration';
 import playbackWebSocketService from '../services/playbackWebSocketService';
 import companyAdService, { CompanyAd } from '../services/companyAdService';
+import offlineQueueService from '../services/offlineQueueService';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
@@ -84,13 +85,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track ad playback
   const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
     try {
-      // Don't track ad playback if offline
-      if (isOffline) {
-        console.log(`Skipping ad tracking - device is offline: ${adTitle}`);
-        return;
-      }
-      
-      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s`);
+      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s - ${isOffline ? 'OFFLINE' : 'ONLINE'}`);
       
       // If this is a company ad, increment play count
       if (currentAdIndex === -1 && companyAds.length > 0) {
@@ -100,6 +95,22 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // Get registration data for analytics
       const registrationData = await tabletRegistrationService.getRegistrationData();
+      
+      // Create ad playback data for queuing
+      const adPlaybackData = {
+        adId: adId,
+        adTitle: adTitle,
+        adDuration: adDuration,
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        viewTime: viewTime,
+        completionRate: viewTime && adDuration ? Math.round((viewTime / adDuration) * 100) : 100,
+        impressions: 1,
+        slotNumber: slotNumber
+      };
+
+      // Queue the ad playback data (will send immediately if online, queue if offline)
+      await offlineQueueService.queueAdPlayback(adPlaybackData);
       
       // Send to analytics service
       const analyticsData = {
@@ -133,49 +144,39 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         isOffline: isOffline
       };
       
-      // Send to device tracking endpoint (new daily staging system)
-      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deviceId: analyticsData.deviceId,
-          deviceSlot: analyticsData.slotNumber,
-          adId: analyticsData.adId,
-          adTitle: analyticsData.adTitle,
-          adDuration: analyticsData.adDuration,
-          viewTime: analyticsData.viewTime
-        }),
-      });
-      
-      if (deviceTrackingResponse.ok) {
-        console.log(`✅ Ad playback tracked in device tracking: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback in device tracking: ${adTitle}`);
-      }
-      
-      // Also send to analytics endpoint for backward compatibility
-      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(analyticsData),
-      });
-      
-      if (analyticsResponse.ok) {
-        console.log(`✅ Ad playback tracked in analytics: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
+      // Send to analytics endpoint (only if online)
+      if (!isOffline) {
+        try {
+          const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(analyticsData),
+          });
+          
+          if (analyticsResponse.ok) {
+            console.log(`✅ Ad playback tracked in analytics: ${adTitle}`);
+          } else {
+            console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
+          }
+        } catch (error) {
+          console.error('❌ Error sending analytics data:', error);
+        }
       }
       
       // Also send to existing screen tracking (start of ad playback)
-      const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
-      if (success) {
-        console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback: ${adTitle}`);
+      if (!isOffline) {
+        try {
+          const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
+          if (success) {
+            console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
+          } else {
+            console.log(`❌ Failed to track ad playback: ${adTitle}`);
+          }
+        } catch (error) {
+          console.error('❌ Error sending to tablet registration service:', error);
+        }
       }
     } catch (error) {
       console.error('Error tracking ad playback:', error);

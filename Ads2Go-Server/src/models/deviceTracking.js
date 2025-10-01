@@ -840,4 +840,51 @@ DeviceTrackingSchema.methods.updateDriverActivity = function(isActive = true) {
   return this.save();
 };
 
+// Method to calculate and update online hours based on session time
+DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
+  const now = new Date();
+  
+  // Only calculate if device is online and has a current session
+  if (!this.isOnline || !this.currentSession || !this.currentSession.isActive) {
+    return this;
+  }
+  
+  // Check if this is a new day - if so, reset session
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession.date);
+  sessionDate.setHours(0, 0, 0, 0);
+  
+  if (sessionDate.getTime() !== today.getTime()) {
+    // New day - reset session
+    this.resetDailySession();
+    return this;
+  }
+  
+  // Calculate hours since session start
+  const startTime = new Date(this.currentSession.startTime);
+  const hoursDiff = (now - startTime) / (1000 * 60 * 60); // Convert to hours
+  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  
+  // Update current session hours
+  this.currentSession.totalHoursOnline = Math.round(totalHours * 100) / 100;
+  
+  // Update compliance status
+  this.currentSession.complianceStatus = 
+    this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
+  
+  // Update total lifetime hours (only if this is more than what we had before)
+  if (totalHours > this.totalHoursOnline) {
+    this.totalHoursOnline = Math.round(totalHours * 100) / 100;
+  }
+  
+  // Update average daily hours
+  this.averageDailyHours = this.totalHoursOnline;
+  
+  // Update compliance rate
+  this.complianceRate = this.currentSession.complianceStatus === 'COMPLIANT' ? 100 : 0;
+  
+  return this;
+};
+
 module.exports = mongoose.models.DeviceTracking || mongoose.model('DeviceTracking', DeviceTrackingSchema);

@@ -7,6 +7,7 @@ import { router } from "expo-router/build/imperative-api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
 import deviceStatusService from '../../services/deviceStatusService';
+import offlineQueueService from '../../services/offlineQueueService';
 import AdPlayer from '../../components/AdPlayer';
 import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
@@ -196,6 +197,9 @@ export default function HomeScreen() {
       // Set offline simulation flag in tablet registration service
       tabletRegistrationService.setSimulatingOffline(true);
       
+      // Set offline queue service to offline mode
+      offlineQueueService.setOnlineStatus(false);
+      
       // Stop location tracking
       await tabletRegistrationService.stopLocationTracking();
       
@@ -232,6 +236,9 @@ export default function HomeScreen() {
       
       // Clear offline simulation flag in tablet registration service
       tabletRegistrationService.setSimulatingOffline(false);
+      
+      // Set offline queue service to online mode
+      offlineQueueService.setOnlineStatus(true);
       
       // Reconnect WebSocket connection
       if (registrationData) {

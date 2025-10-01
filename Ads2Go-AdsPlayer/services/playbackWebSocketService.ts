@@ -99,8 +99,8 @@ class PlaybackWebSocketService {
       return false;
     }
 
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('🔌 [WebSocket] Already connected');
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      console.log('🔌 [WebSocket] Already connected or connecting, skipping connection attempt');
       return true;
     }
 
@@ -110,12 +110,19 @@ class PlaybackWebSocketService {
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}`;
-      console.log('🔌 [WebSocket] Connecting to:', wsUrl);
+      // Only log connection attempts if not in reconnection mode
+      if (this.reconnectAttempts === 0) {
+        console.log('🔌 [WebSocket] Connecting to playback server...');
+      }
 
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('🔌 [WebSocket] Connected successfully');
+        if (this.reconnectAttempts > 0) {
+          console.log('🔌 [WebSocket] ✅ Reconnected to playback server successfully');
+        } else {
+          console.log('🔌 [WebSocket] Connected successfully');
+        }
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.clearReconnectInterval();
@@ -133,7 +140,10 @@ class PlaybackWebSocketService {
       };
 
       this.ws.onclose = (event) => {
-        console.log('🔌 [WebSocket] Connection closed:', event.code, event.reason);
+        // Only log disconnection if it's unexpected (not during reconnection)
+        if (this.reconnectAttempts === 0) {
+          console.log('🔌 [WebSocket] Connection closed:', event.code, event.reason);
+        }
         this.isConnected = false;
         this.ws = null;
         
@@ -145,7 +155,10 @@ class PlaybackWebSocketService {
       };
 
       this.ws.onerror = (error) => {
-        console.error('🔌 [WebSocket] Connection error:', error);
+        // Only log connection errors if we're not in a reconnection attempt
+        if (this.reconnectAttempts === 0) {
+          console.log('🔌 [WebSocket] Connection error - will attempt to reconnect');
+        }
         this.isConnected = false;
       };
 
@@ -157,12 +170,21 @@ class PlaybackWebSocketService {
   }
 
   private scheduleReconnect() {
+    // Don't schedule if already scheduled
+    if (this.reconnectInterval) {
+      return;
+    }
+
     this.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
     
-    console.log(`🔌 [WebSocket] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    // Only log first reconnection attempt to reduce noise
+    if (this.reconnectAttempts === 1) {
+      console.log(`🔌 [WebSocket] Server offline - attempting to reconnect in ${Math.round(delay/1000)}s`);
+    }
     
     this.reconnectInterval = setTimeout(() => {
+      this.reconnectInterval = null; // Clear the interval reference
       this.connect();
     }, delay);
   }

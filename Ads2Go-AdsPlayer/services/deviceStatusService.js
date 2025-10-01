@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
 import { AppState } from 'react-native';
+import offlineQueueService from './offlineQueueService';
 
 class DeviceStatusService {
   constructor() {
@@ -88,6 +89,12 @@ class DeviceStatusService {
   }
 
   connect = () => {
+    // Don't connect if already connected or connecting
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      console.log('[WebSocket] Already connected or connecting, skipping connection attempt');
+      return;
+    }
+
     // Clear any existing connection and timeouts
     if (this.ws) {
       this.ws.close();
@@ -121,20 +128,28 @@ class DeviceStatusService {
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
       
-      console.log('[WebSocket] Connecting to:', wsUrl);
-      console.log('[WebSocket] Device ID:', this.deviceId);
-      console.log('[WebSocket] Material ID:', this.materialId);
-      console.log('[WebSocket] WebSocket ready state before connection:', this.ws ? this.ws.readyState : 'null');
+    // Only log connection attempts if not in reconnection mode
+    if (this.reconnectAttempts === 0) {
+      console.log('[WebSocket] Connecting to server...');
+    }
       
       this.ws = new WebSocket(wsUrl);
       this.ws.binaryType = 'arraybuffer';
       
-      console.log('[WebSocket] WebSocket created, ready state:', this.ws.readyState);
+      // Only log WebSocket creation if not in reconnection mode
+      if (this.reconnectAttempts === 0) {
+        console.log('[WebSocket] WebSocket created, ready state:', this.ws.readyState);
+      }
 
       this.ws.onopen = () => {
-        console.log('[WebSocket] Connected successfully');
+        if (this.reconnectAttempts > 0) {
+          console.log('[WebSocket] ✅ Reconnected to server successfully');
+        } else {
+          console.log('[WebSocket] Connected successfully');
+        }
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.clearReconnectTimeout();
         
         // Notify status change
         if (this.onStatusChange) {
@@ -153,7 +168,10 @@ class DeviceStatusService {
       };
       
       this.ws.onclose = (e) => {
-        console.log('[WebSocket] Disconnected - Code:', e.code, 'Reason:', e.reason, 'WasClean:', e.wasClean);
+        // Only log disconnection if it's unexpected (not during reconnection)
+        if (this.reconnectAttempts === 0) {
+          console.log('[WebSocket] Disconnected - Code:', e.code, 'Reason:', e.reason, 'WasClean:', e.wasClean);
+        }
         this.isConnected = false;
         this.stopPing();
         
@@ -210,7 +228,10 @@ class DeviceStatusService {
       };
       
       this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        // Only log connection errors if we're not in a reconnection attempt
+        if (this.reconnectAttempts === 0) {
+          console.log('[WebSocket] Connection error - will attempt to reconnect');
+        }
         if (this.onStatusChange) {
           this.onStatusChange({ 
             isOnline: false, 
@@ -260,6 +281,13 @@ class DeviceStatusService {
     }
   };
 
+  clearReconnectTimeout = () => {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+  };
+
   sendPing = () => {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return;
@@ -285,23 +313,39 @@ class DeviceStatusService {
   }
 
   sendStatusUpdate = () => {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        const statusUpdate = {
-          type: 'statusUpdate',
-          deviceId: this.deviceId,
-          materialId: this.materialId,
-          timestamp: new Date().toISOString(),
-          platform: Platform.OS,
-          appVersion: Application.nativeApplicationVersion || 'unknown',
-          deviceName: Device.modelName || 'unknown',
-          osVersion: Device.osVersion || 'unknown'
-        };
-        
+    try {
+      const statusUpdate = {
+        type: 'statusUpdate',
+        deviceId: this.deviceId,
+        materialId: this.materialId,
+        timestamp: new Date().toISOString(),
+        platform: Platform.OS,
+        appVersion: Application.nativeApplicationVersion || 'unknown',
+        deviceName: Device.modelName || 'unknown',
+        osVersion: Device.osVersion || 'unknown'
+      };
+
+      // Queue device status (will send immediately if online, queue if offline)
+      offlineQueueService.queueDeviceStatus({
+        isOnline: this.isConnected,
+        lastSeen: new Date().toISOString()
+      });
+
+      // Send via WebSocket if connected
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify(statusUpdate));
-      } catch (error) {
-        console.error('[WebSocket] Error sending status update:', error);
+        // Only log status updates occasionally to reduce noise
+        if (Math.random() < 0.1) { // Log ~10% of status updates
+          console.log('📡 [DeviceStatus] Status update sent via WebSocket');
+        }
+      } else {
+        // Only log offline queuing occasionally
+        if (Math.random() < 0.05) { // Log ~5% of offline queuing
+          console.log('📦 [DeviceStatus] Status update queued (offline)');
+        }
       }
+    } catch (error) {
+      console.error('[WebSocket] Error sending status update:', error);
     }
   }
 
@@ -334,20 +378,24 @@ class DeviceStatusService {
       });
     }
     
-    // Try to reconnect if we haven't exceeded max attempts
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
+    // Try to reconnect if we haven't exceeded max attempts and not already scheduled
+    if (this.reconnectAttempts < this.maxReconnectAttempts && !this.reconnectTimeout) {
       const baseDelay = 1000; // Start with 1 second
       const maxDelay = 30000; // Max 30 seconds
       const jitter = Math.random() * 1000; // Add up to 1 second of jitter
       const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts), maxDelay) + jitter;
       
-      console.log(`[WebSocket] Attempting to reconnect in ${Math.round(delay/1000)}s (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+      // Only log first reconnection attempt to reduce noise
+      if (this.reconnectAttempts === 0) {
+        console.log(`[WebSocket] Server offline - attempting to reconnect in ${Math.round(delay/1000)}s`);
+      }
       
       this.reconnectTimeout = setTimeout(() => {
+        this.reconnectTimeout = null; // Clear the timeout reference
         this.reconnectAttempts++;
         this.connect();
       }, delay);
-    } else {
+    } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[WebSocket] Max reconnection attempts reached');
     }
   };

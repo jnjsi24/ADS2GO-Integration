@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Device from 'expo-device';
 import * as Location from 'expo-location';
 import playbackWebSocketService from './playbackWebSocketService';
+import offlineQueueService from './offlineQueueService';
 import Constants from 'expo-constants';
 import { AppState } from 'react-native';
 
@@ -656,25 +657,54 @@ export class TabletRegistrationService {
         violation: violation || undefined
       };
 
-      console.log('Updating location tracking:', locationUpdate);
+      // Only log location updates occasionally to reduce noise
+      if (Math.random() < 0.1) { // Log ~10% of location updates
+        console.log('Updating location tracking:', locationUpdate);
+      }
+
+      // Queue location data (will send immediately if online, queue if offline)
+      await offlineQueueService.queueLocationData({
+        lat: lat,
+        lng: lng,
+        speed: speed,
+        heading: heading,
+        accuracy: accuracy
+      });
+
+      // If simulating offline, don't send to server
+      if (this.simulatingOffline) {
+        console.log('📦 [Location] Queued location data (offline mode)');
+        return true;
+      }
+
       console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
 
       // Send to new device tracking endpoint (daily staging system)
-      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deviceId: locationUpdate.deviceId,
-          deviceSlot: 1, // Default slot for now
-          lat: locationUpdate.lat,
-          lng: locationUpdate.lng,
-          speed: locationUpdate.speed,
-          heading: locationUpdate.heading,
-          accuracy: locationUpdate.accuracy
-        }),
-      });
+      try {
+        const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            deviceId: locationUpdate.deviceId,
+            deviceSlot: 1, // Default slot for now
+            lat: locationUpdate.lat,
+            lng: locationUpdate.lng,
+            speed: locationUpdate.speed,
+            heading: locationUpdate.heading,
+            accuracy: locationUpdate.accuracy
+          }),
+        });
+
+        if (deviceTrackingResponse.ok) {
+          console.log('✅ Location updated in device tracking');
+        } else {
+          console.log('❌ Failed to update location in device tracking');
+        }
+      } catch (error) {
+        console.error('❌ Error sending to device tracking:', error);
+      }
 
       // Also send to existing screen tracking for backward compatibility
       const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
