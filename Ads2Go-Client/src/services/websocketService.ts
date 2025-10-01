@@ -30,8 +30,13 @@ class WebSocketService {
     const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     // Cache bust to force reload
     const cacheBust = Date.now();
+    
+    // Add Railway-specific headers for WebSocket connection
+    const isRailway = window.location.hostname.includes('railway.app');
+    const railwayHeaders = isRailway ? '&railway=true' : '';
+    
     // Use playback endpoint with admin=true for general admin connections
-    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}`;
+    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}${railwayHeaders}`;
   }
 
   private connect(): void {

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+
+    <script>
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+        
+        function addMessage(msg) {
+            const div = document.createElement('div');
+            div.textContent = new Date().toISOString() + ': ' + msg;
+            messages.appendChild(div);
+        }
+        
+        const wsUrl = 'wss://ads2go-integration-production.up.railway.app/ws/playback?admin=true';
+        addMessage('Attempting to connect to: ' + wsUrl);
+        
+        const ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function(event) {
+            status.textContent = 'Connected!';
+            status.style.color = 'green';
+            addMessage('WebSocket connection opened');
+        };
+        
+        ws.onmessage = function(event) {
+            addMessage('Received: ' + event.data);
+        };
+        
+        ws.onclose = function(event) {
+            status.textContent = 'Disconnected (Code: ' + event.code + ')';
+            status.style.color = 'red';
+            addMessage('WebSocket connection closed. Code: ' + event.code + ', Reason: ' + event.reason);
+        };
+        
+        ws.onerror = function(error) {
+            status.textContent = 'Error occurred';
+            status.style.color = 'red';
+            addMessage('WebSocket error: ' + JSON.stringify(error));
+        };
+    </script>
+</body>
+</html>

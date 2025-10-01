@@ -300,6 +300,18 @@ app.use('/cleanup', cleanupRoutes);
   // Create HTTP server
   const httpServer = http.createServer(app);
   
+  // Add Railway-specific headers for WebSocket support
+  httpServer.on('upgrade', (request, socket, head) => {
+    console.log(`🔌 HTTP Upgrade request received: ${request.url}`);
+    console.log(`🔌 Headers:`, {
+      origin: request.headers.origin,
+      host: request.headers.host,
+      'user-agent': request.headers['user-agent'],
+      'sec-websocket-key': request.headers['sec-websocket-key'],
+      'sec-websocket-version': request.headers['sec-websocket-version']
+    });
+  });
+  
   // Initialize WebSocket server
   deviceStatusService.initializeWebSocketServer(httpServer);
 

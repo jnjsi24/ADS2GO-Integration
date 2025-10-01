@@ -44,6 +44,13 @@ class DeviceStatusService {
       const url = new URL(request.url, `http://${request.headers.host}`);
       const pathname = url.pathname;
       
+      console.log(`🔌 WebSocket upgrade request to: ${pathname}`);
+      console.log(`🔌 Request headers:`, {
+        origin: request.headers.origin,
+        host: request.headers.host,
+        'user-agent': request.headers['user-agent']
+      });
+      
       if (pathname === '/ws/status') {
         // Get device ID from query params or headers
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
