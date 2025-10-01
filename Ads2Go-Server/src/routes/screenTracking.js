@@ -188,10 +188,72 @@ router.get('/route/:deviceId', async (req, res) => {
       });
     }
 
-    // Get location history from current session
     let locationHistory = [];
     
-    if (deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+    // If date is provided, look in historical data first
+    if (date) {
+      console.log(`🔍 [ROUTE] Looking for historical data for device ${deviceId} on date ${date}`);
+      
+      // Import DeviceDataHistory model
+      const DeviceDataHistory = require('../models/deviceDataHistory');
+      
+      // Find historical data for the specific date
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      // First try with the exact deviceId
+      let historicalData = await DeviceDataHistory.findOne({
+        deviceId: deviceId,
+        date: {
+          $gte: targetDate,
+          $lt: nextDay
+        }
+      });
+      
+      if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
+        console.log(`✅ [ROUTE] Found historical data with exact deviceId ${deviceId}: ${historicalData.locationHistory.length} points`);
+        locationHistory = historicalData.locationHistory;
+      } else {
+        console.log(`❌ [ROUTE] No historical data found for exact deviceId ${deviceId} on date ${date}`);
+        
+        // Try to find by materialId if deviceId is actually a materialId
+        console.log(`🔍 [ROUTE] Trying to find by materialId ${deviceId} on date ${date}`);
+        historicalData = await DeviceDataHistory.findOne({
+          deviceId: deviceId, // This might actually be a materialId
+          date: {
+            $gte: targetDate,
+            $lt: nextDay
+          }
+        });
+        
+        if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
+          console.log(`✅ [ROUTE] Found historical data with materialId ${deviceId}: ${historicalData.locationHistory.length} points`);
+          locationHistory = historicalData.locationHistory;
+        } else {
+          console.log(`❌ [ROUTE] No historical data found for materialId ${deviceId} on date ${date}`);
+          
+          // Debug: List all available deviceIds for this date
+          const allHistoricalData = await DeviceDataHistory.find({
+            date: {
+              $gte: targetDate,
+              $lt: nextDay
+            }
+          }).select('deviceId materialId date locationHistory');
+          
+          console.log(`🔍 [ROUTE] Available historical data for date ${date}:`, allHistoricalData.map(d => ({
+            deviceId: d.deviceId,
+            hasLocationHistory: d.locationHistory && d.locationHistory.length > 0,
+            locationHistoryLength: d.locationHistory ? d.locationHistory.length : 0
+          })));
+        }
+      }
+    }
+    
+    // If no historical data found or no date provided, try current session
+    if (locationHistory.length === 0 && deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+      console.log(`🔍 [ROUTE] Using current session data for device ${deviceId}`);
       locationHistory = deviceTracking.currentSession.locationHistory;
       
       // Filter by date if provided
@@ -206,11 +268,11 @@ router.get('/route/:deviceId', async (req, res) => {
           return pointDate >= targetDate && pointDate < nextDay;
         });
       }
-      
-      // Limit results
-      if (limit && parseInt(limit) > 0) {
-        locationHistory = locationHistory.slice(-parseInt(limit));
-      }
+    }
+    
+    // Limit results
+    if (limit && parseInt(limit) > 0) {
+      locationHistory = locationHistory.slice(-parseInt(limit));
     }
 
     // Convert to route format for frontend
@@ -228,8 +290,29 @@ router.get('/route/:deviceId', async (req, res) => {
     let totalDistance = 0;
     let totalDuration = 0;
     let averageSpeed = 0;
+    let totalAdPlays = 0;
+    let totalQRScans = 0;
+    let totalHoursOnline = 0;
     
-    if (routeData.length > 1) {
+    // If we have historical data, use the stored metrics first
+    if (date && historicalData) {
+      totalDistance = historicalData.totalDistanceTraveled || 0;
+      totalAdPlays = historicalData.totalAdPlays || 0;
+      totalQRScans = historicalData.totalQRScans || 0;
+      totalHoursOnline = historicalData.totalHoursOnline || 0;
+      
+      console.log(`📊 [ROUTE] Using stored metrics from historical data:`, {
+        totalDistance,
+        totalAdPlays,
+        totalQRScans,
+        totalHoursOnline
+      });
+    }
+    
+    // If no stored distance or we need to calculate from route points
+    if (totalDistance === 0 && routeData.length > 1) {
+      console.log(`📊 [ROUTE] Calculating distance from ${routeData.length} route points`);
+      
       // Calculate total distance using Haversine formula
       for (let i = 1; i < routeData.length; i++) {
         const prev = routeData[i - 1];
@@ -238,7 +321,11 @@ router.get('/route/:deviceId', async (req, res) => {
         totalDistance += distance;
       }
       
-      // Calculate duration
+      console.log(`📊 [ROUTE] Calculated distance from route points: ${totalDistance} km`);
+    }
+    
+    // Calculate duration from route points
+    if (routeData.length > 1) {
       const startTime = new Date(routeData[0].timestamp);
       const endTime = new Date(routeData[routeData.length - 1].timestamp);
       totalDuration = (endTime.getTime() - startTime.getTime()) / 1000; // seconds
@@ -246,6 +333,40 @@ router.get('/route/:deviceId', async (req, res) => {
       // Calculate average speed
       if (totalDuration > 0) {
         averageSpeed = (totalDistance / totalDuration) * 3600; // km/h
+      }
+    }
+
+    // Get additional metrics from historical data if available
+    let additionalMetrics = {};
+    if (date) {
+      try {
+        const DeviceDataHistory = require('../models/deviceDataHistory');
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const historicalData = await DeviceDataHistory.findOne({
+          deviceId: deviceId,
+          date: {
+            $gte: targetDate,
+            $lt: nextDay
+          }
+        });
+        
+        if (historicalData) {
+          additionalMetrics = {
+            totalAdPlays: historicalData.totalAdPlays || 0,
+            totalQRScans: historicalData.totalQRScans || 0,
+            totalHoursOnline: historicalData.totalHoursOnline || 0,
+            totalAdImpressions: historicalData.dailySummary?.totalAdImpressions || 0,
+            totalAdPlayTime: historicalData.dailySummary?.totalAdPlayTime || 0,
+            complianceRate: historicalData.dailySummary?.complianceRate || 0,
+            uptimePercentage: historicalData.dailySummary?.uptimePercentage || 0
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching additional metrics:', error);
       }
     }
 
@@ -262,7 +383,11 @@ router.get('/route/:deviceId', async (req, res) => {
           averageSpeed: Math.round(averageSpeed * 100) / 100, // Round to 2 decimal places
           pointCount: routeData.length,
           startTime: routeData.length > 0 ? routeData[0].timestamp : null,
-          endTime: routeData.length > 0 ? routeData[routeData.length - 1].timestamp : null
+          endTime: routeData.length > 0 ? routeData[routeData.length - 1].timestamp : null,
+          totalAdPlays: totalAdPlays,
+          totalQRScans: totalQRScans,
+          totalHoursOnline: totalHoursOnline,
+          ...additionalMetrics
         }
       }
     });

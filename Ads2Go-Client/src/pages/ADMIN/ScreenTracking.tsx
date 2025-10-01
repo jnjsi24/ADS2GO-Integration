@@ -3,6 +3,7 @@ import { Popup, Polyline, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map, Icon } from 'leaflet';
+import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
 
 // Import MapView directly since we're not using Next.js
@@ -123,6 +124,13 @@ const ScreenTracking: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [mapCenter, setMapCenter] = useState<[number, number]>([14.5995, 120.9842]); // Manila coordinates
+  const [activeTab, setActiveTab] = useState<'live' | 'historical'>('live');
+  const [historicalRouteData, setHistoricalRouteData] = useState<any>(null);
+  const [loadingHistorical, setLoadingHistorical] = useState(false);
+  const [mapKey, setMapKey] = useState(0); // Force map re-render
+  const [clearMap, setClearMap] = useState(false); // Flag to clear map
+  const [forceMapRemount, setForceMapRemount] = useState(0); // Force complete map remount
+  const [showMap, setShowMap] = useState(true); // Control map visibility
   
   // Helper function to validate coordinates
   const isValidCoordinate = (lat: number, lng: number): boolean => {
@@ -140,6 +148,109 @@ const ScreenTracking: React.FC = () => {
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
 
   const mapRef = useRef<Map | null>(null);
+
+  // Fetch historical route data
+  const fetchHistoricalRoute = async (deviceId: string, date: string) => {
+    try {
+      console.log('🚀 Starting historical route fetch:', { deviceId, date });
+      setLoadingHistorical(true);
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+      const url = `${baseUrl}/deviceTracking/route/${deviceId}?date=${date}`;
+      console.log('📡 Fetching from URL:', url);
+      
+      const response = await fetch(url);
+      console.log('📊 Response status:', response.status);
+      
+      const result = await response.json();
+      console.log('📋 Response data:', result);
+      
+      if (result.success) {
+        console.log('✅ Historical route data received:', result.data);
+        console.log('🗺️ Route points count:', result.data.route?.length);
+        console.log('📍 First point:', result.data.route?.[0]);
+        console.log('📍 Last point:', result.data.route?.[result.data.route.length - 1]);
+        console.log('📊 Full route data structure:', JSON.stringify(result.data, null, 2));
+        setHistoricalRouteData(result.data);
+        return result.data;
+      } else {
+        console.error('❌ Failed to fetch historical route:', result.message);
+        setHistoricalRouteData(null);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error fetching historical route:', error);
+      setHistoricalRouteData(null);
+      return null;
+    } finally {
+      setLoadingHistorical(false);
+    }
+  };
+
+  // Auto-load historical route when screen is selected and historical tab is active
+  useEffect(() => {
+    console.log('🔄 Tab/Selection changed:', { activeTab, selectedScreen: selectedScreen?.deviceId, selectedDate });
+    
+    // Clear historical route data when switching to live tab or when no screen is selected
+    if (activeTab === 'live' || !selectedScreen) {
+      console.log('🧹 Clearing historical route data');
+      setHistoricalRouteData(null);
+      return;
+    }
+    
+    if (activeTab === 'historical' && selectedScreen && selectedDate) {
+      console.log('📡 Fetching historical route for:', selectedScreen.deviceId, 'on', selectedDate);
+      // Clear previous data before fetching new data
+      setHistoricalRouteData(null);
+      setClearMap(true); // Flag to clear map
+      fetchHistoricalRoute(selectedScreen.deviceId, selectedDate);
+    }
+  }, [activeTab, selectedScreen, selectedDate]);
+
+  // Debug: Log when historicalRouteData changes and force map re-render
+  useEffect(() => {
+    if (historicalRouteData) {
+      console.log('🔄 Historical route data updated:', {
+        date: selectedDate,
+        routeLength: historicalRouteData.route?.length,
+        firstPoint: historicalRouteData.route?.[0] ? {
+          lat: historicalRouteData.route[0].lat,
+          lng: historicalRouteData.route[0].lng,
+          timestamp: historicalRouteData.route[0].timestamp
+        } : null,
+        lastPoint: historicalRouteData.route?.length > 0 ? {
+          lat: historicalRouteData.route[historicalRouteData.route.length - 1].lat,
+          lng: historicalRouteData.route[historicalRouteData.route.length - 1].lng,
+          timestamp: historicalRouteData.route[historicalRouteData.route.length - 1].timestamp
+        } : null
+      });
+      
+      // Force map re-render by updating the key
+      setMapKey(prev => prev + 1);
+      console.log('🗺️ Map key updated to force re-render:', mapKey + 1);
+      
+      // Force complete map remount
+      setForceMapRemount(prev => prev + 1);
+      console.log('🔄 Forcing complete map remount:', forceMapRemount + 1);
+      
+      // Temporarily hide map, then show it again to force complete remount
+      setShowMap(false);
+      setTimeout(() => {
+        setShowMap(true);
+        setClearMap(false);
+        console.log('✅ Map cleared and remounted, ready for new data');
+      }, 200);
+      
+      // Clear any existing map layers if mapRef is available
+      if (mapRef.current) {
+        console.log('🗑️ Clearing existing map layers');
+        mapRef.current.eachLayer((layer) => {
+          if (layer instanceof L.Polyline || layer instanceof L.Marker) {
+            mapRef.current?.removeLayer(layer);
+          }
+        });
+      }
+    }
+  }, [historicalRouteData, selectedDate]);
 
   // Fetch materials list
   const fetchMaterials = async () => {
@@ -294,18 +405,32 @@ const ScreenTracking: React.FC = () => {
     if (!screens) {
       console.log('No screens data available');
       setFilteredScreens([]);
+      setSelectedScreen(null); // Clear selection when no screens
       return;
     }
     
+    let filtered: ScreenStatus[] = [];
     if (selectedMaterial === 'all') {
       console.log('Showing all screens:', screens.length);
-      setFilteredScreens(screens);
+      filtered = screens;
     } else {
-      const filtered = screens.filter((screen: ScreenStatus) => screen.materialId === selectedMaterial);
+      filtered = screens.filter((screen: ScreenStatus) => screen.materialId === selectedMaterial);
       console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
-      setFilteredScreens(filtered);
     }
-  }, [screens, selectedMaterial]);
+    
+    setFilteredScreens(filtered);
+    
+    // Auto-select first screen if none selected or current selection is not in filtered results
+    if (filtered.length > 0) {
+      if (!selectedScreen || !filtered.find(screen => screen.deviceId === selectedScreen.deviceId)) {
+        console.log('Auto-selecting first screen from filtered results:', filtered[0].deviceId);
+        setSelectedScreen(filtered[0]);
+      }
+    } else {
+      console.log('No screens available after filtering, clearing selection');
+      setSelectedScreen(null);
+    }
+  }, [screens, selectedMaterial, selectedScreen]);
 
   // Auto-refresh data every 30 seconds
   useEffect(() => {
@@ -418,27 +543,29 @@ const ScreenTracking: React.FC = () => {
                    connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
-                             <select
-                 value={selectedMaterial}
-                 onChange={(e) => setSelectedMaterial(e.target.value)}
-                 className="border border-gray-300 rounded-md px-3 py-2 bg-white"
-                 disabled={materialsLoading}
-               >
-                 <option value="all">
-                   {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
-                 </option>
-                 {materials?.map((material) => (
-                   <option key={material._id} value={material.materialId}>
-                     {material.title} - {material.materialId} ({material.materialType})
-                   </option>
-                 ))}
-               </select>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2"
-              />
+              <select
+                value={selectedMaterial}
+                onChange={(e) => setSelectedMaterial(e.target.value)}
+                className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+                disabled={materialsLoading}
+              >
+                <option value="all">
+                  {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
+                </option>
+                {materials?.map((material) => (
+                  <option key={material._id} value={material.materialId}>
+                    {material.title} - {material.materialId} ({material.materialType})
+                  </option>
+                ))}
+              </select>
+              {activeTab === 'historical' && (
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="border border-gray-300 rounded-md px-3 py-2"
+                />
+              )}
               <button
                 onClick={fetchData}
                 disabled={refreshing}
@@ -448,6 +575,40 @@ const ScreenTracking: React.FC = () => {
                 <span>Refresh</span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'live'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Activity className="w-4 h-4" />
+                <span>Live Tracking</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('historical')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'historical'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4" />
+                <span>Historical Routes</span>
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -554,13 +715,56 @@ const ScreenTracking: React.FC = () => {
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow">
               <div className="p-4 border-b">
-                <h2 className="text-lg font-semibold text-gray-900">Live Map</h2>
-                <p className="text-sm text-gray-600">Real-time tablet locations and routes</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {activeTab === 'historical' ? 'Historical Routes' : 'Live Map'}
+                    </h2>
+                    <p className="text-sm text-gray-600">
+                      {activeTab === 'historical' 
+                        ? `Historical routes for ${selectedDate}` 
+                        : 'Real-time tablet locations and routes'
+                      }
+                    </p>
+                  </div>
+                  {activeTab === 'historical' && (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          if (selectedScreen) {
+                            console.log('🔄 Manual load route clicked');
+                            fetchHistoricalRoute(selectedScreen.deviceId, selectedDate);
+                          } else {
+                            console.log('⚠️ No screen selected for historical route');
+                          }
+                        }}
+                        disabled={loadingHistorical || !selectedScreen}
+                        className="flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
+                        <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
+                      </button>
+                      <div className="text-xs text-gray-500">
+                        {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="h-96 relative">
-                <MapView 
-                  center={mapCenter}
-                  zoom={zoom}
+                {!showMap && (
+                  <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-gray-600">Updating map...</p>
+                    </div>
+                  </div>
+                )}
+                {showMap && (
+                  <MapView 
+                    key={`map-${forceMapRemount}-${selectedDate}-${mapKey}`}
+                    center={mapCenter}
+                    zoom={zoom}
                   onMapLoad={(map: Map) => {
                     if (mapRef) {
                       (mapRef as React.MutableRefObject<Map | null>).current = map;
@@ -568,9 +772,11 @@ const ScreenTracking: React.FC = () => {
                     // Any map initialization code can go here
                   }}
                 >
-                  
-                  {/* Individual device markers - show one marker per device */}
-                  {(() => {
+                  {activeTab === 'live' ? (
+                    // Live tracking markers and routes
+                    <>
+                      {/* Individual device markers - show one marker per device */}
+                      {(() => {
                     try {
                       if (!filteredScreens || !Array.isArray(filteredScreens)) {
                         console.warn('filteredScreens is not a valid array:', filteredScreens);
@@ -644,7 +850,12 @@ const ScreenTracking: React.FC = () => {
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-xs text-gray-600">Distance Traveled:</span>
-                                        <span className="font-medium text-xs">{formatDistance(screen.totalDistanceToday)}</span>
+                                        <span className="font-medium text-xs">
+                                          {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
+                                            ? `${historicalRouteData.metrics.totalDistance} km`
+                                            : formatDistance(screen.totalDistanceToday)
+                                          }
+                                        </span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-xs text-gray-600">Compliance Rate:</span>
@@ -684,10 +895,116 @@ const ScreenTracking: React.FC = () => {
                       />
                     ) : null;
                   })()}
+                    </>
+                  ) : (
+                    // Historical route markers and polylines
+                    <>
+                      {/* Historical route polyline */}
+                      {(() => {
+                        console.log('🔍 Checking historical route data:', { 
+                          hasData: !!historicalRouteData, 
+                          hasRoute: !!historicalRouteData?.route, 
+                          routeLength: historicalRouteData?.route?.length,
+                          activeTab 
+                        });
+                        return historicalRouteData && historicalRouteData.route && historicalRouteData.route.length > 0;
+                      })() && !clearMap && (
+                        <>
+                          <Polyline
+                            key={`historical-route-${selectedDate}-${historicalRouteData.route.length}-${mapKey}`}
+                            positions={historicalRouteData.route.map((point: any) => [point.lat, point.lng])}
+                            color="red"
+                            weight={4}
+                            opacity={0.8}
+                          />
+                          {/* Start marker */}
+                          {historicalRouteData.route[0] && (
+                            <Marker
+                              key={`start-marker-${selectedDate}-${historicalRouteData.route[0].lat}-${historicalRouteData.route[0].lng}-${mapKey}`}
+                              position={[historicalRouteData.route[0].lat, historicalRouteData.route[0].lng]}
+                              icon={new Icon({
+                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                                shadowSize: [41, 41]
+                              })}
+                            >
+                              <Popup>
+                                <div className="p-2">
+                                  <h3 className="font-semibold text-green-600">Route Start</h3>
+                                  <p className="text-sm text-gray-600">
+                                    {new Date(historicalRouteData.route[0].timestamp).toLocaleString()}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    Distance: {historicalRouteData.metrics.totalDistance} km
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    Duration: {Math.floor(historicalRouteData.metrics.totalDuration / 60)} minutes
+                                  </p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          )}
+                          {/* End marker */}
+                          {historicalRouteData.route.length > 1 && (
+                            <Marker
+                              key={`end-marker-${selectedDate}-${historicalRouteData.route[historicalRouteData.route.length - 1].lat}-${historicalRouteData.route[historicalRouteData.route.length - 1].lng}-${mapKey}`}
+                              position={[
+                                historicalRouteData.route[historicalRouteData.route.length - 1].lat, 
+                                historicalRouteData.route[historicalRouteData.route.length - 1].lng
+                              ]}
+                              icon={new Icon({
+                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                                shadowSize: [41, 41]
+                              })}
+                            >
+                              <Popup>
+                                <div className="p-2">
+                                  <h3 className="font-semibold text-red-600">Route End</h3>
+                                  <p className="text-sm text-gray-600">
+                                    {new Date(historicalRouteData.route[historicalRouteData.route.length - 1].timestamp).toLocaleString()}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    Total Points: {historicalRouteData.metrics.pointCount}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
+                                    Ad Plays: {historicalRouteData.metrics.totalAdPlays}
+                                  </p>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
                 </MapView>
+                )}
                 
-                {/* Show message when no tablets have valid location data */}
-                {filteredScreens && filteredScreens.filter((screen: ScreenStatus) => 
+                {/* Historical Route Information */}
+                {activeTab === 'historical' && historicalRouteData && (
+                  <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-sm">
+                    <h4 className="font-semibold text-gray-900 mb-2">Historical Route Info</h4>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium">Device:</span> {historicalRouteData.deviceId}</p>
+                      <p><span className="font-medium">Date:</span> {selectedDate}</p>
+                      <p><span className="font-medium">Distance:</span> {historicalRouteData.metrics.totalDistance} km</p>
+                      <p><span className="font-medium">Duration:</span> {Math.floor(historicalRouteData.metrics.totalDuration / 60)} minutes</p>
+                      <p><span className="font-medium">Points:</span> {historicalRouteData.metrics.pointCount}</p>
+                      <p><span className="font-medium">Ad Plays:</span> {historicalRouteData.metrics.totalAdPlays}</p>
+                      <p><span className="font-medium">Hours Online:</span> {historicalRouteData.metrics.totalHoursOnline}h</p>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Show message when no tablets have valid location data (Live tab) */}
+                {activeTab === 'live' && filteredScreens && filteredScreens.filter((screen: ScreenStatus) => 
                   screen && 
                   screen.currentLocation && 
                   isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
@@ -706,6 +1023,55 @@ const ScreenTracking: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
                         Make sure tablets are online and have GPS permissions enabled.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message when no historical data is available (Historical tab) */}
+                {activeTab === 'historical' && !loadingHistorical && !historicalRouteData && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
+                    <div className="text-center p-6">
+                      <div className="text-gray-500 mb-2">
+                        <Clock className="w-12 h-12 mx-auto" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Historical Data</h3>
+                      <p className="text-sm text-gray-600">
+                        Select a device and date to view historical routes.
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Available test dates: 2025-09-25, 2025-09-26, 2025-09-27, 2025-09-28, 2025-09-29
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show loading message for historical data */}
+                {activeTab === 'historical' && loadingHistorical && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
+                    <div className="text-center p-6">
+                      <RefreshCw className="w-8 h-8 mx-auto animate-spin text-blue-600 mb-2" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Historical Route</h3>
+                      <p className="text-sm text-gray-600">
+                        Fetching route data for {selectedDate}...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message when historical data exists but has no route */}
+                {activeTab === 'historical' && historicalRouteData && (!historicalRouteData.route || historicalRouteData.route.length === 0) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
+                    <div className="text-center p-6">
+                      <div className="text-gray-500 mb-2">
+                        <Clock className="w-12 h-12 mx-auto" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No Route Data Available</h3>
+                      <p className="text-sm text-gray-600">
+                        Historical data exists for this device and date, but no route points were recorded.
+                      </p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        The device may not have been moving or GPS data was not available.
                       </p>
                     </div>
                   </div>
@@ -753,7 +1119,12 @@ const ScreenTracking: React.FC = () => {
                          </div>
                          <div className="flex justify-between">
                            <span>Distance:</span>
-                           <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
+                           <span className="font-medium">
+                             {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
+                               ? `${historicalRouteData.metrics.totalDistance} km`
+                               : formatDistance(screen.totalDistanceToday)
+                             }
+                           </span>
                          </div>
                          <div className="flex justify-between">
                            <span>Last Seen:</span>
@@ -809,7 +1180,12 @@ const ScreenTracking: React.FC = () => {
                          </div>
                          <div className="flex justify-between">
                            <span className="text-sm text-gray-600">Distance Traveled:</span>
-                           <span className="font-medium">{formatDistance(selectedScreen.totalDistanceToday)}</span>
+                           <span className="font-medium">
+                             {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
+                               ? `${historicalRouteData.metrics.totalDistance} km`
+                               : formatDistance(selectedScreen.totalDistanceToday)
+                             }
+                           </span>
                          </div>
                          <div className="flex justify-between">
                            <span className="text-sm text-gray-600">Compliance Rate:</span>
