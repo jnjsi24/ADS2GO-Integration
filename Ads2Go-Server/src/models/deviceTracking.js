@@ -459,14 +459,15 @@ DeviceTrackingSchema.methods.saveWithRetry = function(maxRetries = 3) {
 };
 
 // Instance methods
-DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0) {
+DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '') {
   const newLocation = {
     type: 'Point',
     coordinates: [lng, lat],
     timestamp: new Date(),
     speed,
     heading,
-    accuracy
+    accuracy,
+    address
   };
   
   // Use findByIdAndUpdate to avoid version conflicts

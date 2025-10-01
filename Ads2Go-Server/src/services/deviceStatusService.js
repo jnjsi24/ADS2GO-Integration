@@ -201,6 +201,11 @@ class DeviceStatusService {
     // Update DeviceStatusManager with WebSocket connection
     deviceStatusManager.setWebSocketStatus(deviceId, true, new Date());
     
+    // Also update tablet registration status to ONLINE
+    this.updateTabletStatus(deviceId, true).catch(err => {
+      console.error('Error updating tablet status on connect:', err);
+    });
+    
     // Immediately broadcast status update for real-time response
     this.broadcastDeviceUpdate(deviceId, true);
     
@@ -582,11 +587,59 @@ class DeviceStatusService {
     try {
       console.log(`🔄 [handleDisconnect] Starting disconnect process for device: ${deviceId}`);
       await this.updateDeviceStatus(deviceId, false);
+      
+      // Also update tablet registration status to OFFLINE
+      await this.updateTabletStatus(deviceId, false);
+      
       console.log(`✅ [handleDisconnect] Successfully handled disconnect for device ${deviceId}`);
       return true;
     } catch (error) {
       console.error(`❌ [handleDisconnect] Error handling disconnect for device ${deviceId}:`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Update tablet registration status when device disconnects
+   * @param {string} deviceId - Device identifier
+   * @param {boolean} isOnline - Whether device is online
+   */
+  async updateTabletStatus(deviceId, isOnline) {
+    try {
+      const Tablet = require('../models/Tablet');
+      
+      // Find tablet by device ID
+      const tablet = await Tablet.findOne({
+        'tablets.deviceId': deviceId
+      });
+
+      if (!tablet) {
+        console.log(`⚠️ [updateTabletStatus] Tablet not found for device: ${deviceId}`);
+        return;
+      }
+
+      // Find the specific tablet slot
+      const tabletIndex = tablet.tablets.findIndex(t => t.deviceId === deviceId);
+      if (tabletIndex === -1) {
+        console.log(`⚠️ [updateTabletStatus] Tablet slot not found for device: ${deviceId}`);
+        return;
+      }
+
+      // Update tablet status
+      const currentTablet = tablet.tablets[tabletIndex];
+      tablet.tablets[tabletIndex] = {
+        tabletNumber: currentTablet.tabletNumber,
+        deviceId: currentTablet.deviceId,
+        status: isOnline ? 'ONLINE' : 'OFFLINE',
+        lastSeen: new Date(),
+        gps: currentTablet.gps || null
+      };
+
+      await tablet.save();
+      console.log(`✅ [updateTabletStatus] Updated tablet status for ${deviceId}: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+
+    } catch (error) {
+      console.error(`❌ [updateTabletStatus] Error updating tablet status for ${deviceId}:`, error);
     }
   }
 

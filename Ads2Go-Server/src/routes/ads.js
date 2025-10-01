@@ -316,6 +316,9 @@ router.post('/qr-scan', async (req, res) => {
       screenData
     } = req.body;
 
+    // Accept data from both Slot 1 and Slot 2 since they are different physical devices
+    console.log(`📱 Processing QR scan from Slot ${slotNumber} for material ${materialId}`);
+
     // Enhanced QR scan logging with sound alert and colors
     console.log('\n\n\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m');
     console.log('\u001b[42m\u001b[30m' + ' '.repeat(20) + '🔍 QR CODE SCANNED! 🔍' + ' '.repeat(20) + '\u001b[0m');

@@ -18,6 +18,9 @@ router.post('/location-update', async (req, res) => {
       });
     }
 
+    // Accept data from both Slot 1 and Slot 2 since they are different physical devices
+    console.log(`📍 Processing location update from Slot ${deviceSlot} for device ${deviceId}`);
+
     // Find or create device tracking record for today
     let device = await DeviceTracking.findByDeviceId(deviceId);
     
@@ -215,6 +218,9 @@ router.post('/qr-scan', async (req, res) => {
         message: 'Missing required fields: deviceId, deviceSlot, qrScanData'
       });
     }
+
+    // Accept data from both Slot 1 and Slot 2 since they are different physical devices
+    console.log(`📱 Processing QR scan from Slot ${deviceSlot} for device ${deviceId}`);
 
     // Find or create device tracking record
     let device = await DeviceTracking.findByDeviceId(deviceId);

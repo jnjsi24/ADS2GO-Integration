@@ -47,6 +47,9 @@ interface ScreenStatus {
   totalHoursOnline?: number;
   totalDistanceTraveled?: number;
   displayStatus: 'ACTIVE' | 'OFFLINE' | 'MAINTENANCE' | 'DISPLAY_OFF';
+  statusText?: string; // Explicit slot statuses (e.g., "SLOT 1: OFFLINE | SLOT 2: OFFLINE")
+  slot1Status?: string; // Individual slot 1 status
+  slot2Status?: string; // Individual slot 2 status
   screenMetrics?: {
     displayHours: number;
     adPlayCount: number;
@@ -623,6 +626,7 @@ const ScreenTracking: React.FC = () => {
                                       <p>Screen Type: {screen.screenType}</p>
                                       {screen.carGroupId && <p>Car Group: {screen.carGroupId}</p>}
                                       {screen.slotNumber && <p>Slot: {screen.slotNumber}</p>}
+                                      {screen.statusText && <p className="text-sm text-gray-600">Status: {screen.statusText}</p>}
                                     </div>
                                   </div>
 
@@ -733,7 +737,7 @@ const ScreenTracking: React.FC = () => {
                          <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
                            {getStatusIcon(screen.isOnline, screen.isCompliant)}
                            <span className="text-xs">
-                             {screen.displayStatus}
+                             {screen.statusText || screen.displayStatus}
                            </span>
                          </div>
                        </div>
@@ -788,6 +792,7 @@ const ScreenTracking: React.FC = () => {
                          <p>Screen Type: {selectedScreen.screenType}</p>
                          {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
                          {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
+                         {selectedScreen.statusText && <p className="text-sm text-gray-600">Status: {selectedScreen.statusText}</p>}
                        </div>
                      </div>
 

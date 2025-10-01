@@ -579,30 +579,38 @@ router.get('/compliance', async (req, res) => {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
-    // Only fetch devices that have actual connected devices (not just temporary records)
-    const allDevices = await DeviceTracking.find({ 
-      isActive: true,
-      $and: [
-        {
-          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-          deviceId: { $exists: true, $ne: null } // Has a real device ID
-        },
-        {
-          $or: [
-            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { screenType: { $exists: true } } // Or has screen type (legacy records)
-          ]
+    // First, get all registered devices from tablet system
+    const Tablet = require('../models/Tablet');
+    const registeredDevices = new Map();
+    
+    const tablets = await Tablet.find({});
+    tablets.forEach(tablet => {
+      tablet.tablets.forEach(tabletDevice => {
+        if (tabletDevice.deviceId) {
+          registeredDevices.set(tabletDevice.deviceId, {
+            materialId: tablet.materialId,
+            carGroupId: tablet.carGroupId,
+            slotNumber: tabletDevice.tabletNumber,
+            status: tabletDevice.status,
+            lastSeen: tabletDevice.lastSeen
+          });
         }
-      ]
+      });
     });
     
-    console.log('🔍 Found devices:', allDevices.length);
-    console.log('🔍 Device details:', allDevices.map(d => ({
-      deviceId: d.deviceId,
-      materialId: d.materialId,
-      screenType: d.screenType,
-      isOnline: d.isOnline
-    })));
+    console.log('📱 Registered devices from tablet system:', registeredDevices.size);
+    registeredDevices.forEach((info, deviceId) => {
+      console.log(`   - ${deviceId} -> ${info.materialId} (Slot ${info.slotNumber})`);
+    });
+
+    // Get all device tracking records for registered devices
+    const registeredDeviceIds = Array.from(registeredDevices.keys());
+    const allDevices = await DeviceTracking.find({ 
+      deviceId: { $in: registeredDeviceIds },
+      isActive: true
+    });
+    
+    console.log('🔍 Found device tracking records for registered devices:', allDevices.length);
     
     // Initialize screens array to collect individual device records
     const individualScreens = [];
@@ -612,25 +620,127 @@ router.get('/compliance', async (req, res) => {
     let totalHours = 0;
     let totalDistance = 0;
     
-    // Process each device and create individual device records
+    // Group devices by material ID to consolidate display
+    const materialGroups = new Map();
+    
+    
+    // First, group all devices by material
     allDevices.forEach(device => {
-      // Debug: Log device data to see what fields are available
-      console.log('🔍 Device data:', {
-        deviceId: device.deviceId,
-        materialId: device.materialId,
-        screenType: device.screenType,
-        deviceSlot: device.deviceSlot,
-        isOnline: device.isOnline
+      const registrationInfo = registeredDevices.get(device.deviceId);
+      if (!registrationInfo) {
+        console.log(`⚠️ Skipping device ${device.deviceId} - not found in tablet registrations`);
+        return;
+      }
+      
+      const materialId = registrationInfo.materialId || device.materialId;
+      
+      if (!materialGroups.has(materialId)) {
+        materialGroups.set(materialId, {
+          materialId: materialId,
+          carGroupId: registrationInfo.carGroupId,
+          devices: [],
+          totalAdPlays: 0,
+          totalQRScans: 0,
+          totalDistanceTraveled: 0,
+          totalHoursOnline: 0,
+          totalAdImpressions: 0,
+          totalAdPlayTime: 0,
+          isOnline: false,
+          lastSeen: null,
+          currentLocation: null,
+          screenMetrics: {},
+          adPlaybacks: [],
+          qrScans: [],
+          locationHistory: [],
+          hourlyStats: [],
+          adPerformance: [],
+          alerts: [],
+          slotStatus: {
+            slot1: { online: false, deviceId: null, lastSeen: null },
+            slot2: { online: false, deviceId: null, lastSeen: null }
+          }
+        });
+      }
+      
+      const group = materialGroups.get(materialId);
+      group.devices.push({
+        device,
+        registrationInfo
       });
       
-      // Use device-specific values
-      const deviceHours = device.currentHoursToday || 0;
-      const deviceDistance = device.currentSession?.totalDistanceTraveled || 0;
-      
-      // Determine online status using DeviceStatusManager (WebSocket > DB fallback > timeout)
+      // Update slot status - use tablet registration status as primary source
       const statusInfo = deviceStatusService.getDeviceStatus(device.deviceId);
-      const isDeviceOnline = !!statusInfo.isOnline;
+      const deviceStatusOnline = !!statusInfo.isOnline;
       
+      // Check if tablet registration status is recent (within last 30 seconds)
+      const now = new Date();
+      const lastSeen = new Date(device.lastSeen);
+      const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
+      const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
+      
+      // Use tablet registration status if recent, otherwise use device status
+      const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
+      
+      
+      if (registrationInfo.slotNumber === 1) {
+        group.slotStatus.slot1 = {
+          online: isDeviceOnline,
+          deviceId: device.deviceId,
+          lastSeen: device.lastSeen
+        };
+      } else if (registrationInfo.slotNumber === 2) {
+        group.slotStatus.slot2 = {
+          online: isDeviceOnline,
+          deviceId: device.deviceId,
+          lastSeen: device.lastSeen
+        };
+      }
+      
+      // Sum up all metrics
+      group.totalAdPlays += device.totalAdPlays || 0;
+      group.totalQRScans += device.totalQRScans || 0;
+      group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
+      group.totalHoursOnline += device.totalHoursOnline || 0;
+      group.totalAdImpressions += device.totalAdImpressions || 0;
+      group.totalAdPlayTime += device.totalAdPlayTime || 0;
+      
+      // Use the most recent lastSeen
+      if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
+        group.lastSeen = device.lastSeen;
+      }
+      
+      // Use the most recent location
+      if (device.currentLocation && (!group.currentLocation || 
+          (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
+        group.currentLocation = device.currentLocation;
+      }
+      
+      // Merge arrays
+      if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
+      if (device.qrScans) group.qrScans.push(...device.qrScans);
+      if (device.locationHistory) group.locationHistory.push(...device.locationHistory);
+      if (device.hourlyStats) group.hourlyStats.push(...device.hourlyStats);
+      if (device.adPerformance) group.adPerformance.push(...device.adPerformance);
+      if (device.alerts) group.alerts.push(...device.alerts);
+      
+      // Use the most recent screen metrics
+      if (device.screenMetrics && Object.keys(device.screenMetrics).length > 0) {
+        group.screenMetrics = { ...group.screenMetrics, ...device.screenMetrics };
+      }
+      
+      // If any device is online, mark the group as online
+      if (isDeviceOnline) {
+        group.isOnline = true;
+      }
+    });
+    
+    // Process each material group and create consolidated display
+    materialGroups.forEach((group, materialId) => {
+      
+      // Calculate totals
+      const deviceHours = group.totalHoursOnline || 0;
+      const deviceDistance = group.totalDistanceTraveled || 0;
+      const isDeviceOnline = group.isOnline;
       const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
       
       totalHours += deviceHours;
@@ -638,16 +748,8 @@ router.get('/compliance', async (req, res) => {
       if (isDeviceOnline) totalOnlineScreens++;
       if (isDeviceCompliant) totalCompliantScreens++;
       
-      // Create unique display ID by combining materialId with slot info
-      // If materialId is missing, try to use deviceId as fallback
-      const materialId = device.materialId || device.deviceId || 'UNKNOWN';
-      const displayId = `${materialId}-SLOT-${device.deviceSlot || 1}`;
-      
-      // Skip devices without proper materialId for now (they need to be linked to materials)
-      if (!device.materialId) {
-        console.log(`⚠️ Skipping device ${device.deviceId} - no materialId assigned`);
-        return;
-      }
+      // Create display ID (just material ID, no slot suffix)
+      const displayId = materialId;
       
       // Skip if we've already seen this display ID (deduplication)
       if (seenDisplayIds.has(displayId)) {
@@ -657,11 +759,9 @@ router.get('/compliance', async (req, res) => {
       seenDisplayIds.add(displayId);
       
       // Convert coordinates format for individual screens
-      let deviceLocation = device.currentLocation;
+      let deviceLocation = group.currentLocation;
       let frontendDeviceLocation = null;
       
-      // Debug: Log location data
-      console.log('🔍 Location data for device', device.deviceId, ':', deviceLocation);
       
       if (deviceLocation) {
         if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
@@ -687,47 +787,76 @@ router.get('/compliance', async (req, res) => {
         };
       }
 
+      // Create status text showing both slots explicitly
+      let slot1Status = group.slotStatus.slot1.online ? 'ONLINE' : 'OFFLINE';
+      let slot2Status = group.slotStatus.slot2.online ? 'ONLINE' : 'OFFLINE';
+      let statusText = `SLOT 1: ${slot1Status} | SLOT 2: ${slot2Status}`;
+      
+      // Also create a combined status for overall device status
+      let combinedStatus = 'OFFLINE';
+      if (group.slotStatus.slot1.online && group.slotStatus.slot2.online) {
+        combinedStatus = 'BOTH SLOTS ONLINE';
+      } else if (group.slotStatus.slot1.online || group.slotStatus.slot2.online) {
+        const onlineSlots = [];
+        if (group.slotStatus.slot1.online) onlineSlots.push('1');
+        if (group.slotStatus.slot2.online) onlineSlots.push('2');
+        combinedStatus = `SLOT ${onlineSlots.join(' & ')} ONLINE`;
+      } else {
+        combinedStatus = 'BOTH SLOTS OFFLINE';
+      }
+
       individualScreens.push({
-        deviceId: device.deviceId,
-        displayId: displayId, // Unique identifier for frontend display
-        materialId: materialId, // Use the fallback materialId
-        screenType: device.screenType,
-        carGroupId: device.carGroupId,
-        deviceSlot: device.deviceSlot,
+        deviceId: group.devices[0].device.deviceId, // Use first device as primary
+        displayId: displayId, // Just material ID, no slot suffix
+        materialId: materialId, // Use the materialId from tablet registration
+        screenType: 'HEADDRESS',
+        carGroupId: group.carGroupId,
+        deviceSlot: undefined, // Don't show slot for consolidated entries
+        slotNumber: undefined, // Don't show slot for consolidated entries
         isOnline: isDeviceOnline,
         currentLocation: frontendDeviceLocation,
-        lastSeen: device.lastSeen,
+        lastSeen: group.lastSeen,
         currentHours: deviceHours,
         hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
         isCompliant: isDeviceCompliant,
         totalDistanceToday: deviceDistance,
-        averageDailyHours: device.averageDailyHours || deviceHours,
+        averageDailyHours: deviceHours,
         complianceRate: Math.min(100, (deviceHours / 8) * 100), // Percentage of 8-hour target
-        totalHoursOnline: device.totalHoursOnline || deviceHours,
-        totalDistanceTraveled: device.totalDistanceTraveled || deviceDistance,
+        totalHoursOnline: group.totalHoursOnline,
+        totalDistanceTraveled: group.totalDistanceTraveled,
         displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
+        statusText: statusText, // Show both slot statuses explicitly
+        combinedStatus: combinedStatus, // Show combined status
+        slot1Status: slot1Status, // Individual slot 1 status
+        slot2Status: slot2Status, // Individual slot 2 status
+        slotStatus: group.slotStatus, // Include detailed slot status
         screenMetrics: {
-          ...(device.screenMetrics || {}),
+          ...group.screenMetrics,
           displayHours: deviceHours,
-          adPlayCount: device.screenMetrics?.adPlayCount || 0,
-          lastAdPlayed: device.screenMetrics?.lastAdPlayed || null,
-          brightness: device.screenMetrics?.brightness || 100,
-          volume: device.screenMetrics?.volume || 50,
+          adPlayCount: group.screenMetrics?.adPlayCount || 0,
+          lastAdPlayed: group.screenMetrics?.lastAdPlayed || null,
+          brightness: group.screenMetrics?.brightness || 100,
+          volume: group.screenMetrics?.volume || 50,
           isDisplaying: isDeviceOnline,
-          maintenanceMode: device.screenMetrics?.maintenanceMode || false,
-          currentAd: device.screenMetrics?.currentAd || null
+          maintenanceMode: group.screenMetrics?.maintenanceMode || false,
+          currentAd: group.screenMetrics?.currentAd || null
         },
-        alerts: device.alerts || []
+        alerts: group.alerts,
+        // Add consolidated totals for display
+        totalAdPlays: group.totalAdPlays,
+        totalQRScans: group.totalQRScans,
+        totalAdImpressions: group.totalAdImpressions,
+        totalAdPlayTime: group.totalAdPlayTime
       });
     });
 
     // Create material-level records for map display (one per material)
     const materialScreens = [];
-    allDevices.forEach(device => {
-      // Use the device's location
-      let displayLocation = device.currentLocation;
-      let displayStatus = device.isOnline ? 'ACTIVE' : 'OFFLINE';
-      let hasOnlineDevice = device.isOnline;
+    materialGroups.forEach((group, materialId) => {
+      // Use the group's location
+      let displayLocation = group.currentLocation;
+      let displayStatus = group.isOnline ? 'ACTIVE' : 'OFFLINE';
+      let hasOnlineDevice = group.isOnline;
       
       // Convert coordinates format from [lng, lat] to {lat, lng} for frontend compatibility
       let frontendLocation = null;
@@ -749,22 +878,31 @@ router.get('/compliance', async (req, res) => {
         }
       }
 
+      // Create status text for material screens
+      let materialSlot1Status = group.slotStatus.slot1.online ? 'ONLINE' : 'OFFLINE';
+      let materialSlot2Status = group.slotStatus.slot2.online ? 'ONLINE' : 'OFFLINE';
+      let materialStatusText = `SLOT 1: ${materialSlot1Status} | SLOT 2: ${materialSlot2Status}`;
+
       materialScreens.push({
-        materialId: device.materialId,
-        deviceId: device.deviceId, // Legacy deviceId for compatibility
-        screenType: device.screenType,
-        carGroupId: device.carGroupId,
+        materialId: materialId,
+        deviceId: group.devices[0].device.deviceId, // Use first device as primary
+        screenType: 'HEADDRESS',
+        carGroupId: group.carGroupId,
         isOnline: hasOnlineDevice,
         currentLocation: frontendLocation,
-        lastSeen: device.lastSeen,
+        lastSeen: group.lastSeen,
         displayStatus: displayStatus,
-        totalDevices: 1,
-        onlineDevices: device.isOnline ? 1 : 0,
+        statusText: materialStatusText, // Show both slot statuses
+        totalDevices: group.devices.length, // Show total devices in this material
+        onlineDevices: group.slotStatus.slot1.online + group.slotStatus.slot2.online ? 1 : 0, // Count online slots
+        slot1Status: materialSlot1Status, // Individual slot 1 status
+        slot2Status: materialSlot2Status, // Individual slot 2 status
+        slotStatus: group.slotStatus, // Include slot status
         // Aggregate data for display
-        totalHours: device.currentHoursToday || 0,
-        totalDistance: device.currentSession?.totalDistanceTraveled || 0,
-        screenMetrics: device.screenMetrics,
-        alerts: device.alerts
+        totalHours: group.totalHoursOnline || 0,
+        totalDistance: group.totalDistanceTraveled || 0,
+        screenMetrics: group.screenMetrics,
+        alerts: group.alerts
       });
     });
 

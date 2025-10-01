@@ -122,11 +122,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                       {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                     </button>
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber}</td>
+                  <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber || 'Consolidated'}</td>
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
                       {getStatusIcon(screen.isOnline ? 'online' : 'offline')}
-                      <span className="text-sm">{getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
+                      <span className="text-sm">{screen.statusText || getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -159,10 +159,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     )}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
-                    {typeof screen.currentLocation === 'string' 
-                      ? screen.currentLocation 
-                      : (screen.currentLocation as any)?.address || 'Unknown Location'
-                    }
+                    {screen.currentLocation?.address || 'Location not available'}
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
