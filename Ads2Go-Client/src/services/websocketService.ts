@@ -35,8 +35,11 @@ class WebSocketService {
     const isRailway = window.location.hostname.includes('railway.app');
     const railwayHeaders = isRailway ? '&railway=true' : '';
     
+    // Use Railway-specific endpoint if on Railway
+    const endpoint = isRailway ? '/ws/railway' : '/ws/playback';
+    
     // Use playback endpoint with admin=true for general admin connections
-    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}${railwayHeaders}`;
+    return `${protocol}//${host}${endpoint}?admin=true&cb=${cacheBust}${railwayHeaders}`;
   }
 
   private connect(): void {

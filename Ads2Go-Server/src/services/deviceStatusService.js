@@ -16,23 +16,16 @@ class DeviceStatusService {
       return;
     }
     
+    // Railway-compatible WebSocket configuration
     this.wss = new WebSocket.Server({ 
       noServer: true,
       clientTracking: true,
-      perMessageDeflate: {
-        zlibDeflateOptions: {
-          chunkSize: 1024,
-          memLevel: 7,
-          level: 3
-        },
-        zlibInflateOptions: {
-          chunkSize: 10 * 1024
-        },
-        clientNoContextTakeover: true,
-        serverNoContextTakeover: true,
-        serverMaxWindowBits: 10,
-        concurrencyLimit: 10,
-        threshold: 1024
+      // Disable compression for Railway compatibility
+      perMessageDeflate: false,
+      // Add Railway-specific options
+      verifyClient: (info) => {
+        console.log(`🔍 WebSocket client verification: ${info.origin}`);
+        return true; // Allow all connections for now
       }
     });
     
@@ -91,7 +84,7 @@ class DeviceStatusService {
           
           this.handleConnection(ws, request);
         });
-      } else if (pathname === '/ws/playback') {
+      } else if (pathname === '/ws/playback' || pathname === '/ws/railway') {
         // New endpoint for real-time ad playback updates
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];

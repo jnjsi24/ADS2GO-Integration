@@ -10,6 +10,9 @@ require('dotenv').config();
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
 
+// SSE service for Railway-compatible real-time updates
+const { router: sseRouter, broadcastToSSE, broadcastToAdminSSE } = require('./routes/sse');
+
 // ✅ For handling GraphQL file uploads
 const { graphqlUploadExpress } = require('graphql-upload');
 
@@ -308,8 +311,14 @@ app.use('/cleanup', cleanupRoutes);
       host: request.headers.host,
       'user-agent': request.headers['user-agent'],
       'sec-websocket-key': request.headers['sec-websocket-key'],
-      'sec-websocket-version': request.headers['sec-websocket-version']
+      'sec-websocket-version': request.headers['sec-websocket-version'],
+      'connection': request.headers.connection,
+      'upgrade': request.headers.upgrade
     });
+    
+    // Add Railway-specific headers
+    request.headers['x-forwarded-proto'] = 'https';
+    request.headers['x-forwarded-for'] = request.headers['x-forwarded-for'] || request.connection.remoteAddress;
   });
   
   // Initialize WebSocket server
