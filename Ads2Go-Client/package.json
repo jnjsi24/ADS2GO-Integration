@@ -1,29 +1,49 @@
 {
-  "name": "client",
+  "name": "ads2go-client",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@apollo/client": "^3.13.8",
-    "@heroicons/react": "^2.0.18",
-    "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
-    "cross-env": "^7.0.3",
-    "graphql": "^16.11.0",
+    "@apollo/client": "^3.8.8",
+    "@heroicons/react": "^2.2.0",
+    "@radix-ui/react-accordion": "^1.2.12",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "@types/jest": "^27.5.2",
+    "@types/node": "^16.18.68",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
+    "ads2go-integration": "file:..",
+    "apollo-server-express": "^3.12.1",
+    "date-fns": "^4.1.0",
+    "express": "^4.18.2",
+    "firebase": "^12.2.1",
+    "framer-motion": "^12.23.16",
+    "graphql": "^16.8.1",
     "jwt-decode": "^4.0.0",
-    "lucide-react": "^0.508.0",
-    "next-auth": "^4.24.11",
+    "leaflet": "^1.9.4",
+    "leaflet-defaulticon-compatibility": "^0.1.2",
+    "lucide-react": "^0.544.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^6.21.0",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^7.8.2",
     "react-scripts": "5.0.1",
-    "recharts": "^2.15.1",
-    "sonner": "^2.0.5"
+    "recharts": "^3.1.2",
+    "serve": "^14.2.1",
+    "sonner": "^2.0.7",
+    "typescript": "^4.9.5",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
-    "start": "cross-env NODE_OPTIONS=--max-old-space-size=4096 PORT=3000 react-scripts start",
-    "build": "cross-env NODE_OPTIONS=--max-old-space-size=4096 react-scripts build",
-    "test": "cross-env NODE_OPTIONS=--max-old-space-size=4096 react-scripts test",
+    "start": "react-scripts start",
+    "start:prod": "node server.js",
+    "build": "node build-optimized.js",
+    "build:dev": "CI=false node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
+    "build:standard": "node --max-old-space-size=4096 node_modules/.bin/react-scripts build",
+    "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -45,15 +65,6 @@
     ]
   },
   "devDependencies": {
-    "@types/jwt-decode": "^3.1.0",
-    "@types/node": "^20.10.5",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0"
-  },
-  "overrides": {
-    "react-scripts": {
-      "webpack": "^5.81.0"
-    }
+    "@types/leaflet": "^1.9.20"
   }
 }

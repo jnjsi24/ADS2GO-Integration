@@ -13,19 +13,39 @@ const paymentTypeDefs = gql`
     GCASH
     PAYPAL
     BANK_TRANSFER
+    CASH
   }
 
   type Ad {
-    id: ID!
-    title: String!
-    price: Float!
+    id: ID
+    title: String
+    price: Float
+    name: String
+    durationDays: Int
+    category: String
+    materialType: String
+    vehicleType: String
+    description: String
+    adStatus: String
+    paymentStatus: String
+  }
+
+  type AdsPlan {
+    id: ID
+    title: String
+    description: String
+    durationDays: Int
+    playsPerDayPerDevice: Int
+    numberOfDevices: Int
+    pricePerPlay: Float
   }
 
   type Payment {
     id: ID!
     userId: ID!
-    adsId: ID!
-    ad: Ad
+    adsId: Ad
+    planID: AdsPlan
+    paymentDate: String
     paymentType: PaymentType!
     amount: Float!
     receiptId: String!
@@ -36,9 +56,9 @@ const paymentTypeDefs = gql`
 
   input CreatePaymentInput {
     adsId: ID!
+    paymentDate: String
     paymentType: PaymentType!
-    amount: Float!
-    receiptId: String!
+    receiptId: String
   }
 
   input UpdatePaymentInput {
@@ -51,14 +71,21 @@ const paymentTypeDefs = gql`
     payment: Payment
   }
 
+  type AdPaymentInfo {
+    ad: Ad!
+    payment: Payment
+  }
+
   type Query {
-    getPaymentsByUser: [Payment!]!
-    getAllPayments: [Payment!]! # Admin only
+    getPaymentsByUser(paymentStatus: PaymentStatus, durationDays: Int): [Payment!]!
+    getAllPayments(paymentStatus: PaymentStatus): [Payment!]!
+    getPaymentById(id: ID!): Payment
+    getUserAdsWithPayments: [AdPaymentInfo!]!
   }
 
   type Mutation {
     createPayment(input: CreatePaymentInput!): PaymentResponse!
-    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse! # Admin only
+    updatePayment(id: ID!, input: UpdatePaymentInput!): PaymentResponse!
     deletePayment(id: ID!): PaymentResponse!
   }
 `;

@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
+import { useQuery, useMutation } from '@apollo/client';
+import AdminLayout from '../../components/AdminLayout';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
+import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
+import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
+import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 
 interface User {
-  id: number;
+  id: string;
   lastName: string;
   firstName: string;
   middleName: string;
@@ -11,578 +21,908 @@ interface User {
   email: string;
   status: 'active' | 'inactive';
   city: string;
-  adsCount: number;
-  ridersCount: number;
+  ads: { id: string }[];
+  isEmailVerified: boolean;
+  lastLogin: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  role: string;
+  profilePicture: string | null;
+  houseAddress: string | null;
 }
 
-interface AdForm {
-  id: string;
-  type: 'ads';
-  title: string;
-  description: string;
-  vehicleType: string;
-  material: string;
-  plan: string;
-  format: string;
-  mediaUrl: string;
-  companyName: string;
-  companyEmail: string;
-  dateStarted: string;
-  dateEnded: string;
-  status: string;
-}
+const cities = ['Manila', 'Quezon City', 'Cebu', 'Davao', 'Iloilo', 'Baguio', 'Makati', 'Mandaluyong', 'Taguig', 'Pasig', 'Parañaque'];
 
-const mockUsers: User[] = [
-  {
-    id: 1,
-    lastName: 'Garcia',
-    firstName: 'Juan',
-    middleName: 'Santos',
-    company: 'TechCorp',
-    address: '123 Ayala Ave.',
-    contact: '09171234567',
-    email: 'juan.garcia@techcorp.com',
-    status: 'active',
-    city: 'Makati',
-    adsCount: 5,
-    ridersCount: 12,
-  },
-  {
-    id: 2,
-    lastName: 'Reyes',
-    firstName: 'Maria',
-    middleName: 'Lopez',
-    company: 'AgriFarm Inc.',
-    address: '456 Quezon Blvd.',
-    contact: '09987654321',
-    email: 'maria.reyes@agrifarm.com',
-    status: 'inactive',
-    city: 'Quezon City',
-    adsCount: 3,
-    ridersCount: 7,
-  },
-  {
-    id: 3,
-    lastName: 'Cruz',
-    firstName: 'Pedro',
-    middleName: 'Dela Cruz',
-    company: 'BuildIt',
-    address: '789 Katipunan St.',
-    contact: '09182345678',
-    email: 'pedro.cruz@buildit.com',
-    status: 'active',
-    city: 'Manila',
-    adsCount: 8,
-    ridersCount: 15,
-  },
-  {
-    id: 4,
-    lastName: 'Dela Rosa',
-    firstName: 'Ana',
-    middleName: 'Mendoza',
-    company: 'SmartBuild',
-    address: '101 Maginhawa St.',
-    contact: '09174561234',
-    email: 'ana.rosa@smartbuild.com',
-    status: 'active',
-    city: 'Pasig',
-    adsCount: 2,
-    ridersCount: 3,
-  },
-  {
-    id: 5,
-    lastName: 'Santos',
-    firstName: 'Carlos',
-    middleName: 'Rivera',
-    company: 'GreenFields',
-    address: '34 Davao St.',
-    contact: '09176543210',
-    email: 'carlos.santos@greenfields.com',
-    status: 'inactive',
-    city: 'Davao',
-    adsCount: 0,
-    ridersCount: 0,
-  },
-  {
-    id: 6,
-    lastName: 'Navarro',
-    firstName: 'Liza',
-    middleName: 'Gomez',
-    company: 'BioTech PH',
-    address: '88 Baguio Hilltop Rd.',
-    contact: '09171239876',
-    email: 'liza.navarro@biotechph.com',
-    status: 'active',
-    city: 'Baguio',
-    adsCount: 4,
-    ridersCount: 9,
-  },
-  {
-    id: 7,
-    lastName: 'Lopez',
-    firstName: 'Miguel',
-    middleName: 'Torres',
-    company: 'AutoMate',
-    address: '14 Iloilo Ave.',
-    contact: '09223456789',
-    email: 'miguel.lopez@automate.com',
-    status: 'inactive',
-    city: 'Iloilo',
-    adsCount: 1,
-    ridersCount: 2,
-  },
-  {
-    id: 8,
-    lastName: 'Torres',
-    firstName: 'Sofia',
-    middleName: 'Reyes',
-    company: 'NextGen',
-    address: '22 Taguig Rd.',
-    contact: '09181234567',
-    email: 'sofia.torres@nextgen.com',
-    status: 'active',
-    city: 'Taguig',
-    adsCount: 6,
-    ridersCount: 11,
-  },
-  {
-    id: 9,
-    lastName: 'Fernandez',
-    firstName: 'Marco',
-    middleName: 'Luis',
-    company: 'CloudLink',
-    address: '77 Makati Ave.',
-    contact: '09331234567',
-    email: 'marco.fernandez@cloudlink.com',
-    status: 'active',
-    city: 'Makati',
-    adsCount: 4,
-    ridersCount: 10,
-  },
-  {
-    id: 10,
-    lastName: 'Ramirez',
-    firstName: 'Isabel',
-    middleName: 'Delos Santos',
-    company: 'HealthPlus',
-    address: '65 Quezon Ave.',
-    contact: '09451234567',
-    email: 'isabel.ramirez@healthplus.com',
-    status: 'inactive',
-    city: 'Quezon City',
-    adsCount: 2,
-    ridersCount: 4,
-  },
-];
+// Helper function to safely parse dates
+const parseDate = (dateString: any): Date | null => {
+  if (!dateString) return null;
+  
+  try {
+    // Handle various date formats
+    let date: Date;
+    
+    // If it's already a number (timestamp)
+    if (typeof dateString === 'number') {
+      date = new Date(dateString);
+    }
+    // If it's a string
+    else if (typeof dateString === 'string') {
+      // Handle ISO string format
+      if (dateString.includes('T') || dateString.includes('Z')) {
+        date = new Date(dateString);
+      }
+      // Handle timestamp as string
+      else if (/^\d+$/.test(dateString)) {
+        const timestamp = parseInt(dateString);
+        // If timestamp is in seconds, convert to milliseconds
+        date = new Date(timestamp < 10000000000 ? timestamp * 1000 : timestamp);
+      }
+      // Handle other string formats
+      else {
+        date = new Date(dateString);
+      }
+    }
+    // If it's already a Date object
+    else if (dateString instanceof Date) {
+      date = dateString;
+    }
+    // Default fallback
+    else {
+      date = new Date(dateString);
+    }
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date received:', dateString);
+      return null;
+    }
+    
+    return date;
+  } catch (error) {
+    console.warn('Error parsing date:', dateString, error);
+    return null;
+  }
+};
 
-const cities = ['Manila', 'Quezon City', 'Cebu', 'Davao', 'Iloilo', 'Baguio', 'Makati', 'Taguig', 'Pasig', 'Parañaque'];
+// Helper function to format date for display
+const formatDate = (date: Date | null): string => {
+  if (!date) return 'Never';
+  
+  try {
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    console.warn('Error formatting date:', date, error);
+    return 'Invalid Date';
+  }
+};
+
+// Helper function to format date for last access (shorter format)
+const formatLastAccess = (date: Date | null): string => {
+  if (!date) return 'Never';
+  
+  try {
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    // If within 24 hours, show "Today"
+    if (diffInHours < 24) {
+      return 'Today';
+    }
+    // If within a week, show day name
+    else if (diffInHours < 168) {
+      return date.toLocaleDateString('en-US', { weekday: 'short' });
+    }
+    // Otherwise show date
+    else {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    }
+  } catch (error) {
+    console.warn('Error formatting last access date:', date, error);
+    return 'Invalid Date';
+  }
+};
 
 const ManageUsers: React.FC = () => {
+  const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
+  const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [citySearch, setCitySearch] = useState('');
-  const [showCityModal, setShowCityModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('User List');
-  const [expandedId, setExpandedId] = useState<string | number | null>(null); // Updated to handle both string and number
-  const [selectedItems, setSelectedItems] = useState<Set<string | number>>(new Set());
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
+  const cityFilterOptions = ['All Cities', ...cities];
 
-  // Mock data for ads
-  const [mockData, setMockData] = useState<AdForm[] | null>(null);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [selectedCityFilter, setSelectedCityFilter] = useState('All Cities');
+
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false); // New state for animation
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Show 10 advertisers per page
+ 
+  // Fetch users using useQuery hook
+  const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
+    fetchPolicy: 'network-only',
+  });
+
+  // Delete user mutation
+  const [deleteUser] = useMutation(DELETE_USER);
+
+  // Transform users data when it changes
+  useEffect(() => {
+    if (usersData?.getAllUsers) {
+      const userData = usersData.getAllUsers;
+      
+      // Transform the data to match the User interface
+      const transformedUsers: User[] = userData.map((user: any) => {
+        // Extract city from address (last part after comma)
+        const addressParts = user.companyAddress?.split(',') || [];
+        const city = addressParts.length > 1 ? addressParts[addressParts.length - 1].trim() : 'Unknown';
+        
+        // Parse dates safely
+        const lastLogin = parseDate(user.lastLogin);
+        const createdAt = parseDate(user.createdAt) || new Date();
+        const updatedAt = parseDate(user.updatedAt) || new Date();
+        
+        return {
+          id: user.id,
+          lastName: user.lastName || '',
+          firstName: user.firstName || '',
+          middleName: user.middleName || '',
+          company: user.companyName || '',
+          address: user.companyAddress || '',
+          contact: user.contactNumber || '',
+          email: user.email || '',
+          status: user.isEmailVerified ? 'active' : 'inactive',
+          city: city,
+          ads: user.ads || [],
+          isEmailVerified: user.isEmailVerified || false,
+          lastLogin,
+          createdAt,
+          updatedAt,
+          role: user.role || 'USER',
+          profilePicture: user.profilePicture || null,
+          houseAddress: user.houseAddress || null
+        };
+      });
+      
+      setUsers(transformedUsers);
+      setError(null);
+      setLoading(false);
+    }
+  }, [usersData]);
+
+  // Handle loading and error states
+  useEffect(() => {
+    setLoading(usersLoading);
+  }, [usersLoading]);
 
   useEffect(() => {
-    const mockAdForms: AdForm[] = [
-      {
-        id: "1",
-        type: "ads",
-        title: "Summer Sale Ad",
-        description: "Promoting summer discounts on scooters",
-        vehicleType: "Scooter",
-        material: "Vinyl",
-        plan: "Premium",
-        format: "Video",
-        mediaUrl: "https://example.com/media/summer-sale.mp4",
-        companyName: "Summer Co.",
-        companyEmail: "sales@summerco.com",
-        dateStarted: "2025-06-01",
-        dateEnded: "2025-06-30",
-        status: "pending",
-      },
-      {
-        id: "2",
-        type: "ads",
-        title: "New Bike Launch",
-        description: "Introducing our latest bike model",
-        vehicleType: "Motorcycle",
-        material: "Metal",
-        plan: "Basic",
-        format: "Image",
-        mediaUrl: "https://example.com/media/bike-launch.jpg",
-        companyName: "Bike Innovations",
-        companyEmail: "info@bikeinnovations.com",
-        dateStarted: "2025-07-01",
-        dateEnded: "2025-07-15",
-        status: "pending",
-      },
-    ];
-    setMockData(mockAdForms);
-  }, []);
+    if (usersError) {
+      const errorMessage = usersError.message || 'Unknown error';
+      setError('Failed to fetch advertisers: ' + errorMessage);
+      console.error('Error fetching advertisers:', usersError);
+      setLoading(false);
+    }
+  }, [usersError]);
 
-  const filteredUsers = mockUsers.filter((user) => {
-    const matchesSearch = user.firstName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    const matchesCity = !selectedCity || user.city === selectedCity;
+  // Helper function to get initials for the user avatar
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  };
+
+  const handleDelete = (id: string) => {
+    setUserToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (userToDelete) {
+      try {
+        const result = await deleteUser({
+          variables: { id: userToDelete },
+        });
+        
+        if (result.data?.deleteUser?.success) {
+          // Remove the user from the local state
+          setUsers(prev => prev.filter((user) => user.id !== userToDelete));
+          if (selectedUser?.id === userToDelete) setSelectedUser(null);
+
+          // Remove from selected users if it was selected
+          setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
+          alert('Advertiser deleted successfully');
+        } else {
+          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+        }
+        setShowDeleteModal(false);
+        setUserToDelete(null);
+      } catch (err: any) {
+        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        console.error('Error deleting advertiser:', err);
+        setShowDeleteModal(false);
+        setUserToDelete(null);
+      }
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setUserToDelete(null);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+  setSelectedStatusFilter(status);
+  setShowStatusDropdown(false);
+};
+
+const handleCityFilterChange = (city: string) => {
+  setSelectedCityFilter(city);
+  setShowCityDropdown(false);
+};
+
+
+  // Filter users based on search term, status, and city
+  const filteredUsers = users.filter((user) => {
+    const searchLower = searchTerm.toLowerCase();
+    const fullName = `${user.firstName} ${user.middleName} ${user.lastName}`.toLowerCase();
+    const matchesSearch = 
+      fullName.includes(searchLower) ||
+      user.email.toLowerCase().includes(searchLower) ||
+      user.company.toLowerCase().includes(searchLower) ||
+      user.contact.toLowerCase().includes(searchLower);
+    
+    const matchesStatus = selectedStatusFilter === 'All Status' || user.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+    const matchesCity = selectedCityFilter === 'All Cities' || user.city.toLowerCase().includes(selectedCityFilter.toLowerCase());
+    
     return matchesSearch && matchesStatus && matchesCity;
   });
 
-  const forms = mockData || [];
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
-  const handleApprove = () => {
-    alert('Form approved successfully');
-    setExpandedId(null);
-    setSelectedItems(new Set());
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatusFilter, selectedCityFilter]);
+
+  // View details in modal
+  const handleViewDetails = (user: User) => {
+    setSelectedUser(user);
+    setShowDetailsModal(true);
+    // Trigger animation after the modal is rendered
+    setTimeout(() => {
+      setIsModalOpen(true);
+    }, 10);
+  };
+  
+  // Close modal with animation
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setTimeout(() => {
+      setShowDetailsModal(false);
+      setSelectedUser(null);
+    }, 300); // Duration matches the transition duration
   };
 
-  const handleReject = () => {
-    alert('Form rejected successfully');
-    setExpandedId(null);
-    setSelectedItems(new Set());
+  // Handle individual user selection
+  const handleUserSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedUsers(prevSelected =>
+      prevSelected.includes(id)
+        ? prevSelected.filter(userId => userId !== id)
+        : [...prevSelected, id]
+    );
   };
 
-  const toggleExpand = (id: string | number) => {
-    setExpandedId(prev => (prev === id ? null : id));
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      const allIds: (string | number)[] = activeTab === 'User List' ? filteredUsers.map(user => user.id) : forms.map(form => form.id);
-      setSelectedItems(new Set(allIds));
-    } else {
-      setSelectedItems(new Set());
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
     }
   };
 
-  const handleItemSelect = (id: string | number) => {
-    const newSelectedItems = new Set(selectedItems);
-    if (newSelectedItems.has(id)) {
-      newSelectedItems.delete(id);
-    } else {
-      newSelectedItems.add(id);
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
     }
-    setSelectedItems(newSelectedItems);
   };
+
+  // Handle select all users (only for current page)
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentPageUserIds = paginatedUsers.map(user => user.id);
+    const allCurrentPageSelected = currentPageUserIds.every(id => selectedUsers.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect all users on current page
+      setSelectedUsers(prev => prev.filter(id => !currentPageUserIds.includes(id)));
+    } else {
+      // Select all users on current page
+      setSelectedUsers(prev => {
+        const newSelection = [...prev];
+        currentPageUserIds.forEach(id => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id);
+          }
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const isAllSelected = paginatedUsers.length > 0 && paginatedUsers.every(user => selectedUsers.includes(user.id));
+
+  // Export to Excel function
+  const exportToExcel = () => {
+    try {
+      // Get the users to export (selected users or all users if none selected)
+      const usersToExport = selectedUsers.length > 0 
+        ? users.filter(user => selectedUsers.includes(user.id))
+        : filteredUsers;
+
+      // Prepare data for Excel
+      const excelData = usersToExport.map(user => ({
+        'First Name': user.firstName,
+        'Middle Name': user.middleName,
+        'Last Name': user.lastName,
+        'Email': user.email,
+        'Company': user.company,
+        'Contact': user.contact,
+        'Address': user.address,
+        'City': user.city,
+        'Status': user.status.charAt(0).toUpperCase() + user.status.slice(1),
+        'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
+        'Last Login': user.lastLogin ? formatLastAccess(user.lastLogin) : 'Never',
+        'Created At': user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
+        'Role': user.role
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // First Name
+        { wch: 15 }, // Middle Name
+        { wch: 15 }, // Last Name
+        { wch: 25 }, // Email
+        { wch: 20 }, // Company
+        { wch: 15 }, // Contact
+        { wch: 30 }, // Address
+        { wch: 15 }, // City
+        { wch: 10 }, // Status
+        { wch: 12 }, // Email Verified
+        { wch: 15 }, // Last Login
+        { wch: 12 }, // Created At
+        { wch: 10 }  // Role
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Advertisers');
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `advertisers_export_${timestamp}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      // Show success message
+      alert(`Successfully exported ${usersToExport.length} advertiser(s) to ${filename}`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Error exporting to Excel. Please try again.');
+    }
+  };
+
+  // Show loading state while authentication is being checked
+  if (authLoading || !isInitialized) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Check if admin is authenticated
+  if (!admin) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600">You must be logged in to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="text-lg">Loading advertisers...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+        <div className="text-red-500 text-lg">{error}</div>
+        <div className="mt-2 text-sm text-gray-600">
+          Please check:
+          <ul className="list-disc list-inside mt-1">
+            <li>GraphQL server is running on port 5000</li>
+            <li>You have admin privileges</li>
+            <li>Authentication token is valid</li>
+          </ul>
+        </div>
+        <button 
+          className="ml-4 px-4 py-2 bg-blue-500 text-white rounded mt-4"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] ">
-      <div className="bg-[#f9f9fc] w-full">
-        {/* Header with Dropdown Title and Add New Button */}
-        <div className="flex justify-between items-center mb-6">
-          <select
-            className="px-3 py-1 text-2xl bg-[#f9f9fc] font-bold text-gray-800 focus:outline-none"
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value)}
-          >
-            <option value="User List">User List</option>
-            <option value="Manage Ads">Manage Ads</option>
-          </select>
-          <button 
-            className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] hover:scale-105 transition-all duration-300"
-          >
-            Add New User
-          </button>
-        </div>
-
-        {/* Search Bar and Filters */}
-        <div className="flex justify-between items-center mb-4">
+    <AdminLayout>
+      <div className="min-h-screen bg-gray-100 pr-5 p-10 flex flex-col">
+      {/* Header with Title and Filters */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
+        <div className="flex gap-2">
           <input
             type="text"
-            className="border rounded px-3 py-1 text-sm w-64"
-            placeholder="Search by first name..."
+            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+            placeholder="Search advertisers by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <div className="flex space-x-2">
-            <select
-              className="border rounded px-3 py-1 text-sm"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+          {/* STATUS Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedStatusFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showStatusDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                >
+                  {statusFilterOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusFilterChange(status)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* CITY Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowCityDropdown(!showCityDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedCityFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showCityDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                >
+                  {cityFilterOptions.map((city) => (
+                    <button
+                      key={city}
+                      onClick={() => handleCityFilterChange(city)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+      
+
+        {/* User List */}
+        <div className="flex-1 flex flex-col">
+          <div className="rounded-xl mb-4 overflow-hidden flex-1">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+            <div className="flex items-center gap-2 ml-1 col-span-3">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                onChange={(e) => {}}
+                onClick={handleSelectAll}
+                checked={isAllSelected}
+              />
+              <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            </div>
+            <div className="col-span-3 ml-16">Email</div>
+            <div className="col-span-2">Company</div>
+            <div className="col-span-1 flex items-center gap-1 ml-7">
+              <span>Status</span>
+              <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+            </div>
+            <div className="col-span-2 ml-20">Last Access</div>
+            <div className="col-span-1 text-center">Action</div>
+          </div>
+
+          {/* User Cards */}
+          {paginatedUsers.map((user) => (
+            <div
+              key={user.id}
+              className="bg-white mb-3 rounded-lg shadow-md"
+              onClick={() => handleViewDetails(user)}
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-            <select
-              className="border rounded px-3 py-1 text-sm"
-              value={selectedCity || ''}
-              onChange={(e) => setSelectedCity(e.target.value || null)}
-            >
-              <option value="">Filter by City</option>
-              {cities.map(city => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
+              <div
+                className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm transition-colors cursor-pointer rounded-lg group hover:bg-[#3674B5]"
+              >
+                <div className="col-span-3 gap-4 flex items-center">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={selectedUsers.includes(user.id)}
+                    onChange={() => {}}
+                    onClick={(e) => handleUserSelect(user.id, e)}
+                  />
+                  <div className="flex items-center">
+                    <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
+                      {getInitials(user.firstName, user.lastName)}
+                    </div>
+                    <span className="truncate font-semibold group-hover:text-white">
+                      {user.firstName} {user.middleName} {user.lastName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="col-span-3 truncate group-hover:text-white">{user.email}</div>
+                <div className="col-span-2 truncate group-hover:text-white">{user.company}</div>
+
+                <div className="col-span-1 ml-8">
+                  <span
+                    className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      user.status === 'active'
+                        ? 'bg-green-200 text-green-800'
+                        : 'bg-red-200 text-red-800'
+                    } `}
+                  >
+                    {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
+                  </span>
+                </div>
+
+                <div className="col-span-2 truncate ml-10 text-center group-hover:text-white">
+                  {formatLastAccess(user.lastLogin)}
+                </div>
+
+                <div
+                  className="col-span-1 flex items-center justify-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                    onClick={() => handleDelete(user.id)}
+                    title="Delete"
+                  >
+                    <Trash 
+                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                      size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                      Delete
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {paginatedUsers.length === 0 && (
+            <div className="p-4 text-center text-gray-500">
+              {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
+            </div>
+          )}
           </div>
         </div>
 
-        {showCityModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-20 z-50">
-            <div className="bg-white p-4 rounded-lg w-80 shadow-lg">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="text-lg font-semibold">Select a City</h3>
-                <button onClick={() => setShowCityModal(false)}>×</button>
-              </div>
-              <input
-                type="text"
-                placeholder="Search cities..."
-                value={citySearch}
-                onChange={(e) => setCitySearch(e.target.value)}
-                className="w-full border px-2 py-1 rounded mb-3"
-              />
-              <div className="max-h-60 overflow-y-auto">
-                {cities
-                  .filter(city => city.toLowerCase().includes(citySearch.toLowerCase()))
-                  .map(city => (
-                    <div
-                      key={city}
-                      onClick={() => {
-                        setSelectedCity(city);
-                        setShowCityModal(false);
-                        setCitySearch('');
-                      }}
-                      className="cursor-pointer hover:bg-gray-100 px-2 py-1 rounded"
-                    >
-                      {city}
+        {/* Details Modal */}
+        {showDetailsModal && selectedUser && (
+          <div
+            className="fixed inset-0 z-50 overflow-hidden"
+            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+            onClick={handleCloseModal} // This closes the modal on outside click
+          >
+            <div
+              className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}
+              onClick={(e) => e.stopPropagation()} // This stops the click from bubbling up and closing the modal
+            >
+              
+              {/* Modal Content */}
+              <div className="h-full p-6 overflow-y-auto">
+                {/* User Info Section */}
+                <div className="flex items-center mb-6">
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white bg-[#FF9D3D] mr-4 shadow-md">
+                    {getInitials(selectedUser.firstName, selectedUser.lastName)}
+                  </div>
+                  <div>
+                    <div className="flex items-center flex-wrap gap-2">
+                      <h2 className="text-2xl font-bold text-gray-800">
+                        {selectedUser.firstName} {selectedUser.lastName}
+                      </h2>
+                      <span className={`px-2 py-1 text-xs ml-3 font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                      <span className="text-xs bg-gray-200 rounded-full px-2 py-1 text-gray-500">Last Access: {formatLastAccess(selectedUser.lastLogin)}</span>
                     </div>
-                  ))}
+                    <p className="text-sm text-gray-500">{selectedUser.company}</p>
+                  </div>
+                </div>
+
+                {/* Counts Section (Ads/Drivers) */}
+                <div className="mb-6">
+                  <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
+                    <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
+                      <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
+                      <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
+                    </div>
+                  </Link>
+                </div>
+
+                {/* Account Details - Now a table */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3">Account Details:</h3>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr>
+                        {/* Left side */}
+                        <td className="w-1/2 align-top pr-4">
+                          <table className="w-full border-separate border-spacing-y-3">
+                            <tbody>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">ID:</td>
+                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.id}</td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">City:</td>
+                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.city}</td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2">Email Verified:</td>
+                                <td className="text-black text-right py-1">
+                                  {selectedUser.isEmailVerified ? "✔" : "✘"}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+
+                        {/* Right side */}
+                        <td className="w-1/2 align-top pl-4">
+                          <table className="w-full border-separate border-spacing-y-3">
+                            <tbody>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Last Login:</td>
+                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
+                                  {formatDate(selectedUser.lastLogin)}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Created At:</td>
+                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
+                                  {formatDate(selectedUser.createdAt)}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="font-bold text-gray-700 py-1 pr-2">Updated At:</td>
+                                <td className="text-gray-600 py-1 text-right">
+                                  {formatDate(selectedUser.updatedAt)}
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* User Details */}
+                <div className="mb-6">
+                  <h3 className="text-lg font-bold mb-3">User Details:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 text-sm">
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Mail size={16} />
+                      <span>{selectedUser.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Phone size={16} />
+                      <span>{selectedUser.contact}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <MapPin size={16} />
+                      <p>{selectedUser.address}</p>
+                    </div>
+                    {selectedUser.houseAddress && (
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <MapPin size={16} />
+                        <p>House: {selectedUser.houseAddress}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        <div className="overflow-auto rounded-md mb-4">
-          {activeTab === 'User List' ? (
-            <table className="min-w-full text-sm">
-              <thead className="bg-[#3674B5]">
-                <tr>
-                  <th className="px-2 py-2 text-left text-sm font-semibold text-white w-32">
-                    <div className="flex justify-center">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={filteredUsers.length > 0 && filteredUsers.every(user => selectedItems.has(user.id))}
-                          onChange={handleSelectAll}
-                          className="mr-1"
-                        />
-                        Select All
-                      </label>
-                    </div>
-                  </th>
-                  <th className="px-2 py-2 text-left text-sm font-semibold text-white">First Name</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Last Name</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Email</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Status</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Last Access</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((user) => (
-                  <React.Fragment key={user.id}>
-                    <tr
-                      className="bg-white border-t border-gray-300 cursor-pointer hover:bg-gray-100"
-                      onClick={() => toggleExpand(user.id)}
-                    >
-                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <div className="flex justify-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.has(user.id)}
-                            onChange={() => handleItemSelect(user.id)}
-                            className="mr-1"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <img
-                          src={`https://via.placeholder.com/40?text=${user.firstName[0]}`}
-                          alt={user.firstName}
-                          className="w-8 h-8 rounded-full mr-2 inline-block"
-                        />
-                        {user.firstName}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {user.lastName}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {user.email}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            user.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                          }`}
-                        >
-                          {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {user.status === 'active' ? 'Active Now' : 'Muted for 24 hours'}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <button className="text-blue-600 text-xs">...</button>
-                      </td>
-                    </tr>
-                    {expandedId === user.id && (
-                      <tr className="bg-gray-50">
-                        <td colSpan={7} className="p-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                            <div><strong>Middle Name:</strong> {user.middleName}</div>
-                            <div><strong>Company:</strong> {user.company}</div>
-                            <div><strong>Address:</strong> {user.address}</div>
-                            <div><strong>Contact:</strong> {user.contact}</div>
-                            <div><strong>City:</strong> {user.city}</div>
-                            <div><strong>Ads Count:</strong> {user.adsCount}</div>
-                            <div><strong>Riders Count:</strong> {user.ridersCount}</div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-[#3674B5]">
-                <tr>
-                  <th className="px-2 py-2 text-left text-sm font-semibold text-white w-32">
-                    <div className="flex justify-center">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={forms.length > 0 && forms.every(form => selectedItems.has(form.id))}
-                          onChange={handleSelectAll}
-                          className="mr-1"
-                        />
-                        Select All
-                      </label>
-                    </div>
-                  </th>
-                  <th className="px-2 py-2 text-left text-sm font-semibold text-white">Title</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Company Name</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Company Email</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Date Started</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Date Ended</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-white">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {forms.map((form, index) => (
-                  <React.Fragment key={form.id}>
-                    <tr
-                      className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} cursor-pointer hover:bg-gray-100`}
-                      onClick={() => toggleExpand(form.id)}
-                    >
-                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <div className="flex justify-center">
-                          <input
-                            type="checkbox"
-                            checked={selectedItems.has(form.id)}
-                            onChange={() => handleItemSelect(form.id)}
-                            className="mr-1"
-                          />
-                        </div>
-                      </td>
-                      <td className="px-2 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {form.title}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {form.companyName}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {form.companyEmail}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {form.dateStarted}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        {form.dateEnded}
-                      </td>
-                      <td className="px-4 py-3"> {/* Changed to py-3 for spacing like in the image */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleApprove();
-                          }}
-                          className="bg-green-500 text-white px-2 py-1 rounded mr-2"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReject();
-                          }}
-                          className="bg-red-500 text-white px-2 py-1 rounded"
-                        >
-                          Reject
-                        </button>
-                      </td>
-                    </tr>
-                    {expandedId === form.id && (
-                      <tr className="bg-gray-50">
-                        <td colSpan={7} className="p-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                            <div><strong>Description:</strong> {form.description}</div>
-                            <div><strong>Vehicle Type:</strong> {form.vehicleType}</div>
-                            <div><strong>Material:</strong> {form.material}</div>
-                            <div><strong>Plan:</strong> {form.plan}</div>
-                            <div><strong>Format:</strong> {form.format}</div>
-                            <div>
-                              <strong>Media:</strong><br />
-                              {form.format === 'Video' ? (
-                                <video controls className="w-40 h-40 object-cover rounded">
-                                  <source src={form.mediaUrl} type="video/mp4" />
-                                  Your browser does not support the video tag.
-                                </video>
-                              ) : form.format === 'Image' ? (
-                                <img src={form.mediaUrl} alt="Ad Media" className="w-40 h-40 object-cover rounded" />
-                              ) : null}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                ))}
-                {forms.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center text-gray-500 py-3">No forms available.</td> {/* Changed to py-3 for consistency */}
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">Found: {activeTab === 'User List' ? filteredUsers.length : forms.length} {activeTab === 'User List' ? 'user(s)' : 'form(s)'}</span>
-          <div className="flex space-x-2">
-            <button className="px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 text-sm">
-              Export to Excel
+        {/* Footer with pagination controls - Fixed at bottom */}
+        <div className="mt-auto">
+          {/* Action buttons */}
+          <div className="flex space-x-2 mb-4">
+            <button 
+              onClick={exportToExcel}
+              className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={filteredUsers.length === 0}
+            >
+              Export {selectedUsers.length > 0 ? `${selectedUsers.length} Selected Advertisers` : 'All Advertisers to Excel'}
             </button>
-            <div className="flex items-center space-x-2">
-              <button className="px-2 py-1 border rounded text-sm"></button>
-              <span className="px-2 py-1">1 2 3</span>
-              <button className="px-2 py-1 border rounded text-sm"></button>
-              <span className="text-sm text-gray-600">19 20</span>
+          </div>
+
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} advertisers
+              </span>
+              <span className="text-sm text-gray-600">Selected: {selectedUsers.length}</span>
+            </div>
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center space-x-4">
+              {/* Page size selector */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Pagination buttons */}
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers - show only a few pages around current page */}
+                  <div className="flex space-x-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-1 text-sm border rounded ${
+                              currentPage === i
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+                      return pages;
+                    })()}
+                  </div>
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete User"
+        message="Are you sure you want to delete this user? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+    </AdminLayout>
   );
 };
 

@@ -11,3 +11,48 @@ Ads2Go-Client/build/
 # Ads2Go-Server
 Ads2Go-Server/node_modules/
 Ads2Go-Server/.env
+
+# React Native
+Ads2Go-MobileApp/node_modules/
+Ads2Go-MobileApp/.expo/
+Ads2Go-MobileApp/.expo-shared/
+Ads2Go-MobileApp/android/
+Ads2Go-MobileApp/ios/
+Ads2Go-MobileApp/.env
+Ads2Go-MobileApp/*.jks
+Ads2Go-MobileApp/*.p8
+Ads2Go-MobileApp/*.p12
+Ads2Go-MobileApp/*.key
+Ads2Go-MobileApp/*.mobileprovision
+Ads2Go-MobileApp/*.orig.*
+Ads2Go-MobileApp/web-build/
+Ads2Go-MobileApp/.gradle/
+Ads2Go-MobileApp/android/app/build/
+Ads2Go-MobileApp/android/app/debug/
+Ads2Go-MobileApp/android/app/release/
+
+# Expo Project (androidPlayerExpo)
+androidPlayerExpo/node_modules/
+androidPlayerExpo/.expo/
+androidPlayerExpo/.expo-shared/
+androidPlayerExpo/web-build/
+androidPlayerExpo/dist/
+androidPlayerExpo/.env
+androidPlayerExpo/*.jks
+androidPlayerExpo/*.p8
+androidPlayerExpo/*.p12
+androidPlayerExpo/*.key
+androidPlayerExpo/*.mobileprovision
+androidPlayerExpo/*.orig.*
+
+# Temporary debugging scripts (Ads2Go-Server)
+Ads2Go-Server/create*.js
+Ads2Go-Server/update*.js
+Ads2Go-Server/fix*.js
+Ads2Go-Server/check*.js
+Ads2Go-Server/add*.js
+Ads2Go-Server/remove*.js
+Ads2Go-Server/debug*.js
+Ads2Go-Server/find*.js
+Ads2Go-Server/test*.js
+Ads2Go-Client/.env.development

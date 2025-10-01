@@ -3,12 +3,12 @@ const mongoose = require('mongoose');
 const MaterialSchema = new mongoose.Schema({
   vehicleType: {
     type: String,
-    enum: ['CAR', 'MOTOR', 'BUS', 'JEEP', 'E_TRIKE'],
+    enum: ['CAR', 'MOTORCYCLE', 'BUS', 'JEEP', 'E_TRIKE'],
     required: [true, 'Vehicle type is required'],
   },
   materialType: {
     type: String,
-    enum: ['POSTER', 'LCD', 'STICKER', 'LCD_HEADDRESS', 'BANNER'],
+    enum: ['POSTER', 'LCD', 'STICKER', 'HEADDRESS', 'BANNER'],
     required: [true, 'Material type is required'],
   },
   description: {
@@ -26,13 +26,36 @@ const MaterialSchema = new mongoose.Schema({
   },
   materialId: {
     type: String,
-    unique: true,
     index: true,
   },
+  materialName: {
+    type: String,
+    trim: true,
+    default: function() {
+      return `${this.materialType} for ${this.vehicleType}`;
+    }
+  },
+  status: {
+    type: String,
+    enum: ['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'RETIRED'],
+    default: 'ACTIVE'
+  },
+  assignedDate: {
+    type: Date,
+    default: null
+  },
+  location: {
+    address: String,
+    coordinates: {
+      type: [Number],
+      index: '2dsphere'
+    }
+  },
   driverId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Driver',
-    default: null, // assigned on approval
+    type: String,   // DRV-001, not ObjectId
+    default: null,
+    index: true,
+    sparse: true,
   },
   mountedAt: {
     type: Date,
@@ -42,28 +65,110 @@ const MaterialSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
-}, { timestamps: true });
+  // Material condition and inspection fields - these will be stored in materialTracking collection
+  // but we keep them here for backward compatibility and easy access
+  materialCondition: {
+    type: String,
+    enum: ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'],
+    default: 'GOOD'
+  },
+  photoComplianceStatus: {
+    type: String,
+    enum: ['COMPLIANT', 'NON_COMPLIANT', 'PENDING'],
+    default: 'PENDING'
+  },
+  lastInspectionDate: {
+    type: Date,
+    default: null
+  },
+  nextInspectionDue: {
+    type: Date,
+    default: null
+  }
+}, { 
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
 
-// Pre-save hook to auto-generate materialId
-MaterialSchema.pre('save', async function () {
-  if (
-    this.isModified('category') || 
-    this.isModified('materialType') || 
-    this.isModified('vehicleType') || 
-    !this.materialId
-  ) {
-    const categoryAbbrev = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
-    const baseId = `${categoryAbbrev}_${this.materialType}_${this.vehicleType}`;
-
-    // Count how many materials already have a similar ID
-    const count = await this.constructor.countDocuments({
-      materialId: new RegExp(`^${baseId}`),
-      _id: { $ne: this._id }, // exclude current doc if updating
-    });
-
-    // Assign materialId with increment if needed
-    this.materialId = count === 0 ? baseId : `${baseId}_${count + 1}`;
+// Pre-save hook to generate sequential materialId
+MaterialSchema.pre('save', async function() {
+  if (this.isNew) {
+    try {
+      const prefix = this.category === 'DIGITAL' ? 'DGL' : 'NDGL';
+      const baseId = `${prefix}-${this.materialType}-${this.vehicleType}`;
+      
+      // Find all existing material IDs with the same base
+      const existingMaterials = await this.constructor.find({
+        materialType: this.materialType,
+        vehicleType: this.vehicleType,
+        category: this.category
+      }, 'materialId');
+      
+      // Extract the numeric parts and find the highest number
+      const numbers = existingMaterials.map(material => {
+        const match = material.materialId.match(/-([0-9]+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      });
+      
+      // Find the next available number
+      let nextNumber = 1;
+      while (numbers.includes(nextNumber)) {
+        nextNumber++;
+      }
+      
+      // Generate the new ID with 3-digit padding
+      this.materialId = `${baseId}-${String(nextNumber).padStart(3, '0')}`;
+      console.log(`🔧 Generated materialId: ${this.materialId} for ${this.materialType} ${this.vehicleType}`);
+    } catch (error) {
+      console.error(`❌ Error in pre-save hook:`, error);
+      throw error;
+    }
   }
 });
 
-module.exports = mongoose.model('Material', MaterialSchema);
+// Virtual for driver details
+MaterialSchema.virtual('driver', {
+  ref: 'Driver',
+  localField: 'driverId',
+  foreignField: 'driverId',
+  justOne: true,
+  options: { select: 'driverId firstName lastName email contactNumber' }
+});
+
+// Method to assign to driver
+MaterialSchema.methods.assignToDriver = async function(driverId) {
+  if (this.driverId) {
+    throw new Error('Material is already assigned to a driver');
+  }
+  
+  this.driverId = driverId;
+  this.mountedAt = new Date();
+  this.assignedDate = new Date();
+  await this.save();
+  return this;
+};
+
+// Method to unassign from driver
+MaterialSchema.methods.unassignFromDriver = async function() {
+  if (!this.driverId) {
+    throw new Error('Material is not assigned to any driver');
+  }
+  
+  this.driverId = null;
+  this.dismountedAt = new Date();
+  await this.save();
+  return this;
+};
+
+// Index to ensure one-to-one relationship between driver and material
+MaterialSchema.index(
+  { driverId: 1 },
+  { 
+    unique: true, 
+    partialFilterExpression: { driverId: { $exists: true } },
+    name: 'driverId_unique_when_set'
+  }
+);
+
+module.exports = mongoose.models.Material || mongoose.model('Material', MaterialSchema);

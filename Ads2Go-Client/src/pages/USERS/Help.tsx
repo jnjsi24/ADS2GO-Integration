@@ -1,269 +1,371 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
+import { useQuery } from "@apollo/client";
+// ✅ If you already use lucide-react or heroicons, adjust import accordingly.
+// Here we use Heroicons outline set:
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/24/solid";
+import { FileText, Plus, List } from "lucide-react";
+import CreateReport from "../../components/CreateReport";
+import UserReportsList from "../../components/UserReportsList";
+import { GET_ALL_FAQS } from "../../graphql/faq/queries/GetAllFAQs";
 
-type Section = 'help' | 'about' | 'privacy' | 'terms';
+const FAQItem: React.FC<{ question: string; answer: string; searchQuery?: string }> = ({
+  question,
+  answer,
+  searchQuery = '',
+}) => {
+  const [open, setOpen] = useState(false);
 
-const icons = {
-  about: (
-    <svg
-      className="inline-block mr-2 w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="16" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12.01" y2="8" />
-    </svg>
-  ),
-  privacy: (
-    <svg
-      className="inline-block mr-2 w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 1L3 5v6c0 5 3.8 9.8 9 11 5.2-1.2 9-6 9-11V5l-9-4z" />
-      <circle cx="12" cy="11" r="2" />
-    </svg>
-  ),
-  terms: (
-    <svg
-      className="inline-block mr-2 w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 12h6m-6 4h6M5 7h14M5 19h14" />
-    </svg>
-  ),
-  help: (
-    <svg
-      className="inline-block mr-2 w-5 h-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      viewBox="0 0 24 24"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M9.09 9a3 3 0 1 1 5.82 1c0 2-3 3-3 3" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  ),
+  // Function to highlight search terms
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-200 px-1 rounded">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
+
+  return (
+    <div className="border-b border-gray-200 last:border-b-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex justify-between items-center py-4 px-2 text-left font-medium text-[#2E2E2E]
+                   hover:text-[#3674B5] hover:bg-gray-50 rounded-lg transition-all duration-200 group"
+      >
+        <div className="flex-1 pr-4">
+          <span className="text-sm font-semibold text-[#3674B5] italic">Question:</span>
+          <p className="text-gray-800 mt-1 leading-relaxed">
+            {highlightText(question, searchQuery)}
+          </p>
+        </div>
+        {/* ✅ Chevron Up/Down icon */}
+        <span
+          className={`transition-transform duration-300 text-gray-400 group-hover:text-[#3674B5] ${
+            open ? "rotate-180" : "rotate-0"
+          }`}
+        >
+          <ChevronDownIcon className="w-5 h-5" />
+        </span>
+      </button>
+      <div
+        className={`overflow-hidden transition-all duration-300 ${
+          open ? "faq-open" : "faq-closed"
+        }`}
+      >
+        <div className="px-2 pb-4">
+          <div className="bg-blue-50 border-l-4 border-[#3674B5] rounded-r-lg p-4">
+            <span className="text-sm font-semibold text-[#3674B5] italic">Answer:</span>
+            <p className="text-gray-700 mt-2 leading-relaxed">
+              {highlightText(answer, searchQuery)}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const Help: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<Section>('about');
-  const [fade, setFade] = useState(true);
+  const [isCreateReportOpen, setIsCreateReportOpen] = useState(false);
+  const [showUserReports, setShowUserReports] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredFAQs, setFilteredFAQs] = useState<any[]>([]);
 
+  // Fetch FAQs dynamically
+  const { data: faqData, loading: faqLoading, error: faqError } = useQuery(GET_ALL_FAQS, {
+    variables: {
+      filters: {
+        isActive: true
+      }
+    }
+  });
+
+  const handleCreateReportSuccess = () => {
+    // You can add a success notification here
+    console.log('Report created successfully');
+  };
+
+  // Search functionality with debouncing
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  // Debounced search effect
   useEffect(() => {
-    setFade(false);
-    const timer = setTimeout(() => setFade(true), 150);
-    return () => clearTimeout(timer);
-  }, [activeSection]);
+    const timeoutId = setTimeout(() => {
+      if (!searchQuery.trim()) {
+        setFilteredFAQs([]);
+        return;
+      }
 
-  const navItem = (label: string, section: Section) => (
-    <li
-      key={section}
-      className={`flex items-center px-4 py-2 rounded-lg cursor-pointer hover:scale-105 transition-all duration-300 select-none
-        ${
-          activeSection === section
-            ? 'bg-[#3674B5] text-white font-semibold shadow-md'
-            : 'text-[#0A192F] hover:bg-[#3674B5] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#2EC4B6]'
-        }`}
-      onClick={() => setActiveSection(section)}
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') setActiveSection(section);
-      }}
-      role="button"
-      aria-current={activeSection === section ? 'page' : undefined}
-    >
-      {icons[section]}
-      {label}
-    </li>
-  );
+      const faqs = faqData?.getAllFAQs?.faqs || [];
+      const filtered = faqs.filter((faq: any) => 
+        faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
+      setFilteredFAQs(filtered);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, faqData]);
+
+  // Get category orders and FAQs
+  const faqs = faqData?.getAllFAQs?.faqs || [];
+  const categoryOrders = faqData?.getAllFAQs?.categoryOrders || [];
+
+  // Sort categories by order (if categoryOrders exist) or use default order
+  const getSortedCategories = (categories: any) => {
+    if (categoryOrders.length > 0) {
+      // Sort by category order
+      return Object.keys(categories).sort((a, b) => {
+        const orderA = categoryOrders.find((co: any) => co.category === a)?.order || 999;
+        const orderB = categoryOrders.find((co: any) => co.category === b)?.order || 999;
+        return orderA - orderB;
+      });
+    } else {
+      // Default order: EVERYONE, ADVERTISERS, DRIVERS
+      const defaultOrder = ['EVERYONE', 'ADVERTISERS', 'DRIVERS'];
+      return Object.keys(categories).sort((a, b) => {
+        const indexA = defaultOrder.indexOf(a);
+        const indexB = defaultOrder.indexOf(b);
+        return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+      });
+    }
+  };
+
+  // Group FAQs by category
+  const faqsByCategory = faqs.reduce((acc: any, faq: any) => {
+    if (!acc[faq.category]) {
+      acc[faq.category] = [];
+    }
+    acc[faq.category].push(faq);
+    return acc;
+  }, {});
+
+  // Debug logging
+  console.log('User Client FAQ Debug:', {
+    faqs: faqs.length,
+    categoryOrders: categoryOrders.length,
+    categoryOrdersData: categoryOrders,
+    faqsByCategory: Object.keys(faqsByCategory),
+    sortedCategories: getSortedCategories(faqsByCategory)
+  });
+
+  // Group filtered FAQs by category
+  const filteredFAQsByCategory = filteredFAQs.reduce((acc: any, faq: any) => {
+    if (!acc[faq.category]) {
+      acc[faq.category] = [];
+    }
+    acc[faq.category].push(faq);
+    return acc;
+  }, {});
+
+  const getCategoryTitle = (category: string) => {
+    switch (category) {
+      case 'ADVERTISERS': return 'For Advertisers:';
+      case 'DRIVERS': return 'For Drivers:';
+      case 'EVERYONE': return 'For Everyone:';
+      default: return category;
+    }
+  };
 
   return (
-    <div className="min-h-screen pl-60 pt-5 bg-white font-sans flex">
-      {/* Main content area with left margin for sidebar width (w-64 = 256px) */}
-      <div className="flex-1 flex flex-col">
-        <main
-          className={`mx-auto p-6 space-y-8 transition-opacity duration-300 ${
-            fade ? 'opacity-100' : 'opacity-0'
-          }`}
-          aria-live="polite"
-        >
-          {/* Header Container Centered */}
-          <div className="flex justify-center">
-            <div className="text-center mb-6">
-              <h1 className="text-4xl font-bold text-black mb-2">Hello, how can we help?</h1>
-              <div className="flex justify-center items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="Ask a question..."
-                  className="border border-gray-300 rounded-lg p-2 w-64 focus:outline-none"
-                />
-                <button className="bg-[#F3A26D] text-black rounded-lg px-4 py-2 hover:bg-[#578FCA] hover:scale-105 transition-all duration-300">
-                  Search
-                </button>
+    <div className="min-h-screen bg-white pl-64 pr-5">
+      {/* ✅ Inline CSS for accordion animation */}
+      <style>{`
+        .faq-open { max-height: 500px; }
+        .faq-closed { max-height: 0; }
+      `}</style>
+
+      <main className="mx-auto p-6 space-y-10 max-w-7xl" aria-live="polite">
+        {/* Create Report Section - Moved to top */}
+        <section className="rounded-2xl p-6 bg-gradient-to-r from-[#3674B5] to-[#578FCA] text-white">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FileText className="w-8 h-8" />
+              <div>
+                <h1 className="text-3xl font-bold">Need Help?</h1>
+                <p className="text-blue-100">Can't find what you're looking for? Create a report and we'll help you out.</p>
               </div>
-              <p className="text-sm text-gray-500 mt-2">or choose a category to quickly find the help you need</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUserReports(!showUserReports)}
+                className="flex items-center gap-2 px-4 py-3 bg-white bg-opacity-20 text-white rounded-lg font-semibold hover:bg-opacity-30 transition-colors"
+              >
+                <List className="w-5 h-5" />
+                {showUserReports ? 'Hide My Reports' : 'View My Reports'}
+              </button>
+              <button
+                onClick={() => setIsCreateReportOpen(true)}
+                className="flex items-center gap-2 px-6 py-3 bg-white text-[#3674B5] rounded-lg font-semibold hover:bg-blue-50 transition-colors shadow-lg hover:shadow-xl"
+              >
+                <Plus className="w-5 h-5" />
+                Create Report
+              </button>
             </div>
           </div>
-
-          {/* Navigation Tabs */}
-          <nav aria-label="Help sections" className="mb-6">
-            <ul className="flex justify-center space-x-4 border-b border-gray-300 pb-2">
-              {navItem('About Us', 'about')}
-              {navItem('Privacy Policy', 'privacy')}
-              {navItem('Terms and Conditions', 'terms')}
-              {navItem('Help & Support', 'help')}
-            </ul>
-          </nav>
-
-          {/* About Us */}
-          {activeSection === 'about' && (
-  <section className="border border-gray rounded-2xl p-6">
-    <h1 className="text-3xl font-bold mb-4 text-[#3674B5]">About Us</h1>
-    <div className="flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
-      <div className="flex-1">
-        <p className="mb-4 text-[#2E2E2E] leading-relaxed">
-          AdsToGo is an innovative mobile advertising platform that transforms vehicles into moving digital billboards.
-          Our mission is to connect brands with audiences in fresh, interactive ways while creating income opportunities for drivers.
-        </p>
-        <p className="text-[#2E2E2E] leading-relaxed">
-          By integrating LCD screens and QR code interactivity, we create a dynamic advertising ecosystem tailored for the Philippines' growing vehicle market.
-        </p>
-      </div>
-      <div className="flex-1 shadow-lg rounded-2xl p-6">
-        <form className="space-y-4">
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
-              Your Email Address
-            </label>
-            <input
-              id="email"
-              type="email"
-              placeholder="Enter your email"
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none hover:scale-105 transition-all duration-300"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <div className="bg-white bg-opacity-10 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">Bug Reports</h3>
+              <p className="text-sm text-blue-100">Report technical issues or bugs you encounter</p>
+            </div>
+            <div className="bg-white bg-opacity-10 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">Feature Requests</h3>
+              <p className="text-sm text-blue-100">Suggest new features or improvements</p>
+            </div>
+            <div className="bg-white bg-opacity-10 rounded-lg p-4">
+              <h3 className="font-semibold mb-2">General Support</h3>
+              <p className="text-sm text-blue-100">Ask questions or get help with your account</p>
+            </div>
           </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="topic">
-              Can't find what you are looking for? Tell us below:
-            </label>
-            <textarea
-              id="topic"
-              placeholder="Enter your concern"
-              className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none resize-y hover:scale-105 transition-all duration-300"
-              style={{ minHeight: '32px', maxHeight: '200px' }}
-            />
+        </section>
+
+        {/* User Reports Section */}
+        {showUserReports && (
+          <section className="space-y-4">
+            <UserReportsList />
+          </section>
+        )}
+
+        {/* Spacer */}
+        <div className="h-16"></div>
+
+        {/* Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-4xl mt-5 font-bold text-black mb-2">
+            Hello, how can we help you today?
+          </h1>
+          <p className="text-sm text-gray-500 max-w-lg mx-auto mt-2 leading-relaxed">
+            Browse the information and frequently asked questions below to
+            quickly find the detailed help you need. Our comprehensive guides
+            provide clear, step-by-step solutions for common questions.
+          </p>
+              <div className="flex justify-center">
+                <div className="relative w-screen max-w-md mt-8">
+                  <input
+                    type="text"
+                    placeholder="Ask a question..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="text-xs text-black rounded-lg pl-5 pr-20 py-3 w-full shadow-md focus:outline-none focus:ring-2 focus:ring-[#3674B5] bg-white"
+                  />
+                  <button
+                    onClick={() => handleSearch(searchQuery)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 bg-[#feb011] text-white text-sm rounded-lg px-4 py-1.5
+                               hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300"
+                  >
+                    Search
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Spacer between search and FAQ */}
+            <div className="h-8"></div>
+
+            {/* FAQ with chevron animation */}
+            <section className="bg-white rounded-2xl shadow-lg p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold mb-3 text-[#3674B5]">
+              {searchQuery ? `Search Results for "${searchQuery}"` : 'Frequently Asked Questions'}
+            </h1>
+            <p className="text-gray-600 text-lg">
+              {searchQuery && filteredFAQs.length > 0 ? `Found ${filteredFAQs.length} result${filteredFAQs.length !== 1 ? 's' : ''}` : searchQuery ? '' : 'Find answers to common questions about our platform'}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilteredFAQs([]);
+                }}
+                className="mt-3 text-[#3674B5] hover:text-[#578FCA] underline text-sm"
+              >
+                Clear search and show all FAQs
+              </button>
+            )}
           </div>
-          <div className="flex justify-end">
-  <button
-    type="submit"
-    className="w-44 bg-[#F3A26D] text-black p-2 rounded-lg hover:bg-[#578FCA] hover:scale-105 transition-all duration-300"
-  >
-    Send your request
-  </button>
-</div>
-        </form>
-      </div>
-    </div>
-  </section>
-)}
 
-          {/* Privacy Policy */}
-          {activeSection === 'privacy' && (
-            <section className="border border-gray rounded-2xl p-6">
-              <h1 className="text-3xl font-bold mb-4 text-[#3674B5]">Privacy Policy</h1>
-              <p className="mb-4 text-[#2E2E2E] leading-relaxed">
-                We respect your privacy. AdsToGo collects only essential data required to track ad performance and driver earnings.
-                Consumer interactions through QR codes are anonymized and used solely to improve advertising effectiveness.
-              </p>
-              <p className="text-[#2E2E2E] leading-relaxed">
-                We do not share personal information with third parties except as required by law or with your explicit consent.
-              </p>
-            </section>
-          )}
+          {faqLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3674B5] mx-auto"></div>
+              <p className="mt-4 text-gray-600 text-lg">Loading FAQs...</p>
+            </div>
+          ) : faqError ? (
+            <div className="text-center py-12 text-red-600">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
+                <p className="text-lg font-medium">Error loading FAQs</p>
+                <p className="text-sm mt-2">{faqError.message}</p>
+              </div>
+            </div>
+          ) : searchQuery && filteredFAQs.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
+                <p className="text-lg">No FAQs found for "{searchQuery}"</p>
+                <p className="text-sm mt-2">Try different keywords or check spelling.</p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setFilteredFAQs([]);
+                  }}
+                  className="mt-3 text-[#3674B5] hover:text-[#578FCA] underline"
+                >
+                  Show all FAQs
+                </button>
+              </div>
+            </div>
+          ) : Object.keys(searchQuery ? filteredFAQsByCategory : faqsByCategory).length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 max-w-md mx-auto">
+                <p className="text-lg">No FAQs available at the moment.</p>
+                <p className="text-sm mt-2">Please check back later or contact support.</p>
+              </div>
+            </div>
+              ) : (
+                <div className="max-w-4xl mx-auto">
+                  {getSortedCategories(searchQuery ? filteredFAQsByCategory : faqsByCategory).map((category: string, index: number) => {
+                    const categoryFaqs = (searchQuery ? filteredFAQsByCategory : faqsByCategory)[category];
+                    return (
+                      <div key={category} className={`mb-8 last:mb-0 ${index === 0 ? 'mt-24' : ''}`}>
+                        <div className="flex items-center mb-6">
+                          <div className="h-1 bg-gradient-to-r from-[#3674B5] to-[#578FCA] w-16 rounded-full"></div>
+                          <h2 className="text-2xl font-bold ml-4 text-gray-800">
+                            {getCategoryTitle(category)}
+                          </h2>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-6 shadow-sm">
+                          {categoryFaqs.map((faq: any) => (
+                            <FAQItem
+                              key={faq.id}
+                              question={faq.question}
+                              answer={faq.answer}
+                              searchQuery={searchQuery}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+        </section>
+      </main>
 
-          {/* Terms and Conditions */}
-          {activeSection === 'terms' && (
-            <section className="border border-gray rounded-2xl p-6">
-              <h1 className="text-3xl font-bold mb-4 text-[#3674B5]">Terms and Conditions</h1>
-              <p className="mb-4 text-[#2E2E2E] leading-relaxed">
-                By using AdsToGo services, you agree to comply with all applicable laws and regulations.
-                Advertisers must provide appropriate content and respect copyright laws.
-                Drivers agree to maintain their vehicles according to the platform standards and participate fairly in the revenue sharing model.
-              </p>
-              <p className="text-[#2E2E2E] leading-relaxed">
-                AdsToGo reserves the right to modify these terms at any time with prior notice.
-              </p>
-            </section>
-          )}
-
-          {/* Help & Support */}
-          {activeSection === 'help' && (
-            <section className="border border-gray rounded-2xl p-6">
-              <h1 className="text-3xl font-bold mb-4 text-[#3674B5]">Help & Support</h1>
-
-              <section className="mb-6">
-                <h2 className="text-2xl font-semibold mb-2 text-black">What is AdsToGo?</h2>
-                <p className="text-[#2E2E2E] leading-relaxed">
-                  AdsToGo is a mobile digital advertising platform that transforms everyday vehicles into moving ad spaces.
-                  Through the use of LCD screens mounted on cars, we broadcast digital ads throughout urban and rural areas—
-                  increasing brand visibility and community reach.
-                </p>
-              </section>
-
-              <section className="mb-6">
-                <h2 className="text-2xl font-semibold mb-2 text-black">How Does It Work?</h2>
-                <ul className="list-disc list-inside space-y-1 text-[#2E2E2E] leading-relaxed">
-                  <li>Advertisers upload and manage their digital ad content through the dashboard.</li>
-                  <li>Vehicles equipped with LCD screens display the ads as they travel.</li>
-                  <li>Real-time tracking tools monitor ad impressions and travel distance.</li>
-                  <li>Consumers can interact with ads via QR codes displayed on-screen.</li>
-                  <li>Drivers earn income based on how far they travel and how many impressions their vehicle generates.</li>
-                </ul>
-              </section>
-
-              <section className="mb-6">
-                <h2 className="text-2xl font-semibold mb-2 text-black">Benefits</h2>
-                <ul className="list-disc list-inside space-y-1 text-[#2E2E2E] leading-relaxed">
-                  <li><strong>For Advertisers:</strong> Broader reach, measurable results, and consumer engagement via QR codes.</li>
-                  <li><strong>For Drivers:</strong> Passive income through fair, distance-based revenue sharing.</li>
-                  <li><strong>For Consumers:</strong> Instant access to more information through QR code scanning.</li>
-                </ul>
-              </section>
-
-              <section>
-                <h2 className="text-2xl font-semibold mb-2 text-black">Need More Help?</h2>
-                <p className="text-[#2E2E2E] leading-relaxed">
-                  For technical issues, ad guidelines, or driver onboarding support, please contact our team at{' '}
-                  <a href="mailto:support@adstogo.ph" className="text-[#0A192F] underline font-semibold hover:text-[#2EC4B6]">
-                    support@adstogo.ph
-                  </a>.
-                </p>
-              </section>
-            </section>
-          )}
-        </main>
-      </div>
+      {/* Create Report Modal */}
+      <CreateReport
+        isOpen={isCreateReportOpen}
+        onClose={() => setIsCreateReportOpen(false)}
+        onSuccess={handleCreateReportSuccess}
+      />
     </div>
   );
 };

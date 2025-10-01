@@ -1,23 +1,29 @@
 // src/components/SadminNavbar.tsx
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
 import {
   LayoutDashboard,
   Users,
   Settings,
   LogOut,
-  FileText, // Assuming you might need this for reports or other admin-like sections
+  BarChart3,
+  DollarSign,
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
-  const { logout, user } = useAuth(); // Use the useAuth hook
+  const { logout, admin } = useAdminAuth(); // Use the useAdminAuth hook
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Debug logging
+  React.useEffect(() => {
+    // Admin object updated
+  }, [admin]);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/sadmin-login'); // Redirect to general login after logout
+    // Navigation is handled by AdminAuthContext.logout() based on user role
   };
 
   // Generate initials using firstName and lastName (similar to AdminNavbar/UserNavbar)
@@ -29,8 +35,10 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> }, // Assuming /admin/settings is where superadmin manages general settings
-    // Add more SuperAdmin specific links if needed
+    { label: 'Analytics', path: '/sadmin-analytics', icon: <BarChart3 size={20} /> },
+    { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
+    { label: 'Pricing', path: '/sadmin-pricing', icon: <DollarSign size={20} /> },
+    { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];
 
   return (
@@ -64,19 +72,26 @@ const SadminNavbar: React.FC = () => {
       <div className="pt-4 border-t border-gray-600 text-sm text-gray-200 flex flex-col">
         {/* Profile Section */}
         <div className="flex items-center gap-3 pb-4 mb-4 cursor-pointer" onClick={() => navigate('/sadmin-account')}> {/* Assuming settings page is shared or sadmin has a dedicated one */}
-          {user?.profilePicture ? ( // Assuming user object might have a profilePicture
+          {admin?.profilePicture ? ( // Assuming admin object might have a profilePicture
             <img
-              src={user.profilePicture}
+              src={admin.profilePicture}
               alt="Profile"
               className="rounded-full w-10 h-10 object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+          const initialsDiv = e.currentTarget.nextElementSibling as HTMLElement;
+          if (initialsDiv) initialsDiv.style.display = 'flex';
+        }}
             />
-          ) : (
-            <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
-              {user ? getInitials(user.firstName, user.lastName) : '?'}
-            </div>
-          )}
+          ) : null}
+          <div 
+            className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold"
+            style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+          >
+            {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
+          </div>
           <div className="font-semibold text-white">
-            {user ? `${user.firstName || ''} ${user.lastName || ''}` : 'SuperAdmin User'}
+            {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
           </div>
         </div>
 

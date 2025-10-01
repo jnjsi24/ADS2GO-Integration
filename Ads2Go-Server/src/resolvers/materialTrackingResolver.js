@@ -1,6 +1,6 @@
 // src/resolvers/materialTrackingResolver.js
 const jwt = require('jsonwebtoken');
-const MaterialTracking = require('../models/MaterialTracking'); // fixed filename case
+const MaterialTracking = require('../models/materialTracking'); // fixed filename case
 const { JWT_SECRET } = process.env;
 
 /**

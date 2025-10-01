@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow public read access to all files
+    match /{allPaths=**} {
+      allow read: if true;
+    }
+
+    // Direct upload path for non-sensitive content (user avatars, ads, etc.)
+    match /users/{userId}/avatars/{fileId} {
+      allow write: if request.auth != null && 
+                   request.auth.uid == userId &&
+                   request.resource.size < 5 * 1024 * 1024 && // 5MB limit
+                   request.resource.contentType.matches('image/.*');
+    }
+
+    // Admin profile picture uploads
+    match /admin/{fileId} {
+      allow write: if request.auth != null && 
+                   request.resource.size < 5 * 1024 * 1024 && // 5MB limit
+                   request.resource.contentType.matches('image/.*');
+    }
+
+    match /ads/{adId}/media/{fileId} {
+      allow write: if request.auth != null && 
+                   request.resource.size < 10 * 1024 * 1024 && // 10MB limit for ads
+                   request.resource.contentType.matches('image/.*|video/.*');
+    }
+
+    // Server-side upload path for sensitive documents
+    match /drivers/{documentType}/{fileName} {
+      // Only allow server-side uploads (using Firebase Admin SDK)
+      allow write: if request.auth == null && 
+                   request.resource.metadata.validated == 'true';
+      
+      // Allow read for authenticated users
+      allow read: if request.auth != null;
+    }
+
+    // General catch-all rule for other uploads (deny by default)
+    match /{path=**}/files/{fileId} {
+      allow write: if false;
+    }
+  }
+}

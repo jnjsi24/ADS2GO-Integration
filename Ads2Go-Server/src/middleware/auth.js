@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const Driver = require('../models/Driver');
+const Admin = require('../models/Admin');
+const SuperAdmin = require('../models/SuperAdmin');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -9,31 +10,53 @@ const getUser = async (token) => {
     if (!token) return null;
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    if (decoded.driverId) {
-      const driver = await Driver.findById(decoded.driverId).select('id email isEmailVerified tokenVersion');
-      if (!driver || driver.tokenVersion !== decoded.tokenVersion) return null;
+    // Check for admin token
+    if (decoded.adminId) {
+      const admin = await Admin.findById(decoded.adminId).select('id firstName lastName email role isEmailVerified tokenVersion');
+      if (!admin || admin.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
-        id: driver.id,
-        email: driver.email,
-        role: 'DRIVER',
-        isEmailVerified: driver.isEmailVerified,
-        tokenVersion: driver.tokenVersion,
+        id: admin.id,
+        name: `${admin.firstName} ${admin.lastName}`.trim(),
+        email: admin.email,
+        role: admin.role,
+        isEmailVerified: admin.isEmailVerified,
+        tokenVersion: admin.tokenVersion,
       };
     }
 
+    // Check for superadmin token
+    if (decoded.superAdminId) {
+      const superAdmin = await SuperAdmin.findById(decoded.superAdminId).select('id firstName lastName email role isEmailVerified tokenVersion');
+      if (!superAdmin || superAdmin.tokenVersion !== decoded.tokenVersion) return null;
+
+      return {
+        id: superAdmin.id,
+        name: `${superAdmin.firstName} ${superAdmin.lastName}`.trim(),
+        email: superAdmin.email,
+        role: superAdmin.role,
+        isEmailVerified: superAdmin.isEmailVerified,
+        tokenVersion: superAdmin.tokenVersion,
+      };
+    }
+
+    // Check for regular user token
     if (decoded.userId) {
-      const user = await User.findById(decoded.userId).select('id email role isEmailVerified tokenVersion');
+      const user = await User.findById(decoded.userId).select('id firstName lastName email role isEmailVerified tokenVersion');
       if (!user || user.tokenVersion !== decoded.tokenVersion) return null;
 
       return {
         id: user.id,
+        name: `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         tokenVersion: user.tokenVersion,
       };
     }
+
+    // Note: Driver tokens are handled by driverAuth.js middleware
+    // This prevents conflicts between the two authentication systems
 
     return null;
   } catch (error) {
@@ -50,7 +73,12 @@ const authMiddleware = async ({ req }) => {
     if (isVerifyEmailRequest) return { user: null };
 
     const user = await getUser(token);
-    return { user: user || null };
+    
+    // For admins and regular users only
+    // Drivers are handled by driverAuth.js middleware
+    return { 
+      user: user || null
+    };
   } catch (error) {
     console.error('Auth Middleware Error:', error);
     return { user: null };
@@ -78,10 +106,44 @@ const checkAdmin = (user) => {
   return user;
 };
 
+
+
+// ✅ Express middleware for protecting admin routes
+const checkAdminMiddleware = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    const user = await getUser(token);
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+    
+    if (user.role !== 'ADMIN' && user.role !== 'SUPERADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+    
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error('Admin Auth Middleware Error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+};
+
 module.exports = {
   authMiddleware,
   adminMiddleware,
   JWT_SECRET,
   checkAuth,
   checkAdmin,
+  checkAdminMiddleware,
 };

@@ -1,14 +1,20 @@
 {
-  "name": "ads2go-integ",
+  "name": "ads2go-integration",
   "version": "1.0.0",
+  "description": "Ads2Go Full-Stack Application",
+  "main": "index.js",
   "scripts": {
-    "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\""
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2",
-    "nodemon": "^3.1.10"
+    "start": "concurrently \"npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
+    "start:client": "npm start --prefix Ads2Go-Client",
+    "start:server": "npm run dev --prefix Ads2Go-Server",
+    "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",
+    "install:all": "npm install && npm install --prefix Ads2Go-Client && npm install --prefix Ads2Go-Server && npm install --prefix Ads2Go-MobileAppExpo && npm install --prefix androidPlayerExpo",
+    "build": "npm run build --prefix Ads2Go-Client",
+    "test": "npm test --prefix Ads2Go-Client"
   },
   "dependencies": {
-    "multer": "^2.0.2"
-  }
+    "concurrently": "^8.2.2",
+    "ws": "^8.18.3"
+  },
+  "private": true
 }

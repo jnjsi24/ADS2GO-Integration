@@ -14,55 +14,59 @@ const adTypeDefs = gql`
     NON_DIGITAL
   }
 
-  enum AdDurationType {
-    WEEKLY
-    MONTHLY
-    YEARLY
-  }
-
   type Ad {
-    id: ID!
-    userId: ID!
-    riderId: ID
-    materialId: ID!
-    planId: ID!
+    id: ID!                
+    userId: User!          
+    driverId: ID
+    materialId: Material   
+    targetDevices: [Material!]  # Array of devices where this ad should be deployed
+    planId: AdsPlan        
     title: String!
     description: String
+    website: String        # Optional advertiser website
     adFormat: String!
     mediaFile: String!
-    price: Float! # ✅ Calculated from plan and duration
-
-    # Plan-related fields
+    price: Float!          # total price for the ad
+    durationDays: Int!     
     numberOfDevices: Int!
-    adLengthMinutes: Int!
+    adLengthSeconds: Int!
     playsPerDayPerDevice: Int!
     totalPlaysPerDay: Int!
     pricePerPlay: Float!
-    totalPrice: Float! # ✅ Calculated as totalPlaysPerDay * pricePerPlay * duration in days
-
-    status: AdStatus!
-    startTime: String!
-    endTime: String!
+    totalPrice: Float!     
     adType: AdType!
-    durationType: AdDurationType! # ✅ Duration of ad (weekly, monthly, yearly)
+    status: AdStatus!
+    adStatus: String!      # INACTIVE, ACTIVE, FINISHED
+    paymentStatus: String! # PENDING, PAID, FAILED, REFUNDED
+    impressions: Int!
     reasonForReject: String
     approveTime: String
     rejectTime: String
+    startTime: String!     # Admin review time (7 days earlier)
+    endTime: String!
+    userDesiredStartTime: String # User's desired start time
+    # Flexible ad fields
+    materialType: String
+    vehicleType: String
+    category: String
     createdAt: String!
     updatedAt: String!
   }
 
   input CreateAdInput {
-    riderId: ID
+    driverId: ID
     materialId: ID!
     planId: ID!
     title: String!
     description: String
+    website: String         # Optional advertiser website
     adFormat: String!
     mediaFile: String!
-    startTime: String!
+    price: Float!
+    status: AdStatus!
+    startTime: String!      # user-defined start time
+    endTime: String!        # calculated end time based on plan duration
     adType: AdType!
-    durationType: AdDurationType! # ✅ Must pass duration to calculate price and endTime
   }
 
   input UpdateAdInput {
@@ -73,9 +77,8 @@ const adTypeDefs = gql`
     materialId: ID
     planId: ID
     status: AdStatus
-    startTime: String
+    startTime: String      # update start time, auto-adjusts endTime
     adType: AdType
-    durationType: AdDurationType # ✅ Optional update to recalc price/endTime
     reasonForReject: String
   }
 
