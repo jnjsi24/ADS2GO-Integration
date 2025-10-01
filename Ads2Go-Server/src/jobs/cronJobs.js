@@ -60,7 +60,7 @@ class CronJobs {
 
     this.jobs.set('onlineHours', onlineHoursTask);
 
-    // Start all jobs
+    // Start all cron jobs
     this.jobs.forEach((job, name) => {
       job.start();
       console.log(`✅ Started cron job: ${name}`);

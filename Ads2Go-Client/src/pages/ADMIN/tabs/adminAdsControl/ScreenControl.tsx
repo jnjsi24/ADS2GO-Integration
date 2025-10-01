@@ -52,7 +52,7 @@ const ScreenControl: React.FC<ScreenControlProps> = ({
                     realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
                       currentTime: screen.screenMetrics.currentAd.currentTime,
                       progress: screen.screenMetrics.currentAd.progress || 0,
-                      state: screen.screenMetrics.currentAd.state || 'playing'
+                      state: (screen.screenMetrics.currentAd.state as "playing" | "paused" | "buffering" | "loading" | "ended") || 'playing'
                     } : undefined}
                   />
                 </div>
