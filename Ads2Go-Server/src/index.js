@@ -175,6 +175,7 @@ async function startServer() {
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        'https://ads2go-client-production.up.railway.app',
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);

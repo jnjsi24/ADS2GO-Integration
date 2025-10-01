@@ -106,26 +106,33 @@ class DeviceStatusService {
         
         if (isAdmin) {
           console.log(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
+          console.log(`🔧 Admin connection from origin: ${request.headers.origin || 'unknown'}`);
         } else {
           console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
         }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          // Store the device and material IDs with the connection
-          ws.deviceId = deviceId || 'ADMIN';
-          if (materialId) ws.materialId = materialId;
-          ws.isAlive = true;
-          ws.lastPong = Date.now();
-          ws.connectionType = 'playback'; // Mark as playback connection
-          ws.isAdmin = isAdmin; // Mark as admin connection
-          
-          // Set up ping-pong handler
-          ws.on('pong', () => {
+          try {
+            // Store the device and material IDs with the connection
+            ws.deviceId = deviceId || 'ADMIN';
+            if (materialId) ws.materialId = materialId;
             ws.isAlive = true;
             ws.lastPong = Date.now();
-          });
-          
-          this.handlePlaybackConnection(ws, request);
+            ws.connectionType = 'playback'; // Mark as playback connection
+            ws.isAdmin = isAdmin; // Mark as admin connection
+            
+            // Set up ping-pong handler
+            ws.on('pong', () => {
+              ws.isAlive = true;
+              ws.lastPong = Date.now();
+            });
+            
+            this.handlePlaybackConnection(ws, request);
+            console.log(`✅ WebSocket upgrade successful for ${isAdmin ? 'admin' : 'device'}: ${deviceId || 'ADMIN'}`);
+          } catch (error) {
+            console.error(`❌ Error during WebSocket upgrade:`, error);
+            ws.close(1006, 'Internal server error');
+          }
         });
       } else {
         console.log(`Rejected WebSocket connection to unknown path: ${pathname}`);

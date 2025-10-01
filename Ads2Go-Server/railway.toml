@@ -12,3 +12,4 @@ restartPolicyMaxRetries = 10
 [env]
 PORT = "5000"
 NODE_ENV = "production"
+ALLOWED_ORIGINS = "https://ads2go-client-production.up.railway.app"
