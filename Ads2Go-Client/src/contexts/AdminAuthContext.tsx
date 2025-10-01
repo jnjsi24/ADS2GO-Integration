@@ -391,13 +391,25 @@ export const AdminAuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
-      localStorage.removeItem('adminToken');
+      // First, clear admin state to prevent any new authenticated requests
       setAdminWithDebug(null);
       setAdminEmail('');
+
+      // Clear localStorage
+      localStorage.removeItem('adminToken');
+
+      // Reset Apollo store AFTER clearing tokens and state
       await apolloClient.resetStore();
+      
+      // Navigate to admin login
       navigate('/admin-login');
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if there's an error, ensure we clear everything and navigate
+      setAdminWithDebug(null);
+      setAdminEmail('');
+      localStorage.removeItem('adminToken');
+      navigate('/admin-login');
     }
   };
 

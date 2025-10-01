@@ -197,24 +197,6 @@ export default function HomeScreen() {
     (window as any).adTrackingInterval = adTrackingInterval;
   };
 
-  const handleStopTracking = async () => {
-    try {
-      console.log('Stopping location tracking...');
-      await tabletRegistrationService.stopLocationTracking();
-      setIsTracking(false);
-      setTrackingStatus('Stopped');
-      console.log('Location tracking stopped');
-      
-      // Stop ad tracking simulation
-      if ((window as any).adTrackingInterval) {
-        clearInterval((window as any).adTrackingInterval);
-        (window as any).adTrackingInterval = null;
-      }
-    } catch (error) {
-      console.error('Error stopping tracking:', error);
-      setTrackingStatus('Error stopping tracking');
-    }
-  };
 
   const handleGoOffline = async () => {
     try {
@@ -228,6 +210,12 @@ export default function HomeScreen() {
       
       // Stop location tracking
       await tabletRegistrationService.stopLocationTracking();
+      
+      // Stop ad tracking simulation
+      if ((window as any).adTrackingInterval) {
+        clearInterval((window as any).adTrackingInterval);
+        (window as any).adTrackingInterval = null;
+      }
       
       // Disconnect WebSocket connection
       (deviceStatusService as any).disconnect();
@@ -270,8 +258,9 @@ export default function HomeScreen() {
         });
       }
       
-      // Don't automatically restart location tracking - let user control it
-      // Location tracking will be started manually if needed
+      // Automatically restart location tracking when going back online
+      await tabletRegistrationService.startLocationTracking();
+      setIsTracking(true);
       
       // Send online status to server
       if (registrationData) {
@@ -596,21 +585,14 @@ export default function HomeScreen() {
               {trackingStatus}
             </Text>
             <View style={styles.trackingControls}>
-              {!isTracking ? (
+              {!isTracking && !isSimulatingOffline ? (
                 <TouchableOpacity 
                   style={[styles.trackingButton, styles.startButton]}
                   onPress={handleStartTracking}
                 >
                   <Text style={styles.trackingButtonText}>▶️ Start Tracking</Text>
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={[styles.trackingButton, styles.stopButton]}
-                  onPress={handleStopTracking}
-                >
-                  <Text style={styles.trackingButtonText}>⏹️ Stop Tracking</Text>
-                </TouchableOpacity>
-              )}
+              ) : null}
               
               <TouchableOpacity 
                 style={[
@@ -621,7 +603,7 @@ export default function HomeScreen() {
                 disabled={isSimulatingOffline}
               >
                 <Text style={[styles.trackingButtonText, isSimulatingOffline && styles.disabledButtonText]}>
-                  🔴 Go Offline
+                  🔴 Go Offline (Stops Tracking)
                 </Text>
               </TouchableOpacity>
               
@@ -634,7 +616,7 @@ export default function HomeScreen() {
                 disabled={!isSimulatingOffline}
               >
                 <Text style={[styles.trackingButtonText, !isSimulatingOffline && styles.disabledButtonText]}>
-                  🟢 Go Online
+                  🟢 Go Online (Start Tracking)
                 </Text>
               </TouchableOpacity>
             </View>

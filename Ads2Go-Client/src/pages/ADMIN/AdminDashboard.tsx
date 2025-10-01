@@ -14,6 +14,7 @@ import { GET_ADMIN_DASHBOARD_STATS } from '../../graphql/admin/queries';
 import DeviceStatus from '../../components/DeviceStatus';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import { useAdminNotificationSettings } from '../../contexts/AdminNotificationSettingsContext';
+import AirtimeAvailability from '../../components/AirtimeAvailability';
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -49,7 +50,7 @@ const Dashboard = () => {
 
   // Fetch admin dashboard stats
   const { data: statsData, loading: statsLoading } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onCompleted: (data) => {
       console.log('🔔 Frontend: Dashboard stats received:', data);
     },
@@ -177,6 +178,11 @@ const Dashboard = () => {
           <NotificationDashboard pendingAdsCount={stats?.pendingAds} />
         </div>
       )}
+
+      {/* Airtime Availability */}
+      <div className="mb-8">
+        <AirtimeAvailability />
+      </div>
 
       {/* Device Status */}
       <div className="bg-white p-6 rounded-lg shadow">

@@ -142,7 +142,8 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const materialsUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/material`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const materialsUrl = `${baseUrl}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
@@ -176,7 +177,8 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const apiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/compliance?date=${selectedDate}`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
       const complianceResponse = await fetch(apiUrl, {
@@ -236,7 +238,8 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const pathApiUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const pathApiUrl = `${baseUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       
       const response = await fetch(pathApiUrl, {
@@ -306,7 +309,7 @@ const ScreenTracking: React.FC = () => {
     fetchData();
     fetchMaterials();
     
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds for faster updates
     return () => clearInterval(interval);
   }, [selectedDate, fetchData]);
 

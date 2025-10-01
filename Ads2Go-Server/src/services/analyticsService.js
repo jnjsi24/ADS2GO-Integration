@@ -1,86 +1,47 @@
 const mongoose = require('mongoose');
 const Analytics = require('../models/analytics');
-const ScreenTracking = require('../models/screenTracking');
-const MaterialTracking = require('../models/materialTracking');
 
 class AnalyticsService {
   
   // Update analytics when Android player sends data
   static async updateAnalytics(deviceId, materialId, slotNumber, data) {
     try {
-      // Always prioritize active deployment devices for analytics updates
-      let analytics = await Analytics.findOne({ 
-        materialId, 
-        slotNumber, 
-        deviceId: { $regex: '^DEPLOYMENT-' } 
-      });
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      if (analytics) {
-        console.log(`✅ Found active deployment device for analytics update: ${analytics.deviceId}`);
-      } else {
-        // Only create new document if no deployment device exists
-        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
-        
-        if (!analytics) {
-          analytics = new Analytics({
-            deviceId,
-            materialId,
-            slotNumber,
-            carGroupId: data.carGroupId,
-            driverId: data.driverId,
-            adId: data.adId,
-            userId: data.userId,
-            adDeploymentId: data.adDeploymentId,
-            deviceInfo: data.deviceInfo,
-            isOnline: data.isOnline || false,
-            currentLocation: data.gpsData ? {
-              type: 'Point',
-              coordinates: [data.gpsData.lng, data.gpsData.lat],
-              accuracy: data.gpsData.accuracy,
-              speed: data.gpsData.speed,
-              heading: data.gpsData.heading,
-              altitude: data.gpsData.altitude,
-              timestamp: new Date()
-            } : null,
-            networkStatus: {
-              isOnline: data.networkStatus || false,
-              lastSeen: new Date()
-            }
-          });
+      // Use the new createOrUpdateAdAnalytics method
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        data.adId,
+        data.adTitle || `Ad ${data.adId}`,
+        materialId,
+        slotNumber,
+        deviceId,
+        {
+          userId: data.userId,
+          adDeploymentId: data.adDeploymentId,
+          carGroupId: data.carGroupId,
+          driverId: data.driverId,
+          materialType: materialType,
+          isOnline: data.isOnline,
+          currentLocation: data.gpsData ? {
+            type: 'Point',
+            coordinates: [data.gpsData.lng, data.gpsData.lat],
+            accuracy: data.gpsData.accuracy,
+            speed: data.gpsData.speed,
+            heading: data.gpsData.heading,
+            altitude: data.gpsData.altitude,
+            timestamp: new Date()
+          } : null,
+          networkStatus: {
+            isOnline: data.networkStatus || false,
+            lastSeen: new Date()
+          },
+          deviceInfo: data.deviceInfo
         }
-      }
-      
-      if (analytics) {
-        // Update existing analytics
-        analytics.isOnline = data.isOnline || false;
-        analytics.lastUpdated = new Date();
-        
-        // Update ad and user references if provided
-        if (data.adId) analytics.adId = data.adId;
-        if (data.userId) analytics.userId = data.userId;
-        if (data.adDeploymentId) analytics.adDeploymentId = data.adDeploymentId;
-        
-        if (data.gpsData) {
-          await analytics.updateLocation(
-            data.gpsData.lat,
-            data.gpsData.lng,
-            data.gpsData.speed,
-            data.gpsData.heading,
-            data.gpsData.accuracy
-          );
-        }
-        
-        if (data.deviceInfo) {
-          analytics.deviceInfo = { ...analytics.deviceInfo, ...data.deviceInfo };
-        }
-        
-        if (data.networkStatus !== undefined) {
-          analytics.networkStatus.isOnline = data.networkStatus;
-          analytics.networkStatus.lastSeen = new Date();
-        }
-      }
-      
-      await analytics.save();
+      );
+
       return analytics;
     } catch (error) {
       console.error('Error updating analytics:', error);
@@ -91,76 +52,42 @@ class AnalyticsService {
   // Track ad playback
   static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
     try {
-      // Get the ad to find the userId - require Ad model locally to avoid OverwriteModelError
+      // Skip processing if materialId is invalid or unknown
+      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
+        console.log(`⚠️  Skipping ad playback analytics - invalid materialId: ${materialId}`);
+        return null;
+      }
+
+      // Skip processing if slotNumber is invalid
+      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
+        console.log(`⚠️  Skipping ad playback analytics - invalid slotNumber: ${slotNumber}`);
+        return null;
+      }
+
+      // Get the ad to find the userId
       const Ad = mongoose.models.Ad || require('../models/ad');
       const ad = await Ad.findById(adId);
       const userId = ad ? ad.userId : null;
       
-      // Always prioritize active deployment devices for ad playback tracking
-      let analytics = await Analytics.findOne({ 
-        materialId, 
-        slotNumber, 
-        deviceId: { $regex: '^DEPLOYMENT-' } 
-      });
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      if (analytics) {
-        console.log(`✅ Found active deployment device for ad playback: ${analytics.deviceId}`);
-        // Update userId if not set
-        if (!analytics.userId && userId) {
-          analytics.userId = userId;
-          await analytics.save();
-        }
-      } else {
-        // Only create new document if no deployment device exists
-        analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
-        
-        if (!analytics) {
-          analytics = new Analytics({
-            deviceId,
-            materialId,
-            slotNumber,
-            userId: userId, // Set the userId from the ad
-            adPlaybacks: [],
-            totalAdPlayTime: 0,
-            totalAdImpressions: 0
-          });
-        } else {
-          // Update userId if not set
-          if (!analytics.userId && userId) {
-            analytics.userId = userId;
-            await analytics.save();
-          }
-        }
-      }
-      
-      await analytics.addAdPlayback(adId, adTitle, adDuration, viewTime);
-      
-      // Also update screen tracking
-      console.log(`🔍 [analyticsService] Updating ScreenTracking for device ${deviceId}...`);
-      const screenResult = await ScreenTracking.findOneAndUpdate(
-        { 'devices.deviceId': deviceId },
-        { 
-          $inc: { 'screenMetrics.adPlayCount': 1 },
-          $set: { 
-            'screenMetrics.lastAdPlayed': new Date(),
-            'screenMetrics.currentAd.adId': adId,
-            'screenMetrics.currentAd.adTitle': adTitle,
-            'screenMetrics.currentAd.adDuration': adDuration,
-            'screenMetrics.currentAd.startTime': new Date(),
-            'screenMetrics.currentAd.currentTime': 0,
-            'screenMetrics.currentAd.state': 'playing',
-            'screenMetrics.currentAd.progress': 0
-          }
-        },
-        { new: true }
+      // Create or update analytics for this ad
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        adId,
+        adTitle,
+        materialId,
+        slotNumber,
+        deviceId,
+        { userId, materialType }
       );
       
-      if (screenResult) {
-        console.log(`✅ [analyticsService] Updated ScreenTracking for device ${deviceId}: ${adTitle}`);
-        console.log(`📊 ScreenTracking currentAd:`, screenResult.screenMetrics?.currentAd);
-      } else {
-        console.log(`❌ [analyticsService] No ScreenTracking document found for device ${deviceId}`);
-      }
+      // Add ad playback to the specific material
+      await analytics.addAdPlayback(materialId, slotNumber, adId, adTitle, adDuration, viewTime);
+      
+      // ScreenTracking collection deprecated: skip screen-level updates
       
       return analytics;
     } catch (error) {
@@ -172,38 +99,41 @@ class AnalyticsService {
   // Track QR scan
   static async trackQRScan(deviceId, materialId, slotNumber, qrScanData) {
     try {
-      let analytics = await Analytics.findOne({ deviceId, materialId, slotNumber });
-      
-      if (!analytics) {
-        analytics = new Analytics({
-          deviceId,
-          materialId,
-          slotNumber,
-          qrScans: [],
-          totalQRScans: 0
-        });
+      // Skip processing if materialId is invalid or unknown
+      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
+        console.log(`⚠️  Skipping QR scan analytics - invalid materialId: ${materialId}`);
+        return null;
       }
+
+      // Skip processing if slotNumber is invalid
+      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
+        console.log(`⚠️  Skipping QR scan analytics - invalid slotNumber: ${slotNumber}`);
+        return null;
+      }
+
+      // Get the material to find the material type
+      const Material = mongoose.models.Material || require('../models/Material');
+      const material = await Material.findOne({ materialId: materialId });
+      const materialType = material ? material.materialType : 'HEADDRESS';
       
-      await analytics.addQRScan(qrScanData);
+      // Create or update analytics for this ad
+      const analytics = await Analytics.createOrUpdateAdAnalytics(
+        qrScanData.adId,
+        qrScanData.adTitle || `Ad ${qrScanData.adId}`,
+        materialId,
+        slotNumber,
+        deviceId,
+        { materialType }
+      );
+      
+      // Add QR scan to the specific material
+      await analytics.addQRScan(materialId, slotNumber, qrScanData);
       
       // QR scan tracking is now handled directly in the ads.js route
       // No need to create separate QRScanTracking documents here
       
-      // Update material tracking - skip if materialId is not a valid ObjectId
-      try {
-        // Check if materialId is a valid ObjectId format
-        if (mongoose.Types.ObjectId.isValid(materialId)) {
-          await MaterialTracking.findOneAndUpdate(
-            { materialId },
-            { $inc: { qrCodeScans: 1 } },
-            { upsert: false }
-          );
-        } else {
-          console.log(`Skipping MaterialTracking update - materialId "${materialId}" is not a valid ObjectId`);
-        }
-      } catch (materialTrackingError) {
-        console.log('Could not update material tracking QR count:', materialTrackingError.message);
-      }
+      // DeviceCompliance is now PHOTOS ONLY - no analytics data
+      // QR scan analytics are handled by DeviceTracking and Analytics collections
       
       return analytics;
     } catch (error) {
@@ -541,7 +471,7 @@ class AnalyticsService {
   // Get user-specific analytics
   static async getUserAnalytics(userId, startDate, endDate, period = '7d') {
     try {
-      console.log(`Getting analytics for user ${userId} for period ${period}`);
+      // Debug: console.log(`Getting analytics for user ${userId} for period ${period}`);
       
       // Calculate date range based on period
       const now = new Date();
@@ -620,61 +550,7 @@ class AnalyticsService {
         ...dateFilter
       }).populate('userId', 'firstName lastName email');
 
-      // Sync view time from ScreenTracking to Analytics
-      if (userAnalytics.length > 0) {
-        console.log(`🔄 Syncing view time from ScreenTracking for user ${userId}...`);
-        
-        // Get ScreenTracking data for user's ads
-        const screenTrackings = await ScreenTracking.find({
-          'screenMetrics.currentAd.adId': { $in: userAdIds }
-        });
-        
-        for (const screenTracking of screenTrackings) {
-          const currentAd = screenTracking.screenMetrics?.currentAd;
-          if (currentAd && userAdIds.includes(currentAd.adId)) {
-            // Find corresponding analytics record
-            const analyticsRecord = userAnalytics.find(analytics => 
-              analytics.adPlaybacks.some(playback => playback.adId === currentAd.adId)
-            );
-            
-            if (analyticsRecord && currentAd.totalViewTime > 0) {
-              // Update the analytics record with actual view time
-              const playbackIndex = analyticsRecord.adPlaybacks.findIndex(
-                playback => playback.adId === currentAd.adId
-              );
-              
-              if (playbackIndex >= 0) {
-                const oldViewTime = analyticsRecord.adPlaybacks[playbackIndex].viewTime || 0;
-                const newViewTime = currentAd.totalViewTime;
-                
-                if (newViewTime > oldViewTime) {
-                  // Update the playback record
-                  analyticsRecord.adPlaybacks[playbackIndex].viewTime = newViewTime;
-                  analyticsRecord.adPlaybacks[playbackIndex].completionRate = 
-                    currentAd.adDuration > 0 ? Math.min(100, (newViewTime / currentAd.adDuration) * 100) : 0;
-                  
-                  // Update total play time
-                  analyticsRecord.totalAdPlayTime += (newViewTime - oldViewTime);
-                  
-                  // Update average completion rate
-                  const totalCompletion = analyticsRecord.adPlaybacks.reduce((sum, ad) => sum + ad.completionRate, 0);
-                  analyticsRecord.averageAdCompletionRate = analyticsRecord.adPlaybacks.length > 0 ? totalCompletion / analyticsRecord.adPlaybacks.length : 0;
-                  
-                  await analyticsRecord.save();
-                  console.log(`✅ Updated view time for ad ${currentAd.adTitle}: ${oldViewTime}s → ${newViewTime}s`);
-                }
-              }
-            }
-          }
-        }
-        
-        // Refresh userAnalytics after sync
-        userAnalytics = await Analytics.find({
-          userId: userId,
-          'adPlaybacks.adId': { $in: userAdIds },
-          ...dateFilter
-        }).populate('userId', 'firstName lastName email');
-      }
+      // ScreenTracking collection deprecated: skip sync from ScreenTracking to Analytics
 
       // If no analytics found with userId, try to find analytics that have the user's ads
       if (userAnalytics.length === 0) {
@@ -1017,31 +893,7 @@ class AnalyticsService {
     try {
       console.log('Starting analytics sync from existing collections...');
       
-      // Sync from ScreenTracking
-      const screenTrackings = await ScreenTracking.find({});
-      for (const screen of screenTrackings) {
-        for (const device of screen.devices) {
-          await Analytics.findOneAndUpdate(
-            { deviceId: device.deviceId, materialId: screen.materialId },
-            {
-              $set: {
-                deviceId: device.deviceId,
-                materialId: screen.materialId,
-                slotNumber: device.slotNumber,
-                isOnline: device.isOnline,
-                currentLocation: device.currentLocation,
-                totalHoursOnline: device.totalHoursOnline,
-                totalDistanceTraveled: device.totalDistanceTraveled,
-                uptimePercentage: screen.screenMetrics?.displayHours || 0,
-                totalAdImpressions: screen.screenMetrics?.adPlayCount || 0,
-                totalQRScans: screen.screenMetrics?.qrCodeScans || 0,
-                lastUpdated: device.lastSeen
-              }
-            },
-            { upsert: true }
-          );
-        }
-      }
+      // ScreenTracking collection deprecated: no sync needed
       
       // QRScanTracking sync removed - QR scans are now handled directly in the ads.js route
       // No need to sync from QRScanTracking collection as it's deprecated

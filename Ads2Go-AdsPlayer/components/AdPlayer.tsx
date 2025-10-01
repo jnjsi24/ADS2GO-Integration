@@ -8,6 +8,7 @@ import * as Location from 'expo-location';
 import * as Device from 'expo-device';
 import tabletRegistrationService from '../services/tabletRegistration';
 import playbackWebSocketService from '../services/playbackWebSocketService';
+import companyAdService, { CompanyAd } from '../services/companyAdService';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
@@ -35,6 +36,7 @@ interface AdPlayerProps {
 
 const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false }) => {
   const [ads, setAds] = useState<Ad[]>([]);
+  const [companyAds, setCompanyAds] = useState<CompanyAd[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [qrCodeReady, setQrCodeReady] = useState(false);
   const [videoActuallyStarted, setVideoActuallyStarted] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [maxRetries] = useState(3);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -66,6 +70,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       }
       
       console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s`);
+      
+      // If this is a company ad, increment play count
+      if (currentAdIndex === -1 && companyAds.length > 0) {
+        console.log(`🏢 Tracking company ad play count: ${adTitle}`);
+        await companyAdService.incrementPlayCount(adId);
+      }
       
       // Get registration data for analytics
       const registrationData = await tabletRegistrationService.getRegistrationData();
@@ -102,7 +112,29 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         isOffline: isOffline
       };
       
-      // Send to analytics endpoint
+      // Send to device tracking endpoint (new daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: analyticsData.deviceId,
+          deviceSlot: analyticsData.slotNumber,
+          adId: analyticsData.adId,
+          adTitle: analyticsData.adTitle,
+          adDuration: analyticsData.adDuration,
+          viewTime: analyticsData.viewTime
+        }),
+      });
+      
+      if (deviceTrackingResponse.ok) {
+        console.log(`✅ Ad playback tracked in device tracking: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track ad playback in device tracking: ${adTitle}`);
+      }
+      
+      // Also send to analytics endpoint for backward compatibility
       const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
         method: 'POST',
         headers: {
@@ -374,7 +406,26 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
       console.log('QR display data to send:', qrDisplayData);
 
-      // Send to QR scan tracking endpoint (treating display as a scan)
+      // Send to device tracking endpoint (new daily staging system)
+      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+          deviceSlot: adSlotNumber,
+          qrScanData: qrDisplayData
+        }),
+      });
+
+      if (deviceTrackingResponse.ok) {
+        console.log(`✅ QR display tracked in device tracking: ${adTitle}`);
+      } else {
+        console.log(`❌ Failed to track QR display in device tracking: ${adTitle}`);
+      }
+
+      // Also send to existing QR scan tracking endpoint for backward compatibility
       const response = await fetch(`${API_BASE_URL}/ads/qr-scan`, {
         method: 'POST',
         headers: {
@@ -390,9 +441,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         console.error(`❌ Failed to track QR display: ${response.status} ${response.statusText}`);
       }
       
-      // QR display is already tracked in the /ads/qr-scan endpoint above
-      // No need for duplicate analytics call - everything is handled in analytics collection
-      console.log(`✅ QR display fully tracked via /ads/qr-scan endpoint: ${adTitle}`);
+      console.log(`✅ QR display fully tracked via both endpoints: ${adTitle}`);
     } catch (error) {
       console.error('Error tracking QR display:', error);
     }
@@ -401,24 +450,23 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track QR code display when ad changes (only once per ad)
   const [trackedAds, setTrackedAds] = useState(new Set());
   
-  // Company ad fallback
-  const companyAd = {
-    adId: 'company-ad',
-    adTitle: 'Ads2Go',
-    mediaFile: 'https://firebasestorage.googleapis.com/v0/b/ads2go-6ead4.firebasestorage.app/o/advertisements%2Fcomapanyads.mp4?alt=media&token=6beecec9-4f14-42fa-bd08-0815b14cdbed',
-    duration: 15
-  };
-  
   // Determine which ad to show
-  const currentAd = currentAdIndex === -1 ? companyAd : (ads[currentAdIndex] || null);
+  const currentAd = currentAdIndex === -1 ? 
+    (companyAds.length > 0 ? {
+      adId: companyAds[0].id,
+      adTitle: companyAds[0].title,
+      mediaFile: companyAds[0].mediaFile,
+      duration: companyAds[0].duration
+    } : null) : 
+    (ads[currentAdIndex] || null);
   
   useEffect(() => {
-    if (currentAd && currentAd.adId !== 'company-ad' && !isOffline && !trackedAds.has(currentAd.adId)) {
+    if (currentAd && currentAdIndex >= 0 && !isOffline && !trackedAds.has(currentAd.adId)) {
       // Note: QR display tracking is now handled by the tracking page when users scan
       console.log(`📱 QR code displayed for ad: ${currentAd.adTitle}`);
       setTrackedAds(prev => new Set(prev).add(currentAd.adId));
     }
-  }, [currentAd?.adId, isOffline, trackedAds]);
+  }, [currentAd?.adId, currentAdIndex, isOffline, trackedAds]);
 
   // Handle QR code interaction (for debugging - simulates when someone scans the QR code)
   const handleQRInteraction = () => {
@@ -642,6 +690,25 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     return validAds;
   };
 
+  // Fetch company ads
+  const fetchCompanyAds = async () => {
+    try {
+      console.log('🏢 Fetching company ads...');
+      const result = await companyAdService.fetchActiveCompanyAds();
+      
+      if (result.success && result.ads.length > 0) {
+        setCompanyAds(result.ads);
+        console.log(`✅ Loaded ${result.ads.length} company ads`);
+      } else {
+        console.log('⚠️ No company ads available:', result.message);
+        setCompanyAds([]);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching company ads:', error);
+      setCompanyAds([]);
+    }
+  };
+
   // Import the service dynamically to avoid circular dependencies
   const fetchAds = async () => {
     try {
@@ -739,7 +806,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   }, [isOffline]);
 
   useEffect(() => {
-    fetchAds();
+    // Fetch both user ads and company ads
+    const fetchAllAds = async () => {
+      await Promise.all([
+        fetchAds(),
+        fetchCompanyAds()
+      ]);
+    };
+    
+    fetchAllAds();
     
     // Connect to WebSocket for real-time playback updates
     playbackWebSocketService.connect().then((connected) => {
@@ -776,6 +851,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Reset WebSocket updates for new ad
       setWebsocketUpdatesStarted(false);
       setVideoActuallyStarted(false);
+      
+      // Reset retry count for new ad
+      setRetryCount(0);
       
       // DON'T send any WebSocket updates yet - wait for video to actually load
       // The onLoadStart, onLoad, and onReadyForDisplay will handle the buffering states
@@ -822,6 +900,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     // Reset WebSocket updates flag for next ad
     setWebsocketUpdatesStarted(false);
     
+    // If no user ads available, loop the company ad
+    if (ads.length === 0) {
+      console.log('No user ads available, looping company ad');
+      if (companyAds.length > 0) {
+        setCurrentAdIndex(-1); // Keep showing company ad
+      } else {
+        console.log('No company ads available either');
+      }
+      return;
+    }
+    
     // If slots are not full (less than 5 ads), include company ads in rotation
     if (ads.length < 5) {
       // If currently showing a user ad
@@ -858,14 +947,49 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
     
     console.log('Ad Player Error:', errorMessage);
+    console.log('Current ad causing error:', currentAd);
+    console.log('Retry count:', retryCount, 'Max retries:', maxRetries);
     
-    // If this is a network error (404, etc.), try to skip to next ad
-    if (errorMessage.includes('404') || errorMessage.includes('Response code')) {
-      console.log('Network error detected, attempting to skip to next ad...');
-      setTimeout(() => {
-        handleVideoEnd(); // Skip to next ad
-      }, 1000);
-      return;
+    // If this is a network error (404, etc.), try to skip to next ad or retry
+    if (errorMessage.includes('404') || errorMessage.includes('Response code') || errorMessage.includes('Network error')) {
+      console.log('Network error detected, attempting to handle...');
+      
+      // If we haven't exceeded max retries, try again
+      if (retryCount < maxRetries) {
+        console.log(`Retrying video playback (${retryCount + 1}/${maxRetries})...`);
+        setRetryCount(prev => prev + 1);
+        setTimeout(() => {
+          // Force video to reload by updating the key
+          setVideoActuallyStarted(false);
+          setIsTransitioning(false);
+        }, 2000); // Wait 2 seconds before retry
+        return;
+      }
+      
+      // If we've exceeded max retries, try the next ad
+      console.log('Max retries exceeded, attempting to skip to next ad...');
+      setRetryCount(0); // Reset retry count for next ad
+      
+      // If we have user ads, try the next one
+      if (ads.length > 0) {
+        setTimeout(() => {
+          handleVideoEnd(); // Skip to next ad
+        }, 1000);
+        return;
+      } else {
+        // If no user ads, try company ad if we're not already showing it
+        if (currentAdIndex !== -1 && companyAds.length > 0) {
+          console.log('No user ads available, switching to company ad');
+          setTimeout(() => {
+            setCurrentAdIndex(-1); // Switch to company ad
+            setIsTransitioning(false);
+          }, 1000);
+          return;
+        } else {
+          // We're already on company ad and it's failing, or no company ads available
+          console.log('Company ad also failed or no company ads available, showing error');
+        }
+      }
     }
     
     setError(errorMessage);
@@ -884,6 +1008,63 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3498db" />
           <Text style={styles.loadingText}>Loading advertisements...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // If we have an error but no current ad, try to show company ad as fallback
+  if (error && !currentAd && ads.length === 0 && companyAds.length > 0) {
+    console.log('Error with no ads, attempting to show company ad as fallback');
+    // Force show company ad
+    const fallbackAd = {
+      adId: companyAds[0].id,
+      adTitle: companyAds[0].title,
+      mediaFile: companyAds[0].mediaFile,
+      duration: companyAds[0].duration
+    };
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity 
+          style={styles.videoContainer}
+          onPress={handleScreenTap}
+          activeOpacity={1}
+        >
+          <Video
+            key="fallback-company-ad"
+            ref={videoRef}
+            source={{ uri: fallbackAd.mediaFile }}
+            style={styles.video}
+            useNativeControls={false}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay={true}
+            isLooping={true} // Loop the company ad when it's the only option
+            onPlaybackStatusUpdate={(status) => {
+              if (status.isLoaded) {
+                setIsPlaying(status.isPlaying || false);
+              }
+            }}
+            onError={(error) => {
+              console.error('Fallback company ad also failed:', error);
+              // If even the company ad fails, show the error
+            }}
+          />
+          
+          {/* Minimal Ad Info Overlay */}
+          <View style={styles.adInfoOverlay}>
+            <Text style={styles.adTitle}>{fallbackAd.adTitle}</Text>
+          </View>
+
+          {/* Ad Counter */}
+          <View style={styles.adCounter}>
+            <Text style={styles.adCounterText}>Company (Fallback)</Text>
+          </View>
+        </TouchableOpacity>
+        
+        {/* Error indicator */}
+        <View style={styles.offlineIndicator}>
+          <Ionicons name="alert-circle" size={16} color="#e74c3c" />
+          <Text style={styles.offlineText}>Using fallback ad - {error}</Text>
         </View>
       </View>
     );
@@ -935,7 +1116,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         activeOpacity={1}
       >
         <Video
-          key={currentAd?.adId || 'no-ad'} // Force re-render when switching between user and company ads
+          key={`${currentAd?.adId || 'no-ad'}-${retryCount}`} // Force re-render when switching ads or retrying
           ref={videoRef}
           source={{ uri: currentAd?.mediaFile || '' }}
           style={styles.video}
@@ -1021,8 +1202,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                   playbackRate: playbackRate,
                   volume: volume,
                   isMuted: status.isMuted || false,
-                  hasJustStarted: status.hasJustStarted || false,
-                  hasJustFinished: status.hasJustFinished || false,
+                  hasJustStarted: (status as any).hasJustStarted || false,
+                  hasJustFinished: (status as any).hasJustFinished || false,
                   // Additional detailed info
                   adDetails: {
                     adId: currentAd.adId,
@@ -1108,16 +1289,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             } else if (status.error) {
               // Handle buffering/loading states with detailed error info
               if (currentAd) {
+                const errorStatus = status as any;
                 playbackWebSocketService.updatePlaybackDataAndSend({
                   state: 'buffering',
-                  currentTime: status.positionMillis ? status.positionMillis / 1000 : 0,
+                  currentTime: errorStatus.positionMillis ? errorStatus.positionMillis / 1000 : 0,
                   duration: currentAd.duration,
-                  progress: status.positionMillis && status.durationMillis ? 
-                    (status.positionMillis / status.durationMillis) * 100 : 0,
-                  remainingTime: currentAd.duration - (status.positionMillis ? status.positionMillis / 1000 : 0),
+                  progress: errorStatus.positionMillis && errorStatus.durationMillis ? 
+                    (errorStatus.positionMillis / errorStatus.durationMillis) * 100 : 0,
+                  remainingTime: currentAd.duration - (errorStatus.positionMillis ? errorStatus.positionMillis / 1000 : 0),
                   playbackRate: 0,
-                  volume: status.volume || 1.0,
-                  isMuted: status.isMuted || false,
+                  volume: errorStatus.volume || 1.0,
+                  isMuted: errorStatus.isMuted || false,
                   adDetails: {
                     adId: currentAd.adId,
                     adTitle: currentAd.adTitle,
@@ -1236,7 +1418,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         </View>
 
         {/* QR Code Overlay - Always visible for user ads */}
-        {currentAd && currentAd.adId !== 'company-ad' && qrData && (
+        {currentAd && currentAdIndex >= 0 && qrData && (
           <View style={styles.qrOverlay}>
             <View style={styles.qrContainer}>
               <QRCode
@@ -1264,7 +1446,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               <Text style={styles.debugText}>Material ID: {materialId}</Text>
               
               {/* Debug QR Scan Button */}
-              {currentAd && currentAd.adId !== 'company-ad' && (
+              {currentAd && currentAdIndex >= 0 && (
                 <TouchableOpacity 
                   style={styles.debugButton} 
                   onPress={handleQRInteraction}
@@ -1275,6 +1457,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               <Text style={styles.debugText}>Slot Number: {slotNumber}</Text>
               <Text style={styles.debugText}>Current Index: {currentAdIndex}</Text>
               <Text style={styles.debugText}>Total Ads: {ads.length}</Text>
+              <Text style={styles.debugText}>Company Ads: {companyAds.length}</Text>
               <Text style={styles.debugText}>Is Playing: {isPlaying ? 'Yes' : 'No'}</Text>
               <Text style={styles.debugText}>Network Status: {networkStatus ? 'Online' : 'Offline'}</Text>
               <Text style={styles.debugText}>Is Offline: {isOffline ? 'Yes' : 'No'}</Text>

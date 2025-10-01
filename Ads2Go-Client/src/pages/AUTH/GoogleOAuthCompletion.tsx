@@ -19,6 +19,7 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
   const [completeGoogleOAuth] = useMutation(COMPLETE_GOOGLE_OAUTH_MUTATION);
   
   const [formData, setFormData] = useState({
+    lastName: googleUserData?.lastName || '', // Use Google's lastName or empty
     middleName: '',
     companyName: '',
     companyAddress: '',
@@ -54,6 +55,13 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+
+    // Validate lastName if not provided by Google
+    if (!googleUserData?.lastName && !formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    } else if (!googleUserData?.lastName && formData.lastName.trim().length < 2) {
+      newErrors.lastName = 'Last name must be at least 2 characters long';
+    }
 
     if (!formData.companyName.trim()) {
       newErrors.companyName = 'Company/Business name is required';
@@ -100,13 +108,20 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
     setIsSubmitting(true);
     
     try {
+      console.log('🔄 Submitting Google OAuth completion with data:', {
+        email: googleUserData.email,
+        firstName: googleUserData.firstName,
+        lastName: googleUserData.lastName || formData.lastName,
+        companyName: formData.companyName
+      });
+
       const result = await completeGoogleOAuth({
         variables: {
           input: {
             googleId: googleUserData.googleId,
             email: googleUserData.email,
             firstName: googleUserData.firstName,
-            lastName: googleUserData.lastName,
+            lastName: googleUserData.lastName || formData.lastName, // Use form data if Google didn't provide it
             profilePicture: googleUserData.profilePicture,
             middleName: formData.middleName,
             companyName: formData.companyName,
@@ -116,6 +131,8 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
           }
         }
       });
+
+      console.log('📥 Google OAuth completion response:', result.data);
 
       if (result.data?.completeGoogleOAuthProfile?.token && result.data?.completeGoogleOAuthProfile?.user) {
         const { token, user: userRaw } = result.data.completeGoogleOAuthProfile;
@@ -144,6 +161,9 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
         // Set user in context
         setUser(user);
         setUserEmail(user.email);
+
+        // Store user data in localStorage (same as regular login)
+        localStorage.setItem('user', JSON.stringify(user));
 
         // Clear session storage
         sessionStorage.removeItem('googleOAuthData');
@@ -199,7 +219,7 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
               <div>
                 <span className="font-medium text-gray-700">Name:</span>
                 <span className="ml-2 text-gray-600">
-                  {googleUserData.firstName} {googleUserData.lastName}
+                  {googleUserData.firstName} {googleUserData.lastName || '(Last name not provided)'}
                 </span>
               </div>
               <div>
@@ -228,6 +248,30 @@ const GoogleOAuthCompletion: React.FC<GoogleOAuthCompletionProps> = ({ googleUse
                 placeholder="Enter your middle name"
               />
             </div>
+
+            {/* Last Name - Required if not provided by Google */}
+            {!googleUserData.lastName && (
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  id="lastName"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                    errors.lastName ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter your last name"
+                  required
+                />
+                {errors.lastName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>
+                )}
+              </div>
+            )}
 
             {/* Company Name */}
             <div>

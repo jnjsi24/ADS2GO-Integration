@@ -43,6 +43,15 @@ export const DELETE_NOTIFICATION = gql`
   }
 `;
 
+export const DELETE_ALL_NOTIFICATIONS = gql`
+  mutation DeleteAllNotifications {
+    deleteAllNotifications {
+      success
+      message
+    }
+  }
+`;
+
 // TODO: Add real-time subscription when WebSocket is implemented
 // export const NOTIFICATION_SUBSCRIPTION = gql`
 //   subscription NotificationReceived {

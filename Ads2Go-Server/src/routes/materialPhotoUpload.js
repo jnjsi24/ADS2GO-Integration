@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { PhotoUploadService, upload } = require('../services/photoUploadService');
-const MaterialTracking = require('../models/materialTracking');
+const DeviceCompliance = require('../models/deviceCompliance');
 const { checkDriver } = require('../middleware/driverAuth');
 const { checkAdminMiddleware } = require('../middleware/auth');
 
@@ -44,16 +44,16 @@ router.post('/upload',
         });
       }
 
-      // Find the MaterialTracking record
-      const materialTracking = await MaterialTracking.findOne({ 
+      // Find the DeviceCompliance record
+      const deviceCompliance = await DeviceCompliance.findOne({ 
         materialId,
         driverId: req.driver._id // Use ObjectId from driver context
       });
 
-      if (!materialTracking) {
+      if (!deviceCompliance) {
         return res.status(404).json({
           success: false,
-          message: 'Material tracking record not found'
+          message: 'Device compliance record not found'
         });
       }
 
@@ -78,8 +78,8 @@ router.post('/upload',
         photoUrls.push(photoUrl);
       }
 
-      // Update MaterialTracking record with new photos
-      await materialTracking.addMonthlyPhoto(month, photoUrls, driverId);
+      // Update DeviceCompliance record with new photos
+      await deviceCompliance.addMonthlyPhoto(month, photoUrls, driverId);
 
       console.log(`✅ Monthly photos uploaded for material ${materialId}, month ${month}`);
 
@@ -91,8 +91,8 @@ router.post('/upload',
           month,
           photoUrls,
           totalPhotos: photoUrls.length,
-          nextPhotoDue: materialTracking.nextPhotoDue,
-          complianceStatus: materialTracking.photoComplianceStatus
+          nextPhotoDue: deviceCompliance.nextPhotoDue,
+          complianceStatus: deviceCompliance.photoComplianceStatus
         }
       });
 
@@ -126,18 +126,18 @@ router.get('/:materialId/:month',
         });
       }
 
-      // Find MaterialTracking record
-      const materialTracking = await MaterialTracking.findOne({ materialId });
+      // Find DeviceCompliance record
+      const deviceCompliance = await DeviceCompliance.findOne({ materialId });
 
-      if (!materialTracking) {
+      if (!deviceCompliance) {
         return res.status(404).json({
           success: false,
-          message: 'Material tracking record not found'
+          message: 'Device compliance record not found'
         });
       }
 
       // Get monthly photos
-      const monthlyPhoto = materialTracking.monthlyPhotos?.find(
+      const monthlyPhoto = deviceCompliance.monthlyPhotos?.find(
         photo => photo.month === month
       );
 
@@ -199,18 +199,18 @@ router.delete('/:materialId/:month',
         });
       }
 
-      // Find MaterialTracking record
-      const materialTracking = await MaterialTracking.findOne({ materialId });
+      // Find DeviceCompliance record
+      const deviceCompliance = await DeviceCompliance.findOne({ materialId });
 
-      if (!materialTracking) {
+      if (!deviceCompliance) {
         return res.status(404).json({
           success: false,
-          message: 'Material tracking record not found'
+          message: 'Device compliance record not found'
         });
       }
 
       // Find monthly photo
-      const monthlyPhoto = materialTracking.monthlyPhotos?.find(
+      const monthlyPhoto = deviceCompliance.monthlyPhotos?.find(
         photo => photo.month === month
       );
 
@@ -240,20 +240,20 @@ router.delete('/:materialId/:month',
         await photoUploadService.deletePhoto(photoUrl);
       }
 
-      // Remove monthly photo from MaterialTracking
-      materialTracking.monthlyPhotos = materialTracking.monthlyPhotos.filter(
+      // Remove monthly photo from DeviceCompliance
+      deviceCompliance.monthlyPhotos = deviceCompliance.monthlyPhotos.filter(
         photo => photo.month !== month
       );
 
       // Update tracking fields
-      materialTracking.lastPhotoUpload = materialTracking.monthlyPhotos.length > 0 
-        ? Math.max(...materialTracking.monthlyPhotos.map(p => new Date(p.uploadedAt)))
+      deviceCompliance.lastPhotoUpload = deviceCompliance.monthlyPhotos.length > 0 
+        ? Math.max(...deviceCompliance.monthlyPhotos.map(p => new Date(p.uploadedAt)))
         : null;
       
-      materialTracking.nextPhotoDue = materialTracking.calculateNextPhotoDue();
-      materialTracking.photoComplianceStatus = materialTracking.calculatePhotoComplianceStatus();
+      deviceCompliance.nextPhotoDue = deviceCompliance.calculateNextPhotoDue();
+      deviceCompliance.photoComplianceStatus = deviceCompliance.calculatePhotoComplianceStatus();
 
-      await materialTracking.save();
+      await deviceCompliance.save();
 
       console.log(`✅ Monthly photos deleted for material ${materialId}, month ${month}`);
 
@@ -307,18 +307,18 @@ router.put('/:materialId/:month/review',
         });
       }
 
-      // Find MaterialTracking record
-      const materialTracking = await MaterialTracking.findOne({ materialId });
+      // Find DeviceCompliance record
+      const deviceCompliance = await DeviceCompliance.findOne({ materialId });
 
-      if (!materialTracking) {
+      if (!deviceCompliance) {
         return res.status(404).json({
           success: false,
-          message: 'Material tracking record not found'
+          message: 'Device compliance record not found'
         });
       }
 
       // Review the monthly photo
-      await materialTracking.reviewMonthlyPhoto(month, status, adminId, notes);
+      await deviceCompliance.reviewMonthlyPhoto(month, status, adminId, notes);
 
       console.log(`✅ Monthly photos reviewed for material ${materialId}, month ${month}`);
 
@@ -332,7 +332,7 @@ router.put('/:materialId/:month/review',
           reviewedBy: adminId,
           reviewedAt: new Date(),
           notes,
-          complianceStatus: materialTracking.photoComplianceStatus
+          complianceStatus: deviceCompliance.photoComplianceStatus
         }
       });
 
@@ -356,7 +356,7 @@ router.get('/compliance/overdue',
   checkAdminMiddleware,
   async (req, res) => {
     try {
-      const overdueMaterials = await MaterialTracking.findOverduePhotos();
+      const overdueMaterials = await DeviceCompliance.findOverduePhotos();
 
       res.status(200).json({
         success: true,

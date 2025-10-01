@@ -175,10 +175,39 @@ const resolvers = {
         } = input;
 
         // Check if user already exists
+        console.log('🔍 Checking for existing user with email:', email);
         const existingUser = await User.findOne({ email });
+        console.log('🔍 Database query result:', existingUser);
+        console.log('🔍 Existing user found:', existingUser ? 'YES' : 'NO');
         if (existingUser) {
-          throw new Error('User with this email already exists');
+          console.log('🔍 Existing user details:', {
+            id: existingUser.id,
+            email: existingUser.email,
+            firstName: existingUser.firstName,
+            lastName: existingUser.lastName
+          });
         }
+        
+        if (existingUser) {
+          console.log('✅ User already exists, logging them in directly');
+          // User already exists, generate new token and return user data
+          const token = jwt.sign({
+            userId: existingUser.id,
+            email: existingUser.email,
+            role: existingUser.role,
+            firstName: existingUser.firstName,
+            lastName: existingUser.lastName,
+            tokenVersion: existingUser.tokenVersion,
+          }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+          console.log('✅ Generated token for existing user:', existingUser.firstName, existingUser.lastName);
+          return {
+            token,
+            user: existingUser
+          };
+        }
+        
+        console.log('🆕 User does not exist, creating new account');
 
         // Validate phone number
         let normalizedNumber = contactNumber.replace(/\s/g, '');
@@ -194,7 +223,7 @@ const resolvers = {
         const newUser = new User({
           firstName: firstName.trim(),
           middleName: middleName?.trim() || null,
-          lastName: lastName.trim(),
+          lastName: lastName?.trim() || 'User', // Provide default if Google doesn't give last name
           companyName: companyName.trim(),
           companyAddress: companyAddress.trim(),
           houseAddress: houseAddress?.trim() || null,

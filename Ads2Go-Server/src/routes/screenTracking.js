@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ScreenTracking = require('../models/screenTracking');
+const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 const { checkDriver } = require('../middleware/driverAuth');
@@ -36,13 +36,13 @@ router.post('/updateLocation', async (req, res) => {
       });
     }
 
-    // Find or create screen tracking record
-    let screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    // Find or create device tracking record
+    let deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!screenTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found. Please register screen first.'
+        message: 'Device tracking record not found. Please register device first.'
       });
     }
 
@@ -57,60 +57,54 @@ router.post('/updateLocation', async (req, res) => {
     }
 
     // Check if we need to reset daily session (new day)
-    const wasReset = screenTracking.resetDailySession();
+    const wasReset = deviceTracking.resetDailySession();
     if (wasReset) {
       console.log(`🔄 Daily session reset for ${deviceId} - new day started`);
-      await screenTracking.save();
+      await deviceTracking.save();
     }
     
     // Check if device was offline and just reconnected - clear location history to prevent invalid distance calculation
     const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
-    const wasOffline = !screenTracking.isOnline && hasWebSocketConnection;
+    const wasOffline = !deviceTracking.isOnline && hasWebSocketConnection;
     
     // Also check if this is a fresh connection (no recent location history or invalid coordinates)
-    const hasInvalidLocationHistory = screenTracking.currentSession?.locationHistory?.some(point => 
+    const hasInvalidLocationHistory = deviceTracking.currentSession?.locationHistory?.some(point => 
       point.coordinates && point.coordinates[0] === 0 && point.coordinates[1] === 0
     );
     
     if (wasOffline || hasInvalidLocationHistory) {
       console.log(`🔄 Device ${deviceId} reconnected after being offline or has invalid location history - clearing location history to prevent invalid distance calculation`);
-      screenTracking.currentSession.locationHistory = [];
-      screenTracking.currentLocation = null;
-      screenTracking.currentSession.totalDistanceTraveled = 0;
-      screenTracking.totalDistanceTraveled = 0;
-      await screenTracking.save();
+      deviceTracking.currentSession.locationHistory = [];
+      deviceTracking.currentLocation = null;
+      deviceTracking.currentSession.totalDistanceTraveled = 0;
+      deviceTracking.totalDistanceTraveled = 0;
+      await deviceTracking.save();
     }
 
     // Update location and online status
     try {
-      await screenTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
+      await deviceTracking.updateLocation(lat, lng, speed, heading, accuracy, address);
       console.log('Location updated successfully for device:', deviceId);
       
       // Check if device has active WebSocket connection before marking as online
       const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
       
       // Only mark as online if device has active WebSocket connection
-      await ScreenTracking.updateOne(
-        { 'devices.deviceId': deviceId },
+      await DeviceTracking.updateOne(
+        { deviceId: deviceId },
         { 
           $set: { 
-            'devices.$.isOnline': hasWebSocketConnection,
-            'devices.$.lastSeen': new Date()
+            isOnline: hasWebSocketConnection,
+            lastSeen: new Date()
           } 
         }
       );
       
       console.log(`📱 Device ${deviceId} status: ${hasWebSocketConnection ? 'ONLINE (WebSocket connected)' : 'OFFLINE (no WebSocket connection)'}`);
       
-      // Also update root level isOnline status based on WebSocket connection
-      const hasAnyOnlineDevice = screenTracking.devices?.some(d => d.isOnline) || false;
-      if (screenTracking.isOnline !== hasAnyOnlineDevice) {
-        console.log(`🔄 Updating root status for ${screenTracking.materialId}: ${screenTracking.isOnline} -> ${hasAnyOnlineDevice}`);
-        await ScreenTracking.updateOne(
-          { _id: screenTracking._id },
-          { $set: { isOnline: hasAnyOnlineDevice } }
-        );
-      }
+      // Update the device tracking object
+      deviceTracking.isOnline = hasWebSocketConnection;
+      deviceTracking.lastSeen = new Date();
     } catch (error) {
       console.error('Error updating location and status:', error);
       // Continue processing even if update fails
@@ -118,21 +112,21 @@ router.post('/updateLocation', async (req, res) => {
 
     // Check for alerts (optional - don't fail if alerts fail)
     try {
-      const currentHours = screenTracking.currentHoursToday;
-      const hoursRemaining = screenTracking.hoursRemaining;
+      const currentHours = deviceTracking.currentHoursToday;
+      const hoursRemaining = deviceTracking.hoursRemaining;
       
       // Alert for low hours (less than 6 hours with 2 hours remaining) - Only for HEADDRESS
       // Only create alert if device is actually online and we don't already have a recent LOW_HOURS alert (within last hour)
-      if (screenTracking.screenType === 'HEADDRESS' && screenTracking.isOnline && currentHours < 6 && hoursRemaining > 2) {
+      if (deviceTracking.screenType === 'HEADDRESS' && deviceTracking.isOnline && currentHours < 6 && hoursRemaining > 2) {
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-        const recentLowHoursAlert = screenTracking.alerts.find(alert => 
+        const recentLowHoursAlert = deviceTracking.alerts.find(alert => 
           alert.type === 'LOW_HOURS' && 
           alert.timestamp > oneHourAgo && 
           !alert.isResolved
         );
         
         if (!recentLowHoursAlert) {
-          await screenTracking.addAlert(
+          await deviceTracking.addAlert(
             'LOW_HOURS',
             `Driver has only ${currentHours.toFixed(1)} hours today. ${hoursRemaining.toFixed(1)} hours remaining to meet 8-hour target.`,
             'HIGH'
@@ -150,15 +144,15 @@ router.post('/updateLocation', async (req, res) => {
       success: true,
       message: 'Location updated successfully',
       data: {
-        deviceId: screenTracking.deviceId,
-        materialId: screenTracking.materialId,
-        screenType: screenTracking.screenType,
-        currentHours: screenTracking.currentHoursToday,
-        hoursRemaining: screenTracking.hoursRemaining,
-        isCompliant: screenTracking.isCompliantToday,
-        totalDistanceToday: screenTracking.currentSession?.totalDistanceTraveled || 0,
-        lastSeen: screenTracking.lastSeen,
-        displayStatus: screenTracking.displayStatus
+        deviceId: deviceTracking.deviceId,
+        materialId: deviceTracking.materialId,
+        screenType: deviceTracking.screenType,
+        currentHours: deviceTracking.currentHoursToday,
+        hoursRemaining: deviceTracking.hoursRemaining,
+        isCompliant: deviceTracking.isCompliantToday,
+        totalDistanceToday: deviceTracking.currentSession?.totalDistanceTraveled || 0,
+        lastSeen: deviceTracking.lastSeen,
+        displayStatus: deviceTracking.displayStatus
       }
     });
 
@@ -184,21 +178,21 @@ router.get('/route/:deviceId', async (req, res) => {
       });
     }
 
-    // Find screen tracking record
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    // Find device tracking record
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!screenTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
     // Get location history from current session
     let locationHistory = [];
     
-    if (screenTracking.currentSession && screenTracking.currentSession.locationHistory) {
-      locationHistory = screenTracking.currentSession.locationHistory;
+    if (deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+      locationHistory = deviceTracking.currentSession.locationHistory;
       
       // Filter by date if provided
       if (date) {
@@ -260,7 +254,7 @@ router.get('/route/:deviceId', async (req, res) => {
       message: 'Route data retrieved successfully',
       data: {
         deviceId,
-        materialId: screenTracking.materialId,
+        materialId: deviceTracking.materialId,
         route: routeData,
         metrics: {
           totalDistance: Math.round(totalDistance * 1000) / 1000, // Round to 3 decimal places
@@ -308,20 +302,18 @@ router.get('/deviceByMaterial/:materialId', async (req, res) => {
       });
     }
 
-    // Find screen tracking record by material ID
-    const screenTracking = await ScreenTracking.findOne({ materialId });
+    // Find device tracking record by material ID
+    const deviceTracking = await DeviceTracking.findByMaterial(materialId);
     
-    if (!screenTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
         message: 'No device found for this material ID'
       });
     }
 
-    // Get the primary device ID (first device in the devices array or legacy deviceId)
-    const deviceId = screenTracking.devices && screenTracking.devices.length > 0 
-      ? screenTracking.devices[0].deviceId 
-      : screenTracking.deviceId;
+    // Get the device ID
+    const deviceId = deviceTracking.deviceId;
 
     if (!deviceId) {
       return res.status(404).json({
@@ -336,10 +328,10 @@ router.get('/deviceByMaterial/:materialId', async (req, res) => {
       data: {
         materialId,
         deviceId,
-        screenType: screenTracking.screenType,
-        carGroupId: screenTracking.carGroupId,
-        isOnline: screenTracking.isOnline,
-        lastSeen: screenTracking.lastSeen
+        screenType: deviceTracking.screenType,
+        carGroupId: deviceTracking.carGroupId,
+        isOnline: deviceTracking.isOnline,
+        lastSeen: deviceTracking.lastSeen
       }
     });
 
@@ -364,24 +356,24 @@ router.post('/startSession', async (req, res) => {
       });
     }
 
-    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!tabletTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Tablet tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
-    await tabletTracking.startDailySession();
+    await deviceTracking.startDailySession();
 
     res.json({
       success: true,
       message: 'Daily session started successfully',
       data: {
-        deviceId: tabletTracking.deviceId,
-        startTime: tabletTracking.currentSession.startTime,
-        targetHours: tabletTracking.currentSession.targetHours
+        deviceId: deviceTracking.deviceId,
+        startTime: deviceTracking.currentSession.startTime,
+        targetHours: deviceTracking.currentSession.targetHours
       }
     });
 
@@ -406,25 +398,25 @@ router.post('/endSession', async (req, res) => {
       });
     }
 
-    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!tabletTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Tablet tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
-    await tabletTracking.endDailySession();
+    await deviceTracking.endDailySession();
 
     res.json({
       success: true,
       message: 'Daily session ended successfully',
       data: {
-        deviceId: tabletTracking.deviceId,
-        totalHours: tabletTracking.currentSession.totalHoursOnline,
-        totalDistance: tabletTracking.currentSession.totalDistanceTraveled,
-        complianceStatus: tabletTracking.currentSession.complianceStatus
+        deviceId: deviceTracking.deviceId,
+        totalHours: deviceTracking.currentSession.totalHoursOnline,
+        totalDistance: deviceTracking.currentSession.totalDistanceTraveled,
+        complianceStatus: deviceTracking.currentSession.complianceStatus
       }
     });
 
@@ -442,34 +434,39 @@ router.post('/endSession', async (req, res) => {
     try {
       const { deviceId } = req.params;
 
-      const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+      const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
       
-      if (!tabletTracking) {
+      if (!deviceTracking) {
         return res.status(404).json({
           success: false,
-          message: 'Tablet tracking record not found'
+          message: 'Device tracking record not found'
         });
       }
+
+      // Use centralized status manager for real-time online state
+      const statusInfo = deviceStatusService.getDeviceStatus(deviceId);
+      const isOnline = !!statusInfo.isOnline;
+      const lastSeen = statusInfo.lastSeen || deviceTracking.lastSeen;
 
     res.json({
       success: true,
       data: {
-        deviceId: tabletTracking.deviceId,
-        materialId: tabletTracking.materialId,
-        carGroupId: tabletTracking.carGroupId,
-        slotNumber: tabletTracking.slotNumber,
-        isOnline: tabletTracking.isOnline,
-        currentLocation: tabletTracking.getFormattedLocation(),
-        lastSeen: tabletTracking.lastSeen,
-        currentHours: tabletTracking.currentHoursToday,
-        hoursRemaining: tabletTracking.hoursRemaining,
-        isCompliant: tabletTracking.isCompliantToday,
-        totalDistanceToday: tabletTracking.currentSession?.totalDistanceTraveled || 0,
-        averageDailyHours: tabletTracking.averageDailyHours,
-        complianceRate: tabletTracking.complianceRate,
-        totalHoursOnline: tabletTracking.totalHoursOnline,
-        totalDistanceTraveled: tabletTracking.totalDistanceTraveled,
-        alerts: tabletTracking.alerts.filter(alert => !alert.isResolved)
+        deviceId: deviceTracking.deviceId,
+        materialId: deviceTracking.materialId,
+        carGroupId: deviceTracking.carGroupId,
+        deviceSlot: deviceTracking.deviceSlot,
+        isOnline,
+        currentLocation: deviceTracking.currentLocation,
+        lastSeen,
+        currentHours: deviceTracking.currentHoursToday,
+        hoursRemaining: deviceTracking.hoursRemaining,
+        isCompliant: deviceTracking.isCompliantToday,
+        totalDistanceToday: deviceTracking.currentSession?.totalDistanceTraveled || 0,
+        averageDailyHours: deviceTracking.averageDailyHours,
+        complianceRate: deviceTracking.complianceRate,
+        totalHoursOnline: deviceTracking.totalHoursOnline,
+        totalDistanceTraveled: deviceTracking.totalDistanceTraveled,
+        alerts: deviceTracking.alerts.filter(alert => !alert.isResolved)
       }
     });
 
@@ -487,28 +484,28 @@ router.get('/material/:materialId', async (req, res) => {
   try {
     const { materialId } = req.params;
 
-    const tablets = await ScreenTracking.findByMaterial(materialId);
+    const devices = await DeviceTracking.findByMaterial(materialId);
     
-    const tabletsData = tablets.map(tablet => ({
-      deviceId: tablet.deviceId,
-      slotNumber: tablet.slotNumber,
-      isOnline: tablet.isOnline,
-      currentLocation: tablet.getFormattedLocation(),
-      lastSeen: tablet.lastSeen,
-      currentHours: tablet.currentHoursToday,
-      hoursRemaining: tablet.hoursRemaining,
-      isCompliant: tablet.isCompliantToday,
-      totalDistanceToday: tablet.currentSession?.totalDistanceTraveled || 0
+    const devicesData = devices.map(device => ({
+      deviceId: device.deviceId,
+      deviceSlot: device.deviceSlot,
+      isOnline: device.isOnline,
+      currentLocation: device.currentLocation,
+      lastSeen: device.lastSeen,
+      currentHours: device.currentHoursToday,
+      hoursRemaining: device.hoursRemaining,
+      isCompliant: device.isCompliantToday,
+      totalDistanceToday: device.currentSession?.totalDistanceTraveled || 0
     }));
 
     res.json({
       success: true,
       data: {
         materialId,
-        tablets: tabletsData,
-        totalTablets: tablets.length,
-        onlineTablets: tablets.filter(t => t.isOnline).length,
-        compliantTablets: tablets.filter(t => t.isCompliantToday).length
+        devices: devicesData,
+        totalDevices: devices.length,
+        onlineDevices: devices.filter(d => d.isOnline).length,
+        compliantDevices: devices.filter(d => d.isCompliantToday).length
       }
     });
 
@@ -527,12 +524,12 @@ router.get('/path/:deviceId', async (req, res) => {
     const { deviceId } = req.params;
     const { date } = req.query; // Optional: specific date
 
-    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!tabletTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Tablet tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
@@ -543,29 +540,27 @@ router.get('/path/:deviceId', async (req, res) => {
       const targetDate = new Date(date);
       targetDate.setHours(0, 0, 0, 0);
       
-      const session = tabletTracking.dailySessions.find(s => 
-        new Date(s.date).getTime() === targetDate.getTime()
-      );
+      const session = deviceTracking.currentSession;
       
-      if (session) {
+      if (session && new Date(session.date).getTime() === targetDate.getTime()) {
         locationHistory = session.locationHistory;
       }
     } else {
       // Get current session history
-      if (tabletTracking.currentSession && tabletTracking.currentSession.locationHistory) {
-        locationHistory = tabletTracking.currentSession.locationHistory;
+      if (deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+        locationHistory = deviceTracking.currentSession.locationHistory;
       }
     }
 
     res.json({
       success: true,
       data: {
-        deviceId: tabletTracking.deviceId,
-        materialId: tabletTracking.materialId,
+        deviceId: deviceTracking.deviceId,
+        materialId: deviceTracking.materialId,
         locationHistory,
         totalPoints: locationHistory.length,
         totalDistance: locationHistory.length > 0 ? 
-          tabletTracking.currentSession?.totalDistanceTraveled || 0 : 0
+          deviceTracking.currentSession?.totalDistanceTraveled || 0 : 0
       }
     });
 
@@ -584,34 +579,30 @@ router.get('/compliance', async (req, res) => {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
-    // Only fetch materials that have actual connected devices (not just temporary records)
-    const allTablets = await ScreenTracking.find({ 
+    // Only fetch devices that have actual connected devices (not just temporary records)
+    const allDevices = await DeviceTracking.find({ 
       isActive: true,
       $and: [
         {
-          $or: [
-            { 'devices.0': { $exists: true } }, // Has at least one device in devices array
-            { 
-              deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-              deviceId: { $exists: true, $ne: null } // Has a real device ID
-            }
-          ]
-        },
-        {
-          $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+          deviceId: { $exists: true, $ne: null } // Has a real device ID
         },
         {
           $or: [
-            { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { 'devices': { $exists: false } }, // Or no devices array (legacy records)
-            { 
-              'devices': { $size: 0 }, // Or empty devices array
-              deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
-            }
+            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { screenType: { $exists: true } } // Or has screen type (legacy records)
           ]
         }
       ]
     });
+    
+    console.log('🔍 Found devices:', allDevices.length);
+    console.log('🔍 Device details:', allDevices.map(d => ({
+      deviceId: d.deviceId,
+      materialId: d.materialId,
+      screenType: d.screenType,
+      isOnline: d.isOnline
+    })));
     
     // Initialize screens array to collect individual device records
     const individualScreens = [];
@@ -621,174 +612,122 @@ router.get('/compliance', async (req, res) => {
     let totalHours = 0;
     let totalDistance = 0;
     
-    // Process each tablet and create individual device records
-    allTablets.forEach(tablet => {
-      if (tablet.devices && tablet.devices.length > 0) {
-        // New multi-device structure: create individual records per device
-        tablet.devices.forEach((device, index) => {
-          // Use device-specific values if available, otherwise fall back to legacy values
-          // Count hours if device is online (WebSocket or database status)
-          const deviceHours = device.isOnline ? (device.totalHoursOnline || tablet.currentHoursToday || 0) : (tablet.currentHoursToday || 0);
-          const deviceDistance = device.totalDistanceTraveled || tablet.currentSession?.totalDistanceTraveled || 0;
-          const isDeviceOnline = device.isOnline;
-          const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
-          
-          totalHours += deviceHours;
-          totalDistance += deviceDistance;
-          if (isDeviceOnline) totalOnlineScreens++;
-          if (isDeviceCompliant) totalCompliantScreens++;
-          
-          // Create unique display ID by combining materialId with slot info
-          const displayId = `${tablet.materialId}-SLOT-${device.slotNumber || (index + 1)}`;
-          
-          // Skip if we've already seen this display ID (deduplication)
-          if (seenDisplayIds.has(displayId)) {
-            console.log(`Skipping duplicate display ID: ${displayId}`);
-            return;
-          }
-          seenDisplayIds.add(displayId);
-          
-          // Convert coordinates format for individual screens
-          let deviceLocation = device.currentLocation || tablet.currentLocation;
-          let frontendDeviceLocation = null;
-          if (deviceLocation) {
-            if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
-              frontendDeviceLocation = {
-                lat: deviceLocation.coordinates[1],
-                lng: deviceLocation.coordinates[0],
-                timestamp: deviceLocation.timestamp,
-                speed: deviceLocation.speed,
-                heading: deviceLocation.heading,
-                accuracy: deviceLocation.accuracy,
-                address: deviceLocation.address
-              };
-            } else if (deviceLocation.lat !== undefined && deviceLocation.lng !== undefined) {
-              frontendDeviceLocation = deviceLocation;
-            }
-          }
-
-          individualScreens.push({
-            deviceId: device.deviceId,
-            displayId: displayId, // Unique identifier for frontend display
-            materialId: tablet.materialId,
-            screenType: tablet.screenType,
-            carGroupId: tablet.carGroupId,
-            slotNumber: device.slotNumber || (index + 1),
-            isOnline: isDeviceOnline,
-            currentLocation: frontendDeviceLocation,
-            lastSeen: device.lastSeen || tablet.lastSeen,
-            currentHours: deviceHours,
-            hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
-            isCompliant: isDeviceCompliant,
-            totalDistanceToday: deviceDistance,
-            averageDailyHours: deviceHours,
-            complianceRate: Math.min(100, (deviceHours / 8) * 100), // Percentage of 8-hour target
-            totalHoursOnline: deviceHours,
-            totalDistanceTraveled: deviceDistance,
-            displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
-            screenMetrics: {
-              ...(tablet.screenMetrics || {}),
-              displayHours: deviceHours,
-              adPlayCount: tablet.screenMetrics?.adPlayCount || 0,
-              lastAdPlayed: tablet.screenMetrics?.lastAdPlayed || null,
-              brightness: tablet.screenMetrics?.brightness || 100,
-              volume: tablet.screenMetrics?.volume || 50,
-              isDisplaying: isDeviceOnline,
-              maintenanceMode: tablet.screenMetrics?.maintenanceMode || false,
-              currentAd: tablet.screenMetrics?.currentAd || null
-            },
-            alerts: tablet.alerts || []
-          });
-        });
-      } else {
-        // Legacy single-device structure: use root-level fields for backward compatibility
-        // Only process if there are NO devices in the devices array
-        const legacyDisplayId = `${tablet.materialId}-SLOT-${tablet.slotNumber || 1}`;
-        
-        // Skip if we've already seen this display ID (deduplication)
-        if (seenDisplayIds.has(legacyDisplayId)) {
-          console.log(`Skipping duplicate legacy display ID: ${legacyDisplayId}`);
-          return;
-        }
-        seenDisplayIds.add(legacyDisplayId);
-        
-        const legacyHours = tablet.currentHoursToday || 0;
-        const legacyDistance = tablet.currentSession?.totalDistanceTraveled || 0;
-        const isLegacyOnline = tablet.isOnline;
-        const isLegacyCompliant = tablet.isCompliantToday || (legacyHours >= 8);
-        
-        totalHours += legacyHours;
-        totalDistance += legacyDistance;
-        if (isLegacyOnline) totalOnlineScreens++;
-        if (isLegacyCompliant) totalCompliantScreens++;
-        
-        // Convert coordinates format for legacy structure
-        let legacyLocation = tablet.getFormattedLocation ? tablet.getFormattedLocation() : tablet.currentLocation;
-        let frontendLegacyLocation = null;
-        if (legacyLocation) {
-          if (legacyLocation.coordinates && Array.isArray(legacyLocation.coordinates)) {
-            frontendLegacyLocation = {
-              lat: legacyLocation.coordinates[1],
-              lng: legacyLocation.coordinates[0],
-              timestamp: legacyLocation.timestamp,
-              speed: legacyLocation.speed,
-              heading: legacyLocation.heading,
-              accuracy: legacyLocation.accuracy,
-              address: legacyLocation.address
-            };
-          } else if (legacyLocation.lat !== undefined && legacyLocation.lng !== undefined) {
-            frontendLegacyLocation = legacyLocation;
-          }
-        }
-
-        individualScreens.push({
-          deviceId: tablet.deviceId,
-          displayId: legacyDisplayId,
-          materialId: tablet.materialId,
-          screenType: tablet.screenType,
-          carGroupId: tablet.carGroupId,
-          slotNumber: tablet.slotNumber,
-          isOnline: isLegacyOnline,
-          currentLocation: frontendLegacyLocation,
-          lastSeen: tablet.lastSeen,
-          currentHours: legacyHours,
-          hoursRemaining: tablet.hoursRemaining || Math.max(0, 8 - legacyHours),
-          isCompliant: isLegacyCompliant,
-          totalDistanceToday: legacyDistance,
-          averageDailyHours: tablet.averageDailyHours || legacyHours,
-          complianceRate: tablet.complianceRate || Math.min(100, (legacyHours / 8) * 100),
-          totalHoursOnline: tablet.totalHoursOnline || legacyHours,
-          totalDistanceTraveled: tablet.totalDistanceTraveled || legacyDistance,
-          displayStatus: tablet.displayStatus || (isLegacyOnline ? 'ACTIVE' : 'OFFLINE'),
-          screenMetrics: tablet.screenMetrics,
-          alerts: tablet.alerts
-        });
+    // Process each device and create individual device records
+    allDevices.forEach(device => {
+      // Debug: Log device data to see what fields are available
+      console.log('🔍 Device data:', {
+        deviceId: device.deviceId,
+        materialId: device.materialId,
+        screenType: device.screenType,
+        deviceSlot: device.deviceSlot,
+        isOnline: device.isOnline
+      });
+      
+      // Use device-specific values
+      const deviceHours = device.currentHoursToday || 0;
+      const deviceDistance = device.currentSession?.totalDistanceTraveled || 0;
+      
+      // Determine online status using DeviceStatusManager (WebSocket > DB fallback > timeout)
+      const statusInfo = deviceStatusService.getDeviceStatus(device.deviceId);
+      const isDeviceOnline = !!statusInfo.isOnline;
+      
+      const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
+      
+      totalHours += deviceHours;
+      totalDistance += deviceDistance;
+      if (isDeviceOnline) totalOnlineScreens++;
+      if (isDeviceCompliant) totalCompliantScreens++;
+      
+      // Create unique display ID by combining materialId with slot info
+      // If materialId is missing, try to use deviceId as fallback
+      const materialId = device.materialId || device.deviceId || 'UNKNOWN';
+      const displayId = `${materialId}-SLOT-${device.deviceSlot || 1}`;
+      
+      // Skip devices without proper materialId for now (they need to be linked to materials)
+      if (!device.materialId) {
+        console.log(`⚠️ Skipping device ${device.deviceId} - no materialId assigned`);
+        return;
       }
+      
+      // Skip if we've already seen this display ID (deduplication)
+      if (seenDisplayIds.has(displayId)) {
+        console.log(`Skipping duplicate display ID: ${displayId}`);
+        return;
+      }
+      seenDisplayIds.add(displayId);
+      
+      // Convert coordinates format for individual screens
+      let deviceLocation = device.currentLocation;
+      let frontendDeviceLocation = null;
+      
+      // Debug: Log location data
+      console.log('🔍 Location data for device', device.deviceId, ':', deviceLocation);
+      
+      if (deviceLocation) {
+        if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
+          frontendDeviceLocation = {
+            lat: deviceLocation.coordinates[1],
+            lng: deviceLocation.coordinates[0],
+            timestamp: deviceLocation.timestamp,
+            speed: deviceLocation.speed,
+            heading: deviceLocation.heading,
+            accuracy: deviceLocation.accuracy,
+            address: deviceLocation.address
+          };
+        } else if (deviceLocation.lat !== undefined && deviceLocation.lng !== undefined) {
+          // Already in correct format
+          frontendDeviceLocation = deviceLocation;
+        }
+      } else {
+        // If no location data, create a default location
+        frontendDeviceLocation = {
+          lat: 0,
+          lng: 0,
+          address: 'Location not available'
+        };
+      }
+
+      individualScreens.push({
+        deviceId: device.deviceId,
+        displayId: displayId, // Unique identifier for frontend display
+        materialId: materialId, // Use the fallback materialId
+        screenType: device.screenType,
+        carGroupId: device.carGroupId,
+        deviceSlot: device.deviceSlot,
+        isOnline: isDeviceOnline,
+        currentLocation: frontendDeviceLocation,
+        lastSeen: device.lastSeen,
+        currentHours: deviceHours,
+        hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
+        isCompliant: isDeviceCompliant,
+        totalDistanceToday: deviceDistance,
+        averageDailyHours: device.averageDailyHours || deviceHours,
+        complianceRate: Math.min(100, (deviceHours / 8) * 100), // Percentage of 8-hour target
+        totalHoursOnline: device.totalHoursOnline || deviceHours,
+        totalDistanceTraveled: device.totalDistanceTraveled || deviceDistance,
+        displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
+        screenMetrics: {
+          ...(device.screenMetrics || {}),
+          displayHours: deviceHours,
+          adPlayCount: device.screenMetrics?.adPlayCount || 0,
+          lastAdPlayed: device.screenMetrics?.lastAdPlayed || null,
+          brightness: device.screenMetrics?.brightness || 100,
+          volume: device.screenMetrics?.volume || 50,
+          isDisplaying: isDeviceOnline,
+          maintenanceMode: device.screenMetrics?.maintenanceMode || false,
+          currentAd: device.screenMetrics?.currentAd || null
+        },
+        alerts: device.alerts || []
+      });
     });
 
     // Create material-level records for map display (one per material)
     const materialScreens = [];
-    allTablets.forEach(tablet => {
-      // Use the first online device's location, or first device's location if none online
-      let displayLocation = null;
-      let displayStatus = 'OFFLINE';
-      let hasOnlineDevice = false;
-      
-      if (tablet.devices && tablet.devices.length > 0) {
-        const onlineDevice = tablet.devices.find(d => d.isOnline);
-        if (onlineDevice) {
-          displayLocation = onlineDevice.currentLocation || tablet.currentLocation;
-          displayStatus = 'ACTIVE';
-          hasOnlineDevice = true;
-        } else {
-          displayLocation = tablet.devices[0].currentLocation || tablet.currentLocation;
-          displayStatus = 'OFFLINE';
-        }
-      } else {
-        displayLocation = tablet.currentLocation;
-        displayStatus = tablet.isOnline ? 'ACTIVE' : 'OFFLINE';
-        hasOnlineDevice = tablet.isOnline;
-      }
+    allDevices.forEach(device => {
+      // Use the device's location
+      let displayLocation = device.currentLocation;
+      let displayStatus = device.isOnline ? 'ACTIVE' : 'OFFLINE';
+      let hasOnlineDevice = device.isOnline;
       
       // Convert coordinates format from [lng, lat] to {lat, lng} for frontend compatibility
       let frontendLocation = null;
@@ -811,33 +750,33 @@ router.get('/compliance', async (req, res) => {
       }
 
       materialScreens.push({
-        materialId: tablet.materialId,
-        deviceId: tablet.deviceId, // Legacy deviceId for compatibility
-        screenType: tablet.screenType,
-        carGroupId: tablet.carGroupId,
+        materialId: device.materialId,
+        deviceId: device.deviceId, // Legacy deviceId for compatibility
+        screenType: device.screenType,
+        carGroupId: device.carGroupId,
         isOnline: hasOnlineDevice,
         currentLocation: frontendLocation,
-        lastSeen: tablet.lastSeen,
+        lastSeen: device.lastSeen,
         displayStatus: displayStatus,
-        totalDevices: tablet.devices?.length || 1,
-        onlineDevices: tablet.devices?.filter(d => d.isOnline).length || (tablet.isOnline ? 1 : 0),
+        totalDevices: 1,
+        onlineDevices: device.isOnline ? 1 : 0,
         // Aggregate data for display
-        totalHours: tablet.devices?.reduce((sum, d) => sum + (d.totalHoursOnline || 0), 0) || (tablet.currentHoursToday || 0),
-        totalDistance: tablet.devices?.reduce((sum, d) => sum + (d.totalDistanceTraveled || 0), 0) || (tablet.currentSession?.totalDistanceTraveled || 0),
-        screenMetrics: tablet.screenMetrics,
-        alerts: tablet.alerts
+        totalHours: device.currentHoursToday || 0,
+        totalDistance: device.currentSession?.totalDistanceTraveled || 0,
+        screenMetrics: device.screenMetrics,
+        alerts: device.alerts
       });
     });
 
     const complianceReport = {
       date: targetDate,
-      totalTablets: individualScreens.length,
-      onlineTablets: totalOnlineScreens,
-      compliantTablets: totalCompliantScreens,
-      nonCompliantTablets: individualScreens.length - totalCompliantScreens,
+      totalDevices: individualScreens.length,
+      onlineDevices: totalOnlineScreens,
+      compliantDevices: totalCompliantScreens,
+      nonCompliantDevices: individualScreens.length - totalCompliantScreens,
       averageHours: individualScreens.length > 0 ? Math.round((totalHours / individualScreens.length) * 100) / 100 : 0,
       averageDistance: individualScreens.length > 0 ? Math.round((totalDistance / individualScreens.length) * 100) / 100 : 0,
-      screens: individualScreens, // Individual device records for screen list
+      screens: individualScreens, // Individual device records for screen list (renamed from devices)
       materialScreens: materialScreens // Material-level records for map display
     };
 
@@ -868,25 +807,25 @@ router.post('/trackAd', async (req, res) => {
       });
     }
 
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
-    if (!screenTracking) {
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
     // Track ad playback
-    await screenTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime);
+    await deviceTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime);
 
     res.json({
       success: true,
       message: 'Ad playback tracked successfully',
       data: {
-        deviceId: screenTracking.deviceId,
-        currentAd: screenTracking.screenMetrics.currentAd,
-        totalAdsPlayed: screenTracking.screenMetrics.adPlayCount,
-        dailyStats: screenTracking.screenMetrics.dailyAdStats
+        deviceId: deviceTracking.deviceId,
+        currentAd: deviceTracking.screenMetrics.currentAd,
+        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
+        dailyStats: deviceTracking.screenMetrics.dailyAdStats
       }
     });
 
@@ -911,23 +850,23 @@ router.post('/endAd', async (req, res) => {
       });
     }
 
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
-    if (!screenTracking) {
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
     // End ad playback
-    await screenTracking.endAdPlayback();
+    await deviceTracking.endAdPlayback();
 
     res.json({
       success: true,
       message: 'Ad playback ended successfully',
       data: {
-        deviceId: screenTracking.deviceId,
-        completedAd: screenTracking.screenMetrics.currentAd
+        deviceId: deviceTracking.deviceId,
+        completedAd: deviceTracking.screenMetrics.currentAd
       }
     });
 
@@ -952,25 +891,25 @@ router.post('/updateDriverActivity', async (req, res) => {
       });
     }
 
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
-    if (!screenTracking) {
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
     // Update driver activity
-    await screenTracking.updateDriverActivity(isActive);
+    await deviceTracking.updateDriverActivity(isActive);
 
     res.json({
       success: true,
       message: 'Driver activity updated successfully',
       data: {
-        deviceId: screenTracking.deviceId,
-        displayHours: screenTracking.screenMetrics.displayHours,
-        currentHours: screenTracking.currentHoursToday,
-        totalHours: screenTracking.totalHoursOnline,
+        deviceId: deviceTracking.deviceId,
+        displayHours: deviceTracking.screenMetrics.displayHours,
+        currentHours: deviceTracking.currentHoursToday,
+        totalHours: deviceTracking.totalHoursOnline,
         isActive: isActive
       }
     });
@@ -990,16 +929,16 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
     const { deviceId } = req.params;
     const { date } = req.query;
 
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
-    if (!screenTracking) {
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
-    let adPerformance = screenTracking.screenMetrics.adPerformance || [];
-    let dailyStats = screenTracking.screenMetrics.dailyAdStats || {};
+    let adPerformance = deviceTracking.adPerformance || [];
+    let dailyStats = deviceTracking.screenMetrics.dailyAdStats || {};
 
     // Filter by date if provided
     if (date) {
@@ -1010,14 +949,14 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
     res.json({
       success: true,
       data: {
-        deviceId: screenTracking.deviceId,
-        materialId: screenTracking.materialId,
-        currentAd: screenTracking.screenMetrics.currentAd,
+        deviceId: deviceTracking.deviceId,
+        materialId: deviceTracking.materialId,
+        currentAd: deviceTracking.screenMetrics.currentAd,
         dailyStats: dailyStats,
         adPerformance: adPerformance,
-        totalAdsPlayed: screenTracking.screenMetrics.adPlayCount,
-        displayHours: screenTracking.screenMetrics.displayHours,
-        lastAdPlayed: screenTracking.screenMetrics.lastAdPlayed
+        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
+        displayHours: deviceTracking.screenMetrics.displayHours,
+        lastAdPlayed: deviceTracking.screenMetrics.lastAdPlayed
       }
     });
 
@@ -1040,20 +979,20 @@ router.get('/adAnalytics', async (req, res) => {
       query.materialId = materialId;
     }
 
-    const allTablets = await ScreenTracking.find(query);
+    const allDevices = await DeviceTracking.find(query);
     
-    let analytics = allTablets.map(tablet => ({
-      deviceId: tablet.deviceId,
-      materialId: tablet.materialId,
-      screenType: tablet.screenType,
-      currentAd: tablet.screenMetrics.currentAd,
-      dailyStats: tablet.screenMetrics.dailyAdStats,
-      totalAdsPlayed: tablet.screenMetrics.adPlayCount,
-      displayHours: tablet.screenMetrics.displayHours,
-      adPerformance: tablet.screenMetrics.adPerformance || [],
-      lastAdPlayed: tablet.screenMetrics.lastAdPlayed,
-      isOnline: tablet.isOnline,
-      lastSeen: tablet.lastSeen
+    let analytics = allDevices.map(device => ({
+      deviceId: device.deviceId,
+      materialId: device.materialId,
+      screenType: device.screenType,
+      currentAd: device.screenMetrics.currentAd,
+      dailyStats: device.screenMetrics.dailyAdStats,
+      totalAdsPlayed: device.screenMetrics.adPlayCount,
+      displayHours: device.screenMetrics.displayHours,
+      adPerformance: device.adPerformance || [],
+      lastAdPlayed: device.screenMetrics.lastAdPlayed,
+      isOnline: device.isOnline,
+      lastSeen: device.lastSeen
     }));
 
     // Filter by user if userId is provided
@@ -1115,18 +1054,18 @@ router.post('/resolveAlert', async (req, res) => {
       });
     }
 
-    const tabletTracking = await ScreenTracking.findByDeviceId(deviceId);
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!tabletTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Tablet tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
-    if (alertIndex >= 0 && alertIndex < tabletTracking.alerts.length) {
-      tabletTracking.alerts[alertIndex].isResolved = true;
-      await tabletTracking.save();
+    if (alertIndex >= 0 && alertIndex < deviceTracking.alerts.length) {
+      deviceTracking.alerts[alertIndex].isResolved = true;
+      await deviceTracking.save();
     }
 
     res.json({
@@ -1162,28 +1101,28 @@ router.post('/updateScreenMetrics', async (req, res) => {
       });
     }
 
-    const screenTracking = await ScreenTracking.findByDeviceId(deviceId);
+    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
     
-    if (!screenTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'Screen tracking record not found'
+        message: 'Device tracking record not found'
       });
     }
 
     // Update screen metrics
-    if (isDisplaying !== undefined) screenTracking.screenMetrics.isDisplaying = isDisplaying;
-    if (brightness !== undefined) screenTracking.screenMetrics.brightness = brightness;
-    if (volume !== undefined) screenTracking.screenMetrics.volume = volume;
-    if (adPlayCount !== undefined) screenTracking.screenMetrics.adPlayCount = adPlayCount;
-    if (maintenanceMode !== undefined) screenTracking.screenMetrics.maintenanceMode = maintenanceMode;
+    if (isDisplaying !== undefined) deviceTracking.screenMetrics.isDisplaying = isDisplaying;
+    if (brightness !== undefined) deviceTracking.screenMetrics.brightness = brightness;
+    if (volume !== undefined) deviceTracking.screenMetrics.volume = volume;
+    if (adPlayCount !== undefined) deviceTracking.screenMetrics.adPlayCount = adPlayCount;
+    if (maintenanceMode !== undefined) deviceTracking.screenMetrics.maintenanceMode = maintenanceMode;
     
-    screenTracking.screenMetrics.lastAdPlayed = new Date();
-    screenTracking.lastSeen = new Date();
+    deviceTracking.screenMetrics.lastAdPlayed = new Date();
+    deviceTracking.lastSeen = new Date();
 
     // Add alerts for display issues
-    if (!isDisplaying && screenTracking.screenMetrics.isDisplaying) {
-      await screenTracking.addAlert(
+    if (!isDisplaying && deviceTracking.screenMetrics.isDisplaying) {
+      await deviceTracking.addAlert(
         'DISPLAY_OFFLINE',
         'Screen display has been turned off',
         'HIGH'
@@ -1191,7 +1130,7 @@ router.post('/updateScreenMetrics', async (req, res) => {
     }
 
     if (brightness < 50) {
-      await screenTracking.addAlert(
+      await deviceTracking.addAlert(
         'LOW_BRIGHTNESS',
         `Screen brightness is low: ${brightness}%`,
         'MEDIUM'
@@ -1199,26 +1138,26 @@ router.post('/updateScreenMetrics', async (req, res) => {
     }
 
     if (maintenanceMode) {
-      await screenTracking.addAlert(
+      await deviceTracking.addAlert(
         'MAINTENANCE_NEEDED',
         'Screen is in maintenance mode',
         'MEDIUM'
       );
     }
 
-    await screenTracking.save();
+    await deviceTracking.save();
 
     res.json({
       success: true,
       message: 'Screen metrics updated successfully',
       data: {
-        deviceId: screenTracking.deviceId,
-        screenType: screenTracking.screenType,
-        displayStatus: screenTracking.displayStatus,
-        brightness: screenTracking.screenMetrics.brightness,
-        volume: screenTracking.screenMetrics.volume,
-        adPlayCount: screenTracking.screenMetrics.adPlayCount,
-        lastSeen: screenTracking.lastSeen
+        deviceId: deviceTracking.deviceId,
+        screenType: deviceTracking.screenType,
+        displayStatus: deviceTracking.displayStatus,
+        brightness: deviceTracking.screenMetrics.brightness,
+        volume: deviceTracking.screenMetrics.volume,
+        adPlayCount: deviceTracking.screenMetrics.adPlayCount,
+        lastSeen: deviceTracking.lastSeen
       }
     });
 
@@ -1237,29 +1176,29 @@ router.post('/syncStatus', async (req, res) => {
   try {
     console.log('🔄 Syncing root isOnline status with devices array...');
     
-    // Find all screens and sync their root isOnline with devices array
-    const screens = await ScreenTracking.find({});
+    // Find all devices and sync their status
+    const devices = await DeviceTracking.find({});
     let syncedCount = 0;
     
-    for (const screen of screens) {
-      if (screen.devices && screen.devices.length > 0) {
-        // Check if any device in the array is online
-        const hasOnlineDevice = screen.devices.some(device => device.isOnline);
-        
-        // Update root level isOnline to match the devices array
-        if (screen.isOnline !== hasOnlineDevice) {
-          console.log(`🔄 Syncing ${screen.deviceId}: ${screen.isOnline} -> ${hasOnlineDevice}`);
-          await ScreenTracking.findByIdAndUpdate(
-            screen._id,
-            { 
-              $set: { 
-                isOnline: hasOnlineDevice,
-                lastSeen: new Date()
-              }
+    for (const device of devices) {
+      // Update device status based on lastSeen
+      const now = new Date();
+      const lastSeen = new Date(device.lastSeen);
+      const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
+      const shouldBeOnline = timeSinceLastSeen <= 120; // 2 minutes timeout
+      
+      if (device.isOnline !== shouldBeOnline) {
+        console.log(`🔄 Syncing ${device.deviceId}: ${device.isOnline} -> ${shouldBeOnline}`);
+        await DeviceTracking.findByIdAndUpdate(
+          device._id,
+          { 
+            $set: { 
+              isOnline: shouldBeOnline,
+              lastSeen: new Date()
             }
-          );
-          syncedCount++;
-        }
+          }
+        );
+        syncedCount++;
       }
     }
     
@@ -1364,17 +1303,11 @@ router.post('/forceOffline/:deviceId', async (req, res) => {
     deviceStatusService.getDeviceStatus(deviceId); // This will trigger the status calculation
     
     // Force update the database
-    await ScreenTracking.updateMany(
-      { 
-        $or: [
-          { deviceId: deviceId },
-          { 'devices.deviceId': deviceId }
-        ]
-      },
+    await DeviceTracking.updateMany(
+      { deviceId: deviceId },
       { 
         $set: { 
-          isOnline: false,
-          'devices.$.isOnline': false
+          isOnline: false
         } 
       }
     );
@@ -1419,17 +1352,11 @@ router.post('/syncDeviceStatus/:deviceId', async (req, res) => {
       deviceStatusService.updateDeviceStatus(deviceId, foundStatus.isOnline, new Date());
       
       // Update the database
-      await ScreenTracking.updateMany(
-        { 
-          $or: [
-            { deviceId: deviceId },
-            { 'devices.deviceId': deviceId }
-          ]
-        },
+      await DeviceTracking.updateMany(
+        { deviceId: deviceId },
         { 
           $set: { 
-            isOnline: foundStatus.isOnline,
-            'devices.$.isOnline': foundStatus.isOnline
+            isOnline: foundStatus.isOnline
           } 
         }
       );
@@ -1469,14 +1396,13 @@ router.get('/screens', async (req, res) => {
     const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
     
     // Mark devices as offline if lastSeen is older than 2 minutes (less aggressive)
-    await ScreenTracking.updateMany(
+    await DeviceTracking.updateMany(
       { 
-        'devices.isOnline': true,
-        'devices.lastSeen': { $lt: twoMinutesAgo }
+        isOnline: true,
+        lastSeen: { $lt: twoMinutesAgo }
       },
       { 
         $set: { 
-          'devices.$.isOnline': false,
           isOnline: false
         } 
       },
@@ -1484,9 +1410,9 @@ router.get('/screens', async (req, res) => {
     );
     
     // Clean up any stale sessions (older than 5 minutes)
-    await ScreenTracking.updateMany(
+    await DeviceTracking.updateMany(
       { 
-        'devices.lastSeen': { $lt: fiveMinutesAgo },
+        lastSeen: { $lt: fiveMinutesAgo },
         'currentSession.isActive': true
       },
       { 
@@ -1499,28 +1425,16 @@ router.get('/screens', async (req, res) => {
     );
     
     let query = {
-      // Only fetch materials that have actual connected devices (not just temporary records)
+      // Only fetch devices that have actual connected devices (not just temporary records)
       $and: [
         {
-          $or: [
-            { 'devices.0': { $exists: true } }, // Has at least one device in devices array
-            { 
-              deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-              deviceId: { $exists: true, $ne: null } // Has a real device ID
-            }
-          ]
-        },
-        {
-          $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+          deviceId: { $exists: true, $ne: null } // Has a real device ID
         },
         {
           $or: [
-            { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { 'devices': { $exists: false } }, // Or no devices array (legacy records)
-            { 
-              'devices': { $size: 0 }, // Or empty devices array
-              deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
-            }
+            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { screenType: { $exists: true } } // Or has screen type (legacy records)
           ]
         }
       ]
@@ -1531,42 +1445,28 @@ router.get('/screens', async (req, res) => {
     
     // Update status query to check lastSeen for online status (less aggressive)
     if (status === 'online') {
-      query['devices.isOnline'] = true;
-      query['devices.lastSeen'] = { $gte: twoMinutesAgo };
       query.isOnline = true;
+      query.lastSeen = { $gte: twoMinutesAgo };
       
       console.log('🔍 Online devices query:', JSON.stringify({
-        'devices.isOnline': true,
-        'devices.lastSeen': { $gte: twoMinutesAgo },
-        isOnline: true
+        isOnline: true,
+        lastSeen: { $gte: twoMinutesAgo }
       }, null, 2));
     }
     if (status === 'offline') {
       query['$or'] = [
-        { 'devices.isOnline': false },
-        { 'devices.lastSeen': { $lt: twoMinutesAgo } },
-        { 'devices': { $exists: false } },
-        { isOnline: false }
+        { isOnline: false },
+        { lastSeen: { $lt: twoMinutesAgo } }
       ];
     }
     if (status === 'displaying') query['screenMetrics.isDisplaying'] = true;
     if (status === 'maintenance') query['screenMetrics.maintenanceMode'] = true;
 
     console.log('🔍 Running query:', JSON.stringify(query, null, 2));
-    const screens = await ScreenTracking.find(query);
+    const screens = await DeviceTracking.find(query);
     
-    // Auto-sync root isOnline with devices array before processing
+    // Sync with DeviceStatusManager - check if we have a WebSocket connection for this materialId
     for (const screen of screens) {
-      if (screen.devices && screen.devices.length > 0) {
-        const hasOnlineDevice = screen.devices.some(device => device.isOnline);
-        if (screen.isOnline !== hasOnlineDevice) {
-          console.log(`🔄 Auto-syncing ${screen.deviceId}: ${screen.isOnline} -> ${hasOnlineDevice}`);
-          screen.isOnline = hasOnlineDevice;
-          await screen.save();
-        }
-      }
-      
-      // Sync with DeviceStatusManager - check if we have a WebSocket connection for this materialId
       const allStatuses = deviceStatusService.getAllDeviceStatuses();
       const materialStatus = allStatuses.find(status => {
         // Check if this device ID matches the materialId pattern
@@ -1590,12 +1490,6 @@ router.get('/screens', async (req, res) => {
       console.log(`  - ${screen.deviceId} (${screen.materialId}):`);
       console.log(`    isOnline: ${screen.isOnline}`);
       console.log(`    lastSeen: ${lastSeen} (${secondsAgo}s ago)`);
-      console.log('    devices:', screen.devices?.map(d => ({
-        deviceId: d.deviceId,
-        isOnline: d.isOnline,
-        lastSeen: d.lastSeen,
-        secondsAgo: d.lastSeen ? (now - new Date(d.lastSeen)) / 1000 : 'N/A'
-      })));
     });
     
     // Update the isOnline status based on lastSeen
@@ -1636,18 +1530,10 @@ router.get('/screens', async (req, res) => {
       console.log(`  - Confidence: ${deviceStatus.confidence}`);
       console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
       
-      // Legacy fallback logic (kept for compatibility)
-      const hasOnlineDevice = screen.devices && screen.devices.some(device => {
-        const deviceLastSeen = new Date(device.lastSeen);
-        const deviceTimeSinceLastSeen = (now - deviceLastSeen) / 1000;
-        return device.isOnline && deviceTimeSinceLastSeen <= 120; // 2 minutes timeout
-      });
-      
       const lastSeen = new Date(screen.lastSeen);
       const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
       
       // Check device status based on last seen time
-      console.log(`  - Has online device: ${hasOnlineDevice}`);
       console.log(`  - Final isOnline: ${isActuallyOnline}`);
       console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
       
@@ -1664,9 +1550,9 @@ router.get('/screens', async (req, res) => {
         materialId: screen.materialId,
         screenType: screen.screenType,
         carGroupId: screen.carGroupId,
-        slotNumber: screen.slotNumber,
+        deviceSlot: screen.deviceSlot,
         isOnline: isActuallyOnline,
-        currentLocation: screen.getFormattedLocation(),
+        currentLocation: screen.currentLocation,
         lastSeen: screen.lastSeen,
         currentHours: screen.currentHoursToday,
         hoursRemaining: screen.hoursRemaining,
@@ -1708,7 +1594,7 @@ router.get('/debug/device/:deviceId', async (req, res) => {
     const { deviceId } = req.params;
     
     // Find the device in the database
-    const device = await ScreenTracking.findOne({ 'devices.deviceId': deviceId });
+    const device = await DeviceTracking.findOne({ deviceId: deviceId });
     
     if (!device) {
       return res.status(404).json({
@@ -1717,16 +1603,13 @@ router.get('/debug/device/:deviceId', async (req, res) => {
       });
     }
     
-    // Find the specific device in the devices array
-    const deviceInfo = device.devices.find(d => d.deviceId === deviceId);
-    
     res.json({
       success: true,
       data: {
-        deviceId: deviceInfo?.deviceId,
+        deviceId: device.deviceId,
         materialId: device.materialId,
-        isOnline: deviceInfo?.isOnline,
-        lastSeen: deviceInfo?.lastSeen,
+        isOnline: device.isOnline,
+        lastSeen: device.lastSeen,
         isActive: device.currentSession?.isActive,
         screenType: device.screenType,
         displayStatus: device.displayStatus,
@@ -1744,7 +1627,7 @@ router.get('/debug/device/:deviceId', async (req, res) => {
   }
 });
 
-// GET /screen-tracking/driver/:driverId - Get real-time ScreenTracking data for a driver
+// GET /screen-tracking/driver/:driverId - Get real-time DeviceTracking data for a driver
 router.get('/driver/:driverId', checkDriver, async (req, res) => {
   try {
     const { driverId } = req.params;
@@ -1766,15 +1649,15 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
       });
     }
     
-    // Find ScreenTracking record for this material
-    const screenTracking = await ScreenTracking.findOne({ 
+    // Find DeviceTracking record for this material
+    const deviceTracking = await DeviceTracking.findOne({ 
       materialId: material.materialId 
     });
     
-    if (!screenTracking) {
+    if (!deviceTracking) {
       return res.status(404).json({
         success: false,
-        message: 'No screen tracking data found for this driver'
+        message: 'No device tracking data found for this driver'
       });
     }
     
@@ -1790,32 +1673,32 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
         vehicleType: driver?.vehicleType || 'Unknown',
         materialId: material.materialId,
         materialType: material.materialType,
-        isOnline: screenTracking.isOnline,
-        lastSeen: screenTracking.lastSeen,
-        currentLocation: screenTracking.currentLocation,
+        isOnline: deviceTracking.isOnline,
+        lastSeen: deviceTracking.lastSeen,
+        currentLocation: deviceTracking.currentLocation,
         
-        // Real-time data from ScreenTracking
-        currentHours: screenTracking.currentHoursToday || 0,
-        hoursRemaining: screenTracking.hoursRemaining || 0,
-        totalDistanceToday: screenTracking.currentSession?.totalDistanceTraveled || 0,
-        averageSpeed: screenTracking.currentSession?.averageSpeed || 0,
-        maxSpeed: screenTracking.currentSession?.maxSpeed || 0,
+        // Real-time data from DeviceTracking
+        currentHours: deviceTracking.currentHoursToday || 0,
+        hoursRemaining: deviceTracking.hoursRemaining || 0,
+        totalDistanceToday: deviceTracking.currentSession?.totalDistanceTraveled || 0,
+        averageSpeed: deviceTracking.currentSession?.averageSpeed || 0,
+        maxSpeed: deviceTracking.currentSession?.maxSpeed || 0,
         
         // Compliance
-        complianceRate: screenTracking.complianceRate || 0,
+        complianceRate: deviceTracking.complianceRate || 0,
         
         
         // Daily performance
-        dailyPerformance: screenTracking.dailyPerformance || [],
+        dailyPerformance: deviceTracking.dailyPerformance || [],
         
         // Device info
-        deviceId: screenTracking.deviceId,
-        screenType: screenTracking.screenType,
-        displayStatus: screenTracking.displayStatus,
+        deviceId: deviceTracking.deviceId,
+        screenType: deviceTracking.screenType,
+        displayStatus: deviceTracking.displayStatus,
         
         // Alerts
-        totalAlerts: screenTracking.alerts?.length || 0,
-        recentAlerts: screenTracking.alerts?.slice(-5) || []
+        totalAlerts: deviceTracking.alerts?.length || 0,
+        recentAlerts: deviceTracking.alerts?.slice(-5) || []
       }
     };
     

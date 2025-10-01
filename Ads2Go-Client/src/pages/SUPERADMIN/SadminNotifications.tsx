@@ -13,13 +13,16 @@ import {
   Info,
   Users,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { 
   GET_SUPERADMIN_NOTIFICATIONS, 
   MARK_SUPERADMIN_NOTIFICATION_READ, 
   MARK_ALL_SUPERADMIN_NOTIFICATIONS_READ,
   DELETE_SUPERADMIN_NOTIFICATION,
+  DELETE_ALL_SUPERADMIN_NOTIFICATIONS,
   GET_USER_COUNTS_BY_PLAN,
   SuperAdminNotification 
 } from '../../graphql/superadmin/queries/sadminNotificationQueries';
@@ -29,6 +32,8 @@ const SadminNotifications: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<SuperAdminNotification | null>(null);
+  const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_SUPERADMIN_NOTIFICATIONS, {
@@ -75,6 +80,19 @@ const SadminNotifications: React.FC = () => {
     onError: (error) => {
       console.error('Error deleting notification:', error);
       alert('Failed to delete notification: ' + error.message);
+    }
+  });
+
+  // Delete all notifications
+  const [deleteAllNotifications] = useMutation(DELETE_ALL_SUPERADMIN_NOTIFICATIONS, {
+    onCompleted: () => {
+      refetchNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    },
+    onError: (error) => {
+      console.error('Error deleting all notifications:', error);
+      alert('Failed to delete all notifications: ' + error.message);
     }
   });
 
@@ -127,6 +145,52 @@ const SadminNotifications: React.FC = () => {
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setNotificationToDelete(null);
+  };
+
+  // Selection helper functions
+  const toggleSelectAll = () => {
+    if (selectedNotifications.size === filteredNotifications.length) {
+      setSelectedNotifications(new Set());
+    } else {
+      setSelectedNotifications(new Set(filteredNotifications.map(n => n.id)));
+    }
+  };
+
+  const toggleSelectNotification = (notificationId: string) => {
+    const newSelected = new Set(selectedNotifications);
+    if (newSelected.has(notificationId)) {
+      newSelected.delete(notificationId);
+    } else {
+      newSelected.add(notificationId);
+    }
+    setSelectedNotifications(newSelected);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedNotifications.size === 0) return;
+    
+    if (selectedNotifications.size === filteredNotifications.length) {
+      // If all notifications are selected, use deleteAllNotifications
+      await deleteAllNotifications();
+    } else {
+      // Delete selected notifications one by one
+      for (const notificationId of selectedNotifications) {
+        await deleteNotification({
+          variables: { notificationId }
+        });
+      }
+    }
+    
+    setSelectedNotifications(new Set());
+    setIsSelectMode(false);
+  };
+
+  const handleDeleteAll = async () => {
+    if (window.confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+      await deleteAllNotifications();
+      setSelectedNotifications(new Set());
+      setIsSelectMode(false);
+    }
   };
 
   const getNotificationIcon = (type: string) => {
@@ -205,6 +269,58 @@ const SadminNotifications: React.FC = () => {
               <p className="text-gray-600 mt-1">Manage system notifications and monitor user activity</p>
             </div>
             <div className="flex items-center space-x-3">
+              {filteredNotifications.length > 0 && (
+                <>
+                  {!isSelectMode ? (
+                    <button
+                      onClick={() => setIsSelectMode(true)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      <CheckSquare className="w-4 h-4" />
+                      <span>Select</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={toggleSelectAll}
+                        className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                      >
+                        {selectedNotifications.size === filteredNotifications.length ? (
+                          <CheckSquare className="w-4 h-4" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                        <span>{selectedNotifications.size === filteredNotifications.length ? 'Deselect All' : 'Select All'}</span>
+                      </button>
+                      {selectedNotifications.size > 0 && (
+                        <button
+                          onClick={handleDeleteSelected}
+                          className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete Selected ({selectedNotifications.size})</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={handleDeleteAll}
+                        className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete All</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsSelectMode(false);
+                          setSelectedNotifications(new Set());
+                        }}
+                        className="flex items-center space-x-2 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                      >
+                        <span>Cancel</span>
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
@@ -362,6 +478,18 @@ const SadminNotifications: React.FC = () => {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-start space-x-3 flex-1">
+                        {isSelectMode && (
+                          <button
+                            onClick={() => toggleSelectNotification(notification.id)}
+                            className="mt-1 p-1 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            {selectedNotifications.has(notification.id) ? (
+                              <CheckSquare size={20} className="text-blue-600" />
+                            ) : (
+                              <Square size={20} className="text-gray-400" />
+                            )}
+                          </button>
+                        )}
                         <div className="flex-shrink-0 mt-1">
                           {getNotificationIcon(notification.type)}
                         </div>
@@ -389,24 +517,26 @@ const SadminNotifications: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2 ml-4">
-                        {!notification.read && (
+                      {!isSelectMode && (
+                        <div className="flex items-center space-x-2 ml-4">
+                          {!notification.read && (
+                            <button
+                              onClick={() => handleMarkAsRead(notification.id)}
+                              className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+                              title="Mark as read"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleMarkAsRead(notification.id)}
-                            className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-                            title="Mark as read"
+                            onClick={() => handleDeleteNotification(notification)}
+                            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                            title="Delete notification"
                           >
-                            <Check className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => handleDeleteNotification(notification)}
-                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                          title="Delete notification"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

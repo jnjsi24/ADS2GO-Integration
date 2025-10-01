@@ -6,7 +6,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import AboutUsModal from '../../components/modals/AboutUsModal';
 import ContactUsModal from '../../components/modals/ContactUsModal';
 import PricingModal from '../../components/modals/PricingModal';
-import TestimonialsModal from '../../components/modals/TestimonialsModal';
 import TermsOfServiceModal from '../../components/modals/TermsOfServiceModal';
 import PrivacyPolicyModal from '../../components/modals/PrivacyPolicyModal';
 import LegalModal from '../../components/modals/LegalModal';
@@ -16,13 +15,6 @@ import StatusModal from '../../components/modals/StatusModal';
 // Import newsletter service
 import { NewsletterService } from '../../services/newsletterService';
 
-// Define the Testimonial interface
-interface Testimonial {
-  image: string;
-  name: string;
-  title: string;
-  quote: string;
-}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -33,8 +25,6 @@ export default function Home() {
   // State for the popup in the footer
   const [showPopup, setShowPopup] = useState(false);
 
-  // State for the testimonial popup, typed as Testimonial | null
-  const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
 
   // State for newsletter subscription
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -46,7 +36,6 @@ export default function Home() {
     aboutUs: false,
     contactUs: false,
     pricing: false,
-    testimonials: false,
     termsOfService: false,
     privacyPolicy: false,
     legal: false,
@@ -61,14 +50,14 @@ export default function Home() {
       description: "Boost your brand with mobile advertising solutions that drive visibility, engagement, and growth — anytime, anywhere.",
       buttonText: "+ Register Ad Campaign",
       buttonLink: "/login",
-      imageSrc: "/image/AdsMobile.jpg",
+      videoSrc: "/image/home.mp4",
     },
     {
       title: "Drive Your Brand Forward with Mobile Advertising",
       description: "Reach your audience on the go with our innovative mobile ad solutions, designed to maximize impact and engagement.",
       buttonText: "Learn More",
       buttonLink: "/login",
-      imageSrc: "/image/Dashboard_Driver.jpg", 
+      videoSrc: "/image/home2.mp4", 
     },
   ];
 
@@ -146,27 +135,6 @@ export default function Home() {
     return items;
   };
 
-  // Testimonial data
-  const testimonials: Testimonial[] = [
-    {
-      image: '/image/Rajesh_Kumar.jpg',
-      name: 'Rajesh Kumar',
-      title: 'Business Owner',
-      quote: 'Increased my sales by 30% with mobile ads!',
-    },
-    {
-      image: '/image/Priya_Sharma.jpg',
-      name: 'Priya Sharma',
-      title: 'Marketing Manager',
-      quote: 'Amazing reach and easy to manage campaigns.',
-    },
-    {
-      image: '/image/Amit_Singh.jpg',
-      name: 'Amit Singh',
-      title: 'Driver',
-      quote: 'I earned extra income by displaying digital ads on my vehicle while doing my regular driving routes. It was a great way to make passive money without changing my routine—I just drove like I normally do, and the ads ran automatically.',
-    },
-  ];
 
   // Handle newsletter subscription
   const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -213,14 +181,6 @@ export default function Home() {
     setTimeout(() => setShowPopup(false), 3000); // Hide popup after 3 seconds
   };
 
-  // Type the testimonial parameter
-  const handleTestimonialClick = (testimonial: Testimonial) => {
-    setSelectedTestimonial(testimonial);
-  };
-
-  const handleClosePopup = () => {
-    setSelectedTestimonial(null);
-  };
 
   // Modal handlers
   const openModal = (modalName: keyof typeof modalStates) => {
@@ -235,11 +195,15 @@ export default function Home() {
     <div className="min-h-screen relative">
   {/* Hero Section - Slideshow */}
   <section className="relative py-20 px-2 pr-44 text-black min-h-[90vh] flex items-center overflow-hidden">
-    <img
-      src={slides[currentSlide].imageSrc}
-      alt="Hero background"
+    <video
+      autoPlay
+      muted
+      loop
       className="absolute top-0 left-0 w-full h-full object-cover z-0"
-    />
+      src={slides[currentSlide].videoSrc}
+    >
+      Your browser does not support the video tag.
+    </video>
     <div className="container mx-auto max-w-screen-xl relative z-10">
       {slides.map((slide, index) => (
         <div
@@ -257,7 +221,7 @@ export default function Home() {
             </p>
             <div className="flex flex-wrap gap-4">
               <Link to={slide.buttonLink}>
-                <button className="px-6 py-3 text-sm font-semibold bg-[#FADA7A] text-white border rounded-[8px] hover:bg-[#DF9755] hover:scale-105 transition-all duration-300">
+                <button className="px-6 py-3 text-sm font-semibold bg-[#F59E0B] text-white border rounded-[8px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300">
                   {slide.buttonText}
                 </button>
               </Link>
@@ -278,64 +242,77 @@ export default function Home() {
     </div>
   </section>
 
-      {/* Our Clients Section */}
+      {/* Why Ads2Go? Section */}
       <section className="py-16 px-4 bg-white">
         <div className="container mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-8 animate-fadeDown">Our Clients</h2>
-          <div className="flex justify-center gap-12 mb-8">
-            <img src="/image/bg1.png" alt="Client 1" className="h-16 animate-pulse" />
-            <img src="/image/bg2.png" alt="Client 2" className="h-16 animate-pulse delay-100" />
-            <img src="/image/bus.png" alt="Client 3" className="h-16 animate-pulse delay-200" />
+          <h2 className="text-3xl font-bold mb-12 animate-fadeDown">Why Ads2Go?</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">💰</div>
+              <h3 className="text-xl font-semibold mb-3">Cost-effective vs. billboards</h3>
+              <p className="text-[#475569]">Get more exposure for less cost compared to traditional billboard advertising</p>
+            </div>
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">📍</div>
+              <h3 className="text-xl font-semibold mb-3">Targeted routes (GPS tracking)</h3>
+              <p className="text-[#475569]">Reach your specific audience with precise GPS tracking and route optimization</p>
+            </div>
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">⚡</div>
+              <h3 className="text-xl font-semibold mb-3">Flexible pricing plans</h3>
+              <p className="text-[#475569]">Choose from various vehicle types and pricing options that fit your budget</p>
+            </div>
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">🚀</div>
+              <h3 className="text-xl font-semibold mb-3">Boosts brand awareness fast</h3>
+              <p className="text-[#475569]">See immediate results with mobile advertising that reaches thousands daily</p>
+            </div>
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">💵</div>
+              <h3 className="text-xl font-semibold mb-3">Extra income for drivers</h3>
+              <p className="text-[#475569]">Drivers earn passive income by displaying ads on their vehicles</p>
+            </div>
+            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+              <div className="text-4xl mb-4">📊</div>
+              <h3 className="text-xl font-semibold mb-3">Real-time analytics</h3>
+              <p className="text-[#475569]">Track performance with detailed reports and route heatmaps</p>
+            </div>
           </div>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto animate-fadeDown delay-200">
-            We have been working with some Fortune 500+ clients
-          </p>
         </div>
       </section>
 
       <section className="py-16 px-4 bg-gray-50 flex items-center justify-center">
   <div className="container mx-auto max-w-screen-xl text-center">
     <h2 className="text-3xl font-bold mb-8 animate-fadeDown">Easily manage your ads in just a few simple steps</h2>
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
+        <div className="w-full max-w-xs mx-auto mb-4">
           <img
-            className="w-full h-full object-cover rounded-lg"
-            src="/image/RegisterAdsHere.jpg"
-            alt="Register Your Ad"
+            className="w-full h-auto rounded-lg"
+            src="/image/register-ad-realistic.jpg"
+            alt="Person registering ad campaign on laptop with vehicle options visible in background"
           />
         </div>
         <h3 className="text-xl font-semibold mb-2">Register Your Ad</h3>
         <p className="text-gray-600 mt-8">Submit your ad content, choose your preferred vehicle type (motorcycle, car, jeepney, bus), and select your campaign duration.</p>
       </div>
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
+        <div className="w-full max-w-xs mx-auto mb-4">
           <img
-            className="w-full h-full object-cover rounded-lg"
-            src="/image/CampaignAds.jpg"
-            alt="Launch Your Campaign"
+            className="w-full h-auto rounded-lg"
+            src="/image/launch-campaign-realistic.jpg"
+            alt="Laptop showing campaign dashboard with Launch Campaign button and vehicles with ads in background"
           />
         </div>
         <h3 className="text-xl font-semibold mb-2">Launch Your Campaign</h3>
         <p className="text-gray-600 mt-8">Once approved, your ad goes live on vehicle LCDs or vinyl wraps, reaching thousands daily.</p>
       </div>
       <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
+        <div className="w-full max-w-xs mx-auto mb-4">
           <img
-            className="w-full h-full object-cover rounded-lg"
-            src="/image/Drivers.jpg"
-            alt="View Drivers"
-          />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">View Drivers</h3>
-        <p className="text-gray-600 mt-8">Browse available drivers or vehicles based on your preferred route or area. Assign your ad to the one that best fits your goals.</p>
-      </div>
-      <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4 aspect-[16/9]">
-          <img
-            className="w-full h-full object-cover rounded-lg"
-            src="/image/Track_Monitor.jpg"
-            alt="Track & Monitor Performance"
+            className="w-full h-auto rounded-lg"
+            src="/image/track-performance-realistic.jpg"
+            alt="Laptop showing live campaign monitoring dashboard with analytics and driver locations on map"
           />
         </div>
         <h3 className="text-xl font-semibold mb-2">Track & Monitor Performance</h3>
@@ -346,15 +323,15 @@ export default function Home() {
 </section>
 
       {/* Vehicle Plans Section */}
-      <section className="py-16 px-4 bg-[#578FCA] text-white h-96">
+      <section className="py-16 px-4 bg-[#0EA5E9] text-white">
         <div className="container mx-auto">
           <h2 className="text-3xl font-bold text-center mb-12 animate-fadeDown">Pick the perfect ride and plan for your ad</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[600px] hover:scale-105 transition-all duration-300">
+            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
               <h3 className="text-3xl font-bold mb-2">Motorcycle Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱100,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#FADA7A] text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -367,11 +344,11 @@ export default function Home() {
                 <p className="text-md">Targeted routes available upon request</p>
               </div>
             </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[600px] hover:scale-105 transition-all duration-300">
+            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
               <h3 className="text-3xl font-bold mb-2">Car Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱150,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#FADA7A]  text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -384,11 +361,11 @@ export default function Home() {
                 <p className="text-md">Optional: Custom campaign times (rush hour only, etc.)</p>
               </div>
             </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[600px] hover:scale-105 transition-all duration-300">
+            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
               <h3 className="text-3xl font-bold mb-2">Bus Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱300,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#FADA7A]  text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -401,11 +378,11 @@ export default function Home() {
                 <p className="text-md">Includes full analytics and route heatmaps</p>
               </div>
             </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[600px] hover:scale-105 transition-all duration-300">
+            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
               <h3 className="text-3xl font-bold mb-2">Jeepney Plan</h3>
               <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱180,000/month</p>
               <Link to="/login">
-                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#FADA7A] text-black rounded hover:bg-teal-600 transition hover:scale-105 transition-all duration-300">
+                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
                   Get Started
                 </button>
               </Link>
@@ -421,98 +398,109 @@ export default function Home() {
         </div>
       </section>
 
-     {/* Testimonials */}
-<section className="py-16 px-4 bg-white mt-[460px]">
-  <div className="container mx-auto">
-    <h2 className="text-3xl font-bold text-center mb-12 animate-fadeDown">Testimonials</h2>
-    <div className="grid md:grid-cols-3 gap-8">
-      {testimonials.map((testimonial, index) => (
-        <div key={index} className="relative text-center group h-64 flex flex-col justify-end">
-          <div className="absolute inset-0">
-            <img
-              src={testimonial.image}
-              alt={testimonial.name}
-              className="w-full h-full object-cover opacity-90 group-hover:opacity-70 transition-opacity duration-300"
-            />
-          </div>
-          <div
-            className="relative w-96 z-10 p-6 bg-white bg-opacity-90 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 mx-auto cursor-pointer h-36 translate-y-20 hover:scale-105"
-            onClick={() => handleTestimonialClick(testimonial)}
-          >
-            <p className="text-gray-600 italic line-clamp-2 mb-2">" {testimonial.quote} "</p>
-            <h3 className="text-lg font-semibold truncate">{testimonial.name}</h3>
-            <p className="text-sm text-gray-500 truncate">{testimonial.title}</p>
-          </div>
+      {/* For Drivers Section */}
+      <section className="py-20 px-4 bg-gradient-to-br from-[#F8FAFC] to-[#E2E8F0] relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute top-10 left-10 w-32 h-32 bg-[#0EA5E9] rounded-full"></div>
+          <div className="absolute top-32 right-20 w-24 h-24 bg-[#F59E0B] rounded-full"></div>
+          <div className="absolute bottom-20 left-1/4 w-16 h-16 bg-[#10B981] rounded-full"></div>
+          <div className="absolute bottom-32 right-1/3 w-20 h-20 bg-[#0C4A6E] rounded-full"></div>
         </div>
-      ))}
+        
+        <div className="container mx-auto text-center relative z-10">
+          <div className="max-w-4xl mx-auto">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-[#F59E0B] rounded-full mb-6 animate-bounce">
+              <span className="text-3xl">🚗</span>
+            </div>
+            <h2 className="text-5xl font-bold mb-6 animate-fadeDown bg-gradient-to-r from-[#0C4A6E] to-[#0EA5E9] bg-clip-text text-transparent">
+              Earn While You Drive
+            </h2>
+            <p className="text-xl text-[#475569] mb-10 animate-fadeDown delay-100 leading-relaxed">
+              Install LCD or vinyl wraps on your vehicle and get paid monthly. 
+              <br className="hidden md:block" />
+              Turn your daily commute into a money-making opportunity.
+            </p>
+            
+            {/* Benefits Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+                <div className="text-3xl mb-3">💰</div>
+                <h3 className="font-semibold text-[#0C4A6E] mb-2">Passive Income</h3>
+                <p className="text-sm text-[#475569]">Earn money while doing your regular driving routes</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+                <div className="text-3xl mb-3">📱</div>
+                <h3 className="font-semibold text-[#0C4A6E] mb-2">Easy Setup</h3>
+                <p className="text-sm text-[#475569]">Quick installation with professional support</p>
+              </div>
+              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
+                <div className="text-3xl mb-3">📊</div>
+                <h3 className="font-semibold text-[#0C4A6E] mb-2">Track Earnings</h3>
+                <p className="text-sm text-[#475569]">Monitor your income through our dashboard</p>
     </div>
   </div>
 
-  {/* Popup for full testimonial */}
-  {selectedTestimonial && (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity duration-300"
-      style={{ animation: 'fadeIn 0.3s ease-out forwards' }}
-      onClick={handleClosePopup}
-    >
-      <div 
-        className="relative bg-white rounded-lg p-6 w-[90vw] sm:w-[50vw] md:w-[30vw] lg:w-[20vw] max-h-[80vh] overflow-y-auto transition-all duration-300 transform"
-        style={{ animation: 'slideUp 0.3s ease-out forwards' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          className="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 hover:scale-110"
-          onClick={handleClosePopup}
-        >
-          ✕
+            <Link to="/login">
+              <button className="px-10 py-5 text-lg font-semibold bg-[#F59E0B] text-black border rounded-[12px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
+                Register as Driver
         </button>
-        <div className="relative text-center space-y-4">
-          <img
-            src={selectedTestimonial.image}
-            alt={selectedTestimonial.name}
-            className="w-full h-auto object-cover rounded-t-lg transition-opacity duration-300"
-            style={{ animation: 'fadeIn 0.4s ease-out forwards' }}
-          />
-          <div className="relative z-10 p-4 pb-8 space-y-2">
-            <p 
-              className="text-gray-600 italic transition-opacity duration-300"
-              style={{ animation: 'fadeIn 0.5s ease-out forwards' }}
-            >
-              " {selectedTestimonial.quote} "
-            </p>
-            <h3 
-              className="text-lg font-semibold transition-opacity duration-300"
-              style={{ animation: 'fadeIn 0.6s ease-out forwards' }}
-            >
-              {selectedTestimonial.name}
-            </h3>
-            <p 
-              className="text-sm text-gray-500 transition-opacity duration-300"
-              style={{ animation: 'fadeIn 0.7s ease-out forwards' }}
-            >
-              {selectedTestimonial.title}
-            </p>
+            </Link>
           </div>
         </div>
-      </div>
-    </div>
-  )}
 </section>
 
-
       {/* Call to Action */}
-      <section className="py-16 px-4 bg-gray-50 text-center mt-14">
-        <h2 className="text-5xl font-bold mb-4 animate-fadeDown">Your ads deserve wheels.</h2>
-        <p className="text-5xl text-gray-600 mb-6 animate-fadeDown delay-100">Let’s drive it forward.</p>
-        <Link to="/login">
-          <button className="px-6 py-3 text-sm font-semibold bg-[#FADA7A] text-white border rounded-[8px] hover:bg-[#DF9755] hover:text-black hover:scale-105 transition-all duration-300">
-            Register your ads
-          </button>
-        </Link>
+      <section className="py-20 px-4 bg-gradient-to-r from-[#0C4A6E] to-[#0EA5E9] text-white relative overflow-hidden">
+        {/* Background Elements */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-full h-full">
+            <div className="absolute top-20 left-20 w-40 h-40 border-2 border-white rounded-full"></div>
+            <div className="absolute top-40 right-32 w-24 h-24 border-2 border-white rounded-full"></div>
+            <div className="absolute bottom-20 left-1/3 w-32 h-32 border-2 border-white rounded-full"></div>
+            <div className="absolute bottom-40 right-20 w-16 h-16 border-2 border-white rounded-full"></div>
+          </div>
+        </div>
+        
+        <div className="container mx-auto text-center relative z-10">
+          <div className="max-w-4xl mx-auto">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-white bg-opacity-20 rounded-full mb-8 animate-pulse">
+              <span className="text-4xl">🚀</span>
+            </div>
+            <h2 className="text-6xl font-bold mb-6 animate-fadeDown">
+              Your ads deserve wheels.
+            </h2>
+            <p className="text-3xl text-white text-opacity-90 mb-10 animate-fadeDown delay-100 font-light">
+              Let's drive it forward.
+            </p>
+            
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
+              <div className="text-center">
+                <div className="text-4xl font-bold text-[#F59E0B] mb-2">1000+</div>
+                <div className="text-white text-opacity-80">Active Vehicles</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-[#F59E0B] mb-2">50K+</div>
+                <div className="text-white text-opacity-80">Daily Impressions</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-[#F59E0B] mb-2">95%</div>
+                <div className="text-white text-opacity-80">Client Satisfaction</div>
+              </div>
+            </div>
+            
+            <Link to="/login">
+              <button className="px-12 py-6 text-xl font-semibold bg-[#F59E0B] text-black border rounded-[12px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-3xl">
+                Register your ads
+              </button>
+            </Link>
+          </div>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#3674B5] text-white py-8 px-4">
+      <footer className="bg-[#0C4A6E] text-white py-8 px-4">
         <div className="container mx-auto text-left">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
@@ -531,7 +519,6 @@ export default function Home() {
                 <li><button onClick={() => openModal('blog')} className="hover:text-teal-400 text-left">Blog</button></li>
                 <li><button onClick={() => openModal('contactUs')} className="hover:text-teal-400 text-left">Contact Us</button></li>
                 <li><button onClick={() => openModal('pricing')} className="hover:text-teal-400 text-left">Pricing</button></li>
-                <li><button onClick={() => openModal('testimonials')} className="hover:text-teal-400 text-left">Testimonials</button></li>
               </ul>
             </div>
             <div>
@@ -553,9 +540,13 @@ export default function Home() {
                     placeholder="Your email address"
                     value={newsletterEmail}
                     onChange={(e) => setNewsletterEmail(e.target.value)}
-                    className={`w-full p-2 pl-4 pr-10 bg-[#C9E6F0] text-black rounded focus:outline-none ${
+                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none autofill:bg-[#F1F5F9] autofill:text-black autofill:shadow-[inset_0_0_0px_1000px_#F1F5F9] ${
                       newsletterStatus === 'error' ? 'border-2 border-red-500' : ''
                     }`}
+                    style={{
+                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
+                      WebkitTextFillColor: '#000000'
+                    }}
                     disabled={newsletterStatus === 'loading'}
                   />
                   <button
@@ -578,7 +569,7 @@ export default function Home() {
           </div>
         </div>
         {showPopup && (
-          <div className="fixed bottom-4 right-4 bg-[#CBF3F0] text-black p-3 rounded shadow-lg z-50">
+          <div className="fixed bottom-4 right-4 bg-[#DCFCE7] text-black p-3 rounded shadow-lg z-50">
             {newsletterStatus === 'success' ? 'Successfully subscribed! Check your email for confirmation.' : 'Request sent. Please check your email after a while'}
           </div>
         )}
@@ -596,10 +587,6 @@ export default function Home() {
       <PricingModal 
         isOpen={modalStates.pricing} 
         onClose={() => closeModal('pricing')} 
-      />
-      <TestimonialsModal 
-        isOpen={modalStates.testimonials} 
-        onClose={() => closeModal('testimonials')} 
       />
       <TermsOfServiceModal 
         isOpen={modalStates.termsOfService} 

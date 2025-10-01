@@ -99,7 +99,7 @@ module.exports = gql`
     driver: DriverInfo
   }
 
-  type MaterialTrackingInfo {
+  type DeviceComplianceInfo {
     photoComplianceStatus: String
     nextPhotoDue: String
     lastPhotoUpload: String
@@ -124,7 +124,7 @@ module.exports = gql`
     status: String
     assignedDate: String
     location: LocationInfo
-    materialTracking: MaterialTrackingInfo
+    deviceCompliance: DeviceComplianceInfo
   }
 
   type LocationInfo {

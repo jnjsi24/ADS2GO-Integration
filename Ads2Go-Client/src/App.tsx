@@ -30,8 +30,10 @@ import About from './pages/USERS/About';
 import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
+import DetailedAnalytics from './pages/USERS/DetailedAnalytics';
 import Notifications from './pages/USERS/Notifications';
 import GoogleOAuthCompletion from './pages/AUTH/GoogleOAuthCompletion';
+import GoogleOAuthCallback from './pages/AUTH/GoogleOAuthCallback';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
@@ -55,6 +57,7 @@ import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPricing from './pages/SUPERADMIN/SadminPricing';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
+import SadminAnalytics from './pages/SUPERADMIN/SadminAnalytics';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -227,6 +230,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         /> 
+        <Route
+          path="/sadmin-analytics"
+          element={
+            <ProtectedRoute>
+              <SadminAnalytics />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -239,21 +250,24 @@ const AdminAppContent: React.FC = () => {
 };
 
 const UserAppContent: React.FC = () => {
-  const { user } = useUserAuth();
+  const { user, isLoading, isInitialized } = useUserAuth();
   
   return (
     <NotificationProvider>
       <div className="min-h-screen bg-white text-black">
-        {/* Show navbar depending on user role */}
-        {user?.role === 'USER' && <UserNavbar />}
+        {/* Always show navbar for users, with loading state handled inside */}
+        <UserNavbar />
         
-        <Routes>
+        {/* Main content with smooth transition */}
+        <div className="transition-all duration-300 ease-in-out">
+          <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/landing" element={<Landing />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
+        <Route path="/auth/google/callback" element={<GoogleOAuthCallback />} />
         <Route path="/auth/google/complete" element={
           <GoogleOAuthCompletion 
             googleUserData={(() => {
@@ -361,6 +375,14 @@ const UserAppContent: React.FC = () => {
           }
         />
         <Route
+          path="/detailed-analytics"
+          element={
+            <ProtectedRoute>
+              <DetailedAnalytics />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/notifications"
           element={
             <ProtectedRoute>
@@ -373,7 +395,8 @@ const UserAppContent: React.FC = () => {
         <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-    </div>
+        </div>
+      </div>
     </NotificationProvider>
   );
 };

@@ -224,6 +224,7 @@ const Materials: React.FC = () => {
   // Tablet query hook
   const { data: tabletData, loading: tabletLoading, error: tabletError, refetch: refetchTabletData } = useQuery(GET_TABLETS_BY_MATERIAL, {
     variables: { materialId: selectedTabletMaterialId || '' },
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -246,6 +247,7 @@ const Materials: React.FC = () => {
       materialId: selectedTabletMaterialId || '', 
       slotNumber: selectedTabletSlotNumber || 1 
     },
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`

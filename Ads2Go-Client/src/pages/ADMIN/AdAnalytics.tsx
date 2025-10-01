@@ -75,7 +75,8 @@ const AdAnalytics: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const response = await fetch((process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/screenTracking/adAnalytics');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/screenTracking/adAnalytics`);
       const data = await response.json();
       
       if (data.success) {
@@ -94,8 +95,8 @@ const AdAnalytics: React.FC = () => {
   useEffect(() => {
     fetchAnalytics();
     
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchAnalytics, 30000);
+    // Auto-refresh every 5 seconds for faster updates
+    const interval = setInterval(fetchAnalytics, 5000);
     return () => clearInterval(interval);
   }, []);
 

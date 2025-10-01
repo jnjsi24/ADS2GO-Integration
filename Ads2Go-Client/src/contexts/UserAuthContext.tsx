@@ -16,7 +16,7 @@ import {
 } from '../graphql/user';
 import { jwtDecode } from 'jwt-decode';
 import { NewsletterService } from '../services/newsletterService';
-import { signInWithGoogle } from '../firebase/init';
+import { generateGoogleOAuthURL } from '../config/googleOAuth';
 
 // Types
 type UserRole = 'USER';
@@ -164,6 +164,25 @@ export const UserAuthProvider: React.FC<{
           throw new Error('User not found');
         }
 
+        // Helper function to construct full image URL
+        const getImageUrl = (imagePath: string | undefined | null) => {
+          if (!imagePath) return null;
+          // If it's already a full URL, return as is
+          if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+          }
+          // If it starts with /uploads, prepend server URL
+          if (imagePath.startsWith('/uploads')) {
+            const serverUrl = process.env.REACT_APP_SERVER_URL;
+            if (!serverUrl) {
+              console.error('REACT_APP_SERVER_URL not configured');
+              return imagePath; // Return original path as fallback
+            }
+            return `${serverUrl}${imagePath}`;
+          }
+          return imagePath;
+        };
+
         const freshUser: User = {
           userId: freshUserRaw.id,
           email: freshUserRaw.email,
@@ -176,7 +195,7 @@ export const UserAuthProvider: React.FC<{
           companyName: freshUserRaw.companyName,
           companyAddress: freshUserRaw.companyAddress,
           contactNumber: freshUserRaw.contactNumber,
-          profilePicture: freshUserRaw.profilePicture,
+          profilePicture: getImageUrl(freshUserRaw.profilePicture),
         };
 
         console.log('🔄 UserAuthContext: Setting user from initialization:', freshUser);
@@ -303,34 +322,15 @@ export const UserAuthProvider: React.FC<{
     try {
       console.log('🔄 Starting Google OAuth login...');
       
-      // Use Firebase Auth to sign in with Google
-      const firebaseUser = await signInWithGoogle();
-      console.log('✅ Firebase Google Auth successful:', firebaseUser.email);
+      // Generate Google OAuth URL and redirect to Google
+      const oauthUrl = generateGoogleOAuthURL();
+      console.log('🔄 Redirecting to Google OAuth...');
       
-      // Extract user data from Firebase Auth
-      const googleUserData = {
-        email: firebaseUser.email!,
-        firstName: firebaseUser.displayName?.split(' ')[0] || '',
-        lastName: firebaseUser.displayName?.split(' ').slice(1).join(' ') || '',
-        profilePicture: firebaseUser.photoURL || '',
-        isEmailVerified: firebaseUser.emailVerified,
-        googleId: firebaseUser.uid,
-        authProvider: 'google'
-      };
-
-      // Check if this is a new Google OAuth user or existing user
-      // For now, we'll assume it's a new user and redirect to completion form
-      // In a real implementation, you'd check your database first
+      // Redirect to Google OAuth
+      window.location.href = oauthUrl;
       
-      // Store Google user data temporarily for the completion form
-      console.log('🔄 Storing Google OAuth data:', googleUserData);
-      sessionStorage.setItem('googleOAuthData', JSON.stringify(googleUserData));
-      
-      // Redirect to completion form
-      console.log('🔄 Redirecting to completion form...');
-      navigate('/auth/google/complete');
-      
-      return null; // We'll return the user after completion
+      // This function won't return normally as we're redirecting
+      return null;
     } catch (error: any) {
       console.error('Google OAuth login error:', error);
       throw new Error(error.message || 'Google login failed');
@@ -391,22 +391,39 @@ export const UserAuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
+      // First, clear user state to prevent any new authenticated requests
+      setUser(null);
+      setUserEmail('');
+
+      // Clear localStorage
       localStorage.removeItem('userToken');
       localStorage.removeItem('keepLoggedIn');
       localStorage.removeItem('loginTimestamp');
+      localStorage.removeItem('user');
 
+      // Try to call logout mutation (but don't fail if it doesn't work)
       try {
         await logoutMutation();
       } catch (error) {
         console.error('Logout mutation error:', error);
+        // Continue with logout even if mutation fails
       }
 
-      setUser(null);
-      setUserEmail('');
+      // Reset Apollo store AFTER clearing tokens and state
       await apolloClient.resetStore();
+      
+      // Navigate to login
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if there's an error, ensure we clear everything and navigate
+      setUser(null);
+      setUserEmail('');
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('keepLoggedIn');
+      localStorage.removeItem('loginTimestamp');
+      localStorage.removeItem('user');
+      navigate('/login');
     }
   };
 
@@ -441,19 +458,13 @@ export const UserAuthProvider: React.FC<{
       userEmail,
       isLoading,
       isInitialized,
-      login,
-      loginWithGoogle,
-      register,
-      logout,
-      navigate,
-      debugToken,
-      navigateToRegister,
+      // Remove function dependencies to prevent unnecessary re-renders
     ]
   );
 
   return (
     <UserAuthContext.Provider value={contextValue}>
-      {!isLoading && isInitialized ? children : null}
+      {children}
     </UserAuthContext.Provider>
   );
 };

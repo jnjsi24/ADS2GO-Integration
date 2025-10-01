@@ -31,10 +31,11 @@ const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
-const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
+// const screenTrackingTypeDefs = require('./schema/screenTrackingSchema'); // deprecated
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
+const companyAdTypeDefs = require('./schema/companyAdSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -50,28 +51,32 @@ const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
-const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
+// const screenTrackingResolvers = require('./resolvers/screenTrackingResolver'); // deprecated
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
+const companyAdResolvers = require('./resolvers/companyAdResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
 const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
-const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+// const { startDeviceStatusJob } = require('./jobs/deviceStatusJob'); // deprecated with ScreenTracking
 const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
+const cronJobs = require('./jobs/cronJobs');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
-const screenTrackingRoutes = require('./routes/screenTracking');
+const screenTrackingRoutes = require('./routes/screenTracking'); // Now uses DeviceTracking
+const deviceTrackingRoutes = require('./routes/deviceTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
 const newsletterRoutes = require('./routes/newsletter');
+const cleanupRoutes = require('./routes/cleanup');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -126,10 +131,11 @@ const server = new ApolloServer({
     materialTrackingTypeDefs,
     tabletTypeDefs,
     adsDeploymentTypeDefs,
-    screenTrackingTypeDefs,
+    // screenTrackingTypeDefs, // deprecated
     notificationTypeDefs,
     userReportTypeDefs,
     faqTypeDefs,
+    companyAdTypeDefs,
   ]),
   resolvers: mergeResolvers([
     {
@@ -152,10 +158,11 @@ const server = new ApolloServer({
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
-    screenTrackingResolvers,
+    // screenTrackingResolvers, // deprecated
     notificationResolvers,
     userReportResolvers,
     faqResolvers,
+    companyAdResolvers,
   ]),
 });
 
@@ -169,6 +176,12 @@ async function startServer() {
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
+
+      // In development, allow all origins for easier debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔓 Development mode: Allowing origin ${origin}`);
+        return callback(null, true);
+      }
 
       // Allowlist from env (comma-separated)
       const envAllowed = (process.env.ALLOWED_ORIGINS || '')
@@ -186,6 +199,15 @@ async function startServer() {
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        // Additional development origins
+        'http://localhost:3001',
+        'http://localhost:5000',
+        'http://localhost:8080',
+        'http://localhost:8000',
+        'http://10.0.2.2:3000', // Android emulator
+        'http://10.0.2.2:5000', // Android emulator
+        'exp://192.168.1.5:19000', // Expo development
+        'exp://192.168.100.22:19000', // Expo development
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
@@ -194,10 +216,10 @@ async function startServer() {
                            /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
 
       if (allowedOrigins.has(origin) || isRailwayApp) {
-        console.log('✅ CORS: Allowing origin:', origin);
         callback(null, true);
       } else {
-        console.log('❌ CORS: Blocking origin:', origin);
+        console.log(`🚫 CORS blocked origin: ${origin}`);
+        console.log(`📋 Allowed origins:`, Array.from(allowedOrigins));
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -209,7 +231,6 @@ async function startServer() {
 
   // Handle preflight requests manually
   app.options('*', (req, res) => {
-    console.log('🔄 Handling preflight request for:', req.headers.origin);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -229,14 +250,16 @@ async function startServer() {
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
-  // Routes
-  app.use('/tablet', tabletRoutes);
-  app.use('/screenTracking', screenTrackingRoutes);
-  app.use('/material', materialRoutes);
-  app.use('/ads', adsRoutes);
-  app.use('/material-photos', materialPhotoUploadRoutes);
-  app.use('/analytics', analyticsRoutes);
-  app.use('/api/newsletter', newsletterRoutes);
+// Routes
+app.use('/tablet', tabletRoutes);
+app.use('/screenTracking', screenTrackingRoutes); // Now uses DeviceTracking
+app.use('/deviceTracking', deviceTrackingRoutes);
+app.use('/material', materialRoutes);
+app.use('/ads', adsRoutes);
+app.use('/material-photos', materialPhotoUploadRoutes);
+app.use('/analytics', analyticsRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/cleanup', cleanupRoutes);
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -246,11 +269,6 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
-        // Debug GraphQL context
-        console.log('🔍 GraphQL Context Debug:');
-        console.log('  - Authorization header:', req.headers.authorization);
-        console.log('  - User-Agent:', req.headers['user-agent']);
-        
         // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
@@ -259,36 +277,19 @@ async function startServer() {
         let context = { driver, user };
         
         if (driver) {
-          console.log('🚗 Driver context:', { id: driver.id, driverId: driver.driverId, email: driver.email, role: driver.role });
           context.driver = driver;
         }
         
         if (user) {
-          console.log('🔐 User context:', { id: user.id, email: user.email, role: user.role });
           if (user.role === 'ADMIN') {
             context.admin = user;
-            console.log('✅ Set admin context for ADMIN user');
           } else if (user.role === 'SUPERADMIN') {
             context.superAdmin = user;
             // SuperAdmin should also have admin access
             context.admin = user;
-            console.log('✅ Set admin context for SUPERADMIN user');
           }
         }
         
-        // Debug final context
-        console.log('🔧 Final GraphQL context:', {
-          hasDriver: !!context.driver,
-          hasUser: !!context.user,
-          hasAdmin: !!context.admin,
-          hasSuperAdmin: !!context.superAdmin
-        });
-        
-        if (!driver && !user) {
-          console.log('❌ No authentication context found');
-        }
-        
-        console.log('🔧 Final context:', Object.keys(context));
         return context;
       },
     })
@@ -318,8 +319,12 @@ async function startServer() {
     console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
-    startDeviceStatusJob();
+    // startDeviceStatusJob(); // deprecated
     startPaymentDeadlineJob();
+    
+    // Start cron jobs for daily data archiving
+    cronJobs.start();
+    console.log('📅 Cron jobs started for daily data archiving');
   });
   
   // Handle server shutdown gracefully

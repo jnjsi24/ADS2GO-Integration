@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION } from '../graphql/notifications';
 import { GET_USER_NOTIFICATION_PREFERENCES } from '../graphql/user/queries/getUserNotificationPreferences';
+import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION, DELETE_ALL_NOTIFICATIONS } from '../graphql/notifications';
 import { useUserAuth } from './UserAuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -25,6 +26,7 @@ interface NotificationContextType {
   markAllAsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
   removeNotification: (notificationId: string) => Promise<void>;
+  deleteAllNotifications: () => Promise<void>;
   refreshNotifications: () => Promise<void>;
   isLoading: boolean;
   error: string | null;
@@ -57,6 +59,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [markNotificationAsReadMutation] = useMutation(MARK_NOTIFICATION_AS_READ);
   const [markAllNotificationsAsReadMutation] = useMutation(MARK_ALL_NOTIFICATIONS_AS_READ);
   const [deleteNotificationMutation] = useMutation(DELETE_NOTIFICATION);
+  const [deleteAllNotificationsMutation] = useMutation(DELETE_ALL_NOTIFICATIONS);
 
   // Fetch user notification preferences
   const { data: preferencesData } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
@@ -257,6 +260,49 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     setNotificationToDelete(null);
   };
 
+  const deleteAllNotifications = async () => {
+    try {
+      console.log('🗑️ Deleting all notifications');
+      
+      // Update local state immediately for better UX
+      setNotifications([]);
+
+      // Call backend mutation
+      const result = await deleteAllNotificationsMutation();
+      
+      console.log('🔍 Delete all notifications result:', result);
+      
+      if (result.data?.deleteAllNotifications?.success) {
+        console.log('✅ All notifications deleted successfully from server');
+      } else {
+        const errorMessage = result.data?.deleteAllNotifications?.message || 'Failed to delete all notifications';
+        console.error('❌ Delete all notifications failed:', errorMessage);
+        throw new Error(errorMessage);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting all notifications:', error);
+      
+      // Revert local state on error - refetch notifications
+      await refreshNotifications();
+      
+      // Extract meaningful error message
+      let errorMessage = 'Failed to delete all notifications. Please try again.';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        const apolloError = error as any;
+        if (apolloError.graphQLErrors && apolloError.graphQLErrors.length > 0) {
+          errorMessage = apolloError.graphQLErrors[0].message;
+        } else if (apolloError.networkError) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        }
+      }
+      
+      console.error('Failed to delete all notifications:', errorMessage);
+      alert(errorMessage);
+    }
+  };
+
   const refreshNotifications = async () => {
     console.log('🔔 Manual refresh triggered');
     console.log('🔔 Current auth state:', { user, isAuthenticated });
@@ -282,6 +328,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     markAllAsRead,
     addNotification,
     removeNotification,
+    deleteAllNotifications,
     refreshNotifications,
     isLoading,
     error

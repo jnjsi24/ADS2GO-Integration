@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Pencil, FileUp } from "lucide-react";
 import { useUserAuth } from "../../contexts/UserAuthContext";
 import { gql, useMutation } from "@apollo/client";
+import { uploadUserProfilePicture } from "../../utils/fileUpload";
 
 // GraphQL Mutation (update user)
 const UPDATE_USER = gql`
@@ -20,6 +21,7 @@ const UPDATE_USER = gql`
         contactNumber
         email
         houseAddress
+        profilePicture
       }
     }
   }
@@ -95,7 +97,7 @@ const Account: React.FC = () => {
   setIsEditing(false);
 };
 
-const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
   if (e.target.files && e.target.files[0]) {
     const file = e.target.files[0];
     const allowedExtensions = ["jpg", "jpeg", "png"];
@@ -106,13 +108,14 @@ const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const updatedProfile = reader.result as string;
-      setFormData(prev => ({ ...prev, profilePicture: updatedProfile }));
-      // ❌ Remove setUser from here
-    };
-    reader.readAsDataURL(file);
+    try {
+      // Upload the file to Firebase Storage
+      const uploadedUrl = await uploadUserProfilePicture(file);
+      setFormData(prev => ({ ...prev, profilePicture: uploadedUrl }));
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      alert('Error uploading profile picture. Please try again.');
+    }
   }
 };
 
