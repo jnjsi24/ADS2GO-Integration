@@ -57,6 +57,13 @@ const typeDefs = gql`
     announcementsEmails: Boolean!
   }
 
+  type QueuedEmailStats {
+    pending: Int!
+    sent: Int!
+    failed: Int!
+    cancelled: Int!
+  }
+
   type PasswordStrength {
     score: Float!
     strong: Boolean!
@@ -214,6 +221,7 @@ const typeDefs = gql`
     getUserAnalytics(startDate: String, endDate: String, period: String): UserAnalytics
     getUserAdDetails(adId: String!): UserAdDetails
     getUserNotificationPreferences: UserNotificationPreferences!
+    getQueuedEmailStats: QueuedEmailStats!
   }
 
   # Mutations

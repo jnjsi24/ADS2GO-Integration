@@ -79,7 +79,12 @@ class EmailService {
 
   // Get transporter instance
   static getTransporter() {
-    return this.initializeTransporter();
+    if (!this.transporter && !this.initializeTransporter()) {
+      console.error('❌ EmailService: Failed to initialize transporter');
+      console.error('❌ EmailService: Check EMAIL_USER and EMAIL_PASSWORD environment variables');
+      return null;
+    }
+    return this.transporter;
   }
 
   // Generate 6-digit verification code

@@ -62,6 +62,22 @@ const resolvers = {
       }
     },
 
+    getQueuedEmailStats: async (_, __, { user }) => {
+      try {
+        console.log('📧 getQueuedEmailStats called for user:', user?.id);
+        checkAuth(user);
+        
+        const EnhancedEmailNotificationService = require('../services/notifications/EnhancedEmailNotificationService');
+        const stats = await EnhancedEmailNotificationService.getQueuedEmailStats(user.id);
+        
+        console.log('📧 Queued email stats:', stats);
+        return stats;
+      } catch (error) {
+        console.error('❌ Error in getQueuedEmailStats:', error);
+        throw error;
+      }
+    },
+
         getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
           checkAuth(user);
           try {
@@ -546,6 +562,9 @@ const resolvers = {
           };
         }
 
+        // Store previous announcements emails setting
+        const wasAnnouncementsEmailsEnabled = userRecord.notificationPreferences.announcementsEmails;
+
         // Update only the provided fields
         Object.keys(input).forEach(key => {
           if (input[key] !== undefined && input[key] !== null) {
@@ -556,6 +575,19 @@ const resolvers = {
 
         await userRecord.save();
         console.log('✅ Notification preferences saved successfully');
+
+        // If announcements emails were just enabled, process any queued emails
+        if (!wasAnnouncementsEmailsEnabled && input.announcementsEmails === true) {
+          console.log('📧 Announcements emails enabled, processing queued emails...');
+          try {
+            const EnhancedEmailNotificationService = require('../services/notifications/EnhancedEmailNotificationService');
+            const queueResult = await EnhancedEmailNotificationService.processQueuedEmails(user.id);
+            console.log('📧 Queued emails processed:', queueResult);
+          } catch (queueError) {
+            console.error('❌ Error processing queued emails:', queueError);
+            // Don't throw error - notification preferences were still saved successfully
+          }
+        }
 
         return {
           success: true,

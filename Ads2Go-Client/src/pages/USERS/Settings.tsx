@@ -5,6 +5,7 @@ import { NewsletterService } from '../../services/newsletterService';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/queries/getUserNotificationPreferences';
 import { UPDATE_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/mutations/updateUserNotificationPreferences';
+import { GET_QUEUED_EMAIL_STATS } from '../../graphql/user/queries/getQueuedEmailStats';
 
 // Toast notification type
 type Toast = {
@@ -33,6 +34,14 @@ const Settings: React.FC = () => {
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // State for queued email stats
+  const [queuedEmailStats, setQueuedEmailStats] = useState({
+    pending: 0,
+    sent: 0,
+    failed: 0,
+    cancelled: 0
+  });
+
   // GraphQL hooks
   const { data: notificationPreferencesData, loading: notificationPreferencesLoading, refetch: refetchNotifications } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
     onCompleted: (data) => {
@@ -57,6 +66,8 @@ const Settings: React.FC = () => {
       console.log('Mutation completed:', data);
       if (data?.updateUserNotificationPreferences?.success) {
         addToast('Notification preferences saved successfully!', 'success');
+        // Refetch queued email stats to show updated information
+        refetchQueuedStats();
       } else {
         addToast('Failed to save notification preferences', 'error');
       }
@@ -66,6 +77,18 @@ const Settings: React.FC = () => {
       console.error('GraphQL errors:', error.graphQLErrors);
       console.error('Network error:', error.networkError);
       addToast(`Failed to save notification preferences: ${error.message}`, 'error');
+    }
+  });
+
+  // Query for queued email stats
+  const { data: queuedStatsData, loading: queuedStatsLoading, refetch: refetchQueuedStats } = useQuery(GET_QUEUED_EMAIL_STATS, {
+    onCompleted: (data) => {
+      if (data?.getQueuedEmailStats) {
+        setQueuedEmailStats(data.getQueuedEmailStats);
+      }
+    },
+    onError: (error) => {
+      console.error('Error fetching queued email stats:', error);
     }
   });
 
@@ -272,6 +295,21 @@ const Settings: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-semibold">Announcements & Updates</h3>
                   <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
+                  {!notificationForm.announcementsEmails && queuedEmailStats.pending > 0 && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-xs text-yellow-700">
+                        📧 You have {queuedEmailStats.pending} email{queuedEmailStats.pending !== 1 ? 's' : ''} waiting to be sent. 
+                        Turn on Announcements & Updates to receive them.
+                      </p>
+                    </div>
+                  )}
+                  {notificationForm.announcementsEmails && queuedEmailStats.pending > 0 && (
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                      <p className="text-xs text-green-700">
+                        ✅ Your queued emails are being processed and sent.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <button
                   type="button"

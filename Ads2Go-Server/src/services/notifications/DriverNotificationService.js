@@ -1,5 +1,6 @@
 const BaseNotificationService = require('./BaseNotificationService');
 const EmailService = require('../../utils/emailService');
+const EnhancedEmailNotificationService = require('./EnhancedEmailNotificationService');
 
 class DriverNotificationService extends BaseNotificationService {
   /**
