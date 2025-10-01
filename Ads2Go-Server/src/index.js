@@ -215,6 +215,16 @@ async function startServer() {
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Server is healthy and accessible',
+    timestamp: new Date().toISOString(),
+    status: 'OK'
+  });
+});
+
 // Routes
 app.use('/tablet', tabletRoutes);
 app.use('/screenTracking', screenTrackingRoutes);
