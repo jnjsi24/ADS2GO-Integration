@@ -5,7 +5,14 @@ const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config();
+
+// Load environment-specific configuration
+const env = process.env.NODE_ENV || 'development';
+const envFile = env === 'production' ? '.env.production' : '.env.development';
+require('dotenv').config({ path: envFile });
+
+console.log(`🔧 Environment: ${env}`);
+console.log(`📁 Loading config from: ${envFile}`);
 
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');

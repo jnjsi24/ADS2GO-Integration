@@ -3,7 +3,7 @@ builder = "NIXPACKS"
 buildCommand = "echo 'no build step'"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "npm run start:prod"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
@@ -13,7 +13,8 @@ healthcheckInterval = 30
 [env]
 PORT = "5000"
 NODE_ENV = "production"
-ALLOWED_ORIGINS = "https://ads2go-client-production.up.railway.app"
+CLIENT_URL = "https://ads2go-client-production.up.railway.app"
+ALLOWED_ORIGINS = "https://ads2go-client-production.up.railway.app,https://ads2go-integration-production.up.railway.app"
 RAILWAY_STATIC_URL = "https://ads2go-integration-production.up.railway.app"
 RAILWAY_ENVIRONMENT = "production"
 RAILWAY_PROJECT_ID = "ads2go-integration"

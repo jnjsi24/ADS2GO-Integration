@@ -13,3 +13,8 @@ restartPolicyMaxRetries = 10
 NODE_OPTIONS = "--max-old-space-size=4096"
 GENERATE_SOURCEMAP = "false"
 INLINE_RUNTIME_CHUNK = "false"
+NODE_ENV = "production"
+REACT_APP_API_URL = "https://ads2go-integration-production.up.railway.app"
+REACT_APP_GRAPHQL_URL = "https://ads2go-integration-production.up.railway.app/graphql"
+REACT_APP_SERVER_URL = "https://ads2go-integration-production.up.railway.app"
+REACT_APP_CLIENT_URL = "https://ads2go-client-production.up.railway.app"
