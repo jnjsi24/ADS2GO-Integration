@@ -44,7 +44,12 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Contact number is required'],
     trim: true,
-    match: [/^(09\d{9}|\+639\d{9})$/, 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)']
+    match: [/^(09\d{9}|\+639\d{9})$/, 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)']
+  },
+  profilePicture: {
+    type: String,
+    default: null,
+    trim: true
   },
   email: {
     type: String,
@@ -56,8 +61,21 @@ const UserSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: function() {
+      return this.authProvider !== 'google';
+    },
     minlength: [8, 'Password must be at least 8 characters long']
+  },
+  authProvider: {
+    type: String,
+    enum: ['local', 'google'],
+    default: 'local'
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Allows null values but ensures uniqueness when present
+    trim: true
   },
   role: {
     type: String,

@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
-import { Plan, getMaterialTypeOptions, getMaxDevices, calculatePlanPricing } from './utils';
+import React, { useState, useEffect } from "react";
+import { X, ChevronDown } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Plan,
+  getMaterialTypeOptions,
+  getMaxDevices,
+  calculatePlanPricing,
+} from "./utils";
 
 interface PlanFormData {
   planName: string;
@@ -13,9 +19,9 @@ interface PlanFormData {
   adLengthSeconds: number;
   playsPerDayPerDevice: number;
   pricePerPlayOverride: string | number;
-  deviceCostOverride: string | number;
-  durationCostOverride: string | number;
-  adLengthCostOverride: string | number;
+  startType: "immediate" | "scheduled";
+  scheduledStartDate: string;
+  scheduledEndDate: string;
 }
 
 interface CreateEditPlanModalProps {
@@ -23,8 +29,8 @@ interface CreateEditPlanModalProps {
   onClose: () => void;
   onSubmit: (formData: PlanFormData) => void;
   editingPlan: Plan | null;
-  errorMsg: string;
-  isLoading: boolean;
+  errorMsg?: string;
+  isLoading?: boolean;
 }
 
 const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
@@ -36,19 +42,19 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
   isLoading,
 }) => {
   const [formData, setFormData] = useState<PlanFormData>({
-    planName: '',
-    planDescription: '',
+    planName: "",
+    planDescription: "",
     durationDays: 30,
-    category: '',
-    materialType: '',
-    vehicleType: '',
+    category: "",
+    materialType: "",
+    vehicleType: "",
     numberOfDevices: 1,
     adLengthSeconds: 20,
     playsPerDayPerDevice: 160,
-    pricePerPlayOverride: '',
-    deviceCostOverride: '',
-    durationCostOverride: '',
-    adLengthCostOverride: '',
+    pricePerPlayOverride: "",
+    startType: "immediate",
+    scheduledStartDate: "",
+    scheduledEndDate: "",
   });
 
   const [calculatedPricing, setCalculatedPricing] = useState({
@@ -56,6 +62,11 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
     dailyRevenue: 0,
     totalPrice: 0,
   });
+
+  // Dropdown states
+  const [showCategory, setShowCategory] = useState(false);
+  const [showMaterial, setShowMaterial] = useState(false);
+  const [showVehicle, setShowVehicle] = useState(false);
 
   // Initialize form data when editing
   useEffect(() => {
@@ -70,56 +81,37 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
         numberOfDevices: editingPlan.numberOfDevices,
         adLengthSeconds: editingPlan.adLengthSeconds,
         playsPerDayPerDevice: editingPlan.playsPerDayPerDevice,
-        pricePerPlayOverride: '',
-        deviceCostOverride: '',
-        durationCostOverride: '',
-        adLengthCostOverride: '',
-      });
-    } else {
-      setFormData({
-        planName: '',
-        planDescription: '',
-        durationDays: 30,
-        category: '',
-        materialType: '',
-        vehicleType: '',
-        numberOfDevices: 1,
-        adLengthSeconds: 20,
-        playsPerDayPerDevice: 160,
-        pricePerPlayOverride: '',
-        deviceCostOverride: '',
-        durationCostOverride: '',
-        adLengthCostOverride: '',
+        pricePerPlayOverride: "",
+        startType: "immediate",
+        scheduledStartDate: "",
+        scheduledEndDate: "",
       });
     }
   }, [editingPlan]);
 
-  // Auto-determine category based on material type
+  // Auto-set category based on material type
   useEffect(() => {
-    if (formData.materialType === 'LCD') {
-      setFormData((prev: PlanFormData) => ({ ...prev, category: 'DIGITAL' }));
-    } else if (formData.materialType === 'HEADDRESS') {
-      setFormData((prev: PlanFormData) => ({ ...prev, category: 'DIGITAL' }));
+    if (formData.materialType === "LCD" || formData.materialType === "HEADDRESS") {
+      setFormData((prev) => ({ ...prev, category: "DIGITAL" }));
     }
   }, [formData.materialType]);
 
-  // Calculate pricing when form data changes
+  // Recalculate pricing on form changes
   useEffect(() => {
     const pricing = calculatePlanPricing(
       formData.numberOfDevices,
       formData.playsPerDayPerDevice,
       formData.adLengthSeconds,
       formData.durationDays,
-      typeof formData.pricePerPlayOverride === 'number' ? formData.pricePerPlayOverride : undefined,
-      typeof formData.deviceCostOverride === 'number' ? formData.deviceCostOverride : undefined,
-      typeof formData.durationCostOverride === 'number' ? formData.durationCostOverride : undefined,
-      typeof formData.adLengthCostOverride === 'number' ? formData.adLengthCostOverride : undefined
+      typeof formData.pricePerPlayOverride === "number"
+        ? formData.pricePerPlayOverride
+        : undefined
     );
     setCalculatedPricing(pricing);
   }, [formData]);
 
   const handleInputChange = (field: keyof PlanFormData, value: string | number) => {
-    setFormData((prev: PlanFormData) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -132,278 +124,478 @@ const CreateEditPlanModal: React.FC<CreateEditPlanModalProps> = ({
 
   if (!isOpen) return null;
 
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="p-6 border-b">
+    <div
+    onClick={handleBackdropClick} // ✅ New: detect backdrop clicks
+    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+  >
+    <div className="bg-white rounded-md w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="p-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold text-gray-900">
-              {editingPlan ? 'Edit Plan' : 'Create New Plan'}
+              {editingPlan ? "Edit Plan" : "Create New Plan"}
             </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Error Message */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {/* Error message */}
           {errorMsg && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-md flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full" />
               {errorMsg}
             </div>
           )}
 
+          {/* === Basic Details === */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Plan Name */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plan Name *
-              </label>
+            <div className="relative md:col-span-2">
               <input
+                id="planName"
                 type="text"
+                required
                 value={formData.planName}
-                onChange={(e) => handleInputChange('planName', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter plan name"
-                required
+                placeholder="Plan Name"
+                onChange={(e) => handleInputChange("planName", e.target.value)}
+                className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                           focus:outline-none focus:border-blue-500 placeholder-transparent transition"
               />
+              <label
+                htmlFor="planName"
+                className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
+              >
+                Plan Name
+              </label>
             </div>
 
-            {/* Plan Description */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plan Description *
-              </label>
+            {/* Description */}
+            <div className="relative md:col-span-2">
               <textarea
+                id="planDescription"
+                required
                 value={formData.planDescription}
-                onChange={(e) => handleInputChange('planDescription', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter plan description"
+                placeholder="Plan Description"
+                onChange={(e) =>
+                  handleInputChange("planDescription", e.target.value)
+                }
                 rows={3}
-                required
+                className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                           focus:outline-none focus:border-blue-500 placeholder-transparent transition"
               />
-            </div>
-
-            {/* Category */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category *
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => handleInputChange('category', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
+              <label
+                htmlFor="planDescription"
+                className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
               >
-                <option value="">Select category</option>
-                <option value="DIGITAL">Digital</option>
-                <option value="NON-DIGITAL">Non-Digital</option>
-              </select>
+                Plan Description
+              </label>
             </div>
 
-            {/* Material Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Material Type *
-              </label>
-              <select
-                value={formData.materialType}
-                onChange={(e) => handleInputChange('materialType', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
+            {/* Category Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowCategory(!showCategory)}
+                className="flex items-center justify-between w-full text-sm text-gray-900
+                           rounded-md pl-4 pr-3 py-3 shadow-md bg-white focus:outline-none gap-2"
+              >
+                {formData.category || "Select category"}
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${showCategory ? "rotate-180" : ""}`}
+                />
+              </button>
+              <AnimatePresence>
+                {showCategory && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                  >
+                    {["DIGITAL", "NON-DIGITAL"].map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          handleInputChange("category", cat);
+                          setShowCategory(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Material Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
                 disabled={!formData.category}
+                onClick={() => setShowMaterial(!showMaterial)}
+                className={`flex items-center justify-between w-full text-sm rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none gap-2 ${
+                  formData.category ? "bg-white text-gray-900" : "bg-gray-100 text-gray-400"
+                }`}
               >
-                <option value="">Select material type</option>
-                {materialOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                {formData.materialType || "Select material type"}
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${showMaterial ? "rotate-180" : ""}`}
+                />
+              </button>
+              <AnimatePresence>
+                {showMaterial && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                  >
+                    {materialOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          handleInputChange("materialType", opt.value);
+                          setShowMaterial(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            {/* Vehicle Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Vehicle Type *
-              </label>
-              <select
-                value={formData.vehicleType}
-                onChange={(e) => handleInputChange('vehicleType', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
+            {/* Vehicle Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowVehicle(!showVehicle)}
+                className="flex items-center justify-between w-full text-sm text-gray-900 rounded-md pl-4 pr-3 py-3 shadow-md bg-white focus:outline-none gap-2"
               >
-                <option value="">Select vehicle type</option>
-                <option value="CAR">Car</option>
-                <option value="MOTORCYCLE">Motorcycle</option>
-              </select>
+                {formData.vehicleType || "Select vehicle type"}
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${showVehicle ? "rotate-180" : ""}`}
+                />
+              </button>
+              <AnimatePresence>
+                {showVehicle && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                  >
+                    {["CAR", "MOTORCYCLE"].map((veh) => (
+                      <button
+                        key={veh}
+                        type="button"
+                        onClick={() => {
+                          handleInputChange("vehicleType", veh);
+                          setShowVehicle(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        {veh}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Number of Devices */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Number of Devices *
-              </label>
+            <div className="relative">
               <input
                 type="number"
                 min="1"
                 max={maxDevices}
                 value={formData.numberOfDevices}
-                onChange={(e) => handleInputChange('numberOfDevices', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Number of Devices"
+                onChange={(e) =>
+                  handleInputChange("numberOfDevices", parseInt(e.target.value))
+                }
+                className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                           focus:outline-none focus:border-blue-500 placeholder-transparent transition"
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Maximum: {maxDevices} devices for {formData.vehicleType} with {formData.materialType}
-              </p>
+              <label
+                className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
+              >
+                Number of Devices 
+              </label>
+              <p className="text-xs text-gray-500 mt-1">Maximum: {maxDevices} devices</p>
             </div>
 
             {/* Duration Days */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Duration (Days) *
-              </label>
+            <div className="relative">
               <input
                 type="number"
                 min="1"
                 value={formData.durationDays}
-                onChange={(e) => handleInputChange('durationDays', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Duration Days"
+                onChange={(e) =>
+                  handleInputChange("durationDays", parseInt(e.target.value))
+                }
+                className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                           focus:outline-none focus:border-blue-500 placeholder-transparent transition"
                 required
               />
+              <label
+                className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
+              >
+                Duration (Days) 
+              </label>
             </div>
 
-            {/* Ad Length Seconds */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Ad Length (Seconds) *
-              </label>
+            {/* Ad Length */}
+            <div className="relative">
               <input
                 type="number"
                 min="1"
                 value={formData.adLengthSeconds}
-                onChange={(e) => handleInputChange('adLengthSeconds', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Ad Length Seconds"
+                onChange={(e) =>
+                  handleInputChange("adLengthSeconds", parseInt(e.target.value))
+                }
+                className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                           focus:outline-none focus:border-blue-500 placeholder-transparent transition"
                 required
               />
+              <label
+                className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                  peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
+              >
+                Ad Length (Seconds) 
+              </label>
             </div>
+          </div>
+
+          {/* Price & Plays Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Price Per Play with floating label */}
+            
 
             {/* Plays Per Day Per Device */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plays Per Day Per Device *
+                Device Plays/Day (Auto Calculated)
               </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.playsPerDayPerDevice}
-                onChange={(e) => handleInputChange('playsPerDayPerDevice', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+              <div className="w-full px-4 py-3 border border-gray-200 rounded-md bg-gray-50 text-gray-600">
+                {formData.adLengthSeconds > 0
+                  ? Math.floor((8 * 60 * 60) / formData.adLengthSeconds)
+                  : "Enter ad length to calculate"}{" "}
+                plays per day
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Calculated based on 8 hours screen time ÷ ad length
+              </p>
             </div>
           </div>
 
-          {/* Pricing Overrides */}
+
+          {/* Scheduling Options */}
           <div className="mt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Pricing Overrides (Optional)</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Plan Scheduling</h3>
+            <div className="space-y-4">
+              {/* Start Type Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  When should this plan start?
+                </label>
+                <div className="space-y-3">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="startType"
+                      value="immediate"
+                      checked={formData.startType === 'immediate'}
+                      onChange={(e) => handleInputChange('startType', e.target.value)}
+                      className="mr-3 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Start Immediately</div>
+                      <div className="text-sm text-gray-500">Plan will be active right after creation</div>
+                    </div>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="startType"
+                      value="scheduled"
+                      checked={formData.startType === 'scheduled'}
+                      onChange={(e) => handleInputChange('startType', e.target.value)}
+                      className="mr-3 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">Schedule for Later</div>
+                      <div className="text-sm text-gray-500">Set specific start and end dates</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Scheduled Dates */}
+              {formData.startType === 'scheduled' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-100 rounded-md">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Start Date 
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledStartDate}
+                      onChange={(e) => handleInputChange('scheduledStartDate', e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required={formData.startType === 'scheduled'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      End Date 
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledEndDate}
+                      onChange={(e) => handleInputChange('scheduledEndDate', e.target.value)}
+                      min={formData.scheduledStartDate || new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required={formData.startType === 'scheduled'}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-blue-600">
+                      💡 Scheduled plans will be PENDING until the start date, then automatically become RUNNING.
+                      They will automatically become ENDED after the end date.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Required Pricing */}
+          <div className="mt-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Pricing <span className="text-sm text-blue-500">Required</span></h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price Per Play Override
-                </label>
+              <div className="relative w-full">
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
+                  min="0.01"
                   value={formData.pricePerPlayOverride}
-                  onChange={(e) => handleInputChange('pricePerPlayOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 0.50"
+                  placeholder="Price Per Play" // Needed for peer animation
+                  onChange={(e) =>
+                    handleInputChange(
+                      "pricePerPlayOverride",
+                      e.target.value ? parseFloat(e.target.value) : ""
+                    )
+                  }
+                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b border-gray-300
+                            focus:outline-none focus:border-blue-500 placeholder-transparent transition"
+                  required
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Device Cost Override
+                <label
+                  className="absolute left-0 -top-2 text-sm text-gray-500 transition-all
+                    peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400
+                    peer-focus:-top-2 peer-focus:text-sm peer-focus:text-blue-600 peer-focus:font-semibold"
+                >
+                  Price Per Play
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.deviceCostOverride}
-                  onChange={(e) => handleInputChange('deviceCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Duration Cost Override
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.durationCostOverride}
-                  onChange={(e) => handleInputChange('durationCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 10"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ad Length Cost Override
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.adLengthCostOverride}
-                  onChange={(e) => handleInputChange('adLengthCostOverride', e.target.value ? parseFloat(e.target.value) : '')}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Default: 0.10"
-                />
+
+                <p className="text-xs text-gray-500 mt-1">
+                  This is the base price per ad play. Total price will be calculated based on this.
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Calculated Pricing */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+
+          {/* Calculated Pricing Display */}
+          <div className="mt-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Calculated Pricing</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-sm text-gray-600">Total Plays Per Day</p>
-                <p className="text-xl font-semibold text-gray-900">{calculatedPricing.totalPlaysPerDay}</p>
+            <div className="bg-gray-50 rounded-md p-4 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Plays Per Day Per Device:</span>
+                <span className="font-medium">
+                  {formData.adLengthSeconds > 0 ? 
+                    Math.floor((8 * 60 * 60) / formData.adLengthSeconds) : 
+                    'Enter ad length to calculate'
+                  } plays
+                </span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Daily Revenue</p>
-                <p className="text-xl font-semibold text-green-600">₱{calculatedPricing.dailyRevenue.toFixed(2)}</p>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Plays Per Day:</span>
+                <span className="font-medium">
+                  {formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 ? 
+                    Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices : 
+                    'Enter details to calculate'
+                  } plays
+                </span>
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Price</p>
-                <p className="text-xl font-semibold text-blue-600">₱{calculatedPricing.totalPrice.toFixed(2)}</p>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Daily Revenue:</span>
+                <span className="font-medium">
+                  {formData.pricePerPlayOverride && formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 ? 
+                    `₱${(Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices * formData.pricePerPlayOverride).toLocaleString()}` : 
+                    'Enter details to calculate'
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600">Total Price:</span>
+                <span className="font-medium text-lg text-blue-600">
+                  {formData.pricePerPlayOverride && formData.adLengthSeconds > 0 && formData.numberOfDevices > 0 && formData.durationDays > 0 ? 
+                    `₱${(Math.floor((8 * 60 * 60) / formData.adLengthSeconds) * formData.numberOfDevices * formData.pricePerPlayOverride * formData.durationDays).toLocaleString()}` : 
+                    'Enter details to calculate'
+                  }
+                </span>
               </div>
             </div>
           </div>
+
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-4 mt-8">
+          <div className="flex justify-between pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium"
+              className="px-5 py-1 rounded-lg hover:bg-gray-100 text-gray-700 text-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="px-6 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-[#3674B5] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Saving...' : editingPlan ? 'Update Plan' : 'Create Plan'}
             </button>

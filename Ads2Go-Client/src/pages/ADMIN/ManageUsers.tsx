@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import AdminLayout from '../../components/AdminLayout';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
 import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
+import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmationModal from '../../components/ConfirmationModal';
+import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 
 interface User {
   id: string;
@@ -17,8 +21,7 @@ interface User {
   email: string;
   status: 'active' | 'inactive';
   city: string;
-  adsCount: number;
-  ridersCount: number;
+  ads: { id: string }[];
   isEmailVerified: boolean;
   lastLogin: Date | null;
   createdAt: Date;
@@ -133,8 +136,15 @@ const ManageUsers: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
+  const cityFilterOptions = ['All Cities', ...cities];
+
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [selectedCityFilter, setSelectedCityFilter] = useState('All Cities');
+
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false); // New state for animation
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -142,7 +152,13 @@ const ManageUsers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
-
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10); // Show 10 advertisers per page
+ 
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
     fetchPolicy: 'network-only',
@@ -178,8 +194,7 @@ const ManageUsers: React.FC = () => {
           email: user.email || '',
           status: user.isEmailVerified ? 'active' : 'inactive',
           city: city,
-          adsCount: 0,
-          ridersCount: 0,
+          ads: user.ads || [],
           isEmailVerified: user.isEmailVerified || false,
           lastLogin,
           createdAt,
@@ -204,8 +219,8 @@ const ManageUsers: React.FC = () => {
   useEffect(() => {
     if (usersError) {
       const errorMessage = usersError.message || 'Unknown error';
-      setError('Failed to fetch users: ' + errorMessage);
-      console.error('Error fetching users:', usersError);
+      setError('Failed to fetch advertisers: ' + errorMessage);
+      console.error('Error fetching advertisers:', usersError);
       setLoading(false);
     }
   }, [usersError]);
@@ -215,30 +230,55 @@ const ManageUsers: React.FC = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+  const handleDelete = (id: string) => {
+    setUserToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (userToDelete) {
       try {
         const result = await deleteUser({
-          variables: { id },
+          variables: { id: userToDelete },
         });
         
         if (result.data?.deleteUser?.success) {
           // Remove the user from the local state
-          setUsers(prev => prev.filter((user) => user.id !== id));
-          if (selectedUser?.id === id) setSelectedUser(null);
+          setUsers(prev => prev.filter((user) => user.id !== userToDelete));
+          if (selectedUser?.id === userToDelete) setSelectedUser(null);
 
           // Remove from selected users if it was selected
-          setSelectedUsers(prev => prev.filter(userId => userId !== id));
-          alert('User deleted successfully');
+          setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
+          alert('Advertiser deleted successfully');
         } else {
-          alert('Failed to delete user: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
         }
+        setShowDeleteModal(false);
+        setUserToDelete(null);
       } catch (err: any) {
-        alert('Error deleting user: ' + (err.message || 'Unknown error'));
-        console.error('Error deleting user:', err);
+        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        console.error('Error deleting advertiser:', err);
+        setShowDeleteModal(false);
+        setUserToDelete(null);
       }
     }
   };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setUserToDelete(null);
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+  setSelectedStatusFilter(status);
+  setShowStatusDropdown(false);
+};
+
+const handleCityFilterChange = (city: string) => {
+  setSelectedCityFilter(city);
+  setShowCityDropdown(false);
+};
+
 
   // Filter users based on search term, status, and city
   const filteredUsers = users.filter((user) => {
@@ -250,11 +290,22 @@ const ManageUsers: React.FC = () => {
       user.company.toLowerCase().includes(searchLower) ||
       user.contact.toLowerCase().includes(searchLower);
     
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-    const matchesCity = !selectedCity || user.city.toLowerCase().includes(selectedCity.toLowerCase());
+    const matchesStatus = selectedStatusFilter === 'All Status' || user.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+    const matchesCity = selectedCityFilter === 'All Cities' || user.city.toLowerCase().includes(selectedCityFilter.toLowerCase());
     
     return matchesSearch && matchesStatus && matchesCity;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatusFilter, selectedCityFilter]);
 
   // View details in modal
   const handleViewDetails = (user: User) => {
@@ -285,17 +336,112 @@ const ManageUsers: React.FC = () => {
     );
   };
 
-  // Handle select all users
-  const handleSelectAll = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedUsers.length === filteredUsers.length) {
-      setSelectedUsers([]);
-    } else {
-      setSelectedUsers(filteredUsers.map(user => user.id));
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
     }
   };
 
-  const isAllSelected = selectedUsers.length === filteredUsers.length && filteredUsers.length > 0;
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Handle select all users (only for current page)
+  const handleSelectAll = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const currentPageUserIds = paginatedUsers.map(user => user.id);
+    const allCurrentPageSelected = currentPageUserIds.every(id => selectedUsers.includes(id));
+    
+    if (allCurrentPageSelected) {
+      // Deselect all users on current page
+      setSelectedUsers(prev => prev.filter(id => !currentPageUserIds.includes(id)));
+    } else {
+      // Select all users on current page
+      setSelectedUsers(prev => {
+        const newSelection = [...prev];
+        currentPageUserIds.forEach(id => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id);
+          }
+        });
+        return newSelection;
+      });
+    }
+  };
+
+  const isAllSelected = paginatedUsers.length > 0 && paginatedUsers.every(user => selectedUsers.includes(user.id));
+
+  // Export to Excel function
+  const exportToExcel = () => {
+    try {
+      // Get the users to export (selected users or all users if none selected)
+      const usersToExport = selectedUsers.length > 0 
+        ? users.filter(user => selectedUsers.includes(user.id))
+        : filteredUsers;
+
+      // Prepare data for Excel
+      const excelData = usersToExport.map(user => ({
+        'First Name': user.firstName,
+        'Middle Name': user.middleName,
+        'Last Name': user.lastName,
+        'Email': user.email,
+        'Company': user.company,
+        'Contact': user.contact,
+        'Address': user.address,
+        'City': user.city,
+        'Status': user.status.charAt(0).toUpperCase() + user.status.slice(1),
+        'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
+        'Last Login': user.lastLogin ? formatLastAccess(user.lastLogin) : 'Never',
+        'Created At': user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
+        'Role': user.role
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 15 }, // First Name
+        { wch: 15 }, // Middle Name
+        { wch: 15 }, // Last Name
+        { wch: 25 }, // Email
+        { wch: 20 }, // Company
+        { wch: 15 }, // Contact
+        { wch: 30 }, // Address
+        { wch: 15 }, // City
+        { wch: 10 }, // Status
+        { wch: 12 }, // Email Verified
+        { wch: 15 }, // Last Login
+        { wch: 12 }, // Created At
+        { wch: 10 }  // Role
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Advertisers');
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `advertisers_export_${timestamp}.xlsx`;
+
+      // Save file
+      XLSX.writeFile(wb, filename);
+
+      // Show success message
+      alert(`Successfully exported ${usersToExport.length} advertiser(s) to ${filename}`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Error exporting to Excel. Please try again.');
+    }
+  };
 
   // Show loading state while authentication is being checked
   if (authLoading || !isInitialized) {
@@ -321,7 +467,7 @@ const ManageUsers: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
-        <div className="text-lg">Loading users...</div>
+        <div className="text-lg">Loading advertisers...</div>
       </div>
     );
   }
@@ -350,76 +496,94 @@ const ManageUsers: React.FC = () => {
 
   return (
     <AdminLayout>
-      <div className="min-h-screen bg-gray-100 pr-5 p-10">
+      <div className="min-h-screen bg-gray-100 pr-5 p-10 flex flex-col">
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Users Management</h1>
-        <div className="flex gap-4">
+        <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
+        <div className="flex gap-2">
           <input
             type="text"
-            className="text-xs text-black rounded-xl pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-            placeholder="Search by name..."
+            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+            placeholder="Search advertisers by name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <div className="flex space-x-2">
-            {/* Status Filter with SVG */}
-            <div className="relative w-40">
-              <select
-                className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-              <svg
-                className="w-4 h-4 text-gray-500"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          {/* City Filter with SVG */}
-            <div className="relative w-40">
-              <select
-              className="appearance-none w-full text-xs text-black rounded-xl pl-5 pr-10 py-3 shadow-md focus:outline-none bg-white"
-                value={selectedCity || ''}
-                onChange={(e) => setSelectedCity(e.target.value || null)}
-              >
-                <option value="">Filter by City</option>
-                {cities.map(city => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <svg
-                  className="w-4 h-4 text-gray-500"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  viewBox="0 0 24 24"
-                  >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+          {/* STATUS Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedStatusFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showStatusDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                >
+                  {statusFilterOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusFilterChange(status)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-            
+          {/* CITY Filter */}
+          <div className="relative w-32">
+            <button
+              onClick={() => setShowCityDropdown(!showCityDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+              {selectedCityFilter}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showCityDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                >
+                  {cityFilterOptions.map((city) => (
+                    <button
+                      key={city}
+                      onClick={() => handleCityFilterChange(city)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {city}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
+      </div>
+      
 
         {/* User List */}
-        <div className="rounded-xl mb-4 overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <div className="rounded-xl mb-4 overflow-hidden flex-1">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
             <div className="flex items-center gap-2 ml-1 col-span-3">
@@ -444,7 +608,7 @@ const ManageUsers: React.FC = () => {
           </div>
 
           {/* User Cards */}
-          {filteredUsers.map((user) => (
+          {paginatedUsers.map((user) => (
             <div
               key={user.id}
               className="bg-white mb-3 rounded-lg shadow-md"
@@ -495,21 +659,27 @@ const ManageUsers: React.FC = () => {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
-                    className="text-red-500 text-md hover:text-red-700"
+                    className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                     onClick={() => handleDelete(user.id)}
-                    title="Delete User"
+                    title="Delete"
                   >
-                    <Trash size={16} />
+                    <Trash 
+                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                      size={16} />
+                    <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                      Delete
+                    </span>
                   </button>
                 </div>
               </div>
             </div>
           ))}
-          {filteredUsers.length === 0 && (
+          {paginatedUsers.length === 0 && (
             <div className="p-4 text-center text-gray-500">
-              {users.length === 0 ? 'No users found' : 'No users match your search criteria'}
+              {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
             </div>
           )}
+          </div>
         </div>
 
         {/* Details Modal */}
@@ -545,16 +715,14 @@ const ManageUsers: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Counts Section (Ads/Riders) */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-gray-100 p-4 rounded-lg text-center">
-                    <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
-                    <p className="text-3xl font-bold text-gray-800">{selectedUser.adsCount}</p>
-                  </div>
-                  <div className="bg-gray-100 p-4 rounded-lg text-center">
-                    <p className="text-sm font-semibold text-gray-600">Riders Count:</p>
-                    <p className="text-3xl font-bold text-gray-800">{selectedUser.ridersCount}</p>
-                  </div>
+                {/* Counts Section (Ads/Drivers) */}
+                <div className="mb-6">
+                  <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
+                    <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
+                      <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
+                      <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
+                    </div>
+                  </Link>
                 </div>
 
                 {/* Account Details - Now a table */}
@@ -639,35 +807,121 @@ const ManageUsers: React.FC = () => {
                     )}
                   </div>
                 </div>
-
-
-                {/* Button group */}
-                <div className="flex gap-3 justify-end mt-10">
-                  <button 
-                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50" 
-                    onClick={handleCloseModal}
-                  >
-                    Close
-                  </button>
-                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Footer with user count */}
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-sm text-gray-600">Found: {filteredUsers.length} user(s) - Selected: {selectedUsers.length}</span>
-          <div className="flex space-x-2">
+        {/* Footer with pagination controls - Fixed at bottom */}
+        <div className="mt-auto">
+          {/* Action buttons */}
+          <div className="flex space-x-2 mb-4">
             <button 
+              onClick={exportToExcel}
               className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={selectedUsers.length === 0}
+              disabled={filteredUsers.length === 0}
             >
-              Export {selectedUsers.length > 0 ? `${selectedUsers.length} Selected Users` : 'to Excel'}
+              Export {selectedUsers.length > 0 ? `${selectedUsers.length} Selected Advertisers` : 'All Advertisers to Excel'}
             </button>
           </div>
+
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} advertisers
+              </span>
+              <span className="text-sm text-gray-600">Selected: {selectedUsers.length}</span>
+            </div>
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center space-x-4">
+              {/* Page size selector */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Pagination buttons */}
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers - show only a few pages around current page */}
+                  <div className="flex space-x-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-1 text-sm border rounded ${
+                              currentPage === i
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+                      return pages;
+                    })()}
+                  </div>
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>      
+      </div>
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete User"
+        message="Are you sure you want to delete this user? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
     </AdminLayout>
   );
 };

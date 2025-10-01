@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Popup, Polyline, CircleMarker, Marker } from 'react-leaflet';
+import { Popup, Polyline, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.webpack.css';
 import { LatLngTuple, Map, Icon } from 'leaflet';
@@ -23,8 +23,10 @@ import { useQuery } from '@apollo/client';
 import { GET_ALL_SCREENS } from '../../graphql/admin/queries/screenTracking';
 import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
 
+
 interface ScreenStatus {
   deviceId: string;
+  displayId?: string; // Unique display identifier (e.g., "DGL-HEADDRESS-CAR-001-SLOT-1")
   materialId: string;
   screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
   carGroupId?: string;
@@ -40,6 +42,7 @@ interface ScreenStatus {
     address: string;
   };
   lastSeen: string;
+<<<<<<< HEAD
   lastSeenDisplay?: string;
   lastSeenLocation?: {
     lat: number;
@@ -52,12 +55,16 @@ interface ScreenStatus {
   };
   currentHours: number;
   hoursRemaining: number;
+=======
+  currentHours?: number;
+  hoursRemaining?: number;
+>>>>>>> jairhon_cleanup-directory
   isCompliant: boolean;
-  totalDistanceToday: number;
-  averageDailyHours: number;
-  complianceRate: number;
-  totalHoursOnline: number;
-  totalDistanceTraveled: number;
+  totalDistanceToday?: number;
+  averageDailyHours?: number;
+  complianceRate?: number;
+  totalHoursOnline?: number;
+  totalDistanceTraveled?: number;
   displayStatus: 'ACTIVE' | 'OFFLINE' | 'MAINTENANCE' | 'DISPLAY_OFF';
   screenMetrics?: {
     displayHours: number;
@@ -75,7 +82,15 @@ interface ScreenStatus {
     isResolved: boolean;
     severity: string;
   }>;
+<<<<<<< HEAD
   alertCount?: number;
+=======
+  // Additional fields for material-level screens (used in map)
+  totalDevices?: number;
+  onlineDevices?: number;
+  totalHours?: number;
+  totalDistance?: number;
+>>>>>>> jairhon_cleanup-directory
 }
 
 interface ComplianceReport {
@@ -123,6 +138,7 @@ interface Material {
 
 const ScreenTracking: React.FC = () => {
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
+  const [materialScreens, setMaterialScreens] = useState<ScreenStatus[]>([]);
   const [complianceReport, setComplianceReport] = useState<ComplianceReport | null>(null);
   const [selectedScreen, setSelectedScreen] = useState<ScreenStatus | null>(null);
   const [pathData, setPathData] = useState<PathData | null>(null);
@@ -262,6 +278,7 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
+<<<<<<< HEAD
 
       // Get authentication token
       const adminToken = localStorage.getItem('adminToken');
@@ -270,6 +287,13 @@ const ScreenTracking: React.FC = () => {
 
       const materialsResponse = await fetch('https://ads2go-integration-production.up.railway.app/graphql', {
         method: 'POST',
+=======
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const materialsUrl = `${baseUrl}/material`;
+      console.log('Fetching materials from:', materialsUrl);
+      
+      const response = await fetch(materialsUrl, {
+>>>>>>> jairhon_cleanup-directory
         headers: {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -316,10 +340,55 @@ const ScreenTracking: React.FC = () => {
 
   // Legacy functions - replaced by GraphQL polling
   const fetchData = useCallback(async () => {
+<<<<<<< HEAD
     console.log('fetchData called - using GraphQL polling instead');
   }, []);
+=======
+    try {
+      setRefreshing(true);
+      setConnectionStatus('connecting');
+      
+      // Fetch compliance report (no auth required for this endpoint)
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
+      console.log('Making request to:', apiUrl);
+      
+      const complianceResponse = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Compliance response status:', complianceResponse.status);
+      
+      if (complianceResponse.ok) {
+        const complianceData = await complianceResponse.json();
+        console.log('Compliance data received:', complianceData);
+        console.log('Screens in response:', complianceData.data?.screens);
+        console.log('Number of screens:', complianceData.data?.screens?.length || 0);
+        
+        setComplianceReport(complianceData.data);
+        setScreens(complianceData.data?.screens || []); // Individual device records for screen list
+        
+        // Set material screens for map display with validation
+        if (complianceData.data?.materialScreens && Array.isArray(complianceData.data.materialScreens)) {
+          // Filter out any undefined or invalid entries
+          const validMaterialScreens = complianceData.data.materialScreens.filter((screen: any) => 
+            screen && 
+            typeof screen === 'object' && 
+            screen.deviceId && 
+            screen.materialId
+          );
+          setMaterialScreens(validMaterialScreens);
+        } else {
+          setMaterialScreens([]);
+        }
+        
+        setConnectionStatus('connected');
+>>>>>>> jairhon_cleanup-directory
 
   const fetchPathData = useCallback(async (deviceId: string) => {
+<<<<<<< HEAD
     console.log('fetchPathData called - using GraphQL polling instead');
   }, []);
 
@@ -327,6 +396,12 @@ const ScreenTracking: React.FC = () => {
   useEffect(() => {
     if (screensData?.getAllScreens?.screens) {
       const screensFromGraphQL = screensData.getAllScreens.screens || [];
+=======
+    try {
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const pathApiUrl = `${baseUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
+      console.log('Making path request to:', pathApiUrl);
+>>>>>>> jairhon_cleanup-directory
       
       // Enhance with WebSocket real-time status
       const enhancedScreens = screensFromGraphQL.map((screen: any) => {
@@ -376,7 +451,43 @@ const ScreenTracking: React.FC = () => {
         }
       });
       
+<<<<<<< HEAD
       setScreens(enhancedScreens);
+=======
+      console.log('Path data response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Path data received:', data);
+        
+        // Validate path data structure before setting
+        if (data.data && Array.isArray(data.data.locationHistory)) {
+          // Filter out invalid location points
+          const validLocationHistory = data.data.locationHistory.filter((point: any) => 
+            point && 
+            typeof point.lat === 'number' && 
+            typeof point.lng === 'number' && 
+            !isNaN(point.lat) && 
+            !isNaN(point.lng) &&
+            isValidCoordinate(point.lat, point.lng)
+          );
+          
+          setPathData({
+            ...data.data,
+            locationHistory: validLocationHistory,
+            totalPoints: validLocationHistory.length
+          });
+        } else {
+          console.warn('Invalid path data structure received:', data);
+          setPathData(null);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Path data API Error:', errorData);
+      }
+    } catch (error) {
+      console.error('Error fetching path data:', error);
+>>>>>>> jairhon_cleanup-directory
     }
   }, [screensData, wsDevices]);
 
@@ -395,8 +506,14 @@ const ScreenTracking: React.FC = () => {
       filtered = screens;
       console.log('🔍 Showing all screens:', filtered.length);
     } else {
+<<<<<<< HEAD
       filtered = screens.filter(screen => screen.materialId === selectedMaterial);
       console.log(`🔍 Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
+=======
+      const filtered = screens.filter((screen: ScreenStatus) => screen.materialId === selectedMaterial);
+      console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
+      setFilteredScreens(filtered);
+>>>>>>> jairhon_cleanup-directory
     }
     
     // Debug coordinate validation for filtered screens
@@ -442,17 +559,25 @@ const ScreenTracking: React.FC = () => {
     return <AlertTriangle className="w-4 h-4" />;
   };
 
-  const formatTime = (hours: number) => {
+  const formatTime = (hours: number | undefined | null) => {
+    if (hours === undefined || hours === null || isNaN(hours)) {
+      return '0h 0m';
+    }
     const wholeHours = Math.floor(hours);
     const minutes = Math.round((hours - wholeHours) * 60);
     return `${wholeHours}h ${minutes}m`;
   };
 
-  const formatDistance = (distance: number) => {
+  const formatDistance = (distance: number | undefined | null) => {
+    if (distance === undefined || distance === null || isNaN(distance)) {
+      return '0.00 km';
+    }
     return `${distance.toFixed(2)} km`;
   };
 
+
   const getMarkerColor = (screen: ScreenStatus) => {
+<<<<<<< HEAD
     if (!screen.isOnline) {
       return '#ef4444'; // Red for offline devices
     }
@@ -460,13 +585,22 @@ const ScreenTracking: React.FC = () => {
       return '#22c55e'; // Green for online and compliant
     }
     return '#eab308'; // Yellow for online but not compliant
+=======
+    if (!screen || typeof screen !== 'object') return '#6b7280'; // gray for invalid data
+    if (!screen.isOnline) return '#ef4444'; // red
+    if (screen.isCompliant) return '#22c55e'; // green
+    return '#eab308'; // yellow
+>>>>>>> jairhon_cleanup-directory
   };
 
   const createPinIcon = (color: string) => {
+    // Validate color input
+    const validColor = color && typeof color === 'string' ? color : '#6b7280';
+    
     return new Icon({
       iconUrl: `data:image/svg+xml;base64,${btoa(`
         <svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 20 12 20s12-12.5 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 7.5 12 20 12 20s12-12.5 12-20c0-6.627-5.373-12-12-12z" fill="${validColor}" stroke="#ffffff" stroke-width="2"/>
           <circle cx="12" cy="12" r="6" fill="#ffffff"/>
         </svg>
       `)}`,
@@ -495,8 +629,13 @@ const ScreenTracking: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div>
+<<<<<<< HEAD
               <h1 className="text-2xl font-bold text-gray-900">Screen Tracking Dashboard</h1>
                 <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance - Updates every 5 seconds</p>
+=======
+              <h1 className="text-2xl font-bold text-gray-900">Device Tracking Dashboard</h1>
+              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
+>>>>>>> jairhon_cleanup-directory
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -684,11 +823,19 @@ const ScreenTracking: React.FC = () => {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Avg Hours</p>
                   <p className="text-2xl font-bold text-gray-900">
+<<<<<<< HEAD
                     {filteredScreens && filteredScreens.length > 0 
                       ? (filteredScreens.reduce((sum, s) => sum + s.currentHours, 0) / filteredScreens.length).toFixed(1)
                       : '0.0'
                     }h
                   </p>
+=======
+                   {filteredScreens && filteredScreens.length > 0 
+                     ? (filteredScreens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / filteredScreens.length).toFixed(1)
+                     : '0.0'
+                   }h
+                 </p>
+>>>>>>> jairhon_cleanup-directory
                 </div>
               </div>
             </div>
@@ -716,6 +863,7 @@ const ScreenTracking: React.FC = () => {
                     }
                   }}
                 >
+<<<<<<< HEAD
                   {/* Screen markers - show markers for screens with valid location data (current or last seen) */}
                   {filteredScreens?.filter(screen => {
                     if (!screen) {
@@ -796,19 +944,127 @@ const ScreenTracking: React.FC = () => {
                       </Marker>
                     );
                   })}
+=======
+                  
+                  {/* Individual device markers - show one marker per device */}
+                  {(() => {
+                    try {
+                      if (!filteredScreens || !Array.isArray(filteredScreens)) {
+                        console.warn('filteredScreens is not a valid array:', filteredScreens);
+                        return null;
+                      }
+                      
+                      const validScreens = filteredScreens.filter(screen => {
+                        if (!screen || typeof screen !== 'object') {
+                          console.warn('Invalid screen object:', screen);
+                          return false;
+                        }
+                        if (!screen.currentLocation) {
+                          console.warn('Screen missing currentLocation:', screen.deviceId);
+                          return false;
+                        }
+                        if (screen.currentLocation.lat === undefined || screen.currentLocation.lng === undefined) {
+                          console.warn('Screen missing coordinates:', screen.deviceId, screen.currentLocation);
+                          return false;
+                        }
+                        if (!isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)) {
+                          console.warn('Screen has invalid coordinates:', screen.deviceId, screen.currentLocation);
+                          return false;
+                        }
+                        return true;
+                      });
+                      
+                      console.log(`Rendering ${validScreens.length} valid markers out of ${filteredScreens.length} total screens`);
+                      
+                      return validScreens.map((screen) => {
+                        try {
+                          return (
+                            <Marker
+                              key={screen.deviceId}
+                              position={[screen.currentLocation!.lat, screen.currentLocation!.lng] as LatLngTuple}
+                              icon={createPinIcon(getMarkerColor(screen))}
+                              eventHandlers={{
+                                click: () => handleScreenSelect(screen),
+                              }}
+                            >
+                              <Popup maxWidth={300} maxHeight={400}>
+                                <div className="p-3 space-y-3 max-w-xs">
+                                  {/* Header */}
+                                  <div className="border-b pb-2">
+                                    <h3 className="text-base font-semibold text-gray-900">Screen Details</h3>
+                                  </div>
+
+                                  {/* Device Info */}
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 text-sm">Device Info</h4>
+                                    <div className="mt-1 space-y-1 text-xs text-gray-600">
+                                      <p>Device ID: {screen.deviceId}</p>
+                                      <p>Material: {screen.materialId}</p>
+                                      <p>Screen Type: {screen.screenType}</p>
+                                      {screen.carGroupId && <p>Car Group: {screen.carGroupId}</p>}
+                                      {screen.slotNumber && <p>Slot: {screen.slotNumber}</p>}
+                                    </div>
+                                  </div>
+
+                                  {/* Today's Progress */}
+                                  <div>
+                                    <h4 className="font-medium text-gray-900 text-sm">Today's Progress</h4>
+                                    <div className="mt-1 space-y-1">
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Hours Online:</span>
+                                        <span className="font-medium text-xs">{formatTime(screen.currentHours)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Hours Remaining:</span>
+                                        <span className="font-medium text-xs">{formatTime(screen.hoursRemaining)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Distance Traveled:</span>
+                                        <span className="font-medium text-xs">{formatDistance(screen.totalDistanceToday)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-gray-600">Compliance Rate:</span>
+                                        <span className="font-medium text-xs">{screen.complianceRate}%</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </Popup>
+                            </Marker>
+                          );
+                        } catch (error) {
+                          console.error('Error rendering marker for screen:', screen.deviceId, error);
+                          return null;
+                        }
+                      });
+                    } catch (error) {
+                      console.error('Error processing filtered screens for map:', error);
+                      return null;
+                    }
+                  })()}
+>>>>>>> jairhon_cleanup-directory
                   
                   {/* Path for selected tablet */}
-                  {pathData && pathData.locationHistory?.length > 1 && (
-                    <Polyline
-                      positions={pathData.locationHistory.map(point => [point.lat, point.lng] as LatLngTuple)}
-                      color="#3b82f6"
-                      weight={3}
-                      opacity={0.7}
-                    />
-                  )}
+                  {pathData && pathData.locationHistory?.length > 1 && (() => {
+                    const validPositions = pathData.locationHistory
+                      .filter(point => point && typeof point.lat === 'number' && typeof point.lng === 'number' && 
+                             !isNaN(point.lat) && !isNaN(point.lng) &&
+                             isValidCoordinate(point.lat, point.lng))
+                      .map(point => [point.lat, point.lng] as LatLngTuple);
+                    
+                    return validPositions.length > 1 ? (
+                      <Polyline
+                        positions={validPositions}
+                        color="#3b82f6"
+                        weight={3}
+                        opacity={0.7}
+                      />
+                    ) : null;
+                  })()}
                 </MapView>
                 
                 {/* Show message when no tablets have valid location data */}
+<<<<<<< HEAD
                 {filteredScreens && filteredScreens.filter(screen => {
                   if (!screen) return false;
                   
@@ -826,6 +1082,13 @@ const ScreenTracking: React.FC = () => {
                   
                   return false;
                 }).length === 0 && (
+=======
+                {filteredScreens && filteredScreens.filter((screen: ScreenStatus) => 
+                  screen && 
+                  screen.currentLocation && 
+                  isValidCoordinate(screen.currentLocation.lat, screen.currentLocation.lng)
+                ).length === 0 && (
+>>>>>>> jairhon_cleanup-directory
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
                     <div className="text-center p-6">
                       <div className="text-gray-500 mb-2">
@@ -847,6 +1110,58 @@ const ScreenTracking: React.FC = () => {
               </div>
             </div>
           </div>
+<<<<<<< HEAD
+=======
+                       {/* Screen List */}
+             <div className="lg:col-span-1">
+               <div className="bg-white rounded-lg shadow">
+                 <div className="p-4 border-b">
+                   <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
+                   <p className="text-sm text-gray-600">Click to view details</p>
+                 </div>
+                 <div className="max-h-96 overflow-y-auto">
+                   {filteredScreens?.map((screen) => (
+                     <div
+                       key={screen.deviceId}
+                       onClick={() => handleScreenSelect(screen)}
+                       className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
+                         selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
+                       }`}
+                     >
+                       <div className="flex items-center justify-between mb-2">
+                         <div className="flex items-center space-x-2">
+                           <Car className="w-4 h-4 text-gray-500" />
+                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
+                         </div>
+                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
+                           {getStatusIcon(screen.isOnline, screen.isCompliant)}
+                           <span className="text-xs">
+                             {screen.displayStatus}
+                           </span>
+                         </div>
+                       </div>
+                       
+                       <div className="space-y-1 text-sm text-gray-600">
+                         <div className="flex justify-between">
+                           <span>Hours Today:</span>
+                           <span className="font-medium">{formatTime(screen.currentHours)}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span>Remaining:</span>
+                           <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span>Distance:</span>
+                           <span className="font-medium">{formatDistance(screen.totalDistanceToday)}</span>
+                         </div>
+                         <div className="flex justify-between">
+                           <span>Last Seen:</span>
+                           <span className="font-medium">
+                             {screen.lastSeen ? new Date(screen.lastSeen).toLocaleTimeString() : 'Unknown'}
+                           </span>
+                         </div>
+                       </div>
+>>>>>>> jairhon_cleanup-directory
 
           {/* Screen List */}
           <div className="lg:col-span-1">
@@ -967,6 +1282,7 @@ const ScreenTracking: React.FC = () => {
                     </div>
                   </div>
 
+<<<<<<< HEAD
                   <div>
                     <h4 className="font-medium text-gray-900">Today's Progress</h4>
                     <div className="mt-2 space-y-2">
@@ -988,6 +1304,20 @@ const ScreenTracking: React.FC = () => {
                       </div>
                     </div>
                   </div>
+=======
+
+                     {selectedScreen.currentLocation && (
+                       <div>
+                         <h4 className="font-medium text-gray-900">Current Location</h4>
+                         <div className="mt-2 space-y-1 text-sm text-gray-600">
+                           <p>Address: {selectedScreen.currentLocation.address}</p>
+                           <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
+                           <p>Heading: {selectedScreen.currentLocation.heading}°</p>
+                           <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
+                         </div>
+                       </div>
+                     )}
+>>>>>>> jairhon_cleanup-directory
 
                   {(selectedScreen.currentLocation || selectedScreen.lastSeenLocation) && (
                     <div>

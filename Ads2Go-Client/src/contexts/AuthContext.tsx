@@ -52,8 +52,7 @@ interface AuthContextType {
   isInitialized: boolean;
   navigate: (path: string) => void;
   debugToken: (token: string) => User | null;
-  navigateToRegister: () => void;
-}
+  navigateToRegister: () => void;}
 
 // Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,8 +76,8 @@ export const AuthProvider: React.FC<{
   const [fetchAdminDetails] = useLazyQuery(GET_OWN_ADMIN_DETAILS);
   const [fetchSuperAdminDetails] = useLazyQuery(GET_OWN_SUPERADMIN_DETAILS);
 
-  // ✅ Added /superadmin-login to publicPages
-  const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
+  // ✅ Added /sadmin-login to publicPages
+  const publicPages = ['/login', '/register', '/forgot-password', '/sadmin-login'];
 
   const navigateToRegister = useCallback(() => {
     navigate('/register');
@@ -180,7 +179,7 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-          if (window.location.pathname === '/superadmin-login') {
+          if (window.location.pathname === '/sadmin-login') {
             return;
           }
 
@@ -303,12 +302,21 @@ export const AuthProvider: React.FC<{
 
       // If we reach here, try regular user login as fallback
       try {
-        const { data: userData } = await loginUserMutation({
+        const result = await loginUserMutation({
           variables: { email, password, deviceInfo },
         });
 
-        if (userData?.login?.token && userData?.login?.user) {
-          const { token, user: userRaw } = userData.login;
+        // Check for GraphQL errors first
+        if (result.errors && result.errors.length > 0) {
+          const errorMessage = result.errors[0].message;
+          if (errorMessage.includes('Account is temporarily locked')) {
+            throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+          }
+          throw new Error(errorMessage);
+        }
+
+        if (result.data?.login?.token && result.data?.login?.user) {
+          const { token, user: userRaw } = result.data.login;
           localStorage.setItem('token', token);
 
           const user: User = {
@@ -349,6 +357,12 @@ export const AuthProvider: React.FC<{
       throw new Error('Login failed');
     } catch (error: any) {
       console.error('Login error:', error.message || error);
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('Account is temporarily locked')) {
+        throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+      }
+      
       // Let the Login component handle error display instead of using alert()
       return null;
     }

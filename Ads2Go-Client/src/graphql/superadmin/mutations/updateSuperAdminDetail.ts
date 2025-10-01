@@ -1,11 +1,11 @@
 import { gql } from "@apollo/client";
 
 export const UPDATE_SUPER_ADMIN_DETAIL = gql`
-  mutation UpdateSuperAdminDetail($adminId: ID!, $input: UpdateAdminDetailsInput!) {
-    updateAdminDetails(adminId: $adminId, input: $input) {
+  mutation UpdateSuperAdminDetail($superAdminId: ID!, $input: UpdateSuperAdminInput!) {
+    updateSuperAdmin(superAdminId: $superAdminId, input: $input) {
       success
       message
-      user {
+      superAdmin {
         id
         firstName
         middleName
@@ -14,6 +14,7 @@ export const UPDATE_SUPER_ADMIN_DETAIL = gql`
         contactNumber
         companyName
         companyAddress
+        profilePicture
       }
     }
   }

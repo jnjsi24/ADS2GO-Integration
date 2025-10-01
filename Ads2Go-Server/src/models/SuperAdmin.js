@@ -49,6 +49,10 @@ const SuperAdminSchema = new mongoose.Schema({
     trim: true,
     match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email']
   },
+  profilePicture: {
+    type: String,
+    default: null
+  },
   password: {
     type: String,
     required: [true, 'Password is required'],
@@ -147,8 +151,24 @@ const SuperAdminSchema = new mongoose.Schema({
   }
 });
 
-// Pre-save hook to update updatedAt
+// Pre-save hook to normalize contact number
 SuperAdminSchema.pre('save', function(next) {
+  if (this.contactNumber) {
+    // Remove all non-digit characters except +
+    let normalized = this.contactNumber.replace(/[^\d+]/g, '');
+    
+    // If it starts with 9 and has 10 digits, add 0 prefix
+    if (/^9\d{9}$/.test(normalized)) {
+      normalized = '0' + normalized;
+    }
+    // If it starts with 639 and has 12 digits, add + prefix
+    else if (/^639\d{9}$/.test(normalized)) {
+      normalized = '+' + normalized;
+    }
+    
+    this.contactNumber = normalized;
+  }
+  
   this.updatedAt = Date.now();
   next();
 });

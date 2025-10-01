@@ -1,78 +1,53 @@
 const AdsPlan = require('../models/AdsPlan');
+const Material = require('../models/Material');
+const MaterialAvailability = require('../models/MaterialAvailability');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
 
-// Helper function to get pricePerPlay rules
-const getPricePerPlay = (vehicleType, materialType, override = null) => {
-  if (override !== null) return override; // allow SUPERADMIN override
-
-  if (vehicleType === 'CAR') {
-    if (materialType === 'LCD') return 3;
-    if (materialType === 'HEADDRESS') return 2;
+// Helper function to get pricePerPlay - super admin must provide this
+const getPricePerPlay = (pricePerPlay) => {
+  if (pricePerPlay === null || pricePerPlay === undefined) {
+    throw new Error('pricePerPlay is required - super admin must set the price per play');
   }
-  if (vehicleType === 'MOTORCYCLE') {
-    if (materialType === 'LCD') return 1;
+  if (pricePerPlay <= 0) {
+    throw new Error('pricePerPlay must be greater than 0');
   }
-  return 1; // default fallback
+  return pricePerPlay;
 };
 
-// Helper function to calculate pricing
+// Helper function to calculate plays per day based on screen hours and ad slots
+const calculatePlaysPerDay = (adLengthSeconds, screenHoursPerDay = 8, adSlotsPerDevice = 5) => {
+  // Convert screen hours to seconds
+  const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
+  
+  // Calculate how many times each ad slot can play in a day
+  // Each slot plays DIFFERENT ads, so we calculate per slot, not total
+  const playsPerSlotPerDay = Math.floor(screenSecondsPerDay / adLengthSeconds);
+  
+  // Each ad gets played in ONE slot, so plays per device = plays per slot
+  // (not multiplied by number of slots since each slot has different ads)
+  const playsPerDevicePerDay = playsPerSlotPerDay;
+  
+  console.log(`📊 Play Calculation: ${screenHoursPerDay}h screen ÷ ${adLengthSeconds}s ads = ${playsPerDevicePerDay} plays/ad/day (each of ${adSlotsPerDevice} slots plays different ads)`);
+  
+  return playsPerDevicePerDay;
+};
+
+// Helper function to calculate pricing (simplified - no overrides needed)
 const calculatePricing = (
   numberOfDevices,
   adLengthSeconds,
   durationDays,
-  playsPerDayPerDevice = 160,
-  pricePerPlay,
-  vehicleType,
-  materialType,
-  deviceCostOverride = null,
-  durationCostOverride = null,
-  adLengthCostOverride = null
+  playsPerDayPerDevice = null, // Will be calculated if not provided
+  pricePerPlay // Now mandatory
 ) => {
-  const totalPlaysPerDay = playsPerDayPerDevice * numberOfDevices;
+  // Calculate plays per day if not provided
+  const calculatedPlaysPerDay = playsPerDayPerDevice || calculatePlaysPerDay(adLengthSeconds);
+  const totalPlaysPerDay = calculatedPlaysPerDay * numberOfDevices;
   const dailyRevenue = totalPlaysPerDay * pricePerPlay;
 
-  // --- Device Cost Rules (with override support) ---
-  let deviceUnitCost = 0;
-  if (deviceCostOverride !== null) {
-    deviceUnitCost = deviceCostOverride;
-  } else {
-    if (vehicleType === 'CAR') {
-      if (materialType === 'LCD') deviceUnitCost = 4000;
-      else if (materialType === 'HEADDRESS') deviceUnitCost = 1000;
-    } else if (vehicleType === 'MOTORCYCLE') {
-      if (materialType === 'LCD') deviceUnitCost = 2000;
-    }
-  }
-  const deviceCost = numberOfDevices * deviceUnitCost;
-
-  // --- Ad Length Cost ---
-  let adLengthCost;
-  if (adLengthCostOverride !== null) {
-    adLengthCost = adLengthCostOverride;
-  } else {
-    adLengthCost = adLengthSeconds === 20 ? 500 :
-                   adLengthSeconds === 40 ? 5000 :
-                   adLengthSeconds === 60 ? 10000 : 0;
-  }
-
-  // --- Duration Cost Rules ---
-  const durationMonths = Math.ceil(durationDays / 30);
-  let durationCostPerMonth = 0;
-  if (durationCostOverride !== null) {
-    durationCostPerMonth = durationCostOverride;
-  } else {
-    if (vehicleType === 'CAR') {
-      if (materialType === 'LCD') durationCostPerMonth = 2000;
-      else if (materialType === 'HEADDRESS') durationCostPerMonth = 1500;
-    } else if (vehicleType === 'MOTORCYCLE') {
-      if (materialType === 'LCD') durationCostPerMonth = 1000;
-    }
-  }
-  const durationCost = durationMonths * durationCostPerMonth;
-
-  // --- Total Price ---
-  const totalForPlay = totalPlaysPerDay * pricePerPlay * durationDays;
-  const totalPrice = totalForPlay + deviceCost + durationCost + adLengthCost;
+  // --- Total Price (simplified) ---
+  const totalPrice = dailyRevenue * durationDays;
 
   return {
     totalPlaysPerDay,
@@ -80,6 +55,7 @@ const calculatePricing = (
     totalPrice
   };
 };
+
 
 module.exports = {
 
@@ -89,16 +65,18 @@ module.exports = {
         throw new Error('Unauthorized: Only SUPERADMIN can create ads plans');
       }
 
-      const playsPerDayPerDevice = input.playsPerDayPerDevice || 160;
       const vehicleType = input.vehicleType.toUpperCase();
       const materialType = input.materialType.toUpperCase();
 
-      // ✅ Get pricePerPlay automatically (with override)
-      const pricePerPlay = getPricePerPlay(
-        vehicleType,
-        materialType,
-        input.pricePerPlay ?? null
-      );
+      // ✅ Get pricePerPlay - super admin must provide this
+      if (!input.pricePerPlay) {
+        throw new Error('pricePerPlay is required - super admin must set the price per play for this plan');
+      }
+      const pricePerPlay = getPricePerPlay(input.pricePerPlay);
+
+      // Calculate plays per day based on screen hours and ad slots
+      const playsPerDayPerDevice = calculatePlaysPerDay(input.adLengthSeconds);
+      console.log(`🎯 Plan: ${input.name} - ${playsPerDayPerDevice} plays/device/day (${input.adLengthSeconds}s ads, 8h screen, 5 slots)`);
 
       // Calculate pricing
       const pricing = calculatePricing(
@@ -106,12 +84,7 @@ module.exports = {
         input.adLengthSeconds,
         input.durationDays,
         playsPerDayPerDevice,
-        pricePerPlay,
-        vehicleType,
-        materialType,
-        input.deviceCostOverride ?? null,
-        input.durationCostOverride ?? null,
-        input.adLengthCostOverride ?? null
+        pricePerPlay
       );
 
       const newPlan = new AdsPlan({
@@ -128,12 +101,45 @@ module.exports = {
         totalPlaysPerDay: pricing.totalPlaysPerDay,
         dailyRevenue: pricing.dailyRevenue,
         totalPrice: pricing.totalPrice,
-        status: 'PENDING',
-        startDate: null,
-        endDate: null,
+        status: input.status || 'PENDING',
+        startDate: input.startDate ? new Date(input.startDate) : null,
+        endDate: input.endDate ? new Date(input.endDate) : null,
       });
 
-      return await newPlan.save();
+      const savedPlan = await newPlan.save();
+
+      // Automatically assign compatible materials to the plan (sorted by slot availability)
+      try {
+        console.log(`🔗 Auto-assigning materials to plan: ${savedPlan.name}`);
+        
+        // Get materials sorted by slot availability (most available first)
+        const compatibleMaterials = await getMaterialsSortedByAvailability(
+          materialType,
+          vehicleType,
+          input.category
+        );
+        
+        console.log(`📋 Found ${compatibleMaterials.length} compatible materials for plan: ${savedPlan.name}`);
+        
+        if (compatibleMaterials.length > 0) {
+          // Take up to 3 materials, already sorted by availability
+          const materialsToAssign = compatibleMaterials.slice(0, 3);
+          savedPlan.materials = materialsToAssign.map(m => m._id);
+          await savedPlan.save();
+          
+          console.log(`✅ Assigned ${materialsToAssign.length} materials to plan: ${savedPlan.name}`);
+          console.log(`📦 Materials (sorted by availability): ${materialsToAssign.map(m => m.materialId).join(', ')}`);
+        } else {
+          console.log(`⚠️ No compatible materials found for plan: ${savedPlan.name}`);
+          console.log(`🔍 Looking for: ${materialType} ${vehicleType} ${input.category}`);
+        }
+      } catch (materialAssignmentError) {
+        console.error(`❌ Error auto-assigning materials to plan:`, materialAssignmentError);
+        // Don't throw error - material assignment is helpful but shouldn't break plan creation
+        console.log(`⚠️ Plan created but material assignment failed. Run fix script to assign materials.`);
+      }
+
+      return savedPlan;
     },
 
     updateAdsPlan: async (_, { id, input }, { user }) => {
@@ -149,16 +155,19 @@ module.exports = {
       const numberOfDevices = input.numberOfDevices ?? existingPlan.numberOfDevices;
       const adLengthSeconds = input.adLengthSeconds ?? existingPlan.adLengthSeconds;
       const durationDays = input.durationDays ?? existingPlan.durationDays;
-      const playsPerDayPerDevice = input.playsPerDayPerDevice ?? existingPlan.playsPerDayPerDevice;
       const vehicleType = (input.vehicleType || existingPlan.vehicleType).toUpperCase();
       const materialType = (input.materialType || existingPlan.materialType).toUpperCase();
 
-      // ✅ Recalculate pricePerPlay with new rule (unless overridden)
-      const pricePerPlay = getPricePerPlay(
-        vehicleType,
-        materialType,
-        input.pricePerPlay ?? existingPlan.pricePerPlay
-      );
+      // ✅ Get pricePerPlay - super admin must provide this
+      const newPricePerPlay = input.pricePerPlay ?? existingPlan.pricePerPlay;
+      if (!newPricePerPlay) {
+        throw new Error('pricePerPlay is required - super admin must set the price per play for this plan');
+      }
+      const pricePerPlay = getPricePerPlay(newPricePerPlay);
+
+      // Calculate plays per day based on screen hours and ad slots
+      const playsPerDayPerDevice = calculatePlaysPerDay(adLengthSeconds);
+      console.log(`🎯 Plan Update: ${existingPlan.name} - ${playsPerDayPerDevice} plays/device/day (${adLengthSeconds}s ads, 8h screen, 5 slots)`);
 
       // Recalculate pricing
       const pricing = calculatePricing(
@@ -166,12 +175,7 @@ module.exports = {
         adLengthSeconds,
         durationDays,
         playsPerDayPerDevice,
-        pricePerPlay,
-        vehicleType,
-        materialType,
-        input.deviceCostOverride ?? null,
-        input.durationCostOverride ?? null,
-        input.adLengthCostOverride ?? null
+        pricePerPlay
       );
 
       input.pricePerPlay = pricePerPlay;
@@ -272,6 +276,44 @@ module.exports = {
       }
     },
 
+    getSmartMaterialSelection: async (_, { materialType, vehicleType, category, timestamp, requestId }, { user }) => {
+      if (!user) {
+        throw new Error('Authentication required');
+      }
+      
+      console.log(`🧠 [getSmartMaterialSelection] Request for: ${materialType} ${vehicleType} ${category} (timestamp: ${timestamp}, requestId: ${requestId})`);
+      
+      try {
+        // Get materials sorted by smart selection logic
+        const sortedMaterials = await getMaterialsSortedByAvailability(materialType, vehicleType, category);
+        
+        // Return the first material (highest priority) with slot information
+        if (sortedMaterials.length > 0) {
+          const selectedMaterial = sortedMaterials[0];
+          const availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
+          
+          const result = {
+            id: selectedMaterial._id,
+            materialId: selectedMaterial.materialId,
+            materialType: selectedMaterial.materialType,
+            vehicleType: selectedMaterial.vehicleType,
+            category: selectedMaterial.category,
+            occupiedSlots: availability ? availability.occupiedSlots : 0,
+            availableSlots: availability ? availability.availableSlots : 5,
+            totalSlots: availability ? availability.totalSlots : 5,
+            priority: 1
+          };
+          
+          console.log(`🎯 [getSmartMaterialSelection] Returning: ${result.materialId} (${result.occupiedSlots}/${result.totalSlots} slots)`);
+          return result;
+        }
+        
+        return null;
+      } catch (error) {
+        throw new Error(`Error getting smart material selection: ${error.message}`);
+      }
+    },
+
     getAvailabilitySummary: async (_, __, { user }) => {
       if (!user || !['ADMIN', 'SUPERADMIN'].includes(user.role)) {
         throw new Error('Unauthorized: Admin access required');
@@ -286,3 +328,4 @@ module.exports = {
     },
   },
 };
+

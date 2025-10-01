@@ -8,20 +8,34 @@ import {
   PieChart,
   Pie,
   Cell,
+  BarChart,
+  Bar,
 } from 'recharts';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@apollo/client';
+import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 
 const Dashboard = () => {
-  const [selectedOption, setSelectedOption] = useState('Riders');
+  const [selectedOption, setSelectedOption] = useState('Drivers');
   // Explicitly type selectedPeriod to the union of its possible values
   const [selectedPeriod, setSelectedPeriod] = useState<'Monthly' | 'Weekly' | 'Daily'>('Monthly');
   // Changed initial state from 'All time' to 'Today'
   const [qrSelectedPeriod, setQrSelectedPeriod] = useState<'Weekly' | 'Daily' | 'Today'>('Today');
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'1d' | '7d' | '30d'>('7d');
   const [displayRevenue, setDisplayRevenue] = useState(0);
   const [displayExpenses, setDisplayExpenses] = useState(0);
   const [displayProfit, setDisplayProfit] = useState(0);
   const [displayPeriodLabel, setDisplayPeriodLabel] = useState('');
   const [userFirstName, setUserFirstName] = useState('User');
+
+  // Fetch analytics data
+  const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
+    variables: { period: analyticsPeriod },
+    pollInterval: 30000, // Refresh every 30 seconds
+    onError: (error) => {
+      console.error('Analytics fetch error:', error);
+    }
+  });
 
   // Get user's first name from localStorage on component mount
   useEffect(() => {
@@ -159,48 +173,6 @@ const Dashboard = () => {
 
   const colors = ['#0E2A47', '#1b5087', '#3674B5', '#E78B48', '#FFAB5B', '#D4C9BE', '#EFEEEA']; // Colors for the pie chart
 
-  const recentOrderData = [
-    {
-      orderId: '97174',
-      product: 'Apple MacBook Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/12/2023, 12:33',
-      status: 'Pending',
-      qty: 1,
-      totalPrice: 2092,
-      customer: 'Luca Rijal',
-    },
-    {
-      orderId: '97173',
-      product: 'iBox iPhone 14 Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/12/2023, 07:41',
-      status: 'Active',
-      qty: 1,
-      totalPrice: 1852,
-      customer: 'Lina Punk Oy Oy',
-    },
-    {
-      orderId: '97172',
-      product: 'Apple AirPods Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/10/2023, 23:01',
-      status: 'Rejected',
-      qty: 2,
-      totalPrice: 522,
-      customer: 'Cristiano Edgar',
-    },
-    {
-      orderId: '97171',
-      product: 'iBox iPhone 14 Pro',
-      image: 'https://via.placeholder.com/40',
-      orderTime: '01/10/2023, 21:42',
-      status: 'Rejected',
-      qty: 1,
-      totalPrice: 1852,
-      customer: 'Angkara Toldo',
-    },
-  ];
 
   const calculateFinancials = (period: 'Monthly' | 'Weekly' | 'Daily') => {
     let totalProfit = 0;
@@ -282,6 +254,29 @@ const Dashboard = () => {
     setQrSelectedPeriod(e.target.value as 'Weekly' | 'Daily' | 'Today'); // Removed 'All time' from type
   };
 
+  const handleAnalyticsPeriodChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const newPeriod = e.target.value as '1d' | '7d' | '30d';
+    setAnalyticsPeriod(newPeriod);
+    refetchAnalytics({ period: newPeriod });
+  };
+
+  // Get analytics summary data
+  const analyticsSummary = analyticsData?.getUserAnalytics?.summary || {
+    totalAdImpressions: 0,
+    totalAdsPlayed: 0,
+    totalDisplayTime: 0,
+    averageCompletionRate: 0,
+    totalAds: 0,
+    activeAds: 0
+  };
+
+  // Format display time
+  const formatDisplayTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+
 
   return (
     <div className="min-h-screen bg-white pl-72 pr-5 p-10">
@@ -296,18 +291,18 @@ const Dashboard = () => {
       {/* Metrics Section - Adjusted Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* Profit & Loss Overview - Now spans 2 columns */}
-        <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white">
+        <div className="bg-[#1b5087] p-6 rounded-lg shadow-lg col-span-2 text-white cursor-pointer hover:bg-[#0E2A47] transition-colors" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
-            <span className="text-lg font-semibold">Profit & Loss Overview</span>
-            <div className="relative">
+            <span className="text-lg font-semibold">Ad Performance Overview</span>
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
               <select
                 className="text-xs text-white bg-[#1b5087] rounded-md pl-5 pr-10 py-3 border border-white focus:outline-none appearance-none"
-                value={selectedPeriod}
-                onChange={handlePeriodChange}
+                value={analyticsPeriod}
+                onChange={handleAnalyticsPeriodChange}
               >
-                <option className="rounded-lg" value="Monthly">Monthly</option>
-                <option className="rounded-lg" value="Weekly">Weekly</option>
-                <option className="rounded-lg" value="Daily">Daily</option>
+                <option className="rounded-lg" value="1d">Daily</option>
+                <option className="rounded-lg" value="7d">Weekly</option>
+                <option className="rounded-lg" value="30d">Monthly</option>
               </select>
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -318,176 +313,257 @@ const Dashboard = () => {
           </div>
 
           <ResponsiveContainer width="100%" height={150}>
-            <AreaChart data={getChartData()} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
+            <AreaChart data={analyticsData?.getUserAnalytics?.dailyStats || []} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
               <XAxis
-                dataKey="day"
+                dataKey="date"
                 axisLine={false}
                 tickLine={false}
                 stroke="white"
                 tick={{ fontSize: 10 }}
                 interval="preserveStartEnd"
+                tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               />
               <Tooltip
                 contentStyle={{ backgroundColor: '#2D3748', border: 'none', borderRadius: '8px' }}
                 labelStyle={{ color: '#E2E8F0' }}
                 itemStyle={{ color: '#A8FF35' }}
+                labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                  formatter={(value, name) => [
+                    name === 'impressions' ? value.toLocaleString() : 
+                    name === 'adsPlayed' ? value.toLocaleString() : value,
+                    name === 'impressions' ? 'Impressions' :
+                    name === 'adsPlayed' ? 'Ads Played' : 'Display Time'
+                  ]}
               />
               <Area
                 type="monotone"
-                dataKey="profit"
+                dataKey="impressions"
                 stroke="#A8FF35"
                 fill="#2876c7"
                 fillOpacity={0.6}
-                name="Profit"
+                name="impressions"
               />
               <Area
                 type="monotone"
-                dataKey="loss"
-                stroke="#FF4D4D"
+                dataKey="adsPlayed"
+                stroke="#4FD1C7"
                 fill="#2876c7"
                 fillOpacity={0.6}
-                name="Loss"
+                name="adsPlayed"
               />
             </AreaChart>
           </ResponsiveContainer>
 
           <div className="grid grid-cols-3 gap-4 mt-4 text-center">
             <div className="bg-[#1b5087] p-3 rounded-lg">
-              <p className="text-2xl font-bold">${displayRevenue.toLocaleString()}</p>
-              <p className="text-sm text-gray-300">Total Revenue</p>
-              <p className="text-xs text-gray-400">{displayPeriodLabel}</p>
+              <p className="text-2xl font-bold">
+                {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-300">Total Ad Impressions</p>
+              <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
             </div>
-            <div className="bg-[#2876c7] p-3 rounded-lg">
-              <p className="text-2xl font-bold">${displayExpenses.toLocaleString()}</p>
-              <p className="text-sm text-gray-300">Total Expenses</p>
-              <p className="text-xs text-gray-400">{displayPeriodLabel}</p>
-            </div>
-            <div className="bg-[#1b5087] p-3 rounded-lg">
-              <p className="text-2xl font-bold">${displayProfit.toLocaleString()}</p>
-              <p className="text-sm text-gray-300">Net Profit</p>
-              <p className="text-xs text-gray-400">{displayPeriodLabel}</p>
-            </div>
+              <div className="bg-[#2876c7] p-3 rounded-lg">
+                <p className="text-2xl font-bold">
+                  {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
+                </p>
+                <p className="text-sm text-gray-300">Total Ad Plays</p>
+                <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+              </div>
+              <div className="bg-[#1b5087] p-3 rounded-lg">
+                <p className="text-2xl font-bold">
+                  {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
+                </p>
+                <p className="text-sm text-gray-300">Active Ads</p>
+                <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
+              </div>
           </div>
         </div>
 
-        {/* Total Advertisements */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
+        {/* Ad Impressions */}
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Total Advertisements</span>
-          </div>
-          <p className="text-5xl font-bold text-[#1b5087] pl-4">12,832</p>
-          <p className="text-sm pt-2 pl-4">
-            <span className="text-green-600">â†' +20.1%</span>
-            <span className="text-black"> +2,123 today</span>
-          </p>
-          <div className="mt-32"> {/* Adjusted margin for consistent height */}
-            <div className="pt-6 border-t border-gray-300 mb-2"></div>
-            <Link
-              to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
-            >
-              View Report <span>→</span>
-            </Link>
-          </div>
-        </div>
-
-        {/* Total Riders */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
-          <div className="flex justify-between items-center mt-8 pl-4">
-            <span className="text-gray-500 text-lg">Total Riders</span>
-          </div>
-          <p className="text-5xl font-bold text-[#1b5087] pl-4">1,062</p>
-          <p className="text-sm pt-2 pl-4">
-            <span className="text-red-600">â†" -4%</span>
-            <span className="text-black"> -426 today</span>
-          </p>
-          <div className="mt-32"> {/* Adjusted margin for consistent height */}
-            <div className="pt-6 border-t border-gray-300 mb-2"></div>
-            <Link
-              to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
-            >
-              View Report <span>→</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity and QR Impressions Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Order - Now spans 2 columns */}
-        <div className="bg-white p-4 rounded-lg shadow-lg lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold pt-3 text-gray-800">Recent Activity</h2>
-            <div className="relative pt-3"> {/* Wrap select and icon for relative positioning */}
+            <span className="text-gray-500 text-lg">Ad Impressions</span>
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
               <select
-              className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
-        >
-          <option value="This Week">This Week</option>
-          {/* Add other options if desired */}
-        </select>
-        {/* SVG icon positioned absolutely within the relative container */}
-        <div className="absolute right-3 top-1/2 pt-3 transform -translate-y-1/2 pointer-events-none">
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                className="text-xs text-gray-600 bg-white rounded-md pl-3 pr-8 py-1 border border-gray-200 focus:outline-none appearance-none"
+                value={analyticsPeriod}
+                onChange={handleAnalyticsPeriodChange}
+              >
+                <option value="1d">Last 24h</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
-      </div>
-    </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Ads ID</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Total Price</th>
-                  <th scope="col" className="pt-8 px-3 py-2 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {recentOrderData.map((order, index) => (
-                  <tr key={index}>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-900">{order.orderId}</td>
-                    <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900">{order.product}</td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">{order.orderTime}</td>
-                    <td className="px-3 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 text-center font-semibold rounded-full ${
-                          order.status === 'Pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : order.status === 'Active'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-red-100 text-red-800' // 'Rejected' status
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">x{order.qty}</td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-center text-gray-900">${order.totalPrice.toLocaleString()}</td>
-                    <td className="px-3 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <div className="flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        {order.customer}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            </div>
+          </div>
+          <p className="text-5xl font-bold text-[#1b5087] pl-4">
+            {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
+          </p>
+          <p className="text-sm pt-2 pl-4">
+            <span className="text-green-600">↑ Active</span>
+            <span className="text-black"> {analyticsSummary.activeAds} ads</span>
+          </p>
+          <div className="mt-32">
+            <div className="pt-6 border-t border-gray-300 mb-2"></div>
+            <Link
+              to="/advertisements"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+            >
+              View Analytics <span>→</span>
+            </Link>
           </div>
         </div>
 
-        {/* QR Impressions - Now spans 1 column */}
-        <div className="bg-white p-4 rounded-lg shadow-lg">
+        {/* Total Display Time */}
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
+          <div className="flex justify-between items-center mt-8 pl-4">
+            <span className="text-gray-500 text-lg">Display Time</span>
+          </div>
+          <p className="text-3xl font-bold text-[#1b5087] pl-4">
+            {analyticsLoading ? '...' : formatDisplayTime(analyticsSummary.totalDisplayTime)}
+          </p>
+          <p className="text-sm pt-2 pl-4">
+            <span className="text-blue-600">📺 Playing</span>
+            <span className="text-black"> {analyticsSummary.totalAdsPlayed} ads</span>
+          </p>
+          <div className="mt-32">
+            <div className="pt-6 border-t border-gray-300 mb-2"></div>
+            <Link
+              to="/advertisements"
+              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+            >
+              View Performance <span>→</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Analytics Section */}
+      {analyticsData?.getUserAnalytics && (
+        <div className="bg-white p-6 rounded-lg shadow-lg mb-6 cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Ad Performance Analytics</h2>
+            <div className="text-sm text-gray-500">
+              Last updated: {new Date().toLocaleTimeString()}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600">Completion Rate</p>
+                  <p className="text-2xl font-bold text-blue-700">
+                    {analyticsSummary.averageCompletionRate.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-blue-500">📊</div>
+              </div>
+            </div>
+            
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-green-600">Completion Rate</p>
+                  <p className="text-2xl font-bold text-green-700">
+                    {analyticsSummary.averageCompletionRate.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-green-500">📊</div>
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-purple-600">Total Ads</p>
+                  <p className="text-2xl font-bold text-purple-700">
+                    {analyticsSummary.totalAds}
+                  </p>
+                </div>
+                <div className="text-purple-500">📺</div>
+              </div>
+            </div>
+            
+            <div className="bg-orange-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-orange-600">Active Ads</p>
+                  <p className="text-2xl font-bold text-orange-700">
+                    {analyticsSummary.activeAds}
+                  </p>
+                </div>
+                <div className="text-orange-500">🎬</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Daily Stats Chart */}
+          {analyticsData.getUserAnalytics.dailyStats && analyticsData.getUserAnalytics.dailyStats.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-gray-800 mb-4">Daily Performance</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={analyticsData.getUserAnalytics.dailyStats}>
+                  <XAxis 
+                    dataKey="date" 
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  />
+                  <Tooltip 
+                    labelFormatter={(value) => new Date(value).toLocaleDateString()}
+                    formatter={(value, name) => [
+                      name === 'impressions' ? value.toLocaleString() : 
+                      name === 'displayTime' ? formatDisplayTime(value) : value,
+                      name === 'impressions' ? 'Impressions' :
+                      name === 'displayTime' ? 'Display Time' : 'Ads Played'
+                    ]}
+                  />
+                  <Bar dataKey="impressions" fill="#1b5087" name="impressions" />
+                  <Bar dataKey="adsPlayed" fill="#3674B5" name="adsPlayed" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Top Performing Ads */}
+          {analyticsData.getUserAnalytics.adPerformance && analyticsData.getUserAnalytics.adPerformance.length > 0 && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-800 mb-4">Top Performing Ads</h3>
+              <div className="space-y-3">
+                {analyticsData.getUserAnalytics.adPerformance.slice(0, 5).map((ad, index) => (
+                  <div key={ad.adId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-[#1b5087] text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">{ad.adTitle}</p>
+                        <p className="text-sm text-gray-500">{ad.playCount} plays • {ad.impressions} impressions</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-800">{ad.averageCompletionRate.toFixed(1)}%</p>
+                      <p className="text-sm text-gray-500">completion</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* QR Impressions Section */}
+      <div className="grid grid-cols-1 gap-6">
+        {/* QR Impressions - Now spans full width */}
+        <div className="bg-white p-4 rounded-lg shadow-lg cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold text-gray-800 pt-3">QR Impressions</h2>
-            <div className="relative pt-3">
+            <div className="relative pt-3" onClick={(e) => e.stopPropagation()}>
               <select
                 className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
                 value={qrSelectedPeriod}

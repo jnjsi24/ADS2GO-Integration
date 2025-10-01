@@ -1,5 +1,9 @@
 [build]
 builder = "NIXPACKS"
+<<<<<<< HEAD
+=======
+buildCommand = "echo 'no build step'"
+>>>>>>> jairhon_cleanup-directory
 
 [deploy]
 startCommand = "npm start"
@@ -9,4 +13,9 @@ restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [env]
+<<<<<<< HEAD
 NODE_ENV = "production"
+=======
+PORT = "5000"
+NODE_ENV = "production"
+>>>>>>> jairhon_cleanup-directory

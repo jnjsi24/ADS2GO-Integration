@@ -13,6 +13,12 @@ export const GET_MY_ADS = gql`
       vehicleType
       createdAt
       price
+<<<<<<< HEAD
+=======
+      startTime
+      endTime
+      adLengthSeconds
+>>>>>>> jairhon_cleanup-directory
 
       planId {       # populated AdsPlan object
         id
@@ -27,6 +33,7 @@ export const GET_MY_ADS = gql`
 
       materialId {   # populated Material object
         id
+        materialId
         materialType
         category
         description

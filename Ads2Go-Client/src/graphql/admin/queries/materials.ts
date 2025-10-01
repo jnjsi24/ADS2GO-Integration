@@ -133,3 +133,46 @@ export const GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE = gql`
     }
   }
 `;
+
+export const GET_MATERIAL_USAGE_HISTORY = gql`
+  query GetMaterialUsageHistory($materialId: ID!) {
+    getMaterialUsageHistory(materialId: $materialId) {
+      success
+      message
+      usageHistory {
+        id
+        materialId
+        driverId
+        driverInfo {
+          driverId
+          fullName
+          email
+          contactNumber
+          vehiclePlateNumber
+        }
+        assignedAt
+        unassignedAt
+        mountedAt
+        dismountedAt
+        usageDuration
+        assignmentReason
+        unassignmentReason
+        customDismountReason
+        assignedByAdmin {
+          adminId
+          adminName
+          adminEmail
+        }
+        unassignedByAdmin {
+          adminId
+          adminName
+          adminEmail
+        }
+        notes
+        isActive
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;

@@ -26,10 +26,16 @@ const driverTypeDefs = require('./schema/driverSchema');
 const paymentTypeDefs = require('./schema/paymentSchema');
 const materialTypeDefs = require('./schema/materialSchema');
 const adsPlanTypeDefs = require('./schema/adsPlanSchema');
+const pricingConfigTypeDefs = require('./schema/pricingConfigSchema');
+const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
 const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
+const notificationTypeDefs = require('./schema/notificationSchema');
+const userReportTypeDefs = require('./schema/userReportSchema');
+const faqTypeDefs = require('./schema/faqSchema');
+const companyAdTypeDefs = require('./schema/companyAdSchema');
 
 // 👇 Resolvers
 const userResolvers = require('./resolvers/userResolver');
@@ -40,10 +46,16 @@ const driverResolvers = require('./resolvers/driverResolver');
 const paymentResolvers = require('./resolvers/paymentResolver');
 const materialResolver = require('./resolvers/materialResolver');
 const adsPlanResolvers = require('./resolvers/adsPlanResolver');
+const pricingConfigResolvers = require('./resolvers/pricingConfigResolver');
+const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
 const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
+const notificationResolvers = require('./resolvers/notificationResolver');
+const userReportResolvers = require('./resolvers/userReportResolver');
+const faqResolvers = require('./resolvers/faqResolver');
+const companyAdResolvers = require('./resolvers/companyAdResolver');
 
 // 👇 Middleware
 const { authMiddleware } = require('./middleware/auth');
@@ -51,14 +63,20 @@ const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
 const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
+const cronJobs = require('./jobs/cronJobs');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
 const screenTrackingRoutes = require('./routes/screenTracking');
+const deviceTrackingRoutes = require('./routes/deviceTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
 const uploadRoute = require('./routes/upload');
 const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
+const analyticsRoutes = require('./routes/analytics');
+const newsletterRoutes = require('./routes/newsletter');
+const cleanupRoutes = require('./routes/cleanup');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -90,12 +108,25 @@ const server = new ApolloServer({
     paymentTypeDefs,
     materialTypeDefs,
     adsPlanTypeDefs,
+    pricingConfigTypeDefs,
+    flexibleAdTypeDefs,
     materialTrackingTypeDefs,
     tabletTypeDefs,
     adsDeploymentTypeDefs,
     screenTrackingTypeDefs,
+    notificationTypeDefs,
+    userReportTypeDefs,
+    faqTypeDefs,
+    companyAdTypeDefs,
   ]),
   resolvers: mergeResolvers([
+    {
+      JSON: {
+        serialize: (value) => value,
+        parseValue: (value) => value,
+        parseLiteral: (ast) => ast.value,
+      },
+    },
     userResolvers,
     adminResolvers,
     superAdminResolvers,
@@ -104,10 +135,16 @@ const server = new ApolloServer({
     paymentResolvers,
     materialResolver,
     adsPlanResolvers,
+    pricingConfigResolvers,
+    flexibleAdResolvers,
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
     screenTrackingResolvers,
+    notificationResolvers,
+    userReportResolvers,
+    faqResolvers,
+    companyAdResolvers,
   ]),
 });
 
@@ -134,6 +171,8 @@ async function startServer() {
         'http://localhost',
         'http://127.0.0.1',
         'http://192.168.1.5:3000',
+        'http://192.168.100.22:3000',
+        'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
         // Railway domains (will be auto-detected, but adding common patterns)
@@ -146,10 +185,8 @@ async function startServer() {
                            /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
 
       if (allowedOrigins.has(origin) || isRailwayApp) {
-        console.log('✅ CORS: Allowing origin:', origin);
         callback(null, true);
       } else {
-        console.log('❌ CORS: Blocking origin:', origin);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -161,7 +198,6 @@ async function startServer() {
 
   // Handle preflight requests manually
   app.options('*', (req, res) => {
-    console.log('🔄 Handling preflight request for:', req.headers.origin);
     res.header('Access-Control-Allow-Origin', req.headers.origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -175,15 +211,22 @@ async function startServer() {
   // Serve uploaded media statically
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   
+  // Serve public files statically
+  app.use(express.static(path.join(__dirname, '..', 'public')));
+  
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
-  // Routes
-  app.use('/tablet', tabletRoutes);
-  app.use('/screenTracking', screenTrackingRoutes);
-  app.use('/material', materialRoutes);
-  app.use('/ads', adsRoutes);
-  app.use('/material-photos', materialPhotoUploadRoutes);
+// Routes
+app.use('/tablet', tabletRoutes);
+app.use('/screenTracking', screenTrackingRoutes);
+app.use('/deviceTracking', deviceTrackingRoutes);
+app.use('/material', materialRoutes);
+app.use('/ads', adsRoutes);
+app.use('/material-photos', materialPhotoUploadRoutes);
+app.use('/analytics', analyticsRoutes);
+app.use('/api/newsletter', newsletterRoutes);
+app.use('/cleanup', cleanupRoutes);
   
   // Health check endpoint for deployment platforms (e.g., Railway)
   app.get('/health', (req, res) => {
@@ -198,11 +241,6 @@ async function startServer() {
     '/graphql',
     expressMiddleware(server, {
       context: async ({ req }) => {
-        // Debug GraphQL context
-        console.log('🔍 GraphQL Context Debug:');
-        console.log('  - Authorization header:', req.headers.authorization);
-        console.log('  - User-Agent:', req.headers['user-agent']);
-        
         // Get both driver and user context
         const { driver } = await driverMiddleware({ req });
         const { user } = await authMiddleware({ req });
@@ -211,36 +249,19 @@ async function startServer() {
         let context = { driver, user };
         
         if (driver) {
-          console.log('🚗 Driver context:', { id: driver.id, driverId: driver.driverId, email: driver.email, role: driver.role });
           context.driver = driver;
         }
         
         if (user) {
-          console.log('🔐 User context:', { id: user.id, email: user.email, role: user.role });
           if (user.role === 'ADMIN') {
             context.admin = user;
-            console.log('✅ Set admin context for ADMIN user');
           } else if (user.role === 'SUPERADMIN') {
             context.superAdmin = user;
             // SuperAdmin should also have admin access
             context.admin = user;
-            console.log('✅ Set admin context for SUPERADMIN user');
           }
         }
         
-        // Debug final context
-        console.log('🔧 Final GraphQL context:', {
-          hasDriver: !!context.driver,
-          hasUser: !!context.user,
-          hasAdmin: !!context.admin,
-          hasSuperAdmin: !!context.superAdmin
-        });
-        
-        if (!driver && !user) {
-          console.log('❌ No authentication context found');
-        }
-        
-        console.log('🔧 Final context:', Object.keys(context));
         return context;
       },
     })
@@ -265,12 +286,17 @@ async function startServer() {
   deviceStatusService.initializeWebSocketServer(httpServer);
 
   // Start the server
-  httpServer.listen(PORT, () => {
-    console.log(`\n🚀 Server ready at http://localhost:${PORT}`);
-    console.log(`\n🚀 GraphQL server ready at http://localhost:${PORT}/graphql`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚀 Server ready at http://0.0.0.0:${PORT}`);
+    console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
     startDeviceStatusJob();
+    startPaymentDeadlineJob();
+    
+    // Start cron jobs for daily data archiving
+    cronJobs.start();
+    console.log('📅 Cron jobs started for daily data archiving');
   });
   
   // Handle server shutdown gracefully

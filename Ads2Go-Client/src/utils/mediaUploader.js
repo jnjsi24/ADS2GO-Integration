@@ -3,7 +3,11 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, db } from '../firebase/init';
 
 // Base URL for server-side uploads
+<<<<<<< HEAD
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://ads2go-integration-production.up.railway.app/api';
+=======
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '') + '/api';
+>>>>>>> jairhon_cleanup-directory
 
 /**
  * Uploads a file directly to Firebase Storage (for non-sensitive content)

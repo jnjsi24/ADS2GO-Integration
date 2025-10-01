@@ -97,12 +97,12 @@ async function assignMaterialToDriver(driver) {
   try {
     // Assign material to driver
     materialToAssign.driverId = driver.driverId;
-    materialToAssign.mountedAt = new Date();
+    materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     await materialToAssign.save({ session });
 
     // Update driver's material reference
     driver.materialId = materialToAssign._id;
-    driver.installedMaterialType = materialToAssign.materialType;
+    driver.installedMaterialType = null; // Will be set when material is actually mounted
     await driver.save({ session });
 
     await session.commitTransaction();
@@ -380,6 +380,16 @@ createDriver: async (_, { input }) => {
 
     await newDriver.save();
 
+    // Send notification to admins about new driver application
+    try {
+      const NotificationService = require('../services/notifications/NotificationService');
+      await NotificationService.sendNewDriverApplicationNotification(newDriver._id);
+      console.log(`✅ Sent new driver application notification for driver: ${newDriver._id}`);
+    } catch (notificationError) {
+      console.error('❌ Error sending new driver application notification:', notificationError);
+      // Don't fail the driver creation if notification fails
+    }
+
     const token = jwt.sign(
       { driverId: newDriver._id.toString(), tokenVersion: newDriver.tokenVersion },
       JWT_SECRET,
@@ -413,13 +423,34 @@ createDriver: async (_, { input }) => {
         }
 
         if (!driver.isEmailVerified) return { success: false, message: 'Please verify your email before logging in', token: null, driver: null };
-        if (driver.accountStatus !== 'ACTIVE') return { success: false, message: `Driver account is ${driver.accountStatus}`, token: null, driver: null };
+        
+        // Provide specific messages for different account statuses
+        if (driver.accountStatus !== 'ACTIVE') {
+          let statusMessage = '';
+          switch (driver.accountStatus) {
+            case 'PENDING':
+              statusMessage = 'Your account is still under review. Please wait for approval.';
+              break;
+            case 'SUSPENDED':
+              statusMessage = 'Your account has been suspended. Please contact support for assistance.';
+              break;
+            case 'REJECTED':
+              statusMessage = 'Your account application was rejected. Please contact support for more information.';
+              break;
+            case 'RESUBMITTED':
+              statusMessage = 'Your account is being reviewed after resubmission. Please wait for approval.';
+              break;
+            default:
+              statusMessage = `Your account status is ${driver.accountStatus}. Please contact support for assistance.`;
+          }
+          return { success: false, message: statusMessage, token: null, driver: null };
+        }
 
         const valid = await bcrypt.compare(password.trim(), driver.password);
         if (!valid) {
           driver.loginAttempts = (driver.loginAttempts || 0) + 1;
           const MAX_LOGIN_ATTEMPTS = 5;
-          const LOCK_TIME = 2 * 60 * 60 * 1000;
+          const LOCK_TIME = 1 * 60 * 60 * 1000;
 
           if (driver.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
             driver.accountLocked = true;
@@ -625,7 +656,7 @@ createDriver: async (_, { input }) => {
     // Assign the first available material first to ensure it's available
     const materialToAssign = availableMaterials[0];
     materialToAssign.driverId = driver.driverId;
-    materialToAssign.mountedAt = new Date();
+    materialToAssign.mountedAt = null; // Will be set by admin when actually mounted
     materialToAssign.dismountedAt = null;
     await materialToAssign.save();
 
@@ -639,7 +670,7 @@ createDriver: async (_, { input }) => {
     driver.reviewStatus = 'APPROVED';
     driver.approvalDate = new Date();
     driver.materialId = materialToAssign._id;
-    driver.installedMaterialType = materialToAssign.materialType;
+    driver.installedMaterialType = null; // Will be set when material is actually mounted
 
     if (materialTypeOverride?.length > 0) {
       driver.adminOverride = true;
@@ -652,6 +683,30 @@ createDriver: async (_, { input }) => {
       .populate({ path: 'material', select: 'materialId materialType vehicleType' });
 
     console.log(`Driver ${driver.driverId} approved and material assigned.`);
+
+    // Send driver approval notification
+    try {
+      const NotificationService = require('../services/notifications/NotificationService');
+      await NotificationService.sendDriverStatusChangeNotification(driver._id, 'APPROVED');
+      console.log('✅ Driver approval notification sent successfully');
+    } catch (notificationError) {
+      console.error('❌ Error sending driver approval notification:', notificationError);
+      // Don't fail the approval if notification fails
+    }
+
+    // Send material assignment notification (both in-app and email)
+    try {
+      const DriverNotificationService = require('../services/notifications/DriverNotificationService');
+      await DriverNotificationService.sendMaterialAssignmentNotification(
+        driver._id, 
+        materialToAssign._id, 
+        materialToAssign.materialId
+      );
+      console.log('✅ Material assignment notification sent successfully');
+    } catch (notificationError) {
+      console.error('❌ Error sending material assignment notification:', notificationError);
+      // Don't fail the approval if notification fails
+    }
 
     return { 
       success: true, 
@@ -701,6 +756,16 @@ createDriver: async (_, { input }) => {
 
         console.log(`Driver ${driver.driverId} rejected. Reason: ${reason}`);
 
+        // Send driver rejection notification
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendDriverStatusChangeNotification(driver._id, 'REJECTED', reason);
+          console.log('✅ Driver rejection notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending driver rejection notification:', notificationError);
+          // Don't fail the rejection if notification fails
+        }
+
         return {
           success: true,
           message: 'Driver rejected successfully',
@@ -728,8 +793,27 @@ createDriver: async (_, { input }) => {
           };
         }
 
+        // Track status changes for notifications
+        const oldStatus = driver.accountStatus;
+        const oldReviewStatus = driver.reviewStatus;
+
         Object.assign(driver, input);
         await driver.save();
+
+        // Send notification if status changed
+        if ((input.accountStatus && input.accountStatus !== oldStatus) || 
+            (input.reviewStatus && input.reviewStatus !== oldReviewStatus)) {
+          try {
+            const NotificationService = require('../services/notifications/NotificationService');
+            const newStatus = input.accountStatus || driver.accountStatus;
+            const reason = input.rejectedReason || driver.rejectedReason;
+            await NotificationService.sendDriverStatusChangeNotification(driver._id, newStatus, reason);
+            console.log('✅ Driver status change notification sent successfully');
+          } catch (notificationError) {
+            console.error('❌ Error sending driver status change notification:', notificationError);
+            // Don't fail the update if notification fails
+          }
+        }
 
         return { 
           success: true, 
@@ -973,6 +1057,34 @@ createDriver: async (_, { input }) => {
           message: 'Failed to reset password', 
           error: error.message,
           driver: null
+        };
+      }
+    },
+
+    // ===== UPDATE DRIVER PUSH TOKEN =====
+    updateDriverPushToken: async (_, { driverId, pushToken }, { user }) => {
+      try {
+        console.log(`Updating push token for driver ${driverId}`);
+        
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          throw new Error('Driver not found');
+        }
+
+        driver.pushToken = pushToken;
+        await driver.save();
+
+        console.log(`✅ Push token updated for driver ${driverId}`);
+        
+        return { 
+          success: true, 
+          message: 'Push token updated successfully' 
+        };
+      } catch (error) {
+        console.error('updateDriverPushToken error:', error);
+        return { 
+          success: false, 
+          message: error.message || 'Failed to update push token'
         };
       }
     },

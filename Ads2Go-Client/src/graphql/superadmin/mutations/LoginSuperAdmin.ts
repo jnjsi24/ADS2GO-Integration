@@ -15,6 +15,7 @@ export const LOGIN_SUPERADMIN_MUTATION = gql`
         companyName
         companyAddress
         contactNumber
+        profilePicture
         createdAt
         updatedAt
         permissions {

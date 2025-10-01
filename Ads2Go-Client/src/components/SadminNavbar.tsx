@@ -7,17 +7,23 @@ import {
   Users,
   Settings,
   LogOut,
-  FileText,
+  BarChart3,
+  DollarSign,
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
   const { logout, admin } = useAdminAuth(); // Use the useAdminAuth hook
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Debug logging
+  React.useEffect(() => {
+    // Admin object updated
+  }, [admin]);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/sadmin-login'); // Redirect to general login after logout
+    // Navigation is handled by AdminAuthContext.logout() based on user role
   };
 
   // Generate initials using firstName and lastName (similar to AdminNavbar/UserNavbar)
@@ -29,8 +35,9 @@ const SadminNavbar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/sadmin-dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Manage Admin', path: '/sadmin-admin', icon: <LayoutDashboard size={20} /> },
-    { label: 'Plans', path: '/sadmin-plans', icon: <FileText size={20} /> },
+    { label: 'Analytics', path: '/sadmin-analytics', icon: <BarChart3 size={20} /> },
+    { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
+    { label: 'Pricing', path: '/sadmin-pricing', icon: <DollarSign size={20} /> },
     { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];
 
@@ -70,12 +77,19 @@ const SadminNavbar: React.FC = () => {
               src={admin.profilePicture}
               alt="Profile"
               className="rounded-full w-10 h-10 object-cover"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+          const initialsDiv = e.currentTarget.nextElementSibling as HTMLElement;
+          if (initialsDiv) initialsDiv.style.display = 'flex';
+        }}
             />
-          ) : (
-            <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
-              {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
-            </div>
-          )}
+          ) : null}
+          <div 
+            className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold"
+            style={{ display: admin?.profilePicture ? 'none' : 'flex' }}
+          >
+            {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
+          </div>
           <div className="font-semibold text-white">
             {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
           </div>

@@ -22,182 +22,212 @@ const EditAdminModal: React.FC<EditAdminModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const FloatingInput = ({
+    id,
+    name,
+    type = 'text',
+    label,
+    value,
+    onChange,
+    required = false,
+    error,
+  }: {
+    id: string;
+    name: string;
+    type?: string;
+    label: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    required?: boolean;
+    error?: string;
+  }) => (
+    <div className="relative">
+      <input
+        id={id}
+        name={name}
+        type={type}
+        placeholder=" "
+        required={required}
+        value={value}
+        onChange={onChange}
+        className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent text-gray-900 focus:outline-none focus:border-[#3674B5] placeholder-transparent transition ${
+          error ? 'border-red-400' : 'border-gray-300'
+        }`}
+      />
+      <label
+        htmlFor={id}
+        className={`absolute left-0 bg-transparent transition-all duration-200
+          ${
+            value
+              ? '-top-2 text-sm text-gray-700 font-semibold'
+              : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+          }
+          peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+      >
+        {label}
+      </label>
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+  );
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-end p-4">
-      <div className="fixed inset-0 bg-black bg-opacity-30" onClick={onClose}></div>
-      <div className="relative w-full md:w-1/2 lg:w-1/3 max-w-xl h-auto pb-6 rounded-3xl bg-gray-100 mt-2 shadow-lg transform transition-transform duration-300 ease-in-out animate-slideIn">
-        <div className="p-6 h-full overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-[#3674B5]">Edit Admin</h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-gray-700"></button>
-          </div>
-          <form onSubmit={onSubmit} className="space-y-4 mt-9">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-              <div>
-                <label htmlFor="editFirstName" className="block text-sm font-medium text-gray-500 mb-1">
-                  First Name
-                </label>
-                <input
-                  id="editFirstName"
-                  name="firstName"
-                  type="text"
-                  value={formData.firstName}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                  required
-                />
-                {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editMiddleName" className="block text-sm font-medium text-gray-500 mb-1">
-                  Middle Name
-                </label>
-                <input
-                  id="editMiddleName"
-                  name="middleName"
-                  type="text"
-                  value={formData.middleName || ''}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="editLastName" className="block text-sm font-medium text-gray-500 mb-1">
-                  Last Name
-                </label>
-                <input
-                  id="editLastName"
-                  name="lastName"
-                  type="text"
-                  value={formData.lastName}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                  required
-                />
-                {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editEmail" className="block text-sm font-medium text-gray-500 mb-1">
-                  Email Address
-                </label>
-                <input
-                  id="editEmail"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                  required
-                />
-                {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editContactNumber" className="block text-sm font-medium text-gray-500 mb-1">
-                  Phone Number
-                </label>
-                <div className="flex items-center py-2 border-b border-[#3674B5] focus-within:border-[#3674B5] transition-colors">
-                  <span className="text-gray-700 select-none pr-1">+63</span>
-                  <input
-                    id="editContactNumber"
-                    name="contactNumber"
-                    type="tel"
-                    value={formData.contactNumber.replace('+63 ', '')}
-                    onChange={onInputChange}
-                    maxLength={10}
-                    className="flex-grow focus:outline-none bg-transparent"
-                  />
-                </div>
-                {errors.contactNumber && <p className="text-red-500 text-xs mt-1">{errors.contactNumber}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editCompanyName" className="block text-sm font-medium text-gray-500 mb-1">
-                  Company Name
-                </label>
-                <input
-                  id="editCompanyName"
-                  name="companyName"
-                  type="text"
-                  value={formData.companyName}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                />
-                {errors.companyName && <p className="text-red-500 text-xs mt-1">{errors.companyName}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editCompanyAddress" className="block text-sm font-medium text-gray-500 mb-1">
-                  Company Address
-                </label>
-                <input
-                  id="editCompanyAddress"
-                  name="companyAddress"
-                  type="text"
-                  value={formData.companyAddress}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                />
-                {errors.companyAddress && <p className="text-red-500 text-xs mt-1">{errors.companyAddress}</p>}
-              </div>
-
-              <div>
-                <label htmlFor="editPassword" className="block text-sm font-medium text-gray-500 mb-1">
-                  New Password <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
-                </label>
-                <input
-                  id="editPassword"
-                  name="password"
-                  type="password"
-                  value={formData.password || ''}
-                  onChange={onInputChange}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="editProfilePicture" className="block text-sm font-medium text-gray-500 mb-1">
-                  Profile Picture <span className="text-gray-400 text-xs">(leave blank to keep current)</span>
-                </label>
-                <input
-                  id="editProfilePicture"
-                  name="profilePicture"
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setFormData(prev => ({
-                        ...prev,
-                        profilePicture: e.target.files![0]
-                      }));
-                    }
-                  }}
-                  className="w-full py-2 border-b border-[#3674B5] focus:outline-none focus:border-[#3674B5] transition-colors bg-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-between pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2 rounded-lg hover:bg-gray-200 border border-gray-300 text-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={Object.values(errors).some((error) => error !== '')}
-                className="bg-[#3674B5] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                Update Admin
-              </button>
-            </div>
-          </form>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Overlay */}
+      <div
+        className="absolute inset-0 bg-black bg-opacity-30"
+        onClick={onClose}
+      />
+      {/* Centered Modal */}
+      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8 animate-slideIn">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-[#3674B5]">Edit Admin</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+          >
+          </button>
         </div>
+
+        <form onSubmit={onSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            <FloatingInput
+              id="editFirstName"
+              name="firstName"
+              label="First Name"
+              value={formData.firstName}
+              onChange={onInputChange}
+              required
+              error={errors.firstName}
+            />
+
+            <FloatingInput
+              id="editMiddleName"
+              name="middleName"
+              label="Middle Name"
+              value={formData.middleName || ''}
+              onChange={onInputChange}
+            />
+
+            <FloatingInput
+              id="editLastName"
+              name="lastName"
+              label="Last Name"
+              value={formData.lastName}
+              onChange={onInputChange}
+              required
+              error={errors.lastName}
+            />
+
+            <FloatingInput
+              id="editEmail"
+              name="email"
+              type="email"
+              label="Email Address"
+              value={formData.email}
+              onChange={onInputChange}
+              required
+              error={errors.email}
+            />
+
+            {/* Contact Number with +63 prefix */}
+            <div className="relative">
+              <div className="flex items-end">
+                <span className="pr-2 mb-2 text-gray-600">+63</span>
+                <input
+                  id="editContactNumber"
+                  name="contactNumber"
+                  type="tel"
+                  placeholder=" "
+                  value={formData.contactNumber.replace('+63 ', '')}
+                  onChange={onInputChange}
+                  maxLength={10}
+                  className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent text-gray-900 focus:outline-none focus:border-[#3674B5] placeholder-transparent transition ${
+                    errors.contactNumber ? 'border-red-400' : 'border-gray-300'
+                  }`}
+                />
+              </div>
+              <label
+                htmlFor="editContactNumber"
+                className={`absolute left-8 bg-transparent transition-all duration-200
+                  ${
+                    formData.contactNumber
+                      ? '-top-2 text-sm text-gray-700 font-semibold'
+                      : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                  }
+                  peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
+              >
+                Phone Number
+              </label>
+              {errors.contactNumber && (
+                <p className="text-red-500 text-xs mt-1">{errors.contactNumber}</p>
+              )}
+            </div>
+
+            <FloatingInput
+              id="editCompanyName"
+              name="companyName"
+              label="Company Name"
+              value={formData.companyName}
+              onChange={onInputChange}
+              error={errors.companyName}
+            />
+
+            <FloatingInput
+              id="editCompanyAddress"
+              name="companyAddress"
+              label="Company Address"
+              value={formData.companyAddress}
+              onChange={onInputChange}
+              error={errors.companyAddress}
+            />
+
+            <FloatingInput
+              id="editPassword"
+              name="password"
+              type="password"
+              label="New Password (optional)"
+              value={formData.password || ''}
+              onChange={onInputChange}
+            />
+
+            {/* Profile Picture */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Profile Picture (optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      profilePicture: e.target.files![0],
+                    }));
+                  }
+                }}
+                className="w-full py-2 border-b border-gray-300 bg-transparent focus:outline-none focus:border-[#3674B5]"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-between pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-1 rounded-lg hover:bg-gray-100 text-gray-700 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={Object.values(errors).some((error) => error !== '')}
+              className="bg-[#3674B5] text-white px-4 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              Update Admin
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

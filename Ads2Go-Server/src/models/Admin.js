@@ -39,7 +39,7 @@ const AdminSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Contact number is required'],
     trim: true,
-    match: [/^(09\d{9}|\+639\d{9})$/, 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)']
+    match: [/^(09\d{9}|\+639\d{9})$/, 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)']
   },
   profilePicture: {
     type: String,
@@ -132,6 +132,11 @@ const AdminSchema = new mongoose.Schema({
       return this.accountLocked && this.lockUntil && this.lockUntil > new Date();
     }
   }
+});
+
+// Virtual for full name
+AdminSchema.virtual('fullName').get(function() {
+  return `${this.firstName} ${this.lastName}`.trim();
 });
 
 // Pre-save hook to update updatedAt

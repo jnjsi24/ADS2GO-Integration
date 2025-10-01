@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { TrashIcon, Edit } from 'lucide-react';
+import { Trash, Edit } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -13,11 +13,13 @@ import {
   ASSIGN_MATERIAL_TO_DRIVER, 
   UPDATE_MATERIAL, 
   UNREGISTER_TABLET, 
-  CREATE_TABLET_CONFIGURATION 
+  CREATE_TABLET_CONFIGURATION,
+  UNASSIGN_MATERIAL_FROM_DRIVER
 } from '../../graphql/admin/mutations/materials';
 import CreateMaterialModal from './tabs/materials/CreateMaterialModal';
 import MaterialDetailsModal from './tabs/materials/MaterialDetailsModal';
 import TabletConnectionModal from './tabs/materials/TabletConnectionModal';
+import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 
@@ -34,6 +36,15 @@ interface DriverWithVehicleType extends Driver {
   preferredMaterialType?: ('POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER')[];
 }
 
+interface InspectionPhoto {
+  url: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  description?: string;
+  month: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
 interface Material {
   id: string;
   materialId: string;
@@ -48,6 +59,12 @@ interface Material {
   dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Material condition and inspection fields
+  materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
+  inspectionPhotos?: InspectionPhoto[];
+  photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
+  lastInspectionDate?: string;
+  nextInspectionDue?: string;
 }
 
 interface CreateMaterialInput {
@@ -126,7 +143,26 @@ const Materials: React.FC = () => {
   const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [creatingTabletConfig, setCreatingTabletConfig] = useState(false);
+  const [refreshingConnectionStatus, setRefreshingConnectionStatus] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState<string | null>(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
+  const [dismountReason, setDismountReason] = useState('');
 
+  // Custom refresh function for connection status
+  const handleRefetchConnectionStatus = async () => {
+    if (refreshingConnectionStatus) return; // Prevent multiple simultaneous refreshes
+    
+    setRefreshingConnectionStatus(true);
+    try {
+      await refetchConnectionStatus();
+    } catch (error) {
+      console.error('Error refreshing connection status:', error);
+    } finally {
+      setRefreshingConnectionStatus(false);
+    }
+  };
 
   // GraphQL hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_MATERIALS, {
@@ -359,6 +395,28 @@ const Materials: React.FC = () => {
     }
   });
 
+  const [unassignMaterialFromDriver, { loading: unassigning }] = useMutation(UNASSIGN_MATERIAL_FROM_DRIVER, {
+    context: {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    },
+    onCompleted: (data) => {
+      if (data.unassignMaterialFromDriver.success) {
+        alert(data.unassignMaterialFromDriver.message);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
+        setDismountReason('');
+        refetch();
+      } else {
+        alert(`Unassignment failed: ${data.unassignMaterialFromDriver.message}`);
+      }
+    },
+    onError: (error) => {
+      alert(`Error unassigning material: ${error.message}`);
+    }
+  });
+
   const [unregisterTablet] = useMutation(UNREGISTER_TABLET, {
     context: {
       headers: {
@@ -472,16 +530,30 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const handleDeleteMaterial = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this material?')) {
+  const handleDeleteMaterial = (id: string) => {
+    setMaterialToDelete(id);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (materialToDelete) {
       try {
-        await deleteMaterial({ variables: { id } });
+        await deleteMaterial({ variables: { id: materialToDelete } });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       } catch (error) {
         console.error('Error deleting material:', error);
+        setShowDeleteModal(false);
+        setMaterialToDelete(null);
       }
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setMaterialToDelete(null);
   };
 
   const handleCloseModal = () => {
@@ -489,23 +561,40 @@ const Materials: React.FC = () => {
     setSelectedMaterialDetails(null);
   };
 
-  const handleRemoveFromDriver = async (id: string) => {
-    if (window.confirm('Are you sure you want to remove this material from the driver?')) {
+  const handleRemoveFromDriver = (id: string) => {
+    setMaterialToRemove(id);
+    setShowRemoveModal(true);
+  };
+
+  const confirmRemove = async () => {
+    if (materialToRemove && dismountReason.trim()) {
       try {
-        await updateMaterial({
+        await unassignMaterialFromDriver({
           variables: {
-            id,
-            input: {
-              driverId: null
-            }
+            materialId: materialToRemove,
+            dismountReason: dismountReason.trim()
           }
         });
         setShowDetailsModal(false);
         setSelectedMaterialDetails(null);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
+        setDismountReason('');
       } catch (error) {
         console.error('Error removing material from driver:', error);
+        setShowRemoveModal(false);
+        setMaterialToRemove(null);
+        setDismountReason('');
       }
+    } else if (!dismountReason.trim()) {
+      alert('Please provide a reason for removing the material from the driver.');
     }
+  };
+
+  const cancelRemove = () => {
+    setShowRemoveModal(false);
+    setMaterialToRemove(null);
+    setDismountReason('');
   };
 
   const handleCreateSubmit = async (formData: CreateMaterialInput) => {
@@ -551,12 +640,14 @@ const Materials: React.FC = () => {
     try {
       const input: any = {};
       
-      if (editData.mountedAt) {
-        input.mountedAt = new Date(editData.mountedAt).toISOString();
+      // Always send mountedAt if it's in the edit data (even if empty to clear it)
+      if (editData.mountedAt !== undefined) {
+        input.mountedAt = editData.mountedAt ? new Date(editData.mountedAt).toISOString() : null;
       }
       
-      if (editData.dismountedAt) {
-        input.dismountedAt = new Date(editData.dismountedAt).toISOString();
+      // Always send dismountedAt if it's in the edit data (even if empty to clear it)
+      if (editData.dismountedAt !== undefined) {
+        input.dismountedAt = editData.dismountedAt ? new Date(editData.dismountedAt).toISOString() : null;
       }
 
       await updateMaterial({
@@ -708,27 +799,37 @@ const Materials: React.FC = () => {
                   </div>
 
                   <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                  <div className="col-span-2 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+                  <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
 
-                  <div className="col-span-1 flex justify-center gap-1 ml-36">
+                  <div className="col-span-1 flex justify-center gap-1 ml-">
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         handleViewDetails(material);
                       }}
-                      className="flex items-center px-1 py-2 text-gray-500 rounded-lg hover:text-gray-600 transition-colors"
+                      className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
                     >
-                      <Edit size={16} />
+                      <Edit 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Edit
+                        </span>
                     </button> 
+
                     <button
                       onClick={(e) => {
                       e.stopPropagation(); // ✅ stop row click
                       handleDeleteMaterial(material.id); // ✅ delete action
                     }}
-                      className="flex items-center px-1 py-2 text-red-500 rounded-lg hover:text-red-600 transition-colors"
+                      className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
                     >
-                      <TrashIcon size={16} />
-                      
+                      <Trash 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                        size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                        Delete
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -798,9 +899,10 @@ const Materials: React.FC = () => {
         connectionStatusLoading={connectionStatusLoading}
         connectionStatusError={connectionStatusError}
         unregistering={unregistering}
+        refreshingConnectionStatus={refreshingConnectionStatus}
         creatingTabletConfig={creatingTabletConfig}
         onRefetchTabletData={refetchTabletData}
-        onRefetchConnectionStatus={refetchConnectionStatus}
+        onRefetchConnectionStatus={handleRefetchConnectionStatus}
         onCreateTabletConfiguration={handleCreateTabletConfiguration}
         onUnregisterTablet={handleUnregisterTablet}
         onCopyToClipboard={copyToClipboard}
@@ -824,6 +926,62 @@ const Materials: React.FC = () => {
       onSaveDateChanges={saveDateChanges}
       onUpdateEditingDate={updateEditingDate}
     />
+    
+    {/* Delete Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showDeleteModal}
+      onClose={cancelDelete}
+      onConfirm={confirmDelete}
+      title="Delete Material"
+      message="Are you sure you want to delete this material? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+    />
+    
+    {/* Remove from Driver Confirmation Modal */}
+    {showRemoveModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Remove Material from Driver
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Are you sure you want to remove this material from the driver? Please provide a reason for this action.
+          </p>
+          <div className="mb-4">
+            <label htmlFor="dismountReason" className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for Removal *
+            </label>
+            <textarea
+              id="dismountReason"
+              value={dismountReason}
+              onChange={(e) => setDismountReason(e.target.value)}
+              placeholder="Please provide a reason for removing this material from the driver..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={cancelRemove}
+              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              disabled={unassigning}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmRemove}
+              disabled={!dismountReason.trim() || unassigning}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {unassigning ? 'Removing...' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 };

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Tracking - Ads2Go</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 90%;
+        }
+        .logo {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .message {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .redirect-info {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+        .error {
+            color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">📱 Ads2Go</div>
+        <div class="message">Tracking your QR code scan...</div>
+        <div class="spinner"></div>
+        <div class="redirect-info">You will be redirected to the advertiser's website shortly.</div>
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const adId = urlParams.get('ad_id');
+        const adTitle = urlParams.get('ad_title') || urlParams.get('utm_campaign');
+        const materialId = urlParams.get('material_id');
+        const slotNumber = urlParams.get('slot_number');
+        const redirectUrl = urlParams.get('redirect_url') || urlParams.get('website');
+        const scanTime = urlParams.get('scan_time');
+
+        console.log('QR Code Scan Detected:', {
+            adId, adTitle, materialId, slotNumber, redirectUrl, scanTime
+        });
+
+        // Track the QR scan
+        async function trackQRScan() {
+            try {
+                const trackingData = {
+                    adId: adId,
+                    adTitle: adTitle,
+                    materialId: materialId,
+                    slotNumber: parseInt(slotNumber),
+                    timestamp: new Date().toISOString(),
+                    qrCodeUrl: window.location.href,
+                    userAgent: navigator.userAgent,
+                    deviceType: /Mobile|Android|iPhone|iPad/.test(navigator.userAgent) ? 'mobile' : 'desktop',
+                    browser: getBrowserName(),
+                    operatingSystem: getOperatingSystem(),
+                    ipAddress: 'Unknown', // Will be detected by server
+                    country: 'Unknown',
+                    city: 'Unknown',
+                    website: redirectUrl,
+                    redirectUrl: redirectUrl,
+                    networkStatus: navigator.onLine,
+                    isOffline: !navigator.onLine
+                };
+
+                console.log('Sending tracking data:', trackingData);
+
+                const response = await fetch('/ads/qr-scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(trackingData)
+                });
+
+                if (response.ok) {
+                    console.log('✅ QR scan tracked successfully');
+                } else {
+                    console.error('❌ Failed to track QR scan:', response.status);
+                }
+            } catch (error) {
+                console.error('❌ Error tracking QR scan:', error);
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Failed to track scan, but redirecting anyway...';
+            }
+        }
+
+        function getBrowserName() {
+            const userAgent = navigator.userAgent;
+            if (userAgent.includes('Chrome')) return 'Chrome';
+            if (userAgent.includes('Firefox')) return 'Firefox';
+            if (userAgent.includes('Safari')) return 'Safari';
+            if (userAgent.includes('Edge')) return 'Edge';
+            return 'Unknown';
+        }
+
+        function getOperatingSystem() {
+            const userAgent = navigator.userAgent;
+            if (userAgent.includes('Windows')) return 'Windows';
+            if (userAgent.includes('Mac')) return 'macOS';
+            if (userAgent.includes('Linux')) return 'Linux';
+            if (userAgent.includes('Android')) return 'Android';
+            if (userAgent.includes('iOS')) return 'iOS';
+            return 'Unknown';
+        }
+
+        // Track and redirect
+        async function trackAndRedirect() {
+            await trackQRScan();
+            
+            // Wait a moment for tracking to complete
+            setTimeout(() => {
+                if (redirectUrl) {
+                    console.log('🔗 Redirecting to:', redirectUrl);
+                    window.location.href = redirectUrl;
+                } else {
+                    console.log('❌ No redirect URL provided');
+                    document.querySelector('.message').textContent = 'No redirect URL provided.';
+                    document.querySelector('.spinner').style.display = 'none';
+                }
+            }, 1000);
+        }
+
+        // Start tracking and redirect
+        trackAndRedirect();
+    </script>
+</body>
+</html>

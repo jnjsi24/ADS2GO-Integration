@@ -4,12 +4,18 @@ import { useQuery } from '@apollo/client';
 import { GET_ALL_ADS, type Ad } from '../../../../graphql/admin/ads';
 
 interface ScheduleTabProps {
-  // Add any props you need for the schedule tab
+  statusFilter: string;
+  onStatusChange: (status: string) => void;
 }
 
-const ScheduleTab: React.FC<ScheduleTabProps> = () => {
+
+const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange }) => {
   const [scheduleView, setScheduleView] = useState<'month' | 'week' | 'day'>('month');
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
+
+  const [filterType, setFilterType] = useState<"day" | "month" | "year">("day");
+  const [selectedDate, setSelectedDate] = useState<string>("");
+
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_ADS, {
     fetchPolicy: 'cache-and-network',
@@ -96,8 +102,16 @@ const ScheduleTab: React.FC<ScheduleTabProps> = () => {
     });
   }, [data, period.start, period.end]);
 
+  const filteredAds = useMemo(() => {
+    return adsInPeriod.filter(ad => 
+      statusFilter === 'All Status' || ad.status.toLowerCase() === statusFilter.toLowerCase()
+    );
+  }, [adsInPeriod, statusFilter]);
+
+
+
   const groupedByMaterial = useMemo(() => {
-    const source: Ad[] = adsInPeriod.length > 0 ? adsInPeriod : (data?.getAllAds ?? []); // Fallback to all ads if none matched
+    const source: Ad[] = filteredAds.length > 0 ? filteredAds : (data?.getAllAds ?? []);
     const map = new Map<string, Ad[]>();
     source.forEach((ad) => {
       const materialId = typeof ad.materialId === 'string' ? ad.materialId : (ad.materialId?.materialId || ad.materialId?.id || 'Unknown Material');
@@ -106,7 +120,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = () => {
       map.set(materialId, current);
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [adsInPeriod, data]);
+  }, [filteredAds, data]);
 
   const periodLabel = useMemo(() => {
     if (scheduleView === 'month') return cursorDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -133,52 +147,69 @@ const ScheduleTab: React.FC<ScheduleTabProps> = () => {
   const goToday = () => setCursorDate(new Date());
 
   return (
-    <div className="p-6">
+    <div className="">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold text-gray-800">Ad Schedule</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setScheduleView('month')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'month' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Month
-          </button>
-          <button
-            onClick={() => setScheduleView('week')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'week' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Week
-          </button>
-          <button
-            onClick={() => setScheduleView('day')}
-            className={`px-3 py-1 text-sm rounded ${
-              scheduleView === 'day' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            Day
-          </button>
-        </div>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={goPrev} className="p-2 rounded hover:bg-gray-100" title="Previous">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <div className="text-sm font-medium text-gray-800">{periodLabel}</div>
-          <button onClick={goNext} className="p-2 rounded hover:bg-gray-100" title="Next">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button onClick={goToday} className="ml-2 px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200">Today</button>
+        {/* Date Filter Group */}
+        <div className="flex items-center gap-3">
+          {/* Filter Type Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setFilterType("day")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "day" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Day
+            </button>
+            <button
+              onClick={() => setFilterType("month")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Month
+            </button>
+            <button
+              onClick={() => setFilterType("year")}
+              className={`px-3 py-1 text-sm rounded ${
+                filterType === "year" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              Year
+            </button>
+          </div>
+
+          {/* Date Picker */}
+          <input
+            type={
+              filterType === "day"
+                ? "date"
+                : filterType === "month"
+                ? "month"
+                : "number" // or "text" for custom year input
+            }
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+            placeholder={filterType === "year" ? "YYYY" : ""}
+            min={filterType === "year" ? "1900" : undefined}
+            max={filterType === "year" ? "2100" : undefined}
+          />
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => refetch()} className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600">Refresh</button>
-        </div>
+
+        {/* Refresh Button */}
+        <button
+          onClick={() => refetch()}
+          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Refresh
+        </button>
       </div>
+
 
       {loading ? (
         <div className="bg-gray-50 rounded-lg p-8 text-center">
@@ -194,33 +225,16 @@ const ScheduleTab: React.FC<ScheduleTabProps> = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Material Summary */}
-          <div className="bg-blue-50 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-medium text-blue-800 mb-2">Ads Grouped by Material</h3>
-            <p className="text-xs text-blue-600 mb-2">All ads are now organized by their assigned material for easier management.</p>
-            <div className="flex flex-wrap gap-2">
-              {(() => {
-                const materialCounts = new Map<string, number>();
-                adsInPeriod.forEach(ad => {
-                  const materialId = typeof ad.materialId === 'string' ? ad.materialId : (ad.materialId?.materialId || ad.materialId?.id || 'Unknown');
-                  materialCounts.set(materialId, (materialCounts.get(materialId) || 0) + 1);
-                });
-                return Array.from(materialCounts.entries()).map(([materialId, count]) => (
-                  <span key={materialId} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                    {materialId}: {count} ad{count !== 1 ? 's' : ''}
-                  </span>
-                ));
-              })()}
-            </div>
-          </div>
-
           {groupedByMaterial.map(([materialId, ads]) => (
-            <div key={materialId} className="bg-white rounded-lg border border-gray-200">
-              <div className="px-4 py-2 border-b text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <div key={materialId}>
+              {/* Material Header */}
+              <div className="px-4 py-2 text-lg font-semibold text-gray-700 flex items-center gap-2">
                 <Monitor className="w-4 h-4" />
                 {materialId} ({ads.length} ad{ads.length !== 1 ? 's' : ''})
               </div>
-              <ul className="divide-y">
+
+              {/* 2 Column Grid for Ads */}
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
                 {ads
                   .slice()
                   .sort((a, b) => {
@@ -230,33 +244,74 @@ const ScheduleTab: React.FC<ScheduleTabProps> = () => {
                     return dateA.getTime() - dateB.getTime();
                   })
                   .map((ad) => (
-                  <li key={ad.id} className="px-4 py-3 flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-[32rem]">{ad.title || '(Untitled Ad)'}</div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                        <Clock className="w-3 h-3" />
-                        <span>
-                          {parseDate(ad.startTime)?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'N/A'}
-                          {parseDate(ad.endTime) ? ` - ${parseDate(ad.endTime)!.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700">{ad.adFormat}</span>
-                        <span className={`px-2 py-0.5 rounded ${ad.status === 'RUNNING' ? 'bg-green-100 text-green-700' : ad.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' : ad.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : ad.status === 'REJECTED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{ad.status}</span>
+                    <li
+                      key={ad.id}
+                      className="bg-white rounded-lg shadow-md px-5 py-3 hover:shadow-lg hover:scale-[1.01] transition-all cursor-pointer"
+                    >
+                      {/* Title + Format + Status in same row */}
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium text-gray-900 truncate text-lg">
+                          {ad.title || '(Untitled Ad)'}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="px-3 py-1 rounded bg-gray-100 text-gray-700">
+                            {ad.adFormat}
+                          </span>
+                          <span
+                            className={`px-3 py-1 rounded ${
+                              ad.status === 'RUNNING'
+                                ? 'bg-green-100 text-green-700'
+                                : ad.status === 'APPROVED'
+                                ? 'bg-blue-100 text-blue-700'
+                                : ad.status === 'PENDING'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : ad.status === 'REJECTED'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {ad.status}
+                          </span>
+                        </div>
                       </div>
-                      {/* Show start date since we're now grouped by material */}
-                      <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>Starts: {formatDateOnly(ad.startTime)}</span>
+
+                      {/* Dates + Time Range in 2 columns */}
+                      <div className="flex justify-between mt-2 text-sm text-gray-500">
+                        {/* Left side: Created + Ends */}
+                        <div className="space-y-1">
+                          <div>Created: {formatDateOnly(ad.createdAt)}</div>
+                          <div>Ends: {formatDateOnly(ad.endTime)}</div>
+                        </div>
+
+                        {/* Right side: Time Range + Start Date */}
+                        <div className="space-y-1 text-left">
+                          <div className="flex items-center gap-1 ">
+                            <Clock className="w-3 h-3" />
+                            <span>
+                              {parseDate(ad.startTime)?.toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              }) || 'N/A'}
+                              {parseDate(ad.endTime)
+                                ? ` - ${parseDate(ad.endTime)!.toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}`
+                                : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            <span>Starts: {formatDateOnly(ad.startTime)}</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-xs text-gray-500 text-right">
-                      <div>Created: {formatDateOnly(ad.createdAt)}</div>
-                      <div>Ends: {formatDateOnly(ad.endTime)}</div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  ))}
               </ul>
             </div>
           ))}
+
         </div>
       )}
     </div>

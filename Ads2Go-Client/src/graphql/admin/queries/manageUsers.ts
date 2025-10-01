@@ -18,6 +18,9 @@ export const GET_ALL_USERS = gql`
       lastLogin
       createdAt
       updatedAt
+      ads {
+        id
+      }
     }
   }
 `;

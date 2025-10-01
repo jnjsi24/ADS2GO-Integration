@@ -3,9 +3,14 @@ const User = require('../models/User');
 const Plan = require('../models/AdsPlan');
 const Material = require('../models/Material');
 const MaterialAvailability = require('../models/MaterialAvailability');
+const AdsDeployment = require('../models/adsDeployment');
+const Analytics = require('../models/analytics');
+const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 const adDeploymentService = require('../services/adDeploymentService');
 const MaterialAvailabilityService = require('../services/materialAvailabilityService');
+const NotificationService = require('../services/notifications/NotificationService');
+const { deleteFromFirebase } = require('../utils/firebaseStorage');
 
 const adResolvers = {
   Query: {
@@ -87,7 +92,32 @@ const adResolvers = {
         throw new Error(`No available materials or slots for selected plan. Next available: ${nextAvailable}`);
       }
 
-      // Calculate total price
+      // Auto-detect video duration from uploaded file
+      const VideoDurationService = require('../services/videoDurationService');
+      let actualVideoDuration = plan.adLengthSeconds; // Default to plan duration
+      
+      try {
+        console.log('🎬 Auto-detecting video duration...');
+        actualVideoDuration = await VideoDurationService.getVideoDuration(input.mediaFile);
+        console.log(`✅ Video duration detected: ${actualVideoDuration}s (plan limit: ${plan.adLengthSeconds}s)`);
+        
+        // Validate video duration against plan limits
+        if (actualVideoDuration > plan.adLengthSeconds) {
+          throw new Error(`Video duration (${actualVideoDuration}s) exceeds plan limit (${plan.adLengthSeconds}s). Please choose a shorter video or upgrade to a plan with longer ad duration.`);
+        }
+        
+        if (actualVideoDuration < 5) {
+          throw new Error(`Video duration (${actualVideoDuration}s) is too short. Minimum duration is 5 seconds.`);
+        }
+        
+      } catch (error) {
+        if (error.message.includes('exceeds plan limit') || error.message.includes('too short')) {
+          throw error; // Re-throw validation errors
+        }
+        console.warn('⚠️ Could not detect video duration, using plan duration:', error.message);
+      }
+
+      // Calculate total price using actual video duration
       const totalPlaysPerDay = plan.playsPerDayPerDevice * plan.numberOfDevices;
       const totalPrice = totalPlaysPerDay * plan.pricePerPlay * plan.durationDays;
 
@@ -96,27 +126,50 @@ const adResolvers = {
       const endTime = new Date(userDesiredStartDate);
       endTime.setDate(endTime.getDate() + plan.durationDays);
 
-      // Select the first available material from the plan's materials array
-      // This ensures consistency with the client-side material selection
+      // Use smart material selection instead of plan's materials array
       let selectedMaterial = null;
-      if (plan.materials && plan.materials.length > 0) {
-        // Find the first material that has availability for the desired time period
-        for (const material of plan.materials) {
-          const availability = await MaterialAvailability.findOne({ materialId: material._id });
-          if (availability && availability.canAcceptAd(startTime, endTime)) {
-            selectedMaterial = material;
-            console.log(`🎯 Selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType})`);
-            break;
-          }
-        }
+      
+      // Import the smart selection function from utility
+      const { getMaterialsSortedByAvailability } = require('../utils/smartMaterialSelection');
+      
+      try {
+        console.log('🧠 Using smart material selection for ad creation...');
+        const sortedMaterials = await getMaterialsSortedByAvailability(
+          plan.materialType,
+          plan.vehicleType,
+          plan.category,
+          startTime,
+          endTime
+        );
         
-        // If no available material found, use the first material (fallback)
-        if (!selectedMaterial) {
-          selectedMaterial = plan.materials[0];
-          console.log(`⚠️ No available material found, using first material: ${selectedMaterial.materialId}`);
+        if (sortedMaterials.length > 0) {
+          // Find the first material that has availability for the desired time period
+          for (const material of sortedMaterials) {
+            const availability = await MaterialAvailability.findOne({ materialId: material._id });
+            if (availability && availability.canAcceptAd(startTime, endTime)) {
+              selectedMaterial = material;
+              console.log(`🎯 Smart selected material for ad: ${material.materialId} (${material.materialType} ${material.vehicleType}) - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+              break;
+            }
+          }
+          
+          // If no available material found, use the first material (fallback)
+          if (!selectedMaterial) {
+            selectedMaterial = sortedMaterials[0];
+            console.log(`⚠️ No available material found, using first smart material: ${selectedMaterial.materialId}`);
+          }
+        } else {
+          throw new Error('No compatible materials found for this plan');
         }
-      } else {
-        throw new Error('No materials assigned to this plan');
+      } catch (error) {
+        console.error('❌ Smart material selection failed, falling back to plan materials:', error.message);
+        // Fallback to plan's materials if smart selection fails
+        if (plan.materials && plan.materials.length > 0) {
+          selectedMaterial = plan.materials[0];
+          console.log(`⚠️ Fallback to plan material: ${selectedMaterial.materialId}`);
+        } else {
+          throw new Error('No materials assigned to this plan');
+        }
       }
 
       const ad = new Ad({
@@ -125,7 +178,7 @@ const adResolvers = {
         materialId: selectedMaterial._id, // Use the selected material
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
-        adLengthSeconds: plan.adLengthSeconds,
+        adLengthSeconds: actualVideoDuration, // Use detected video duration instead of plan duration
         playsPerDayPerDevice: plan.playsPerDayPerDevice,
         totalPlaysPerDay,
         pricePerPlay: plan.pricePerPlay,
@@ -143,6 +196,32 @@ const adResolvers = {
       });
 
       const savedAd = await ad.save();
+
+      // Send notification to admins about new ad submission
+      try {
+        const AdminNotificationService = require('../services/notifications/AdminNotificationService');
+        await AdminNotificationService.sendNewAdSubmissionNotification(savedAd._id);
+        console.log(`✅ Sent new ad submission notification for ad: ${savedAd._id}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending new ad submission notification:', notificationError);
+        // Don't fail the ad creation if notification fails
+      }
+
+      // Update material availability when ad is created
+      try {
+        console.log(`🔄 Updating material availability for ad: ${savedAd._id}`);
+        const availability = await MaterialAvailability.findOne({ materialId: selectedMaterial._id });
+        if (availability) {
+          availability.addAd(savedAd._id, startTime, endTime);
+          await availability.save();
+          console.log(`✅ Updated material availability: ${selectedMaterial.materialId} now has ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+        } else {
+          console.warn(`⚠️ No availability record found for material: ${selectedMaterial.materialId}`);
+        }
+      } catch (availabilityError) {
+        console.error('❌ Error updating material availability:', availabilityError);
+        // Don't fail the ad creation if availability update fails
+      }
 
       // Note: Ad deployment is handled by the Ad model's post-save hook
       // when the ad status is PAID and adStatus is ACTIVE
@@ -189,16 +268,37 @@ const adResolvers = {
 
       if (isAdmin) {
         if (input.status && input.status !== ad.status) {
+          const previousStatus = ad.status;
           ad.status = input.status;
 
           if (input.status === "APPROVED") {
             ad.approveTime = new Date();
             ad.rejectTime = null;
             ad.reasonForReject = null;
+            
+            // Send approval notification
+            try {
+              console.log('🔔 AdResolver: Sending approval notification for ad:', ad._id);
+              await NotificationService.sendAdApprovalNotification(ad._id);
+              console.log('✅ AdResolver: Approval notification sent successfully');
+            } catch (notificationError) {
+              console.error('❌ AdResolver: Error sending approval notification:', notificationError);
+              console.error('❌ AdResolver: Error details:', notificationError.message);
+              console.error('❌ AdResolver: Stack trace:', notificationError.stack);
+              // Don't fail the ad update if notification fails
+            }
           } else if (input.status === "REJECTED") {
             ad.rejectTime = new Date();
             ad.approveTime = null;
             ad.reasonForReject = input.reasonForReject || "No reason provided";
+            
+            // Send rejection notification
+            try {
+              await NotificationService.sendAdRejectionNotification(ad._id, ad.reasonForReject);
+            } catch (notificationError) {
+              console.error('Error sending rejection notification:', notificationError);
+              // Don't fail the ad update if notification fails
+            }
           } else {
             ad.approveTime = null;
             ad.rejectTime = null;
@@ -264,9 +364,121 @@ const adResolvers = {
     },
 
     deleteAd: async (_, { id }, { user }) => {
-      checkAdmin(user);
-      const result = await Ad.findByIdAndDelete(id);
-      return !!result;
+      checkAuth(user);
+      
+      try {
+        // 1. Find the ad first to ensure it exists
+        const ad = await Ad.findById(id);
+        if (!ad) {
+          throw new Error('Ad not found');
+        }
+
+        // 2. Check permissions: Admin can delete any ad, users can only delete their own pending ads
+        const isAdmin = user.role === 'ADMIN' || user.role === 'SUPERADMIN';
+        const isOwner = ad.userId.toString() === user.id;
+        const isPending = ad.status === 'PENDING';
+
+        if (!isAdmin && (!isOwner || !isPending)) {
+          throw new Error('You can only delete your own pending advertisements');
+        }
+
+        console.log(`🗑️ Starting cascade delete for ad: ${id} (${ad.title})`);
+
+        // 2. Remove ad from all deployments (LCD slots and non-LCD)
+        const deployments = await AdsDeployment.find({
+          $or: [
+            { adId: id },
+            { 'lcdSlots.adId': id }
+          ]
+        });
+
+        console.log(`📦 Found ${deployments.length} deployments to update`);
+
+        for (const deployment of deployments) {
+          let shouldDeleteDeployment = false;
+          
+          // Remove from LCD slots
+          if (deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+            const originalLength = deployment.lcdSlots.length;
+            deployment.lcdSlots = deployment.lcdSlots.filter(slot => 
+              slot.adId.toString() !== id.toString()
+            );
+            
+            if (deployment.lcdSlots.length < originalLength) {
+              console.log(`  ✅ Removed ad from LCD slot in deployment ${deployment._id}`);
+              
+              // If no LCD slots remain and no adId, delete the entire deployment
+              if (deployment.lcdSlots.length === 0 && !deployment.adId) {
+                shouldDeleteDeployment = true;
+              } else {
+                await deployment.save();
+              }
+            }
+          }
+          
+          // Remove from non-LCD deployment
+          if (deployment.adId && deployment.adId.toString() === id.toString()) {
+            // If this is the only ad in the deployment, delete the entire deployment
+            if (deployment.lcdSlots.length === 0) {
+              shouldDeleteDeployment = true;
+            } else {
+              // If there are LCD slots, just remove the adId
+              deployment.adId = null;
+              console.log(`  ✅ Removed ad from non-LCD deployment ${deployment._id}`);
+              await deployment.save();
+            }
+          }
+          
+          // Delete deployment if it should be removed
+          if (shouldDeleteDeployment) {
+            console.log(`  🗑️ Deleting entire deployment ${deployment._id} (no remaining ads)`);
+            await AdsDeployment.findByIdAndDelete(deployment._id);
+          }
+        }
+
+        // 3. Delete analytics records
+        const analyticsResult = await Analytics.deleteMany({ adId: id });
+        console.log(`📊 Deleted ${analyticsResult.deletedCount} analytics records`);
+
+        // 4. Update payment records (set adsId to null instead of deleting)
+        const paymentResult = await Payment.updateMany(
+          { adsId: id },
+          { $unset: { adsId: 1 } }
+        );
+        console.log(`💳 Updated ${paymentResult.modifiedCount} payment records`);
+
+        // 5. Remove from material availability
+        try {
+          await MaterialAvailabilityService.removeAdFromMaterials(id);
+          console.log(`📋 Removed ad from material availability`);
+        } catch (availabilityError) {
+          console.warn(`⚠️ Warning: Could not remove from material availability:`, availabilityError.message);
+        }
+
+        // 6. Delete media file from Firebase Storage
+        if (ad.mediaFile) {
+          try {
+            const deleteSuccess = await deleteFromFirebase(ad.mediaFile);
+            if (deleteSuccess) {
+              console.log(`🗑️ Successfully deleted media file from Firebase Storage`);
+            } else {
+              console.warn(`⚠️ Warning: Could not delete media file from Firebase Storage`);
+            }
+          } catch (firebaseError) {
+            console.warn(`⚠️ Warning: Error deleting media file from Firebase Storage:`, firebaseError.message);
+          }
+        }
+
+        // 7. Delete the ad itself
+        await Ad.findByIdAndDelete(id);
+        console.log(`✅ Ad ${id} deleted successfully`);
+
+        return true;
+
+      } catch (error) {
+        console.error('❌ Error in cascade delete:', error);
+        throw new Error(`Failed to delete ad: ${error.message}`);
+      }
     }
   },
 

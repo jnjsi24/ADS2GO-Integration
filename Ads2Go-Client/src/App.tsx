@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { UserAuthProvider, useUserAuth } from './contexts/UserAuthContext';
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext';
 import { DeviceStatusProvider } from './contexts/DeviceStatusContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 
@@ -23,29 +24,37 @@ import Payment from './pages/USERS/Payment';
 import CreateAdvertisement from './pages/USERS/CreateAdvertisement';
 import Advertisements from './pages/USERS/Advertisements';
 import Help from './pages/USERS/Help';
+import About from './pages/USERS/About';
 import PaymentHistory from './pages/USERS/PaymentHistory';
 import Settings from './pages/USERS/Settings';
 import AdDetailsPage from './pages/USERS/AdDetailsPage';
+import Notifications from './pages/USERS/Notifications';
+import GoogleOAuthCompletion from './pages/AUTH/GoogleOAuthCompletion';
+import GoogleOAuthCallback from './pages/AUTH/GoogleOAuthCallback';
 
 // Admin pages
 import AdminLogin from './pages/AUTH/AdminLogin';
 import AdminDashboard from './pages/ADMIN/AdminDashboard';
 import ManageUsers from './pages/ADMIN/ManageUsers';
 import SiteSettings from './pages/ADMIN/SiteSettings';
-import ManageRiders from './pages/ADMIN/ManageRiders';
+import ManageDrivers from './pages/ADMIN/ManageDrivers';
 import AdminAdsControl from './pages/ADMIN/AdminAdsControl';
 import Materials from './pages/ADMIN/Materials';
 import Reports from './pages/ADMIN/Reports';
 import ManageAds from 'pages/ADMIN/ManageAds';
 import ScreenTracking from './pages/ADMIN/ScreenTracking';
-
+import FAQManagement from './pages/ADMIN/FAQManagement';
+import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
+import UserAdsPage from './pages/ADMIN/UserAdsPage';
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
-import SadminPlans from './pages/SUPERADMIN/SadminPlans';
+import SadminPricing from './pages/SUPERADMIN/SadminPricing';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
+import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
+import SadminAnalytics from './pages/SUPERADMIN/SadminAnalytics';
 
 // Initialize Firebase when the app starts
 console.log('🚀 Initializing Firebase...');
@@ -66,7 +75,7 @@ const AdminAppContent: React.FC = () => {
       <Routes>
         {/* Public routes */}
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/sadmin-login" element={<SuperAdminLogin />} />
 
         {/* Protected Admin Routes */}
         <Route
@@ -94,10 +103,10 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/admin/riders"
+          path="/admin/drivers"
           element={
             <ProtectedRoute>
-              <ManageRiders />
+              <ManageDrivers />
             </ProtectedRoute>
           }
         />
@@ -134,6 +143,22 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
+          path="/admin/faq"
+          element={
+            <ProtectedRoute>
+              <FAQManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/newsletter"
+          element={
+            <ProtectedRoute>
+              <NewsletterManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/admin/tablet-tracking"
           element={
             <ProtectedRoute>
@@ -141,6 +166,15 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/admin/ads-by-user/:userId"
+          element={
+            <ProtectedRoute>
+              <UserAdsPage />
+            </ProtectedRoute>
+          }
+        />
+
 
         {/* Protected SuperAdmin Routes */}
         <Route
@@ -168,10 +202,18 @@ const AdminAppContent: React.FC = () => {
           }
         />
         <Route
-          path="/sadmin-plans"
+          path="/sadmin-pricing"
           element={
             <ProtectedRoute>
-              <SadminPlans />
+              <SadminPricing />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sadmin-notifications"
+          element={
+            <ProtectedRoute>
+              <SadminNotifications />
             </ProtectedRoute>
           }
         />
@@ -183,6 +225,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         /> 
+        <Route
+          path="/sadmin-analytics"
+          element={
+            <ProtectedRoute>
+              <SadminAnalytics />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -196,15 +246,35 @@ const UserAppContent: React.FC = () => {
   const { user } = useUserAuth();
   
   return (
-    <div className="min-h-screen bg-white text-black">
-      {/* Show navbar depending on user role */}
-      {user?.role === 'USER' && <UserNavbar />}
-      
-      <Routes>
+    <NotificationProvider>
+      <div className="min-h-screen bg-white text-black">
+        {/* Show navbar depending on user role */}
+        {user?.role === 'USER' && <UserNavbar />}
+        
+        <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/landing" element={<Landing />} />
+        <Route path="/forgot-password" element={<ForgotPass />} />
+        <Route path="/auth/google/callback" element={<GoogleOAuthCallback />} />
+        <Route path="/auth/google/complete" element={
+          <GoogleOAuthCompletion 
+            googleUserData={(() => {
+              try {
+                const data = sessionStorage.getItem('googleOAuthData');
+                console.log('🔍 Raw sessionStorage data:', data);
+                const parsed = data ? JSON.parse(data) : null;
+                console.log('🔍 Parsed Google OAuth data:', parsed);
+                return parsed;
+              } catch (error) {
+                console.error('Error parsing Google OAuth data:', error);
+                return null;
+              }
+            })()}
+          />
+        } />
 
         {/* Protected user routes */}
         <Route
@@ -272,6 +342,14 @@ const UserAppContent: React.FC = () => {
           }
         />
         <Route
+          path="/about"
+          element={
+            <ProtectedRoute>
+              <About />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/history"
           element={
             <ProtectedRoute>
@@ -287,12 +365,21 @@ const UserAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Default redirects */}
         <Route path="/" element={<Navigate to="/landing" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </div>
+    </NotificationProvider>
   );
 };
 
@@ -301,7 +388,7 @@ const AppContent: React.FC = () => {
   
   const publicPages = [
     '/admin-login',
-    '/superadmin-login',
+    '/sadmin-login',
     '/login',
     '/register',
     '/forgot-password',
@@ -315,7 +402,7 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/sadmin-login" element={<SuperAdminLogin />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
@@ -330,7 +417,7 @@ const AppContent: React.FC = () => {
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
                       location.pathname === '/admin-login' ||
-                      location.pathname === '/superadmin-login';
+                      location.pathname === '/sadmin-login';
   
     if (isAdminRoute) {
     return <AdminAppContent />;
@@ -347,7 +434,7 @@ const App: React.FC = () => {
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
                       location.pathname === '/admin-login' ||
-                      location.pathname === '/superadmin-login';
+                      location.pathname === '/sadmin-login';
   
   // Check if we're on user-related routes
   const isUserRoute = location.pathname.startsWith('/dashboard') || 

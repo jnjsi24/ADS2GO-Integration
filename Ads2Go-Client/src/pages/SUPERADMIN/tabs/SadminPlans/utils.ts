@@ -27,27 +27,37 @@ export const getMaxDevices = (vehicleType: string, materialType: string): number
   return 1;
 };
 
-// Calculate plan pricing
+// Calculate plays per day based on screen hours and ad slots (matches server logic)
+const calculatePlaysPerDay = (adLengthSeconds: number, screenHoursPerDay: number = 8, adSlotsPerDevice: number = 5): number => {
+  // Convert screen hours to seconds
+  const screenSecondsPerDay = screenHoursPerDay * 60 * 60; // 8 hours = 28,800 seconds
+  
+  // Calculate how many times each ad slot can play in a day
+  // Each slot plays DIFFERENT ads, so we calculate per slot, not total
+  const playsPerSlotPerDay = Math.floor(screenSecondsPerDay / adLengthSeconds);
+  
+  // Each ad gets played in ONE slot, so plays per device = plays per slot
+  // (not multiplied by number of slots since each slot has different ads)
+  return playsPerSlotPerDay;
+};
+
+// Calculate plan pricing (simplified - no overrides needed)
 export const calculatePlanPricing = (
   numberOfDevices: number,
-  playsPerDayPerDevice: number,
+  playsPerDayPerDevice: number, // This parameter is ignored - we calculate it automatically
   adLengthSeconds: number,
   durationDays: number,
-  pricePerPlayOverride?: number | '',
-  deviceCostOverride?: number | '',
-  durationCostOverride?: number | '',
-  adLengthCostOverride?: number | ''
+  pricePerPlayOverride?: number | ''
 ) => {
-  const totalPlaysPerDay = numberOfDevices * playsPerDayPerDevice;
+  // Calculate plays per day automatically based on 8-hour screen time
+  const calculatedPlaysPerDay = calculatePlaysPerDay(adLengthSeconds);
+  const totalPlaysPerDay = numberOfDevices * calculatedPlaysPerDay;
   
-  // Use overrides if provided, otherwise use default calculations
-  const pricePerPlay = pricePerPlayOverride || 0.50; // Default price per play
-  const deviceCost = deviceCostOverride || 100; // Default device cost
-  const durationCost = durationCostOverride || 10; // Default duration cost per day
-  const adLengthCost = adLengthCostOverride || 0.10; // Default cost per second
+  // Use the provided price per play (required field)
+  const pricePerPlay = pricePerPlayOverride || 0;
   
   const dailyRevenue = totalPlaysPerDay * pricePerPlay;
-  const totalPrice = (dailyRevenue + deviceCost + durationCost + (adLengthCost * adLengthSeconds)) * durationDays;
+  const totalPrice = dailyRevenue * durationDays;
   
   return {
     totalPlaysPerDay,
@@ -64,6 +74,49 @@ export const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Date display helper
+export const formatDate = (dateInput: any): string => {
+  if (!dateInput) return 'N/A';
+  
+  try {
+    // Handle different date formats
+    let date: Date;
+    
+    if (typeof dateInput === 'number') {
+      // If it's a timestamp (milliseconds)
+      date = new Date(dateInput);
+    } else if (typeof dateInput === 'string') {
+      // If it's a date string, try to parse it
+      // First, try to parse as ISO string
+      date = new Date(dateInput);
+      
+      // If that fails, try to parse as timestamp string
+      if (isNaN(date.getTime()) && /^\d+$/.test(dateInput)) {
+        date = new Date(parseInt(dateInput));
+      }
+    } else {
+      // If it's already a Date object
+      date = dateInput;
+    }
+    
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date input:', dateInput, 'Type:', typeof dateInput);
+      return 'Invalid Date';
+    }
+    
+    // Format the date as "MMM DD, YYYY" (e.g., "Jan 15, 2024")
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error, 'Input:', dateInput);
+    return 'Invalid Date';
+  }
+};
+
 // Get status badge classes
 export const getStatusBadgeClasses = (status: string): string => {
   switch (status) {
@@ -72,7 +125,7 @@ export const getStatusBadgeClasses = (status: string): string => {
     case 'PENDING':
       return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     case 'ENDED':
-      return 'bg-gray-100 text-gray-800 border-gray-200';
+      return 'bg-red-100 text-red-800 border-red-200';
     default:
       return 'bg-gray-100 text-gray-800 border-gray-200';
   }

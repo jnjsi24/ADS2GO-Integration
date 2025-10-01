@@ -22,6 +22,13 @@ module.exports = gql`
     BANNER
   }
 
+  enum MaterialCondition {
+    GOOD
+    FADED
+    DAMAGED
+    REMOVED
+  }
+
   type DriverInfo {
     driverId: String!
     fullName: String!
@@ -44,6 +51,21 @@ module.exports = gql`
     dismountedAt: String
     createdAt: String
     updatedAt: String
+    # Material condition and inspection fields (from materialTracking)
+    materialCondition: MaterialCondition
+    inspectionPhotos: [InspectionPhoto!]
+    photoComplianceStatus: String
+    lastInspectionDate: String
+    nextInspectionDue: String
+  }
+
+  type InspectionPhoto {
+    url: String!
+    uploadedAt: String!
+    uploadedBy: String!
+    description: String
+    month: String!
+    status: String!
   }
 
   type MaterialWithDriver {
@@ -88,6 +110,9 @@ module.exports = gql`
     month: String!
     status: String!
     photoUrls: [String!]!
+    uploadedAt: String!
+    uploadedBy: String!
+    adminNotes: String
   }
 
   type MaterialWithTracking {
@@ -128,6 +153,9 @@ extend type Query {
   
   # Get materials assigned to a specific driver
   getDriverMaterials(driverId: ID!): DriverMaterialsResponse!
+  
+  # Get usage history for a specific material (Admin-only)
+  getMaterialUsageHistory(materialId: ID!): MaterialUsageHistoryResponse!
 }
 
   type Mutation {
@@ -138,6 +166,59 @@ extend type Query {
 
     # Material Assignment (Admin-only)
     assignMaterialToDriver(driverId: String!, materialId: ID): MaterialAssignmentResult
-    unassignMaterialFromDriver(materialId: ID!): MaterialAssignmentResult
+    unassignMaterialFromDriver(materialId: ID!, dismountReason: String!): MaterialAssignmentResult
+
+    # Driver photo upload
+    uploadMonthlyPhoto(materialId: ID!, photoUrls: [String!]!, month: String!, description: String): MaterialPhotoUploadResult
+  }
+
+  type MaterialPhotoTracking {
+    id: ID!
+    materialId: ID!
+    driverId: ID
+    materialCondition: MaterialCondition
+    monthlyPhotos: [MonthlyPhoto!]
+    photoComplianceStatus: String
+    lastPhotoUpload: String
+    nextPhotoDue: String
+  }
+
+  type MaterialPhotoUploadResult {
+    success: Boolean!
+    message: String!
+    materialTracking: MaterialPhotoTracking
+  }
+
+  type AdminInfo {
+    adminId: String!
+    adminName: String!
+    adminEmail: String!
+  }
+
+  type MaterialUsageHistory {
+    id: ID!
+    materialId: ID!
+    driverId: String!
+    driverInfo: DriverInfo!
+    assignedAt: String!
+    unassignedAt: String
+    mountedAt: String
+    dismountedAt: String
+    usageDuration: Int # in days
+    assignmentReason: String!
+    unassignmentReason: String
+    customDismountReason: String
+    assignedByAdmin: AdminInfo
+    unassignedByAdmin: AdminInfo
+    notes: String
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  type MaterialUsageHistoryResponse {
+    success: Boolean!
+    message: String!
+    usageHistory: [MaterialUsageHistory!]!
   }
 `;

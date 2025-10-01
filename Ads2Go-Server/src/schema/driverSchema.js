@@ -120,6 +120,7 @@ const typeDefs = gql`
     editRequestData: EditRequestData
     profilePicture: String
     material: MaterialInfo   # Reference to assigned material
+    pushToken: String         # Push notification token for mobile app
     createdAt: String
     updatedAt: String
   }
@@ -348,6 +349,9 @@ const typeDefs = gql`
     approveDriverEditRequest(id: ID!): ApproveDriverEditResponse!
     rejectDriverEditRequest(id: ID!, reason: String): ApproveDriverEditResponse!
     requestDriverEdit(input: DriverEditRequestInput!): ApproveDriverEditResponse!
+    
+    # Push notification token management
+    updateDriverPushToken(driverId: ID!, pushToken: String!): Response!
   }
 `;
 

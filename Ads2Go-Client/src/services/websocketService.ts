@@ -19,11 +19,27 @@ class WebSocketService {
   }
 
   private getWebSocketUrl(): string {
+<<<<<<< HEAD
     // Enable WebSocket for admin dashboard
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'wss://ads2go-integration-production.up.railway.app' 
       : 'ws://localhost:5000';
     return `${baseUrl}/ws/admin-dashboard`;
+=======
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiUrl = process.env.REACT_APP_API_URL;
+    
+    if (!apiUrl) {
+      console.error('❌ Missing REACT_APP_API_URL environment variable');
+      throw new Error('REACT_APP_API_URL is required in .env file');
+    }
+    
+    const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    // Cache bust to force reload
+    const cacheBust = Date.now();
+    // Use playback endpoint with admin=true for general admin connections
+    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}`;
+>>>>>>> jairhon_cleanup-directory
   }
 
   private connect(): void {

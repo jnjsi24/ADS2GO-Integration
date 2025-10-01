@@ -157,6 +157,7 @@ const ScreenTrackingSchema = new mongoose.Schema({
   totalDistanceTraveled: { type: Number, default: 0 }, // lifetime total
   averageDailyHours: { type: Number, default: 0 },
   complianceRate: { type: Number, default: 0 }, // percentage of days meeting 8-hour target
+  
 
   // Route tracking (for mobile screens only)
   currentRoute: {
@@ -193,6 +194,10 @@ const ScreenTrackingSchema = new mongoose.Schema({
       impressions: { type: Number, default: 0 }, // How many times this ad was shown
       totalViewTime: { type: Number, default: 0 }, // Total time viewed in seconds
       completionRate: { type: Number, default: 0 }, // Percentage of ad completed
+      // Real-time playback fields
+      currentTime: { type: Number, default: 0 }, // Current playback time in seconds
+      state: { type: String, enum: ['playing', 'paused', 'buffering', 'loading', 'ended'], default: 'loading' },
+      progress: { type: Number, default: 0, min: 0, max: 100 } // Progress percentage
     },
     
     // Daily ad statistics
@@ -256,6 +261,7 @@ ScreenTrackingSchema.index({ 'currentLocation.coordinates': '2dsphere' });
 ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
   if (!this.currentSession) return 0;
   
+<<<<<<< HEAD
   let totalHours = 0;
   
   // Add completed sessions
@@ -275,6 +281,32 @@ ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
     totalHours += currentSessionDuration;
   }
   
+=======
+  const now = new Date();
+  const startTime = new Date(this.currentSession.startTime);
+  
+  // Check if this is a new day - if so, reset to 8 hours
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession.date);
+  sessionDate.setHours(0, 0, 0, 0);
+  
+  // If it's a new day, return 8 hours (fresh start)
+  if (sessionDate.getTime() !== today.getTime()) {
+    return 8;
+  }
+  
+  // Count hours if device is online (either WebSocket connected or database shows online)
+  // If not online, return the last recorded hours
+  if (!this.isOnline) {
+    return this.currentSession.totalHoursOnline || 0;
+  }
+  
+  // Calculate hours since session start, but only if online
+  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  
+>>>>>>> jairhon_cleanup-directory
   return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
 
@@ -282,6 +314,18 @@ ScreenTrackingSchema.virtual('currentHoursToday').get(function() {
 ScreenTrackingSchema.virtual('hoursRemaining').get(function() {
   const targetHours = this.currentSession?.targetHours || 8;
   const currentHours = this.currentHoursToday;
+  
+  // If it's a new day, show 8 hours remaining
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      return 8;
+    }
+  }
+  
   return Math.max(0, targetHours - currentHours);
 });
 
@@ -298,6 +342,7 @@ ScreenTrackingSchema.virtual('displayStatus').get(function() {
   return 'ACTIVE';
 });
 
+<<<<<<< HEAD
 // Virtual for last seen (only when offline)
 ScreenTrackingSchema.virtual('lastSeenDisplay').get(function() {
   // If currently connected via WebSocket, don't show "last seen"
@@ -333,6 +378,51 @@ ScreenTrackingSchema.virtual('lastSeenLocation').get(function() {
   // Fallback to current location
   return this.currentLocation;
 });
+=======
+// Method to reset daily session
+ScreenTrackingSchema.methods.resetDailySession = function() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Check if we need to reset (new day)
+  const sessionDate = new Date(this.currentSession?.date);
+  if (sessionDate) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
+      // Reset for new day
+      this.currentSession = {
+        date: today,
+        startTime: new Date(),
+        endTime: null,
+        totalHoursOnline: 0,
+        totalDistanceTraveled: 0,
+        isActive: true,
+        targetHours: 8,
+        complianceStatus: 'PENDING',
+        locationHistory: []
+      };
+      
+      // Also reset the current location to prevent invalid distance calculations
+      this.currentLocation = null;
+      
+      // Reset device-specific hours and distance
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          device.totalHoursOnline = 0;
+          device.totalDistanceTraveled = 0;
+        });
+      }
+      
+      // Reset total distance as well
+      this.totalDistanceTraveled = 0;
+      
+      return true; // Session was reset
+    }
+  }
+  
+  return false; // No reset needed
+};
+>>>>>>> jairhon_cleanup-directory
 
 // Virtual for easy access to current location coordinates
 ScreenTrackingSchema.virtual('currentLat').get(function() {
@@ -365,6 +455,7 @@ ScreenTrackingSchema.methods.startDailySession = function() {
   return this.save();
 };
 
+<<<<<<< HEAD
 // Method to handle WebSocket connection
 ScreenTrackingSchema.methods.handleWebSocketConnection = function() {
   if (!this.currentSession) {
@@ -440,6 +531,9 @@ ScreenTrackingSchema.methods.handleWebSocketDisconnection = function() {
 };
 
 ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '') {
+=======
+ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', deviceId = null) {
+>>>>>>> jairhon_cleanup-directory
   const locationPoint = {
     type: 'Point',
     coordinates: [lng, lat], // GeoJSON format: [longitude, latitude]
@@ -450,8 +544,9 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
     address
   };
 
-  // Update current location
+  // Update current location (root level)
   this.currentLocation = locationPoint;
+<<<<<<< HEAD
   
   // Only update lastSeen if WebSocket is connected (real-time tracking)
   if (this.currentSession && this.currentSession.lastWebSocketStatus) {
@@ -460,25 +555,45 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   } else {
     console.log(`📍 [LOCATION] ${this.devices[0]?.deviceId || 'Unknown'} location updated (WebSocket disconnected - not updating lastSeen)`);
   }
+=======
+  this.lastSeen = new Date();
+  
+  // Also update location for the specific device in devices array
+  if (this.devices && this.devices.length > 0 && deviceId) {
+    this.devices.forEach(device => {
+      if (device.deviceId === deviceId) { // Update the specific device using the passed deviceId
+        device.currentLocation = locationPoint;
+        device.lastSeen = new Date();
+      }
+    });
+  }
+  
+>>>>>>> jairhon_cleanup-directory
 
-  // Add to current session history
+  // Add to current session history (but limit entries to prevent database bloat)
   if (this.currentSession && this.currentSession.isActive) {
     this.currentSession.locationHistory.push(locationPoint);
     
-    // Calculate distance traveled
+    // Limit location history to last 100 entries to prevent database bloat
+    if (this.currentSession.locationHistory.length > 100) {
+      this.currentSession.locationHistory = this.currentSession.locationHistory.slice(-100);
+    }
+    
+    // Calculate distance traveled only if location actually changed
     if (this.currentSession.locationHistory.length > 1) {
       const prevPoint = this.currentSession.locationHistory[this.currentSession.locationHistory.length - 2];
       
-      // Check if previous point has valid coordinates
+      // Check if previous point has valid coordinates (not 0,0 which is in the ocean)
       if (prevPoint.coordinates && prevPoint.coordinates.length === 2 && 
           typeof prevPoint.coordinates[0] === 'number' && typeof prevPoint.coordinates[1] === 'number' &&
-          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1])) {
+          !isNaN(prevPoint.coordinates[0]) && !isNaN(prevPoint.coordinates[1]) &&
+          !(prevPoint.coordinates[0] === 0 && prevPoint.coordinates[1] === 0)) {
         
         // Extract coordinates from GeoJSON format: [longitude, latitude]
         const prevLng = prevPoint.coordinates[0];
         const prevLat = prevPoint.coordinates[1];
-        const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
         
+<<<<<<< HEAD
         // Only add distance if it's a valid number and above movement threshold
         // Movement threshold: 10 meters (0.01 km) to ignore GPS noise
         const MOVEMENT_THRESHOLD = 0.01; // 10 meters in kilometers
@@ -504,8 +619,51 @@ ScreenTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
           console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} GPS accuracy too poor: ${accuracy}m (ignored)`);
         } else if (!isTimeIntervalValid) {
           console.log(`📍 [DISTANCE] ${this.devices[0]?.deviceId || 'Unknown'} time interval too short: ${timeDiff}ms (ignored)`);
+=======
+        // Only calculate distance if coordinates are actually different
+        const latDiff = Math.abs(prevLat - lat);
+        const lngDiff = Math.abs(prevLng - lng);
+        const minChangeThreshold = 0.000001; // ~0.1 meters (very small threshold for actual movement)
+        
+        if (latDiff > minChangeThreshold || lngDiff > minChangeThreshold) {
+          const distance = this.calculateDistance(prevLat, prevLng, lat, lng);
+          
+          // Only add distance if it's a valid number and greater than minimum threshold (10 meters)
+          if (!isNaN(distance) && distance >= 0 && distance > 0.01) {
+            this.currentSession.totalDistanceTraveled += distance;
+            this.totalDistanceTraveled += distance;
+            console.log(`📍 Distance calculated: ${distance.toFixed(3)}km (from [${prevLat.toFixed(6)}, ${prevLng.toFixed(6)}] to [${lat.toFixed(6)}, ${lng.toFixed(6)}])`);
+          }
+        } else {
+          console.log(`📍 No significant movement detected (${latDiff.toFixed(8)}, ${lngDiff.toFixed(8)}) - skipping distance calculation`);
+>>>>>>> jairhon_cleanup-directory
         }
+      } else {
+        console.log(`📍 Previous location invalid or is 0,0 - skipping distance calculation`);
       }
+    }
+    
+    // Update hours tracking - only count when device is online (WebSocket connected)
+    if (this.isOnline && this.currentSession && this.currentSession.isActive) {
+      const now = new Date();
+      const startTime = new Date(this.currentSession.startTime);
+      const hoursDiff = (now - startTime) / (1000 * 60 * 60);
+      
+      // Cap at 8 hours maximum
+      const totalHours = Math.min(8, Math.max(0, hoursDiff));
+      this.currentSession.totalHoursOnline = Math.round(totalHours * 100) / 100;
+      
+      // Update device-specific hours if devices array exists
+      if (this.devices && this.devices.length > 0) {
+        this.devices.forEach(device => {
+          if (device.deviceId === this.deviceId) { // Update the specific device
+            device.totalHoursOnline = this.currentSession.totalHoursOnline;
+            device.totalDistanceTraveled = this.currentSession.totalDistanceTraveled;
+          }
+        });
+      }
+      
+      console.log(`⏰ Hours updated: ${this.currentSession.totalHoursOnline}h (online: ${this.isOnline})`);
     }
   }
 
@@ -601,6 +759,10 @@ ScreenTrackingSchema.methods.deg2rad = function(deg) {
 };
 
 ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDIUM') {
+  // Clean up old alerts (older than 7 days) before adding new ones
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  this.alerts = this.alerts.filter(alert => alert.timestamp > sevenDaysAgo);
+  
   this.alerts.push({
     type,
     message,
@@ -611,6 +773,7 @@ ScreenTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDI
   
   return this.save();
 };
+
 
 // Helper method to get formatted location data for API responses
 ScreenTrackingSchema.methods.getFormattedLocation = function() {
@@ -693,7 +856,11 @@ ScreenTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
     endTime: null,
     impressions: (this.screenMetrics.currentAd?.impressions || 0) + 1,
     totalViewTime: (this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime,
-    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0
+    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0,
+    // Real-time playback fields
+    currentTime: 0,
+    state: 'playing',
+    progress: 0
   };
   
   // Update total ad play count

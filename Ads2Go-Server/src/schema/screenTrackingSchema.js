@@ -11,6 +11,38 @@ const typeDefs = gql`
   }
 
   """
+<<<<<<< HEAD
+=======
+  Current ad information
+  """
+  type CurrentAd {
+    adId: String
+    adTitle: String
+    adDuration: Int
+    startTime: String
+    currentTime: Float
+    state: String
+    progress: Float
+  }
+
+  """
+  Screen metrics data
+  """
+  type ScreenMetrics {
+    isDisplaying: Boolean
+    brightness: Int
+    volume: Int
+    adPlayCount: Int
+    maintenanceMode: Boolean
+    currentAd: CurrentAd
+    dailyAdStats: DailyAdStats
+    adPerformance: [String]
+    displayHours: Float
+    lastAdPlayed: String
+  }
+
+  """
+>>>>>>> jairhon_cleanup-directory
   Location data structure
   """
   type LocationData {

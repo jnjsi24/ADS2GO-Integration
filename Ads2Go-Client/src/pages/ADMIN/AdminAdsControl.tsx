@@ -20,17 +20,20 @@ import {
   Wifi,
   Sun,
   Upload,
-  Loader2
+  Loader2,
+  FileVideo
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
-import { adsPanelGraphQLService, ScreenData, AdAnalytics } from '../../services/adsPanelGraphQLService';
-import '../../services/testEndpoints';
+import { ScreenData, AdAnalytics } from '../../types/screenTypes';
+import { adsPanelService } from '../../services/adsPanelService';
+import playbackWebSocketService from '../../services/playbackWebSocketService';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
 import ScreenControl from './tabs/adminAdsControl/ScreenControl';
 import ContentManagement from './tabs/manageAds/ContentManagement';
-import Analytics from './tabs/dashboard/Analytics';
+import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
+import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
 
 const AdminAdsControl: React.FC = () => {
@@ -60,8 +63,8 @@ const AdminAdsControl: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
-  // GraphQL service for all API operations
-  const graphQLService = adsPanelGraphQLService;
+  // REST API service for all API operations (using compliance endpoint for real-time data)
+  const apiService = adsPanelService;
 
   // Data fetching functions - only for initial load and manual refresh
   const fetchData = useCallback(async (isManualRefresh = false) => {
@@ -79,10 +82,10 @@ const AdminAdsControl: React.FC = () => {
       
       console.log('🔄 Fetching data from server...');
       
-      // Fetch screens data using GraphQL
+      // Fetch screens data using REST API (compliance endpoint)
       try {
-        console.log('🔍 Fetching screens data via GraphQL...');
-        const screensResponse = await graphQLService.getScreens();
+        console.log('🔍 Fetching screens data via REST API...');
+        const screensResponse = await apiService.getScreens();
         console.log('📊 Screens data received:', screensResponse);
         
         if (screensResponse && Array.isArray(screensResponse.screens)) {
@@ -98,6 +101,13 @@ const AdminAdsControl: React.FC = () => {
             screenMetrics: s.screenMetrics,
             currentAd: s.screenMetrics?.currentAd
           })));
+          
+          // Log current ad information for debugging
+          screensResponse.screens.forEach((screen: any) => {
+            if (screen.screenMetrics?.currentAd) {
+              console.log(`🎬 Initial load - Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+            }
+          });
         } else {
           console.warn('⚠️ Unexpected screens data format:', screensResponse);
           setScreens([]);
@@ -107,10 +117,10 @@ const AdminAdsControl: React.FC = () => {
         setScreens([]);
       }
       
-      // Fetch other data in parallel using GraphQL
+      // Fetch other data in parallel using REST API
       try {
-        console.log('🔄 Fetching additional data via GraphQL...');
-        const analyticsData = await graphQLService.getAdAnalytics();
+        console.log('🔄 Fetching additional data via REST API...');
+        const analyticsData = await apiService.getAdAnalytics();
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data:', otherError);
@@ -132,21 +142,29 @@ const AdminAdsControl: React.FC = () => {
       setIsRefreshing(false);
       setLastRefresh(new Date());
     }
-  }, [hasInitiallyLoaded, graphQLService]);
+  }, [hasInitiallyLoaded, apiService]);
 
   // Auto-refresh function that never shows loading
   const autoRefreshData = useCallback(async () => {
     try {
       console.log('🔄 Auto-refresh - fetching data silently...');
       
-      // Fetch screens data using GraphQL
+      // Fetch screens data using REST API
       try {
-        const screensResponse = await graphQLService.getScreens();
+        const screensResponse = await apiService.getScreens();
         if (screensResponse && Array.isArray(screensResponse.screens)) {
           setScreens(prevScreens => {
             const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
             if (hasChanged) {
               console.log('📊 Screen data updated via auto-refresh');
+              // Log current ad information for debugging
+              screensResponse.screens.forEach((screen: any) => {
+                if (screen.screenMetrics?.currentAd) {
+                  console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+                }
+              });
+            } else {
+              console.log('📊 No changes detected in screen data');
             }
             return screensResponse.screens;
           });
@@ -155,9 +173,9 @@ const AdminAdsControl: React.FC = () => {
         console.error('❌ Error fetching screens during auto-refresh:', screensError);
       }
       
-      // Fetch other data in parallel using GraphQL
+      // Fetch other data in parallel using REST API
       try {
-        const analyticsData = await graphQLService.getAdAnalytics();
+        const analyticsData = await apiService.getAdAnalytics();
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data during auto-refresh:', otherError);
@@ -167,15 +185,66 @@ const AdminAdsControl: React.FC = () => {
     } catch (err) {
       console.error('Error during auto-refresh:', err);
     }
-  }, [graphQLService]);
+  }, [apiService]);
 
   // Load data on component mount
   useEffect(() => {
     fetchData();
     
-    // Set up auto-refresh every 5 seconds for real-time updates
+    // Set up auto-refresh every 5 seconds (reduced to not override WebSocket updates)
     const interval = setInterval(autoRefreshData, 5000);
-    return () => clearInterval(interval);
+    
+    // Subscribe to real-time WebSocket updates for immediate processing
+    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      console.log('🎬 [AdminAdsControl] Received real-time playback update:', {
+        deviceId: update.deviceId,
+        adTitle: update.adTitle,
+        state: update.state,
+        currentTime: update.currentTime,
+        progress: update.progress,
+        timestamp: update.timestamp
+      });
+      
+      // Process updates immediately for perfect real-time sync
+      // Update the screens state with real-time data immediately
+      setScreens(prevScreens => {
+        return prevScreens.map(screen => {
+          if (screen.deviceId === update.deviceId) {
+            console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} with real-time data:`, {
+              currentTime: update.currentTime,
+              progress: update.progress,
+              state: update.state,
+              timestamp: update.timestamp
+            });
+            
+            const updatedScreen = {
+              ...screen,
+              screenMetrics: {
+                ...screen.screenMetrics,
+                currentAd: {
+                  adId: update.adId,
+                  adTitle: update.adTitle,
+                  adDuration: update.duration,
+                  startTime: update.timestamp,
+                  currentTime: update.currentTime,
+                  state: update.state,
+                  progress: update.progress
+                }
+              }
+            };
+            
+            // Force immediate re-render by creating new object reference
+            return updatedScreen;
+          }
+          return screen;
+        });
+      });
+    });
+    
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [fetchData, autoRefreshData]);
 
   // Action handlers
@@ -379,7 +448,6 @@ const AdminAdsControl: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
-            <p className="text-gray-600">Master control panel for all LCD screens and ad playback</p>
           </div>
           <button 
             onClick={() => fetchData(true)}
@@ -391,9 +459,62 @@ const AdminAdsControl: React.FC = () => {
           </button>
         </div>
       </div>
+ 
+      {/* Status Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-2">
+        {/* Total Screens */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-16">
+            <Monitor className="w-8 h-8 text-blue-500" />
+            <div className="flex flex-col items-center">
+              <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
+              <p className="text-sm text-gray-600">Total Screens</p>
+            </div>
+          </div>
+        </div>
+        {/* Online Screens */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-green-600">
+                {screens.filter(s => s.isOnline).length}
+              </p>
+              <p className="text-sm text-gray-600">Online Screens</p>
+            </div>
+            <Wifi className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
 
+        {/* Playing Ads */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-blue-600">
+                {screens.filter(s => s.screenMetrics?.isDisplaying).length}
+              </p>
+              <p className="text-sm text-gray-600">Playing Ads</p>
+            </div>
+            <PlayCircle className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+
+        {/* Total Impressions */}
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="flex flex-col items-center">
+              <p className="text-2xl font-bold text-purple-600">
+                {adAnalytics?.summary.totalAdsPlayed || 0}
+              </p>
+              <p className="text-sm text-gray-600">Total Impressions</p>
+            </div>
+            <Eye className="w-8 h-8 text-purple-500" />
+          </div>
+        </div>
+      </div>
+
+      
       {/* Master Controls */}
-      <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-3">
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           <Monitor className="w-5 h-5 mr-2" />
           Master Controls
@@ -450,68 +571,33 @@ const AdminAdsControl: React.FC = () => {
         </div>
       </div>
 
-      {/* Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Screens</p>
-              <p className="text-2xl font-bold text-gray-900">{screens.length}</p>
-            </div>
-            <Monitor className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Online Screens</p>
-              <p className="text-2xl font-bold text-green-600">{screens.filter(s => s.isOnline).length}</p>
-            </div>
-            <Wifi className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Playing Ads</p>
-              <p className="text-2xl font-bold text-blue-600">{screens.filter(s => s.screenMetrics?.isDisplaying).length}</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Impressions</p>
-              <p className="text-2xl font-bold text-purple-600">{adAnalytics?.summary.totalAdsPlayed || 0}</p>
-            </div>
-            <Eye className="w-8 h-8 text-purple-500" />
-          </div>
-        </div>
-      </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-2xl shadow-sm mb-8">
+      <div className="mb-8">
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'screens', label: 'Screen Control', icon: Monitor },
               { id: 'content', label: 'Content Management', icon: Upload },
-              { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+              { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
+              { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
               { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                  activeTab === tab.id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <tab.icon className="w-4 h-4 mr-2" />
                 {tab.label}
+                <span
+                  className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                    ${activeTab === tab.id ? 'w-full' : 'w-0 group-hover:w-full'}
+                  `}
+                />
               </button>
             ))}
           </nav>
@@ -557,10 +643,12 @@ const AdminAdsControl: React.FC = () => {
             />
           )}
 
-          {activeTab === 'analytics' && (
-            <Analytics
-              analytics={mockAnalytics}
-            />
+          {activeTab === 'company-ads' && (
+            <CompanyAdsManagement />
+          )}
+
+          {activeTab === 'notifications' && (
+            <NotificationDashboard />
           )}
 
           {activeTab === 'alerts' && (

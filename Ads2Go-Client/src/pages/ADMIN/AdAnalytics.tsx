@@ -78,7 +78,29 @@ const AdAnalytics: React.FC = () => {
   const errorMessage = error ? 'Network error: Unable to fetch analytics' : null;
 
   const fetchAnalytics = async () => {
+<<<<<<< HEAD
     await refetch();
+=======
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/screenTracking/adAnalytics`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setAnalytics(data.data);
+      } else {
+        setError(data.message || 'Failed to fetch analytics');
+      }
+    } catch (err) {
+      setError('Network error: Unable to fetch analytics');
+      console.error('Error fetching analytics:', err);
+    } finally {
+      setLoading(false);
+    }
+>>>>>>> jairhon_cleanup-directory
   };
 
   // Auto-refresh every 5 seconds for real-time updates

@@ -5,7 +5,8 @@ import {
   Square, 
   Settings
 } from 'lucide-react';
-import { ScreenData } from '../../../services/adsPanelGraphQLService';
+import { ScreenData } from '../../../../types/screenTypes';
+import AdProgressBar from '../../../../components/AdProgressBar';
 
 interface ScreenControlProps {
   screens: ScreenData[];
@@ -43,19 +44,17 @@ const ScreenControl: React.FC<ScreenControlProps> = ({
                   Duration: {screen.screenMetrics.currentAd.adDuration ? `${screen.screenMetrics.currentAd.adDuration}s` : 'Unknown'}
                 </div>
                 <div className="mt-1">
-                  <div className="flex justify-between text-xs text-gray-600 mb-1">
-                    <span>{formatTime(0)}</span>
-                    <span>{formatTime(screen.screenMetrics.currentAd.adDuration)}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1">
-                    <div 
-                      className="bg-blue-600 h-1 rounded-full transition-all duration-300" 
-                      style={{ width: '0%' }}
-                    ></div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    Ready to play
-                  </div>
+                  <AdProgressBar 
+                    adDuration={screen.screenMetrics.currentAd.adDuration}
+                    isPlaying={screen.isOnline}
+                    className="w-full"
+                    startTime={screen.screenMetrics.currentAd.startTime}
+                    realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
+                      currentTime: screen.screenMetrics.currentAd.currentTime,
+                      progress: screen.screenMetrics.currentAd.progress || 0,
+                      state: screen.screenMetrics.currentAd.state || 'playing'
+                    } : undefined}
+                  />
                 </div>
               </div>
             ) : (

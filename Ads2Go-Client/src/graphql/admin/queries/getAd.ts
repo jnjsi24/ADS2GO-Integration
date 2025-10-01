@@ -12,7 +12,14 @@ export const GET_MY_ADS = gql`
       vehicleType
       price
       status
+      reasonForReject
       createdAt
+<<<<<<< HEAD
+=======
+      startTime
+      endTime
+      adLengthSeconds
+>>>>>>> jairhon_cleanup-directory
       planId {
         id
         name
@@ -25,6 +32,7 @@ export const GET_MY_ADS = gql`
       }
       materialId {
         id
+        materialId
         materialType
         category
         description

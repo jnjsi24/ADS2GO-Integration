@@ -8,7 +8,7 @@ const EmailService = require('../utils/emailService');
 const validator = require('validator');
 
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
+const LOCK_TIME = 1 * 60 * 60 * 1000; // 1 hour
 
 const checkAuth = (superAdmin) => {
   if (!superAdmin) throw new Error('Not authenticated');
@@ -70,9 +70,35 @@ const resolvers = {
       const normalizedEmail = email.toLowerCase().trim();
       if (await SuperAdmin.findOne({ email: normalizedEmail })) throw new Error('Email already exists');
 
-      let normalizedNumber = contactNumber.replace(/\s/g, '');
-      const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
-      if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      // Clean the number (remove spaces and non-digit characters except +)
+      let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+      
+      // Handle different input formats:
+      // 1. 09748717212 -> should be valid (10 digits starting with 09)
+      // 2. +639748717212 -> should be valid (10 digits after +63)
+      // 3. 639748717212 -> should be valid (10 digits after 63)
+      
+      let isValid = false;
+      
+      // Check if it's 10 digits starting with 09
+      if (/^09\d{8}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after +63
+      else if (/^\+639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after 63 (without +)
+      else if (/^639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      
+      if (!isValid) {
+        throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212 or +639748717212');
+      }
+      
+      // Normalize to +63 format for storage
+      let normalizedNumber = cleanNumber;
       if (!normalizedNumber.startsWith('+63')) {
         normalizedNumber = normalizedNumber.startsWith('0')
           ? '+63' + normalizedNumber.substring(1)
@@ -160,14 +186,45 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, password, isActive, permissions
+        contactNumber, email, password, isActive, permissions, profilePicture
       } = input;
 
       // Validate contact number if provided
-      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
-      if (normalizedNumber) {
-        const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
-        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      let normalizedNumber = null;
+      if (contactNumber) {
+        // Clean the number (remove spaces and non-digit characters except +)
+        let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+        
+        // Handle different input formats:
+        // 1. 09748717212 -> should be valid (10 digits starting with 09)
+        // 2. +639748717212 -> should be valid (10 digits after +63)
+        // 3. 639748717212 -> should be valid (10 digits after 63)
+        
+        let isValid = false;
+        
+        // Check if it's 10 digits starting with 09
+        if (/^09\d{8}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after +63
+        else if (/^\+639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after 63 (without +)
+        else if (/^639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits starting with 9 (client sends this format)
+        else if (/^9\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        
+        if (!isValid) {
+          throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212, +639748717212, or 9748717212');
+        }
+        
+        // Normalize to +63 format for storage
+        normalizedNumber = cleanNumber;
         if (!normalizedNumber.startsWith('+63')) {
           normalizedNumber = normalizedNumber.startsWith('0')
             ? '+63' + normalizedNumber.substring(1)
@@ -190,6 +247,7 @@ const resolvers = {
       if (companyName) superAdminToUpdate.companyName = companyName.trim();
       if (companyAddress) superAdminToUpdate.companyAddress = companyAddress.trim();
       if (normalizedNumber) superAdminToUpdate.contactNumber = normalizedNumber;
+      if (profilePicture) superAdminToUpdate.profilePicture = profilePicture;
       if (isActive !== undefined) superAdminToUpdate.isActive = isActive;
 
       // Update permissions if provided
@@ -349,9 +407,35 @@ const resolvers = {
 
       if (await Admin.findOne({ email })) throw new Error('Email already exists');
 
-      let normalizedNumber = contactNumber.replace(/\s/g, '');
-      const phoneRegex = /^(\+63|0)?\d{10}$/;
-      if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      // Clean the number (remove spaces and non-digit characters except +)
+      let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+      
+      // Handle different input formats:
+      // 1. 09748717212 -> should be valid (10 digits starting with 09)
+      // 2. +639748717212 -> should be valid (10 digits after +63)
+      // 3. 639748717212 -> should be valid (10 digits after 63)
+      
+      let isValid = false;
+      
+      // Check if it's 10 digits starting with 09
+      if (/^09\d{8}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after +63
+      else if (/^\+639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after 63 (without +)
+      else if (/^639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      
+      if (!isValid) {
+        throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212 or +639748717212');
+      }
+      
+      // Normalize to +63 format for storage
+      let normalizedNumber = cleanNumber;
       if (!normalizedNumber.startsWith('+63')) {
         normalizedNumber = normalizedNumber.startsWith('0')
           ? '+63' + normalizedNumber.substring(1)
@@ -399,14 +483,36 @@ const resolvers = {
       } = input;
 
       // Validate contact number if provided
-      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
-      if (normalizedNumber) {
-        const phoneRegex = /^(\+63|0)?\d{10}$/;
-        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
-        if (!normalizedNumber.startsWith('+63')) {
-          normalizedNumber = normalizedNumber.startsWith('0')
-            ? '+63' + normalizedNumber.substring(1)
-            : '+63' + normalizedNumber;
+      if (contactNumber) {
+        // Clean the number (remove spaces and non-digit characters except +)
+        let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+        
+        // Handle different input formats:
+        // 1. 09748717212 -> should be valid (10 digits starting with 09)
+        // 2. +639748717212 -> should be valid (10 digits after +63)
+        // 3. 639748717212 -> should be valid (10 digits after 63)
+        
+        let isValid = false;
+        
+        // Check if it's 10 digits starting with 09
+        if (/^09\d{8}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after +63
+        else if (/^\+639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after 63 (without +)
+        else if (/^639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits starting with 9 (client sends this format)
+        else if (/^9\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        
+        if (!isValid) {
+          throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212, +639748717212, or 9748717212');
         }
       }
 

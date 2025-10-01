@@ -1,6 +1,11 @@
 
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
+const ScreenTracking = require('../models/screenTracking');
+const AnalyticsService = require('../services/analyticsService');
+const AdsDeployment = require('../models/adsDeployment');
+const Material = require('../models/Material');
+const Ad = require('../models/Ad');
 
 module.exports = {
   Query: {
@@ -35,10 +40,20 @@ module.exports = {
       return await Tablet.find();
     },
     getTabletConnectionStatus: async (_, { materialId, slotNumber }) => {
+      console.log('=== getTabletConnectionStatus called ===');
+      console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
+      console.log('materialId type:', typeof materialId);
+      
+      // Default response
+      const defaultResponse = {
+        isConnected: false,
+        materialId: materialId || '',
+        slotNumber: slotNumber || 1,
+        carGroupId: null,
+        connectedDevice: null
+      };
+      
       try {
-        console.log('=== getTabletConnectionStatus called ===');
-        console.log('Getting connection status for materialId:', materialId, 'slotNumber:', slotNumber);
-        console.log('materialId type:', typeof materialId);
         
         // Find tablet by materialId (as string)
         const tablet = await Tablet.findOne({ materialId });
@@ -53,20 +68,23 @@ module.exports = {
         
         if (!tablet) {
           console.log('No tablet found for materialId:', materialId);
+          return defaultResponse;
+        }
+
+        // Check if tablet has tablets array and the slot exists
+        if (!tablet.tablets || !Array.isArray(tablet.tablets)) {
+          console.log('Tablet has no tablets array or tablets is not an array');
           return {
-            isConnected: false,
-            materialId,
-            slotNumber,
-            carGroupId: null
+            ...defaultResponse,
+            carGroupId: tablet.carGroupId || null
           };
         }
 
         const tabletUnit = tablet.tablets[slotNumber - 1]; // slotNumber is 1-based
         if (!tabletUnit) {
+          console.log('Tablet unit not found for slot:', slotNumber);
           return {
-            isConnected: false,
-            materialId,
-            slotNumber,
+            ...defaultResponse,
             carGroupId: tablet.carGroupId || null
           };
         }
@@ -87,7 +105,8 @@ module.exports = {
         };
       } catch (error) {
         console.error('Error getting tablet connection status:', error);
-        throw new Error('Failed to get tablet connection status');
+        // Return the default response instead of throwing an error
+        return defaultResponse;
       }
     }
   },
@@ -143,6 +162,61 @@ module.exports = {
         
         await tablet.save();
         
+        // Update analytics to link tablet device with deployment analytics
+        try {
+          console.log(`🔄 Updating analytics for tablet device: ${deviceId}`);
+          
+          // Find the deployment for this material
+          const deployment = await AdsDeployment.findOne({ materialId });
+          
+          if (deployment && deployment.lcdSlots && deployment.lcdSlots.length > 0) {
+            // Find the slot that matches the slotNumber
+            const slot = deployment.lcdSlots.find(s => s.slotNumber === slotNumber);
+            
+            if (slot && slot.adId) {
+              // Get the ad details
+              const ad = await Ad.findById(slot.adId);
+              
+              if (ad) {
+                // Get material details
+                const material = await Material.findOne({ materialId });
+                
+                if (material) {
+                  // Update analytics with real device data
+                  const analyticsData = {
+                    carGroupId: material.carGroupId,
+                    driverId: material.driverId,
+                    adId: slot.adId,
+                    userId: ad.userId,
+                    adDeploymentId: deployment._id,
+                    deviceInfo: {
+                      deviceId: deviceId,
+                      deviceName: 'Tablet Device',
+                      deviceType: 'Tablet',
+                      osName: 'Android',
+                      osVersion: 'Unknown',
+                      platform: 'Android',
+                      brand: 'Unknown',
+                      modelName: 'Unknown',
+                      screenWidth: 0,
+                      screenHeight: 0,
+                      screenScale: 1
+                    },
+                    isOnline: true,
+                    networkStatus: true
+                  };
+                  
+                  await AnalyticsService.updateAnalytics(deviceId, materialId, slotNumber, analyticsData);
+                  console.log(`✅ Analytics updated for tablet device: ${deviceId} -> Slot ${slotNumber} -> Ad ${slot.adId}`);
+                }
+              }
+            }
+          }
+        } catch (analyticsError) {
+          console.error('Error updating analytics for tablet:', analyticsError);
+          // Don't fail the registration if analytics update fails
+        }
+        
         console.log('Tablet registered successfully:', { deviceId, materialId, slotNumber });
         return tablet;
         
@@ -184,6 +258,50 @@ module.exports = {
         };
         
         await tablet.save();
+        
+        // Also update ScreenTracking collection to sync status
+        try {
+          const now = new Date();
+          const materialId = tablet.materialId;
+          
+          if (materialId) {
+            // Update ScreenTracking collection
+            const screenTracking = await ScreenTracking.findOneAndUpdate(
+              { materialId },
+              {
+                $set: {
+                  isOnline: isOnline,
+                  lastSeen: now
+                },
+                $push: {
+                  statusHistory: {
+                    status: isOnline ? 'online' : 'offline',
+                    timestamp: now
+                  }
+                }
+              },
+              { upsert: true, new: true }
+            );
+
+            // Also update device-specific status in the devices array
+            if (screenTracking) {
+              await ScreenTracking.updateOne(
+                { 'devices.deviceId': deviceId },
+                {
+                  $set: {
+                    'devices.$.isOnline': isOnline,
+                    'devices.$.lastSeen': now
+                  }
+                }
+              );
+            }
+
+            console.log(`🔄 [GraphQL updateTabletStatus] Updated ScreenTracking for materialId: ${materialId}, deviceId: ${deviceId}, status: ${isOnline ? 'online' : 'offline'}`);
+          }
+        } catch (screenTrackingError) {
+          console.error('Error updating ScreenTracking collection in GraphQL:', screenTrackingError);
+          // Don't fail the request if ScreenTracking update fails
+        }
         
         console.log('Tablet status updated successfully:', { deviceId, status: isOnline ? 'ONLINE' : 'OFFLINE' });
         return tablet;

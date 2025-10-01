@@ -3,6 +3,7 @@ const Driver = require('../models/Driver');
 const Tablet = require('../models/Tablet');
 const ScreenTracking = require('../models/screenTracking');
 const MaterialTracking = require('../models/materialTracking');
+const MaterialUsageHistory = require('../models/MaterialUsageHistory');
 const MaterialAvailability = require('../models/MaterialAvailability');
 const AdsPlan = require('../models/AdsPlan');
 const { checkAdmin } = require('../middleware/auth');
@@ -167,7 +168,14 @@ const materialResolvers = {
                 photoComplianceStatus: tracking.photoComplianceStatus,
                 nextPhotoDue: tracking.nextPhotoDue,
                 lastPhotoUpload: tracking.lastPhotoUpload,
-                monthlyPhotos: tracking.monthlyPhotos || []
+                monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
+                  month: photo.month,
+                  status: photo.status,
+                  photoUrls: photo.photoUrls,
+                  uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+                  uploadedBy: photo.uploadedBy,
+                  adminNotes: photo.adminNotes
+                }))
               } : null
             };
           })
@@ -187,6 +195,77 @@ const materialResolvers = {
           success: false,
           message: error.message,
           materials: []
+        };
+      }
+    },
+
+    // Get usage history for a specific material (Admin-only)
+    getMaterialUsageHistory: async (_, { materialId }, { user }) => {
+      checkAdmin(user); // Only admin can access
+      
+      try {
+        console.log(`📊 Fetching usage history for material ${materialId}`);
+        
+        // Verify material exists
+        const material = await Material.findById(materialId);
+        if (!material) {
+          throw new Error('Material not found');
+        }
+        
+        // Get usage history
+        const usageHistory = await MaterialUsageHistory.getMaterialUsageHistory(materialId);
+        
+        console.log(`✅ Found ${usageHistory.length} usage history entries for material ${material.materialId}`);
+        
+        // Ensure all records have proper IDs and required fields
+        const validatedHistory = usageHistory.map(record => {
+          // Ensure ID is present
+          const id = record.id || record._id?.toString();
+          if (!id) {
+            console.error('Record missing ID:', record);
+            throw new Error('Usage history record missing ID');
+          }
+          
+          // Ensure required fields are present
+          if (!record.driverInfo || !record.driverInfo.driverId) {
+            console.error('Record missing driver info:', record);
+            throw new Error('Usage history record missing driver info');
+          }
+          
+          return {
+            id: id,
+            materialId: record.materialId?.toString(),
+            driverId: record.driverId,
+            driverInfo: record.driverInfo,
+            assignedAt: record.assignedAt?.toISOString(),
+            unassignedAt: record.unassignedAt ? record.unassignedAt.toISOString() : null,
+            mountedAt: record.mountedAt ? record.mountedAt.toISOString() : null,
+            dismountedAt: record.dismountedAt ? record.dismountedAt.toISOString() : null,
+            usageDuration: record.usageDuration,
+            assignmentReason: record.assignmentReason,
+            unassignmentReason: record.unassignmentReason || null,
+            customDismountReason: record.customDismountReason || null,
+            assignedByAdmin: record.assignedByAdmin || null,
+            unassignedByAdmin: record.unassignedByAdmin || null,
+            notes: record.notes || null,
+            isActive: record.isActive,
+            createdAt: record.createdAt?.toISOString(),
+            updatedAt: record.updatedAt?.toISOString()
+          };
+        });
+        
+        return {
+          success: true,
+          message: `Found ${validatedHistory.length} usage history entries`,
+          usageHistory: validatedHistory
+        };
+        
+      } catch (error) {
+        console.error('Error fetching material usage history:', error);
+        return {
+          success: false,
+          message: error.message,
+          usageHistory: []
         };
       }
     },
@@ -218,6 +297,16 @@ const materialResolvers = {
       } catch (error) {
         console.error(`❌ Error saving material:`, error);
         throw new Error(`Failed to save material: ${error.message}`);
+      }
+
+      // Send notification to admins about new material creation
+      try {
+        const AdminNotificationService = require('../services/notifications/AdminNotificationService');
+        await AdminNotificationService.sendNewMaterialCreatedNotification(material._id);
+        console.log(`✅ Sent new material creation notification for material: ${material.materialId}`);
+      } catch (notificationError) {
+        console.error('❌ Error sending new material creation notification:', notificationError);
+        // Don't fail the material creation if notification fails
       }
 
       // Create MaterialAvailability record automatically
@@ -446,6 +535,9 @@ const materialResolvers = {
 
       // Handle material dismounting (when driverId is set to null)
       if (input.driverId === null && material.driverId) {
+        const dismountDate = new Date();
+        const previousDriverId = material.driverId; // Store the driver ID before clearing it
+        
         // Find and update the driver to clear the material reference
         await Driver.findOneAndUpdate(
           { driverId: material.driverId },
@@ -458,43 +550,94 @@ const materialResolvers = {
         
         // Update material fields
         material.driverId = null;
-        material.dismountedAt = new Date();
+        material.dismountedAt = dismountDate;
+        
+        // Update usage history with dismounted date
+        try {
+          await MaterialUsageHistory.endUsageEntry(
+            material._id,
+            previousDriverId,
+            'MANUAL_REMOVAL',
+            `Material dismounted via admin update by ${user.name || user.email}`,
+            dismountDate,
+            null,
+            {
+              adminId: user.id,
+              adminName: user.name || user.email,
+              adminEmail: user.email
+            }
+          );
+        } catch (error) {
+          console.error('Error updating usage history for dismount:', error);
+          // Don't fail the main operation if usage history update fails
+        }
       } 
       // Handle mounting (when mountedAt is set)
-      else if (input.mountedAt) {
-        if (!material.driverId) {
-          throw new Error('Cannot set mountedAt: No driver assigned to this material');
-        }
-        material.mountedAt = input.mountedAt;
+      if (input.mountedAt !== undefined) {
+        material.mountedAt = input.mountedAt ? new Date(input.mountedAt) : null;
         
-        // Update the driver's installedMaterialType
-        await Driver.findOneAndUpdate(
-          { driverId: material.driverId },
-          { 
-            installedMaterialType: material.materialType,
-            materialId: material.id
-          },
-          { runValidators: false } // Skip validation to avoid contact number issues
-        );
+        // If there's a driver assigned, update the driver's installedMaterialType
+        if (material.driverId) {
+          await Driver.findOneAndUpdate(
+            { driverId: material.driverId },
+            { 
+              installedMaterialType: material.materialType,
+              materialId: material.id
+            },
+            { runValidators: false } // Skip validation to avoid contact number issues
+          );
+          
+          // Update usage history with mounted date
+          try {
+            const usageHistory = await MaterialUsageHistory.findOne({
+              materialId: material._id,
+              driverId: material.driverId,
+              isActive: true
+            });
+            
+            if (usageHistory) {
+              usageHistory.mountedAt = input.mountedAt ? new Date(input.mountedAt) : null;
+              await usageHistory.save();
+            }
+          } catch (error) {
+            console.error('Error updating usage history mounted date:', error);
+            // Don't fail the main operation if usage history update fails
+          }
+        }
       }
       // Handle dismounting (when dismountedAt is set)
-      else if (input.dismountedAt) {
-        if (!material.driverId) {
-          throw new Error('Cannot set dismountedAt: No driver assigned to this material');
-        }
-        material.dismountedAt = input.dismountedAt;
+      if (input.dismountedAt !== undefined) {
+        material.dismountedAt = input.dismountedAt ? new Date(input.dismountedAt) : null;
         
-        // Clear the driver's installedMaterialType
-        await Driver.findOneAndUpdate(
-          { driverId: material.driverId },
-          { 
-            installedMaterialType: null,
-            materialId: null
-          },
-          { runValidators: false } // Skip validation to avoid contact number issues
-        );
+        // Update usage history with dismounted date (don't unassign driver automatically)
+        if (material.driverId && input.dismountedAt) {
+          try {
+            const usageHistory = await MaterialUsageHistory.findOne({
+              materialId: material._id,
+              driverId: material.driverId,
+              isActive: true
+            });
+            
+            if (usageHistory) {
+              usageHistory.dismountedAt = new Date(input.dismountedAt);
+              await usageHistory.save();
+            }
+          } catch (error) {
+            console.error('Error updating usage history dismounted date:', error);
+            // Don't fail the main operation if usage history update fails
+          }
+        }
       }
-      else if (input.driverId !== undefined) {
+      
+      // Handle other material fields
+      if (input.vehicleType !== undefined) material.vehicleType = input.vehicleType;
+      if (input.materialType !== undefined) material.materialType = input.materialType;
+      if (input.description !== undefined) material.description = input.description;
+      if (input.requirements !== undefined) material.requirements = input.requirements;
+      if (input.category !== undefined) material.category = input.category;
+      
+      // Prevent direct driver assignment through updateMaterial
+      if (input.driverId !== undefined && input.driverId !== null) {
         throw new Error('Cannot assign driver through updateMaterial. Use assignMaterialToDriver mutation instead.');
       }
       
@@ -615,6 +758,25 @@ const materialResolvers = {
         // Unassign from the previous driver
         const previousDriver = await Driver.findOne({ driverId: availableMaterial.driverId });
         if (previousDriver) {
+        // Set dismounted date before ending usage history
+        const dismountDate = new Date();
+        availableMaterial.dismountedAt = dismountDate;
+        
+        // Create usage history entry for the previous driver
+        await MaterialUsageHistory.endUsageEntry(
+          availableMaterial._id,
+          previousDriver.driverId,
+          'REASSIGNMENT',
+          `Material reassigned to driver ${driver.driverId}`,
+          dismountDate,
+          null,
+          {
+            adminId: user.id,
+            adminName: user.name || user.email,
+            adminEmail: user.email
+          }
+        );
+          
           previousDriver.materialId = null;
           previousDriver.installedMaterialType = null;
           await previousDriver.save();
@@ -636,6 +798,25 @@ const materialResolvers = {
         driver.save()
       ]);
 
+      // Create usage history entry
+      await MaterialUsageHistory.createUsageEntry(
+        availableMaterial._id,
+        driver.driverId,
+        {
+          driverId: driver.driverId,
+          fullName: `${driver.firstName} ${driver.lastName}`,
+          email: driver.email,
+          contactNumber: driver.contactNumber,
+          vehiclePlateNumber: driver.vehiclePlateNumber
+        },
+        'MANUAL_ASSIGNMENT',
+        {
+          adminId: user.id,
+          adminName: user.name || user.email,
+          adminEmail: user.email
+        }
+      );
+
       return {
         success: true,
         message: 'Material assigned successfully',
@@ -649,6 +830,122 @@ const materialResolvers = {
         }
       };
     },
+
+    unassignMaterialFromDriver: async (_, { materialId, dismountReason }, { user }) => {
+      checkAdmin(user);
+
+      // Validate dismount reason
+      if (!dismountReason || dismountReason.trim().length === 0) {
+        throw new Error('Dismount reason is required');
+      }
+
+      const material = await Material.findById(materialId);
+      if (!material) throw new Error('Material not found');
+      
+      if (!material.driverId) {
+        throw new Error('Material is not assigned to any driver');
+      }
+
+      const driver = await Driver.findOne({ driverId: material.driverId });
+      if (!driver) throw new Error('Driver not found');
+
+      // Unassign the material and reset dates
+      const dismountDate = new Date();
+      material.driverId = null;
+      material.mountedAt = null; // Reset mounted date
+      material.dismountedAt = dismountDate; // Set dismounted date to now
+      await material.save();
+
+      // Create usage history entry for the unassignment with dismounted date and custom reason
+      await MaterialUsageHistory.endUsageEntry(
+        material._id,
+        driver.driverId,
+        'CUSTOM',
+        `Material manually unassigned by ${user.name || user.email}: ${dismountReason.trim()}`,
+        dismountDate,
+        dismountReason.trim(),
+        {
+          adminId: user.id,
+          adminName: user.name || user.email,
+          adminEmail: user.email
+        }
+      );
+
+      // Update driver
+      driver.materialId = null;
+      driver.installedMaterialType = null;
+      await driver.save();
+
+      return {
+        success: true,
+        message: 'Material unassigned successfully',
+        material: material,
+        driver: {
+          driverId: driver.driverId,
+          fullName: `${driver.firstName} ${driver.lastName}`,
+          email: driver.email,
+          contactNumber: driver.contactNumber,
+          vehiclePlateNumber: driver.vehiclePlateNumber
+        }
+      };
+    },
+
+    // Driver photo upload mutation
+    uploadMonthlyPhoto: async (_, { materialId, photoUrls, month, description }, { user, driver }) => {
+      // Check if user is authenticated (either admin or driver)
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
+
+      try {
+        console.log(`📸 Uploading monthly photo for material ${materialId}, month: ${month}`);
+        
+        // Find the material
+        const material = await Material.findById(materialId);
+        if (!material) {
+          throw new Error('Material not found');
+        }
+
+        // If it's a driver, verify they own this material
+        if (driver && material.driverId !== driver.driverId) {
+          throw new Error('You can only upload photos for your assigned materials');
+        }
+
+        // Find or create material tracking record
+        let materialTracking = await MaterialTracking.findOne({ materialId: material._id });
+        
+        if (!materialTracking) {
+          console.log(`📝 Creating new MaterialTracking record for material ${material.materialId}`);
+          materialTracking = new MaterialTracking({
+            materialId: material._id,
+            driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
+            location: {
+              type: 'Point',
+              coordinates: [0, 0] // Default coordinates
+            },
+            address: 'Location not set',
+            materialCondition: 'GOOD',
+            monthlyPhotos: [],
+            photoComplianceStatus: 'PENDING'
+          });
+        }
+
+        // Add monthly photo using the existing method
+        await materialTracking.addMonthlyPhoto(month, photoUrls, driver?.driverId || user?.id);
+
+        console.log(`✅ Monthly photo uploaded for material ${material.materialId}, month: ${month}`);
+
+        return {
+          success: true,
+          message: 'Monthly photo uploaded successfully',
+          materialTracking: materialTracking
+        };
+
+      } catch (error) {
+        console.error('Error uploading monthly photo:', error);
+        throw new Error(error.message || 'Failed to upload monthly photo');
+      }
+    }
   },
 
   Material: {
@@ -705,6 +1002,70 @@ const materialResolvers = {
     dismountedAt: (parent) => {
       if (!parent.dismountedAt) return null;
       return parent.dismountedAt.toISOString();
+    },
+    
+    // Material condition and inspection fields - fetch from materialTracking collection
+    materialCondition: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        return tracking?.materialCondition || parent.materialCondition || 'GOOD';
+      } catch (error) {
+        console.error('Error fetching material condition:', error);
+        return parent.materialCondition || 'GOOD';
+      }
+    },
+    
+    inspectionPhotos: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        if (!tracking?.monthlyPhotos || tracking.monthlyPhotos.length === 0) return [];
+        
+        return tracking.monthlyPhotos.map(photo => ({
+          url: photo.photoUrls?.[0] || '', // Get first photo URL
+          uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+          uploadedBy: photo.uploadedBy,
+          description: photo.adminNotes || '',
+          month: photo.month,
+          status: photo.status || 'PENDING'
+        }));
+      } catch (error) {
+        console.error('Error fetching inspection photos:', error);
+        return [];
+      }
+    },
+    
+    photoComplianceStatus: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        return tracking?.photoComplianceStatus || parent.photoComplianceStatus || 'PENDING';
+      } catch (error) {
+        console.error('Error fetching photo compliance status:', error);
+        return parent.photoComplianceStatus || 'PENDING';
+      }
+    },
+    
+    lastInspectionDate: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const date = tracking?.lastPhotoUpload || parent.lastInspectionDate;
+        if (!date) return null;
+        return date.toISOString();
+      } catch (error) {
+        console.error('Error fetching last inspection date:', error);
+        return parent.lastInspectionDate ? parent.lastInspectionDate.toISOString() : null;
+      }
+    },
+    
+    nextInspectionDue: async (parent) => {
+      try {
+        const tracking = await MaterialTracking.findOne({ materialId: parent._id });
+        const date = tracking?.nextPhotoDue || parent.nextInspectionDue;
+        if (!date) return null;
+        return date.toISOString();
+      } catch (error) {
+        console.error('Error fetching next inspection due:', error);
+        return parent.nextInspectionDue ? parent.nextInspectionDue.toISOString() : null;
+      }
     }
   },
 };

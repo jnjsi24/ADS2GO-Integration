@@ -5,10 +5,11 @@ const Ad = require('../models/Ad');
 const { JWT_SECRET } = require('../middleware/auth');
 const { validateUserInput, checkPasswordStrength } = require('../utils/validations');
 const EmailService = require('../utils/emailService');
+const AnalyticsService = require('../services/analyticsService');
 const validator = require('validator');
 
 const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
+const LOCK_TIME = 1 * 60 * 60 * 1000; // 1 hour
 
 const checkAuth = (user) => {
   if (!user) throw new Error('Not authenticated');
@@ -27,6 +28,33 @@ const resolvers = {
     },
 
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
+
+        getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
+          checkAuth(user);
+          try {
+            const analytics = await AnalyticsService.getUserAnalytics(
+              user.id,
+              startDate,
+              endDate,
+              period
+            );
+            return analytics;
+          } catch (error) {
+            console.error('Error fetching user analytics:', error);
+            throw new Error('Failed to fetch analytics data');
+          }
+        },
+
+    getUserAdDetails: async (_, { adId }, { user }) => {
+      checkAuth(user);
+      try {
+        const adDetails = await AnalyticsService.getUserAdDetails(user.id, adId);
+        return adDetails;
+      } catch (error) {
+        console.error('Error fetching ad details:', error);
+        throw new Error('Failed to fetch ad details');
+      }
+    },
   },
 
   Mutation: {
@@ -76,6 +104,16 @@ const resolvers = {
         await EmailService.sendVerificationEmail(newUser.email, verificationCode);
         await newUser.save();
 
+        // Send notification to admins about new user registration
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendNewUserRegistrationNotification(newUser._id);
+          console.log(`✅ Sent new user registration notification for user: ${newUser._id}`);
+        } catch (notificationError) {
+          console.error('❌ Error sending new user registration notification:', notificationError);
+          // Don't fail the user creation if notification fails
+        }
+
         const token = jwt.sign({
           userId: newUser.id,
           email: newUser.email,
@@ -90,7 +128,97 @@ const resolvers = {
       }
     },
 
-    loginUser: async (_, { email, password, deviceInfo }) => {
+    completeGoogleOAuthProfile: async (_, { input }) => {
+      try {
+        const {
+          googleId, email, firstName, lastName, profilePicture,
+          middleName, companyName, companyAddress, contactNumber, houseAddress
+        } = input;
+
+        // Check if user already exists
+        console.log('🔍 Checking for existing user with email:', email);
+        const existingUser = await User.findOne({ email });
+        console.log('🔍 Database query result:', existingUser);
+        console.log('🔍 Existing user found:', existingUser ? 'YES' : 'NO');
+        if (existingUser) {
+          console.log('🔍 Existing user details:', {
+            id: existingUser.id,
+            email: existingUser.email,
+            firstName: existingUser.firstName,
+            lastName: existingUser.lastName
+          });
+        }
+        
+        if (existingUser) {
+          console.log('✅ User already exists, logging them in directly');
+          // User already exists, generate new token and return user data
+          const token = jwt.sign({
+            userId: existingUser.id,
+            email: existingUser.email,
+            role: existingUser.role,
+            firstName: existingUser.firstName,
+            lastName: existingUser.lastName,
+            tokenVersion: existingUser.tokenVersion,
+          }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+          console.log('✅ Generated token for existing user:', existingUser.firstName, existingUser.lastName);
+          return {
+            token,
+            user: existingUser
+          };
+        }
+        
+        console.log('🆕 User does not exist, creating new account');
+
+        // Validate phone number
+        let normalizedNumber = contactNumber.replace(/\s/g, '');
+        const phoneRegex = /^(\+63|0)?\d{10}$/;
+        if (!phoneRegex.test(normalizedNumber)) {
+          throw new Error('Invalid Philippine mobile number');
+        }
+        if (!normalizedNumber.startsWith('+63')) {
+          normalizedNumber = normalizedNumber.startsWith('0') ? '+63' + normalizedNumber.substring(1) : '+63' + normalizedNumber;
+        }
+
+        // Create new user with Google OAuth data
+        const newUser = new User({
+          firstName: firstName.trim(),
+          middleName: middleName?.trim() || null,
+          lastName: lastName?.trim() || 'User', // Provide default if Google doesn't give last name
+          companyName: companyName.trim(),
+          companyAddress: companyAddress.trim(),
+          houseAddress: houseAddress?.trim() || null,
+          contactNumber: normalizedNumber,
+          email: email.toLowerCase().trim(),
+          password: null, // No password for OAuth users
+          role: 'USER',
+          isEmailVerified: true, // Google emails are pre-verified
+          profilePicture: profilePicture || null,
+          googleId: googleId,
+          authProvider: 'google',
+          emailVerificationCode: null,
+          emailVerificationCodeExpires: null,
+        });
+
+        await newUser.save();
+
+        // Generate JWT token
+        const token = jwt.sign({
+          userId: newUser.id,
+          email: newUser.email,
+          role: newUser.role,
+          isEmailVerified: newUser.isEmailVerified,
+          tokenVersion: newUser.tokenVersion,
+        }, JWT_SECRET, { expiresIn: '30d' }); // 30 days for OAuth users
+
+        return { token, user: newUser };
+      } catch (error) {
+        console.error('Complete Google OAuth profile error:', error);
+        throw error;
+      }
+    },
+
+    loginUser: async (_, { email, password, deviceInfo, keepLoggedIn = false }) => {
       console.log(`User login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
       const user = await User.findOne({ email });
@@ -121,7 +249,7 @@ const resolvers = {
         role: user.role,
         isEmailVerified: user.isEmailVerified,
         tokenVersion: user.tokenVersion,
-      }, JWT_SECRET, { expiresIn: '1d' });
+      }, JWT_SECRET, { expiresIn: keepLoggedIn ? '30d' : '1d' });
 
       return { token, user };
     },
@@ -195,7 +323,7 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, password, houseAddress
+        contactNumber, email, password, houseAddress, profilePicture
       } = input;
 
       let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
@@ -215,16 +343,84 @@ const resolvers = {
         userRecord.email = email.toLowerCase();
       }
 
-      if (firstName) userRecord.firstName = firstName.trim();
-      if (middleName !== undefined) userRecord.middleName = middleName ? middleName.trim() : null;
-      if (lastName) userRecord.lastName = lastName.trim();
-      if (companyName) userRecord.companyName = companyName.trim();
-      if (companyAddress) userRecord.companyAddress = companyAddress.trim();
-      if (normalizedNumber) userRecord.contactNumber = normalizedNumber;
-      if (houseAddress !== undefined) userRecord.houseAddress = houseAddress ? houseAddress.trim() : userRecord.houseAddress;
-      if (password) userRecord.password = await bcrypt.hash(password, 10);
+      // Track which fields are being changed for notifications and capture old values
+      const changedFields = [];
+      const oldValues = {};
+
+      if (firstName && firstName.trim() !== userRecord.firstName) {
+        oldValues.firstName = userRecord.firstName;
+        userRecord.firstName = firstName.trim();
+        changedFields.push('firstName');
+      }
+      if (middleName !== undefined) {
+        const newMiddleName = middleName ? middleName.trim() : null;
+        if (newMiddleName !== userRecord.middleName) {
+          oldValues.middleName = userRecord.middleName;
+          userRecord.middleName = newMiddleName;
+          changedFields.push('middleName');
+        }
+      }
+      if (lastName && lastName.trim() !== userRecord.lastName) {
+        oldValues.lastName = userRecord.lastName;
+        userRecord.lastName = lastName.trim();
+        changedFields.push('lastName');
+      }
+      if (companyName && companyName.trim() !== userRecord.companyName) {
+        oldValues.companyName = userRecord.companyName;
+        userRecord.companyName = companyName.trim();
+        changedFields.push('companyName');
+      }
+      if (companyAddress && companyAddress.trim() !== userRecord.companyAddress) {
+        oldValues.companyAddress = userRecord.companyAddress;
+        userRecord.companyAddress = companyAddress.trim();
+        changedFields.push('companyAddress');
+      }
+      if (normalizedNumber && normalizedNumber !== userRecord.contactNumber) {
+        oldValues.contactNumber = userRecord.contactNumber;
+        userRecord.contactNumber = normalizedNumber;
+        changedFields.push('contactNumber');
+      }
+      if (houseAddress !== undefined) {
+        const newHouseAddress = houseAddress ? houseAddress.trim() : null;
+        if (newHouseAddress !== userRecord.houseAddress) {
+          oldValues.houseAddress = userRecord.houseAddress;
+          userRecord.houseAddress = newHouseAddress;
+          changedFields.push('houseAddress');
+        }
+      }
+      if (password) {
+        oldValues.password = '[HIDDEN]';
+        userRecord.password = await bcrypt.hash(password, 10);
+        changedFields.push('password');
+      }
+      if (email && email !== userRecord.email) {
+        oldValues.email = userRecord.email;
+        changedFields.push('email');
+      }
+      if (profilePicture !== undefined) {
+        const newProfilePicture = profilePicture ? profilePicture.trim() : null;
+        if (newProfilePicture !== userRecord.profilePicture) {
+          oldValues.profilePicture = userRecord.profilePicture;
+          userRecord.profilePicture = newProfilePicture;
+          changedFields.push('profilePicture');
+        }
+      }
 
       await userRecord.save();
+
+      // Send profile change notification if any fields were changed
+      if (changedFields.length > 0) {
+        try {
+          console.log('Sending profile change notification for fields:', changedFields);
+          console.log('Old values:', oldValues);
+          const NotificationService = require('../services/notifications/NotificationService');
+          await NotificationService.sendProfileChangeNotification(user.id, changedFields, oldValues);
+          console.log('✅ Profile change notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ Error sending profile change notification:', notificationError);
+          // Don't fail the update if notification fails
+        }
+      }
 
       return {
         success: true,

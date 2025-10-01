@@ -1,9 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
-// CREATE USER
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -21,23 +23,73 @@ const Register: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [step, setStep] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
   const [registrationError, setRegistrationError] = useState('');
-  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [checked, setChecked] = useState(false);
   
-  // Add refs to track submission state and prevent multiple submissions
   const isSubmittingRef = useRef(false);
   const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  const navigate = useNavigate();
   const { register } = useUserAuth();
 
-  const validateField = (name: string, value: string): string => {
+  // Helper function to check if address is valid (either hierarchical or free-form)
+  const isAddressValid = (address: string): boolean => {
+    if (!address || address.trim().length < 5) return false;
+    
+    // Check if it's just the placeholder text (not valid)
+    if (address.includes('Enter house number and street')) {
+      return false;
+    }
+    
+    // Check if it's a hierarchical location selection (Region, City, Barangay with postal code)
+    const hasRegion = address.includes('National Capital Region') || 
+                     address.includes('Region') ||
+                     address.includes('Province');
+    const hasPostalCode = address.includes('(') && address.includes(')');
+    const hasCommas = address.includes(',');
+    
+    // If it has region, postal code, and commas, check if it has actual address content
+    if (hasRegion && hasPostalCode && hasCommas) {
+      // Extract the part before the region to check for actual address
+      const regionIndex = address.indexOf('National Capital Region');
+      if (regionIndex > 0) {
+        const addressPart = address.substring(0, regionIndex).trim();
+        // Remove common prefixes and check if there's actual content
+        const cleanAddressPart = addressPart.replace(/^Enter house number and street,?\s*/i, '').trim();
+        return cleanAddressPart.length > 0 && cleanAddressPart !== 'Enter house number and street';
+      }
+      return true; // If no region found, assume it's valid
+    }
+    
+    // Otherwise, check if it's a valid free-form address
+    // Should have at least 5 characters and contain some address-like content
+    const trimmedAddress = address.trim();
+    if (trimmedAddress.length < 5) return false;
+    
+    // Check if it contains typical address elements (numbers, street indicators, etc.)
+    const hasNumbers = /\d/.test(trimmedAddress);
+    const hasStreetIndicators = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|way|drive|dr|lane|ln|place|pl|court|ct|circle|cir)\b/i.test(trimmedAddress);
+    const hasLocationIndicators = /\b(manila|quezon|makati|pasig|taguig|mandaluyong|san juan|marikina|caloocan|malabon|navotas|paranaque|las pinas|muntinlupa|pateros|valenzuela|binondo|ermita|intramuros|malate|paco|pandacan|port area|sampaloc|san andres|san miguel|san nicolas|santa ana|santa cruz|santa mesa|tondo|quiapo|santa ana|santa cruz|santa mesa|tondo|quiapo)\b/i.test(trimmedAddress);
+    
+    // Valid if it has numbers and either street indicators or location indicators
+    return hasNumbers && (hasStreetIndicators || hasLocationIndicators);
+  };
+
+  const validateField = useCallback((name: string, value: string): string => {
     switch (name) {
       case 'firstName':
       case 'lastName':
         if (!value.trim()) return `${name.split(/(?=[A-Z])/).join(' ')} is required`;
-        if (!/^[a-zA-Z\s]+$/.test(value)) return 'Only letters and spaces allowed';
+        if (value.trim().length < 2) return `${name.split(/(?=[A-Z])/).join(' ')} must be at least 2 characters`;
+        if (!/^[a-zA-Z\s]+$/.test(value.trim())) return `${name.split(/(?=[A-Z])/).join(' ')} can only contain letters and spaces`;
+        if (value.trim().length > 50) return `${name.split(/(?=[A-Z])/).join(' ')} must be less than 50 characters`;
+        return '';
+      case 'middleName':
+        // Middle name is optional, but if provided, validate it
+        if (value.trim() && value.trim().length < 2) return 'Middle name must be at least 2 characters';
+        if (value.trim() && !/^[a-zA-Z\s]+$/.test(value.trim())) return 'Middle name can only contain letters and spaces';
+        if (value.trim() && value.trim().length > 50) return 'Middle name must be less than 50 characters';
         return '';
       case 'companyName':
         if (!value.trim()) return 'Company/Business name is required';
@@ -46,15 +98,31 @@ const Register: React.FC = () => {
       case 'companyAddress':
         if (!value.trim()) return 'Company/Business address is required';
         if (value.length < 5) return 'Address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'houseAddress':
         if (!value.trim()) return 'House address is required';
         if (value.length < 5) return 'House address must be at least 5 characters';
+        // Check if it's just placeholder text
+        if (value.includes('Enter house number and street')) {
+          return 'Please enter your specific house number and street address';
+        }
+        // Check if address is valid (either hierarchical or free-form)
+        if (!isAddressValid(value)) {
+          return 'Please enter a valid address (e.g., "123 Main St, Manila" or select from location dropdown)';
+        }
         return '';
       case 'contactNumber':
         if (!value.trim()) return 'Contact number is required';
         if (!/^(09\d{9}|\+639\d{9})$/.test(value)) {
-          return 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)';
+          return 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)';
         }
         return '';
       case 'email':
@@ -73,28 +141,45 @@ const Register: React.FC = () => {
       default:
         return '';
     }
-  };
+  }, [formData.password]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
-    if (errors[name]) {
-      setErrors(prev => {
-        const newErrors = { ...prev };
+    // Validate the field in real-time
+    const error = validateField(name, value);
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      if (error) {
+        newErrors[name] = error;
+      } else {
         delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
+      }
+      return newErrors;
+    });
+  }, [validateField]);
 
-  const validateStep = (): boolean => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const { name } = e.currentTarget;
+    
+    // Only apply character restrictions to name fields
+    if (name === 'firstName' || name === 'middleName' || name === 'lastName') {
+      const char = e.key;
+      // Allow letters, spaces, and backspace/delete
+      if (!/^[a-zA-Z\s]$/.test(char) && char !== 'Backspace' && char !== 'Delete' && char !== 'ArrowLeft' && char !== 'ArrowRight') {
+        e.preventDefault();
+      }
+    }
+  }, []);
+
+  const validateStep = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
     let isValid = true;
     let fieldsToValidate: (keyof typeof formData)[] = [];
 
     if (step === 1) {
-      fieldsToValidate = ['firstName', 'lastName'];
+      fieldsToValidate = ['firstName', 'lastName']; // Only require firstName and lastName
     } else if (step === 2) {
       fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
     } else if (step === 3) {
@@ -111,17 +196,40 @@ const Register: React.FC = () => {
 
     setErrors(newErrors);
     return isValid;
-  };
+  }, [step, formData, validateField]);
 
-  const handleNext = () => {
+  // Check if current step is valid
+  const isCurrentStepValid = useCallback((): boolean => {
+    const newErrors: Record<string, string> = {};
+    let fieldsToValidate: (keyof typeof formData)[] = [];
+
+    if (step === 1) {
+      fieldsToValidate = ['firstName', 'lastName']; // Only require firstName and lastName
+    } else if (step === 2) {
+      fieldsToValidate = ['companyName', 'companyAddress', 'houseAddress'];
+    } else if (step === 3) {
+      fieldsToValidate = ['contactNumber', 'email', 'password', 'confirmPassword'];
+    }
+
+    fieldsToValidate.forEach(field => {
+      const error = validateField(field, formData[field]);
+      if (error) {
+        newErrors[field] = error;
+      }
+    });
+
+    return Object.keys(newErrors).length === 0;
+  }, [step, formData, validateField]);
+
+  const handleNext = useCallback(() => {
     if (validateStep()) {
       setStep(prevStep => prevStep + 1);
     }
-  };
+  }, [validateStep]);
 
-  const handlePrevious = () => {
-    setStep(prevStep => prevStep - 1);
-  };
+  const handlePrevious = useCallback(() => {
+    setStep(prevStep => Math.max(1, prevStep - 1));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,314 +308,376 @@ const Register: React.FC = () => {
     };
   }, []);
 
-  return (
-    <div className="relative flex min-h-screen bg-[#fdfdfd]">
-      {/* Background Image on the Right */}
-      <img
-        src="/image/signup.png"
-        alt="Signup background"
-        className="absolute top-0 right-0 w-1/2 h-full object-cover hidden md:block"
+  // Floating Input Component
+  const FloatingInput = React.useCallback(({ 
+    id, 
+    name, 
+    type, 
+    value, 
+    onChange, 
+    onKeyPress, 
+    error, 
+    label, 
+    showPasswordToggle = false 
+  }: {
+    id: string;
+    name: string;
+    type: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+    error?: string;
+    label: string;
+    showPasswordToggle?: boolean;
+  }) => (
+    <div className="relative mt-8">
+      <input
+        id={id}
+        name={name}
+        type={showPasswordToggle ? (name === 'password' ? (showPassword ? 'text' : type) : (showConfirmPassword ? 'text' : type)) : type}
+        placeholder=""
+        required
+        value={value}
+        onChange={onChange}
+        onKeyPress={onKeyPress}
+        className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
+          error ? 'border-red-400' : 'border-gray-300'
+        } text-white`}
       />
-      {/* Form Container on the Left */}
-      <div className="relative z-10 w-full md:w-1/2 h-screen flex flex-col justify-center items-center">
-        <div className="p-20 rounded-3xl shadow-2xl bg-white h-full w-[85%] md:w-[790px] ml-4">
-          <h2 className="text-4xl font-extrabold text-black mb-8 mt-8">Sign up</h2>
+      <label
+        htmlFor={id}
+        className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
+          value ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base'
+        } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+      >
+        {label}
+      </label>
+      
+      {showPasswordToggle && (
+        <button
+          type="button"
+          onClick={() => name === 'password' ? setShowPassword((prev) => !prev) : setShowConfirmPassword((prev) => !prev)}
+          className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+        >
+          {(name === 'password' ? showPassword : showConfirmPassword) ? (
+            <EyeIcon className="h-5 w-5 text-white" />   
+          ) : (
+            <EyeSlashIcon className="h-5 w-5 text-white" />
+          )}
+        </button>
+      )}
 
-          {registrationError && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-red-500"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{registrationError}</p>
-                </div>
+      {error && (
+        <p className="text-red-400 text-xs mt-1">{error}</p>
+      )}
+    </div>
+  ), [showPassword, showConfirmPassword]);
+
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center bg-cover bg-center"
+      style={{ backgroundImage: "url('/image/signup.png')" }}
+    >
+      <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
+
+      <div className="relative z-10 p-8 sm:p-10 
+                rounded-xl shadow-2xl w-full max-w-xl
+                bg-transparent backdrop-blur-lg border border-white/30">
+        <h1 className="text-5xl font-bold text-center mb-6 text-white">
+          Sign up
+        </h1>
+        <p className="text-sm text-center text-white mb-6">
+          Create your account to get started
+        </p>
+
+        {registrationError && (
+          <div className="bg-red-50/80 backdrop-blur-sm border-l-4 border-red-500 p-4 mb-4 rounded">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-red-500"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                    clipRule="evenodd"
+                  />
+                </svg>
               </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{registrationError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Progress Indicator */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-2">
+            {[1, 2, 3].map((stepNumber) => (
+              <React.Fragment key={stepNumber}>
+                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${
+                  step >= stepNumber 
+                    ? 'bg-blue-500 border-blue-500 text-white' 
+                    : 'border-white text-white'
+                }`}>
+                  {stepNumber}
+                </div>
+                {stepNumber < 3 && (
+                  <div className={`w-8 h-1 ${
+                    step > stepNumber ? 'bg-blue-500' : 'bg-white/50'
+                  }`}></div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+        
+        <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} noValidate>
+          {step === 1 && (
+            <div className="space-y-6">
+              <FloatingInput
+                id="firstName"
+                name="firstName"
+                type="text"
+                value={formData.firstName}
+                onChange={handleChange}
+                onKeyPress={handleKeyPress}
+                error={errors.firstName}
+                label="First Name"
+              />
+
+              <FloatingInput
+                id="middleName"
+                name="middleName"
+                type="text"
+                value={formData.middleName}
+                onChange={handleChange}
+                onKeyPress={handleKeyPress}
+                error={errors.middleName}
+                label="Middle Name (Optional)"
+              />
+
+              <FloatingInput
+                id="lastName"
+                name="lastName"
+                type="text"
+                value={formData.lastName}
+                onChange={handleChange}
+                onKeyPress={handleKeyPress}
+                error={errors.lastName}
+                label="Last Name"
+              />
+
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!isCurrentStepValid()}
+                className={`w-full py-3 px-4 rounded-lg transition-colors mt-6 ${
+                  isCurrentStepValid()
+                    ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                    : 'bg-blue-400 cursor-not-allowed'
+                } text-white font-semibold`}
+              >
+                Next
+              </button>
             </div>
           )}
 
-          <form className="mt-8 space-y-6" onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()}>
-            {step === 1 && (
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="firstName" className="block text-md font-bold text-gray-700 mb-1">
-                    First Name
-                  </label>
-                  <input
-                    id="firstName"
-                    name="firstName"
-                    type="text"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
-                </div>
-                <div>
-                  <label htmlFor="middleName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Middle Name
-                  </label>
-                  <input
-                    id="middleName"
-                    name="middleName"
-                    type="text"
-                    value={formData.middleName}
-                    onChange={handleChange}
-                    className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="lastName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Last Name
-                  </label>
-                  <input
-                    id="lastName"
-                    name="lastName"
-                    type="text"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.lastName && <p className="mt-1 text-red-600">{errors.lastName}</p>}
-                </div>
+          {step === 2 && (
+            <div className="space-y-6">
+              <FloatingInput
+                id="companyName"
+                name="companyName"
+                type="text"
+                value={formData.companyName}
+                onChange={handleChange}
+                error={errors.companyName}
+                label="Company/Business Name"
+              />
+
+              <LocationAutocomplete
+                label="Company/Business Address"
+                value={formData.companyAddress}
+                onChange={(value) => setFormData(prev => ({ ...prev, companyAddress: value }))}
+                placeholder="Select company location or enter address..."
+                required
+                error={errors.companyAddress}
+              />
+
+              <LocationAutocomplete
+                label="House Address"
+                value={formData.houseAddress}
+                onChange={(value) => setFormData(prev => ({ ...prev, houseAddress: value }))}
+                placeholder="Select house location or enter address..."
+                required
+                error={errors.houseAddress}
+              />
+
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="button"
+                  onClick={handlePrevious}
+                  className="flex-1 py-3 px-4 border border-white rounded-lg text-white font-semibold hover:bg-white/10 transition-colors"
+                >
+                  Back
+                </button>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-full py-3 px-4 bg-[#FF9800] text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
+                  disabled={!isCurrentStepValid()}
+                  className={`flex-1 py-3 px-4 rounded-lg text-white font-semibold transition-colors ${
+                    isCurrentStepValid()
+                      ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                      : 'bg-blue-400 cursor-not-allowed'
+                  }`}
                 >
                   Next
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {step === 2 && (
-              <div className="space-y-6">
-                <div>
-                  <label htmlFor="companyName" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Company/Business Name
-                  </label>
-                  <input
-                    id="companyName"
-                    name="companyName"
-                    type="text"
-                    value={formData.companyName}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.companyName && <p className="mt-1 text-sm text-red-600">{errors.companyName}</p>}
-                </div>
-                <div>
-                  <label htmlFor="companyAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    Company/Business Address
-                  </label>
-                  <input
-                    id="companyAddress"
-                    name="companyAddress"
-                    type="text"
-                    value={formData.companyAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.companyAddress && <p className="mt-1 text-sm text-red-600">{errors.companyAddress}</p>}
-                </div>
-                <div>
-                  <label htmlFor="houseAddress" className="block text-md font-bold text-gray-700 mb-1" style={{ color: '#000000' }}>
-                    House Address
-                  </label>
-                  <input
-                    id="houseAddress"
-                    name="houseAddress"
-                    type="text"
-                    value={formData.houseAddress}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.houseAddress && <p className="mt-1 text-sm text-red-600">{errors.houseAddress}</p>}
-                </div>
-                <div className="flex justify-between">
-                  <button
-                    type="button"
-                    onClick={handlePrevious}
-                    className="w-40 mr-2 px-3 border justify-start text-gray-800 font-semibold rounded-full hover:bg-gray-100 focus:outline-none"
+          {step === 3 && (
+            <div className="space-y-6">
+              <FloatingInput
+                id="contactNumber"
+                name="contactNumber"
+                type="tel"
+                value={formData.contactNumber}
+                onChange={handleChange}
+                error={errors.contactNumber}
+                label="Contact Number"
+              />
+
+              <FloatingInput
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                error={errors.email}
+                label="Email Address"
+              />
+
+              <FloatingInput
+                id="password"
+                name="password"
+                type="password"
+                value={formData.password}
+                onChange={handleChange}
+                error={errors.password}
+                label="Password"
+                showPasswordToggle={true}
+              />
+
+              <FloatingInput
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                error={errors.confirmPassword}
+                label="Confirm Password"
+                showPasswordToggle={true}
+              />
+
+              {/* Terms Checkbox */}
+              <div className="flex items-center text-sm mt-6">
+                <div
+                  className="flex items-center space-x-2 cursor-pointer"
+                  onClick={() => setChecked((prev) => !prev)}
+                >
+                  <div
+                    className="relative w-5 h-5 border-2 border-gray-400 rounded-md flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
                   >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleNext}
-                    className="w-full ml-2 py-3 px-4 bg-[#FF9800] justify-end text-white font-semibold rounded-full hover:bg-[#FF9B45] focus:outline-none"
-                  >
-                    Next
-                  </button>
+                    <AnimatePresence>
+                      {checked && (
+                        <motion.div
+                          key="check"
+                          initial={{ scale: 0, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0, opacity: 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                          className="absolute text-blue-600"
+                        >
+                          <Check size={16} strokeWidth={3} />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <span className="text-white select-none">I agree to the terms and conditions</span>
                 </div>
               </div>
-            )}
 
-            {step === 3 && (
-              <div className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="contactNumber"
-                    className="block text-md font-bold text-gray-700 mb-1"
-                    style={{ color: '#000000' }}
-                  >
-                    Contact Number
-                  </label>
-                  <input
-                    id="contactNumber"
-                    name="contactNumber"
-                    type="text"
-                    value={formData.contactNumber}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.contactNumber && (
-                    <p className="mt-1 text-sm text-red-600">{errors.contactNumber}</p>
+              <div className="flex gap-4 mt-6">
+                <button
+                  type="button"
+                  onClick={handlePrevious}
+                  disabled={isSubmitting}
+                  className={`flex-1 py-3 px-4 border border-white rounded-lg text-white font-semibold transition-colors ${
+                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+                  }`}
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !checked}
+                  className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
+                    isSubmitting || !checked
+                      ? 'bg-blue-400 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                  } text-white font-semibold`}
+                >
+                  {isSubmitting ? (
+                    <div className="flex items-center justify-center">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Registering...
+                    </div>
+                  ) : (
+                    'Register'
                   )}
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="email"
-                    className="block text-md font-bold text-gray-700 mb-1"
-                    style={{ color: '#000000' }}
-                  >
-                    Email Address
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    className={`w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2`}
-                  />
-                  {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
-                </div>
-
-                {/* Password + Confirm Password side by side */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Password */}
-                  <div>
-                    <label htmlFor="password" className="block text-md font-bold text-gray-700 mb-1">
-                      Password
-                    </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="password"
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(prev => !prev)}
-                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? (
-                          <EyeSlashIcon className="h-5 w-5" />
-                        ) : (
-                          <EyeIcon className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                    {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div>
-                    <label htmlFor="confirmPassword" className="block text-md font-bold text-gray-700 mb-1">
-                      Confirm Password
-                    </label>
-                    <div className="relative mt-1">
-                      <input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        className="w-full border-b border-gray-300 focus:border-blue-500 focus:outline-none py-2"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(prev => !prev)}
-                        className="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        tabIndex={-1}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeSlashIcon className="h-5 w-5" />
-                        ) : (
-                          <EyeIcon className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                    {errors.confirmPassword && (
-                      <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-between">
-                  <button
-                    type="button"
-                    onClick={handlePrevious}
-                    disabled={isSubmitting}
-                    className={`w-40 mr-2 py-3 px-4 border text-gray-800 font-semibold rounded-full focus:outline-none ${
-                      isSubmitting 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full py-3 px-4 text-white font-semibold rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                      isSubmitting
-                        ? 'bg-gray-500 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-[#FF9B45]'
-                    }`}
-                    style={{ backgroundColor: isSubmitting ? '#A0A0A0' : '#FF9800' }}
-                  >
-                    {isSubmitting ? 'Registering...' : 'Register'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Social Sign-in */}
-            <div className="text-center">
-              <p className="text-gray-500 text-sm mb-5 mt-10">or Log in With</p>
-              <div className="flex justify-center space-x-6">
-                <img src="/image/g.png" alt="Google" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/f.png" alt="Facebook" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/i.png" alt="Instagram" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/t.png" alt="Twitter" className="h-6 w-6 cursor-pointer" />
-                <img src="/image/l.png" alt="LinkedIn" className="h-6 w-6 cursor-pointer" />
+                </button>
               </div>
             </div>
+          )}
+        </form>
 
-            {/* Sign Up Link */}
-            <div className="text-center mt-6 text-sm">
-              <span className="text-gray-700">Already have an account?</span>{' '}
-              <a href="/login" className="text-blue-600 hover:underline">Login</a>
-            </div>
-          </form>
+        <div className="flex items-center my-6">
+          <div className="flex-grow border-t border-gray-300"></div>
+          <span className="mx-4 text-white text-sm">
+            or continue with
+          </span>
+          <div className="flex-grow border-t border-gray-300"></div>
+        </div>
+
+        <div className="flex justify-center space-x-4">
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/i.png" alt="Instagram logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/t.png" alt="Twitter logo" className="h-6 w-6" />
+          </button>
+          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+            <img src="/image/l.png" alt="LinkedIn logo" className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="text-center mt-6 text-sm">
+          <span className="text-white">Already have an account?</span>
+          <Link to="/login" className="text-blue-300 ml-1 underline hover:font-semibold">
+            Login
+          </Link>
         </div>
       </div>
     </div>

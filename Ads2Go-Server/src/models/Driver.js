@@ -74,7 +74,7 @@ const DriverSchema = new mongoose.Schema(
         }
         return /^(09\d{9}|\+639\d{9})$/.test(normalized);
       },
-      message: 'Please use a valid Philippine mobile number (e.g., 09123456789 or +639123456789)'
+      message: 'Please enter a valid Philippine mobile number. Format: 09XXXXXXXXX or +639XXXXXXXXX (10 digits starting with 9)'
     }},
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, match: [/^\S+@\S+\.\S+$/, 'Invalid email'] },
     password: { type: String, required: true, minlength: 6, select: false },
@@ -114,6 +114,9 @@ const DriverSchema = new mongoose.Schema(
     lastLogin: Date,
 
     tokenVersion: { type: Number, default: 0 },
+    
+    // Push notification token for mobile app
+    pushToken: { type: String, default: null },
 
     // Material-related fields - updated enum values to match GraphQL schema
     installedMaterialType: { 

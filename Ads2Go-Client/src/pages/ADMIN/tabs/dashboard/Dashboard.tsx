@@ -8,7 +8,8 @@ import {
   Settings,
   WifiOff
 } from 'lucide-react';
-import { ScreenData } from '../../../../services/adsPanelGraphQLService';
+import { ScreenData } from '../../../../types/screenTypes';
+import AdProgressBar from '../../../../components/AdProgressBar';
 
 interface DashboardProps {
   screens: ScreenData[];
@@ -82,7 +83,8 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <WifiOff className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No active devices</h3>
-              <p className="mt-1 text-sm text-gray-500">No devices are currently online and playing ads.</p>
+              <p className="mt-1 text-sm text-gray-500">No screens are currently online and connected via WebSocket.</p>
+              <p className="mt-1 text-xs text-gray-400">Check the Screen Tracking page for real-time device status.</p>
             </div>
           ) : (
             <table className="w-full">
@@ -91,7 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <th className="text-left py-3 px-4">
                     <input type="checkbox" className="rounded" />
                   </th>
-                  <th className="text-left py-3 px-4">Material</th>
+                  <th className="text-left py-3 px-4">Screen ID</th>
                   <th className="text-left py-3 px-4">Slot</th>
                   <th className="text-left py-3 px-4">Status</th>
                   <th className="text-left py-3 px-4">Current Ad</th>
@@ -117,7 +119,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium cursor-pointer"
                       title="Click to view device details"
                     >
-                      {screen.materialId}
+                      {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                     </button>
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber}</td>
@@ -141,21 +143,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </td>
                   <td className="py-3 px-4">
                     {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adDuration ? (
-                      <div className="w-32">
-                        <div className="flex justify-between text-xs text-gray-600 mb-1">
-                          <span>{formatTime(0)}</span>
-                          <span>{formatTime(screen.screenMetrics.currentAd.adDuration)}</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                            style={{ width: '0%' }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1 text-center">
-                          Ready to play
-                        </div>
-                      </div>
+                      <AdProgressBar 
+                        adDuration={screen.screenMetrics.currentAd.adDuration}
+                        isPlaying={screen.isOnline}
+                        className="w-32"
+                        startTime={screen.screenMetrics.currentAd.startTime}
+                        realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
+                          currentTime: screen.screenMetrics.currentAd.currentTime,
+                          progress: screen.screenMetrics.currentAd.progress || 0,
+                          state: screen.screenMetrics.currentAd.state || 'playing'
+                        } : undefined}
+                      />
                     ) : (
                       <span className="text-gray-400 text-sm">-</span>
                     )}

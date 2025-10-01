@@ -10,6 +10,8 @@ import {
   Megaphone,
   LogOut,
   MapPin,
+  HelpCircle,
+  Mail,
 } from 'lucide-react';
 
 const AdminSidebar: React.FC = () => {
@@ -19,7 +21,7 @@ const AdminSidebar: React.FC = () => {
 
   const handleLogout = async () => {
     await logout();
-    navigate('/admin-login');
+    // Navigation is handled by AdminAuthContext.logout() based on user role
   };
 
   const getInitials = (firstName?: string, lastName?: string) => {
@@ -29,13 +31,15 @@ const AdminSidebar: React.FC = () => {
 
   const menuItems = [
     { label: 'Dashboard', path: '/admin', icon: <LayoutDashboard size={20} /> },
-    { label: 'View Users', path: '/admin/users', icon: <Users size={20} /> },
-    { label: 'View Riders', path: '/admin/riders', icon: <Bike size={20} /> },
-    { label: 'Materials', path: '/admin/materials', icon: <Package size={20} /> },
-    { label: 'Screen Tracking', path: '/admin/tablet-tracking', icon: <MapPin size={20} /> },
-    { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
-    { label: 'AdsPanel', path: '/admin/ads', icon: <Megaphone size={20} /> },
-    { label: 'Manage Ads', path: '/admin/manage-ads', icon: <Megaphone size={20} /> },
+    { label: 'Advertisers ', path: '/admin/users', icon: <Users size={20} /> },
+    { label: 'Advertisements', path: '/admin/manage-ads', icon: <Megaphone size={20} /> }, 
+    { label: 'Drivers ', path: '/admin/drivers', icon: <Bike size={20} /> },
+    { label: 'Devices ', path: '/admin/materials', icon: <Package size={20} /> },
+    { label: 'Devices Tracking', path: '/admin/tablet-tracking', icon: <MapPin size={20} /> },
+    { label: 'Screen Control', path: '/admin/ads', icon: <Megaphone size={20} /> },
+    { label: 'Newsletter', path: '/admin/newsletter', icon: <Mail size={20} /> },
+    { label: 'Reports ', path: '/admin/reports', icon: <FileText size={20} /> },
+    { label: 'FAQs', path: '/admin/faq', icon: <HelpCircle size={20} /> },
   ];
 
   return (
