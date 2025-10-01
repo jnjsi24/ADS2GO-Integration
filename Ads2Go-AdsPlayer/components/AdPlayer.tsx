@@ -55,10 +55,31 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [videoActuallyStarted, setVideoActuallyStarted] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(3);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
   const getCacheKey = () => `ads_${materialId}_${slotNumber}`;
+
+  // Check registration status on mount
+  useEffect(() => {
+    const checkRegistration = async () => {
+      try {
+        const registered = await tabletRegistrationService.checkRegistrationStatus();
+        setIsRegistered(registered);
+        if (!registered) {
+          setError('Device not registered. Please register the tablet first.');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error checking registration status:', error);
+        setError('Failed to verify registration status');
+        setLoading(false);
+      }
+    };
+    
+    checkRegistration();
+  }, []);
 
   // Track ad playback
   const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
@@ -806,6 +827,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   }, [isOffline]);
 
   useEffect(() => {
+    // Only fetch ads if device is registered
+    if (isRegistered === false) {
+      return; // Don't fetch ads if not registered
+    }
+    
+    if (isRegistered === null) {
+      return; // Still checking registration status
+    }
+    
     // Fetch both user ads and company ads
     const fetchAllAds = async () => {
       await Promise.all([
@@ -829,7 +859,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     return () => {
       playbackWebSocketService.disconnect();
     };
-  }, [materialId, slotNumber]);
+  }, [materialId, slotNumber, isRegistered]);
 
   // Listen for orientation changes
   useEffect(() => {
@@ -1008,6 +1038,20 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3498db" />
           <Text style={styles.loadingText}>Loading advertisements...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error if device is not registered
+  if (isRegistered === false) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Device Not Registered</Text>
+          <Text style={styles.errorText}>
+            This tablet needs to be registered before it can display advertisements.
+          </Text>
         </View>
       </View>
     );

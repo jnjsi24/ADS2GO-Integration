@@ -10,13 +10,14 @@ import deviceStatusService from '../../services/deviceStatusService';
 import AdPlayer from '../../components/AdPlayer';
 import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
+import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
 
 export default function HomeScreen() {
+  const { status: deviceStatus } = useDeviceStatus();
 
   const [location, setLocation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [registrationData, setRegistrationData] = useState<TabletRegistration | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [unregistering, setUnregistering] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
@@ -45,19 +46,7 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // Initialize device status service when registration data is available
-  useEffect(() => {
-    if (registrationData) {
-      (deviceStatusService as any).initialize({
-        materialId: registrationData.materialId,
-        forceReconnect: false, // Don't force reconnect on initial load
-        onStatusChange: (status: any) => {
-          console.log('Device status changed:', status);
-          setIsOnline(status.isOnline);
-        }
-      });
-    }
-  }, [registrationData]);
+  // Device status is now handled by DeviceStatusContext
 
   // Refresh registration data when screen becomes active
   useFocusEffect(
@@ -80,7 +69,7 @@ export default function HomeScreen() {
           lat: location?.coords.latitude || 0,
           lng: location?.coords.longitude || 0
         });
-        setIsOnline(online);
+        // Online status is now handled by DeviceStatusContext
       }
     } catch (error) {
       console.error('Error refreshing registration data:', error);
@@ -107,7 +96,7 @@ export default function HomeScreen() {
           lat: location?.coords.latitude || 0,
           lng: location?.coords.longitude || 0
         });
-        setIsOnline(online);
+        // Online status is now handled by DeviceStatusContext
         
         // Start continuous location tracking
         console.log('Starting continuous location tracking...');
@@ -202,7 +191,6 @@ export default function HomeScreen() {
     try {
       // Simulate offline
       setIsSimulatingOffline(true);
-      setIsOnline(false);
       setTrackingStatus('Simulating Offline');
       
       // Set offline simulation flag in tablet registration service
@@ -240,7 +228,6 @@ export default function HomeScreen() {
     try {
       // Go back online
       setIsSimulatingOffline(false);
-      setIsOnline(true);
       setTrackingStatus('Back Online');
       
       // Clear offline simulation flag in tablet registration service
@@ -253,7 +240,7 @@ export default function HomeScreen() {
           forceReconnect: true, // Force reconnect when going back online
           onStatusChange: (status: any) => {
             console.log('Device status changed:', status);
-            setIsOnline(status.isOnline);
+            // Online status is now handled by DeviceStatusContext
           }
         });
       }
@@ -289,10 +276,8 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.unregisterTablet();
               if (result.success) {
-                // Clear local registration data, material ID, and cached ads before redirect
-                await tabletRegistrationService.clearRegistration();
-                await tabletRegistrationService.clearMaterialId();
-                await tabletRegistrationService.clearAllCachedAds();
+                // Force clear ALL registration data
+                await tabletRegistrationService.forceClearAllRegistrationData();
                 
                 Alert.alert(
                   'Success',
@@ -393,10 +378,8 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.forceUnregisterTablet();
               if (result.success) {
-                // Clear local registration data, material ID, and cached ads before redirect
-                await tabletRegistrationService.clearRegistration();
-                await tabletRegistrationService.clearMaterialId();
-                await tabletRegistrationService.clearAllCachedAds();
+                // Force clear ALL registration data
+                await tabletRegistrationService.forceClearAllRegistrationData();
                 
                 Alert.alert(
                   'Success',
@@ -528,13 +511,13 @@ export default function HomeScreen() {
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <Text style={styles.statusTitle}>📱 Tablet Status</Text>
-            <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#27ae60' : '#e74c3c' }]} />
+            <View style={[styles.statusIndicator, { backgroundColor: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]} />
           </View>
           <View style={styles.statusContent}>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Status:</Text>
-              <Text style={[styles.statusValue, { color: isOnline ? '#27ae60' : '#e74c3c' }]}>
-                {isOnline ? 'Online' : 'Offline'}
+              <Text style={[styles.statusValue, { color: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]}>
+                {deviceStatus.isOnline ? 'Online' : 'Offline'}
               </Text>
             </View>
             <View style={styles.statusRow}>

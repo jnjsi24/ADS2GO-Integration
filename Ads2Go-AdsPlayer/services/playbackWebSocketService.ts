@@ -51,16 +51,49 @@ class PlaybackWebSocketService {
       const registration = await AsyncStorage.getItem('tabletRegistration');
       if (registration) {
         const data = JSON.parse(registration);
+        
+        // Check if device is actually registered
+        if (!data.isRegistered) {
+          console.log('🔌 [WebSocket] Device not registered, skipping WebSocket initialization');
+          this.deviceId = null;
+          this.materialId = null;
+          return;
+        }
+        
         this.deviceId = data.deviceId;
         this.materialId = data.materialId;
         console.log('🔌 [WebSocket] Loaded device info:', { deviceId: this.deviceId, materialId: this.materialId });
+      } else {
+        console.log('🔌 [WebSocket] No registration data found, device not registered');
+        this.deviceId = null;
+        this.materialId = null;
       }
     } catch (error) {
       console.error('Error loading device info for WebSocket:', error);
+      this.deviceId = null;
+      this.materialId = null;
     }
   }
 
   async connect(): Promise<boolean> {
+    // First check if device is registered
+    try {
+      const registration = await AsyncStorage.getItem('tabletRegistration');
+      if (!registration) {
+        console.log('🔌 [WebSocket] No registration data found, cannot connect');
+        return false;
+      }
+      
+      const data = JSON.parse(registration);
+      if (!data.isRegistered) {
+        console.log('🔌 [WebSocket] Device not registered, cannot connect');
+        return false;
+      }
+    } catch (error) {
+      console.error('🔌 [WebSocket] Error checking registration status:', error);
+      return false;
+    }
+
     if (!this.deviceId || !this.materialId) {
       console.error('🔌 [WebSocket] Cannot connect: missing device info');
       return false;

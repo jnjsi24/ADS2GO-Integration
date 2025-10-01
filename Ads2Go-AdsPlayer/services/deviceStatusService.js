@@ -31,16 +31,38 @@ class DeviceStatusService {
         const registration = JSON.parse(registrationData);
         this.deviceId = registration.deviceId;
         console.log('Using stored device ID from registration:', this.deviceId);
+        
+        // Check if device is actually registered
+        if (!registration.isRegistered) {
+          console.log('Device not registered, skipping WebSocket initialization');
+          if (this.onStatusChange) {
+            this.onStatusChange({ 
+              isOnline: false, 
+              error: 'Device not registered. Please register the tablet first.' 
+            });
+          }
+          return;
+        }
       } else {
-        // Fallback to generated device ID if no registration data
-        this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
-        console.log('No registration data found, using generated device ID:', this.deviceId);
+        // No registration data found, device is not registered
+        console.log('No registration data found, device not registered');
+        if (this.onStatusChange) {
+          this.onStatusChange({ 
+            isOnline: false, 
+            error: 'Device not registered. Please register the tablet first.' 
+          });
+        }
+        return;
       }
     } catch (error) {
       console.error('Error getting device ID from registration:', error);
-      // Fallback to generated device ID
-      this.deviceId = Application.androidId || `TABLET-${Device.modelName || 'UNKNOWN'}-${Date.now()}`;
-      console.log('Using fallback device ID:', this.deviceId);
+      if (this.onStatusChange) {
+        this.onStatusChange({ 
+          isOnline: false, 
+          error: 'Failed to verify registration status' 
+        });
+      }
+      return;
     }
     
     // Connect if we have a materialId and either:

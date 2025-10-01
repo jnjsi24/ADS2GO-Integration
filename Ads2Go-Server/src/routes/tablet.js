@@ -195,7 +195,7 @@ router.post('/registerTablet', async (req, res) => {
               deviceInfo: {
                 deviceId: deviceId,
                 deviceName: 'Tablet Device',
-                deviceType: 'Tablet',
+                deviceType: 'tablet',
                 osName: 'Android',
                 osVersion: 'Unknown',
                 platform: 'Android',
@@ -232,9 +232,9 @@ router.post('/registerTablet', async (req, res) => {
         lastReportedAt: new Date().toISOString()
       },
       trackingInfo: {
-        currentHours: tabletTracking.currentHoursToday,
-        hoursRemaining: tabletTracking.hoursRemaining,
-        isCompliant: tabletTracking.isCompliantToday,
+        currentHours: 0,
+        hoursRemaining: 8,
+        isCompliant: true,
         targetHours: 8
       },
       adsList: [] // TODO: Add actual ads list when ads system is implemented
@@ -473,14 +473,17 @@ router.post('/unregisterTablet', async (req, res) => {
       });
     }
 
-    // Clear the device connection
-    tablet.tablets[tabletIndex] = {
-      tabletNumber: slotNumber,
-      // deviceId is omitted - will be undefined instead of null
-      status: 'OFFLINE',
-      lastSeen: null,
-      gps: { lat: null, lng: null }
-    };
+    // Clear the device connection by removing the deviceId field entirely
+    tabletUnit.deviceId = undefined; // Explicitly set to undefined
+    tabletUnit.status = 'OFFLINE';
+    tabletUnit.lastSeen = null;
+    tabletUnit.gps = { lat: null, lng: null };
+    
+    // Use $unset to completely remove the deviceId field from MongoDB
+    await tablet.updateOne(
+      { _id: tablet._id },
+      { $unset: { [`tablets.${tabletIndex}.deviceId`]: 1 } }
+    );
 
     await tablet.save();
 

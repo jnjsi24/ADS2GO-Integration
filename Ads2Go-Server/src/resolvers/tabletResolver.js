@@ -90,23 +90,24 @@ module.exports = {
           };
         }
 
-        // Determine online status via DeviceStatusManager for real-time accuracy
+        // Check if device is connected (has deviceId) and get online status
+        const hasDeviceId = !!tabletUnit.deviceId;
         const statusInfo = deviceStatusService.getDeviceStatus(tabletUnit.deviceId);
-        const isConnected = !!statusInfo.isOnline;
+        const isOnline = !!statusInfo.isOnline;
 
         // Fetch latest tracking info for lastSeen/GPS
         const tracking = await DeviceTracking.findOne({ deviceId: tabletUnit.deviceId });
-        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || null;
-        const gps = tracking?.currentLocation || null;
+        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || tabletUnit.lastSeen || null;
+        const gps = tracking?.currentLocation || tabletUnit.gps || null;
         
         return {
-          isConnected,
-          connectedDevice: {
+          isConnected: hasDeviceId, // Connected if has deviceId, regardless of online status
+          connectedDevice: hasDeviceId ? {
             deviceId: tabletUnit.deviceId,
-            status: isConnected ? 'ONLINE' : 'OFFLINE',
+            status: isOnline ? 'ONLINE' : 'OFFLINE',
             lastSeen,
             gps
-          },
+          } : null,
           materialId,
           slotNumber,
           carGroupId: tablet.carGroupId || null
@@ -200,7 +201,7 @@ module.exports = {
                     deviceInfo: {
                       deviceId: deviceId,
                       deviceName: 'Tablet Device',
-                      deviceType: 'Tablet',
+                      deviceType: 'tablet',
                       osName: 'Android',
                       osVersion: 'Unknown',
                       platform: 'Android',
@@ -328,14 +329,17 @@ module.exports = {
         // Get the old deviceId before removing it
         const oldDeviceId = tabletUnit.deviceId;
 
-        // Replace the slot object entirely to ensure Mongoose persists removal of deviceId
-        tablet.tablets[tabletIndex] = {
-          tabletNumber: slotNumber,
-          // deviceId intentionally omitted
-          status: 'OFFLINE',
-          lastSeen: null,
-          gps: { lat: null, lng: null }
-        };
+        // Clear the device connection by removing the deviceId field entirely
+        tabletUnit.deviceId = undefined; // Explicitly set to undefined
+        tabletUnit.status = 'OFFLINE';
+        tabletUnit.lastSeen = null;
+        tabletUnit.gps = { lat: null, lng: null };
+        
+        // Use $unset to completely remove the deviceId field from MongoDB
+        await tablet.updateOne(
+          { _id: tablet._id },
+          { $unset: { [`tablets.${tabletIndex}.deviceId`]: 1 } }
+        );
 
         await tablet.save();
 
