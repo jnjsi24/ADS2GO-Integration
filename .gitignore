@@ -56,3 +56,4 @@ Ads2Go-Server/debug*.js
 Ads2Go-Server/find*.js
 Ads2Go-Server/test*.js
 Ads2Go-Client/.env.development
+Ads2Go-Client/.env.production
