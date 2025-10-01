@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../contexts/UserAuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import {
   LayoutDashboard,
   Megaphone,
@@ -16,6 +17,7 @@ import {
 const SideNavbar: React.FC = () => {
   // Only get user data for profile display - navigation stays static
   const { user, logout } = useUserAuth();
+  const { displayBadgeCount } = useNotifications();
   const navigate = useNavigate();
   const [isDropupOpen, setIsDropupOpen] = useState(false);
   const dropupRef = useRef<HTMLDivElement>(null);
@@ -187,6 +189,12 @@ const SideNavbar: React.FC = () => {
             title="View notifications"
           >
             <Bell size={20} />
+            {/* Show notification count badge when there are unread notifications */}
+            {displayBadgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {displayBadgeCount > 99 ? '99+' : displayBadgeCount}
+              </span>
+            )}
           </button>
         </div>
 

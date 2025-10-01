@@ -110,7 +110,16 @@ const resolvers = {
     loginSuperAdmin: async (_, { email, password, deviceInfo }) => {
       console.log(`SuperAdmin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
-      const superAdmin = await SuperAdmin.findOne({ email: email.toLowerCase().trim() });
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Search for SuperAdmin by primary email or recovery email
+      const superAdmin = await SuperAdmin.findOne({
+        $or: [
+          { email: normalizedEmail },
+          { recoveryEmail: normalizedEmail }
+        ]
+      });
+      
       if (!superAdmin || superAdmin.role !== 'SUPERADMIN')
         throw new Error('No superadmin found with this email');
 
@@ -149,7 +158,7 @@ const resolvers = {
     updateSuperAdmin: async (_, { superAdminId, input }, { superAdmin }) => {
       checkAuth(superAdmin);
 
-      // SuperAdmins can only update their own account or other SuperAdmins
+      // SuperAdmins can update their own account
       if (superAdmin.id !== superAdminId) {
         throw new Error('You can only update your own details');
       }
@@ -160,7 +169,7 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, password, isActive, permissions
+        contactNumber, email, recoveryEmail, profilePicture, password, isActive, permissions
       } = input;
 
       // Validate contact number if provided
@@ -183,6 +192,17 @@ const resolvers = {
         superAdminToUpdate.email = email.toLowerCase();
       }
 
+      // Validate recovery email if provided
+      if (recoveryEmail !== undefined) {
+        if (recoveryEmail && !validator.isEmail(recoveryEmail)) {
+          throw new Error('Invalid recovery email address');
+        }
+        if (recoveryEmail && recoveryEmail === superAdminToUpdate.email) {
+          throw new Error('Recovery email cannot be the same as primary email');
+        }
+        superAdminToUpdate.recoveryEmail = recoveryEmail ? recoveryEmail.toLowerCase() : null;
+      }
+
       // Update fields
       if (firstName) superAdminToUpdate.firstName = firstName.trim();
       if (middleName !== undefined) superAdminToUpdate.middleName = middleName ? middleName.trim() : null;
@@ -190,6 +210,7 @@ const resolvers = {
       if (companyName) superAdminToUpdate.companyName = companyName.trim();
       if (companyAddress) superAdminToUpdate.companyAddress = companyAddress.trim();
       if (normalizedNumber) superAdminToUpdate.contactNumber = normalizedNumber;
+      if (profilePicture !== undefined) superAdminToUpdate.profilePicture = profilePicture;
       if (isActive !== undefined) superAdminToUpdate.isActive = isActive;
 
       // Update permissions if provided
@@ -301,7 +322,16 @@ const resolvers = {
     },
 
     requestSuperAdminPasswordReset: async (_, { email }) => {
-      const superAdmin = await SuperAdmin.findOne({ email: email.toLowerCase().trim() });
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Search for SuperAdmin by primary email or recovery email
+      const superAdmin = await SuperAdmin.findOne({
+        $or: [
+          { email: normalizedEmail },
+          { recoveryEmail: normalizedEmail }
+        ]
+      });
+      
       if (!superAdmin) throw new Error("No superadmin found with this email");
 
       const resetCode = EmailService.generateVerificationCode();
@@ -309,7 +339,8 @@ const resolvers = {
       superAdmin.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
       await superAdmin.save();
-      await EmailService.sendVerificationEmail(superAdmin.email, resetCode);
+      // Send reset code to the email that was used for the request
+      await EmailService.sendVerificationEmail(normalizedEmail, resetCode);
 
       return true;
     },
@@ -333,6 +364,41 @@ const resolvers = {
 
       await superAdmin.save();
       return true;
+    },
+
+    updateSuperAdminNotificationPreferences: async (_, { input }, { superAdmin }) => {
+      checkAuth(superAdmin);
+      
+      const superAdminRecord = await SuperAdmin.findById(superAdmin.id);
+      if (!superAdminRecord) throw new Error('SuperAdmin not found');
+
+      // Update notification preferences
+      if (superAdminRecord.notificationPreferences) {
+        Object.keys(input).forEach(key => {
+          if (input[key] !== undefined) {
+            superAdminRecord.notificationPreferences[key] = input[key];
+          }
+        });
+      } else {
+        // Initialize notification preferences if they don't exist
+        superAdminRecord.notificationPreferences = {
+          enableDesktopNotifications: false,
+          enableNotificationBadge: true,
+          pushNotificationTimeout: '10',
+          communicationEmails: false,
+          announcementsEmails: true,
+          disableNotificationSounds: true,
+          ...input
+        };
+      }
+
+      await superAdminRecord.save();
+
+      return {
+        success: true,
+        message: 'Notification preferences updated successfully',
+        superAdmin: superAdminRecord
+      };
     },
 
     // Admin management mutations (for SuperAdmins)

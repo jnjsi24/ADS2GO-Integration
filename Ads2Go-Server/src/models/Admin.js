@@ -117,6 +117,28 @@ const AdminSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  notificationPreferences: {
+    enableDesktopNotifications: {
+      type: Boolean,
+      default: false
+    },
+    enableNotificationBadge: {
+      type: Boolean,
+      default: true
+    },
+    pushNotificationTimeout: {
+      type: String,
+      default: '10'
+    },
+    communicationEmails: {
+      type: Boolean,
+      default: false
+    },
+    announcementsEmails: {
+      type: Boolean,
+      default: true
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now

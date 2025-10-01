@@ -1,5 +1,6 @@
 const BaseNotificationService = require('./BaseNotificationService');
 const EmailService = require('../../utils/emailService');
+const EnhancedEmailNotificationService = require('./EnhancedEmailNotificationService');
 
 class UserNotificationService extends BaseNotificationService {
   /**
@@ -41,10 +42,31 @@ class UserNotificationService extends BaseNotificationService {
       );
       console.log('✅ UserNotificationService: In-app notification created');
 
-      // Send email notification
+      // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
-      await this.sendAdApprovalEmail(user.email, user.firstName, ad.title, ad._id);
-      console.log('✅ UserNotificationService: Email notification sent');
+      try {
+        const emailData = await this.getAdApprovalEmailData(user.firstName, ad.title, ad._id);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'AD_APPROVAL',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+        console.log('✅ UserNotificationService: Email notification sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Email notification queued (communication emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send email notification:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -86,8 +108,30 @@ class UserNotificationService extends BaseNotificationService {
         }
       );
 
-      // Send email notification
-      await this.sendAdRejectionEmail(user.email, user.firstName, ad.title, reason, ad._id);
+      // Send email notification using enhanced service
+      try {
+        const emailData = await this.getAdRejectionEmailData(user.firstName, ad.title, reason, ad._id);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'AD_REJECTION',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+        console.log('✅ UserNotificationService: Ad rejection email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Ad rejection email queued (communication emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send ad rejection email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -129,10 +173,31 @@ class UserNotificationService extends BaseNotificationService {
       );
       console.log('✅ UserNotificationService: In-app notification created');
 
-      // Send email notification
+      // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
-      await this.sendPaymentConfirmationEmail(user.email, user.firstName, amount, adTitle);
-      console.log('✅ UserNotificationService: Email notification sent');
+      try {
+        const emailData = await this.getPaymentConfirmationEmailData(user.firstName, amount, adTitle);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'PAYMENT_CONFIRMATION',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+        console.log('✅ UserNotificationService: Payment confirmation email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Payment confirmation email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send payment confirmation email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -252,10 +317,31 @@ class UserNotificationService extends BaseNotificationService {
       );
       console.log('✅ UserNotificationService: In-app notification created');
 
-      // Send email notification
+      // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
-      await this.sendProfileChangeEmail(user.email, user.firstName, changeMessages, changedFields);
-      console.log('✅ UserNotificationService: Email notification sent');
+      try {
+        const emailData = await this.getProfileChangeEmailData(user.firstName, changeMessages, changedFields);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'PROFILE_CHANGE',
+          emailData,
+          'MEDIUM',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Profile change email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Profile change email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send profile change email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -266,7 +352,281 @@ class UserNotificationService extends BaseNotificationService {
   }
 
   /**
-   * Send email notification for ad approval
+   * Get email data for ad approval notification
+   */
+  static async getAdApprovalEmailData(firstName, adTitle, adId) {
+    return {
+      subject: '🎉 Your Ad Has Been Approved!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">🎉 Great News, ${firstName}!</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been approved and is now live!</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Ad Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">APPROVED ✅</span></p>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Your advertisement is now being displayed on our network and will reach thousands of potential customers!
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Dashboard
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for choosing Ads2Go for your advertising needs!
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        adTitle,
+        adId
+      }
+    };
+  }
+
+  /**
+   * Get email data for ad rejection notification
+   */
+  static async getAdRejectionEmailData(firstName, adTitle, reason, adId) {
+    return {
+      subject: '❌ Ad Rejected - Action Required',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">❌ Ad Review Update</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName},</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">We need to discuss your advertisement submission.</p>
+            
+            <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <h3 style="color: #856404; margin: 0 0 10px 0;">Ad Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Title:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #dc3545; font-weight: bold;">REJECTED ❌</span></p>
+              <p style="margin: 5px 0; color: #333;"><strong>Reason:</strong> ${reason}</p>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Don't worry! You can resubmit your advertisement after making the necessary changes.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Dashboard
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              If you have any questions, please contact our support team.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        adTitle,
+        reason,
+        adId
+      }
+    };
+  }
+
+  /**
+   * Get email data for report status update notification
+   */
+  static async getReportStatusUpdateEmailData(firstName, reportTitle, newStatus, adminNotes) {
+    const statusText = newStatus.replace('_', ' ').toLowerCase();
+    const statusColor = newStatus === 'RESOLVED' ? '#28a745' : '#4A90E2';
+    const statusIcon = newStatus === 'RESOLVED' ? '✅' : newStatus === 'IN_PROGRESS' ? '🔧' : '📋';
+    
+    return {
+      subject: `${statusIcon} Report Status Update - ${statusText}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">${statusIcon} Report Status Update</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">There's an update on your report.</p>
+            
+            <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
+              <h3 style="color: #4A90E2; margin: 0 0 10px 0;">Report Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Report:</strong> ${reportTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: ${statusColor}; font-weight: bold;">${newStatus}</span></p>
+              ${adminNotes ? `<p style="margin: 5px 0; color: #333;"><strong>Admin Notes:</strong> ${adminNotes}</p>` : ''}
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              We're working to resolve your report as quickly as possible.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Reports
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for your patience and for helping us improve our service.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        reportTitle,
+        newStatus,
+        adminNotes
+      }
+    };
+  }
+
+  /**
+   * Get email data for admin response notification
+   */
+  static async getAdminResponseEmailData(firstName, reportTitle, adminNotes) {
+    return {
+      subject: '💬 Admin Response - Your Report',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">💬 Admin Response</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Our admin team has responded to your report.</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Report Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Report:</strong> ${reportTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Admin Response:</strong></p>
+              <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                <p style="margin: 0; color: #333; font-style: italic;">"${adminNotes}"</p>
+              </div>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Please review the response and let us know if you need any clarification.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Reports
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              Thank you for your feedback and for helping us improve our service.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        reportTitle,
+        adminNotes
+      }
+    };
+  }
+
+  /**
+   * Get email data for profile change notification
+   */
+  static async getProfileChangeEmailData(firstName, changeMessages, changedFields) {
+    return {
+      subject: '👤 Profile Updated - Security Alert',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">👤 Profile Updated</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Your profile has been successfully updated.</p>
+            
+            <div style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+              <h3 style="color: #856404; margin: 0 0 10px 0;">Changes Made:</h3>
+              ${changeMessages.map(message => `<p style="margin: 5px 0; color: #333;">• ${message}</p>`).join('')}
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              If you didn't make these changes, please contact our support team immediately.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Profile
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              This is an automated notification for your security and awareness.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        changeMessages,
+        changedFields
+      }
+    };
+  }
+
+  /**
+   * Get email data for payment confirmation notification
+   */
+  static async getPaymentConfirmationEmailData(firstName, amount, adTitle) {
+    return {
+      subject: '💳 Payment Confirmed - Thank You!',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
+          <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; text-align: center;">💳 Payment Confirmed</h2>
+            <p style="text-align: center; font-size: 16px; color: #666;">Hello ${firstName}!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Your payment has been successfully processed.</p>
+            
+            <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+              <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Payment Details:</h3>
+              <p style="margin: 5px 0; color: #333;"><strong>Amount:</strong> ₱${amount}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>For:</strong> ${adTitle}</p>
+              <p style="margin: 5px 0; color: #333;"><strong>Status:</strong> <span style="color: #4CAF50; font-weight: bold;">CONFIRMED ✅</span></p>
+            </div>
+            
+            <p style="color: #666; text-align: center; margin: 20px 0;">
+              Thank you for your payment! Your advertisement is now active and running.
+            </p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.CLIENT_URL || 'https://ads2go.com'}/dashboard" 
+                 style="background-color: #F3A26D; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+                View Your Dashboard
+              </a>
+            </div>
+            
+            <p style="color: #888; font-size: 12px; text-align: center; margin-top: 30px;">
+              If you have any questions about this payment, please contact our support team.
+            </p>
+          </div>
+        </div>
+      `,
+      templateData: {
+        firstName,
+        amount,
+        adTitle
+      }
+    };
+  }
+
+  /**
+   * Send email notification for ad approval (legacy method - use getAdApprovalEmailData instead)
    */
   static async sendAdApprovalEmail(email, firstName, adTitle, adId) {
     try {
@@ -306,10 +666,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send ad approval email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Ad approval email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending ad approval email:', error);
+      console.error('❌ Error sending ad approval email:', error.message);
       throw error;
     }
   }
@@ -360,10 +726,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send ad rejection email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Ad rejection email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending ad rejection email:', error);
+      console.error('❌ Error sending ad rejection email:', error.message);
       throw error;
     }
   }
@@ -416,10 +788,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send payment confirmation email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Payment confirmation email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending payment confirmation email:', error);
+      console.error('❌ Error sending payment confirmation email:', error.message);
       throw error;
     }
   }
@@ -497,10 +875,31 @@ class UserNotificationService extends BaseNotificationService {
       );
       console.log('✅ UserNotificationService: In-app notification created');
 
-      // Send email notification
+      // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
-      await this.sendReportStatusUpdateEmail(user.email, user.firstName, reportTitle, newStatus, adminNotes);
-      console.log('✅ UserNotificationService: Email notification sent');
+      try {
+        const emailData = await this.getReportStatusUpdateEmailData(user.firstName, reportTitle, newStatus, adminNotes);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'REPORT_STATUS_UPDATE',
+          emailData,
+          'MEDIUM',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Report status update email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Report status update email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send report status update email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -544,10 +943,31 @@ class UserNotificationService extends BaseNotificationService {
       );
       console.log('✅ UserNotificationService: In-app notification created');
 
-      // Send email notification
+      // Send email notification using enhanced service
       console.log('📧 UserNotificationService: Sending email notification...');
-      await this.sendReportAdminResponseEmail(user.email, user.firstName, reportTitle, adminNotes);
-      console.log('✅ UserNotificationService: Email notification sent');
+      try {
+        const emailData = await this.getAdminResponseEmailData(user.firstName, reportTitle, adminNotes);
+        const result = await EnhancedEmailNotificationService.sendEmailNotification(
+          user._id,
+          'USER',
+          user.email,
+          user.firstName,
+          'ADMIN_RESPONSE',
+          emailData,
+          'HIGH',
+          notification._id
+        );
+        
+        if (result.sent) {
+          console.log('✅ UserNotificationService: Admin response email sent successfully');
+        } else if (result.queued) {
+          console.log('📝 UserNotificationService: Admin response email queued (announcements emails disabled)');
+        }
+      } catch (emailError) {
+        console.error('❌ UserNotificationService: Failed to send admin response email:', emailError.message);
+        console.error('❌ UserNotificationService: Email error details:', emailError);
+        // Don't throw the error - continue with in-app notification
+      }
 
       return notification;
     } catch (error) {
@@ -610,10 +1030,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send profile change email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Profile change email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending profile change email:', error);
+      console.error('❌ Error sending profile change email:', error.message);
       throw error;
     }
   }
@@ -672,10 +1098,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send report status update email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Report status update email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending report status update email:', error);
+      console.error('❌ Error sending report status update email:', error.message);
       throw error;
     }
   }
@@ -725,10 +1157,16 @@ class UserNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send admin response email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Admin response email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending admin response email:', error);
+      console.error('❌ Error sending admin response email:', error.message);
       throw error;
     }
   }

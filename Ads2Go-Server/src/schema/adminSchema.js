@@ -24,6 +24,7 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     permissions: AdminPermissions!
+    notificationPreferences: AdminNotificationPreferences!
   }
 
   type AdminPermissions {
@@ -35,6 +36,14 @@ const typeDefs = gql`
     reports: Boolean!
   }
 
+  type AdminNotificationPreferences {
+    enableDesktopNotifications: Boolean!
+    enableNotificationBadge: Boolean!
+    pushNotificationTimeout: String!
+    communicationEmails: Boolean!
+    announcementsEmails: Boolean!
+  }
+
   type AuthPayload {
     token: String!
     admin: Admin!
@@ -44,6 +53,12 @@ const typeDefs = gql`
     success: Boolean!
     message: String!
     admin: Admin!
+  }
+
+  type UpdateAdminDetailsResponse {
+    success: Boolean!
+    message: String!
+    user: Admin!
   }
 
   type AdminListResponse {
@@ -94,6 +109,25 @@ const typeDefs = gql`
     reports: Boolean
   }
 
+  input UpdateAdminDetailsInput {
+    firstName: String
+    middleName: String
+    lastName: String
+    companyName: String
+    companyAddress: String
+    contactNumber: String
+    email: String
+    profilePicture: String
+  }
+
+  input UpdateAdminNotificationPreferencesInput {
+    enableDesktopNotifications: Boolean
+    enableNotificationBadge: Boolean
+    pushNotificationTimeout: String
+    communicationEmails: Boolean
+    announcementsEmails: Boolean
+  }
+
   input DeviceInfoInput {
     deviceId: String!
     deviceType: String!
@@ -106,6 +140,7 @@ const typeDefs = gql`
     getAdminById(id: ID!): Admin
     getOwnAdminDetails: Admin
     getAllUsers: [User!]!
+    getAdminNotificationPreferences: AdminNotificationPreferences!
   }
 
   # Mutations
@@ -118,6 +153,7 @@ const typeDefs = gql`
     # Admin management
     createAdmin(input: CreateAdminInput!): AdminResponse!
     updateAdmin(adminId: ID!, input: UpdateAdminInput!): AdminResponse!
+    updateAdminDetails(adminId: ID!, input: UpdateAdminDetailsInput!): UpdateAdminDetailsResponse!
     deleteAdmin(id: ID!): AdminResponse!
     activateAdmin(id: ID!): AdminResponse!
     deactivateAdmin(id: ID!): AdminResponse!
@@ -129,6 +165,9 @@ const typeDefs = gql`
     changeAdminPassword(currentPassword: String!, newPassword: String!): Boolean!
     requestAdminPasswordReset(email: String!): Boolean!
     resetAdminPassword(token: String!, newPassword: String!): Boolean!
+
+    # Notification preferences
+    updateAdminNotificationPreferences(input: UpdateAdminNotificationPreferencesInput!): AdminResponse!
   }
 `;
 

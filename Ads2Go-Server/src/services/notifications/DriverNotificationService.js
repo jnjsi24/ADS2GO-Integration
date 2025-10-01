@@ -1,5 +1,6 @@
 const BaseNotificationService = require('./BaseNotificationService');
 const EmailService = require('../../utils/emailService');
+const EnhancedEmailNotificationService = require('./EnhancedEmailNotificationService');
 
 class DriverNotificationService extends BaseNotificationService {
   /**
@@ -173,10 +174,16 @@ class DriverNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send material assignment email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Material assignment email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending material assignment email:', error);
+      console.error('❌ Error sending material assignment email:', error.message);
       throw error;
     }
   }
@@ -224,10 +231,16 @@ class DriverNotificationService extends BaseNotificationService {
         `
       };
 
-      await EmailService.transporter.sendMail(mailOptions);
+      const transporter = EmailService.getTransporter();
+      if (!transporter) {
+        console.error('❌ Cannot send driver status change email: Email service not configured');
+        return;
+      }
+
+      await transporter.sendMail(mailOptions);
       console.log(`✅ Driver status change email sent to ${email}`);
     } catch (error) {
-      console.error('Error sending driver status change email:', error);
+      console.error('❌ Error sending driver status change email:', error.message);
       throw error;
     }
   }

@@ -123,6 +123,29 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  notificationPreferences: {
+    enableDesktopNotifications: {
+      type: Boolean,
+      default: false
+    },
+    enableNotificationBadge: {
+      type: Boolean,
+      default: true
+    },
+    pushNotificationTimeout: {
+      type: String,
+      default: '10',
+      enum: ['5', '10', '15', '30']
+    },
+    communicationEmails: {
+      type: Boolean,
+      default: false
+    },
+    announcementsEmails: {
+      type: Boolean,
+      default: true
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now

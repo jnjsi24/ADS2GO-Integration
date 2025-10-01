@@ -14,6 +14,7 @@ export const UPDATE_SUPER_ADMIN_DETAIL = gql`
         contactNumber
         companyName
         companyAddress
+        profilePicture
       }
     }
   }
