@@ -176,8 +176,6 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   
   // Compliance and alerts
   complianceData: {
-    speedViolations: { type: Number, default: 0 },
-    routeDeviations: { type: Number, default: 0 },
     offlineIncidents: { type: Number, default: 0 },
     displayIssues: { type: Number, default: 0 }
   },

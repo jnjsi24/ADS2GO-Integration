@@ -227,8 +227,6 @@ const DeviceTrackingSchema = new mongoose.Schema({
   
   // Compliance and alerts
   complianceData: {
-    speedViolations: { type: Number, default: 0 },
-    routeDeviations: { type: Number, default: 0 },
     offlineIncidents: { type: Number, default: 0 },
     displayIssues: { type: Number, default: 0 }
   },
@@ -298,7 +296,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   alerts: [{
     type: { 
       type: String, 
-      enum: ['LOW_HOURS', 'OFFLINE_TOO_LONG', 'OUT_OF_ROUTE', 'SPEED_VIOLATION', 'DISPLAY_OFFLINE', 'LOW_BRIGHTNESS', 'MAINTENANCE_NEEDED', 'AD_PLAYBACK_ERROR'],
+      enum: ['LOW_HOURS', 'OFFLINE_TOO_LONG', 'DISPLAY_OFFLINE', 'LOW_BRIGHTNESS', 'MAINTENANCE_NEEDED', 'AD_PLAYBACK_ERROR'],
       required: true 
     },
     message: { type: String, required: true },
