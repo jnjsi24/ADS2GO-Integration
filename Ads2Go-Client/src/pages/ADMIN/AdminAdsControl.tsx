@@ -447,7 +447,7 @@ const AdminAdsControl: React.FC = () => {
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">AdsPanel - LCD Control Center</h1>
           </div>
           <button 
             onClick={() => fetchData(true)}

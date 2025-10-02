@@ -16,6 +16,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { format, addHours, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Mock data structure - replace with actual GraphQL query
 interface VehicleAirtime {
@@ -48,6 +49,18 @@ interface AirtimeAvailabilityProps {
   selectedVehicle?: string;
 }
 
+const statusOptions = [
+  { value: 'all', label: 'All Status' },
+  { value: 'online', label: 'Online Only' },
+  { value: 'offline', label: 'Offline Only' },
+];
+
+const timeOptions = [
+  { value: 'all', label: 'All Time Slots' },
+  { value: 'available', label: 'Available Only' },
+  { value: 'busy', label: 'Busy Only' },
+];
+
 const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({ 
   selectedDate = new Date(),
   selectedVehicle 
@@ -56,6 +69,8 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
   const [timeFilter, setTimeFilter] = useState<'all' | 'available' | 'busy'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
   const [isLoading, setIsLoading] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
 
   // Mock data - replace with actual GraphQL query
   const mockVehicles: VehicleAirtime[] = [
@@ -197,65 +212,142 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-sm">
       {/* Header */}
+      {/* Summary Footer */}
+      <div className="pb-3 bg-gray-50">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+          <div className="bg-green-100 p-4 rounded-lg shadow-md">
+            <div className="text-2xl font-bold text-gray-900">
+              {filteredVehicles.filter(v => v.status === 'ONLINE').length}
+            </div>
+            <div className="text-sm text-gray-600">Online Vehicles</div>
+          </div>
+          <div className="bg-blue-100 p-4 rounded-lg shadow-md">
+            <div className="text-2xl font-bold text-gray-900">
+              {filteredVehicles.reduce((sum, v) => sum + v.totalAvailableHours, 0)}h
+            </div>
+            <div className="text-sm text-gray-600">Total Available Hours</div>
+          </div>
+          <div className="bg-yellow-100 p-4 rounded-lg shadow-md">
+            <div className="text-2xl font-bold text-gray-900">
+              {Math.round(filteredVehicles.reduce((sum, v) => sum + v.utilizationRate, 0) / filteredVehicles.length) || 0}%
+            </div>
+            <div className="text-sm text-gray-600">Average Utilization</div>
+          </div>
+        </div>
+      </div>
       <div className="p-6 border-b border-gray-200">
+
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-500" />
+            <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
               Available Airtime Per Hour Per Vehicle
             </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Real-time availability and scheduling for all vehicles
-            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsLoading(true)}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-32 text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                {statusOptions.find(opt => opt.value === statusFilter)?.label}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(opt.value as any);
+                          setShowStatusDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTimeDropdown(!showTimeDropdown)}
+                className="flex items-center justify-between w-40 text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                {timeOptions.find(opt => opt.value === timeFilter)?.label}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showTimeDropdown ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showTimeDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {timeOptions.map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setTimeFilter(opt.value as any);
+                          setShowTimeDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-4 mt-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-600">Filters:</span>
-          </div>
-          
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        {/* Refresh Button */}
+        <div className="flex justify-end mt-4">
+          <button
+            onClick={() => setIsLoading(true)}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            <option value="all">All Status</option>
-            <option value="online">Online Only</option>
-            <option value="offline">Offline Only</option>
-          </select>
-
-          <select
-            value={timeFilter}
-            onChange={(e) => setTimeFilter(e.target.value as any)}
-            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Time Slots</option>
-            <option value="available">Available Only</option>
-            <option value="busy">Busy Only</option>
-          </select>
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </div>
 
       {/* Vehicle List */}
       <div className="divide-y divide-gray-200">
         {filteredVehicles.map((vehicle) => (
-          <div key={vehicle.vehicleId} className="p-6">
+          <div key={vehicle.vehicleId} className="p-6 hover:bg-gray-50 ">
             {/* Vehicle Header */}
             <div 
-              className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors"
+              className="flex items-center justify-between cursor-pointer p-2 rounded-lg transition-colors"
               onClick={() => toggleVehicleExpansion(vehicle.vehicleId)}
             >
               <div className="flex items-center gap-4">
@@ -298,45 +390,46 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
               <div className="mt-4">
                 {/* Summary Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-900">Total Available</span>
+                  <div className="bg-blue-50 p-4 rounded-lg flex flex-col items-center justify-center">
+                    <div className="text-2xl font-bold text-blue-900">
+                      {vehicle.totalAvailableHours}h
                     </div>
-                    <div className="text-2xl font-bold text-blue-900">{vehicle.totalAvailableHours}h</div>
+                    <p className="text-sm font-medium text-blue-900">Total Available</p>
                   </div>
 
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Play className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-900">Scheduled</span>
+                  <div className="bg-green-50 p-4 rounded-lg flex flex-col items-center justify-center">
+                    <div className="text-2xl font-bold text-green-900">
+                      {vehicle.totalScheduledHours}h
                     </div>
-                    <div className="text-2xl font-bold text-green-900">{vehicle.totalScheduledHours}h</div>
+                    <p className="text-sm font-medium text-green-900 flex items-center gap-1">
+                      Scheduled
+                    </p>
                   </div>
 
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Pause className="w-4 h-4 text-yellow-600" />
-                      <span className="text-sm font-medium text-yellow-900">Utilization</span>
+                  <div className="bg-yellow-50 p-4 rounded-lg flex flex-col items-center justify-center">
+                    <div className="text-2xl font-bold text-yellow-900">
+                      {vehicle.utilizationRate}%
                     </div>
-                    <div className="text-2xl font-bold text-yellow-900">{vehicle.utilizationRate}%</div>
+                    <p className="text-sm font-medium text-yellow-900 flex items-center gap-1">
+                      Utilization
+                    </p>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Calendar className="w-4 h-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-900">Date</span>
-                    </div>
+                  <div className="bg-gray-50 p-4 rounded-lg flex flex-col items-center justify-center">
                     <div className="text-2xl font-bold text-gray-900">
                       {format(selectedDate, 'MMM dd')}
                     </div>
+                    <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                      Date
+                    </p>
                   </div>
                 </div>
+
 
                 {/* Hourly Schedule */}
                 <div>
                   <h5 className="text-sm font-medium text-gray-900 mb-3">Hourly Availability Schedule</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     {vehicle.hourlyAvailability
                       .filter(slot => {
                         if (timeFilter === 'available') return slot.isAvailable;
@@ -346,10 +439,8 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
                       .map((slot) => (
                         <div
                           key={slot.hour}
-                          className={`p-3 rounded-lg border text-center ${
+                          className={`p-3 rounded-lg bg-white/80 shadow-md text-center ${
                             slot.isAvailable 
-                              ? 'border-green-200 bg-green-50' 
-                              : 'border-red-200 bg-red-50'
                           }`}
                         >
                           <div className="text-xs font-medium text-gray-900 mb-1">
@@ -368,7 +459,11 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
                           </div>
 
                           {slot.currentAd && (
-                            <div className="mt-2 p-2 bg-blue-100 rounded text-xs">
+                            <div
+                              className={`mt-2 p-2 rounded text-xs ${
+                                slot.isAvailable ? 'bg-green-100' : 'bg-red-100'
+                              }`}
+                            >
                               <div className="font-medium text-blue-900 truncate">
                                 {slot.currentAd.adTitle}
                               </div>
@@ -377,6 +472,7 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
                               </div>
                             </div>
                           )}
+
                         </div>
                       ))}
                   </div>
@@ -385,30 +481,6 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
             )}
           </div>
         ))}
-      </div>
-
-      {/* Summary Footer */}
-      <div className="p-6 bg-gray-50 border-t border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-          <div>
-            <div className="text-2xl font-bold text-gray-900">
-              {filteredVehicles.filter(v => v.status === 'ONLINE').length}
-            </div>
-            <div className="text-sm text-gray-600">Online Vehicles</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-gray-900">
-              {filteredVehicles.reduce((sum, v) => sum + v.totalAvailableHours, 0)}h
-            </div>
-            <div className="text-sm text-gray-600">Total Available Hours</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-gray-900">
-              {Math.round(filteredVehicles.reduce((sum, v) => sum + v.utilizationRate, 0) / filteredVehicles.length) || 0}%
-            </div>
-            <div className="text-sm text-gray-600">Average Utilization</div>
-          </div>
-        </div>
       </div>
     </div>
   );
