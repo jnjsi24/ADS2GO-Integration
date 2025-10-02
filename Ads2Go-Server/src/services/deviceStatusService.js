@@ -100,15 +100,18 @@ class DeviceStatusService {
         // New endpoint for real-time ad playback updates
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
+        const slotNumber = url.searchParams.get('slotNumber') || request.headers['slot-number'];
         const isAdmin = url.searchParams.get('admin') === 'true' || request.headers['admin'] === 'true';
         
         console.log('WebSocket Playback Upgrade Request Details:');
         console.log('- Pathname:', pathname);
         console.log('- Device ID from Query:', url.searchParams.get('deviceId'));
         console.log('- Material ID from Query:', url.searchParams.get('materialId'));
+        console.log('- Slot Number from Query:', url.searchParams.get('slotNumber'));
         console.log('- Is Admin:', isAdmin);
         console.log('- Final Device ID:', deviceId);
         console.log('- Final Material ID:', materialId);
+        console.log('- Final Slot Number:', slotNumber);
         
         if (!deviceId && !isAdmin) {
           console.error('No device ID provided in WebSocket playback upgrade request');
@@ -128,6 +131,7 @@ class DeviceStatusService {
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
           if (materialId) ws.materialId = materialId;
+          if (slotNumber) ws.slotNumber = parseInt(slotNumber);
           ws.isAlive = true;
           ws.lastPong = Date.now();
           ws.connectionType = 'playback'; // Mark as playback connection
@@ -294,28 +298,53 @@ class DeviceStatusService {
   }
 
   async handlePlaybackConnection(ws, request) {
-    let deviceId, materialId;
+    let deviceId, materialId, slotNumber;
     
     if (ws.isAdmin) {
       console.log(`🔧 Admin WebSocket Connection Established for Real-Time Monitoring`);
       // For admin connections, use 'ADMIN' as the key
       deviceId = 'ADMIN';
       materialId = null;
+      slotNumber = null;
     } else {
       deviceId = ws.deviceId || request.headers['device-id'];
       materialId = ws.materialId || request.headers['material-id'];
-      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
+      slotNumber = ws.slotNumber || request.headers['slot-number'];
+      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId}, slot: ${slotNumber})` : ''}`);
     }
 
-    // Store the connection with its device ID and material ID
+    // Store the connection with its device ID, material ID, and slot number
     ws.deviceId = deviceId;
     ws.materialId = materialId;
+    ws.slotNumber = slotNumber;
     this.activeConnections.set(deviceId, ws);
+    
+    // Store slot-specific connections for synchronization
+    if (materialId && slotNumber) {
+      const slotKey = `${materialId}-${slotNumber}`;
+      if (!this.slotConnections) {
+        this.slotConnections = new Map();
+      }
+      if (!this.slotConnections.has(slotKey)) {
+        this.slotConnections.set(slotKey, new Set());
+      }
+      this.slotConnections.get(slotKey).add(ws);
+      
+      // Also store by material for cross-slot synchronization
+      const materialKey = `${materialId}`;
+      if (!this.materialConnections) {
+        this.materialConnections = new Map();
+      }
+      if (!this.materialConnections.has(materialKey)) {
+        this.materialConnections.set(materialKey, new Set());
+      }
+      this.materialConnections.get(materialKey).add(ws);
+    }
     
     if (ws.isAdmin) {
       console.log(`🔧 Admin real-time monitoring connection established`);
     } else {
-      console.log(`Playback connection established: ${deviceId}`);
+      console.log(`Playback connection established: ${deviceId} (slot ${slotNumber})`);
     }
     
     // Handle incoming messages (including ping and playback updates)
@@ -337,6 +366,14 @@ class DeviceStatusService {
             progress: message.progress
           });
           this.handlePlaybackUpdate(deviceId, message);
+          
+          // Broadcast synchronization signals to other slots of the same material
+          if (materialId && slotNumber) {
+            this.broadcastSlotSynchronization(materialId, slotNumber, message);
+          }
+        } else if (message.type === 'syncRequest') {
+          // Handle synchronization requests
+          this.handleSyncRequest(deviceId, materialId, slotNumber, message);
         }
       } catch (error) {
         console.error('Error processing WebSocket Playback Message:', error);
@@ -346,6 +383,8 @@ class DeviceStatusService {
     ws.on('close', (code, reason) => {
       console.log(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
+        // Clean up slot connections before removing the main connection
+        this.cleanupSlotConnections(deviceId, materialId, slotNumber);
         this.removeConnection(deviceId);
       }
     });
@@ -361,6 +400,20 @@ class DeviceStatusService {
         duration: message.duration,
         progress: message.progress
       });
+
+      // Store current playback state for synchronization
+      const connection = this.activeConnections.get(deviceId);
+      if (connection) {
+        connection.currentPlaybackState = {
+          adId: message.adId,
+          adTitle: message.adTitle,
+          state: message.state,
+          currentTime: message.currentTime,
+          duration: message.duration,
+          progress: message.progress,
+          timestamp: new Date().toISOString()
+        };
+      }
 
       // Update the database with current ad information
       await this.updateCurrentAd(deviceId, message);
@@ -868,6 +921,137 @@ class DeviceStatusService {
       clearTimeout(timer);
       this.adEndTimers.delete(deviceId);
       console.log(`🚫 [AdCleanup] Cancelled cleanup timer for device ${deviceId}`);
+    }
+  }
+
+  // Slot synchronization methods
+  broadcastSlotSynchronization(materialId, sourceSlotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      console.log(`⚠️ [SlotSync] No material connections found for ${materialId}`);
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    const syncMessage = {
+      type: 'slotSync',
+      sourceSlot: sourceSlotNumber,
+      materialId: materialId,
+      adId: message.adId || '',
+      adTitle: message.adTitle || '',
+      state: message.state,
+      currentTime: message.currentTime || 0,
+      duration: message.duration || 0,
+      progress: message.progress || 0,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`🔄 [SlotSync] Broadcasting sync from slot ${sourceSlotNumber} to other slots: ${message.adTitle || 'Unknown'} - ${message.state}`);
+
+    connections.forEach((connection, slotNumber) => {
+      if (slotNumber !== sourceSlotNumber && connection.ws && connection.ws.readyState === WebSocket.OPEN) {
+        console.log(`🔄 [SlotSync] Sending sync to slot ${slotNumber}: ${message.adTitle || 'Unknown'} - ${message.state}`);
+        try {
+          connection.ws.send(JSON.stringify(syncMessage));
+        } catch (error) {
+          console.error(`❌ [SlotSync] Error sending sync to slot ${slotNumber}:`, error);
+        }
+      }
+    });
+  }
+
+  handleSyncRequest(deviceId, materialId, slotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    console.log(`🔄 [SlotSync] Handling sync request from slot ${slotNumber} for material ${materialId}`);
+
+    // Find the first active slot that is currently playing an ad
+    let sourceSlot = null;
+    let bestSourceSlot = null;
+    
+    connections.forEach(ws => {
+      if (ws.slotNumber !== slotNumber && ws.readyState === WebSocket.OPEN) {
+        // Prefer slots that are currently playing
+        if (ws.currentPlaybackState && ws.currentPlaybackState.state === 'playing') {
+          bestSourceSlot = ws;
+        } else if (!sourceSlot) {
+          sourceSlot = ws; // Fallback to any active slot
+        }
+      }
+    });
+
+    const targetSlot = bestSourceSlot || sourceSlot;
+    
+    // Don't sync if no slots are actually playing ads
+    if (!targetSlot || (targetSlot.currentPlaybackState && 
+        (targetSlot.currentPlaybackState.state === 'loading' || 
+         targetSlot.currentPlaybackState.state === 'buffering'))) {
+      console.log(`⚠️ [SlotSync] No active playing slots found for material ${materialId}`);
+      return;
+    }
+
+    if (targetSlot) {
+      // Request current state from the source slot
+      const stateRequest = {
+        type: 'stateRequest',
+        requestingSlot: slotNumber,
+        materialId: materialId,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        targetSlot.send(JSON.stringify(stateRequest));
+        console.log(`🔄 [SlotSync] Requesting state from slot ${targetSlot.slotNumber} for slot ${slotNumber}`);
+        
+        // Also send a direct sync message with current state if available
+        if (targetSlot.currentPlaybackState) {
+          const directSync = {
+            type: 'slotSync',
+            sourceSlot: targetSlot.slotNumber,
+            materialId: materialId,
+            adId: targetSlot.currentPlaybackState.adId,
+            adTitle: targetSlot.currentPlaybackState.adTitle,
+            state: targetSlot.currentPlaybackState.state,
+            currentTime: targetSlot.currentPlaybackState.currentTime,
+            duration: targetSlot.currentPlaybackState.duration,
+            progress: targetSlot.currentPlaybackState.progress,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Send directly to the requesting slot
+          const requestingConnection = this.activeConnections.get(deviceId);
+          if (requestingConnection && requestingConnection.readyState === WebSocket.OPEN) {
+            requestingConnection.send(JSON.stringify(directSync));
+            console.log(`🔄 [SlotSync] Sent direct sync to slot ${slotNumber} from slot ${targetSlot.slotNumber}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error requesting state from slot ${targetSlot.slotNumber}:`, error);
+      }
+    } else {
+      console.log(`⚠️ [SlotSync] No active slots found for material ${materialId} to sync with slot ${slotNumber}`);
+    }
+  }
+
+  // Clean up slot connections when WebSocket closes
+  cleanupSlotConnections(deviceId, materialId, slotNumber) {
+    if (materialId && slotNumber) {
+      const slotKey = `${materialId}-${slotNumber}`;
+      if (this.slotConnections && this.slotConnections.has(slotKey)) {
+        this.slotConnections.get(slotKey).delete(this.activeConnections.get(deviceId));
+        if (this.slotConnections.get(slotKey).size === 0) {
+          this.slotConnections.delete(slotKey);
+        }
+      }
+
+      if (this.materialConnections && this.materialConnections.has(materialId)) {
+        this.materialConnections.get(materialId).delete(this.activeConnections.get(deviceId));
+        if (this.materialConnections.get(materialId).size === 0) {
+          this.materialConnections.delete(materialId);
+        }
+      }
     }
   }
 }

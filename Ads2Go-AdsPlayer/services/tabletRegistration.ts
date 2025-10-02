@@ -451,7 +451,7 @@ export class TabletRegistrationService {
         await AsyncStorage.removeItem('registration_cleared');
         
         // Update WebSocket service with new device info
-        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId);
+        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId, registration.slotNumber);
       }
 
       return result;
