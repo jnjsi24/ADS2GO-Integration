@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const dailyArchiveJob = require('./dailyArchiveJob');
+const hoursUpdateService = require('../services/hoursUpdateService');
 
 class CronJobs {
   constructor() {
@@ -15,6 +16,9 @@ class CronJobs {
     }
 
     console.log('🚀 Starting cron jobs...');
+
+    // Start the high-precision hours update service (30-second intervals)
+    hoursUpdateService.start();
 
     // Daily archive job - runs at midnight every day
     const dailyArchiveTask = cron.schedule('0 0 * * *', async () => {
@@ -46,8 +50,8 @@ class CronJobs {
 
     this.jobs.set('hourlyCleanup', hourlyCleanupTask);
 
-    // Online hours update job - runs every minute to update online hours
-    const onlineHoursTask = cron.schedule('* * * * *', async () => {
+    // Online hours update job - runs every 5 minutes (backup to high-precision service)
+    const onlineHoursTask = cron.schedule('*/5 * * * *', async () => {
       try {
         await this.updateOnlineHours();
       } catch (error) {
@@ -78,6 +82,9 @@ class CronJobs {
     }
 
     console.log('🛑 Stopping cron jobs...');
+
+    // Stop the hours update service
+    hoursUpdateService.stop();
 
     this.jobs.forEach((job, name) => {
       job.stop();

@@ -99,6 +99,26 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   totalDistanceTraveled: { type: Number, default: 0 }, // in km
   totalHoursOnline: { type: Number, default: 0 }, // in hours
   
+  // Enhanced hours tracking with timezone awareness
+  hoursTracking: {
+    deviceTimezone: { type: String, default: 'Asia/Manila' },
+    sessionStartTime: { type: Date },
+    sessionEndTime: { type: Date },
+    lastOnlineUpdate: { type: Date },
+    offlinePeriods: [{
+      startTime: { type: Date },
+      endTime: { type: Date },
+      duration: { type: Number, default: 0 } // in hours
+    }],
+    complianceStatus: { 
+      type: String, 
+      enum: ['COMPLIANT', 'NON_COMPLIANT', 'PENDING'],
+      default: 'PENDING'
+    },
+    targetHours: { type: Number, default: 8 },
+    precision: { type: String, default: '30s' } // Update frequency used
+  },
+  
   // Daily summary
   dailySummary: DailySummarySchema,
   
@@ -172,12 +192,31 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
+// Pre-save validation hook
+DeviceDataHistorySchema.pre('save', function(next) {
+  // Validate hours tracking data before saving
+  const validation = this.validateHoursTracking();
+  if (!validation.isValid) {
+    console.warn(`⚠️ Hours tracking validation warnings for device ${this.deviceId}:`, validation.errors);
+    // Don't fail the save, just log warnings
+  }
+  
+  // Ensure totalHoursOnline matches hoursTracking.totalOnlineHours
+  if (this.hoursTracking && this.hoursTracking.totalOnlineHours !== undefined) {
+    this.totalHoursOnline = this.hoursTracking.totalOnlineHours;
+  }
+  
+  next();
+});
+
 // Indexes for efficient queries
 DeviceDataHistorySchema.index({ deviceId: 1, date: -1 });
 DeviceDataHistorySchema.index({ deviceSlot: 1, date: -1 });
 DeviceDataHistorySchema.index({ date: -1 });
 DeviceDataHistorySchema.index({ deviceId: 1, deviceSlot: 1, date: -1 });
 DeviceDataHistorySchema.index({ 'locationHistory.coordinates': '2dsphere' });
+DeviceDataHistorySchema.index({ 'hoursTracking.deviceTimezone': 1 });
+DeviceDataHistorySchema.index({ 'hoursTracking.complianceStatus': 1 });
 
 // Virtual for formatted date
 DeviceDataHistorySchema.virtual('dateString').get(function() {
@@ -246,6 +285,48 @@ DeviceDataHistorySchema.methods.getHourlyStats = function(hour) {
 
 DeviceDataHistorySchema.methods.getAdPerformance = function(adId) {
   return this.adPerformance.find(ad => ad.adId === adId);
+};
+
+// Validate hours tracking data
+DeviceDataHistorySchema.methods.validateHoursTracking = function() {
+  const errors = [];
+  
+  if (this.hoursTracking) {
+    const { totalOnlineHours, totalOfflineHours, targetHours, deviceTimezone } = this.hoursTracking;
+    
+    // Validate total hours don't exceed 24 hours
+    if (totalOnlineHours + totalOfflineHours > 24) {
+      errors.push(`Total hours (${totalOnlineHours + totalOfflineHours}) exceed 24 hours`);
+    }
+    
+    // Validate online hours don't exceed target
+    if (totalOnlineHours > targetHours) {
+      errors.push(`Online hours (${totalOnlineHours}) exceed target (${targetHours})`);
+    }
+    
+    // Validate timezone format
+    if (deviceTimezone && !/^[A-Za-z_]+\/[A-Za-z_]+$/.test(deviceTimezone)) {
+      errors.push(`Invalid timezone format: ${deviceTimezone}`);
+    }
+    
+    // Validate compliance status
+    const expectedStatus = totalOnlineHours >= targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
+    if (this.hoursTracking.complianceStatus !== expectedStatus) {
+      errors.push(`Compliance status mismatch: expected ${expectedStatus}, got ${this.hoursTracking.complianceStatus}`);
+    }
+  }
+  
+  return {
+    isValid: errors.length === 0,
+    errors: errors
+  };
+};
+
+// Get timezone-aware date string
+DeviceDataHistorySchema.methods.getDateInTimezone = function() {
+  const TimezoneUtils = require('../utils/timezoneUtils');
+  const deviceTimezone = this.hoursTracking?.deviceTimezone || 'Asia/Manila';
+  return TimezoneUtils.getCurrentTimeInTimezone(deviceTimezone);
 };
 
 module.exports = mongoose.models.DeviceDataHistory || mongoose.model('DeviceDataHistory', DeviceDataHistorySchema);

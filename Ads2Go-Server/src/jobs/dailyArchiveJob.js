@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const DeviceTracking = require('../models/deviceTracking');
 const DeviceDataHistory = require('../models/deviceDataHistory');
 const Analytics = require('../models/analytics');
+const TimezoneUtils = require('../utils/timezoneUtils');
 
 class DailyArchiveJob {
   constructor() {
@@ -76,6 +77,12 @@ class DailyArchiveJob {
       // Calculate daily summary for this slot
       const dailySummary = this.calculateDailySummaryForSlot(device, slot);
       
+      // Get device timezone from current location
+      const deviceTimezone = TimezoneUtils.getDeviceTimezone(device.currentLocation);
+      
+      // Calculate enhanced hours tracking data
+      const hoursTracking = this.calculateHoursTrackingData(device, slot, deviceTimezone);
+      
       // Create archive record for this slot
       const archiveRecord = {
         deviceId: slot.deviceId,
@@ -87,11 +94,14 @@ class DailyArchiveJob {
         // Device info
         deviceInfo: slot.deviceInfo || {},
         
-        // Daily totals (from device level)
+        // Daily totals (from device level) - use enhanced calculation
         totalAdPlays: device.totalAdPlays,
         totalQRScans: device.totalQRScans,
         totalDistanceTraveled: device.totalDistanceTraveled,
-        totalHoursOnline: device.totalHoursOnline,
+        totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+        
+        // Enhanced hours tracking with timezone awareness
+        hoursTracking: hoursTracking,
         
         // Daily summary
         dailySummary: dailySummary,
@@ -120,12 +130,12 @@ class DailyArchiveJob {
         // Metadata
         archivedAt: new Date(),
         dataSource: 'deviceTracking',
-        version: '2.0'
+        version: '3.0' // Updated version for enhanced tracking
       };
 
       // Save to DeviceDataHistory
       await DeviceDataHistory.create(archiveRecord);
-      console.log(`✅ Archived data for device ${slot.deviceId} in material ${device.materialId}`);
+      console.log(`✅ Archived enhanced data for device ${slot.deviceId} in material ${device.materialId} (${hoursTracking.deviceTimezone})`);
     } catch (error) {
       console.error(`❌ Error archiving slot data for device ${slot.deviceId}:`, error);
     }
@@ -146,6 +156,93 @@ class DailyArchiveJob {
       lastSeen: slot.lastSeen,
       deviceInfo: slot.deviceInfo || {}
     };
+  }
+
+  // Calculate enhanced hours tracking data with timezone awareness
+  calculateHoursTrackingData(device, slot, deviceTimezone) {
+    const now = new Date();
+    const session = device.currentSession || {};
+    
+    // Calculate final hours online with timezone awareness
+    const finalHours = this.getFinalHoursOnline(device, deviceTimezone);
+    
+    // Calculate offline periods during the day
+    const offlinePeriods = this.calculateOfflinePeriods(device, deviceTimezone);
+    
+    return {
+      deviceTimezone: deviceTimezone,
+      sessionStartTime: session.startTime || now,
+      sessionEndTime: now,
+      lastOnlineUpdate: session.lastOnlineUpdate || session.startTime || now,
+      offlinePeriods: offlinePeriods,
+      complianceStatus: session.complianceStatus || (finalHours >= 8 ? 'COMPLIANT' : 'NON_COMPLIANT'),
+      targetHours: session.targetHours || 8,
+      precision: '30s', // High-precision updates
+      totalOfflineHours: offlinePeriods.reduce((sum, period) => sum + period.duration, 0),
+      totalOnlineHours: finalHours,
+      efficiency: finalHours > 0 ? (finalHours / (finalHours + offlinePeriods.reduce((sum, period) => sum + period.duration, 0))) * 100 : 0
+    };
+  }
+
+  // Get final hours online with timezone awareness
+  getFinalHoursOnline(device, deviceTimezone) {
+    if (!device.currentSession || !device.currentSession.startTime) {
+      return device.totalHoursOnline || 0;
+    }
+
+    const now = new Date();
+    const sessionStart = new Date(device.currentSession.startTime);
+    
+    // Check if it's a new day in device timezone
+    const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
+    const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(device.currentSession.date, deviceTimezone);
+    
+    if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
+      // New day - return the session total
+      return device.currentSession.totalHoursOnline || 0;
+    }
+
+    // Calculate hours with timezone awareness
+    let totalHours = device.currentSession.totalHoursOnline || 0;
+    
+    if (device.isOnline) {
+      const lastUpdate = device.currentSession.lastOnlineUpdate || sessionStart;
+      const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
+      totalHours += hoursSinceLastUpdate;
+    }
+
+    // Cap at 8 hours max per day
+    return Math.min(8, Math.max(0, totalHours));
+  }
+
+  // Calculate offline periods during the day
+  calculateOfflinePeriods(device, deviceTimezone) {
+    const offlinePeriods = [];
+    
+    if (!device.currentSession || !device.currentSession.startTime) {
+      return offlinePeriods;
+    }
+
+    // This is a simplified calculation - in a real implementation,
+    // you'd track offline/online transitions throughout the day
+    const sessionStart = new Date(device.currentSession.startTime);
+    const now = new Date();
+    
+    // For now, we'll estimate based on current online status
+    if (!device.isOnline) {
+      const lastSeen = new Date(device.lastSeen);
+      const offlineDuration = TimezoneUtils.calculateHoursInTimezone(lastSeen, now, deviceTimezone);
+      
+      if (offlineDuration > 0.1) { // Only count periods longer than 6 minutes
+        offlinePeriods.push({
+          startTime: lastSeen,
+          endTime: now,
+          duration: offlineDuration
+        });
+      }
+    }
+
+    return offlinePeriods;
   }
 
   // Calculate daily summary from device data

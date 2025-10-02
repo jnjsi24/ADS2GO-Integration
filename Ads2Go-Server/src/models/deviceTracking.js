@@ -280,6 +280,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
     locationHistory: [LocationPointSchema],
     isActive: { type: Boolean, default: true },
     targetHours: { type: Number, default: 8 }, // 8 hours target
+    lastOnlineUpdate: { type: Date }, // Last time hours were updated while online
     complianceStatus: { 
       type: String, 
       enum: ['COMPLIANT', 'NON_COMPLIANT', 'PENDING'],
@@ -345,29 +346,41 @@ DeviceTrackingSchema.virtual('currentHour').get(function() {
 DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
   if (!this.currentSession || !this.currentSession.startTime) return 0;
   
+  const TimezoneUtils = require('../utils/timezoneUtils');
   const now = new Date();
   const startTime = new Date(this.currentSession.startTime);
   
-  // Check if this is a new day - if so, reset to 8 hours
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const sessionDate = new Date(this.currentSession.date);
-  sessionDate.setHours(0, 0, 0, 0);
+  // Get device timezone from current location
+  const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
   
-  // If it's a new day, return 8 hours (fresh start)
-  if (sessionDate.getTime() !== today.getTime()) {
+  // Check if this is a new day in device timezone - if so, reset to 8 hours
+  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
+  const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(this.currentSession.date, deviceTimezone);
+  
+  // If it's a new day in device timezone, return 8 hours (fresh start)
+  if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
     return 8;
   }
   
-  // Count hours if device is online (either WebSocket connected or database shows online)
-  // If not online, return the last recorded hours
-  if (!this.isOnline) {
-    return this.currentSession.totalHoursOnline || 0;
-  }
+  // Enhanced session management for offline/online transitions
+  let totalHours = this.currentSession.totalHoursOnline || 0;
   
-  // Calculate hours since session start, but only if online
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60);
-  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  if (this.isOnline) {
+    // Device is online - calculate hours since last update
+    const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
+    const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
+    totalHours += hoursSinceLastUpdate;
+    
+    // Update the last online update time
+    this.currentSession.lastOnlineUpdate = now;
+  }
+  // If offline, return the last recorded hours (don't reset)
+  
+  // Cap at 8 hours max per day
+  totalHours = Math.min(8, Math.max(0, totalHours));
+  
+  // Update the session with current total
+  this.currentSession.totalHoursOnline = totalHours;
   
   return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
@@ -1011,5 +1024,5 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   
   return this;
 };
-
 module.exports = mongoose.models.DeviceTracking || mongoose.model('DeviceTracking', DeviceTrackingSchema);
+

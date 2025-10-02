@@ -63,17 +63,23 @@ router.post('/updateLocation', async (req, res) => {
       await deviceTracking.save();
     }
     
-    // Check if device was offline and just reconnected - clear location history to prevent invalid distance calculation
+    // Enhanced session management for offline/online transitions
     const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
     const wasOffline = !deviceTracking.isOnline && hasWebSocketConnection;
+    
+    // Handle offline to online transition
+    if (wasOffline) {
+      console.log(`🔄 Device ${deviceId} reconnected after being offline - preserving session state`);
+      deviceTracking.handleOfflineTransition(wasOffline, hasWebSocketConnection);
+    }
     
     // Also check if this is a fresh connection (no recent location history or invalid coordinates)
     const hasInvalidLocationHistory = deviceTracking.currentSession?.locationHistory?.some(point => 
       point.coordinates && point.coordinates[0] === 0 && point.coordinates[1] === 0
     );
     
-    if (wasOffline || hasInvalidLocationHistory) {
-      console.log(`🔄 Device ${deviceId} reconnected after being offline or has invalid location history - clearing location history to prevent invalid distance calculation`);
+    if (hasInvalidLocationHistory) {
+      console.log(`🔄 Device ${deviceId} has invalid location history - clearing to prevent invalid distance calculation`);
       deviceTracking.currentSession.locationHistory = [];
       deviceTracking.currentLocation = null;
       deviceTracking.currentSession.totalDistanceTraveled = 0;
