@@ -18,6 +18,7 @@ import { GET_ADS_BY_USER, GET_ALL_ADS,
   DELETE_AD,
   type Ad,
   type User } from "../../graphql/admin/ads";
+import { ToastContainer } from "../../components/ToastNotification";
 
 interface QueryResult {
   getAdsByUser: Ad[];
@@ -69,6 +70,12 @@ const UserAdsPage: React.FC = () => {
   const [updateAd] = useMutation(UPDATE_AD, {
       onCompleted: (data) => {
         console.log('Ad updated successfully:', data);
+        addToast({
+          type: 'success',
+          title: 'Update Successful',
+          message: 'Ad updated successfully!',
+          duration: 4000
+        });
         refetch(); // Refresh the ads list
       },
       onError: (error) => {
@@ -84,6 +91,12 @@ const UserAdsPage: React.FC = () => {
   
     const [deleteAd] = useMutation(DELETE_AD, {
       onCompleted: () => {
+        addToast({
+          type: 'success',
+          title: 'Deletion Successful',
+          message: 'Ad deleted successfully!',
+          duration: 4000
+        });
         refetch(); // Refresh the ads list
       },
       onError: (error) => {
@@ -106,7 +119,7 @@ const UserAdsPage: React.FC = () => {
     "ENDED",
   ];
 
-  const { data, loading, error } = useQuery<QueryResult>(GET_ADS_BY_USER, {
+  const { data, loading, error, refetch } = useQuery<QueryResult>(GET_ADS_BY_USER, {
     variables: { userId },
     skip: !userId,
   });
@@ -471,7 +484,7 @@ const UserAdsPage: React.FC = () => {
                                     <Info size={16} className="text-gray-500" />
                                     <div className="flex flex-col">
                                       <p className="font-semibold">Plan Name</p>
-                                      <p>{ad.planId?.name || 'N/A'}</p>
+                                      <p>{ad.planId?.id || 'N/A'}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -520,6 +533,9 @@ const UserAdsPage: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
