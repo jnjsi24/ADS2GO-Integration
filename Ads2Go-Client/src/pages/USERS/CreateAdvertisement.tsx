@@ -10,6 +10,7 @@ import {
   FlexiblePricingCalculation 
 } from '../../graphql/queries/flexibleAdQueries';
 import { uploadFileToFirebase } from '../../utils/fileUpload';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 type VehicleType = 'CAR' | 'MOTORCYCLE' | '';
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
@@ -31,7 +32,7 @@ type AdvertisementForm = {
 const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
-  const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { toasts, addToast, removeToast } = useToast();
   const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false);
   const [pricingCalculation, setPricingCalculation] = useState<FlexiblePricingCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -67,16 +68,22 @@ const CreateAdvertisement: React.FC = () => {
   const [calculatePricing] = useLazyQuery(CALCULATE_FLEXIBLE_PRICING);
   const [createAd] = useMutation(CREATE_FLEXIBLE_AD, {
     onCompleted: () => {
-      setShowToast({ message: 'Advertisement created successfully! Redirecting...', type: 'success' });
+      addToast({ 
+        title: 'Success!', 
+        message: 'Advertisement created successfully! Redirecting...', 
+        type: 'success' 
+      });
       setTimeout(() => {
-        setShowToast(null);
         navigate('/advertisements');
-      }, 5000); // Changed to 10 seconds
+      }, 3000);
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
-      setShowToast({ message: error.message, type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: error.message, 
+        type: 'error' 
+      });
     }
   });
 
@@ -226,8 +233,11 @@ const CreateAdvertisement: React.FC = () => {
     if (validateStep(currentStep)) {
       setCurrentStep(prev => Math.min(3, prev + 1));
     } else {
-      setShowToast({ message: 'Please complete all required information.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please complete all required information.', 
+        type: 'error' 
+      });
     }
   };
 
@@ -242,13 +252,19 @@ const CreateAdvertisement: React.FC = () => {
     }
     
     if (!validateStep(2) || !validateStep(1)) {
-      setShowToast({ message: 'Please fix the errors before submitting.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please fix the errors before submitting.', 
+        type: 'error' 
+      });
       return;
     }
     if (!pricingCalculation) {
-      setShowToast({ message: 'Please wait for pricing calculation to complete.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please wait for pricing calculation to complete.', 
+        type: 'error' 
+      });
       return;
     }
 
@@ -300,7 +316,11 @@ const CreateAdvertisement: React.FC = () => {
       await createAd({ variables: { input } });
     } catch (error) {
       console.error('Error creating ad:', error);
-      setShowToast({ message: 'Failed to create advertisement. Please try again.', type: 'error' });
+      addToast({ 
+        title: 'Error!', 
+        message: 'Failed to create advertisement. Please try again.', 
+        type: 'error' 
+      });
     } finally {
       setIsSubmissionInProgress(false);
       setIsUploading(false);
@@ -1119,23 +1139,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
         </form>
       </div>
-      <AnimatePresence>
-        {showToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            transition={{ duration: 0.3 }}
-            className={`fixed bottom-4 right-4 px-6 py-3 z-50 rounded-md ${
-              showToast.type === 'error' 
-                ? 'text-red-600 bg-red-100' 
-                : 'text-green-600 bg-green-100'
-            }`}
-          >
-            {showToast.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
