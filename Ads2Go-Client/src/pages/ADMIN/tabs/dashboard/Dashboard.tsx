@@ -79,11 +79,11 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
         
         <div className="overflow-x-auto">
-          {screens.filter(screen => screen.isOnline).length === 0 ? (
+          {screens.length === 0 ? (
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <WifiOff className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No active devices</h3>
-              <p className="mt-1 text-sm text-gray-500">No screens are currently online and connected via WebSocket.</p>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No devices found</h3>
+              <p className="mt-1 text-sm text-gray-500">No screens are currently available.</p>
               <p className="mt-1 text-xs text-gray-400">Check the Screen Tracking page for real-time device status.</p>
             </div>
           ) : (
@@ -94,7 +94,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <input type="checkbox" className="rounded" />
                   </th>
                   <th className="text-left py-3 px-4">Screen ID</th>
-                  <th className="text-left py-3 px-4">Slot</th>
                   <th className="text-left py-3 px-4">Status</th>
                   <th className="text-left py-3 px-4">Current Ad</th>
                   <th className="text-left py-3 px-4">Progress</th>
@@ -103,7 +102,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {screens.filter(screen => screen.isOnline).map((screen) => (
+                {screens.map((screen) => (
                 <tr key={screen.deviceId} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-3 px-4">
                     <input
@@ -122,11 +121,41 @@ const Dashboard: React.FC<DashboardProps> = ({
                       {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                     </button>
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{screen.slotNumber || 'Consolidated'}</td>
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
-                      {getStatusIcon(screen.isOnline ? 'online' : 'offline')}
-                      <span className="text-sm">{screen.statusText || getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
+                      {screen.slot1Status && screen.slot2Status ? (
+                        // For consolidated view, show status based on overall online status
+                        getStatusIcon(screen.isOnline ? 'online' : 'offline')
+                      ) : (
+                        // For single device view, show normal status
+                        getStatusIcon(screen.isOnline ? 'online' : 'offline')
+                      )}
+                      <div className="flex flex-col">
+                        {screen.slot1Status && screen.slot2Status ? (
+                          // Show individual slot statuses for consolidated view
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-2 h-2 rounded-full ${screen.slot1Status === 'ONLINE' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              <span className={`text-sm font-medium ${screen.slot1Status === 'ONLINE' ? 'text-green-600' : 'text-red-600'}`}>
+                                Slot 1: {screen.slot1Status}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-2 h-2 rounded-full ${screen.slot2Status === 'ONLINE' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                              <span className={`text-sm font-medium ${screen.slot2Status === 'ONLINE' ? 'text-green-600' : 'text-red-600'}`}>
+                                Slot 2: {screen.slot2Status}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          // Show single status for non-consolidated view
+                          <span className={`text-sm font-medium ${
+                            screen.isOnline ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {screen.statusText || getStatusText(screen.isOnline ? 'online' : 'offline')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -159,7 +188,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     )}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
-                    {screen.currentLocation?.address || 'Location not available'}
+                    {screen.currentLocation?.address || 
+                     (screen.currentLocation?.lat && screen.currentLocation?.lng ? 
+                      `Location: ${screen.currentLocation.lat.toFixed(6)}, ${screen.currentLocation.lng.toFixed(6)}` : 
+                      'Location not available')}
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
