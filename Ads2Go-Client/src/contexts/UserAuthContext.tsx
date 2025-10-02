@@ -458,19 +458,13 @@ export const UserAuthProvider: React.FC<{
       userEmail,
       isLoading,
       isInitialized,
-      login,
-      loginWithGoogle,
-      register,
-      logout,
-      navigate,
-      debugToken,
-      navigateToRegister,
+      // Remove function dependencies to prevent unnecessary re-renders
     ]
   );
 
   return (
     <UserAuthContext.Provider value={contextValue}>
-      {!isLoading && isInitialized ? children : null}
+      {children}
     </UserAuthContext.Provider>
   );
 };

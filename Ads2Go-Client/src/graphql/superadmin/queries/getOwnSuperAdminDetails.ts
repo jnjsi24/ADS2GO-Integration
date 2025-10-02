@@ -8,6 +8,8 @@ export const GET_OWN_SUPERADMIN_DETAILS = gql`
       middleName
       lastName
       email
+      recoveryEmail
+      profilePicture
       role
       isEmailVerified
       isActive

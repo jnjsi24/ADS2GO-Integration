@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { db, admin } = require('../firebase-admin');
 const { uploadToFirebase } = require('../utils/firebaseStorage');
+const { checkAdminMiddleware } = require('../middleware/auth');
 // Configure multer for memory storage and file size limits
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -14,20 +15,8 @@ const upload = multer({
   }
 });
 
-// Middleware to verify authentication
-const authenticate = (req, res, next) => {
-  // Extract token from header
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
-  }
-  
-  // In a real app, verify the JWT token here
-  // const token = authHeader.split(' ')[1];
-  // ... verify token logic ...
-  
-  next();
-};
+// Use the proper authentication middleware
+const authenticate = checkAdminMiddleware;
 
 /**
  * POST /upload
@@ -36,6 +25,15 @@ const authenticate = (req, res, next) => {
  */
 router.post('/', authenticate, upload.single('file'), async (req, res) => {
   try {
+    console.log('📤 Upload request received:', {
+      userId: req.body.userId,
+      folder: req.body.folder,
+      fileSize: req.file?.size,
+      fileType: req.file?.mimetype,
+      fileName: req.file?.originalname,
+      userRole: req.user?.role
+    });
+    
     const { userId, folder = 'uploads', metadata = {} } = req.body;
     
     // Validate required fields
@@ -75,20 +73,31 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
     
     // Prepare file for upload
     const fileObj = {
-      createReadStream: function* () {
-        yield req.file.buffer;
-      },
+      buffer: req.file.buffer,
       filename: sanitizedFilename,
       mimetype: req.file.mimetype
     };
 
     // Upload to Firebase Storage
+    console.log('🔄 Calling uploadToFirebase with:', {
+      folder,
+      userId,
+      fileSize: req.file.size,
+      fileType: req.file.mimetype
+    });
+    
     const uploaded = await uploadToFirebase(fileObj, folder, userId, {
       ...metadata,
       originalName: req.file.originalname,
       uploadedBy: userId,
       uploadType: 'server',
       userAgent: req.headers['user-agent']
+    });
+    
+    console.log('✅ Upload successful:', {
+      url: uploaded.url?.substring(0, 100) + '...',
+      path: uploaded.path,
+      filename: uploaded.filename
     });
 
     // Log the upload in Firestore for auditing
@@ -134,7 +143,7 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
         error: error.message,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         userId: req.body.userId,
-        documentType: req.body.documentType,
+        documentType: req.body.documentType || 'profile-picture',
         fileSize: req.file?.size,
         mimeType: req.file?.mimetype
       });

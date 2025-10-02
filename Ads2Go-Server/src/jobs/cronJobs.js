@@ -46,7 +46,21 @@ class CronJobs {
 
     this.jobs.set('hourlyCleanup', hourlyCleanupTask);
 
-    // Start all jobs
+    // Online hours update job - runs every minute to update online hours
+    const onlineHoursTask = cron.schedule('* * * * *', async () => {
+      try {
+        await this.updateOnlineHours();
+      } catch (error) {
+        console.error('❌ Online hours update job failed:', error);
+      }
+    }, {
+      scheduled: false,
+      timezone: 'UTC'
+    });
+
+    this.jobs.set('onlineHours', onlineHoursTask);
+
+    // Start all cron jobs
     this.jobs.forEach((job, name) => {
       job.start();
       console.log(`✅ Started cron job: ${name}`);
@@ -167,6 +181,41 @@ class CronJobs {
 
     } catch (error) {
       console.error('❌ Error updating current hour stats:', error);
+    }
+  }
+
+  // Update online hours for all active devices
+  async updateOnlineHours() {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const today = new Date().toISOString().split('T')[0];
+
+      console.log('🕐 [CRON] Updating online hours for all devices...');
+
+      // Get all devices for today that are online
+      const devices = await DeviceTracking.find({ 
+        date: today,
+        isOnline: true 
+      });
+
+      console.log(`📊 Found ${devices.length} online devices to update`);
+
+      for (const device of devices) {
+        try {
+          // Calculate and update online hours
+          await device.calculateAndUpdateOnlineHours();
+          await device.save();
+          
+          console.log(`✅ Updated online hours for ${device.deviceId}: ${device.totalHoursOnline} hours`);
+        } catch (deviceError) {
+          console.error(`❌ Error updating device ${device.deviceId}:`, deviceError.message);
+        }
+      }
+
+      console.log('✅ Online hours update completed');
+
+    } catch (error) {
+      console.error('❌ Error updating online hours:', error);
     }
   }
 

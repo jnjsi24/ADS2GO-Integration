@@ -21,6 +21,10 @@ export interface ScreenData {
   isCompliant: boolean;
   totalDistanceToday: number;
   displayStatus: string;
+  displayId?: string; // Material ID for display
+  statusText?: string; // Explicit slot statuses (e.g., "SLOT 1: OFFLINE | SLOT 2: OFFLINE")
+  slot1Status?: string; // Individual slot 1 status
+  slot2Status?: string; // Individual slot 2 status
   screenMetrics?: {
     isDisplaying: boolean;
     brightness: number;

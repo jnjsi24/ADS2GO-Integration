@@ -14,7 +14,15 @@ export interface ScreenData {
   carGroupId: string;
   slotNumber: number;
   isOnline: boolean;
-  currentLocation: string;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
   lastSeen: string;
   currentHours: number;
   hoursRemaining: number;
@@ -159,7 +167,7 @@ class AdsPanelServiceV4 {
           carGroupId: screen.carGroupId || '',
           slotNumber: screen.slotNumber || 1,
           isOnline: screen.isOnline,
-          currentLocation: screen.currentLocation?.address || 'Unknown Location',
+          currentLocation: screen.currentLocation,
           lastSeen: screen.lastSeen,
           currentHours: screen.currentHours || 0,
           hoursRemaining: screen.hoursRemaining || 0,

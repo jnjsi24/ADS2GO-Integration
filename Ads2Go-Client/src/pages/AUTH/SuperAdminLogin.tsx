@@ -77,7 +77,7 @@ const SuperAdminLogin: React.FC = () => {
             <input
               type="email"
               id="email"
-              placeholder=" "
+              placeholder="Enter your email or recovery email"
               required
               value={email}
               onChange={handleEmailChange}
@@ -89,7 +89,7 @@ const SuperAdminLogin: React.FC = () => {
               htmlFor="email"
               className={`absolute left-0 bg-transparent text-black/80 transition-all duration-200 ${password ? '-top-2 text-sm text-black font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/80 peer-focus:font-bold`}
             >
-              Enter your email
+              Enter your email or recovery email
             </label>
             {validationErrors.email && (
               <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>

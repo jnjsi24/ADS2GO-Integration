@@ -202,6 +202,12 @@ class DailyArchiveJob {
       // Update Analytics for each ad
       for (const [adId, adData] of Object.entries(adGroups)) {
         try {
+          // Skip company ads - they don't need analytics tracking
+          if (this.isCompanyAd(adId, adData.adTitle)) {
+            console.log(`⏭️  Skipping analytics creation for company ad: ${adData.adTitle} (${adId})`);
+            continue;
+          }
+
           // Find or create analytics record
           let analytics = await Analytics.findOne({ adId });
           
@@ -259,6 +265,76 @@ class DailyArchiveJob {
     
     const totalCompletion = adPlaybacks.reduce((sum, ad) => sum + (ad.completionRate || 0), 0);
     return totalCompletion / adPlaybacks.length;
+  }
+
+  // Check if an ad is a company ad (should not have analytics)
+  isCompanyAd(adId, adTitle) {
+    // Company ads are identified by:
+    // 1. Specific titles like "COMPANY ADS"
+    // 2. Ad IDs that exist in the CompanyAd collection
+    // 3. Ad titles that match company ad patterns
+    
+    const companyAdTitles = [
+      'COMPANY ADS',
+      'Company Ads',
+      'company ads',
+      'COMPANY AD',
+      'Company Ad',
+      'company ad'
+    ];
+    
+    // Check if title matches company ad patterns
+    if (companyAdTitles.includes(adTitle)) {
+      return true;
+    }
+    
+    // Check if title contains company ad keywords
+    const companyKeywords = ['company', 'internal', 'fallback', 'default'];
+    const titleLower = adTitle.toLowerCase();
+    if (companyKeywords.some(keyword => titleLower.includes(keyword))) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  // Clean up existing company ad analytics records
+  async cleanupCompanyAdAnalytics() {
+    try {
+      const Analytics = require('../models/analytics');
+      
+      // Find all analytics records that are company ads
+      const companyAdAnalytics = await Analytics.find({
+        $or: [
+          { adTitle: 'COMPANY ADS' },
+          { adTitle: 'Company Ads' },
+          { adTitle: 'company ads' },
+          { adTitle: 'COMPANY AD' },
+          { adTitle: 'Company Ad' },
+          { adTitle: 'company ad' },
+          { adTitle: { $regex: /company/i } },
+          { adTitle: { $regex: /internal/i } },
+          { adTitle: { $regex: /fallback/i } },
+          { adTitle: { $regex: /default/i } }
+        ]
+      });
+      
+      if (companyAdAnalytics.length > 0) {
+        console.log(`🧹 Found ${companyAdAnalytics.length} company ad analytics records to clean up`);
+        
+        // Delete company ad analytics records
+        const result = await Analytics.deleteMany({
+          _id: { $in: companyAdAnalytics.map(ad => ad._id) }
+        });
+        
+        console.log(`✅ Cleaned up ${result.deletedCount} company ad analytics records`);
+      } else {
+        console.log('ℹ️  No company ad analytics records found to clean up');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error cleaning up company ad analytics:', error);
+    }
   }
 
   // Manual archive trigger (for testing)

@@ -37,10 +37,11 @@ const typeDefs = gql`
   }
 
   """
-  Main tracking data for a material.
+  Main compliance data for a device.
   """
-  type MaterialTracking {
+  type DeviceCompliance {
     id: ID!
+    deviceId: String!
     materialId: ID!
     driverId: ID
     deploymentId: ID
@@ -85,9 +86,10 @@ const typeDefs = gql`
   }
 
   """
-  Input type for creating/updating material tracking records.
+  Input type for creating/updating device compliance records.
   """
-  input MaterialTrackingInput {
+  input DeviceComplianceInput {
+    deviceId: String!
     materialId: ID!
     driverId: ID
     deploymentId: ID
@@ -115,31 +117,31 @@ const typeDefs = gql`
 
   type Query {
     """
-    Get a list of all material tracking records (Admin only).
+    Get a list of all device compliance records (Admin only).
     """
-    getMaterialTrackings: [MaterialTracking]
+    getDeviceCompliances: [DeviceCompliance]
 
     """
-    Get a specific material tracking record by ID (Admin only).
+    Get a specific device compliance record by ID (Admin only).
     """
-    getMaterialTrackingById(id: ID!): MaterialTracking
+    getDeviceComplianceById(id: ID!): DeviceCompliance
   }
 
   type Mutation {
     """
-    Create a new material tracking record (Admin only).
+    Create a new device compliance record (Admin only).
     """
-    createMaterialTracking(input: MaterialTrackingInput!): MaterialTracking
+    createDeviceCompliance(input: DeviceComplianceInput!): DeviceCompliance
 
     """
-    Update an existing material tracking record (Admin only).
+    Update an existing device compliance record (Admin only).
     """
-    updateMaterialTracking(id: ID!, input: MaterialTrackingInput!): MaterialTracking
+    updateDeviceCompliance(id: ID!, input: DeviceComplianceInput!): DeviceCompliance
 
     """
-    Delete a material tracking record by ID (Admin only).
+    Delete a device compliance record by ID (Admin only).
     """
-    deleteMaterialTracking(id: ID!): String
+    deleteDeviceCompliance(id: ID!): String
   }
 `;
 

@@ -704,7 +704,7 @@ const AdminAdsControl: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Location</label>
                       <p className="text-lg font-medium">
-                        {screen.currentLocation?.address || 'Unknown Location'}
+                        {screen.currentLocation?.address || 'Location not available'}
                       </p>
                     </div>
                   </div>
@@ -892,7 +892,7 @@ const AdminAdsControl: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                 <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.currentLocation?.address || 'Unknown Location'}
+                  {selectedDeviceForModal.currentLocation?.address || 'Location not available'}
                 </div>
               </div>
             </div>

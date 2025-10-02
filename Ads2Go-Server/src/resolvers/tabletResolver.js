@@ -1,7 +1,8 @@
 
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
-const ScreenTracking = require('../models/screenTracking');
+const DeviceTracking = require('../models/deviceTracking');
+const deviceStatusService = require('../services/deviceStatusService');
 const AnalyticsService = require('../services/analyticsService');
 const AdsDeployment = require('../models/adsDeployment');
 const Material = require('../models/Material');
@@ -89,15 +90,23 @@ module.exports = {
           };
         }
 
-        const isConnected = tabletUnit.deviceId && tabletUnit.status === 'ONLINE';
+        // Check if device is connected (has deviceId) and get online status
+        const hasDeviceId = !!tabletUnit.deviceId;
+        const statusInfo = deviceStatusService.getDeviceStatus(tabletUnit.deviceId);
+        const isOnline = !!statusInfo.isOnline;
+
+        // Fetch latest tracking info for lastSeen/GPS
+        const tracking = await DeviceTracking.findOne({ deviceId: tabletUnit.deviceId });
+        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || tabletUnit.lastSeen || null;
+        const gps = tracking?.currentLocation || tabletUnit.gps || null;
         
         return {
-          isConnected,
-          connectedDevice: isConnected ? {
+          isConnected: hasDeviceId, // Connected if has deviceId, regardless of online status
+          connectedDevice: hasDeviceId ? {
             deviceId: tabletUnit.deviceId,
-            status: tabletUnit.status,
-            lastSeen: tabletUnit.lastSeen,
-            gps: tabletUnit.gps
+            status: isOnline ? 'ONLINE' : 'OFFLINE',
+            lastSeen,
+            gps
           } : null,
           materialId,
           slotNumber,
@@ -192,7 +201,7 @@ module.exports = {
                     deviceInfo: {
                       deviceId: deviceId,
                       deviceName: 'Tablet Device',
-                      deviceType: 'Tablet',
+                      deviceType: 'tablet',
                       osName: 'Android',
                       osVersion: 'Unknown',
                       platform: 'Android',
@@ -259,49 +268,7 @@ module.exports = {
         
         await tablet.save();
         
-        // Also update ScreenTracking collection to sync status
-        try {
-          const now = new Date();
-          const materialId = tablet.materialId;
-          
-          if (materialId) {
-            // Update ScreenTracking collection
-            const screenTracking = await ScreenTracking.findOneAndUpdate(
-              { materialId },
-              {
-                $set: {
-                  isOnline: isOnline,
-                  lastSeen: now
-                },
-                $push: {
-                  statusHistory: {
-                    status: isOnline ? 'online' : 'offline',
-                    timestamp: now
-                  }
-                }
-              },
-              { upsert: true, new: true }
-            );
-
-            // Also update device-specific status in the devices array
-            if (screenTracking) {
-              await ScreenTracking.updateOne(
-                { 'devices.deviceId': deviceId },
-                {
-                  $set: {
-                    'devices.$.isOnline': isOnline,
-                    'devices.$.lastSeen': now
-                  }
-                }
-              );
-            }
-
-            console.log(`🔄 [GraphQL updateTabletStatus] Updated ScreenTracking for materialId: ${materialId}, deviceId: ${deviceId}, status: ${isOnline ? 'online' : 'offline'}`);
-          }
-        } catch (screenTrackingError) {
-          console.error('Error updating ScreenTracking collection in GraphQL:', screenTrackingError);
-          // Don't fail the request if ScreenTracking update fails
-        }
+        // ScreenTracking collection deprecated: skip screen-level status sync
         
         console.log('Tablet status updated successfully:', { deviceId, status: isOnline ? 'ONLINE' : 'OFFLINE' });
         return tablet;
@@ -362,41 +329,21 @@ module.exports = {
         // Get the old deviceId before removing it
         const oldDeviceId = tabletUnit.deviceId;
 
-        // Replace the slot object entirely to ensure Mongoose persists removal of deviceId
-        tablet.tablets[tabletIndex] = {
-          tabletNumber: slotNumber,
-          // deviceId intentionally omitted
-          status: 'OFFLINE',
-          lastSeen: null,
-          gps: { lat: null, lng: null }
-        };
+        // Clear the device connection by removing the deviceId field entirely
+        tabletUnit.deviceId = undefined; // Explicitly set to undefined
+        tabletUnit.status = 'OFFLINE';
+        tabletUnit.lastSeen = null;
+        tabletUnit.gps = { lat: null, lng: null };
+        
+        // Use $unset to completely remove the deviceId field from MongoDB
+        await tablet.updateOne(
+          { _id: tablet._id },
+          { $unset: { [`tablets.${tabletIndex}.deviceId`]: 1 } }
+        );
 
         await tablet.save();
 
-        // Handle ScreenTracking record - SHARED TRACKING approach
-        // Update the specific device in the devices array
-        const ScreenTracking = require('../models/screenTracking');
-        const screenTracking = await ScreenTracking.findOne({ materialId: normalizedMaterialId });
-        
-        if (screenTracking) {
-          console.log(`Updating SHARED ScreenTracking record for materialId: ${normalizedMaterialId} - device ${oldDeviceId} going offline`);
-          
-          // Update the specific device in the devices array
-          if (screenTracking.devices && screenTracking.devices.length > 0) {
-            const deviceIndex = screenTracking.devices.findIndex(d => d.deviceId === oldDeviceId);
-            if (deviceIndex >= 0) {
-              screenTracking.devices[deviceIndex].isOnline = false;
-              screenTracking.devices[deviceIndex].lastSeen = new Date();
-              console.log(`Updated device ${oldDeviceId} in devices array to offline`);
-            }
-          }
-          
-          // Update legacy fields (for backward compatibility)
-          screenTracking.isOnline = false;
-          screenTracking.lastSeen = new Date();
-          await screenTracking.save();
-          console.log(`SHARED ScreenTracking record preserved for materialId: ${normalizedMaterialId} (device ${oldDeviceId} unregistered)`);
-        }
+        // ScreenTracking collection deprecated: no shared tracking update needed
 
         return {
           success: true,

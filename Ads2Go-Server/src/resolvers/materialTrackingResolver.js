@@ -1,6 +1,6 @@
 // src/resolvers/materialTrackingResolver.js
 const jwt = require('jsonwebtoken');
-const MaterialTracking = require('../models/materialTracking'); // fixed filename case
+const DeviceCompliance = require('../models/deviceCompliance');
 const { JWT_SECRET } = process.env;
 
 /**
@@ -37,30 +37,30 @@ function checkAdmin(context = {}) {
 
 const resolvers = {
   Query: {
-    getMaterialTrackings: async (_, __, context) => {
+    getDeviceCompliances: async (_, __, context) => {
       checkAdmin(context);
-      return await MaterialTracking.find();
+      return await DeviceCompliance.find();
     },
-    getMaterialTrackingById: async (_, { id }, context) => {
+    getDeviceComplianceById: async (_, { id }, context) => {
       checkAdmin(context);
-      return await MaterialTracking.findById(id);
+      return await DeviceCompliance.findById(id);
     }
   },
 
   Mutation: {
-    createMaterialTracking: async (_, { input }, context) => {
+    createDeviceCompliance: async (_, { input }, context) => {
       checkAdmin(context);
-      const newTracking = new MaterialTracking(input);
-      return await newTracking.save();
+      const newCompliance = new DeviceCompliance(input);
+      return await newCompliance.save();
     },
-    updateMaterialTracking: async (_, { id, input }, context) => {
+    updateDeviceCompliance: async (_, { id, input }, context) => {
       checkAdmin(context);
-      return await MaterialTracking.findByIdAndUpdate(id, input, { new: true });
+      return await DeviceCompliance.findByIdAndUpdate(id, input, { new: true });
     },
-    deleteMaterialTracking: async (_, { id }, context) => {
+    deleteDeviceCompliance: async (_, { id }, context) => {
       checkAdmin(context);
-      await MaterialTracking.findByIdAndDelete(id);
-      return 'Material tracking record deleted successfully';
+      await DeviceCompliance.findByIdAndDelete(id);
+      return 'Device compliance record deleted successfully';
     }
   }
 };

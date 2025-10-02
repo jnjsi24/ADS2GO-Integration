@@ -7,16 +7,18 @@ import { router } from "expo-router/build/imperative-api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
 import deviceStatusService from '../../services/deviceStatusService';
+import offlineQueueService from '../../services/offlineQueueService';
 import AdPlayer from '../../components/AdPlayer';
 import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
+import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
 
 export default function HomeScreen() {
+  const { status: deviceStatus } = useDeviceStatus();
 
   const [location, setLocation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [registrationData, setRegistrationData] = useState<TabletRegistration | null>(null);
-  const [isOnline, setIsOnline] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [unregistering, setUnregistering] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
@@ -45,19 +47,7 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // Initialize device status service when registration data is available
-  useEffect(() => {
-    if (registrationData) {
-      (deviceStatusService as any).initialize({
-        materialId: registrationData.materialId,
-        forceReconnect: false, // Don't force reconnect on initial load
-        onStatusChange: (status: any) => {
-          console.log('Device status changed:', status);
-          setIsOnline(status.isOnline);
-        }
-      });
-    }
-  }, [registrationData]);
+  // Device status is now handled by DeviceStatusContext
 
   // Refresh registration data when screen becomes active
   useFocusEffect(
@@ -80,7 +70,7 @@ export default function HomeScreen() {
           lat: location?.coords.latitude || 0,
           lng: location?.coords.longitude || 0
         });
-        setIsOnline(online);
+        // Online status is now handled by DeviceStatusContext
       }
     } catch (error) {
       console.error('Error refreshing registration data:', error);
@@ -107,7 +97,7 @@ export default function HomeScreen() {
           lat: location?.coords.latitude || 0,
           lng: location?.coords.longitude || 0
         });
-        setIsOnline(online);
+        // Online status is now handled by DeviceStatusContext
         
         // Start continuous location tracking
         console.log('Starting continuous location tracking...');
@@ -197,37 +187,27 @@ export default function HomeScreen() {
     (window as any).adTrackingInterval = adTrackingInterval;
   };
 
-  const handleStopTracking = async () => {
+
+  const handleGoOffline = async () => {
     try {
-      console.log('Stopping location tracking...');
+      // Simulate offline
+      setIsSimulatingOffline(true);
+      setTrackingStatus('Simulating Offline');
+      
+      // Set offline simulation flag in tablet registration service
+      tabletRegistrationService.setSimulatingOffline(true);
+      
+      // Set offline queue service to offline mode
+      offlineQueueService.setOnlineStatus(false);
+      
+      // Stop location tracking
       await tabletRegistrationService.stopLocationTracking();
-      setIsTracking(false);
-      setTrackingStatus('Stopped');
-      console.log('Location tracking stopped');
       
       // Stop ad tracking simulation
       if ((window as any).adTrackingInterval) {
         clearInterval((window as any).adTrackingInterval);
         (window as any).adTrackingInterval = null;
       }
-    } catch (error) {
-      console.error('Error stopping tracking:', error);
-      setTrackingStatus('Error stopping tracking');
-    }
-  };
-
-  const handleGoOffline = async () => {
-    try {
-      // Simulate offline
-      setIsSimulatingOffline(true);
-      setIsOnline(false);
-      setTrackingStatus('Simulating Offline');
-      
-      // Set offline simulation flag in tablet registration service
-      tabletRegistrationService.setSimulatingOffline(true);
-      
-      // Stop location tracking
-      await tabletRegistrationService.stopLocationTracking();
       
       // Disconnect WebSocket connection
       (deviceStatusService as any).disconnect();
@@ -252,11 +232,13 @@ export default function HomeScreen() {
     try {
       // Go back online
       setIsSimulatingOffline(false);
-      setIsOnline(true);
       setTrackingStatus('Back Online');
       
       // Clear offline simulation flag in tablet registration service
       tabletRegistrationService.setSimulatingOffline(false);
+      
+      // Set offline queue service to online mode
+      offlineQueueService.setOnlineStatus(true);
       
       // Reconnect WebSocket connection
       if (registrationData) {
@@ -265,13 +247,14 @@ export default function HomeScreen() {
           forceReconnect: true, // Force reconnect when going back online
           onStatusChange: (status: any) => {
             console.log('Device status changed:', status);
-            setIsOnline(status.isOnline);
+            // Online status is now handled by DeviceStatusContext
           }
         });
       }
       
-      // Don't automatically restart location tracking - let user control it
-      // Location tracking will be started manually if needed
+      // Automatically restart location tracking when going back online
+      await tabletRegistrationService.startLocationTracking();
+      setIsTracking(true);
       
       // Send online status to server
       if (registrationData) {
@@ -300,10 +283,8 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.unregisterTablet();
               if (result.success) {
-                // Clear local registration data, material ID, and cached ads before redirect
-                await tabletRegistrationService.clearRegistration();
-                await tabletRegistrationService.clearMaterialId();
-                await tabletRegistrationService.clearAllCachedAds();
+                // Force clear ALL registration data
+                await tabletRegistrationService.forceClearAllRegistrationData();
                 
                 Alert.alert(
                   'Success',
@@ -404,10 +385,8 @@ export default function HomeScreen() {
             try {
               const result = await tabletRegistrationService.forceUnregisterTablet();
               if (result.success) {
-                // Clear local registration data, material ID, and cached ads before redirect
-                await tabletRegistrationService.clearRegistration();
-                await tabletRegistrationService.clearMaterialId();
-                await tabletRegistrationService.clearAllCachedAds();
+                // Force clear ALL registration data
+                await tabletRegistrationService.forceClearAllRegistrationData();
                 
                 Alert.alert(
                   'Success',
@@ -539,13 +518,13 @@ export default function HomeScreen() {
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <Text style={styles.statusTitle}>📱 Tablet Status</Text>
-            <View style={[styles.statusIndicator, { backgroundColor: isOnline ? '#27ae60' : '#e74c3c' }]} />
+            <View style={[styles.statusIndicator, { backgroundColor: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]} />
           </View>
           <View style={styles.statusContent}>
             <View style={styles.statusRow}>
               <Text style={styles.statusLabel}>Status:</Text>
-              <Text style={[styles.statusValue, { color: isOnline ? '#27ae60' : '#e74c3c' }]}>
-                {isOnline ? 'Online' : 'Offline'}
+              <Text style={[styles.statusValue, { color: deviceStatus.isOnline ? '#27ae60' : '#e74c3c' }]}>
+                {deviceStatus.isOnline ? 'Online' : 'Offline'}
               </Text>
             </View>
             <View style={styles.statusRow}>
@@ -596,21 +575,14 @@ export default function HomeScreen() {
               {trackingStatus}
             </Text>
             <View style={styles.trackingControls}>
-              {!isTracking ? (
+              {!isTracking && !isSimulatingOffline ? (
                 <TouchableOpacity 
                   style={[styles.trackingButton, styles.startButton]}
                   onPress={handleStartTracking}
                 >
                   <Text style={styles.trackingButtonText}>▶️ Start Tracking</Text>
                 </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={[styles.trackingButton, styles.stopButton]}
-                  onPress={handleStopTracking}
-                >
-                  <Text style={styles.trackingButtonText}>⏹️ Stop Tracking</Text>
-                </TouchableOpacity>
-              )}
+              ) : null}
               
               <TouchableOpacity 
                 style={[
@@ -621,7 +593,7 @@ export default function HomeScreen() {
                 disabled={isSimulatingOffline}
               >
                 <Text style={[styles.trackingButtonText, isSimulatingOffline && styles.disabledButtonText]}>
-                  🔴 Go Offline
+                  🔴 Go Offline (Stops Tracking)
                 </Text>
               </TouchableOpacity>
               
@@ -634,7 +606,7 @@ export default function HomeScreen() {
                 disabled={!isSimulatingOffline}
               >
                 <Text style={[styles.trackingButtonText, !isSimulatingOffline && styles.disabledButtonText]}>
-                  🟢 Go Online
+                  🟢 Go Online (Start Tracking)
                 </Text>
               </TouchableOpacity>
             </View>

@@ -207,69 +207,82 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
                   <br />
                   <span className="text-sm text-gray-500 mb-2">Use the QR code below to Connect a Tablet to this Slot or Input the Connection Information above Manually </span>
                 </div>
-              ) : connectionStatusData?.getTabletConnectionStatus ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-700">Status:</span>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      <span className={`font-semibold ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`}>
-                        {connectionStatusData.getTabletConnectionStatus.isConnected ? 'Connected' : 'Not Connected'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {connectionStatusData.getTabletConnectionStatus.isConnected && connectionStatusData.getTabletConnectionStatus.connectedDevice && (
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
-                      <h4 className="font-medium text-gray-800">Connected Device Details:</h4>
-                      <div className="text-sm space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Device ID:</span>
-                          <span className="font-mono text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.deviceId}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Status:</span>
-                          <span className="text-gray-800">{connectionStatusData.getTabletConnectionStatus.connectedDevice.status}</span>
-                        </div>
-                        {connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Last Seen:</span>
-                            <span className="text-gray-800">{new Date(connectionStatusData.getTabletConnectionStatus.connectedDevice.lastSeen).toLocaleString()}</span>
-                          </div>
-                        )}
-                        {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps && (
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">GPS:</span>
-                            <span className="text-gray-800">
-                              {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lat?.toFixed(6)}, {connectionStatusData.getTabletConnectionStatus.connectedDevice.gps.lng?.toFixed(6)}
-                            </span>
-                          </div>
-                        )}
+              ) : connectionStatusData?.getTabletConnectionStatus || (tabletData?.getTabletsByMaterial?.[0]?.tablets?.[slotNumber - 1]?.deviceId) ? (() => {
+                // Use connection status data if available, otherwise fall back to tablet data
+                const connectionStatus = connectionStatusData?.getTabletConnectionStatus;
+                const tabletUnit = tabletData?.getTabletsByMaterial?.[0]?.tablets?.[slotNumber - 1];
+                const isConnected = connectionStatus?.isConnected ?? !!tabletUnit?.deviceId;
+                const connectedDevice = connectionStatus?.connectedDevice || (tabletUnit?.deviceId ? {
+                  deviceId: tabletUnit.deviceId,
+                  status: tabletUnit.status || 'OFFLINE',
+                  lastSeen: tabletUnit.lastSeen,
+                  gps: tabletUnit.gps
+                } : null);
+                
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Status:</span>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className={`font-semibold ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                          {isConnected ? 'Connected' : 'Not Connected'}
+                        </span>
                       </div>
                     </div>
-                  )}
-                  
-                  {connectionStatusData.getTabletConnectionStatus.isConnected && (
-                    <button
-                      onClick={onUnregisterTablet}
-                      disabled={unregistering}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400"
-                    >
-                      {unregistering ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Unregistering...
-                        </>
-                      ) : (
-                        <>
-                          <UserX size={16} />
-                          Unregister Tablet
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-              ) : (
+                    
+                    {isConnected && connectedDevice && (
+                      <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                        <h4 className="font-medium text-gray-800">Connected Device Details:</h4>
+                        <div className="text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Device ID:</span>
+                            <span className="font-mono text-gray-800">{connectedDevice.deviceId}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Status:</span>
+                            <span className="text-gray-800">{connectedDevice.status}</span>
+                          </div>
+                          {connectedDevice.lastSeen && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Last Seen:</span>
+                              <span className="text-gray-800">{new Date(connectedDevice.lastSeen).toLocaleString()}</span>
+                            </div>
+                          )}
+                          {connectedDevice.gps && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">GPS:</span>
+                              <span className="text-gray-800">
+                                {connectedDevice.gps.lat?.toFixed(6)}, {connectedDevice.gps.lng?.toFixed(6)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {isConnected && (
+                      <button
+                        onClick={onUnregisterTablet}
+                        disabled={unregistering}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400"
+                      >
+                        {unregistering ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            Unregistering...
+                          </>
+                        ) : (
+                          <>
+                            <UserX size={16} />
+                            Unregister Tablet
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                );
+              })() : (
                 <div className="text-center py-4">
                   <div className="text-gray-400 mb-2">📱</div>
                   <span className="text-gray-600">This slot is not yet connected to a tablet</span>

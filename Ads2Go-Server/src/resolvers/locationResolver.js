@@ -1,4 +1,4 @@
-const MaterialTracking = require('../models/materialTracking');
+const DeviceCompliance = require('../models/deviceCompliance');
 const OSMService = require('../services/osmService');
 
 const locationResolvers = {
@@ -16,7 +16,7 @@ const locationResolvers = {
           if (endDate) query.timestamp.$lte = new Date(endDate);
         }
 
-        const tracking = await MaterialTracking.find(query)
+        const tracking = await DeviceCompliance.find(query)
           .sort({ timestamp: 1 });
           
         return tracking;
@@ -31,7 +31,7 @@ const locationResolvers = {
      */
     getCurrentMaterialStatus: async (_, { materialId }) => {
       try {
-        const status = await MaterialTracking.findOne({ materialId })
+        const status = await DeviceCompliance.findOne({ materialId })
           .sort({ timestamp: -1 })
           .limit(1);
           
@@ -57,7 +57,7 @@ const locationResolvers = {
         const address = await OSMService.reverseGeocode(lat, lng);
         
         // Create new tracking entry
-        const tracking = new MaterialTracking({
+        const tracking = new DeviceCompliance({
           materialId,
           driverId,
           location: {

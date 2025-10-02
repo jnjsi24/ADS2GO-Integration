@@ -316,6 +316,9 @@ router.post('/qr-scan', async (req, res) => {
       screenData
     } = req.body;
 
+    // Accept data from both Slot 1 and Slot 2 since they are different physical devices
+    console.log(`📱 Processing QR scan from Slot ${slotNumber} for material ${materialId}`);
+
     // Enhanced QR scan logging with sound alert and colors
     console.log('\n\n\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m');
     console.log('\u001b[42m\u001b[30m' + ' '.repeat(20) + '🔍 QR CODE SCANNED! 🔍' + ' '.repeat(20) + '\u001b[0m');
@@ -435,7 +438,7 @@ router.post('/qr-scan', async (req, res) => {
 
     // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
 
-    // MaterialTracking is now PHOTOS ONLY - no analytics data
+    // DeviceCompliance is now PHOTOS ONLY - no analytics data
     // QR scan analytics are handled by DeviceTracking and Analytics collections
 
     // Process registration data
@@ -534,25 +537,7 @@ router.post('/qr-scan', async (req, res) => {
       }
     }
 
-    // Update screen tracking with QR scan data if we have a device ID
-    if (deviceIdToUse) {
-      try {
-        const ScreenTracking = require('../models/screenTracking');
-        await ScreenTracking.findOneAndUpdate(
-          { 'devices.deviceId': deviceIdToUse },
-          { 
-            $inc: { 'screenMetrics.qrCodeScans': 1 },
-            $set: { 
-              'screenMetrics.lastQRScan': new Date(),
-              'screenMetrics.lastQRScanAdId': adId
-            }
-          }
-        );
-        console.log('\u001b[32m✅ Updated screen tracking QR scan count\u001b[0m');
-      } catch (screenTrackingError) {
-        console.log('\u001b[31m❌ Could not update screen tracking QR count:\u001b[0m', screenTrackingError.message);
-      }
-    }
+    // ScreenTracking collection deprecated: skip screen-level QR scan updates
 
     // Note: QR scan is already tracked in device analytics above
 

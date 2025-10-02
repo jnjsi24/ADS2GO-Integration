@@ -31,7 +31,7 @@ const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
-const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
+// const screenTrackingTypeDefs = require('./schema/screenTrackingSchema'); // deprecated
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
@@ -51,7 +51,7 @@ const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
-const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
+// const screenTrackingResolvers = require('./resolvers/screenTrackingResolver'); // deprecated
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
@@ -62,13 +62,13 @@ const { authMiddleware } = require('./middleware/auth');
 const { driverMiddleware } = require('./middleware/driverAuth');
 
 // Import jobs
-const { startDeviceStatusJob } = require('./jobs/deviceStatusJob');
+// const { startDeviceStatusJob } = require('./jobs/deviceStatusJob'); // deprecated with ScreenTracking
 const { startPaymentDeadlineJob } = require('./jobs/paymentDeadlineJob');
 const cronJobs = require('./jobs/cronJobs');
 
 // Import routes
 const tabletRoutes = require('./routes/tablet');
-const screenTrackingRoutes = require('./routes/screenTracking');
+const screenTrackingRoutes = require('./routes/screenTracking'); // Now uses DeviceTracking
 const deviceTrackingRoutes = require('./routes/deviceTracking');
 const materialRoutes = require('./routes/material');
 const adsRoutes = require('./routes/ads');
@@ -80,6 +80,7 @@ const cleanupRoutes = require('./routes/cleanup');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
+const EmailService = require('./utils/emailService');
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -95,6 +96,23 @@ mongoose.connect(process.env.MONGODB_URI, {
   .catch(err => {
     console.error('\n❌ MongoDB connection error:', err);
     process.exit(1);
+  });
+
+// ✅ Initialize Email Service
+console.log('\n📧 Initializing Email Service...');
+EmailService.initializeTransporter();
+EmailService.verifyConfiguration()
+  .then(isConfigured => {
+    if (isConfigured) {
+      console.log('✅ Email Service: Ready and configured');
+    } else {
+      console.log('⚠️  Email Service: Configuration issues detected');
+      console.log('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
+      console.log('   Run: node verify-gmail-setup.js to test email configuration');
+    }
+  })
+  .catch(err => {
+    console.error('❌ Email Service initialization error:', err.message);
   });
 
 // ✅ Apollo Server setup
@@ -113,7 +131,7 @@ const server = new ApolloServer({
     materialTrackingTypeDefs,
     tabletTypeDefs,
     adsDeploymentTypeDefs,
-    screenTrackingTypeDefs,
+    // screenTrackingTypeDefs, // deprecated
     notificationTypeDefs,
     userReportTypeDefs,
     faqTypeDefs,
@@ -140,7 +158,7 @@ const server = new ApolloServer({
     materialTrackingResolvers,
     tabletResolvers,
     adsDeploymentResolvers,
-    screenTrackingResolvers,
+    // screenTrackingResolvers, // deprecated
     notificationResolvers,
     userReportResolvers,
     faqResolvers,
@@ -159,6 +177,12 @@ async function startServer() {
       // Allow requests with no origin (like mobile apps or curl requests)
       if (!origin) return callback(null, true);
 
+      // In development, allow all origins for easier debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔓 Development mode: Allowing origin ${origin}`);
+        return callback(null, true);
+      }
+
       // Allowlist from env (comma-separated)
       const envAllowed = (process.env.ALLOWED_ORIGINS || '')
         .split(',')
@@ -175,6 +199,15 @@ async function startServer() {
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        // Additional development origins
+        'http://localhost:3001',
+        'http://localhost:5000',
+        'http://localhost:8080',
+        'http://localhost:8000',
+        'http://10.0.2.2:3000', // Android emulator
+        'http://10.0.2.2:5000', // Android emulator
+        'exp://192.168.1.5:19000', // Expo development
+        'exp://192.168.100.22:19000', // Expo development
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
@@ -185,6 +218,8 @@ async function startServer() {
       if (allowedOrigins.has(origin) || isRailwayApp) {
         callback(null, true);
       } else {
+        console.log(`🚫 CORS blocked origin: ${origin}`);
+        console.log(`📋 Allowed origins:`, Array.from(allowedOrigins));
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -217,7 +252,7 @@ async function startServer() {
   
 // Routes
 app.use('/tablet', tabletRoutes);
-app.use('/screenTracking', screenTrackingRoutes);
+app.use('/screenTracking', screenTrackingRoutes); // Now uses DeviceTracking
 app.use('/deviceTracking', deviceTrackingRoutes);
 app.use('/material', materialRoutes);
 app.use('/ads', adsRoutes);
@@ -225,6 +260,7 @@ app.use('/material-photos', materialPhotoUploadRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/cleanup', cleanupRoutes);
+app.use('/offlineQueue', require('./routes/offlineQueue'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -284,7 +320,7 @@ app.use('/cleanup', cleanupRoutes);
     console.log(`\n🚀 GraphQL server ready at http://0.0.0.0:${PORT}/graphql`);
     
     // Start the device status monitoring job
-    startDeviceStatusJob();
+    // startDeviceStatusJob(); // deprecated
     startPaymentDeadlineJob();
     
     // Start cron jobs for daily data archiving

@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const Analytics = require('../models/analytics');
-const ScreenTracking = require('../models/screenTracking');
 
 class AnalyticsService {
   
@@ -88,32 +87,7 @@ class AnalyticsService {
       // Add ad playback to the specific material
       await analytics.addAdPlayback(materialId, slotNumber, adId, adTitle, adDuration, viewTime);
       
-      // Also update screen tracking
-      console.log(`🔍 [analyticsService] Updating ScreenTracking for device ${deviceId}...`);
-      const screenResult = await ScreenTracking.findOneAndUpdate(
-        { 'devices.deviceId': deviceId },
-        { 
-          $inc: { 'screenMetrics.adPlayCount': 1 },
-          $set: { 
-            'screenMetrics.lastAdPlayed': new Date(),
-            'screenMetrics.currentAd.adId': adId,
-            'screenMetrics.currentAd.adTitle': adTitle,
-            'screenMetrics.currentAd.adDuration': adDuration,
-            'screenMetrics.currentAd.startTime': new Date(),
-            'screenMetrics.currentAd.currentTime': 0,
-            'screenMetrics.currentAd.state': 'playing',
-            'screenMetrics.currentAd.progress': 0
-          }
-        },
-        { new: true }
-      );
-      
-      if (screenResult) {
-        console.log(`✅ [analyticsService] Updated ScreenTracking for device ${deviceId}: ${adTitle}`);
-        console.log(`📊 ScreenTracking currentAd:`, screenResult.screenMetrics?.currentAd);
-      } else {
-        console.log(`❌ [analyticsService] No ScreenTracking document found for device ${deviceId}`);
-      }
+      // ScreenTracking collection deprecated: skip screen-level updates
       
       return analytics;
     } catch (error) {
@@ -158,7 +132,7 @@ class AnalyticsService {
       // QR scan tracking is now handled directly in the ads.js route
       // No need to create separate QRScanTracking documents here
       
-      // MaterialTracking is now PHOTOS ONLY - no analytics data
+      // DeviceCompliance is now PHOTOS ONLY - no analytics data
       // QR scan analytics are handled by DeviceTracking and Analytics collections
       
       return analytics;
@@ -576,61 +550,7 @@ class AnalyticsService {
         ...dateFilter
       }).populate('userId', 'firstName lastName email');
 
-      // Sync view time from ScreenTracking to Analytics
-      if (userAnalytics.length > 0) {
-        console.log(`🔄 Syncing view time from ScreenTracking for user ${userId}...`);
-        
-        // Get ScreenTracking data for user's ads
-        const screenTrackings = await ScreenTracking.find({
-          'screenMetrics.currentAd.adId': { $in: userAdIds }
-        });
-        
-        for (const screenTracking of screenTrackings) {
-          const currentAd = screenTracking.screenMetrics?.currentAd;
-          if (currentAd && userAdIds.includes(currentAd.adId)) {
-            // Find corresponding analytics record
-            const analyticsRecord = userAnalytics.find(analytics => 
-              analytics.adPlaybacks.some(playback => playback.adId === currentAd.adId)
-            );
-            
-            if (analyticsRecord && currentAd.totalViewTime > 0) {
-              // Update the analytics record with actual view time
-              const playbackIndex = analyticsRecord.adPlaybacks.findIndex(
-                playback => playback.adId === currentAd.adId
-              );
-              
-              if (playbackIndex >= 0) {
-                const oldViewTime = analyticsRecord.adPlaybacks[playbackIndex].viewTime || 0;
-                const newViewTime = currentAd.totalViewTime;
-                
-                if (newViewTime > oldViewTime) {
-                  // Update the playback record
-                  analyticsRecord.adPlaybacks[playbackIndex].viewTime = newViewTime;
-                  analyticsRecord.adPlaybacks[playbackIndex].completionRate = 
-                    currentAd.adDuration > 0 ? Math.min(100, (newViewTime / currentAd.adDuration) * 100) : 0;
-                  
-                  // Update total play time
-                  analyticsRecord.totalAdPlayTime += (newViewTime - oldViewTime);
-                  
-                  // Update average completion rate
-                  const totalCompletion = analyticsRecord.adPlaybacks.reduce((sum, ad) => sum + ad.completionRate, 0);
-                  analyticsRecord.averageAdCompletionRate = analyticsRecord.adPlaybacks.length > 0 ? totalCompletion / analyticsRecord.adPlaybacks.length : 0;
-                  
-                  await analyticsRecord.save();
-                  console.log(`✅ Updated view time for ad ${currentAd.adTitle}: ${oldViewTime}s → ${newViewTime}s`);
-                }
-              }
-            }
-          }
-        }
-        
-        // Refresh userAnalytics after sync
-        userAnalytics = await Analytics.find({
-          userId: userId,
-          'adPlaybacks.adId': { $in: userAdIds },
-          ...dateFilter
-        }).populate('userId', 'firstName lastName email');
-      }
+      // ScreenTracking collection deprecated: skip sync from ScreenTracking to Analytics
 
       // If no analytics found with userId, try to find analytics that have the user's ads
       if (userAnalytics.length === 0) {
@@ -973,31 +893,7 @@ class AnalyticsService {
     try {
       console.log('Starting analytics sync from existing collections...');
       
-      // Sync from ScreenTracking
-      const screenTrackings = await ScreenTracking.find({});
-      for (const screen of screenTrackings) {
-        for (const device of screen.devices) {
-          await Analytics.findOneAndUpdate(
-            { deviceId: device.deviceId, materialId: screen.materialId },
-            {
-              $set: {
-                deviceId: device.deviceId,
-                materialId: screen.materialId,
-                slotNumber: device.slotNumber,
-                isOnline: device.isOnline,
-                currentLocation: device.currentLocation,
-                totalHoursOnline: device.totalHoursOnline,
-                totalDistanceTraveled: device.totalDistanceTraveled,
-                uptimePercentage: screen.screenMetrics?.displayHours || 0,
-                totalAdImpressions: screen.screenMetrics?.adPlayCount || 0,
-                totalQRScans: screen.screenMetrics?.qrCodeScans || 0,
-                lastUpdated: device.lastSeen
-              }
-            },
-            { upsert: true }
-          );
-        }
-      }
+      // ScreenTracking collection deprecated: no sync needed
       
       // QRScanTracking sync removed - QR scans are now handled directly in the ads.js route
       // No need to sync from QRScanTracking collection as it's deprecated

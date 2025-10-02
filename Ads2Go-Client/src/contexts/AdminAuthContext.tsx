@@ -18,6 +18,7 @@ type AdminRole = 'ADMIN' | 'SUPERADMIN';
 interface Admin {
   userId: string;
   email: string;
+  recoveryEmail?: string;
   role: AdminRole;
   isEmailVerified: boolean;
   firstName: string;
@@ -189,6 +190,7 @@ export const AdminAuthProvider: React.FC<{
           freshAdmin = {
             userId: freshAdminRaw.id,
             email: freshAdminRaw.email,
+            recoveryEmail: freshAdminRaw.recoveryEmail,
             role: freshAdminRaw.role,
             isEmailVerified: freshAdminRaw.isEmailVerified,
             firstName: freshAdminRaw.firstName,

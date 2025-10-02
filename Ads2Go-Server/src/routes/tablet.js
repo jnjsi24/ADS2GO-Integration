@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Tablet = require('../models/Tablet');
 const Material = require('../models/Material');
-const ScreenTracking = require('../models/screenTracking');
+// ScreenTracking model removed; tablet routes will not update ScreenTracking
 const AdsDeployment = require('../models/adsDeployment'); // Added AdsDeployment import
 const AnalyticsService = require('../services/analyticsService');
 
@@ -166,131 +166,7 @@ router.post('/registerTablet', async (req, res) => {
 
     await tablet.save();
 
-    // SHARED TRACKING: Create or update tablet tracking record per materialId (not per slot)
-    // Look for existing record by materialId only (shared across all slots)
-    let tabletTracking = await ScreenTracking.findOne({ materialId });
-    
-    if (!tabletTracking) {
-      // Create new shared tracking record for this materialId
-      console.log(`Creating new SHARED ScreenTracking record for materialId: ${materialId} with deviceId: ${deviceId} (Slot ${slotNumber})`);
-      tabletTracking = new ScreenTracking({
-        materialId,
-        carGroupId,
-        screenType: 'HEADDRESS',
-        devices: [{
-          deviceId,
-          slotNumber,
-          isOnline: true,
-          lastSeen: new Date()
-        }],
-        // Legacy fields for backward compatibility
-        deviceId,
-        slotNumber,
-        isOnline: true,
-        lastSeen: new Date()
-      });
-      
-      // Start daily session
-      await tabletTracking.startDailySession();
-    } else {
-      // Update existing shared record - add or update device in devices array
-      console.log(`Updating SHARED ScreenTracking record for materialId: ${materialId} with deviceId: ${deviceId} (Slot ${slotNumber})`);
-      
-      // Initialize devices array if it doesn't exist
-      if (!tabletTracking.devices) {
-        tabletTracking.devices = [];
-      }
-      
-      // Find existing device in the array by deviceId first, then by slotNumber
-      const existingDeviceIndex = tabletTracking.devices.findIndex(d => d.deviceId === deviceId);
-      const slotOccupiedIndex = tabletTracking.devices.findIndex(d => d.slotNumber === slotNumber);
-      
-      if (existingDeviceIndex >= 0) {
-        // Device already exists, update its slot and status
-        console.log(`Device ${deviceId} already exists, updating slot to ${slotNumber}`);
-        tabletTracking.devices[existingDeviceIndex] = {
-          deviceId,
-          slotNumber,
-          isOnline: true,
-          lastSeen: new Date(),
-          currentLocation: tabletTracking.devices[existingDeviceIndex].currentLocation,
-          totalHoursOnline: tabletTracking.devices[existingDeviceIndex].totalHoursOnline,
-          totalDistanceTraveled: tabletTracking.devices[existingDeviceIndex].totalDistanceTraveled
-        };
-      } else if (slotOccupiedIndex >= 0) {
-        // Slot is occupied by a different device, replace it
-        console.log(`Slot ${slotNumber} is occupied by device ${tabletTracking.devices[slotOccupiedIndex].deviceId}, replacing with ${deviceId}`);
-        tabletTracking.devices[slotOccupiedIndex] = {
-          deviceId,
-          slotNumber,
-          isOnline: true,
-          lastSeen: new Date(),
-          currentLocation: tabletTracking.devices[slotOccupiedIndex].currentLocation,
-          totalHoursOnline: tabletTracking.devices[slotOccupiedIndex].totalHoursOnline,
-          totalDistanceTraveled: tabletTracking.devices[slotOccupiedIndex].totalDistanceTraveled
-        };
-      } else {
-        // Check if we've reached the maximum number of slots (2)
-        if (tabletTracking.devices.length >= 2) {
-          console.log(`⚠️ Warning: Material ${materialId} already has 2 devices. Replacing the oldest offline device.`);
-          
-          // Find the oldest offline device to replace
-          const offlineDevices = tabletTracking.devices.filter(d => !d.isOnline);
-          if (offlineDevices.length > 0) {
-            const oldestOfflineDevice = offlineDevices.sort((a, b) => new Date(a.lastSeen) - new Date(b.lastSeen))[0];
-            const oldestIndex = tabletTracking.devices.findIndex(d => d.deviceId === oldestOfflineDevice.deviceId);
-            
-            console.log(`Replacing oldest offline device ${oldestOfflineDevice.deviceId} with new device ${deviceId}`);
-            tabletTracking.devices[oldestIndex] = {
-              deviceId,
-              slotNumber,
-              isOnline: true,
-              lastSeen: new Date()
-            };
-          } else {
-            console.log(`⚠️ All devices are online. Adding new device anyway (this may cause issues).`);
-            tabletTracking.devices.push({
-              deviceId,
-              slotNumber,
-              isOnline: true,
-              lastSeen: new Date()
-            });
-          }
-        } else {
-          // Add new device normally
-          console.log(`Adding new device to slot ${slotNumber}`);
-          tabletTracking.devices.push({
-            deviceId,
-            slotNumber,
-            isOnline: true,
-            lastSeen: new Date()
-          });
-        }
-      }
-      
-      // Update legacy fields (for backward compatibility)
-      tabletTracking.deviceId = deviceId;
-      tabletTracking.slotNumber = slotNumber;
-      tabletTracking.isOnline = true;
-      tabletTracking.lastSeen = new Date();
-      
-      // Check if we need to start a new daily session
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (!tabletTracking.currentSession || 
-          new Date(tabletTracking.currentSession.date).getTime() !== today.getTime()) {
-        // End previous session if exists
-        if (tabletTracking.currentSession && tabletTracking.currentSession.isActive) {
-          await tabletTracking.endDailySession();
-        }
-        
-        // Start new daily session
-        await tabletTracking.startDailySession();
-      }
-    }
-
-    await tabletTracking.save();
+    // ScreenTracking collection deprecated: skip shared tracking creation/update
 
     // Update analytics to link tablet device with deployment analytics
     try {
@@ -319,7 +195,7 @@ router.post('/registerTablet', async (req, res) => {
               deviceInfo: {
                 deviceId: deviceId,
                 deviceName: 'Tablet Device',
-                deviceType: 'Tablet',
+                deviceType: 'tablet',
                 osName: 'Android',
                 osVersion: 'Unknown',
                 platform: 'Android',
@@ -356,9 +232,9 @@ router.post('/registerTablet', async (req, res) => {
         lastReportedAt: new Date().toISOString()
       },
       trackingInfo: {
-        currentHours: tabletTracking.currentHoursToday,
-        hoursRemaining: tabletTracking.hoursRemaining,
-        isCompliant: tabletTracking.isCompliantToday,
+        currentHours: 0,
+        hoursRemaining: 8,
+        isCompliant: true,
         targetHours: 8
       },
       adsList: [] // TODO: Add actual ads list when ads system is implemented
@@ -420,51 +296,7 @@ router.post('/updateTabletStatus', async (req, res) => {
 
     await tablet.save();
 
-    // Also update ScreenTracking collection to sync status
-    try {
-      const now = new Date();
-      
-      // Find the materialId from the tablet record
-      const materialId = tablet.materialId;
-      
-      if (materialId) {
-        // Update ScreenTracking collection
-        const screenTracking = await ScreenTracking.findOneAndUpdate(
-          { materialId },
-          {
-            $set: {
-              isOnline: isOnline,
-              lastSeen: now
-            },
-            $push: {
-              statusHistory: {
-                status: isOnline ? 'online' : 'offline',
-                timestamp: now
-              }
-            }
-          },
-          { upsert: true, new: true }
-        );
-
-        // Also update device-specific status in the devices array
-        if (screenTracking) {
-          await ScreenTracking.updateOne(
-            { 'devices.deviceId': deviceId },
-            {
-              $set: {
-                'devices.$.isOnline': isOnline,
-                'devices.$.lastSeen': now
-              }
-            }
-          );
-        }
-
-        console.log(`🔄 [updateTabletStatus] Updated ScreenTracking for materialId: ${materialId}, deviceId: ${deviceId}, status: ${isOnline ? 'online' : 'offline'}`);
-      }
-    } catch (screenTrackingError) {
-      console.error('Error updating ScreenTracking collection:', screenTrackingError);
-      // Don't fail the request if ScreenTracking update fails
-    }
+    // ScreenTracking collection deprecated: skip status sync
 
     res.json({
       success: true,
@@ -641,14 +473,17 @@ router.post('/unregisterTablet', async (req, res) => {
       });
     }
 
-    // Clear the device connection
-    tablet.tablets[tabletIndex] = {
-      tabletNumber: slotNumber,
-      // deviceId is omitted - will be undefined instead of null
-      status: 'OFFLINE',
-      lastSeen: null,
-      gps: { lat: null, lng: null }
-    };
+    // Clear the device connection by removing the deviceId field entirely
+    tabletUnit.deviceId = undefined; // Explicitly set to undefined
+    tabletUnit.status = 'OFFLINE';
+    tabletUnit.lastSeen = null;
+    tabletUnit.gps = { lat: null, lng: null };
+    
+    // Use $unset to completely remove the deviceId field from MongoDB
+    await tablet.updateOne(
+      { _id: tablet._id },
+      { $unset: { [`tablets.${tabletIndex}.deviceId`]: 1 } }
+    );
 
     await tablet.save();
 

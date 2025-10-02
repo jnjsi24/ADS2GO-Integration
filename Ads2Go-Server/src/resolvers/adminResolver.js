@@ -55,6 +55,13 @@ const resolvers = {
       }
       return await User.find({});
     },
+
+    getAdminNotificationPreferences: async (_, __, { admin }) => {
+      checkAuth(admin);
+      const adminRecord = await Admin.findById(admin.id);
+      if (!adminRecord) throw new Error('Admin not found');
+      return adminRecord.notificationPreferences;
+    },
   },
 
   Mutation: {
@@ -164,7 +171,7 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, password, isActive, permissions
+        contactNumber, email, password, isActive, permissions, profilePicture
       } = input;
 
       // Validate contact number if provided
@@ -195,6 +202,7 @@ const resolvers = {
       if (companyAddress) adminToUpdate.companyAddress = companyAddress.trim();
       if (normalizedNumber) adminToUpdate.contactNumber = normalizedNumber;
       if (isActive !== undefined) adminToUpdate.isActive = isActive;
+      if (profilePicture !== undefined) adminToUpdate.profilePicture = profilePicture;
 
       // Update permissions if provided (only SuperAdmin can do this)
       if (permissions && isSuperAdmin) {
@@ -347,6 +355,101 @@ const resolvers = {
       return {
         success: true,
         message: 'User deleted successfully'
+      };
+    },
+
+    updateAdminDetails: async (_, { adminId, input }, { admin }) => {
+      checkAuth(admin);
+
+      // Admin can only update their own details
+      if (admin.id !== adminId) {
+        throw new Error('You can only update your own details');
+      }
+
+      const adminToUpdate = await Admin.findById(adminId);
+      if (!adminToUpdate) throw new Error('Admin not found');
+
+      const {
+        firstName, middleName, lastName,
+        companyName, companyAddress,
+        contactNumber, email, profilePicture
+      } = input;
+
+      // Validate contact number if provided
+      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
+      if (normalizedNumber) {
+        const phoneRegex = /^(\+63|0)?\d{10}$/;
+        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+        if (!normalizedNumber.startsWith('+63')) {
+          normalizedNumber = normalizedNumber.startsWith('0')
+            ? '+63' + normalizedNumber.substring(1)
+            : '+63' + normalizedNumber;
+        }
+      }
+
+      // Validate email if provided and changed
+      if (email && email !== adminToUpdate.email) {
+        if (!validator.isEmail(email)) throw new Error('Invalid email address');
+        const existingAdmin = await Admin.findOne({ email });
+        if (existingAdmin) throw new Error('Email already in use');
+        adminToUpdate.email = email.toLowerCase();
+      }
+
+      // Update fields
+      if (firstName) adminToUpdate.firstName = firstName.trim();
+      if (middleName !== undefined) adminToUpdate.middleName = middleName ? middleName.trim() : null;
+      if (lastName) adminToUpdate.lastName = lastName.trim();
+      if (companyName) adminToUpdate.companyName = companyName.trim();
+      if (companyAddress) adminToUpdate.companyAddress = companyAddress.trim();
+      if (normalizedNumber) adminToUpdate.contactNumber = normalizedNumber;
+      if (profilePicture !== undefined) adminToUpdate.profilePicture = profilePicture;
+
+      await adminToUpdate.save();
+
+      return {
+        success: true,
+        message: 'Admin details updated successfully',
+        user: adminToUpdate
+      };
+    },
+
+    updateAdminNotificationPreferences: async (_, { input }, { admin }) => {
+      checkAuth(admin);
+      
+      const adminToUpdate = await Admin.findById(admin.id);
+      if (!adminToUpdate) throw new Error('Admin not found');
+
+      const {
+        enableDesktopNotifications,
+        enableNotificationBadge,
+        pushNotificationTimeout,
+        communicationEmails,
+        announcementsEmails
+      } = input;
+
+      // Update notification preferences
+      if (enableDesktopNotifications !== undefined) {
+        adminToUpdate.notificationPreferences.enableDesktopNotifications = enableDesktopNotifications;
+      }
+      if (enableNotificationBadge !== undefined) {
+        adminToUpdate.notificationPreferences.enableNotificationBadge = enableNotificationBadge;
+      }
+      if (pushNotificationTimeout !== undefined) {
+        adminToUpdate.notificationPreferences.pushNotificationTimeout = pushNotificationTimeout;
+      }
+      if (communicationEmails !== undefined) {
+        adminToUpdate.notificationPreferences.communicationEmails = communicationEmails;
+      }
+      if (announcementsEmails !== undefined) {
+        adminToUpdate.notificationPreferences.announcementsEmails = announcementsEmails;
+      }
+
+      await adminToUpdate.save();
+
+      return {
+        success: true,
+        message: 'Notification preferences updated successfully',
+        admin: adminToUpdate
       };
     },
   },
