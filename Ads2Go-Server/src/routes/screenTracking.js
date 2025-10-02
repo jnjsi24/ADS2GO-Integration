@@ -573,13 +573,16 @@ router.post('/endSession', async (req, res) => {
       const isOnline = !!statusInfo.isOnline;
       const lastSeen = statusInfo.lastSeen || deviceTracking.lastSeen;
 
+    // Get slot information for this device
+    const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+    
     res.json({
       success: true,
       data: {
-        deviceId: deviceTracking.deviceId,
+        deviceId: deviceId,
         materialId: deviceTracking.materialId,
         carGroupId: deviceTracking.carGroupId,
-        deviceSlot: deviceTracking.deviceSlot,
+        deviceSlot: slot?.slotNumber,
         isOnline,
         currentLocation: deviceTracking.currentLocation,
         lastSeen,
@@ -730,12 +733,20 @@ router.get('/compliance', async (req, res) => {
 
     // Get all device tracking records for registered devices
     const registeredDeviceIds = Array.from(registeredDevices.keys());
+    const registeredMaterialIds = Array.from(new Set(Array.from(registeredDevices.values()).map(info => info.materialId)));
+    
+    // Query by materialId (new system) and deviceId in slots
     const allDevices = await DeviceTracking.find({ 
-      deviceId: { $in: registeredDeviceIds },
-      isActive: true
+      $or: [
+        { 'slots.deviceId': { $in: registeredDeviceIds } },
+        { materialId: { $in: registeredMaterialIds } }
+      ]
     });
     
     console.log('🔍 Found device tracking records for registered devices:', allDevices.length);
+    allDevices.forEach((device, index) => {
+      console.log(`  Device ${index + 1}: ${device.materialId} (${device.slots?.length || 0} slots)`);
+    });
     
     // Initialize screens array to collect individual device records
     const individualScreens = [];
@@ -751,18 +762,18 @@ router.get('/compliance', async (req, res) => {
     
     // First, group all devices by material
     allDevices.forEach(device => {
-      const registrationInfo = registeredDevices.get(device.deviceId);
-      if (!registrationInfo) {
-        console.log(`⚠️ Skipping device ${device.deviceId} - not found in tablet registrations`);
+      // For new schema, device is a car record with slots
+      const materialId = device.materialId;
+      
+      if (!materialId) {
+        console.log(`⚠️ Skipping device ${device._id} - no materialId`);
         return;
       }
-      
-      const materialId = registrationInfo.materialId || device.materialId;
       
       if (!materialGroups.has(materialId)) {
         materialGroups.set(materialId, {
           materialId: materialId,
-          carGroupId: registrationInfo.carGroupId,
+          carGroupId: device.carGroupId,
           devices: [],
           totalAdPlays: 0,
           totalQRScans: 0,
@@ -788,40 +799,52 @@ router.get('/compliance', async (req, res) => {
       }
       
       const group = materialGroups.get(materialId);
-      group.devices.push({
-        device,
-        registrationInfo
-      });
       
-      // Update slot status - use tablet registration status as primary source
-      const statusInfo = deviceStatusService.getDeviceStatus(device.deviceId);
-      const deviceStatusOnline = !!statusInfo.isOnline;
-      
-      // Check if tablet registration status is recent (within last 30 seconds)
-      const now = new Date();
-      const lastSeen = new Date(device.lastSeen);
-      const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
-      const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
-      
-      // Use tablet registration status if recent, otherwise use device status
-      const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
-      
-      
-      if (registrationInfo.slotNumber === 1) {
-        group.slotStatus.slot1 = {
-          online: isDeviceOnline,
-          deviceId: device.deviceId,
-          lastSeen: device.lastSeen
-        };
-      } else if (registrationInfo.slotNumber === 2) {
-        group.slotStatus.slot2 = {
-          online: isDeviceOnline,
-          deviceId: device.deviceId,
-          lastSeen: device.lastSeen
-        };
+      // Process each slot in the car record
+      if (device.slots && device.slots.length > 0) {
+        device.slots.forEach(slot => {
+          // Find registration info for this slot
+          const registrationInfo = registeredDevices.get(slot.deviceId);
+          if (registrationInfo) {
+            group.devices.push({
+              device: slot,
+              registrationInfo,
+              carRecord: device
+            });
+            
+            // Update slot status - use tablet registration status as primary source
+            const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
+            const deviceStatusOnline = !!statusInfo.isOnline;
+            
+            // Check if tablet registration status is recent (within last 30 seconds)
+            const now = new Date();
+            const lastSeen = new Date(slot.lastSeen);
+            const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
+            const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
+            
+            // Use tablet registration status if recent, otherwise use device status
+            const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
+            
+            // Update slot status based on the actual slot number
+            const slotNumber = slot.slotNumber;
+            if (slotNumber === 1) {
+              group.slotStatus.slot1 = {
+                online: isDeviceOnline,
+                deviceId: slot.deviceId,
+                lastSeen: slot.lastSeen
+              };
+            } else if (slotNumber === 2) {
+              group.slotStatus.slot2 = {
+                online: isDeviceOnline,
+                deviceId: slot.deviceId,
+                lastSeen: slot.lastSeen
+              };
+            }
+          }
+        });
       }
       
-      // Sum up all metrics
+      // Sum up all metrics from the car record
       group.totalAdPlays += device.totalAdPlays || 0;
       group.totalQRScans += device.totalQRScans || 0;
       group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
@@ -854,7 +877,7 @@ router.get('/compliance', async (req, res) => {
       }
       
       // If any device is online, mark the group as online
-      if (isDeviceOnline) {
+      if (device.isOnline) {
         group.isOnline = true;
       }
     });
@@ -1688,16 +1711,19 @@ router.get('/screens', async (req, res) => {
     );
     
     let query = {
-      // Only fetch devices that have actual connected devices (not just temporary records)
+      // Only fetch devices that have actual connected devices (new system)
       $and: [
         {
-          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-          deviceId: { $exists: true, $ne: null } // Has a real device ID
+          $or: [
+            { 'slots.deviceId': { $not: { $regex: /^TEMP-/ }, $exists: true, $ne: null } }, // Not a temporary device ID
+            { materialId: { $exists: true, $ne: null } } // Or has materialId (new system)
+          ]
         },
         {
           $or: [
-            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { screenType: { $exists: true } } // Or has screen type (legacy records)
+            { 'slots.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { screenType: { $exists: true } }, // Or has screen type (legacy records)
+            { materialId: { $exists: true } } // Or has materialId (new system)
           ]
         }
       ]
@@ -1733,9 +1759,11 @@ router.get('/screens', async (req, res) => {
       const allStatuses = deviceStatusService.getAllDeviceStatuses();
       const materialStatus = allStatuses.find(status => {
         // Check if this device ID matches the materialId pattern
-        return status.deviceId === screen.materialId || 
-               status.deviceId.includes(screen.materialId) ||
-               screen.materialId.includes(status.deviceId);
+        return status.deviceId && screen.materialId && (
+          status.deviceId === screen.materialId || 
+          status.deviceId.includes(screen.materialId) ||
+          screen.materialId.includes(status.deviceId)
+        );
       });
       
       if (materialStatus) {
@@ -1759,71 +1787,90 @@ router.get('/screens', async (req, res) => {
     const THIRTY_SECONDS = 30 * 1000; // 30 seconds in milliseconds
     
     const screensData = screens.map(screen => {
-      // Use DeviceStatusManager as the new source of truth
-      let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
-      let isActuallyOnline = deviceStatus.isOnline;
+      // For the new schema, screen is a car record with slots
+      // We need to create individual entries for each slot
+      const carData = [];
       
-      // If DeviceStatusManager doesn't have this device, try to find it by materialId
-      if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
-        console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${screen.deviceId}, checking by materialId: ${screen.materialId}`);
-        
-        // Try to find the device by materialId in the DeviceStatusManager
-        const allStatuses = deviceStatusService.getAllDeviceStatuses();
-        const foundStatus = allStatuses.find(status => {
-          // Check if this device ID matches the materialId pattern
-          return status.deviceId === screen.materialId || 
-                 status.deviceId.includes(screen.materialId) ||
-                 screen.materialId.includes(status.deviceId);
+      if (screen.slots && screen.slots.length > 0) {
+        screen.slots.forEach(slot => {
+          // Use DeviceStatusManager as the new source of truth for each slot
+          let deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+          let isActuallyOnline = deviceStatus.isOnline;
+          
+          // If DeviceStatusManager doesn't have this device, use slot status
+          if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
+            console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${slot.deviceId}, using slot status`);
+            isActuallyOnline = slot.isOnline;
+          } else {
+            // Use the status from DeviceStatusManager
+            isActuallyOnline = deviceStatus.isOnline;
+          }
+          
+          // Log the status source for debugging
+          console.log(`🎯 [SCREEN TRACKING] Slot ${slot.slotNumber} (${slot.deviceId}) in ${screen.materialId}:`);
+          console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
+          console.log(`  - Source: ${deviceStatus.source}`);
+          console.log(`  - Confidence: ${deviceStatus.confidence}`);
+          console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
+          
+          const lastSeen = new Date(slot.lastSeen);
+          const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
+          
+          // Override online status if timeout threshold is exceeded
+          if (timeSinceLastSeen > 120) {
+            isActuallyOnline = false;
+            console.log(`  - Overriding to OFFLINE due to timeout: ${timeSinceLastSeen}s > 120s`);
+          }
+          
+          // Check device status based on last seen time
+          console.log(`  - Final isOnline: ${isActuallyOnline}`);
+          console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
+          
+          // Determine display status based on actual online status
+          let displayStatus;
+          if (isActuallyOnline) {
+            displayStatus = 'ONLINE';
+          } else {
+            displayStatus = 'OFFLINE';
+          }
+          
+          carData.push({
+            deviceId: slot.deviceId,
+            materialId: screen.materialId,
+            screenType: screen.screenType,
+            carGroupId: screen.carGroupId,
+            deviceSlot: slot.slotNumber,
+            isOnline: isActuallyOnline,
+            currentLocation: screen.currentLocation,
+            lastSeen: slot.lastSeen,
+            currentHours: screen.currentHoursToday,
+            hoursRemaining: screen.hoursRemaining,
+            totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+            displayStatus: displayStatus,
+            screenMetrics: slot.screenMetrics || screen.screenMetrics
+          });
         });
-        
-        if (foundStatus) {
-          console.log(`🔍 [SCREEN TRACKING] Found matching device in DeviceStatusManager: ${foundStatus.deviceId} -> ${foundStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`);
-          // Update the DeviceStatusManager with the full device ID
-          deviceStatusService.updateDeviceStatus(screen.deviceId, foundStatus.isOnline, new Date());
-          // Re-get the status after updating
-          deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
-          isActuallyOnline = deviceStatus.isOnline;
-        }
-      }
-      
-      // Log the status source for debugging
-      console.log(`🎯 [SCREEN TRACKING] Device ${screen.deviceId} (${screen.materialId}):`);
-      console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
-      console.log(`  - Source: ${deviceStatus.source}`);
-      console.log(`  - Confidence: ${deviceStatus.confidence}`);
-      console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
-      
-      const lastSeen = new Date(screen.lastSeen);
-      const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
-      
-      // Check device status based on last seen time
-      console.log(`  - Final isOnline: ${isActuallyOnline}`);
-      console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
-      
-      // Determine display status based on actual online status
-      let displayStatus;
-      if (isActuallyOnline) {
-        displayStatus = 'ONLINE';
       } else {
-        displayStatus = 'OFFLINE';
+        // Fallback for records without slots (legacy)
+        carData.push({
+          deviceId: 'Unknown',
+          materialId: screen.materialId,
+          screenType: screen.screenType,
+          carGroupId: screen.carGroupId,
+          deviceSlot: 0,
+          isOnline: screen.isOnline,
+          currentLocation: screen.currentLocation,
+          lastSeen: screen.lastSeen,
+          currentHours: screen.currentHoursToday,
+          hoursRemaining: screen.hoursRemaining,
+          totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+          displayStatus: screen.isOnline ? 'ONLINE' : 'OFFLINE',
+          screenMetrics: screen.screenMetrics
+        });
       }
       
-      return {
-        deviceId: screen.deviceId,
-        materialId: screen.materialId,
-        screenType: screen.screenType,
-        carGroupId: screen.carGroupId,
-        deviceSlot: screen.deviceSlot,
-        isOnline: isActuallyOnline,
-        currentLocation: screen.currentLocation,
-        lastSeen: screen.lastSeen,
-        currentHours: screen.currentHoursToday,
-        hoursRemaining: screen.hoursRemaining,
-        totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-        displayStatus: displayStatus, // Use the determined status instead of screen.displayStatus
-        screenMetrics: screen.screenMetrics
-      };
-    });
+      return carData;
+    }).flat(); // Flatten the array of arrays
     
     console.log('Screens data mapping result:', screensData);
     console.log('Screens data mapping result length:', screensData.length);
@@ -1835,10 +1882,10 @@ router.get('/screens', async (req, res) => {
       success: true,
       data: {
         screens: screensData,
-        totalScreens: screens.length,
-        onlineScreens: screens.filter(s => s.isOnline).length,
-        displayingScreens: screens.filter(s => s.screenMetrics?.isDisplaying).length,
-        maintenanceScreens: screens.filter(s => s.screenMetrics?.maintenanceMode).length
+        totalScreens: screensData.length,
+        onlineScreens: screensData.filter(s => s.isOnline).length,
+        displayingScreens: screensData.filter(s => s.screenMetrics?.isDisplaying).length,
+        maintenanceScreens: screensData.filter(s => s.screenMetrics?.maintenanceMode).length
       }
     });
 
@@ -1954,10 +2001,10 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
         // Daily performance
         dailyPerformance: deviceTracking.dailyPerformance || [],
         
-        // Device info
-        deviceId: deviceTracking.deviceId,
+        // Device info - get from slot
+        deviceId: deviceTracking.slots?.[0]?.deviceId || 'Unknown',
         screenType: deviceTracking.screenType,
-        displayStatus: deviceTracking.displayStatus,
+        displayStatus: deviceTracking.isOnline ? 'ONLINE' : 'OFFLINE',
         
         // Alerts
         totalAlerts: deviceTracking.alerts?.length || 0,

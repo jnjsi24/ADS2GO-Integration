@@ -495,6 +495,12 @@ class DeviceStatusService {
 
   async updateDeviceStatus(deviceId, status) {
     try {
+      // Check if deviceId is valid
+      if (!deviceId) {
+        console.log('⚠️ [updateDeviceStatus] Skipping update - deviceId is undefined or null');
+        return;
+      }
+      
       const now = new Date();
             // Get materialId from active connections or use deviceId as fallback
       const connection = this.activeConnections.get(deviceId);
@@ -565,7 +571,7 @@ class DeviceStatusService {
       
       // Also update with the short device ID if they're different
       // This handles the case where the database has the full device ID but WebSocket uses short ID
-      if (deviceId.includes('TABLET-') && deviceId.includes('-W09-')) {
+      if (deviceId && deviceId.includes('TABLET-') && deviceId.includes('-W09-')) {
         // Extract short device ID from full device ID
         const shortDeviceId = deviceId.split('-W09-')[0].replace('TABLET-', '') + '-W09';
         console.log(`🔄 [DeviceStatusManager] Also updating short device ID: ${shortDeviceId}`);

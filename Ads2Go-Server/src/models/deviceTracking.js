@@ -87,20 +87,84 @@ const NetworkStatusSchema = new mongoose.Schema({
   lastSeen: { type: Date, default: Date.now }
 }, { _id: false });
 
-// Main DeviceTracking Schema (Current Day Only)
-const DeviceTrackingSchema = new mongoose.Schema({
-  // Device identification
+// Slot Schema for individual devices within a car
+const SlotSchema = new mongoose.Schema({
+  slotNumber: { 
+    type: Number, 
+    required: true,
+    min: 1,
+    max: 5
+  },
   deviceId: { 
     type: String, 
     required: true,
     index: true
   },
-  deviceSlot: { 
-    type: Number, 
+  isOnline: { 
+    type: Boolean, 
+    default: false 
+  },
+  lastSeen: { 
+    type: Date, 
+    default: Date.now 
+  },
+  deviceInfo: DeviceInfoSchema,
+  currentAd: {
+    adId: String,
+    adTitle: String,
+    adDuration: Number,
+    startTime: Date,
+    endTime: Date,
+    currentTime: Number,
+    state: String,
+    progress: Number,
+    completionRate: Number,
+    impressions: Number,
+    totalViewTime: Number
+  },
+  screenMetrics: {
+    isDisplaying: { type: Boolean, default: false },
+    brightness: { type: Number, default: 100 },
+    volume: { type: Number, default: 50 },
+    adPlayCount: { type: Number, default: 0 },
+    maintenanceMode: { type: Boolean, default: false },
+    displayHours: { type: Number, default: 0 },
+    lastAdPlayed: String,
+    dailyAdStats: {
+      totalAdsPlayed: { type: Number, default: 0 },
+      totalDisplayTime: { type: Number, default: 0 },
+      uniqueAdsPlayed: { type: Number, default: 0 },
+      averageAdDuration: { type: Number, default: 0 },
+      adCompletionRate: { type: Number, default: 0 }
+    },
+    adPerformance: [{
+      adId: String,
+      adTitle: String,
+      playCount: Number,
+      totalViewTime: Number,
+      completionRate: Number,
+      lastPlayed: Date
+    }]
+  }
+}, { _id: false });
+
+// Main DeviceTracking Schema (One document per car per day)
+const DeviceTrackingSchema = new mongoose.Schema({
+  // Material identification (car/vehicle)
+  materialId: { 
+    type: String, 
     required: true,
-    min: 1,
-    max: 5,
     index: true
+  },
+  carGroupId: { 
+    type: String, 
+    required: true
+  },
+  screenType: { 
+    type: String, 
+    required: true,
+    enum: ['HEADDRESS', 'LCD', 'BILLBOARD', 'DIGITAL_DISPLAY'],
+    default: 'HEADDRESS'
   },
   date: { 
     type: Date, 
@@ -109,27 +173,10 @@ const DeviceTrackingSchema = new mongoose.Schema({
     index: true
   },
   
-  // Screen tracking fields (consolidated from ScreenTracking)
-  materialId: { 
-    type: String, 
-    required: false,
-    index: true
-  },
-  screenType: { 
-    type: String, 
-    required: false,
-    enum: ['HEADDRESS', 'LCD', 'BILLBOARD', 'DIGITAL_DISPLAY'],
-    default: 'HEADDRESS'
-  },
-  carGroupId: { 
-    type: String, 
-    required: false
-  },
+  // Slots array - one entry per physical device in the car
+  slots: [SlotSchema],
   
-  // Device info
-  deviceInfo: DeviceInfoSchema,
-  
-  // Current status
+  // Car-level status (online if ANY slot is online)
   isOnline: { type: Boolean, default: false },
   currentLocation: LocationPointSchema,
   lastSeen: { type: Date, default: Date.now },
@@ -274,8 +321,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-DeviceTrackingSchema.index({ deviceId: 1, date: -1 });
-DeviceTrackingSchema.index({ deviceSlot: 1, date: -1 });
+// Removed old deviceId and deviceSlot indexes - now using slots array
 DeviceTrackingSchema.index({ date: -1 });
 DeviceTrackingSchema.index({ isOnline: 1 });
 DeviceTrackingSchema.index({ 'currentLocation.coordinates': '2dsphere' });
@@ -358,27 +404,103 @@ DeviceTrackingSchema.virtual('displayStatus').get(function() {
   return 'ACTIVE';
 });
 
-// Compound unique index for deviceId + date (one record per device per day)
-DeviceTrackingSchema.index({ deviceId: 1, date: 1 }, { unique: true });
+// Compound unique index for materialId + date (one record per car per day)
+DeviceTrackingSchema.index({ materialId: 1, date: 1 }, { unique: true });
+
+// Index for deviceId lookups within slots
+DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = function(deviceId) {
   const today = new Date().toISOString().split('T')[0];
   
-  // First try to find today's record
-  return this.findOne({ deviceId, date: today }).then(device => {
-    if (device) {
-      return device;
+  // Find car record that contains this device in slots
+  return this.findOne({ 
+    'slots.deviceId': deviceId, 
+    date: today 
+  }).then(car => {
+    if (car) {
+      return car;
     }
     
     // If no record for today, find the most recent record for this device
-    return this.findOne({ deviceId }).sort({ date: -1 });
+    return this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
   });
+};
+
+DeviceTrackingSchema.statics.findByMaterialId = function(materialId) {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // First try to find today's record for this material
+  return this.findOne({ materialId, date: today }).then(car => {
+    if (car) {
+      return car;
+    }
+    
+    // If no record for today, find the most recent record for this material
+    return this.findOne({ materialId }).sort({ date: -1 });
+  });
+};
+
+// Helper method to get a specific slot
+DeviceTrackingSchema.methods.getSlot = function(slotNumber) {
+  return this.slots.find(slot => slot.slotNumber === slotNumber);
+};
+
+// Helper method to update a specific slot
+DeviceTrackingSchema.methods.updateSlot = function(slotNumber, updateData) {
+  const slot = this.getSlot(slotNumber);
+  if (slot) {
+    Object.assign(slot, updateData);
+    slot.lastSeen = new Date();
+  } else {
+    // Create new slot if it doesn't exist
+    this.slots.push({
+      slotNumber: parseInt(slotNumber),
+      ...updateData,
+      lastSeen: new Date()
+    });
+  }
+  
+  // Update car-level online status
+  this.isOnline = this.slots.some(slot => slot.isOnline);
+  this.lastSeen = new Date();
+  
+  return this.save();
+};
+
+// Helper method to get slot status for dashboard
+DeviceTrackingSchema.methods.getSlotStatus = function() {
+  const status = {
+    slot1: { online: false, deviceId: null, lastSeen: null },
+    slot2: { online: false, deviceId: null, lastSeen: null }
+  };
+  
+  this.slots.forEach(slot => {
+    if (slot.slotNumber === 1) {
+      status.slot1 = {
+        online: slot.isOnline,
+        deviceId: slot.deviceId,
+        lastSeen: slot.lastSeen
+      };
+    } else if (slot.slotNumber === 2) {
+      status.slot2 = {
+        online: slot.isOnline,
+        deviceId: slot.deviceId,
+        lastSeen: slot.lastSeen
+      };
+    }
+  });
+  
+  return status;
 };
 
 DeviceTrackingSchema.statics.findByDeviceSlot = function(deviceSlot) {
   const today = new Date().toISOString().split('T')[0];
-  return this.find({ deviceSlot, date: today });
+  return this.find({ 
+    'slots.slotNumber': deviceSlot, 
+    date: today 
+  });
 };
 
 DeviceTrackingSchema.statics.getCurrentDayData = function() {
@@ -392,7 +514,10 @@ DeviceTrackingSchema.statics.findByMaterial = function(materialId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialAndSlot = function(materialId, slotNumber) {
-  return this.findOne({ materialId, deviceSlot: slotNumber });
+  return this.findOne({ 
+    materialId, 
+    'slots.slotNumber': slotNumber 
+  });
 };
 
 DeviceTrackingSchema.statics.findOnlineScreens = function() {
