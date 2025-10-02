@@ -20,11 +20,12 @@ class CronJobs {
     // Start the high-precision hours update service (30-second intervals)
     hoursUpdateService.start();
 
-    // Daily archive job - runs at midnight every day
-    const dailyArchiveTask = cron.schedule('0 0 * * *', async () => {
-      console.log('⏰ Daily archive job triggered at midnight');
+    // Daily archive job - runs every 5 minutes for testing (normally at midnight)
+    const dailyArchiveTask = cron.schedule('*/5 * * * *', async () => {
+      console.log('⏰ Daily archive job triggered (TESTING: every 5 minutes)');
       try {
         await dailyArchiveJob.archiveDailyData();
+        console.log('✅ Daily archive job completed successfully');
       } catch (error) {
         console.error('❌ Daily archive job failed:', error);
       }
@@ -52,8 +53,10 @@ class CronJobs {
 
     // Online hours update job - runs every 5 minutes (backup to high-precision service)
     const onlineHoursTask = cron.schedule('*/5 * * * *', async () => {
+      console.log('⏰ Online hours update job triggered (every 5 minutes)');
       try {
         await this.updateOnlineHours();
+        console.log('✅ Online hours update job completed successfully');
       } catch (error) {
         console.error('❌ Online hours update job failed:', error);
       }

@@ -60,15 +60,15 @@ const DailySummarySchema = new mongoose.Schema({
 
 // Main DeviceDataHistory Schema
 const DeviceDataHistorySchema = new mongoose.Schema({
-  // Device identification
+  // Device identification (optional for material-level records)
   deviceId: { 
     type: String, 
-    required: true,
+    required: false,
     index: true
   },
   deviceSlot: { 
     type: Number, 
-    required: true,
+    required: false,
     min: 1,
     max: 5,
     index: true
@@ -77,6 +77,17 @@ const DeviceDataHistorySchema = new mongoose.Schema({
     type: Date, 
     required: true,
     index: true
+  },
+  
+  // Material identification (for material-level records)
+  materialId: { 
+    type: String, 
+    required: false,
+    index: true
+  },
+  carGroupId: { 
+    type: String, 
+    required: false
   },
   
   // Device info

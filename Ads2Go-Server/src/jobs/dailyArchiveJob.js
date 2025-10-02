@@ -20,14 +20,14 @@ class DailyArchiveJob {
     console.log('🔄 Starting daily archive job...');
 
     try {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const dateStr = yesterday.toISOString().split('T')[0];
+      // For testing: archive any existing data (not just today's)
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0];
       
-      console.log(`📅 Archiving data for date: ${dateStr}`);
+      console.log(`📅 Archiving data for date: ${dateStr} (TESTING MODE)`);
 
-      // Get all DeviceTracking records for yesterday
-      const dailyData = await DeviceTracking.find({ date: dateStr });
+      // Get all DeviceTracking records (for testing - any date)
+      const dailyData = await DeviceTracking.find({});
       
       if (dailyData.length === 0) {
         console.log('ℹ️  No data found for archiving');
@@ -41,9 +41,8 @@ class DailyArchiveJob {
       const archivePromises = dailyData.map(device => this.archiveDeviceData(device, dateStr));
       await Promise.all(archivePromises);
 
-      // Clear yesterday's data from DeviceTracking
-      await DeviceTracking.deleteMany({ date: dateStr });
-      console.log(`🗑️  Cleared ${dailyData.length} records from DeviceTracking`);
+      // Skip clearing data during testing (normally clears yesterday's data)
+      console.log(`ℹ️  Skipping data cleanup during testing mode`);
 
       // Update Analytics collection with daily summaries
       await this.updateAnalyticsWithDailySummary(dailyData, dateStr);
@@ -58,12 +57,11 @@ class DailyArchiveJob {
     }
   }
 
-  // Archive individual device data
+  // Archive individual device data (one record per material with all slots)
   async archiveDeviceData(device, dateStr) {
     try {
-      // Process each slot in the device (new schema)
-      const archivePromises = device.slots.map(slot => this.archiveSlotData(device, slot, dateStr));
-      await Promise.all(archivePromises);
+      // Create one archive record for the entire material (all slots combined)
+      await this.archiveMaterialData(device, dateStr);
       
       console.log(`✅ Archived data for material ${device.materialId} with ${device.slots.length} slots`);
     } catch (error) {
@@ -71,7 +69,86 @@ class DailyArchiveJob {
     }
   }
 
-  // Archive individual slot data
+  // Archive material data (one record per material with all slots)
+  async archiveMaterialData(device, dateStr) {
+    try {
+      // Get device timezone from current location
+      const deviceTimezone = TimezoneUtils.getDeviceTimezone(device.currentLocation);
+      
+      // Calculate enhanced hours tracking data (using device-level data)
+      const hoursTracking = this.calculateHoursTrackingData(device, null, deviceTimezone);
+      
+      // Calculate daily summary for the entire material
+      const dailySummary = this.calculateDailySummaryForMaterial(device);
+      
+      // Create archive record for the entire material
+      const archiveRecord = {
+        materialId: device.materialId,
+        carGroupId: device.carGroupId,
+        date: new Date(dateStr),
+        
+        // Device info (from first slot or combined)
+        deviceInfo: device.slots[0]?.deviceInfo || {},
+        
+        // Daily totals (from device level)
+        totalAdPlays: device.totalAdPlays,
+        totalQRScans: device.totalQRScans,
+        totalDistanceTraveled: device.totalDistanceTraveled,
+        totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+        
+        // Enhanced hours tracking with timezone awareness
+        hoursTracking: hoursTracking,
+        
+        // Daily summary
+        dailySummary: dailySummary,
+        
+        // Hourly breakdown
+        hourlyStats: device.hourlyStats,
+        
+        // Location data (keep last 24 hours)
+        locationHistory: device.locationHistory.slice(-24),
+        
+        // Ad performance
+        adPerformance: device.adPerformance,
+        
+        // QR scan details
+        qrScans: device.qrScans,
+        
+        // Ad playback details
+        adPlaybacks: device.adPlaybacks,
+        
+        // Network and connectivity
+        networkStatus: device.networkStatus,
+        
+        // Compliance data
+        complianceData: device.complianceData,
+        
+        // Slots information (all slots in one record)
+        slots: device.slots.map(slot => ({
+          deviceId: slot.deviceId,
+          slotNumber: slot.slotNumber,
+          isOnline: slot.isOnline,
+          lastSeen: slot.lastSeen,
+          deviceInfo: slot.deviceInfo,
+          totalAdPlays: slot.totalAdPlays || 0,
+          totalQRScans: slot.totalQRScans || 0
+        })),
+        
+        // Metadata
+        archivedAt: new Date(),
+        dataSource: 'deviceTracking',
+        version: '3.0' // Updated version for enhanced tracking
+      };
+
+      // Save to DeviceDataHistory
+      await DeviceDataHistory.create(archiveRecord);
+      console.log(`✅ Archived material data for ${device.materialId} with ${device.slots.length} slots (${deviceTimezone})`);
+    } catch (error) {
+      console.error(`❌ Error archiving material data for ${device.materialId}:`, error);
+    }
+  }
+
+  // Archive individual slot data (DEPRECATED - kept for backward compatibility)
   async archiveSlotData(device, slot, dateStr) {
     try {
       // Calculate daily summary for this slot
@@ -141,7 +218,42 @@ class DailyArchiveJob {
     }
   }
 
-  // Calculate daily summary for a specific slot
+  // Calculate daily summary for the entire material (all slots combined)
+  calculateDailySummaryForMaterial(device) {
+    // Calculate slot-level statistics
+    const slotStats = device.slots.map(slot => ({
+      slotNumber: slot.slotNumber,
+      deviceId: slot.deviceId,
+      isOnline: slot.isOnline,
+      lastSeen: slot.lastSeen,
+      deviceInfo: slot.deviceInfo || {},
+      totalAdPlays: slot.totalAdPlays || 0,
+      totalQRScans: slot.totalQRScans || 0
+    }));
+
+    return {
+      // Material-level totals
+      totalAdPlays: device.totalAdPlays,
+      totalQRScans: device.totalQRScans,
+      totalDistanceTraveled: device.totalDistanceTraveled,
+      totalHoursOnline: device.totalHoursOnline,
+      averageAdCompletionRate: this.calculateAverageCompletionRate(device.adPlaybacks),
+      uniqueAdsPlayed: new Set(device.adPlaybacks.map(play => play.adId)).size,
+      totalAdImpressions: device.totalAdImpressions,
+      totalAdPlayTime: device.totalAdPlayTime,
+      
+      // Material-level status
+      isOnline: device.isOnline,
+      lastSeen: device.lastSeen,
+      
+      // Slot-level breakdown
+      totalSlots: device.slots.length,
+      onlineSlots: device.slots.filter(slot => slot.isOnline).length,
+      slotStats: slotStats
+    };
+  }
+
+  // Calculate daily summary for a specific slot (DEPRECATED - kept for backward compatibility)
   calculateDailySummaryForSlot(device, slot) {
     return {
       totalAdPlays: device.totalAdPlays,

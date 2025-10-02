@@ -422,35 +422,153 @@ DeviceTrackingSchema.index({ materialId: 1, date: 1 }, { unique: true });
 DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
-DeviceTrackingSchema.statics.findByDeviceId = function(deviceId) {
-  const today = new Date().toISOString().split('T')[0];
+DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   
-  // Find car record that contains this device in slots
-  return this.findOne({ 
+  // Find car record that contains this device in slots for today
+  let car = await this.findOne({ 
     'slots.deviceId': deviceId, 
-    date: today 
-  }).then(car => {
-    if (car) {
-      return car;
-    }
-    
-    // If no record for today, find the most recent record for this device
-    return this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
+    date: todayStr 
   });
+  
+  if (car) {
+    return car;
+  }
+  
+  // If no record for today, find the most recent record for this device
+  car = await this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
+  
+  if (car) {
+    // Update the existing record to today's date and reset session
+    console.log(`🔄 Updating existing DeviceTracking record for device ${deviceId} to today's date: ${todayStr}`);
+    
+    // Update the date to today
+    car.date = todayStr;
+    
+    // Reset the daily session for the new day
+    car.currentSession = {
+      date: today,
+      startTime: new Date(),
+      endTime: null,
+      totalHoursOnline: 0,
+      totalDistanceTraveled: 0,
+      isActive: true,
+      targetHours: 8,
+      complianceStatus: 'PENDING',
+      locationHistory: []
+    };
+    
+    // Reset daily counters
+    car.totalAdPlays = 0;
+    car.totalQRScans = 0;
+    car.totalDistanceTraveled = 0;
+    car.totalHoursOnline = 0;
+    car.totalAdImpressions = 0;
+    car.totalAdPlayTime = 0;
+    
+    // Clear daily data arrays
+    car.adPlaybacks = [];
+    car.qrScans = [];
+    car.locationHistory = [];
+    car.hourlyStats = [];
+    car.adPerformance = [];
+    car.qrScansByAd = [];
+    
+    // Reset current ad
+    car.currentAd = null;
+    
+    // Reset compliance data
+    car.complianceData = {
+      offlineIncidents: 0,
+      displayIssues: 0
+    };
+    
+    // Update lastSeen to now
+    car.lastSeen = new Date();
+    
+    // Save the updated record
+    await car.save();
+    console.log(`✅ Successfully updated DeviceTracking record for device ${deviceId} to today's date`);
+    
+    return car;
+  }
+  
+  return null; // No existing record found
 };
 
-DeviceTrackingSchema.statics.findByMaterialId = function(materialId) {
-  const today = new Date().toISOString().split('T')[0];
+DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   
   // First try to find today's record for this material
-  return this.findOne({ materialId, date: today }).then(car => {
-    if (car) {
-      return car;
-    }
+  let car = await this.findOne({ materialId, date: todayStr });
+  
+  if (car) {
+    return car;
+  }
+  
+  // If no record for today, find the most recent record for this material
+  car = await this.findOne({ materialId }).sort({ date: -1 });
+  
+  if (car) {
+    // Update the existing record to today's date and reset session
+    console.log(`🔄 Updating existing DeviceTracking record for ${materialId} to today's date: ${todayStr}`);
     
-    // If no record for today, find the most recent record for this material
-    return this.findOne({ materialId }).sort({ date: -1 });
-  });
+    // Update the date to today
+    car.date = todayStr;
+    
+    // Reset the daily session for the new day
+    car.currentSession = {
+      date: today,
+      startTime: new Date(),
+      endTime: null,
+      totalHoursOnline: 0,
+      totalDistanceTraveled: 0,
+      isActive: true,
+      targetHours: 8,
+      complianceStatus: 'PENDING',
+      locationHistory: []
+    };
+    
+    // Reset daily counters
+    car.totalAdPlays = 0;
+    car.totalQRScans = 0;
+    car.totalDistanceTraveled = 0;
+    car.totalHoursOnline = 0;
+    car.totalAdImpressions = 0;
+    car.totalAdPlayTime = 0;
+    
+    // Clear daily data arrays
+    car.adPlaybacks = [];
+    car.qrScans = [];
+    car.locationHistory = [];
+    car.hourlyStats = [];
+    car.adPerformance = [];
+    car.qrScansByAd = [];
+    
+    // Reset current ad
+    car.currentAd = null;
+    
+    // Reset compliance data
+    car.complianceData = {
+      offlineIncidents: 0,
+      displayIssues: 0
+    };
+    
+    // Update lastSeen to now
+    car.lastSeen = new Date();
+    
+    // Save the updated record
+    await car.save();
+    console.log(`✅ Successfully updated DeviceTracking record for ${materialId} to today's date`);
+    
+    return car;
+  }
+  
+  return null; // No existing record found
 };
 
 // Helper method to get a specific slot
