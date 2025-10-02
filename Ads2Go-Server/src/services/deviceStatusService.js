@@ -377,7 +377,12 @@ class DeviceStatusService {
     try {
       const now = new Date();
       const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId || deviceId;
+      const materialId = connection?.materialId;
+
+      if (!materialId) {
+        console.log(`⚠️ [updateCurrentAd] No materialId found for device ${deviceId}. Skipping update.`);
+        return;
+      }
 
       console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in DeviceTracking...`);
 
@@ -502,69 +507,40 @@ class DeviceStatusService {
       }
       
       const now = new Date();
-            // Get materialId from active connections or use deviceId as fallback
+      // Get materialId from active connections
       const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId || deviceId;
+      const materialId = connection?.materialId;
+      
+      if (!materialId) {
+        console.log(`⚠️ [updateDeviceStatus] No materialId found for device ${deviceId}. Skipping update.`);
+        return;
+      }
       
       console.log(`🔄 [updateDeviceStatus] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
-      // First, try to find and update existing record by deviceId
-      console.log(`🔍 [updateDeviceStatus] Searching for device by deviceId: ${deviceId}`);
-      let updatedDevice = await DeviceTracking.findOneAndUpdate(
-        { deviceId: deviceId },
-        {
-          $set: {
-            isOnline: status,
-            isActive: status, // Set isActive to match online status
-            lastSeen: now
-          },
-          $push: {
-            statusHistory: {
-              status: status ? 'online' : 'offline',
-              timestamp: now
-            }
-          }
-        },
-        { new: true }
-      );
+      // Find existing record by materialId
+      console.log(`🔍 [updateDeviceStatus] Searching for device by materialId: ${materialId}`);
+      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
       
-      console.log(`🔍 [updateDeviceStatus] Device found by deviceId: ${updatedDevice ? 'YES' : 'NO'}`);
-
-      // If not found by deviceId, try to find by materialId and update
-      if (!updatedDevice) {
-        console.log(`🔍 [updateDeviceStatus] Device ${deviceId} not found, searching by materialId: ${materialId}`);
-        
-        updatedDevice = await DeviceTracking.findOneAndUpdate(
-          { materialId },
-          {
-            $set: {
-              deviceId: deviceId, // Set the deviceId if it wasn't set
-              isOnline: status,
-              isActive: status, // Set isActive to match online status
-              lastSeen: now
-            },
-            $push: {
-              statusHistory: {
-                status: status ? 'online' : 'offline',
-                timestamp: now
-              }
-            }
-          },
-          { upsert: true, new: true }
-        );
-        
-        console.log(`🔍 [updateDeviceStatus] Device found by materialId: ${updatedDevice ? 'YES' : 'NO'}`);
+      if (!deviceTracking) {
+        console.log(`⚠️ [updateDeviceStatus] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);
+        return;
       }
-
-      // Device status is already set correctly in the previous update
-      if (updatedDevice) {
-        console.log(`✅ [updateDeviceStatus] Device ${deviceId} status updated successfully`);
-        console.log(`📊 [updateDeviceStatus] Final device status: isOnline=${updatedDevice.isOnline}, isActive=${updatedDevice.isActive}`);
+      
+      // Update the specific slot for this device
+      const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+      if (slot) {
+        slot.isOnline = status;
+        slot.lastSeen = now;
+        deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
+        deviceTracking.lastSeen = now;
+        await deviceTracking.save();
+        console.log(`✅ [updateDeviceStatus] Updated slot for device ${deviceId} in material ${materialId}`);
       } else {
-        console.log(`❌ [updateDeviceStatus] Failed to find or update device ${deviceId}`);
+        console.log(`⚠️ [updateDeviceStatus] Device ${deviceId} not found in slots for material ${materialId}`);
       }
 
-      console.log(`✅ [updateDeviceStatus] Device ${deviceId} marked as ${status ? 'online' : 'offline'} (root isOnline: ${updatedDevice?.isOnline})`);
+      console.log(`✅ [updateDeviceStatus] Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
       
       // Update DeviceStatusManager with database status
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
@@ -579,7 +555,7 @@ class DeviceStatusService {
       }
       
       // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(updatedDevice);
+      this.broadcastDeviceUpdate(deviceTracking);
       
       // Also update the device list
       this.broadcastDeviceList();

@@ -178,7 +178,20 @@ router.post('/registerTablet', async (req, res) => {
     // Create deviceTracking record for this device
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const existingDeviceTracking = await DeviceTracking.findByMaterialId(materialId);
+      let existingDeviceTracking = await DeviceTracking.findByMaterialId(materialId);
+      
+      // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
+      if (!existingDeviceTracking) {
+        console.log(`🔍 DeviceTracking not found by materialId: ${materialId}, trying deviceId: ${deviceId}`);
+        existingDeviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+        
+        if (existingDeviceTracking) {
+          console.log(`🔄 Found existing DeviceTracking by deviceId, updating materialId to: ${materialId}`);
+          existingDeviceTracking.materialId = materialId;
+          existingDeviceTracking.carGroupId = carGroupId;
+          await existingDeviceTracking.save();
+        }
+      }
       
       if (!existingDeviceTracking) {
         const today = new Date();

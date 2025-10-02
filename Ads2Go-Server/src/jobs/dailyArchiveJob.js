@@ -60,19 +60,34 @@ class DailyArchiveJob {
   // Archive individual device data
   async archiveDeviceData(device, dateStr) {
     try {
-      // Calculate daily summary
-      const dailySummary = this.calculateDailySummary(device);
+      // Process each slot in the device (new schema)
+      const archivePromises = device.slots.map(slot => this.archiveSlotData(device, slot, dateStr));
+      await Promise.all(archivePromises);
       
-      // Create archive record
+      console.log(`✅ Archived data for material ${device.materialId} with ${device.slots.length} slots`);
+    } catch (error) {
+      console.error(`❌ Error archiving device data for material ${device.materialId}:`, error);
+    }
+  }
+
+  // Archive individual slot data
+  async archiveSlotData(device, slot, dateStr) {
+    try {
+      // Calculate daily summary for this slot
+      const dailySummary = this.calculateDailySummaryForSlot(device, slot);
+      
+      // Create archive record for this slot
       const archiveRecord = {
-        deviceId: device.deviceId,
-        deviceSlot: device.deviceSlot,
+        deviceId: slot.deviceId,
+        deviceSlot: slot.slotNumber,
+        materialId: device.materialId,
+        carGroupId: device.carGroupId,
         date: new Date(dateStr),
         
         // Device info
-        deviceInfo: device.deviceInfo,
+        deviceInfo: slot.deviceInfo || {},
         
-        // Daily totals
+        // Daily totals (from device level)
         totalAdPlays: device.totalAdPlays,
         totalQRScans: device.totalQRScans,
         totalDistanceTraveled: device.totalDistanceTraveled,
@@ -105,17 +120,32 @@ class DailyArchiveJob {
         // Metadata
         archivedAt: new Date(),
         dataSource: 'deviceTracking',
-        version: '1.0'
+        version: '2.0'
       };
 
       // Save to DeviceDataHistory
       await DeviceDataHistory.create(archiveRecord);
-      console.log(`✅ Archived data for device ${device.deviceId}`);
-
+      console.log(`✅ Archived data for device ${slot.deviceId} in material ${device.materialId}`);
     } catch (error) {
-      console.error(`❌ Error archiving device ${device.deviceId}:`, error);
-      throw error;
+      console.error(`❌ Error archiving slot data for device ${slot.deviceId}:`, error);
     }
+  }
+
+  // Calculate daily summary for a specific slot
+  calculateDailySummaryForSlot(device, slot) {
+    return {
+      totalAdPlays: device.totalAdPlays,
+      totalQRScans: device.totalQRScans,
+      totalDistanceTraveled: device.totalDistanceTraveled,
+      totalHoursOnline: device.totalHoursOnline,
+      averageAdCompletionRate: this.calculateAverageCompletionRate(device.adPlaybacks),
+      uniqueAdsPlayed: new Set(device.adPlaybacks.map(play => play.adId)).size,
+      totalAdImpressions: device.totalAdImpressions,
+      totalAdPlayTime: device.totalAdPlayTime,
+      isOnline: slot.isOnline,
+      lastSeen: slot.lastSeen,
+      deviceInfo: slot.deviceInfo || {}
+    };
   }
 
   // Calculate daily summary from device data
@@ -224,10 +254,9 @@ class DailyArchiveJob {
           // Update with daily data
           adData.devices.forEach(device => {
             const materialData = {
-              materialId: device.deviceId, // Using deviceId as materialId
-              materialType: 'HEADDRESS', // Default type
-              slotNumber: device.deviceSlot,
-              deviceId: device.deviceId,
+              materialId: device.materialId, // Use actual materialId from new schema
+              materialType: 'HEADDRESS',
+              carGroupId: device.carGroupId,
               isOnline: device.isOnline,
               currentLocation: device.currentLocation,
               totalAdPlayTime: device.totalAdPlayTime,

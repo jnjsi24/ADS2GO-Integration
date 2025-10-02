@@ -177,43 +177,71 @@ router.post('/status-update', async (req, res) => {
       });
     }
 
-    // Find or create device tracking record
-    let device = await DeviceTracking.findByDeviceId(deviceId);
+    // Find the materialId and carGroupId from the Tablet collection
+    const Tablet = require('../models/Tablet');
+    const tablet = await Tablet.findOne({ 'tablets.deviceId': deviceId });
     
-    if (!device) {
-      device = new DeviceTracking({
-        deviceId,
-        deviceSlot,
-        date: new Date().toISOString().split('T')[0],
-        deviceInfo: deviceInfo || {},
-        isOnline: isOnline || false,
-        lastSeen: new Date()
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found in tablet registry. Please register the device first.'
       });
-      await device.save(); // Save the new device first
     }
 
-    // Update status
-    await device.setOnlineStatus(isOnline);
-    
-    if (deviceInfo) {
-      device.deviceInfo = { ...device.deviceInfo, ...deviceInfo };
-    }
-    
-    if (networkStatus) {
-      device.networkStatus = { ...device.networkStatus, ...networkStatus };
-    }
+    const materialId = tablet.materialId;
+    const carGroupId = tablet.carGroupId;
 
-    await device.save();
+    // Find or create device tracking record using the new schema
+    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    
+    if (!deviceTracking) {
+      // Create new car record for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      deviceTracking = new DeviceTracking({
+        materialId,
+        carGroupId,
+        screenType: 'HEADDRESS',
+        date: today,
+        isOnline: isOnline || false,
+        lastSeen: new Date(),
+        slots: [{
+          slotNumber: parseInt(deviceSlot),
+          deviceId,
+          isOnline: isOnline || false,
+          lastSeen: new Date(),
+          deviceInfo: deviceInfo || {}
+        }],
+        currentSession: {
+          date: today,
+          startTime: new Date(),
+          totalHoursOnline: 0,
+          totalDistanceTraveled: 0,
+          targetHours: 8,
+          complianceStatus: 'NON_COMPLIANT',
+          isActive: true
+        }
+      });
+      await deviceTracking.save();
+    } else {
+      // Update existing car record with new slot
+      await deviceTracking.updateSlot(parseInt(deviceSlot), {
+        deviceId,
+        isOnline: isOnline || false,
+        deviceInfo: deviceInfo || {}
+      });
+    }
 
     res.json({
       success: true,
       message: 'Status updated successfully',
       data: {
-        deviceId: device.deviceId,
-        deviceSlot: device.deviceSlot,
-        isOnline: device.isOnline,
-        lastSeen: device.lastSeen,
-        networkStatus: device.networkStatus
+        deviceId: deviceId,
+        deviceSlot: parseInt(deviceSlot),
+        materialId: materialId,
+        isOnline: isOnline || false,
+        lastSeen: new Date()
       }
     });
 
@@ -239,54 +267,95 @@ router.post('/ad-playback', async (req, res) => {
       });
     }
 
-    // Find or create device tracking record for today
-    const today = new Date().toISOString().split('T')[0];
-    const todayDate = new Date(today + 'T00:00:00.000Z'); // Create proper date object for comparison
-    let device = await DeviceTracking.findOne({ 
-      deviceId, 
-      date: { 
-        $gte: todayDate, 
-        $lt: new Date(todayDate.getTime() + 24 * 60 * 60 * 1000) 
-      } 
-    });
+    // Find the materialId and carGroupId from the Tablet collection
+    const Tablet = require('../models/Tablet');
+    const tablet = await Tablet.findOne({ 'tablets.deviceId': deviceId });
     
-    if (!device) {
-      // Check if there's an old record to copy data from
-      const oldDevice = await DeviceTracking.findOne({ deviceId }).sort({ date: -1 });
-      
-      // Create new device record for today
-      device = new DeviceTracking({
-        deviceId,
-        deviceSlot,
-        date: today,
-        deviceInfo: oldDevice?.deviceInfo || {},
-        isOnline: true,
-        lastSeen: new Date(),
-        // Reset daily counters for new day
-        totalAdPlays: 0,
-        totalQRScans: 0,
-        totalAdImpressions: 0,
-        totalAdPlayTime: 0,
-        totalDistanceTraveled: 0,
-        adPlaybacks: [],
-        qrScans: [],
-        hourlyStats: []
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found in tablet registry. Please register the device first.'
       });
-      await device.save(); // Save the new device first
     }
 
-    // Track ad playback
-    await device.trackAdPlayback(adId, adTitle, adDuration, viewTime);
+    const materialId = tablet.materialId;
+    const carGroupId = tablet.carGroupId;
+
+    // Find or create device tracking record using the new schema
+    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    
+    if (!deviceTracking) {
+      // Create new car record for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      deviceTracking = new DeviceTracking({
+        materialId,
+        carGroupId,
+        screenType: 'HEADDRESS',
+        date: today,
+        isOnline: true,
+        lastSeen: new Date(),
+        slots: [{
+          slotNumber: parseInt(deviceSlot),
+          deviceId,
+          isOnline: true,
+          lastSeen: new Date(),
+          deviceInfo: {}
+        }],
+        currentSession: {
+          date: today,
+          startTime: new Date(),
+          totalHoursOnline: 0,
+          totalDistanceTraveled: 0,
+          targetHours: 8,
+          complianceStatus: 'NON_COMPLIANT',
+          isActive: true
+        }
+      });
+      await deviceTracking.save();
+    } else {
+      // Update existing car record with new slot if needed
+      await deviceTracking.updateSlot(parseInt(deviceSlot), {
+        deviceId,
+        isOnline: true,
+        deviceInfo: {}
+      });
+    }
+
+    // Track ad playback using the new schema
+    const slot = deviceTracking.getSlot(parseInt(deviceSlot));
+    if (slot) {
+      // Add ad playback to the slot
+      const adPlayback = {
+        adId,
+        adTitle,
+        adDuration: parseInt(adDuration),
+        startTime: new Date(),
+        endTime: null,
+        viewTime: parseInt(viewTime),
+        completionRate: (parseInt(viewTime) / parseInt(adDuration)) * 100,
+        impressions: 1,
+        slotNumber: parseInt(deviceSlot)
+      };
+      
+      deviceTracking.adPlaybacks.push(adPlayback);
+      deviceTracking.totalAdPlays += 1;
+      deviceTracking.totalAdPlayTime += parseInt(viewTime);
+      deviceTracking.totalAdImpressions += 1;
+      
+      await deviceTracking.save();
+    }
 
     res.json({
       success: true,
       message: 'Ad playback tracked successfully',
       data: {
-        deviceId: device.deviceId,
-        deviceSlot: device.deviceSlot,
-        currentAd: device.currentAd,
-        totalAdPlays: device.totalAdPlays,
-        totalAdPlayTime: device.totalAdPlayTime
+        deviceId: deviceId,
+        deviceSlot: parseInt(deviceSlot),
+        materialId: materialId,
+        totalAdPlays: deviceTracking.totalAdPlays,
+        totalAdPlayTime: deviceTracking.totalAdPlayTime
       }
     });
 
@@ -315,31 +384,83 @@ router.post('/qr-scan', async (req, res) => {
     // Accept data from both Slot 1 and Slot 2 since they are different physical devices
     console.log(`📱 Processing QR scan from Slot ${deviceSlot} for device ${deviceId}`);
 
-    // Find or create device tracking record
-    let device = await DeviceTracking.findByDeviceId(deviceId);
+    // Find the materialId and carGroupId from the Tablet collection
+    const Tablet = require('../models/Tablet');
+    const tablet = await Tablet.findOne({ 'tablets.deviceId': deviceId });
     
-    if (!device) {
-      device = new DeviceTracking({
-        deviceId,
-        deviceSlot,
-        date: new Date().toISOString().split('T')[0],
-        isOnline: true,
-        lastSeen: new Date()
+    if (!tablet) {
+      return res.status(404).json({
+        success: false,
+        message: 'Device not found in tablet registry. Please register the device first.'
       });
-      await device.save(); // Save the new device first
     }
 
-    // Track QR scan
-    await device.trackQRScan(qrScanData);
+    const materialId = tablet.materialId;
+    const carGroupId = tablet.carGroupId;
+
+    // Find or create device tracking record using the new schema
+    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    
+    if (!deviceTracking) {
+      // Create new car record for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      deviceTracking = new DeviceTracking({
+        materialId,
+        carGroupId,
+        screenType: 'HEADDRESS',
+        date: today,
+        isOnline: true,
+        lastSeen: new Date(),
+        slots: [{
+          slotNumber: parseInt(deviceSlot),
+          deviceId,
+          isOnline: true,
+          lastSeen: new Date(),
+          deviceInfo: {}
+        }],
+        currentSession: {
+          date: today,
+          startTime: new Date(),
+          totalHoursOnline: 0,
+          totalDistanceTraveled: 0,
+          targetHours: 8,
+          complianceStatus: 'NON_COMPLIANT',
+          isActive: true
+        }
+      });
+      await deviceTracking.save();
+    } else {
+      // Update existing car record with new slot if needed
+      await deviceTracking.updateSlot(parseInt(deviceSlot), {
+        deviceId,
+        isOnline: true,
+        deviceInfo: {}
+      });
+    }
+
+    // Track QR scan using the new schema
+    const slot = deviceTracking.getSlot(parseInt(deviceSlot));
+    if (slot) {
+      // Add QR scan to the device tracking
+      deviceTracking.qrScans.push({
+        ...qrScanData,
+        slotNumber: parseInt(deviceSlot)
+      });
+      deviceTracking.totalQRScans += 1;
+      
+      await deviceTracking.save();
+    }
 
     res.json({
       success: true,
       message: 'QR scan tracked successfully',
       data: {
-        deviceId: device.deviceId,
-        deviceSlot: device.deviceSlot,
-        totalQRScans: device.totalQRScans,
-        qrScansByAd: device.qrScansByAd
+        deviceId: deviceId,
+        deviceSlot: parseInt(deviceSlot),
+        materialId: materialId,
+        totalQRScans: deviceTracking.totalQRScans
       }
     });
 
