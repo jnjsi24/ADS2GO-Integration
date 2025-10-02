@@ -33,6 +33,7 @@ import {
 import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
+import DateFilter from '../../components/DateFilter';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
@@ -87,6 +88,14 @@ const ManageAds: React.FC = () => {
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
   const [deploymentStatusFilter, setDeploymentStatusFilter] = useState('All Status');
+  
+  // Date filter state for schedule tab
+  const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [dateFilter, setDateFilter] = useState<{
+    startDate: Date | null;
+    endDate: Date | null;
+    condition: string;
+  } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
 
@@ -345,6 +354,27 @@ const ManageAds: React.FC = () => {
     setShowStatusDropdown(false);
   };
 
+  // Date filter handlers
+  const handleApplyDateFilter = (filter: {
+    startDate: Date | null;
+    endDate: Date | null;
+    condition: string;
+  }) => {
+    setDateFilter(filter);
+  };
+
+  const handleDeleteDateFilter = () => {
+    setDateFilter(null);
+  };
+
+  const formatDateRange = (): string => {
+    if (!dateFilter) return '';
+    if (dateFilter.startDate && dateFilter.endDate) {
+      return `${dateFilter.startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })} - ${dateFilter.endDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    }
+    return dateFilter.startDate ? dateFilter.startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  };
+
 
   const handleRowClick = (ad: Ad) => {
     handleViewAdDetails(ad);
@@ -486,50 +516,74 @@ const ManageAds: React.FC = () => {
         ))}
       </nav>
 
-      {/* All Status Filter on the right */}
+      {/* Filters on the right */}
       {['ads', 'schedule', 'deployment'].includes(activeTab) && (
-        <div className="relative w-32">
-          <button
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-            className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-          >
-            {activeTab === 'ads'
-              ? adsStatusFilter
-              : activeTab === 'schedule'
-              ? scheduleStatusFilter
-              : deploymentStatusFilter}
-            <ChevronDown
-              size={16}
-              className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
-            />
-          </button>
-
-          <AnimatePresence>
-            {showStatusDropdown && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+        <div className="flex flex-col items-end gap-2">
+          {/* Top row: Add Filter and All Status */}
+          <div className="flex items-center gap-3">
+            {/* Add Filter button for schedule tab */}
+            {activeTab === 'schedule' && (
+              <button
+                onClick={() => setShowDateFilterModal(true)}
+                className="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
               >
-                {(activeTab === 'deployment' ? deploymentStatusFilterOptions : statusFilterOptions).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      if (activeTab === 'ads') setAdsStatusFilter(status);
-                      else if (activeTab === 'schedule') setScheduleStatusFilter(status);
-                      else if (activeTab === 'deployment') setDeploymentStatusFilter(status);
-                      setShowStatusDropdown(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
-                  >
-                    {status}
-                  </button>
-                ))}
-              </motion.div>
+                Add Filter
+              </button>
             )}
-          </AnimatePresence>
+            
+            {/* All Status Filter */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                {activeTab === 'ads'
+                  ? adsStatusFilter
+                  : activeTab === 'schedule'
+                  ? scheduleStatusFilter
+                  : deploymentStatusFilter}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {(activeTab === 'deployment' ? deploymentStatusFilterOptions : statusFilterOptions).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => {
+                          if (activeTab === 'ads') setAdsStatusFilter(status);
+                          else if (activeTab === 'schedule') setScheduleStatusFilter(status);
+                          else if (activeTab === 'deployment') setDeploymentStatusFilter(status);
+                          setShowStatusDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          
+          {/* Bottom row: Refresh button */}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Refresh
+          </button>
         </div>
       )}
     </div>
@@ -689,6 +743,7 @@ const ManageAds: React.FC = () => {
           <ScheduleTab
             statusFilter={scheduleStatusFilter}
             onStatusChange={setScheduleStatusFilter}
+            dateFilter={dateFilter}
           />
         )}
         {activeTab === 'deployment' && (
@@ -920,6 +975,14 @@ const ManageAds: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Date Filter Modal */}
+      <DateFilter
+        isOpen={showDateFilterModal}
+        onClose={() => setShowDateFilterModal(false)}
+        onApplyFilter={handleApplyDateFilter}
+        onDeleteFilter={handleDeleteDateFilter}
       />
     </div>
   );
