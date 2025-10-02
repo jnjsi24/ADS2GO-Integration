@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Trash, Edit } from 'lucide-react';
+import { Trash, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -149,6 +149,9 @@ const Materials: React.FC = () => {
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [materialToRemove, setMaterialToRemove] = useState<string | null>(null);
   const [dismountReason, setDismountReason] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  
 
   // Custom refresh function for connection status
   const handleRefetchConnectionStatus = async () => {
@@ -599,6 +602,19 @@ const Materials: React.FC = () => {
     setDismountReason('');
   };
 
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
   const handleCreateSubmit = async (formData: CreateMaterialInput) => {
     try {
       await createMaterial({
@@ -744,7 +760,7 @@ const Materials: React.FC = () => {
         />
 
         {/* Table */}
-        <div className="rounded-xl mb-4 overflow-hidden">
+        <div className="rounded-xl mb-5 overflow-hidden">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
             <div className="flex items-center gap-6 col-span-2">
@@ -764,7 +780,9 @@ const Materials: React.FC = () => {
           </div>
           
           {/* Table Body */}
-          {filtered.map((material) => {
+          {filtered
+          .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+          .map((material) => {
             const status = getStatus(material);
             
             return (
@@ -811,7 +829,7 @@ const Materials: React.FC = () => {
                       }}
                       className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
                     >
-                      <Edit 
+                      <Pencil 
                         className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
                           size={16} />
                         <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
@@ -843,26 +861,69 @@ const Materials: React.FC = () => {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-between items-center text-gray-600 mt-4">
-          <span className="text-sm">Found: {filtered.length} materials - Selected: {selectedMaterials.length}</span>
-          <button className="px-4 py-2 border border-green-600 text-green-600 rounded-xl hover:bg-green-50 text-sm">
-            Export {selectedMaterials.length > 0 ? `${selectedMaterials.length} Selected Materials` : 'to Excel'}
-          </button>
-        </div>
-
         {/* Pagination */}
-        <div className="flex justify-center items-center mt-6 gap-2 text-sm flex-wrap">
-          <button className="px-2 py-1 border rounded-xl text-gray-400 cursor-not-allowed">← Previous</button>
-          <button className="px-2 py-1 bg-blue-600 text-white rounded-xl">1</button>
-          <button className="px-2 py-1 border rounded-xl">2</button>
-          <button className="px-2 py-1 border rounded-xl">3</button>
-          <button className="px-2 py-1 border rounded-xl">4</button>
-          <button className="px-2 py-1 border rounded-xl">5</button>
-          <span className="text-gray-500">...</span>
-          <button className="px-2 py-1 border rounded-xl">31</button>
-          <button className="px-2 py-1 border rounded-xl text-blue-600">Next →</button>
-          <button className="px-2 py-1 text-blue-600">Show all</button>
+        <div className="mt-auto flex justify-center">
+          <div className="flex items-center space-x-2">
+            {/* Previous button */}
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Previous
+            </button>
+
+            {/* Page numbers */}
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 3;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black"
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
+
+                return pages;
+              })()}
+            </div>
+
+            {/* Next button */}
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -873,6 +934,7 @@ const Materials: React.FC = () => {
         onSubmit={handleCreateSubmit}
         creating={creating}
       />
+      
 
       {/* Assign Driver Modal */}
       <DriverAssignmentModal
@@ -968,7 +1030,7 @@ const Materials: React.FC = () => {
           <div className="flex justify-end space-x-3">
             <button
               onClick={cancelRemove}
-              className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
               disabled={unassigning}
             >
               Cancel

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Copy, UserX, QrCode } from 'lucide-react';
+import { X, Copy, UserX, QrCode, RefreshCw } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface TabletUnit {
@@ -97,12 +97,6 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
           <h2 className="text-xl font-bold text-gray-800">
             Tablet Connection Details - Slot {slotNumber}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X size={20} />
-          </button>
         </div>
 
         {tabletLoading ? (
@@ -155,69 +149,50 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Column */}
-            <div className="space-y-6">
-              {/* Connection Details */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-800 mb-3">Connection Information</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Material ID:</span>
-                    <span className="text-gray-600 font-mono">{materialId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Slot Number:</span>
-                    <span className="text-gray-600 font-mono">{slotNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium text-gray-700">Car Group ID:</span>
-                    <span className="text-gray-600 font-mono">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
-                  </div>
-                </div>
-              </div>
-
+            <div className="space-y-5">
               {/* Connection Status */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold text-gray-800">Connection Status</h3>
-                <button
-                  onClick={() => onRefetchConnectionStatus()}
-                  disabled={connectionStatusLoading || refreshingConnectionStatus || (!tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0) || (!connectionStatusData?.getTabletConnectionStatus && connectionStatusError)}
-                  className="flex items-center gap-1 px-2 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  <div className={`w-3 h-3 border border-white rounded-full ${(connectionStatusLoading || refreshingConnectionStatus) ? 'animate-spin' : ''}`}></div>
-                  Refresh
-                </button>
-              </div>
-              {(connectionStatusLoading || refreshingConnectionStatus) ? (
-                <div className="flex items-center justify-center py-4">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                  <span className="ml-2 text-gray-600">Checking connection status...</span>
+              <div className=" p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-semibold text-gray-800">Connection Status</h3>
+                  <button
+                    onClick={() => onRefetchConnectionStatus()}
+                    disabled={connectionStatusLoading || refreshingConnectionStatus || (!tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0) || (!connectionStatusData?.getTabletConnectionStatus && connectionStatusError)}
+                    className="flex items-center gap-1 px-3 py-2 text-sm bg-[#3674B5] text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw size={14} /> Refresh
+                  </button>
                 </div>
-              ) : !tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0 ? (
-                <div className="text-center py-4">
-                  <div className="text-gray-400 mb-2">📱</div>
-                  <span className="text-gray-600">This slot is not yet connected to a tablet</span>
-                  <br />
-                  <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
-                </div>
-              ) : connectionStatusError ? (
-                <div className="text-center py-4">
-                  <div className="text-gray-400 mb-2">📱</div>
-                  <span className="text-gray-600">Please connect this slot to a tablet first</span>
-                  <br />
-                  <span className="text-sm text-gray-500 mb-2">Use the QR code below to Connect a Tablet to this Slot or Input the Connection Information above Manually </span>
-                </div>
-              ) : connectionStatusData?.getTabletConnectionStatus ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-700">Status:</span>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                      <span className={`font-semibold ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`}>
-                        {connectionStatusData.getTabletConnectionStatus.isConnected ? 'Connected' : 'Not Connected'}
-                      </span>
-                    </div>
+              
+                {(connectionStatusLoading || refreshingConnectionStatus) ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">Checking connection status...</span>
                   </div>
+                ) : !tabletData?.getTabletsByMaterial || tabletData.getTabletsByMaterial.length === 0 ? (
+                  <div className="text-center py-4">
+                    <div className="text-gray-400 mb-2">📱</div>
+                    <span className="text-gray-600">This slot is not yet connected to a tablet</span>
+                    <br />
+                    <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
+                  </div>
+                ) : connectionStatusError ? (
+                  <div className="text-center py-4">
+                    <div className="text-gray-400 mb-2">📱</div>
+                    <span className="text-gray-600">Please connect this slot to a tablet first</span>
+                    <br />
+                    <span className="text-sm text-gray-500 mb-2">Use the QR code below to Connect a Tablet to this Slot or Input the Connection Information above Manually </span>
+                  </div>
+                ) : connectionStatusData?.getTabletConnectionStatus ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Status:</span>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className={`font-semibold ${connectionStatusData.getTabletConnectionStatus.isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                          {connectionStatusData.getTabletConnectionStatus.isConnected ? 'Connected' : 'Not Connected'}
+                        </span>
+                      </div>
+                    </div>
                   
                   {connectionStatusData.getTabletConnectionStatus.isConnected && connectionStatusData.getTabletConnectionStatus.connectedDevice && (
                     <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
@@ -269,22 +244,49 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
                     </button>
                   )}
                 </div>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="text-gray-400 mb-2">📱</div>
-                  <span className="text-gray-600">This slot is not yet connected to a tablet</span>
-                  <br />
-                  <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
+                ) : (
+                  <div className="text-center py-4">
+                    <div className="text-gray-400 mb-2">📱</div>
+                    <span className="text-gray-600">This slot is not yet connected to a tablet</span>
+                    <br />
+                    <span className="text-sm text-gray-500 mb-2">Please connect to a tablet first using the QR code below</span>
+                  </div>
+                )}
+              </div>
+              {/* Connection Details */}
+              <div className="rounded-lg p-4">
+                <h3 className="font-semibold mb-3">Connection Information</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Material ID:</span>
+                    <span className="font-medium text-gray-700">{materialId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Slot Number:</span>
+                    <span className="font-medium text-gray-700">{slotNumber}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Car Group ID:</span>
+                    <span className="font-medium text-gray-700">{tabletData.getTabletsByMaterial[0].carGroupId}</span>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+              {/* Instructions */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
+                <div className="text-sm text-yellow-700 space-y-1">
+                  <p>1. Scan the QR code or copy the manual code</p>
+                  <p>2. Open the AndroidPlayer app on your tablet</p>
+                  <p>3. Enter the connection details</p>
+                  <p>4. The tablet will connect to the system</p>
+                </div>
+              </div>
             </div>
 
             {/* Right Column */}
             <div className="space-y-6">
               {/* QR Code */}
               <div className="flex flex-col items-center space-y-4">
-                <h3 className="font-semibold text-gray-800">QR Code</h3>
                 <div className="bg-white p-3 border border-gray-200 rounded-lg">
                   {(() => {
                     const qrData = {
@@ -309,42 +311,40 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
               </div>
 
               {/* Manual Code */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-gray-800">Manual Code</h3>
-                <div className="bg-gray-100 p-3 rounded-lg">
-                  <code className="text-sm text-gray-800 break-all">
-                    {JSON.stringify({
-                      materialId: materialId,
-                      slotNumber: slotNumber,
-                      carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                    }, null, 2)}
-                  </code>
+              <div className="space-y-3 pt-3">
+                <div className="flex justify-between">
+                  <h3 className="font-semibold text-gray-800">Manual Code</h3>
+                  <button
+                    onClick={() => {
+                      const connectionData = {
+                        materialId: materialId,
+                        slotNumber: slotNumber,
+                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                      };
+                      console.log('Copying connection data:', connectionData);
+                      onCopyToClipboard(JSON.stringify(connectionData, null, 2));
+                    }}
+                    className="group flex items-center text-gray-700 hover:text-gray-700 overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                  >
+                    <Copy className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                      Copy
+                    </span>
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    const connectionData = {
-                      materialId: materialId,
-                      slotNumber: slotNumber,
-                      carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
-                    };
-                    console.log('Copying connection data:', connectionData);
-                    onCopyToClipboard(JSON.stringify(connectionData, null, 2));
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Copy size={16} />
-                  Copy to Clipboard
-                </button>
-              </div>
-
-              {/* Instructions */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
-                <div className="text-sm text-yellow-700 space-y-1">
-                  <p>1. Scan the QR code or copy the manual code</p>
-                  <p>2. Open the AndroidPlayer app on your tablet</p>
-                  <p>3. Enter the connection details</p>
-                  <p>4. The tablet will connect to the system</p>
+                {/* Code block */}
+                <div className="p-3 border rounded-lg">
+                  <code className="text-sm text-gray-800 break-all">
+                    {JSON.stringify(
+                      {
+                        materialId: materialId,
+                        slotNumber: slotNumber,
+                        carGroupId: tabletData.getTabletsByMaterial[0].carGroupId
+                      },
+                      null,
+                      2
+                    )}
+                  </code>
                 </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff } from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff, ChevronRight, ChevronLeft} from 'lucide-react';
 
 interface Subscriber {
   _id: string;
@@ -31,6 +31,27 @@ const NewsletterManagement: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All Subscribers');
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const subscribersPerPage = 5; // adjust how many to show per page
+  const totalPages = Math.ceil(filteredSubscribers.length / subscribersPerPage);
+
+  // slice for current page
+  const indexOfLast = currentPage * subscribersPerPage;
+  const indexOfFirst = indexOfLast - subscribersPerPage;
+  const currentSubscribers = filteredSubscribers.slice(indexOfFirst, indexOfLast);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(prev => prev - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
+  };
 
   const filterOptions = [
     'All Subscribers',
@@ -297,7 +318,7 @@ const NewsletterManagement: React.FC = () => {
           <div className="flex justify-end space-x-4">
             <button
               onClick={fetchSubscribers}
-              className="flex items-center gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
+              className="flex items-center text-sm gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh List
@@ -312,7 +333,7 @@ const NewsletterManagement: React.FC = () => {
                       .join(",")
                 )
               }
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
+              className="bg-green-600 text-sm text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
               disabled={stats.active === 0}
             >
               Email All Active Subscribers
@@ -387,7 +408,7 @@ const NewsletterManagement: React.FC = () => {
             </div>
 
             {/* Rows */}
-            {filteredSubscribers.map((subscriber) => (
+            {currentSubscribers.map((subscriber) => (
               <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
                 <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
                   {/* Email */}
@@ -468,6 +489,72 @@ const NewsletterManagement: React.FC = () => {
           {filteredSubscribers.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No subscribers found
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="mt-auto flex justify-center py-4">
+              <div className="flex items-center space-x-2">
+                {/* Previous */}
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Previous
+                </button>
+
+                {/* Page numbers */}
+                <div className="flex space-x-1">
+                  {(() => {
+                    const pages = [];
+                    const maxVisiblePages = 3;
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          className={`px-3 py-1 text-sm rounded ${
+                            currentPage === i
+                              ? "border border-gray-300 text-black"
+                              : "text-gray-700 hover:border border-gray-300"
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    if (endPage < totalPages) {
+                      pages.push(
+                        <span key="ellipsis" className="px-2 text-gray-500">
+                          …
+                        </span>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                {/* Next */}
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
             </div>
           )}
         </div>

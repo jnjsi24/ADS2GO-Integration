@@ -4,17 +4,7 @@ import { GET_ALL_FAQS } from '../../graphql/faq/queries/GetAllFAQs';
 import { CREATE_FAQ, UPDATE_FAQ, DELETE_FAQ, REORDER_FAQS } from '../../graphql/faq/mutations/FAQMutations';
 import { UPDATE_CATEGORY_ORDER } from '../../graphql/admin/mutations/updateCategoryOrder';
 import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Eye, 
-  EyeOff, 
-  GripVertical, 
-  AlertCircle, 
-  CheckCircle,
-  HelpCircle,
-  ChevronDown,
-  ChevronUp
+  Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, AlertCircle, HelpCircle, ChevronDown, ChevronUp, CalendarPlus, CalendarArrowUp
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -56,6 +46,8 @@ const FAQManagement: React.FC = () => {
   const [draggedCategory, setDraggedCategory] = useState<FAQCategory | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showCreateCategoryDropdown, setShowCreateCategoryDropdown] = useState(false); // New state for Create modal
+  const [showEditCategoryDropdown, setShowEditCategoryDropdown] = useState(false); // New state for Edit modal
 
   const categoryFilterOptions = ['all', 'ADVERTISERS', 'DRIVERS', 'EVERYONE'];
   const statusFilterOptions = ['all', 'active', 'inactive'];
@@ -517,7 +509,7 @@ const FAQManagement: React.FC = () => {
         </div>
 
         {/* FAQs List */}
-        <div className=" bg-gray-100 rounded-lg shadow-sm">
+        <div className="bg-gray-100 rounded-lg shadow-sm">
           {filteredFAQs.length === 0 ? (
             <div className="text-center py-12">
               <HelpCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -543,7 +535,7 @@ const FAQManagement: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <GripVertical className="w-5 h-5 text-gray-400" />
-                        <span className={` py-1 text-lg font-semibold ${(group.category)}`}>
+                        <span className={`py-1 text-lg font-bold ${(group.category)}`}>
                           {getCategoryLabel(group.category)}
                         </span>
                         <span className="text-sm text-gray-500">
@@ -585,7 +577,7 @@ const FAQManagement: React.FC = () => {
                                 </span>
                               </div>
                             </div>
-                            <h3 className="text-md font-semibold text-gray-700 mb-2">{faq.question}</h3>
+                            <h3 className="text-lg font-semibold text-gray-700 mb-2">{faq.question}</h3>
                           </div>
                           <div className="flex items-center gap-2 ml-4">
                             <button
@@ -621,10 +613,10 @@ const FAQManagement: React.FC = () => {
                             {/* Edit Button */}
                             <button
                               onClick={() => handleEditClick(faq)}
-                              className="group flex items-center text-blue-700 rounded-md overflow-hidden h-6 w-7 hover:w-16 transition-[width] duration-300"
+                              className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-16 transition-[width] duration-300"
                               title="Edit FAQ"
                             >
-                              <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                              <Pencil className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                               <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-sm transition-all duration-300">
                                 Edit
                               </span>
@@ -633,7 +625,7 @@ const FAQManagement: React.FC = () => {
                             {/* Delete Button */}
                             <button
                               onClick={() => handleDeleteFAQ(faq.id)}
-                              className="group flex items-center text-red-700 rounded-md overflow-hidden d h-6 w-7 hover:w-20 transition-[width] duration-300"
+                              className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
                               title="Delete FAQ"
                             >
                               <Trash2 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
@@ -650,12 +642,24 @@ const FAQManagement: React.FC = () => {
                               <p className="text-gray-700 whitespace-pre-wrap">{faq.answer}</p>
                             </div>
                             <div className="mt-4 pt-4 border-t border-gray-200">
-                              <div className="flex items-center gap-4 text-sm text-gray-500">
-                                <span><strong>Created:</strong> {formatDate(faq.createdAt)}</span>
-                                {faq.createdAt !== faq.updatedAt && (
-                                  <span><strong>Updated:</strong> {formatDate(faq.updatedAt)}</span>
-                                )}
-                              </div>
+                            <div className="flex items-center justify-end gap-4 text-sm text-gray-500">
+                              {/* Created */}
+                              <span className="flex items-center gap-1">
+                                <CalendarPlus size={16} className="text-green-500" />
+                                <p className="text-green-500">Created:</p>
+                                <p className="font-semibold">{formatDate(faq.createdAt)}</p>
+                              </span>
+
+                              {/* Updated (only show if different) */}
+                              {faq.createdAt !== faq.updatedAt && (
+                                <span className="flex items-center gap-1">
+                                  <CalendarArrowUp size={16} className="text-yellow-500" />
+                                  <p className="text-yellow-600">Updated:</p>
+                                  <p className="font-semibold">{formatDate(faq.updatedAt)}</p>
+                                </span>
+                              )}
+                            </div>
+
                             </div>
                           </div>
                         )}
@@ -675,7 +679,7 @@ const FAQManagement: React.FC = () => {
               <h2 className="text-2xl font-bold mb-4">Create New FAQ</h2>
               <form onSubmit={handleCreateFAQ} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Question *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Question </label>
                   <input
                     type="text"
                     value={createFormData.question}
@@ -685,7 +689,7 @@ const FAQManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Answer *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Answer</label>
                   <textarea
                     value={createFormData.answer}
                     onChange={(e) => setCreateFormData({ ...createFormData, answer: e.target.value })}
@@ -694,18 +698,45 @@ const FAQManagement: React.FC = () => {
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                  <select
-                    value={createFormData.category}
-                    onChange={(e) => setCreateFormData({ ...createFormData, category: e.target.value as FAQCategory })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
-                    required
-                  >
-                    <option value="EVERYONE">Everyone</option>
-                    <option value="ADVERTISERS">Advertisers</option>
-                    <option value="DRIVERS">Drivers</option>
-                  </select>
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCategoryDropdown(!showCreateCategoryDropdown)}
+                    className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                    >
+                    {createFormData.category.charAt(0).toUpperCase() + createFormData.category.slice(1).toLowerCase()}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${showCreateCategoryDropdown ? "rotate-180" : "rotate-0"}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showCreateCategoryDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {["EVERYONE", "ADVERTISERS", "DRIVERS"].map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              setCreateFormData({ ...createFormData, category: cat as FAQCategory });
+                              setShowCreateCategoryDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -713,24 +744,24 @@ const FAQManagement: React.FC = () => {
                     id="isActive"
                     checked={createFormData.isActive}
                     onChange={(e) => setCreateFormData({ ...createFormData, isActive: e.target.checked })}
-                    className="w-4 h-4 text-[#3674B5] bg-gray-100 border-gray-300 rounded focus:ring-[#3674B5] focus:ring-2"
+                    className="w-4 h-4 text-[#3674B5] bg-gray-100 border-gray-300 rounded"
                   />
                   <label htmlFor="isActive" className="text-sm text-gray-700">
                     Active (FAQ will be visible to users)
                   </label>
                 </div>
-                <div className="flex justify-end gap-3 pt-4">
+                <div className="flex justify-between gap-3 pt-4">
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                  >
+                    className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                    >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA]"
-                  >
+                    className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                    >
                     Create FAQ
                   </button>
                 </div>
@@ -765,18 +796,45 @@ const FAQManagement: React.FC = () => {
                     required
                   />
                 </div>
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                  <select
-                    value={editFormData.category}
-                    onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value as FAQCategory })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
-                    required
+                  <button
+                    type="button"
+                    onClick={() => setShowEditCategoryDropdown(!showEditCategoryDropdown)}
+                    className="flex items-center justify-between w-full text-sm text-gray-800 rounded-lg px-4 py-2 border border-gray-300 shadow-sm focus:outline-none bg-white"
                   >
-                    <option value="EVERYONE">Everyone</option>
-                    <option value="ADVERTISERS">Advertisers</option>
-                    <option value="DRIVERS">Drivers</option>
-                  </select>
+                    {editFormData.category.charAt(0).toUpperCase() + editFormData.category.slice(1).toLowerCase()}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${showEditCategoryDropdown ? "rotate-180" : "rotate-0"}`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showEditCategoryDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      >
+                        {["EVERYONE", "ADVERTISERS", "DRIVERS"].map((cat) => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              setEditFormData({ ...editFormData, category: cat as FAQCategory });
+                              setShowEditCategoryDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <div className="flex items-center gap-2">
                   <input

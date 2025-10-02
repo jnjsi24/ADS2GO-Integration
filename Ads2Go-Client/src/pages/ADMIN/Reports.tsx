@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Mail, CalendarClock, CalendarCheck, ChevronDown, Edit, AlertCircle, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
+import { Mail, CalendarClock, CalendarCheck, ChevronDown, Pencil, AlertCircle, CheckCircle, Clock, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
 
@@ -46,6 +46,9 @@ const Reports: React.FC = () => {
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showModalStatusDropdown, setShowModalStatusDropdown] = useState(false);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(6);
+
   const { data, loading, error, refetch } = useQuery(GET_ALL_USER_REPORTS, {
     variables: { filters, limit: 50, offset: 0 },
   });
@@ -63,6 +66,23 @@ const Reports: React.FC = () => {
       : true;
     return matchSearch;
   });
+
+  const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedReports = filteredReports.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
 
   const handleRowClick = (id: string) => {
     setExpandedRow(expandedRow === id ? null : id);
@@ -389,10 +409,10 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Rows */}
-      {filteredReports.length === 0 ? (
+      {paginatedReports.length === 0 ? (
         <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
       ) : (
-        filteredReports.map((report) => (
+        paginatedReports.map((report) => (
           <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
             <div
               className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
@@ -430,7 +450,7 @@ const Reports: React.FC = () => {
                   className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
                   title="Update Report"
                 >
-                  <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                  <Pencil className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                   <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
                     Update
                   </span>
@@ -599,17 +619,70 @@ const Reports: React.FC = () => {
               </div>
             </div>
           )}
-
           </div>
         ))
       )}
 
-      {/* Footer */}
-      <div className="flex justify-between items-center mt-6">
-        <span className="text-sm text-gray-600">Found: {filteredReports.length} report(s)</span>
-        <div className="flex space-x-2">
-          <button className="px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 text-sm">
-            Export to Excel
+      <div className="mt-auto flex justify-center py-4">
+        <div className="flex items-center space-x-2">
+          {/* Previous */}
+          <button
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Previous
+          </button>
+
+          {/* Page numbers */}
+          <div className="flex space-x-1">
+            {(() => {
+              const pages = [];
+              const maxVisiblePages = 3;
+              let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+              if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+              }
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => handlePageChange(i)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      currentPage === i
+                        ? "border border-gray-300 text-black"
+                        : "text-gray-700 hover:border border-gray-300"
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              if (endPage < totalPages) {
+                pages.push(
+                  <span key="ellipsis" className="px-2 text-gray-500">
+                    …
+                  </span>
+                );
+              }
+
+              return pages;
+            })()}
+          </div>
+
+          {/* Next */}
+          <button
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+            <ChevronRight className="w-4 h-4 ml-1" />
           </button>
         </div>
       </div>
@@ -674,7 +747,6 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-
 
               {/* Admin Notes */}
               <div>

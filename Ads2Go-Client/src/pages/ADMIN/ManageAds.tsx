@@ -745,7 +745,9 @@ const ManageAds: React.FC = () => {
 
                       <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-200 text-blue-800">{selectedAd.adType}</span>
                     </div>
-                    <p className="text-sm text-gray-500">{selectedAd.id}</p>
+                    <p className="text-sm text-gray-500">
+                    <strong> ID: </strong>{selectedAd.id}
+                    </p>
                   </div>
                 </div>
               </div>

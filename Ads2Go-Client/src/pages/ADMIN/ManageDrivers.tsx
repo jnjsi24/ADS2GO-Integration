@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { X, Trash, Eye, ChevronDown, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle} from 'lucide-react';
+import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail,  CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight} from 'lucide-react';
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageDrivers';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -183,6 +183,10 @@ const ManageDrivers: React.FC = () => {
   const [modalImageSrc, setModalImageSrc] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState<string | null>(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6; // you can change this number
+
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{
@@ -456,6 +460,21 @@ const ManageDrivers: React.FC = () => {
     setSelectedDrivers(prev => prev.length === allIds.length ? [] : allIds);
   };
 
+  const totalPages = Math.ceil(filteredDrivers.length / itemsPerPage);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+
+
   const isAllSelected =
     selectedDrivers.length === filteredDrivers.length && filteredDrivers.length > 0;
 
@@ -479,7 +498,7 @@ const ManageDrivers: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
       {/* Toast Notifications */}
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
         <AnimatePresence>
@@ -670,7 +689,9 @@ const ManageDrivers: React.FC = () => {
             <div className="col-span-1 ml-24 text-center">Action</div>
           </div>
 
-          {filteredDrivers.map((r: Driver) => (
+          {filteredDrivers
+          .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+          .map((r: Driver) => (
             <div key={r.driverId} className="bg-white mb-3 rounded-lg shadow-md">
               <div
                 className="grid grid-cols-12 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
@@ -839,7 +860,7 @@ const ManageDrivers: React.FC = () => {
                         {selectedDriverDetails.accountStatus}
                       </span>
                     </div>
-                    <span className="text-sm font-light opacity-80">{selectedDriverDetails.driverId}</span>
+                    <span className="text-sm">{selectedDriverDetails.driverId}</span>
                   </div>
                 </div>
               </div>
@@ -847,74 +868,76 @@ const ManageDrivers: React.FC = () => {
 
             {/* Content Section (Scrollable) */}
             <div className="p-6 overflow-y-auto flex-1">
-              {/* Vehicle Information */}
+              {/* Vehicle & Material Information (2 Columns) */}
               <div className="mb-6">
-                <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Vehicle Information</h3>
-                <div className="overflow-x-auto rounded-lg">
-                  <table className="w-96 mx-auto divide-y divide-gray-200">
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Vehicle Type</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.vehicleType}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Vehicle Model</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.vehicleModel}</td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Plate Number</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">{selectedDriverDetails.vehiclePlateNumber}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+                  {/* Left Column - Vehicle Info (1/3 width) */}
+                  <div className="flex flex-col pb-16 items-center justify-center h-full md:col-span-2">
+                    <div className="">
+                      {selectedDriverDetails.vehicleType?.toLowerCase() === "car" ? (
+                        <Car className="w-20 h-20 text-gray-700" />
+                      ) : (
+                        <Bike className="w-12 h-12 text-gray-700" />
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-bold text-gray-600">
+                        {selectedDriverDetails.vehiclePlateNumber}
+                      </p>
+                      <p className="text-sm text-gray-900">
+                        {selectedDriverDetails.vehicleModel}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Material Info (2/3 width) */}
+                  <div className="flex flex-col justify-between p-6 h-full md:col-span-3">
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-500">Assigned Material</p>
+                      <p className="text-gray-900 font-bold">
+                        {selectedDriverDetails.material?.materialId ||
+                          selectedDriverDetails.material?.materialType ||
+                          selectedDriverDetails.material?.description ||
+                          selectedDriverDetails.installedMaterialType ||
+                          "N/A"}
+                      </p>
+                    </div>
+
+                    <div className="mb-4">
+                      <p className="text-sm text-gray-500">Assigned Date</p>
+                      <p className="text-gray-900 font-bold">
+                        {selectedDriverDetails.material?.assignedDate
+                          ? new Date(
+                              selectedDriverDetails.material.assignedDate
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })
+                          : selectedDriverDetails.material?.mountedAt
+                          ? new Date(
+                              selectedDriverDetails.material.mountedAt
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            })
+                          : "N/A"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-gray-500">Preferred Material</p>
+                      <p className="text-gray-900 font-bold">
+                        {selectedDriverDetails.material?.materialType ||
+                          selectedDriverDetails.installedMaterialType ||
+                          "N/A"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Material Information */}
-              <div className="mb-6">
-                <h3 className="text-xl text-center font-bold text-gray-800 mb-4">Material Information</h3>
-                <div className="overflow-x-auto rounded-lg">
-                  <table className="w-96 mx-auto divide-y divide-gray-200">
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Assigned Material</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">
-                          {selectedDriverDetails.material?.materialId || 
-                           selectedDriverDetails.material?.materialName || 
-                           selectedDriverDetails.material?.description || 
-                           selectedDriverDetails.installedMaterialType || 
-                           'N/A'}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Assigned Date</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">
-                          {selectedDriverDetails.material?.assignedDate ? 
-                            new Date(selectedDriverDetails.material.assignedDate).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            }) : 
-                            selectedDriverDetails.material?.mountedAt ?
-                            new Date(selectedDriverDetails.material.mountedAt).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            }) :
-                            'N/A'
-                          }
-                        </td>
-                      </tr>
-                      <tr>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-500">Preferred Material</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-bold">
-                          {selectedDriverDetails.material?.materialType || selectedDriverDetails.installedMaterialType || 'N/A'}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
 
               {/* Driver Details */}
               <div className="mb-6">
@@ -959,7 +982,7 @@ const ManageDrivers: React.FC = () => {
                     { src: selectedDriverDetails.licensePictureURL, title: 'Driver License' },
                     { src: selectedDriverDetails.orCrPictureURL, title: 'OR/CR Document' },
                     { src: selectedDriverDetails.vehiclePhotoURL, title: 'Vehicle Photo' },
-                  ].filter(doc => doc.src); // Filter out any documents with a null or undefined source
+                  ].filter(doc => doc.src);
 
                   if (documents.length === 0) {
                     return <p className="text-center text-gray-500">No documents or photos available.</p>;
@@ -1032,60 +1055,73 @@ const ManageDrivers: React.FC = () => {
           </div>
         </div>
       )}
-      
-      {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Reject Driver</h2>
-              <button
-                onClick={() => {
-                  setShowRejectModal(false);
-                  setRejectReason('');
-                  setDriverToReject(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for rejection <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                rows={4}
-                placeholder="Please provide a detailed reason for rejecting this driver..."
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">This reason will be visible to the driver.</p>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setShowRejectModal(false);
-                  setRejectReason('');
-                  setDriverToReject(null);
-                }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitReject}
-                disabled={!rejectReason.trim()}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-400"
-              >
-                Reject Driver
-              </button>
-            </div>
+
+      {/* Pagination */}
+      <div className="mt-auto flex justify-center">
+        <div className="flex items-center space-x-2">
+          {/* Previous button */}
+          <button
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Previous
+          </button>
+
+          {/* Page numbers */}
+          <div className="flex space-x-1">
+            {(() => {
+              const pages = [];
+              const maxVisiblePages = 3;
+              let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+              if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+              }
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => handlePageChange(i)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      currentPage === i
+                        ? "border border-gray-300 text-black"
+                        : "text-gray-700 hover:border border-gray-300"
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              if (endPage < totalPages) {
+                pages.push(
+                  <span key="ellipsis" className="px-2 text-gray-500">
+                    …
+                  </span>
+                );
+              }
+
+              return pages;
+            })()}
           </div>
+
+          {/* Next button */}
+          <button
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+            Next
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </button>
         </div>
-      )}
+      </div>
+
+
       
       {/* Image Pop-up Modal */}
       {showImageModal && (
@@ -1104,6 +1140,8 @@ const ManageDrivers: React.FC = () => {
           </div>
         </div>
       )}
+
+      
       
       {/* Confirmation Modal */}
       <ConfirmationModal
