@@ -128,8 +128,13 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
         </div>
       </div>
 
-      {/* Bottom colored line - 60% width */}
-      <div className={`absolute bottom-0 left-0 h-1 ${styles.bottomBorderColor} w-3/5 rounded-full`}></div>
+      {/* Enhanced Progress Bar Timer */}
+      <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-200 rounded-b-lg overflow-hidden">
+        <div 
+          className={`h-full ${styles.bottomBorderColor.replace('border-b-', 'bg-')} transition-all duration-75 ease-linear`}
+          style={{ width: `${progress}%` }}
+        ></div>
+      </div>
     </motion.div>
   );
 };
