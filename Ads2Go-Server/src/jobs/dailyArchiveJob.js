@@ -91,69 +91,148 @@ class DailyArchiveJob {
       // Calculate daily summary for the entire material
       const dailySummary = this.calculateDailySummaryForMaterial(device);
       
-      // Create archive record for the entire material
-      const archiveRecord = {
+      // Check if archive record already exists for this material and date
+      const existingRecord = await DeviceDataHistory.findOne({
         materialId: device.materialId,
-        carGroupId: device.carGroupId,
-        date: new Date(dateStr),
-        
-        // Device info (from first slot or combined)
-        deviceInfo: device.slots[0]?.deviceInfo || {},
-        
-        // Daily totals (from device level)
-        totalAdPlays: device.totalAdPlays,
-        totalQRScans: device.totalQRScans,
-        totalDistanceTraveled: device.totalDistanceTraveled,
-        totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
-        
-        // Enhanced hours tracking with timezone awareness
-        hoursTracking: hoursTracking,
-        
-        // Daily summary
-        dailySummary: dailySummary,
-        
-        // Hourly breakdown
-        hourlyStats: device.hourlyStats,
-        
-        // Location data (keep last 24 hours)
-        locationHistory: device.locationHistory.slice(-24),
-        
-        // Ad performance
-        adPerformance: device.adPerformance,
-        
-        // QR scan details
-        qrScans: device.qrScans,
-        qrScansByAd: device.qrScansByAd,
-        
-        // Ad playback details
-        adPlaybacks: device.adPlaybacks,
-        
-        // Network and connectivity
-        networkStatus: device.networkStatus,
-        
-        // Compliance data
-        complianceData: device.complianceData,
-        
-        // Slots information (all slots in one record)
-        slots: device.slots.map(slot => ({
-          deviceId: slot.deviceId,
-          slotNumber: slot.slotNumber,
-          isOnline: slot.isOnline,
-          lastSeen: slot.lastSeen,
-          deviceInfo: slot.deviceInfo,
-          totalAdPlays: slot.totalAdPlays || 0,
-          totalQRScans: slot.totalQRScans || 0
-        })),
-        
-        // Metadata
-        archivedAt: new Date(),
-        dataSource: 'deviceTracking',
-        version: '3.0' // Updated version for enhanced tracking
-      };
+        date: new Date(dateStr)
+      });
 
-      // Save to DeviceDataHistory
-      await DeviceDataHistory.create(archiveRecord);
-      console.log(`✅ Archived material data for ${device.materialId} with ${device.slots.length} slots (${deviceTimezone})`);
+      if (existingRecord) {
+        // Update existing record by merging new data
+        console.log(`🔄 Updating existing archive record for material ${device.materialId}`);
+        
+        // Merge arrays by combining and deduplicating
+        const mergedAdPlaybacks = this.mergeAdPlaybacks(existingRecord.adPlaybacks, device.adPlaybacks);
+        const mergedQrScans = this.mergeQrScans(existingRecord.qrScans, device.qrScans);
+        const mergedLocationHistory = this.mergeLocationHistory(existingRecord.locationHistory, device.locationHistory.slice(-960));
+        const mergedHourlyStats = this.mergeHourlyStats(existingRecord.hourlyStats, device.hourlyStats);
+        const mergedAdPerformance = this.mergeAdPerformance(existingRecord.adPerformance, device.adPerformance);
+        const mergedQrScansByAd = this.mergeQrScansByAd(existingRecord.qrScansByAd, device.qrScansByAd);
+
+        // Update the existing record
+        await DeviceDataHistory.findByIdAndUpdate(existingRecord._id, {
+          $set: {
+            // Update totals (these should be the latest values, not accumulated)
+            totalAdPlays: device.totalAdPlays,
+            totalQRScans: device.totalQRScans,
+            totalDistanceTraveled: device.totalDistanceTraveled,
+            totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+            
+            // Update calculated data
+            hoursTracking: hoursTracking,
+            dailySummary: dailySummary,
+            
+            // Update merged arrays
+            adPlaybacks: mergedAdPlaybacks,
+            qrScans: mergedQrScans,
+            locationHistory: mergedLocationHistory,
+            hourlyStats: mergedHourlyStats,
+            adPerformance: mergedAdPerformance,
+            qrScansByAd: mergedQrScansByAd,
+            
+            // Update current status
+            networkStatus: device.networkStatus,
+            complianceData: device.complianceData,
+            isDisplaying: device.isDisplaying || true,
+            maintenanceMode: device.maintenanceMode || false,
+            
+            // Update slots information
+            slots: device.slots.map(slot => ({
+              deviceId: slot.deviceId,
+              slotNumber: slot.slotNumber,
+              isOnline: slot.isOnline,
+              lastSeen: slot.lastSeen,
+              deviceInfo: slot.deviceInfo,
+              totalAdPlays: slot.totalAdPlays || 0,
+              totalQRScans: slot.totalQRScans || 0
+            })),
+            
+            // Update metadata
+            archivedAt: new Date(),
+            version: '3.0',
+            
+            // Enhanced tracking
+            lastDataUpdate: new Date(),
+            lastArchiveUpdate: new Date(),
+            lastUpdateSource: 'cron',
+            lastUpdateType: 'update'
+          },
+          $inc: { updateCount: 1 }
+        });
+        
+        console.log(`✅ Updated existing archive record for material ${device.materialId} with ${device.slots.length} slots (${deviceTimezone})`);
+      } else {
+        // Create new archive record for the entire material
+        const archiveRecord = {
+          materialId: device.materialId,
+          carGroupId: device.carGroupId,
+          date: new Date(dateStr),
+          
+          // Device info (from first slot or combined)
+          deviceInfo: device.slots[0]?.deviceInfo || {},
+          
+          // Daily totals (from device level)
+          totalAdPlays: device.totalAdPlays,
+          totalQRScans: device.totalQRScans,
+          totalDistanceTraveled: device.totalDistanceTraveled,
+          totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+          
+          // Enhanced hours tracking with timezone awareness
+          hoursTracking: hoursTracking,
+          
+          // Daily summary
+          dailySummary: dailySummary,
+          
+          // Hourly breakdown
+          hourlyStats: device.hourlyStats,
+          
+          // Location data (keep last 960 entries - 8 hours at 30s intervals)
+          locationHistory: device.locationHistory.slice(-960),
+          
+          // Ad performance
+          adPerformance: device.adPerformance,
+          
+          // QR scan details
+          qrScans: device.qrScans,
+          qrScansByAd: device.qrScansByAd,
+          
+          // Ad playback details
+          adPlaybacks: device.adPlaybacks,
+          
+          // Network and connectivity
+          networkStatus: device.networkStatus,
+          
+          // Compliance data
+          complianceData: device.complianceData,
+          
+          // Slots information (all slots in one record)
+          slots: device.slots.map(slot => ({
+            deviceId: slot.deviceId,
+            slotNumber: slot.slotNumber,
+            isOnline: slot.isOnline,
+            lastSeen: slot.lastSeen,
+            deviceInfo: slot.deviceInfo,
+            totalAdPlays: slot.totalAdPlays || 0,
+            totalQRScans: slot.totalQRScans || 0
+          })),
+          
+          // Metadata
+          archivedAt: new Date(),
+          dataSource: 'deviceTracking',
+          version: '3.0', // Updated version for enhanced tracking
+          
+          // Enhanced tracking
+          lastDataUpdate: new Date(),
+          lastArchiveUpdate: new Date(),
+          updateCount: 1,
+          lastUpdateSource: 'cron',
+          lastUpdateType: 'create'
+        };
+
+        // Save to DeviceDataHistory
+        await DeviceDataHistory.create(archiveRecord);
+        console.log(`✅ Created new archive record for material ${device.materialId} with ${device.slots.length} slots (${deviceTimezone})`);
+      }
     } catch (error) {
       console.error(`❌ Error archiving material data for ${device.materialId}:`, error);
     }
@@ -171,60 +250,115 @@ class DailyArchiveJob {
       // Calculate enhanced hours tracking data
       const hoursTracking = this.calculateHoursTrackingData(device, slot, deviceTimezone);
       
-      // Create archive record for this slot
-      const archiveRecord = {
+      // Check if archive record already exists for this device and date
+      const existingRecord = await DeviceDataHistory.findOne({
         deviceId: slot.deviceId,
         deviceSlot: slot.slotNumber,
-        materialId: device.materialId,
-        carGroupId: device.carGroupId,
-        date: new Date(dateStr),
-        
-        // Device info
-        deviceInfo: slot.deviceInfo || {},
-        
-        // Daily totals (from device level) - use enhanced calculation
-        totalAdPlays: device.totalAdPlays,
-        totalQRScans: device.totalQRScans,
-        totalDistanceTraveled: device.totalDistanceTraveled,
-        totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
-        
-        // Enhanced hours tracking with timezone awareness
-        hoursTracking: hoursTracking,
-        
-        // Daily summary
-        dailySummary: dailySummary,
-        
-        // Hourly breakdown
-        hourlyStats: device.hourlyStats,
-        
-        // Location data (keep last 24 hours)
-        locationHistory: device.locationHistory.slice(-24),
-        
-        // Ad performance
-        adPerformance: device.adPerformance,
-        
-        // QR scan details
-        qrScans: device.qrScans,
-        qrScansByAd: device.qrScansByAd,
-        
-        // Ad playback details
-        adPlaybacks: device.adPlaybacks,
-        
-        // Network and connectivity
-        networkStatus: device.networkStatus,
-        
-        // Compliance data
-        complianceData: device.complianceData,
-        
-        // Metadata
-        archivedAt: new Date(),
-        dataSource: 'deviceTracking',
-        version: '3.0' // Updated version for enhanced tracking
-      };
+        date: new Date(dateStr)
+      });
 
-      // Save to DeviceDataHistory
-      await DeviceDataHistory.create(archiveRecord);
-      console.log(`✅ Archived enhanced data for device ${slot.deviceId} in material ${device.materialId} (${hoursTracking.deviceTimezone})`);
+      if (existingRecord) {
+        // Update existing record by merging new data
+        console.log(`🔄 Updating existing archive record for device ${slot.deviceId} slot ${slot.slotNumber}`);
+        
+        // Merge arrays by combining and deduplicating
+        const mergedAdPlaybacks = this.mergeAdPlaybacks(existingRecord.adPlaybacks, device.adPlaybacks);
+        const mergedQrScans = this.mergeQrScans(existingRecord.qrScans, device.qrScans);
+        const mergedLocationHistory = this.mergeLocationHistory(existingRecord.locationHistory, device.locationHistory.slice(-960));
+        const mergedHourlyStats = this.mergeHourlyStats(existingRecord.hourlyStats, device.hourlyStats);
+        const mergedAdPerformance = this.mergeAdPerformance(existingRecord.adPerformance, device.adPerformance);
+        const mergedQrScansByAd = this.mergeQrScansByAd(existingRecord.qrScansByAd, device.qrScansByAd);
+
+        // Update the existing record
+        await DeviceDataHistory.findByIdAndUpdate(existingRecord._id, {
+          $set: {
+            // Update totals (these should be the latest values, not accumulated)
+            totalAdPlays: device.totalAdPlays,
+            totalQRScans: device.totalQRScans,
+            totalDistanceTraveled: device.totalDistanceTraveled,
+            totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+            
+            // Update calculated data
+            hoursTracking: hoursTracking,
+            dailySummary: dailySummary,
+            
+            // Update merged arrays
+            adPlaybacks: mergedAdPlaybacks,
+            qrScans: mergedQrScans,
+            locationHistory: mergedLocationHistory,
+            hourlyStats: mergedHourlyStats,
+            adPerformance: mergedAdPerformance,
+            qrScansByAd: mergedQrScansByAd,
+            
+            // Update current status
+            networkStatus: device.networkStatus,
+            complianceData: device.complianceData,
+            isDisplaying: device.isDisplaying || true,
+            maintenanceMode: device.maintenanceMode || false,
+            
+            // Update metadata
+            archivedAt: new Date(),
+            version: '3.0'
+          }
+        });
+        
+        console.log(`✅ Updated existing archive record for device ${slot.deviceId} slot ${slot.slotNumber} (${deviceTimezone})`);
+      } else {
+        // Create new archive record for this slot
+        const archiveRecord = {
+          deviceId: slot.deviceId,
+          deviceSlot: slot.slotNumber,
+          materialId: device.materialId,
+          carGroupId: device.carGroupId,
+          date: new Date(dateStr),
+          
+          // Device info
+          deviceInfo: slot.deviceInfo || {},
+          
+          // Daily totals (from device level) - use enhanced calculation
+          totalAdPlays: device.totalAdPlays,
+          totalQRScans: device.totalQRScans,
+          totalDistanceTraveled: device.totalDistanceTraveled,
+          totalHoursOnline: this.getFinalHoursOnline(device, deviceTimezone),
+          
+          // Enhanced hours tracking with timezone awareness
+          hoursTracking: hoursTracking,
+          
+          // Daily summary
+          dailySummary: dailySummary,
+          
+          // Hourly breakdown
+          hourlyStats: device.hourlyStats,
+          
+          // Location data (keep last 960 entries - 8 hours at 30s intervals)
+          locationHistory: device.locationHistory.slice(-960),
+          
+          // Ad performance
+          adPerformance: device.adPerformance,
+          
+          // QR scan details
+          qrScans: device.qrScans,
+          qrScansByAd: device.qrScansByAd,
+          
+          // Ad playback details
+          adPlaybacks: device.adPlaybacks,
+          
+          // Network and connectivity
+          networkStatus: device.networkStatus,
+          
+          // Compliance data
+          complianceData: device.complianceData,
+          
+          // Metadata
+          archivedAt: new Date(),
+          dataSource: 'deviceTracking',
+          version: '3.0' // Updated version for enhanced tracking
+        };
+
+        // Save to DeviceDataHistory
+        await DeviceDataHistory.create(archiveRecord);
+        console.log(`✅ Created new archive record for device ${slot.deviceId} slot ${slot.slotNumber} (${deviceTimezone})`);
+      }
     } catch (error) {
       console.error(`❌ Error archiving slot data for device ${slot.deviceId}:`, error);
     }
@@ -620,6 +754,107 @@ class DailyArchiveJob {
     await Promise.all(archivePromises);
 
     console.log(`✅ Manual archive completed for ${dailyData.length} devices`);
+  }
+
+  // Merge ad playbacks arrays, keeping unique entries based on adId + startTime
+  mergeAdPlaybacks(existing, newData) {
+    const merged = [...existing];
+    const existingKeys = new Set(existing.map(item => `${item.adId}-${item.startTime?.getTime()}`));
+    
+    newData.forEach(newItem => {
+      const key = `${newItem.adId}-${newItem.startTime?.getTime()}`;
+      if (!existingKeys.has(key)) {
+        merged.push(newItem);
+      }
+    });
+    
+    // Keep only the last 800 entries to prevent unlimited growth (8 hours × 160 plays × 5 ads)
+    return merged.slice(-800);
+  }
+
+  // Merge QR scans arrays, keeping unique entries based on adId + scanTimestamp
+  mergeQrScans(existing, newData) {
+    const merged = [...existing];
+    const existingKeys = new Set(existing.map(item => `${item.adId}-${item.scanTimestamp?.getTime()}`));
+    
+    newData.forEach(newItem => {
+      const key = `${newItem.adId}-${newItem.scanTimestamp?.getTime()}`;
+      if (!existingKeys.has(key)) {
+        merged.push(newItem);
+      }
+    });
+    
+    return merged;
+  }
+
+  // Merge location history arrays, keeping unique entries based on timestamp
+  mergeLocationHistory(existing, newData) {
+    const merged = [...existing];
+    const existingKeys = new Set(existing.map(item => item.timestamp?.getTime()));
+    
+    newData.forEach(newItem => {
+      const key = newItem.timestamp?.getTime();
+      if (key && !existingKeys.has(key)) {
+        merged.push(newItem);
+      }
+    });
+    
+    // Keep only the last 240 entries (increased from 50) - 4x more for detailed tracking
+    return merged.slice(-240);
+  }
+
+  // Merge hourly stats arrays, combining data for the same hour
+  mergeHourlyStats(existing, newData) {
+    const merged = [...existing];
+    
+    newData.forEach(newStat => {
+      const existingIndex = merged.findIndex(stat => stat.hour === newStat.hour);
+      if (existingIndex >= 0) {
+        // Update existing hour with latest data
+        merged[existingIndex] = newStat;
+      } else {
+        // Add new hour
+        merged.push(newStat);
+      }
+    });
+    
+    return merged.sort((a, b) => a.hour - b.hour);
+  }
+
+  // Merge ad performance arrays, combining data for the same ad
+  mergeAdPerformance(existing, newData) {
+    const merged = [...existing];
+    
+    newData.forEach(newPerf => {
+      const existingIndex = merged.findIndex(perf => perf.adId === newPerf.adId);
+      if (existingIndex >= 0) {
+        // Update existing ad performance with latest data
+        merged[existingIndex] = newPerf;
+      } else {
+        // Add new ad performance
+        merged.push(newPerf);
+      }
+    });
+    
+    return merged;
+  }
+
+  // Merge QR scans by ad arrays, combining data for the same ad
+  mergeQrScansByAd(existing, newData) {
+    const merged = [...existing];
+    
+    newData.forEach(newQrScan => {
+      const existingIndex = merged.findIndex(qrScan => qrScan.adId === newQrScan.adId);
+      if (existingIndex >= 0) {
+        // Update existing QR scan data with latest data
+        merged[existingIndex] = newQrScan;
+      } else {
+        // Add new QR scan data
+        merged.push(newQrScan);
+      }
+    });
+    
+    return merged;
   }
 
   // Get archive status

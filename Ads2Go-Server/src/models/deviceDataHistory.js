@@ -210,7 +210,14 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   // Metadata
   archivedAt: { type: Date, default: Date.now },
   dataSource: { type: String, default: 'deviceTracking' },
-  version: { type: String, default: '1.0' }
+  version: { type: String, default: '1.0' },
+  
+  // Enhanced tracking timestamps
+  lastDataUpdate: { type: Date, default: Date.now }, // When data was last updated from device
+  lastArchiveUpdate: { type: Date, default: Date.now }, // When archive was last updated
+  updateCount: { type: Number, default: 1 }, // How many times this record has been updated
+  lastUpdateSource: { type: String, default: 'initial' }, // Source of last update: 'initial', 'cron', 'manual'
+  lastUpdateType: { type: String, default: 'create' } // Type of last update: 'create', 'merge', 'update'
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

@@ -693,7 +693,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       $push: {
         locationHistory: {
           $each: [newLocation],
-          $slice: -100 // Keep only last 100 entries
+          $slice: -960 // Keep only last 960 entries (increased from 200)
         }
       }
     },
@@ -1029,8 +1029,8 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
 
 // Method to clean up old ad playbacks
 DeviceTrackingSchema.methods.cleanupAdPlaybacks = function() {
-  if (this.adPlaybacks.length > 20) {
-    this.adPlaybacks = this.adPlaybacks.slice(-20); // Keep only last 20
+  if (this.adPlaybacks.length > 800) {
+    this.adPlaybacks = this.adPlaybacks.slice(-800); // Keep only last 800 (8 hours × 160 plays × 5 ads)
   }
   return this;
 };
