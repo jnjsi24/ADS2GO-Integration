@@ -748,7 +748,7 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
   this.totalAdImpressions += 1;
   this.totalAdPlayTime += viewTime;
   
-  // Clean up old ad playbacks (keep only last 20)
+  // Clean up old ad playbacks (keep only last 800)
   this.cleanupAdPlaybacks();
   
   // Update ad performance

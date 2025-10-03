@@ -799,8 +799,8 @@ class DailyArchiveJob {
       }
     });
     
-    // Keep only the last 240 entries (increased from 50) - 4x more for detailed tracking
-    return merged.slice(-240);
+    // Keep only the last 960 entries (8 hours at 30s intervals)
+    return merged.slice(-960);
   }
 
   // Merge hourly stats arrays, combining data for the same hour

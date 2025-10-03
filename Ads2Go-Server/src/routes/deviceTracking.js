@@ -345,7 +345,7 @@ router.post('/ad-playback', async (req, res) => {
       deviceTracking.totalAdPlayTime += parseInt(viewTime);
       deviceTracking.totalAdImpressions += 1;
       
-      // Clean up old ad playbacks (keep only last 20)
+      // Clean up old ad playbacks (keep only last 800)
       deviceTracking.cleanupAdPlaybacks();
       
       await deviceTracking.save();
