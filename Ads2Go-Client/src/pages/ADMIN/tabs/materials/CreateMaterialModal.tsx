@@ -283,19 +283,19 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
             />
           </div>
           <div className="flex justify-between gap-3 pt-5">
-              <button
-                onClick={handleClose}
-                className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={creating}
-                className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
-              >
-                {creating ? 'Creating...' : 'Create Material'}
-              </button>
-            </div>
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={creating}
+              className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+            >
+              {creating ? 'Creating...' : 'Create Material'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

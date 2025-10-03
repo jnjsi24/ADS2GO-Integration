@@ -18,7 +18,7 @@ import {
   Tag,
   FileVideo,
   Image as ImageIcon,
-  X
+  X, ChevronDown
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { 
@@ -29,6 +29,7 @@ import {
   TOGGLE_COMPANY_AD_STATUS 
 } from '../../../../graphql/admin';
 import { uploadFileToFirebase } from '../../../../utils/fileUpload';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CompanyAd {
   id: string;
@@ -79,6 +80,13 @@ const CompanyAdsManagement: React.FC = () => {
   const [selectedAd, setSelectedAd] = useState<CompanyAd | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  
+  const [validationErrors, setValidationErrors] = useState<{
+    title?: string;
+    duration?: string;
+    mediaFile?: string;
+  }>({});
 
   // Form state for create/edit
   const [formData, setFormData] = useState<CreateCompanyAdInput>({
@@ -102,6 +110,13 @@ const CompanyAdsManagement: React.FC = () => {
 
   const companyAds: CompanyAd[] = data?.getAllCompanyAds || [];
 
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status.toLowerCase() as 'all' | 'active' | 'inactive');
+    setShowStatusDropdown(false);
+  };
+
   // Filter ads based on search and status
   const filteredAds = companyAds.filter(ad => {
     const matchesSearch = ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -112,6 +127,7 @@ const CompanyAdsManagement: React.FC = () => {
                          (statusFilter === 'active' && ad.isActive) ||
                          (statusFilter === 'inactive' && !ad.isActive);
     
+    console.log(`Filtering ads: statusFilter=${statusFilter}, ad.isActive=${ad.isActive}, matchesStatus=${matchesStatus}, matchesSearch=${matchesSearch}`);
     return matchesSearch && matchesStatus;
   });
 
@@ -163,6 +179,25 @@ const CompanyAdsManagement: React.FC = () => {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const errors: { title?: string; duration?: string; mediaFile?: string } = {};
+    if (!formData.title.trim()) {
+      errors.title = 'Title is required';
+    }
+    if (!formData.mediaFile) {
+      errors.mediaFile = 'Media file is required';
+    }
+    if (!formData.duration || formData.duration < 1 || formData.duration > 300) {
+      errors.duration = 'Duration must be between 1 and 300 seconds';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    // Clear errors if validation passes
+    setValidationErrors({});
     
     try {
       if (selectedAd) {
@@ -280,19 +315,76 @@ const CompanyAdsManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Company Ads Management</h3>
-          <p className="text-sm text-gray-600">Manage company advertisements and fallback content</p>
+      <div className="flex flex-col gap-3">
+        {/* Row 1 */}
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900">
+            Company Ads Management
+          </h3>
+
+          <div className="flex gap-2">
+            {/* Search */}
+            <input
+              type="text"
+              placeholder="Search company ads..."
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+
+            {/* Filter Dropdown */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                {statusFilter === "all"
+                  ? "All Status"
+                  : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showStatusDropdown ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Company Ad
-        </button>
+
+        {/* Row 2 - Button aligned under search/filter */}
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Company Ad
+          </button>
+        </div>
       </div>
+
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -345,30 +437,9 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search company ads..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-        </div>
+        
       </div>
+
 
       {/* Company Ads Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -521,227 +592,271 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {selectedAd ? 'Edit Company Ad' : 'Create Company Ad'}
-                </h3>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 top-0 flex items-center justify-center z-50">    
+        <motion.div
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -50 }}
+          transition={{ duration: 0.3 }}
+          className="w-full max-w-xl bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <div className="p-6 sm:p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-900">
+                {selectedAd ? 'Edit Company Ad' : 'Create Company Ad'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setShowEditModal(false);
+                  setSelectedAd(null);
+                  setFormData({
+                    title: '',
+                    description: '',
+                    mediaFile: '',
+                    adFormat: 'VIDEO',
+                    duration: 15,
+                    isActive: true,
+                    priority: 0,
+                    tags: [],
+                    notes: ''
+                  });
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Title */}
+              <div className="relative">
+                <input
+                  type="text"
+                  id="title"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.title ? 'border-red-400' : 'border-gray-300'}`}
+                  placeholder=""
+                />
+                <label
+                  htmlFor="title"
+                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.title ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                >
+                  Enter Ad title
+                </label>
+                {validationErrors.title && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.title}</p>
+                )}
+              </div>
+
+              {/* Description */}
+              <div className="relative">
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
+                  placeholder=""
+                />
+                <label
+                  htmlFor="description"
+                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.description ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                >
+                  Enter Ad description
+                </label>
+              </div>
+
+              {/* Media Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Media File *
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                  <div className="space-y-2 text-center">
+                    {isUploading ? (
+                      <div className="space-y-2">
+                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                        <div className="text-sm text-gray-600">
+                          <p>Uploading... {uploadProgress}%</p>
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div 
+                              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : formData.mediaFile ? (
+                      <div className="space-y-2">
+                        {formData.adFormat === 'VIDEO' ? (
+                          <FileVideo className="mx-auto h-12 w-12 text-blue-600" />
+                        ) : (
+                          <ImageIcon className="mx-auto h-12 w-12 text-blue-600" />
+                        )}
+                        <p className="text-sm text-gray-600">File uploaded successfully</p>
+                        <p className="text-xs text-gray-500 truncate max-w-xs">{formData.mediaFile}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                        <div className="flex text-sm text-gray-600">
+                          <label
+                            htmlFor="file-upload"
+                            className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                          >
+                            <span>Upload a file</span>
+                            <input
+                              id="file-upload"
+                              name="file-upload"
+                              type="file"
+                              className="sr-only"
+                              accept="video/*,image/*"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleFileUpload(file);
+                              }}
+                            />
+                          </label>
+                          <p className="pl-1">or drag and drop</p>
+                        </div>
+                        <p className="text-xs text-gray-500">PNG, JPG, MP4, MOV up to 100MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Duration and Priority */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="duration"
+                    required
+                    min="1"
+                    max="300"
+                    value={formData.duration}
+                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
+                    className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.duration ? 'border-red-400' : 'border-gray-300'}`}
+                    placeholder=""
+                  />
+                  <label
+                    htmlFor="duration"
+                    className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.duration ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                  >
+                    Duration (seconds)
+                  </label>
+                  {validationErrors.duration && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.duration}</p>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="priority"
+                    min="0"
+                    max="10"
+                    value={formData.priority}
+                    onChange={(e) => setFormData(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
+                    className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
+                    placeholder=""
+                  />
+                  <label
+                    htmlFor="priority"
+                    className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.priority ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                  >
+                    Priority
+                  </label>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="relative">
+                <input
+                  type="text"
+                  id="tags"
+                  value={formData.tags?.join(', ') || ''}
+                  onChange={(e) => setFormData(prev => ({ 
+                    ...prev, 
+                    tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag)
+                  }))}
+                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
+                  placeholder=""
+                />
+                <label
+                  htmlFor="tags"
+                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.tags?.length ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                >
+                  Enter tags separated by commas
+                </label>
+              </div>
+
+              {/* Notes */}
+              <div className="relative">
+                <textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  rows={3}
+                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
+                  placeholder=""
+                />
+                <label
+                  htmlFor="notes"
+                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.notes ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                >
+                  Enter any additional notes
+                </label>
+              </div>
+
+              {/* Active Status */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={formData.isActive}
+                  onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+                  Active (will be shown in rotation)
+                </label>
+              </div>
+
+              {/* Submit Buttons */}
+              <div className="flex justify-between gap-3 pt-5">
                 <button
+                  type="button"
                   onClick={() => {
                     setShowCreateModal(false);
                     setShowEditModal(false);
                     setSelectedAd(null);
-                    setFormData({
-                      title: '',
-                      description: '',
-                      mediaFile: '',
-                      adFormat: 'VIDEO',
-                      duration: 15,
-                      isActive: true,
-                      priority: 0,
-                      tags: [],
-                      notes: ''
-                    });
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
                 >
-                  <X className="h-6 w-6" />
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                >
+                  {selectedAd ? 'Update Ad' : 'Create Ad'}
                 </button>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter ad title"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter ad description"
-                  />
-                </div>
-
-                {/* Media Upload */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Media File *
-                  </label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-                    <div className="space-y-1 text-center">
-                      {isUploading ? (
-                        <div className="space-y-2">
-                          <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                          <div className="text-sm text-gray-600">
-                            <p>Uploading... {uploadProgress}%</p>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${uploadProgress}%` }}
-                              ></div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : formData.mediaFile ? (
-                        <div className="space-y-2">
-                          {formData.adFormat === 'VIDEO' ? (
-                            <FileVideo className="mx-auto h-12 w-12 text-blue-600" />
-                          ) : (
-                            <ImageIcon className="mx-auto h-12 w-12 text-blue-600" />
-                          )}
-                          <p className="text-sm text-gray-600">File uploaded successfully</p>
-                          <p className="text-xs text-gray-500 truncate">{formData.mediaFile}</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                          <div className="flex text-sm text-gray-600">
-                            <label
-                              htmlFor="file-upload"
-                              className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                            >
-                              <span>Upload a file</span>
-                              <input
-                                id="file-upload"
-                                name="file-upload"
-                                type="file"
-                                className="sr-only"
-                                accept="video/*,image/*"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) handleFileUpload(file);
-                                }}
-                              />
-                            </label>
-                            <p className="pl-1">or drag and drop</p>
-                          </div>
-                          <p className="text-xs text-gray-500">PNG, JPG, MP4, MOV up to 100MB</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Duration and Priority */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Duration (seconds) *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
-                      max="300"
-                      value={formData.duration}
-                      onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Priority
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={formData.priority}
-                      onChange={(e) => setFormData(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tags
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.tags?.join(', ') || ''}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag)
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter tags separated by commas"
-                  />
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter any additional notes"
-                  />
-                </div>
-
-                {/* Active Status */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                    Active (will be shown in rotation)
-                  </label>
-                </div>
-
-                {/* Submit Buttons */}
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setShowEditModal(false);
-                      setSelectedAd(null);
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    {selectedAd ? 'Update Ad' : 'Create Ad'}
-                  </button>
-                </div>
-              </form>
-            </div>
+            </form>
           </div>
-        </div>
-      )}
+        </motion.div>
+      </div>
+    )}
     </div>
   );
 };

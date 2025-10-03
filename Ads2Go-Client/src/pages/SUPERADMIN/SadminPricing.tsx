@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, DollarSign, Settings } from 'lucide-react';
+import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Settings } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
   PricingConfig, 
@@ -14,12 +14,18 @@ import {
   PricingConfigInput,
   PricingConfigUpdateInput
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
+import { motion, AnimatePresence } from "framer-motion";
+
 
 const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<PricingConfig | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
+  const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
+  const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [showDurationDropdowns, setShowDurationDropdowns] = useState<boolean[]>([]); // One for each tier
 
   // Form states
   const [formData, setFormData] = useState<PricingConfigInput>({
@@ -96,10 +102,14 @@ const SadminPricing: React.FC = () => {
       category: '',
       pricingTiers: [{ durationDays: 30, pricePerPlay: 1.0 }],
       maxDevices: 1,
-        minAdLengthSeconds: 20,
-        maxAdLengthSeconds: 60,
+      minAdLengthSeconds: 20,
+      maxAdLengthSeconds: 60,
       isActive: true
     });
+    setShowVehicleDropdown(false);
+    setShowMaterialDropdown(false);
+    setShowDurationDropdowns([false]);
+    setValidationErrors({});
     setEditingConfig(null);
   };
 
@@ -116,6 +126,7 @@ const SadminPricing: React.FC = () => {
         maxAdLengthSeconds: editingConfig.maxAdLengthSeconds,
         isActive: editingConfig.isActive
       });
+      setShowDurationDropdowns(editingConfig.pricingTiers.map(() => false));
     }
   }, [editingConfig]);
 
@@ -158,6 +169,24 @@ const SadminPricing: React.FC = () => {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    const errors: { [key: string]: string } = {};
+    if (!formData.vehicleType) errors.vehicleType = 'Vehicle Type is required';
+    if (!formData.materialType) errors.materialType = 'Material Type is required';
+    if (!formData.category) errors.category = 'Category is required';
+    if (formData.maxDevices < 1) errors.maxDevices = 'Max Devices must be at least 1';
+    formData.pricingTiers.forEach((tier, index) => {
+      if (tier.durationDays < 30) errors[`durationDays_${index}`] = 'Duration must be at least 30 days';
+      if (tier.pricePerPlay <= 0) errors[`pricePerPlay_${index}`] = 'Price per Play must be positive';
+      if (tier.adLengthMultiplier && (tier.adLengthMultiplier < 0.1 || tier.adLengthMultiplier > 2.0)) errors[`adLengthMultiplier_${index}`] = 'Multiplier must be between 0.1 and 2.0';
+    });
+  
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+  
+    setValidationErrors({});
+  
     if (editingConfig) {
       const updateInput: PricingConfigUpdateInput = {
         pricingTiers: formData.pricingTiers,
@@ -177,6 +206,7 @@ const SadminPricing: React.FC = () => {
       ...prev,
       pricingTiers: [...prev.pricingTiers, { durationDays: 30, pricePerPlay: 1.0 }]
     }));
+    setShowDurationDropdowns(prev => [...prev, false]);
   };
 
   const removePricingTier = (index: number) => {
@@ -185,6 +215,7 @@ const SadminPricing: React.FC = () => {
         ...prev,
         pricingTiers: prev.pricingTiers.filter((_, i) => i !== index)
       }));
+      setShowDurationDropdowns(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -229,20 +260,12 @@ const SadminPricing: React.FC = () => {
   return (
     <div className="min-h-screen ml-64 bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <div>
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Pricing Management</h1>
-              <p className="text-gray-600 mt-1">Configure pricing for different field combinations</p>
             </div>
-            <button
-              onClick={handleCreateConfig}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all duration-200 flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Create Pricing Config
-            </button>
           </div>
         </div>
       </div>
@@ -286,28 +309,41 @@ const SadminPricing: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit mb-6">
+        <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
+          {/* Tabs on the left */}
+          <div className="flex space-x-1 bg-gray-100 rounded-lg">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'active'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Active ({configs.filter(c => c.isActive).length})
+            </button>
+            <button
+              onClick={() => setActiveTab('inactive')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'inactive'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Inactive ({configs.filter(c => !c.isActive).length})
+            </button>
+          </div>
+
+          {/* Create button on the right */}
           <button
-            onClick={() => setActiveTab('active')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'active'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            onClick={handleCreateConfig}
+            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center gap-2"
           >
-            Active ({configs.filter(c => c.isActive).length})
-          </button>
-          <button
-            onClick={() => setActiveTab('inactive')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'inactive'
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Inactive ({configs.filter(c => !c.isActive).length})
+            <Plus className="w-5 h-5" />
+            Create Pricing Config
           </button>
         </div>
+
 
         {/* Error Message */}
         {errorMsg && (
@@ -434,222 +470,339 @@ const SadminPricing: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingConfig ? 'Edit Pricing Configuration' : 'Create Pricing Configuration'}
-                </h2>
-                <button
-                  onClick={handleModalClose}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">
+              {editingConfig ? 'Edit Pricing Configuration' : 'Create Pricing Configuration'}
+            </h2>
+            <button onClick={handleModalClose} className="text-gray-400 hover:text-gray-600">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <p className="text-red-800 text-sm">{errorMsg}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleFormSubmit}>
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Vehicle Type Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle Type
+                </label>
+                <div className="relative w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowVehicleDropdown(!showVehicleDropdown)}
+                    disabled={!!editingConfig}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                    {formData.vehicleType || 'Select vehicle type'}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${showVehicleDropdown ? "rotate-180" : "rotate-0"}`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showVehicleDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
+                      >
+                        {['CAR', 'MOTORCYCLE'].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, vehicleType: option }));
+                              setShowVehicleDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                {validationErrors.vehicleType && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.vehicleType}</p>
+                )}
+              </div>
+
+              {/* Material Type Dropdown */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Material Type
+                </label>
+                <div className="relative w-full">
+                  <button
+                    type="button"
+                    onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
+                    disabled={!!editingConfig || !formData.vehicleType}
+                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    {formData.materialType || 'Select material type'}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${showMaterialDropdown ? "rotate-180" : "rotate-0"}`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {showMaterialDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
+                      >
+                        {(formData.vehicleType === 'CAR' ? ['LCD', 'HEADDRESS'] : formData.vehicleType === 'MOTORCYCLE' ? ['LCD'] : []).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, materialType: option }));
+                              setShowMaterialDropdown(false);
+                            }}
+                            className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                {validationErrors.materialType && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.materialType}</p>
+                )}
+              </div>
+
+              {/* Category (Auto-determined) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <div className="w-full px-4 py-3 text-sm border-b text-gray-600">
+                  {formData.category || 'Will be determined automatically'}
+                </div>
+                {validationErrors.category && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
+                )}
+              </div>
+
+              {/* Max Devices Floating Input */}
+              <div className="relative">
+                <input
+                  type="number"
+                  id="maxDevices"
+                  placeholder=" "
+                  min="1"
+                  max={formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10}
+                  value={formData.maxDevices}
+                  onChange={(e) => setFormData(prev => ({ ...prev, maxDevices: parseInt(e.target.value) }))}
+                  className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.maxDevices ? 'border-red-400' : 'border-gray-300'}`}
+                  required
+                />
+                <label
+                  htmlFor="maxDevices"
+                  className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
                 >
-                  ×
-                </button>
+                  Max Devices
+                </label>
+                {validationErrors.maxDevices && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.maxDevices}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Maximum: {formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10} devices
+                </p>
               </div>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="p-6">
-              {/* Error Message */}
-              {errorMsg && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  {errorMsg}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Material Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Material Type *
-                  </label>
-                  <select
-                    value={formData.materialType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, materialType: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                    disabled={!!editingConfig}
-                  >
-                    <option value="">Select material type</option>
-                    <option value="LCD">LCD</option>
-                    <option value="HEADDRESS">Headdress</option>
-                  </select>
-                </div>
-
-                {/* Vehicle Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vehicle Type *
-                  </label>
-                  <select
-                    value={formData.vehicleType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, vehicleType: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                    disabled={!!editingConfig}
-                  >
-                    <option value="">Select vehicle type</option>
-                    <option value="CAR">Car</option>
-                    <option value="MOTORCYCLE">Motorcycle</option>
-                  </select>
-                </div>
-
-                {/* Category (Auto-determined) */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category *
-                  </label>
-                  <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600">
-                    {formData.category || 'Will be determined automatically'}
-                  </div>
-                </div>
-
-                {/* Max Devices */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Max Devices *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10}
-                    value={formData.maxDevices}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maxDevices: parseInt(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Maximum: {formData.vehicleType && formData.materialType ? getMaxDevices(formData.vehicleType, formData.materialType) : 10} devices
-                  </p>
-                </div>
-
-                {/* Ad Length Range */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ad Length Range *
-                  </label>
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-sm text-gray-600 mb-2">Allowed ad lengths:</p>
-                    <div className="flex gap-4">
-                      <div className="flex items-center">
-                        <input
-                          type="radio"
-                          id="adLength20"
-                          name="adLength"
-                          value="20"
-                          checked={formData.minAdLengthSeconds === 20 && formData.maxAdLengthSeconds === 60}
-                          onChange={() => setFormData(prev => ({ ...prev, minAdLengthSeconds: 20, maxAdLengthSeconds: 60 }))}
-                          className="mr-2"
-                        />
-                        <label htmlFor="adLength20" className="text-sm">20, 40, or 60 seconds</label>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Only these three ad lengths are allowed in the system
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pricing Tiers */}
-              <div className="mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Pricing Tiers</h3>
-                  <button
-                    type="button"
-                    onClick={addPricingTier}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    + Add Tier
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {formData.pricingTiers.map((tier, index) => (
-                    <div key={index} className="flex gap-4 items-end">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Duration (days)
-                        </label>
-                        <select
-                          value={tier.durationDays}
-                          onChange={(e) => updatePricingTier(index, 'durationDays', parseInt(e.target.value))}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        >
-                          <option value={30}>1 month (30 days)</option>
-                          <option value={60}>2 months (60 days)</option>
-                          <option value={90}>3 months (90 days)</option>
-                          <option value={120}>4 months (120 days)</option>
-                          <option value={150}>5 months (150 days)</option>
-                          <option value={180}>6 months (180 days)</option>
-                        </select>
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Price per Play (₱)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0.01"
-                          value={tier.pricePerPlay}
-                          onChange={(e) => updatePricingTier(index, 'pricePerPlay', parseFloat(e.target.value))}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          required
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Ad Length Multiplier
-                        </label>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0.1"
-                          max="2.0"
-                          value={tier.adLengthMultiplier || 1.0}
-                          onChange={(e) => updatePricingTier(index, 'adLengthMultiplier', parseFloat(e.target.value))}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      {formData.pricingTiers.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removePricingTier(index)}
-                          className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex justify-end gap-4 mt-8">
+            {/* Pricing Tiers */}
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Pricing Tiers</h3>
                 <button
                   type="button"
-                  onClick={handleModalClose}
-                  className="px-6 py-3 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors font-medium"
+                  onClick={addPricingTier}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading || updateLoading}
-                  className="px-6 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {createLoading || updateLoading ? 'Saving...' : editingConfig ? 'Update Configuration' : 'Create Configuration'}
+                  + Add Tier
                 </button>
               </div>
-            </form>
+
+              <div className="space-y-4">
+                {formData.pricingTiers.map((tier, index) => (
+                  <div key={index} className="flex gap-4 items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration (days)
+                      </label>
+                      <div className="relative w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newDropdowns = [...showDurationDropdowns];
+                            newDropdowns[index] = !newDropdowns[index];
+                            setShowDurationDropdowns(newDropdowns);
+                          }}
+                          className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"                        >
+                          {tier.durationDays ? `${tier.durationDays / 30} month${tier.durationDays > 30 ? 's' : ''} (${tier.durationDays} days)` : 'Select duration'}
+                          <ChevronDown
+                            size={16}
+                            className={`transform transition-transform duration-200 ${showDurationDropdowns[index] ? "rotate-180" : "rotate-0"}`}
+                          />
+                        </button>
+                        <AnimatePresence>
+                          {showDurationDropdowns[index] && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -10 }}
+                              transition={{ duration: 0.2 }}
+                              className="absolute z-10 top-full mt-2 w-full rounded-xl shadow-lg bg-white overflow-hidden"
+                            >
+                              {[30, 60, 90, 120, 150, 180].map((days) => (
+                                <button
+                                  key={days}
+                                  type="button"
+                                  onClick={() => {
+                                    updatePricingTier(index, 'durationDays', days);
+                                    const newDropdowns = [...showDurationDropdowns];
+                                    newDropdowns[index] = false;
+                                    setShowDurationDropdowns(newDropdowns);
+                                  }}
+                                  className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                                >
+                                  {days / 30} month{days > 30 ? 's' : ''} ({days} days)
+                                </button>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      {validationErrors[`durationDays_${index}`] && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors[`durationDays_${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        id={`pricePerPlay_${index}`}
+                        placeholder=" "
+                        step="0.01"
+                        min="0.01"
+                        value={tier.pricePerPlay}
+                        onChange={(e) => updatePricingTier(index, 'pricePerPlay', parseFloat(e.target.value))}
+                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors[`pricePerPlay_${index}`] ? 'border-red-400' : 'border-gray-300'}`}
+                        required
+                      />
+                      <label
+                        htmlFor={`pricePerPlay_${index}`}
+                        className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${tier.pricePerPlay ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                      >
+                        Price per Play (₱)
+                      </label>
+                      {validationErrors[`pricePerPlay_${index}`] && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors[`pricePerPlay_${index}`]}</p>
+                      )}
+                    </div>
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        id={`adLengthMultiplier_${index}`}
+                        placeholder=" "
+                        step="0.1"
+                        min="0.1"
+                        max="2.0"
+                        value={tier.adLengthMultiplier || 1.0}
+                        onChange={(e) => updatePricingTier(index, 'adLengthMultiplier', parseFloat(e.target.value))}
+                        className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors[`adLengthMultiplier_${index}`] ? 'border-red-400' : 'border-gray-300'}`}
+                      />
+                      <label
+                        htmlFor={`adLengthMultiplier_${index}`}
+                        className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${tier.adLengthMultiplier ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                      >
+                        Ad Length Multiplier
+                      </label>
+                      {validationErrors[`adLengthMultiplier_${index}`] && (
+                        <p className="text-red-500 text-xs mt-1">{validationErrors[`adLengthMultiplier_${index}`]}</p>
+                      )}
+                    </div>
+                    {formData.pricingTiers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePricingTier(index)}
+                        className="p-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Ad Length Range */}
+              <div className="md:col-span-2">
+                <label className="block text-sm mt-6 font-medium text-gray-700 mb-2">
+                  Ad Length Range
+                </label>
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <p className="text-sm text-gray-600 mb-2">Allowed ad lengths:</p>
+                  <div className="flex gap-4">
+                    <div className="flex items-center">
+                      <input
+                        type="radio"
+                        id="adLength20"
+                        name="adLength"
+                        value="20"
+                        checked={formData.minAdLengthSeconds === 20 && formData.maxAdLengthSeconds === 60}
+                        onChange={() => setFormData(prev => ({ ...prev, minAdLengthSeconds: 20, maxAdLengthSeconds: 60 }))}
+                        className="mr-2"
+                      />
+                      <label htmlFor="adLength20" className="text-sm">20, 40, or 60 seconds</label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Only these three ad lengths are allowed in the system
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Actions */}
+            {/* <div className="flex justify-end gap-4 mt-8"> */}
+              
+
+            <div className="flex justify-between mt-8 space-x-3">
+            <button
+              type="button"
+              onClick={handleModalClose}
+              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={createLoading || updateLoading}
+              className="px-4 py-2 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-md disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {createLoading || updateLoading ? 'Saving...' : editingConfig ? 'Update Configuration' : 'Create Configuration'}
+            </button>
           </div>
+          </form>
         </div>
-      )}
+      </div>
+    )}
     </div>
   );
 };
