@@ -163,8 +163,22 @@ const DeviceTrackingSchema = new mongoose.Schema({
   totalAdImpressions: { type: Number, default: 0 },
   totalAdPlayTime: { type: Number, default: 0 }, // in seconds
   
-  // Current ad being played
-  currentAd: AdPlaybackSchema,
+  // Current ad being played (simplified schema for real-time updates)
+  currentAd: {
+    adId: { type: String },
+    adTitle: { type: String },
+    materialId: { type: String },
+    slotNumber: { type: Number },
+    adDuration: { type: Number },
+    startTime: { type: Date },
+    endTime: { type: Date },
+    currentTime: { type: Number, default: 0 },
+    state: { type: String, enum: ['loading', 'buffering', 'playing', 'paused', 'ended'], default: 'loading' },
+    progress: { type: Number, default: 0 },
+    viewTime: { type: Number, default: 0 },
+    completionRate: { type: Number, default: 0 },
+    impressions: { type: Number, default: 1 }
+  },
   
   // Real-time data arrays (for current day)
   adPlaybacks: [AdPlaybackSchema],
@@ -690,29 +704,52 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   );
 };
 
-DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0) {
+DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {
   const now = new Date();
+  const completionRate = adDuration > 0 ? Math.min(100, (viewTime / adDuration) * 100) : 0;
+  const slot = slotNumber || this.deviceSlot || 1;
   
-  // Update current ad
+  // Update current ad (simplified)
   this.currentAd = {
     adId,
     adTitle,
-    adDuration,
+    materialId: this.materialId,
+    slotNumber: slot,
+    adDuration: adDuration,
     startTime: now,
     endTime: null,
-    viewTime,
-    completionRate: adDuration > 0 ? Math.min(100, (viewTime / adDuration) * 100) : 0,
-    impressions: 1,
-    slotNumber: this.deviceSlot
+    currentTime: viewTime,
+    state: 'playing',
+    progress: completionRate,
+    viewTime: viewTime,
+    completionRate: completionRate,
+    impressions: 1
+  };
+  
+  // Create clean ad playback record (minimal data)
+  const playbackRecord = {
+    adId,
+    adTitle,
+    materialId: this.materialId,
+    slotNumber: slot,
+    adDuration: adDuration,
+    startTime: now,
+    endTime: null,
+    viewTime: Math.round(viewTime * 100) / 100, // Round to 2 decimal places
+    completionRate: Math.round(completionRate * 100) / 100, // Round to 2 decimal places
+    impressions: 1
   };
   
   // Add to ad playbacks
-  this.adPlaybacks.push(this.currentAd);
+  this.adPlaybacks.push(playbackRecord);
   
   // Update totals
   this.totalAdPlays += 1;
   this.totalAdImpressions += 1;
   this.totalAdPlayTime += viewTime;
+  
+  // Clean up old ad playbacks (keep only last 20)
+  this.cleanupAdPlaybacks();
   
   // Update ad performance
   let adPerf = this.adPerformance.find(ad => ad.adId === adId);
@@ -989,5 +1026,14 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   
   return this;
 };
+
+// Method to clean up old ad playbacks
+DeviceTrackingSchema.methods.cleanupAdPlaybacks = function() {
+  if (this.adPlaybacks.length > 20) {
+    this.adPlaybacks = this.adPlaybacks.slice(-20); // Keep only last 20
+  }
+  return this;
+};
+
 module.exports = mongoose.models.DeviceTracking || mongoose.model('DeviceTracking', DeviceTrackingSchema);
 

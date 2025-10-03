@@ -988,12 +988,12 @@ router.get('/compliance', async (req, res) => {
           ...group.screenMetrics,
           displayHours: deviceHours,
           adPlayCount: group.screenMetrics?.adPlayCount || 0,
-          lastAdPlayed: group.screenMetrics?.lastAdPlayed || null,
-          brightness: group.screenMetrics?.brightness || 100,
-          volume: group.screenMetrics?.volume || 50,
+          lastAdPlayed: group.lastAdPlayed || null,
+          brightness: group.brightness || 100,
+          volume: group.volume || 50,
           isDisplaying: isDeviceOnline,
-          maintenanceMode: group.screenMetrics?.maintenanceMode || false,
-          currentAd: group.screenMetrics?.currentAd || null
+          maintenanceMode: group.maintenanceMode || false,
+          currentAd: group.currentAd || null
         },
         alerts: group.alerts,
         // Add consolidated totals for display
@@ -1089,7 +1089,7 @@ router.get('/compliance', async (req, res) => {
 // POST /trackAd - Track ad playback
 router.post('/trackAd', async (req, res) => {
   try {
-    const { deviceId, adId, adTitle, adDuration, viewTime = 0 } = req.body;
+    const { deviceId, adId, adTitle, adDuration, viewTime = 0, slotNumber = 1 } = req.body;
 
     // Validate required fields
     if (!deviceId || !adId || !adTitle) {
@@ -1108,16 +1108,17 @@ router.post('/trackAd', async (req, res) => {
     }
 
     // Track ad playback
-    await deviceTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime);
+    await deviceTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime, slotNumber);
 
     res.json({
       success: true,
       message: 'Ad playback tracked successfully',
       data: {
         deviceId: deviceTracking.deviceId,
-        currentAd: deviceTracking.screenMetrics.currentAd,
-        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
-        dailyStats: deviceTracking.screenMetrics.dailyAdStats
+        currentAd: deviceTracking.currentAd,
+        totalAdsPlayed: deviceTracking.totalAdPlays,
+        totalAdImpressions: deviceTracking.totalAdImpressions,
+        totalAdPlayTime: deviceTracking.totalAdPlayTime
       }
     });
 
@@ -1158,7 +1159,7 @@ router.post('/endAd', async (req, res) => {
       message: 'Ad playback ended successfully',
       data: {
         deviceId: deviceTracking.deviceId,
-        completedAd: deviceTracking.screenMetrics.currentAd
+        completedAd: deviceTracking.currentAd
       }
     });
 
@@ -1243,12 +1244,12 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
       data: {
         deviceId: deviceTracking.deviceId,
         materialId: deviceTracking.materialId,
-        currentAd: deviceTracking.screenMetrics.currentAd,
+        currentAd: deviceTracking.currentAd,
         dailyStats: dailyStats,
         adPerformance: adPerformance,
-        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
-        displayHours: deviceTracking.screenMetrics.displayHours,
-        lastAdPlayed: deviceTracking.screenMetrics.lastAdPlayed
+        totalAdsPlayed: deviceTracking.totalAdPlays,
+        totalAdImpressions: deviceTracking.totalAdImpressions,
+        totalAdPlayTime: deviceTracking.totalAdPlayTime
       }
     });
 
@@ -1277,12 +1278,12 @@ router.get('/adAnalytics', async (req, res) => {
       deviceId: device.deviceId,
       materialId: device.materialId,
       screenType: device.screenType,
-      currentAd: device.screenMetrics.currentAd,
-      dailyStats: device.screenMetrics.dailyAdStats,
-      totalAdsPlayed: device.screenMetrics.adPlayCount,
-      displayHours: device.screenMetrics.displayHours,
+      currentAd: device.currentAd,
+      dailyStats: device.dailySummary || {},
+      totalAdsPlayed: device.totalAdPlays,
+      totalAdImpressions: device.totalAdImpressions,
+      totalAdPlayTime: device.totalAdPlayTime,
       adPerformance: device.adPerformance || [],
-      lastAdPlayed: device.screenMetrics.lastAdPlayed,
       isOnline: device.isOnline,
       lastSeen: device.lastSeen
     }));

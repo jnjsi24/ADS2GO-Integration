@@ -447,9 +447,9 @@ class DeviceStatusService {
         // This prevents the "No ads playing" flash between ads
         console.log(`🏁 [updateCurrentAd] Ad ended for device ${deviceId}: ${playbackData.adTitle}`);
         updateData = {
-          'screenMetrics.currentAd.state': 'ended',
-          'screenMetrics.currentAd.endTime': now,
-          'screenMetrics.currentAd.progress': 100,
+          'currentAd.state': 'ended',
+          'currentAd.endTime': now,
+          'currentAd.progress': 100,
           lastSeen: now
         };
         
@@ -459,9 +459,9 @@ class DeviceStatusService {
         // During loading/buffering, keep the current ad info but update state
         console.log(`⏳ [updateCurrentAd] Ad ${playbackData.state} for device ${deviceId}: ${playbackData.adTitle}`);
         updateData = {
-          'screenMetrics.currentAd.state': playbackData.state,
-          'screenMetrics.currentAd.currentTime': playbackData.currentTime || 0,
-          'screenMetrics.currentAd.progress': playbackData.progress || 0,
+          'currentAd.state': playbackData.state,
+          'currentAd.currentTime': playbackData.currentTime || 0,
+          'currentAd.progress': playbackData.progress || 0,
           lastSeen: now
         };
       } else {
@@ -470,14 +470,20 @@ class DeviceStatusService {
         this.cancelAdCleanup(deviceId);
         
         updateData = {
-          'screenMetrics.currentAd': {
+          'currentAd': {
             adId: playbackData.adId,
             adTitle: playbackData.adTitle,
+            materialId: materialId,
+            slotNumber: connection?.slotNumber || 1,
             adDuration: playbackData.duration,
             startTime: playbackData.startTime || now.toISOString(),
-            currentTime: playbackData.currentTime,
+            currentTime: playbackData.currentTime || 0,
             state: playbackData.state,
-            progress: playbackData.progress
+            progress: playbackData.progress || 0,
+            endTime: null,
+            viewTime: playbackData.currentTime || 0,
+            completionRate: playbackData.duration > 0 ? Math.min(100, ((playbackData.currentTime || 0) / playbackData.duration) * 100) : 0,
+            impressions: 1
           },
           lastSeen: now
         };
@@ -492,7 +498,7 @@ class DeviceStatusService {
 
       if (result) {
         console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
-        console.log(`📊 Current ad data:`, result.screenMetrics?.currentAd);
+        console.log(`📊 Current ad data:`, result.currentAd);
       } else {
         console.log(`❌ No DeviceTracking document found for device ${deviceId}`);
         
@@ -957,7 +963,7 @@ class DeviceStatusService {
         let result = await DeviceTracking.findOneAndUpdate(
           { deviceId: deviceId },
           { 
-            $unset: { 'screenMetrics.currentAd': 1 },
+            $unset: { 'currentAd': 1 },
             $set: { lastSeen: new Date() }
           },
           { new: true }
@@ -968,7 +974,7 @@ class DeviceStatusService {
           result = await DeviceTracking.findOneAndUpdate(
             { materialId },
             { 
-              $unset: { 'screenMetrics.currentAd': 1 },
+              $unset: { 'currentAd': 1 },
               $set: { lastSeen: new Date() }
             },
             { new: true }

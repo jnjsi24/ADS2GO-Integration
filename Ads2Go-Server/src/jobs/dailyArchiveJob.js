@@ -472,8 +472,8 @@ class DailyArchiveJob {
             });
           }
 
-          // Update with daily data
-          adData.devices.forEach(device => {
+          // Update with daily data - batch all material updates first
+          const materialUpdates = adData.devices.map(device => {
             const materialData = {
               materialId: device.materialId, // Use actual materialId from new schema
               materialType: 'HEADDRESS',
@@ -490,12 +490,28 @@ class DailyArchiveJob {
               createdAt: device.createdAt,
               updatedAt: new Date()
             };
-
-            // Add or update material
-            analytics.addMaterial(materialData);
+            return materialData;
           });
 
-          await analytics.save();
+          // Update materials array directly to avoid parallel save conflicts
+          const existingMaterials = analytics.materials || [];
+          const updatedMaterials = [...existingMaterials];
+          
+          materialUpdates.forEach(materialData => {
+            const existingIndex = updatedMaterials.findIndex(m => m.materialId === materialData.materialId);
+            if (existingIndex >= 0) {
+              // Update existing material
+              updatedMaterials[existingIndex] = { ...updatedMaterials[existingIndex], ...materialData };
+            } else {
+              // Add new material
+              updatedMaterials.push(materialData);
+            }
+          });
+          
+          // Update the analytics document directly
+          await Analytics.findByIdAndUpdate(analytics._id, {
+            $set: { materials: updatedMaterials }
+          });
           console.log(`✅ Updated Analytics for ad ${adId}`);
 
         } catch (error) {

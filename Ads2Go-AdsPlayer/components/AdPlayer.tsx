@@ -254,39 +254,17 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Send to analytics service
       const analyticsData = {
         deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-        materialId: materialId,
-        slotNumber: slotNumber,
+        deviceSlot: slotNumber, // Server expects 'deviceSlot' not 'slotNumber'
         adId: adId,
         adTitle: adTitle,
         adDuration: adDuration,
-        viewTime: viewTime, // Use actual view time instead of 0
-        timestamp: new Date().toISOString(),
-        // Note: userId and adDeploymentId would need to be fetched from the ad data
-        // For now, we'll use the adId as a string reference
-        userId: null, // This should be populated from ad data
-        adDeploymentId: null, // This should be populated from ad data
-        deviceInfo: {
-          deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-          deviceName: Device.deviceName || 'Unknown',
-          deviceType: Device.deviceType === 2 ? 'tablet' : Device.deviceType === 1 ? 'mobile' : 'unknown',
-          osName: Device.osName || 'Unknown',
-          osVersion: Device.osVersion || 'Unknown',
-          platform: Platform.OS || 'Unknown',
-          brand: Device.brand || 'Unknown',
-          modelName: Device.modelName || 'Unknown',
-          screenWidth: screenData.width,
-          screenHeight: screenData.height,
-          screenScale: screenData.scale
-        },
-        gpsData: null, // Will be updated when location is available
-        networkStatus: networkStatus,
-        isOffline: isOffline
+        viewTime: viewTime // Use actual view time instead of 0
       };
       
       // Send to analytics endpoint (only if online)
       if (!isOffline) {
         try {
-          const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
+          const analyticsResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
