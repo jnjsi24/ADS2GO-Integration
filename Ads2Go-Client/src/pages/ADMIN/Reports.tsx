@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Mail, CalendarClock, CalendarCheck, ChevronDown, Edit, AlertCircle, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
@@ -45,6 +45,10 @@ const Reports: React.FC = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showModalStatusDropdown, setShowModalStatusDropdown] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_USER_REPORTS, {
     variables: { filters, limit: 50, offset: 0 },
@@ -63,6 +67,34 @@ const Reports: React.FC = () => {
       : true;
     return matchSearch;
   });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedReports = filteredReports.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters]);
 
   const handleRowClick = (id: string) => {
     setExpandedRow(expandedRow === id ? null : id);
@@ -238,7 +270,7 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Reports Management</h1>
@@ -392,7 +424,7 @@ const Reports: React.FC = () => {
       {filteredReports.length === 0 ? (
         <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
       ) : (
-        filteredReports.map((report) => (
+        paginatedReports.map((report) => (
           <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
             <div
               className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
@@ -604,13 +636,97 @@ const Reports: React.FC = () => {
         ))
       )}
 
-      {/* Footer */}
-      <div className="flex justify-between items-center mt-6">
-        <span className="text-sm text-gray-600">Found: {filteredReports.length} report(s)</span>
-        <div className="flex space-x-2">
-          <button className="px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 text-sm">
-            Export to Excel
+      {/* Footer with pagination controls - Fixed at bottom */}
+      <div className="mt-auto">
+        {/* Action buttons */}
+        <div className="flex space-x-2 mb-4">
+          <button className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
+            Export All Reports to Excel
           </button>
+        </div>
+
+        {/* Pagination controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredReports.length)} of {filteredReports.length} reports
+            </span>
+            <span className="text-sm text-gray-600">Selected: {selectedReports.length}</span>
+          </div>
+          
+          {/* Pagination Controls */}
+          <div className="flex items-center space-x-4">
+            {/* Page size selector */}
+            <div className="flex items-center space-x-2">
+              <label className="text-sm text-gray-600">Show:</label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+              <span className="text-sm text-gray-600">per page</span>
+            </div>
+
+            {/* Pagination buttons */}
+            {totalPages > 1 && (
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                {/* Page numbers - show only a few pages around current page */}
+                <div className="flex space-x-1">
+                  {(() => {
+                    const pages = [];
+                    const maxVisiblePages = 5;
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                    
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+                    
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          className={`px-3 py-1 text-sm border rounded ${
+                            currentPage === i
+                              ? 'bg-blue-500 text-white border-blue-500'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+                    return pages;
+                  })()}
+                </div>
+                
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

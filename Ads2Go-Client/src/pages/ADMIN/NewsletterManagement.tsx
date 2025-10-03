@@ -31,6 +31,10 @@ const NewsletterManagement: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All Subscribers');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const filterOptions = [
     'All Subscribers',
@@ -39,6 +43,34 @@ const NewsletterManagement: React.FC = () => {
     'Non-User Subscribers',
     'Unsubscribed'
   ];
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredSubscribers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSubscribers = filteredSubscribers.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedFilter]);
 
   useEffect(() => {
     fetchSubscribers();
@@ -53,9 +85,17 @@ const NewsletterManagement: React.FC = () => {
         setError('API URL not configured');
         return;
       }
-      const fullUrl = `${apiUrl}/api/newsletter/subscribers?t=${Date.now()}`;
       
-      console.log('Fetching subscribers from:', fullUrl);
+      // Clean the URL to remove any extra characters or comments
+      const cleanApiUrl = apiUrl.split('#')[0].trim();
+      // Ensure the URL doesn't end with a slash to avoid double slashes
+      const baseUrl = cleanApiUrl.endsWith('/') ? cleanApiUrl.slice(0, -1) : cleanApiUrl;
+      const fullUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
+      
+      console.log('Original API URL:', apiUrl);
+      console.log('Clean API URL:', cleanApiUrl);
+      console.log('Base URL:', baseUrl);
+      console.log('Full URL:', fullUrl);
       
       const response = await fetch(fullUrl, {
         method: 'GET',
@@ -163,7 +203,12 @@ const NewsletterManagement: React.FC = () => {
         alert('API URL not configured');
         return;
       }
-      const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
+      
+      // Clean the URL to remove any extra characters or comments
+      const cleanApiUrl = apiUrl.split('#')[0].trim();
+      // Ensure the URL doesn't end with a slash to avoid double slashes
+      const baseUrl = cleanApiUrl.endsWith('/') ? cleanApiUrl.slice(0, -1) : cleanApiUrl;
+      const response = await fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -230,7 +275,7 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Server is not running on {process.env.REACT_APP_API_URL || 'API URL not configured'}</li>
+                <li>Server is not running on {process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.split('#')[0].trim() : 'API URL not configured'}</li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>
@@ -249,8 +294,8 @@ const NewsletterManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10 flex flex-col">
+      <div className="max-w-7xl mx-auto flex-1 flex flex-col">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-3xl font-bold text-[#3674B5]">Newsletter Management</h1>
@@ -387,7 +432,7 @@ const NewsletterManagement: React.FC = () => {
             </div>
 
             {/* Rows */}
-            {filteredSubscribers.map((subscriber) => (
+            {paginatedSubscribers.map((subscriber) => (
               <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
                 <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
                   {/* Email */}
@@ -470,6 +515,100 @@ const NewsletterManagement: React.FC = () => {
               No subscribers found
             </div>
           )}
+        </div>
+
+        {/* Pagination Controls - Fixed at bottom */}
+        <div className="mt-auto">
+          {/* Action buttons */}
+          <div className="flex space-x-2 mb-4">
+            <button className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
+              Export All Subscribers to Excel
+            </button>
+          </div>
+
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredSubscribers.length)} of {filteredSubscribers.length} subscribers
+              </span>
+              <span className="text-sm text-gray-600">Selected: 0</span>
+            </div>
+            
+            {/* Pagination Controls */}
+            <div className="flex items-center space-x-4">
+              {/* Page size selector */}
+              <div className="flex items-center space-x-2">
+                <label className="text-sm text-gray-600">Show:</label>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Pagination buttons */}
+              {totalPages > 1 && (
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handlePreviousPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers - show only a few pages around current page */}
+                  <div className="flex space-x-1">
+                    {(() => {
+                      const pages = [];
+                      const maxVisiblePages = 5;
+                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                      
+                      if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                      }
+                      
+                      for (let i = startPage; i <= endPage; i++) {
+                        pages.push(
+                          <button
+                            key={i}
+                            onClick={() => handlePageChange(i)}
+                            className={`px-3 py-1 text-sm border rounded ${
+                              currentPage === i
+                                ? 'bg-blue-500 text-white border-blue-500'
+                                : 'border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {i}
+                          </button>
+                        );
+                      }
+                      return pages;
+                    })()}
+                  </div>
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {showUnsubscribeModal && (
