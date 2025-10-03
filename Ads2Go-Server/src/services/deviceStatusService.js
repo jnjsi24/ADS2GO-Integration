@@ -100,15 +100,18 @@ class DeviceStatusService {
         // New endpoint for real-time ad playback updates
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
+        const slotNumber = url.searchParams.get('slotNumber') || request.headers['slot-number'];
         const isAdmin = url.searchParams.get('admin') === 'true' || request.headers['admin'] === 'true';
         
         console.log('WebSocket Playback Upgrade Request Details:');
         console.log('- Pathname:', pathname);
         console.log('- Device ID from Query:', url.searchParams.get('deviceId'));
         console.log('- Material ID from Query:', url.searchParams.get('materialId'));
+        console.log('- Slot Number from Query:', url.searchParams.get('slotNumber'));
         console.log('- Is Admin:', isAdmin);
         console.log('- Final Device ID:', deviceId);
         console.log('- Final Material ID:', materialId);
+        console.log('- Final Slot Number:', slotNumber);
         
         if (!deviceId && !isAdmin) {
           console.error('No device ID provided in WebSocket playback upgrade request');
@@ -128,6 +131,7 @@ class DeviceStatusService {
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
           if (materialId) ws.materialId = materialId;
+          if (slotNumber) ws.slotNumber = parseInt(slotNumber);
           ws.isAlive = true;
           ws.lastPong = Date.now();
           ws.connectionType = 'playback'; // Mark as playback connection
@@ -294,28 +298,53 @@ class DeviceStatusService {
   }
 
   async handlePlaybackConnection(ws, request) {
-    let deviceId, materialId;
+    let deviceId, materialId, slotNumber;
     
     if (ws.isAdmin) {
       console.log(`🔧 Admin WebSocket Connection Established for Real-Time Monitoring`);
       // For admin connections, use 'ADMIN' as the key
       deviceId = 'ADMIN';
       materialId = null;
+      slotNumber = null;
     } else {
       deviceId = ws.deviceId || request.headers['device-id'];
       materialId = ws.materialId || request.headers['material-id'];
-      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId})` : ''}`);
+      slotNumber = ws.slotNumber || request.headers['slot-number'];
+      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId}, slot: ${slotNumber})` : ''}`);
     }
 
-    // Store the connection with its device ID and material ID
+    // Store the connection with its device ID, material ID, and slot number
     ws.deviceId = deviceId;
     ws.materialId = materialId;
+    ws.slotNumber = slotNumber;
     this.activeConnections.set(deviceId, ws);
+    
+    // Store slot-specific connections for synchronization
+    if (materialId && slotNumber) {
+      const slotKey = `${materialId}-${slotNumber}`;
+      if (!this.slotConnections) {
+        this.slotConnections = new Map();
+      }
+      if (!this.slotConnections.has(slotKey)) {
+        this.slotConnections.set(slotKey, new Set());
+      }
+      this.slotConnections.get(slotKey).add(ws);
+      
+      // Also store by material for cross-slot synchronization
+      const materialKey = `${materialId}`;
+      if (!this.materialConnections) {
+        this.materialConnections = new Map();
+      }
+      if (!this.materialConnections.has(materialKey)) {
+        this.materialConnections.set(materialKey, new Set());
+      }
+      this.materialConnections.get(materialKey).add(ws);
+    }
     
     if (ws.isAdmin) {
       console.log(`🔧 Admin real-time monitoring connection established`);
     } else {
-      console.log(`Playback connection established: ${deviceId}`);
+      console.log(`Playback connection established: ${deviceId} (slot ${slotNumber})`);
     }
     
     // Handle incoming messages (including ping and playback updates)
@@ -337,6 +366,14 @@ class DeviceStatusService {
             progress: message.progress
           });
           this.handlePlaybackUpdate(deviceId, message);
+          
+          // Broadcast synchronization signals to other slots of the same material
+          if (materialId && slotNumber) {
+            this.broadcastSlotSynchronization(materialId, slotNumber, message);
+          }
+        } else if (message.type === 'syncRequest') {
+          // Handle synchronization requests
+          this.handleSyncRequest(deviceId, materialId, slotNumber, message);
         }
       } catch (error) {
         console.error('Error processing WebSocket Playback Message:', error);
@@ -346,6 +383,8 @@ class DeviceStatusService {
     ws.on('close', (code, reason) => {
       console.log(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
+        // Clean up slot connections before removing the main connection
+        this.cleanupSlotConnections(deviceId, materialId, slotNumber);
         this.removeConnection(deviceId);
       }
     });
@@ -362,6 +401,20 @@ class DeviceStatusService {
         progress: message.progress
       });
 
+      // Store current playback state for synchronization
+      const connection = this.activeConnections.get(deviceId);
+      if (connection) {
+        connection.currentPlaybackState = {
+          adId: message.adId,
+          adTitle: message.adTitle,
+          state: message.state,
+          currentTime: message.currentTime,
+          duration: message.duration,
+          progress: message.progress,
+          timestamp: new Date().toISOString()
+        };
+      }
+
       // Update the database with current ad information
       await this.updateCurrentAd(deviceId, message);
 
@@ -377,7 +430,12 @@ class DeviceStatusService {
     try {
       const now = new Date();
       const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId || deviceId;
+      const materialId = connection?.materialId;
+
+      if (!materialId) {
+        console.log(`⚠️ [updateCurrentAd] No materialId found for device ${deviceId}. Skipping update.`);
+        return;
+      }
 
       console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in DeviceTracking...`);
 
@@ -389,9 +447,9 @@ class DeviceStatusService {
         // This prevents the "No ads playing" flash between ads
         console.log(`🏁 [updateCurrentAd] Ad ended for device ${deviceId}: ${playbackData.adTitle}`);
         updateData = {
-          'screenMetrics.currentAd.state': 'ended',
-          'screenMetrics.currentAd.endTime': now,
-          'screenMetrics.currentAd.progress': 100,
+          'currentAd.state': 'ended',
+          'currentAd.endTime': now,
+          'currentAd.progress': 100,
           lastSeen: now
         };
         
@@ -401,9 +459,9 @@ class DeviceStatusService {
         // During loading/buffering, keep the current ad info but update state
         console.log(`⏳ [updateCurrentAd] Ad ${playbackData.state} for device ${deviceId}: ${playbackData.adTitle}`);
         updateData = {
-          'screenMetrics.currentAd.state': playbackData.state,
-          'screenMetrics.currentAd.currentTime': playbackData.currentTime || 0,
-          'screenMetrics.currentAd.progress': playbackData.progress || 0,
+          'currentAd.state': playbackData.state,
+          'currentAd.currentTime': playbackData.currentTime || 0,
+          'currentAd.progress': playbackData.progress || 0,
           lastSeen: now
         };
       } else {
@@ -412,14 +470,20 @@ class DeviceStatusService {
         this.cancelAdCleanup(deviceId);
         
         updateData = {
-          'screenMetrics.currentAd': {
+          'currentAd': {
             adId: playbackData.adId,
             adTitle: playbackData.adTitle,
+            materialId: materialId,
+            slotNumber: connection?.slotNumber || 1,
             adDuration: playbackData.duration,
             startTime: playbackData.startTime || now.toISOString(),
-            currentTime: playbackData.currentTime,
+            currentTime: playbackData.currentTime || 0,
             state: playbackData.state,
-            progress: playbackData.progress
+            progress: playbackData.progress || 0,
+            endTime: null,
+            viewTime: playbackData.currentTime || 0,
+            completionRate: playbackData.duration > 0 ? Math.min(100, ((playbackData.currentTime || 0) / playbackData.duration) * 100) : 0,
+            impressions: 1
           },
           lastSeen: now
         };
@@ -434,7 +498,7 @@ class DeviceStatusService {
 
       if (result) {
         console.log(`✅ Updated current ad for device ${deviceId}: ${playbackData.adTitle} (${playbackData.state})`);
-        console.log(`📊 Current ad data:`, result.screenMetrics?.currentAd);
+        console.log(`📊 Current ad data:`, result.currentAd);
       } else {
         console.log(`❌ No DeviceTracking document found for device ${deviceId}`);
         
@@ -495,77 +559,54 @@ class DeviceStatusService {
 
   async updateDeviceStatus(deviceId, status) {
     try {
+      // Check if deviceId is valid
+      if (!deviceId) {
+        console.log('⚠️ [updateDeviceStatus] Skipping update - deviceId is undefined or null');
+        return;
+      }
+      
       const now = new Date();
-            // Get materialId from active connections or use deviceId as fallback
+      // Get materialId from active connections
       const connection = this.activeConnections.get(deviceId);
-      const materialId = connection?.materialId || deviceId;
+      const materialId = connection?.materialId;
+      
+      if (!materialId) {
+        console.log(`⚠️ [updateDeviceStatus] No materialId found for device ${deviceId}. Skipping update.`);
+        return;
+      }
       
       console.log(`🔄 [updateDeviceStatus] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
-      // First, try to find and update existing record by deviceId
-      console.log(`🔍 [updateDeviceStatus] Searching for device by deviceId: ${deviceId}`);
-      let updatedDevice = await DeviceTracking.findOneAndUpdate(
-        { deviceId: deviceId },
-        {
-          $set: {
-            isOnline: status,
-            isActive: status, // Set isActive to match online status
-            lastSeen: now
-          },
-          $push: {
-            statusHistory: {
-              status: status ? 'online' : 'offline',
-              timestamp: now
-            }
-          }
-        },
-        { new: true }
-      );
+      // Find existing record by materialId
+      console.log(`🔍 [updateDeviceStatus] Searching for device by materialId: ${materialId}`);
+      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
       
-      console.log(`🔍 [updateDeviceStatus] Device found by deviceId: ${updatedDevice ? 'YES' : 'NO'}`);
-
-      // If not found by deviceId, try to find by materialId and update
-      if (!updatedDevice) {
-        console.log(`🔍 [updateDeviceStatus] Device ${deviceId} not found, searching by materialId: ${materialId}`);
-        
-        updatedDevice = await DeviceTracking.findOneAndUpdate(
-          { materialId },
-          {
-            $set: {
-              deviceId: deviceId, // Set the deviceId if it wasn't set
-              isOnline: status,
-              isActive: status, // Set isActive to match online status
-              lastSeen: now
-            },
-            $push: {
-              statusHistory: {
-                status: status ? 'online' : 'offline',
-                timestamp: now
-              }
-            }
-          },
-          { upsert: true, new: true }
-        );
-        
-        console.log(`🔍 [updateDeviceStatus] Device found by materialId: ${updatedDevice ? 'YES' : 'NO'}`);
+      if (!deviceTracking) {
+        console.log(`⚠️ [updateDeviceStatus] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);
+        return;
       }
-
-      // Device status is already set correctly in the previous update
-      if (updatedDevice) {
-        console.log(`✅ [updateDeviceStatus] Device ${deviceId} status updated successfully`);
-        console.log(`📊 [updateDeviceStatus] Final device status: isOnline=${updatedDevice.isOnline}, isActive=${updatedDevice.isActive}`);
+      
+      // Update the specific slot for this device
+      const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+      if (slot) {
+        slot.isOnline = status;
+        slot.lastSeen = now;
+        deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
+        deviceTracking.lastSeen = now;
+        await deviceTracking.save();
+        console.log(`✅ [updateDeviceStatus] Updated slot for device ${deviceId} in material ${materialId}`);
       } else {
-        console.log(`❌ [updateDeviceStatus] Failed to find or update device ${deviceId}`);
+        console.log(`⚠️ [updateDeviceStatus] Device ${deviceId} not found in slots for material ${materialId}`);
       }
 
-      console.log(`✅ [updateDeviceStatus] Device ${deviceId} marked as ${status ? 'online' : 'offline'} (root isOnline: ${updatedDevice?.isOnline})`);
+      console.log(`✅ [updateDeviceStatus] Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
       
       // Update DeviceStatusManager with database status
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
       
       // Also update with the short device ID if they're different
       // This handles the case where the database has the full device ID but WebSocket uses short ID
-      if (deviceId.includes('TABLET-') && deviceId.includes('-W09-')) {
+      if (deviceId && deviceId.includes('TABLET-') && deviceId.includes('-W09-')) {
         // Extract short device ID from full device ID
         const shortDeviceId = deviceId.split('-W09-')[0].replace('TABLET-', '') + '-W09';
         console.log(`🔄 [DeviceStatusManager] Also updating short device ID: ${shortDeviceId}`);
@@ -573,7 +614,7 @@ class DeviceStatusService {
       }
       
       // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(updatedDevice);
+      this.broadcastDeviceUpdate(deviceTracking);
       
       // Also update the device list
       this.broadcastDeviceList();
@@ -582,11 +623,90 @@ class DeviceStatusService {
     }
   }
 
+  async updateDeviceStatusWithMaterialId(deviceId, materialId, status) {
+    try {
+      const now = new Date();
+      
+      console.log(`🔄 [updateDeviceStatusWithMaterialId] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
+      
+      // Find existing record by materialId
+      console.log(`🔍 [updateDeviceStatusWithMaterialId] Searching for device by materialId: ${materialId}`);
+      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+      
+      if (!deviceTracking) {
+        console.log(`⚠️ [updateDeviceStatusWithMaterialId] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);
+        return;
+      }
+      
+      // Update the specific slot for this device
+      const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+      if (slot) {
+        slot.isOnline = status;
+        slot.lastSeen = now;
+        deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
+        deviceTracking.lastSeen = now;
+        await deviceTracking.save();
+        console.log(`✅ [updateDeviceStatusWithMaterialId] Updated slot for device ${deviceId} in material ${materialId}`);
+      } else {
+        console.log(`⚠️ [updateDeviceStatusWithMaterialId] Device ${deviceId} not found in slots for material ${materialId}`);
+      }
+
+      console.log(`✅ [updateDeviceStatusWithMaterialId] Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
+      
+      // Update DeviceStatusManager with database status
+      deviceStatusManager.setDatabaseStatus(deviceId, status, now);
+      
+      // Broadcast the status update to all connected clients
+      this.broadcastDeviceUpdate(deviceTracking);
+      
+      // Also update the device list
+      this.broadcastDeviceList();
+      
+    } catch (error) {
+      console.error(`❌ Error updating status for device ${deviceId} with materialId ${materialId}:`, error);
+    }
+  }
+
   async handleDisconnect(deviceId) {
+    // Get materialId before removing connection
+    const connection = this.activeConnections.get(deviceId);
+    let materialId = connection?.materialId;
+    
+    // Debug logging
+    console.log(`🔍 [handleDisconnect] Debug info:`);
+    console.log(`   Device ID: "${deviceId}"`);
+    console.log(`   Connection found: ${!!connection}`);
+    console.log(`   Material ID from connection: ${materialId || 'undefined'}`);
+    console.log(`   Active connections: ${this.activeConnections.size}`);
+    console.log(`   Active connection keys:`, Array.from(this.activeConnections.keys()));
+    
+    // If no materialId from connection, try to find it from database
+    if (!materialId) {
+      console.log(`🔍 [handleDisconnect] No materialId from connection, searching database...`);
+      try {
+        const DeviceTracking = require('../models/deviceTracking');
+        const device = await DeviceTracking.findOne({ 'slots.deviceId': deviceId });
+        if (device) {
+          materialId = device.materialId;
+          console.log(`✅ [handleDisconnect] Found materialId from database: ${materialId}`);
+        } else {
+          console.log(`❌ [handleDisconnect] No device found in database for deviceId: ${deviceId}`);
+        }
+      } catch (error) {
+        console.error(`❌ [handleDisconnect] Error finding materialId from database:`, error);
+      }
+    }
+    
     this.removeConnection(deviceId);
     try {
       console.log(`🔄 [handleDisconnect] Starting disconnect process for device: ${deviceId}`);
-      await this.updateDeviceStatus(deviceId, false);
+      
+      // Update device status with materialId if available
+      if (materialId) {
+        await this.updateDeviceStatusWithMaterialId(deviceId, materialId, false);
+      } else {
+        console.log(`⚠️ [handleDisconnect] No materialId found for device ${deviceId}, skipping database update`);
+      }
       
       // Also update tablet registration status to OFFLINE
       await this.updateTabletStatus(deviceId, false);
@@ -843,7 +963,7 @@ class DeviceStatusService {
         let result = await DeviceTracking.findOneAndUpdate(
           { deviceId: deviceId },
           { 
-            $unset: { 'screenMetrics.currentAd': 1 },
+            $unset: { 'currentAd': 1 },
             $set: { lastSeen: new Date() }
           },
           { new: true }
@@ -854,7 +974,7 @@ class DeviceStatusService {
           result = await DeviceTracking.findOneAndUpdate(
             { materialId },
             { 
-              $unset: { 'screenMetrics.currentAd': 1 },
+              $unset: { 'currentAd': 1 },
               $set: { lastSeen: new Date() }
             },
             { new: true }
@@ -886,6 +1006,137 @@ class DeviceStatusService {
       clearTimeout(timer);
       this.adEndTimers.delete(deviceId);
       console.log(`🚫 [AdCleanup] Cancelled cleanup timer for device ${deviceId}`);
+    }
+  }
+
+  // Slot synchronization methods
+  broadcastSlotSynchronization(materialId, sourceSlotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      console.log(`⚠️ [SlotSync] No material connections found for ${materialId}`);
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    const syncMessage = {
+      type: 'slotSync',
+      sourceSlot: sourceSlotNumber,
+      materialId: materialId,
+      adId: message.adId || '',
+      adTitle: message.adTitle || '',
+      state: message.state,
+      currentTime: message.currentTime || 0,
+      duration: message.duration || 0,
+      progress: message.progress || 0,
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`🔄 [SlotSync] Broadcasting sync from slot ${sourceSlotNumber} to other slots: ${message.adTitle || 'Unknown'} - ${message.state}`);
+
+    connections.forEach((connection, slotNumber) => {
+      if (slotNumber !== sourceSlotNumber && connection.ws && connection.ws.readyState === WebSocket.OPEN) {
+        console.log(`🔄 [SlotSync] Sending sync to slot ${slotNumber}: ${message.adTitle || 'Unknown'} - ${message.state}`);
+        try {
+          connection.ws.send(JSON.stringify(syncMessage));
+        } catch (error) {
+          console.error(`❌ [SlotSync] Error sending sync to slot ${slotNumber}:`, error);
+        }
+      }
+    });
+  }
+
+  handleSyncRequest(deviceId, materialId, slotNumber, message) {
+    if (!this.materialConnections || !this.materialConnections.has(materialId)) {
+      return;
+    }
+
+    const connections = this.materialConnections.get(materialId);
+    console.log(`🔄 [SlotSync] Handling sync request from slot ${slotNumber} for material ${materialId}`);
+
+    // Find the first active slot that is currently playing an ad
+    let sourceSlot = null;
+    let bestSourceSlot = null;
+    
+    connections.forEach(ws => {
+      if (ws.slotNumber !== slotNumber && ws.readyState === WebSocket.OPEN) {
+        // Prefer slots that are currently playing
+        if (ws.currentPlaybackState && ws.currentPlaybackState.state === 'playing') {
+          bestSourceSlot = ws;
+        } else if (!sourceSlot) {
+          sourceSlot = ws; // Fallback to any active slot
+        }
+      }
+    });
+
+    const targetSlot = bestSourceSlot || sourceSlot;
+    
+    // Don't sync if no slots are actually playing ads
+    if (!targetSlot || (targetSlot.currentPlaybackState && 
+        (targetSlot.currentPlaybackState.state === 'loading' || 
+         targetSlot.currentPlaybackState.state === 'buffering'))) {
+      console.log(`⚠️ [SlotSync] No active playing slots found for material ${materialId}`);
+      return;
+    }
+
+    if (targetSlot) {
+      // Request current state from the source slot
+      const stateRequest = {
+        type: 'stateRequest',
+        requestingSlot: slotNumber,
+        materialId: materialId,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        targetSlot.send(JSON.stringify(stateRequest));
+        console.log(`🔄 [SlotSync] Requesting state from slot ${targetSlot.slotNumber} for slot ${slotNumber}`);
+        
+        // Also send a direct sync message with current state if available
+        if (targetSlot.currentPlaybackState) {
+          const directSync = {
+            type: 'slotSync',
+            sourceSlot: targetSlot.slotNumber,
+            materialId: materialId,
+            adId: targetSlot.currentPlaybackState.adId,
+            adTitle: targetSlot.currentPlaybackState.adTitle,
+            state: targetSlot.currentPlaybackState.state,
+            currentTime: targetSlot.currentPlaybackState.currentTime,
+            duration: targetSlot.currentPlaybackState.duration,
+            progress: targetSlot.currentPlaybackState.progress,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Send directly to the requesting slot
+          const requestingConnection = this.activeConnections.get(deviceId);
+          if (requestingConnection && requestingConnection.readyState === WebSocket.OPEN) {
+            requestingConnection.send(JSON.stringify(directSync));
+            console.log(`🔄 [SlotSync] Sent direct sync to slot ${slotNumber} from slot ${targetSlot.slotNumber}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error requesting state from slot ${targetSlot.slotNumber}:`, error);
+      }
+    } else {
+      console.log(`⚠️ [SlotSync] No active slots found for material ${materialId} to sync with slot ${slotNumber}`);
+    }
+  }
+
+  // Clean up slot connections when WebSocket closes
+  cleanupSlotConnections(deviceId, materialId, slotNumber) {
+    if (materialId && slotNumber) {
+      const slotKey = `${materialId}-${slotNumber}`;
+      if (this.slotConnections && this.slotConnections.has(slotKey)) {
+        this.slotConnections.get(slotKey).delete(this.activeConnections.get(deviceId));
+        if (this.slotConnections.get(slotKey).size === 0) {
+          this.slotConnections.delete(slotKey);
+        }
+      }
+
+      if (this.materialConnections && this.materialConnections.has(materialId)) {
+        this.materialConnections.get(materialId).delete(this.activeConnections.get(deviceId));
+        if (this.materialConnections.get(materialId).size === 0) {
+          this.materialConnections.delete(materialId);
+        }
+      }
     }
   }
 }

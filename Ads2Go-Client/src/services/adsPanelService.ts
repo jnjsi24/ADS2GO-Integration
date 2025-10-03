@@ -120,11 +120,11 @@ class AdsPanelServiceV4 {
     materialId?: string;
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
     try {
-      // Use the compliance endpoint to get real-time screen data with displayId
-      console.log('🔍 [getScreens] Using compliance endpoint: /screenTracking/compliance');
+      // Use the screens endpoint to get real-time screen data
+      console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
       // Add cache-busting parameter to ensure fresh data
       const cacheBuster = `?t=${Date.now()}`;
-      const response = await this.makeRequest(`/screenTracking/compliance${cacheBuster}`);
+      const response = await this.makeRequest(`/screenTracking/screens${cacheBuster}`);
       
       if (!response || !response.data || !response.data.screens) {
         console.error('❌ Invalid response format from compliance endpoint:', response);
@@ -165,7 +165,7 @@ class AdsPanelServiceV4 {
           displayId: screen.displayId, // Include the displayId from compliance endpoint
           screenType: screen.screenType || 'HEADDRESS',
           carGroupId: screen.carGroupId || '',
-          slotNumber: screen.slotNumber || 1,
+          slotNumber: screen.deviceSlot || screen.slotNumber || 1,
           isOnline: screen.isOnline,
           currentLocation: screen.currentLocation,
           lastSeen: screen.lastSeen,

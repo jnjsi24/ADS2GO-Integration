@@ -35,12 +35,16 @@ class PlaybackWebSocketService {
   private ws: WebSocket | null = null;
   private deviceId: string | null = null;
   private materialId: string | null = null;
+  private slotNumber: number | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectInterval: NodeJS.Timeout | null = null;
   private isConnected = false;
   private playbackUpdateInterval: NodeJS.Timeout | null = null;
   private currentPlaybackData: Partial<PlaybackUpdate> | null = null;
+  private onSlotSync: ((message: any) => void) | null = null;
+  private syncRequestInterval: NodeJS.Timeout | null = null;
+  private lastSyncTime: number = 0;
 
   constructor() {
     this.loadDeviceInfo();
@@ -62,16 +66,19 @@ class PlaybackWebSocketService {
         
         this.deviceId = data.deviceId;
         this.materialId = data.materialId;
-        console.log('🔌 [WebSocket] Loaded device info:', { deviceId: this.deviceId, materialId: this.materialId });
+        this.slotNumber = data.slotNumber;
+        console.log('🔌 [WebSocket] Loaded device info:', { deviceId: this.deviceId, materialId: this.materialId, slotNumber: this.slotNumber });
       } else {
         console.log('🔌 [WebSocket] No registration data found, device not registered');
         this.deviceId = null;
         this.materialId = null;
+        this.slotNumber = null;
       }
     } catch (error) {
       console.error('Error loading device info for WebSocket:', error);
       this.deviceId = null;
       this.materialId = null;
+      this.slotNumber = null;
     }
   }
 
@@ -109,7 +116,7 @@ class PlaybackWebSocketService {
       const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}`;
+      const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}&slotNumber=${this.slotNumber}`;
       // Only log connection attempts if not in reconnection mode
       if (this.reconnectAttempts === 0) {
         console.log('🔌 [WebSocket] Connecting to playback server...');
@@ -133,6 +140,15 @@ class PlaybackWebSocketService {
           const message = JSON.parse(event.data);
           if (message.type === 'pong') {
             console.log('🔌 [WebSocket] Received pong');
+          } else if (message.type === 'slotSync') {
+            console.log('🔄 [WebSocket] Received slot sync message:', message);
+            this.handleSlotSync(message);
+          } else if (message.type === 'stateRequest') {
+            console.log('🔄 [WebSocket] Received state request:', message);
+            this.handleStateRequest(message);
+          } else if (message.type === 'stateResponse') {
+            console.log('🔄 [WebSocket] Received state response:', message);
+            this.handleStateResponse(message);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -196,6 +212,24 @@ class PlaybackWebSocketService {
     }
   }
 
+  private scheduleReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('🔌 [WebSocket] Max reconnection attempts reached, giving up');
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000); // Exponential backoff, max 10s
+    
+    console.log(`🔌 [WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    
+    setTimeout(() => {
+      if (!this.isConnected && !this.isConnecting) {
+        this.connect();
+      }
+    }, delay);
+  }
+
   startPlaybackUpdates(playbackData: Partial<PlaybackUpdate>) {
     this.currentPlaybackData = playbackData;
     
@@ -251,8 +285,8 @@ class PlaybackWebSocketService {
       const update: PlaybackUpdate = {
         type: 'adPlaybackUpdate',
         deviceId: this.deviceId!,
-        adId: this.currentPlaybackData.adId!,
-        adTitle: this.currentPlaybackData.adTitle!,
+        adId: this.currentPlaybackData.adId || '',
+        adTitle: this.currentPlaybackData.adTitle || '',
         state: this.currentPlaybackData.state!,
         currentTime: this.currentPlaybackData.currentTime!,
         duration: this.currentPlaybackData.duration!,
@@ -302,6 +336,7 @@ class PlaybackWebSocketService {
 
   disconnect() {
     this.stopPlaybackUpdates();
+    this.stopPeriodicSync();
     this.clearReconnectInterval();
     
     if (this.ws) {
@@ -313,15 +348,123 @@ class PlaybackWebSocketService {
     console.log('🔌 [WebSocket] Disconnected');
   }
 
-  async updateDeviceInfo(deviceId: string, materialId: string) {
+  async updateDeviceInfo(deviceId: string, materialId: string, slotNumber?: number) {
     this.deviceId = deviceId;
     this.materialId = materialId;
+    this.slotNumber = slotNumber || null;
     
     // Reconnect with new device info
     if (this.isConnected) {
       this.disconnect();
       await this.connect();
     }
+  }
+
+  // Handle slot synchronization messages
+  private handleSlotSync(message: any) {
+    // This will be called by the AdPlayer component to handle synchronization
+    if (this.onSlotSync) {
+      this.onSlotSync(message);
+    }
+  }
+
+  // Handle state request messages
+  private handleStateRequest(message: any) {
+    // Send current playback state to requesting slot
+    if (this.currentPlaybackData && this.isConnected && this.ws) {
+      const stateResponse = {
+        type: 'stateResponse',
+        requestingSlot: message.requestingSlot,
+        materialId: message.materialId,
+        ...this.currentPlaybackData,
+        timestamp: new Date().toISOString()
+      };
+      
+      this.ws.send(JSON.stringify(stateResponse));
+      console.log('🔄 [WebSocket] Sent state response to slot:', message.requestingSlot);
+    }
+  }
+
+  // Handle state response messages (for late-connecting devices)
+  private handleStateResponse(message: any) {
+    // This will be called by the AdPlayer component to handle state responses
+    if (this.onSlotSync) {
+      this.onSlotSync({
+        type: 'slotSync',
+        sourceSlot: message.requestingSlot,
+        materialId: message.materialId,
+        adId: message.adId,
+        adTitle: message.adTitle,
+        state: message.state,
+        currentTime: message.currentTime,
+        duration: message.duration,
+        progress: message.progress,
+        timestamp: message.timestamp
+      });
+    }
+  }
+
+  // Request synchronization with other slots
+  requestSync() {
+    if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
+      // Only request sync if we have current playback data and are actually playing
+      if (!this.currentPlaybackData || !this.currentPlaybackData.adId || 
+          this.currentPlaybackData.state === 'loading' || 
+          this.currentPlaybackData.state === 'buffering') {
+        console.log('🔄 [WebSocket] Skipping sync request - no ads currently playing or still loading');
+        return;
+      }
+
+      const syncRequest = {
+        type: 'syncRequest',
+        materialId: this.materialId,
+        slotNumber: this.slotNumber,
+        timestamp: new Date().toISOString()
+      };
+      
+      this.ws.send(JSON.stringify(syncRequest));
+      this.lastSyncTime = Date.now();
+      console.log('🔄 [WebSocket] Requested sync with other slots');
+    }
+  }
+
+  // Start periodic sync requests (for late-connecting devices)
+  startPeriodicSync() {
+    if (this.syncRequestInterval) {
+      clearInterval(this.syncRequestInterval);
+    }
+
+    // Request sync every 30 seconds for minimal synchronization
+    this.syncRequestInterval = setInterval(() => {
+      if (this.isConnected && this.materialId && this.slotNumber) {
+        const timeSinceLastSync = Date.now() - this.lastSyncTime;
+        if (timeSinceLastSync > 30000) { // Only if we haven't synced in the last 30 seconds
+          this.requestSync();
+        }
+      }
+    }, 30000);
+
+    // Stop periodic sync after 60 seconds
+    setTimeout(() => {
+      if (this.syncRequestInterval) {
+        clearInterval(this.syncRequestInterval);
+        this.syncRequestInterval = null;
+        console.log('🔄 [WebSocket] Stopped periodic sync requests');
+      }
+    }, 60000);
+  }
+
+  // Stop periodic sync requests
+  stopPeriodicSync() {
+    if (this.syncRequestInterval) {
+      clearInterval(this.syncRequestInterval);
+      this.syncRequestInterval = null;
+    }
+  }
+
+  // Set callback for slot sync handling
+  setSlotSyncCallback(callback: (message: any) => void) {
+    this.onSlotSync = callback;
   }
 
   isWebSocketConnected(): boolean {

@@ -276,44 +276,71 @@ router.post('/update', async (req, res) => {
   }
 });
 
-// POST /analytics/track-ad - Track ad playback
-router.post('/track-ad', async (req, res) => {
+// POST /analytics/get-ad-data - Get ad playback data from deviceTracking
+router.post('/get-ad-data', async (req, res) => {
   try {
-    const { deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime } = req.body;
+    const { materialId, startDate, endDate } = req.body;
     
-    if (!deviceId || !materialId || !slotNumber || !adId || !adTitle || !adDuration) {
+    if (!materialId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: deviceId, materialId, slotNumber, adId, adTitle, adDuration'
+        message: 'Missing required field: materialId'
       });
     }
     
-    const analytics = await AnalyticsService.trackAdPlayback(
-      deviceId, 
-      materialId, 
-      slotNumber, 
-      adId, 
-      adTitle, 
-      adDuration, 
-      viewTime
-    );
+    const start = startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to last 7 days
+    const end = endDate || new Date();
+    
+    const adData = await AnalyticsService.getAdPlaybackData(materialId, start, end);
     
     res.json({
       success: true,
-      data: analytics,
-      message: 'Ad playback tracked successfully'
+      data: adData,
+      message: 'Ad playback data retrieved successfully'
     });
   } catch (error) {
-    console.error('Error tracking ad playback:', error);
+    console.error('Error getting ad playback data:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to track ad playback',
+      message: 'Failed to get ad playback data',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
 
-// POST /analytics/track-qr - Track QR scan
+// POST /analytics/get-qr-data - Get QR scan data from deviceTracking
+router.post('/get-qr-data', async (req, res) => {
+  try {
+    const { materialId, startDate, endDate } = req.body;
+    
+    if (!materialId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: materialId'
+      });
+    }
+    
+    const start = startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to last 7 days
+    const end = endDate || new Date();
+    
+    const qrData = await AnalyticsService.getQRScanData(materialId, start, end);
+    
+    res.json({
+      success: true,
+      data: qrData,
+      message: 'QR scan data retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting QR scan data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get QR scan data',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /analytics/track-qr - Track QR scan (DEPRECATED - now handled by /ads/qr-scan)
 router.post('/track-qr', async (req, res) => {
   try {
     const { deviceId, materialId, slotNumber, qrScanData } = req.body;

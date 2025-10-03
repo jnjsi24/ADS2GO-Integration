@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import playbackWebSocketService from './playbackWebSocketService';
 import offlineQueueService from './offlineQueueService';
 import Constants from 'expo-constants';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -196,11 +196,28 @@ export class TabletRegistrationService {
   }
 
   async generateDeviceId(): Promise<string> {
-    // Use a consistent device identifier that doesn't change between app restarts
-    const baseDeviceId = Device.osInternalBuildId || Device.deviceName || 'unknown';
+    // Create a more unique device identifier using multiple device properties
+    const deviceInfo = {
+      osInternalBuildId: Device.osInternalBuildId || 'unknown',
+      deviceName: Device.deviceName || 'unknown',
+      brand: Device.brand || 'unknown',
+      modelName: Device.modelName || 'unknown',
+      osName: Device.osName || 'unknown',
+      osVersion: Device.osVersion || 'unknown',
+      platform: Platform.OS || 'unknown'
+    };
+    
+    // Create a unique base identifier by combining multiple device properties
+    const baseDeviceId = `${deviceInfo.brand}-${deviceInfo.modelName}-${deviceInfo.osName}-${deviceInfo.osVersion}`.replace(/[^a-zA-Z0-9-]/g, '-');
+    
+    // Add a random component to ensure uniqueness even if device properties are similar
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const timestamp = Date.now();
+    
     // Remove any existing TABLET prefix to avoid duplication
     const cleanDeviceId = baseDeviceId.replace(/^TABLET-/, '');
-    return `TABLET-${cleanDeviceId}-${Date.now()}`;
+    
+    return `TABLET-${cleanDeviceId}-${randomSuffix}-${timestamp}`;
   }
 
   async migrateDeviceIdIfNeeded(): Promise<void> {
@@ -250,62 +267,9 @@ export class TabletRegistrationService {
         console.log('✅ Updated material ID in SecureStore to:', materialId);
       }
       
-      // If registration was cleared, try to verify if tablet is actually registered in database
+      // If registration was cleared, don't check database - respect the cleared state
       if (wasCleared) {
-        console.log('Registration was explicitly cleared, checking database for existing registration...');
-        
-        if (materialId) {
-          console.log('Found material ID, checking database for existing registration:', materialId);
-          
-          try {
-            // Check if tablet is registered in database
-            const response = await fetch(`${API_BASE_URL}/tablet/configuration/${materialId}`);
-            if (response.ok) {
-              const config = await response.json();
-              if (config.success && config.tablet && config.tablet.tablets && config.tablet.tablets.length > 0) {
-                console.log('✅ Found existing registration in database, clearing cleared flag');
-                
-                // Clear the cleared flag since we found a valid registration
-                await AsyncStorage.removeItem('registration_cleared');
-                
-                // Create registration data from database
-                const tabletUnit = config.tablet.tablets[0]; // Use first tablet
-                console.log('Database tablet unit:', tabletUnit);
-                
-                // Try to find the correct tablet unit by matching device ID or use the first one
-                let selectedTablet = tabletUnit;
-                if (config.tablet.tablets.length > 1) {
-                  // Look for a tablet with a valid device ID
-                  const tabletWithDeviceId = config.tablet.tablets.find(t => t.deviceId && t.deviceId !== 'undefined');
-                  if (tabletWithDeviceId) {
-                    selectedTablet = tabletWithDeviceId;
-                    console.log('Found tablet with device ID:', selectedTablet);
-                  }
-                }
-                
-                const registration: TabletRegistration = {
-                  deviceId: selectedTablet.deviceId || `TABLET-${selectedTablet.tabletNumber || 1}-${Date.now()}`,
-                  materialId: config.tablet.materialId,
-                  slotNumber: selectedTablet.tabletNumber || 1,
-                  carGroupId: config.tablet.carGroupId,
-                  isRegistered: true,
-                  lastReportedAt: selectedTablet.gps?.lastSeen || new Date().toISOString()
-                };
-                
-                // Save the registration data
-                await AsyncStorage.setItem('tabletRegistration', JSON.stringify(registration));
-                this.registration = registration;
-                
-                console.log('✅ Restored registration from database:', registration);
-                return true;
-              }
-            }
-          } catch (error) {
-            console.error('Error checking database for existing registration:', error);
-          }
-        }
-        
-        console.log('Registration was explicitly cleared and no valid database registration found, returning false');
+        console.log('Registration was explicitly cleared, returning false');
         return false;
       }
       
@@ -384,70 +348,7 @@ export class TabletRegistrationService {
       const wasCleared = await AsyncStorage.getItem('registration_cleared');
       console.log('🔍 Checking registration cleared flag:', wasCleared);
       if (wasCleared) {
-        console.log('Registration was explicitly cleared, checking database for existing registration...');
-        
-        // Try to restore from database if available
-        let materialId = await SecureStore.getItemAsync('device_material_id') || 
-                        process.env.EXPO_PUBLIC_MATERIAL_ID || 
-                        Constants.expoConfig?.extra?.EXPO_PUBLIC_MATERIAL_ID;
-        
-        // If we have a material ID but it doesn't match the database, try the correct one
-        if (materialId === 'DGL-HEADDRESS-CAR-001') {
-          console.log('⚠️  Material ID mismatch detected, trying correct material ID from database');
-          materialId = 'DGL-HEADDRESS-CAR-005';
-        }
-        
-        if (materialId) {
-          try {
-            const response = await fetch(`${API_BASE_URL}/tablet/configuration/${materialId}`);
-            if (response.ok) {
-              const config = await response.json();
-              if (config.success && config.tablet && config.tablet.tablets && config.tablet.tablets.length > 0) {
-                console.log('✅ Found existing registration in database, restoring...');
-                
-                // Clear the cleared flag
-                await AsyncStorage.removeItem('registration_cleared');
-                
-                // Create registration data from database
-                const tabletUnit = config.tablet.tablets[0];
-                console.log('Database tablet unit:', tabletUnit);
-                
-                // Try to find the correct tablet unit by matching device ID or use the first one
-                let selectedTablet = tabletUnit;
-                if (config.tablet.tablets.length > 1) {
-                  // Look for a tablet with a valid device ID
-                  const tabletWithDeviceId = config.tablet.tablets.find(t => t.deviceId && t.deviceId !== 'undefined');
-                  if (tabletWithDeviceId) {
-                    selectedTablet = tabletWithDeviceId;
-                    console.log('Found tablet with device ID:', selectedTablet);
-                  }
-                }
-                
-                const registration: TabletRegistration = {
-                  deviceId: selectedTablet.deviceId || `TABLET-${selectedTablet.tabletNumber || 1}-${Date.now()}`,
-                  materialId: config.tablet.materialId,
-                  slotNumber: selectedTablet.tabletNumber || 1,
-                  carGroupId: config.tablet.carGroupId,
-                  isRegistered: true,
-                  lastReportedAt: selectedTablet.gps?.lastSeen || new Date().toISOString()
-                };
-                
-                // Save the registration data
-                await AsyncStorage.setItem('tabletRegistration', JSON.stringify(registration));
-                this.registration = registration;
-                
-                // Update material ID in SecureStore
-                await SecureStore.setItemAsync('device_material_id', config.tablet.materialId);
-                
-                return registration;
-              }
-            }
-          } catch (error) {
-            console.error('Error checking database for existing registration:', error);
-          }
-        }
-        
-        console.log('Registration was explicitly cleared and no valid database registration found');
+        console.log('Registration was explicitly cleared, NOT restoring from database');
         return null;
       }
       
@@ -550,7 +451,7 @@ export class TabletRegistrationService {
         await AsyncStorage.removeItem('registration_cleared');
         
         // Update WebSocket service with new device info
-        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId);
+        await playbackWebSocketService.updateDeviceInfo(registration.deviceId, registration.materialId, registration.slotNumber);
       }
 
       return result;
@@ -566,7 +467,7 @@ export class TabletRegistrationService {
   async updateTabletStatus(isOnline: boolean, gps?: { lat: number; lng: number }): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.error('No registration data available');
+        console.log('Device not registered - skipping status update');
         return false;
       }
 
@@ -636,7 +537,13 @@ export class TabletRegistrationService {
   async updateLocationTracking(lat: number, lng: number, speed: number = 0, heading: number = 0, accuracy: number = 0): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.error('No registration data available for location tracking');
+        console.log('Device not registered - skipping location tracking');
+        return false;
+      }
+
+      // Validate that we have proper registration data
+      if (!this.registration.materialId || this.registration.materialId.startsWith('TABLET-')) {
+        console.log('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
         return false;
       }
 
@@ -688,7 +595,9 @@ export class TabletRegistrationService {
           },
           body: JSON.stringify({
             deviceId: locationUpdate.deviceId,
-            deviceSlot: 1, // Default slot for now
+            materialId: this.registration.materialId, // Track by car/material, not individual device
+            deviceSlot: this.registration.slotNumber, // Keep slot info for reference
+            carGroupId: this.registration.carGroupId, // Add carGroupId for dashboard
             lat: locationUpdate.lat,
             lng: locationUpdate.lng,
             speed: locationUpdate.speed,
@@ -757,7 +666,7 @@ export class TabletRegistrationService {
   async getTrackingStatus(): Promise<TrackingStatus | null> {
     try {
       if (!this.registration) {
-        console.error('No registration data available');
+        console.log('Device not registered - no tracking status available');
         return null;
       }
 
@@ -1054,7 +963,7 @@ export class TabletRegistrationService {
   async createScreenTrackingRecord(): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.error('No registration data available to create ScreenTracking record');
+        console.log('Device not registered - skipping ScreenTracking record creation');
         return false;
       }
 
@@ -1149,7 +1058,6 @@ export class TabletRegistrationService {
     
     // Also clear SecureStore data
     try {
-      const { SecureStore } = require('expo-secure-store');
       await SecureStore.deleteItemAsync('device_material_id');
       console.log('Material ID cleared from SecureStore');
     } catch (error) {
@@ -1207,7 +1115,6 @@ export class TabletRegistrationService {
       await AsyncStorage.setItem('registration_cleared', 'true');
       
       // Clear SecureStore data
-      const { SecureStore } = require('expo-secure-store');
       await SecureStore.deleteItemAsync('device_material_id');
       
       // Clear in-memory registration

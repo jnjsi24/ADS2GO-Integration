@@ -148,6 +148,12 @@ module.exports = {
           throw new Error('Invalid car group ID');
         }
         
+        // Check if the device ID is already in use by any tablet in the system
+        const existingDevice = await Tablet.findOne({ 'tablets.deviceId': deviceId });
+        if (existingDevice) {
+          throw new Error(`Device ID ${deviceId} is already registered to another tablet`);
+        }
+
         // Check if the slot is already occupied by another device
         const existingTablet = tablet.tablets.find(t => t.tabletNumber === slotNumber);
         if (existingTablet && existingTablet.deviceId && existingTablet.deviceId !== deviceId) {
@@ -170,6 +176,68 @@ module.exports = {
         };
         
         await tablet.save();
+        
+        // Create deviceTracking record for this device
+        try {
+          const DeviceTracking = require('../models/deviceTracking');
+          let existingDeviceTracking = await DeviceTracking.findByMaterialId(materialId);
+          
+          // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
+          if (!existingDeviceTracking) {
+            console.log(`🔍 DeviceTracking not found by materialId: ${materialId}, trying deviceId: ${deviceId}`);
+            existingDeviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+            
+            if (existingDeviceTracking) {
+              console.log(`🔄 Found existing DeviceTracking by deviceId, updating materialId to: ${materialId}`);
+              existingDeviceTracking.materialId = materialId;
+              existingDeviceTracking.carGroupId = material.carGroupId;
+              await existingDeviceTracking.save();
+            }
+          }
+          
+          if (!existingDeviceTracking) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const deviceTracking = new DeviceTracking({
+              materialId,
+              carGroupId: material.carGroupId,
+              screenType: 'HEADDRESS',
+              date: today,
+              isOnline: true,
+              lastSeen: new Date(),
+              slots: [{
+                slotNumber: parseInt(slotNumber),
+                deviceId,
+                isOnline: true,
+                lastSeen: new Date(),
+                deviceInfo: {}
+              }],
+              currentSession: {
+                date: today,
+                startTime: new Date(),
+                totalHoursOnline: 0,
+                totalDistanceTraveled: 0,
+                targetHours: 8,
+                complianceStatus: 'NON_COMPLIANT',
+                isActive: true
+              }
+            });
+            await deviceTracking.save();
+            console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+          } else {
+            // Update existing car record with new slot
+            await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
+              deviceId,
+              isOnline: true,
+              deviceInfo: {}
+            });
+            console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+          }
+        } catch (deviceTrackingError) {
+          console.error('Error creating deviceTracking record:', deviceTrackingError);
+          // Don't fail the registration if deviceTracking creation fails
+        }
         
         // Update analytics to link tablet device with deployment analytics
         try {

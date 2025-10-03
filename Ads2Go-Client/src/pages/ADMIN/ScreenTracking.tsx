@@ -8,6 +8,7 @@ import 'leaflet-defaulticon-compatibility';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
+import EnhancedRouteMap from '../../components/EnhancedRouteMap';
 import { 
   Clock, 
   Car, 
@@ -146,6 +147,11 @@ const ScreenTracking: React.FC = () => {
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
+  
+  // Enhanced route map controls
+  const [showSpeedColors, setShowSpeedColors] = useState(true);
+  const [showWaypoints, setShowWaypoints] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(true);
 
   const mapRef = useRef<Map | null>(null);
 
@@ -728,7 +734,7 @@ const ScreenTracking: React.FC = () => {
                     </p>
                   </div>
                   {activeTab === 'historical' && (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-4">
                       <button
                         onClick={() => {
                           if (selectedScreen) {
@@ -744,6 +750,40 @@ const ScreenTracking: React.FC = () => {
                         <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
                       </button>
+                      
+                      {/* Enhanced Route Controls */}
+                      <div className="flex items-center space-x-4 text-sm">
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={showSpeedColors}
+                            onChange={(e) => setShowSpeedColors(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-gray-700">Speed Colors</span>
+                        </label>
+                        
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={showWaypoints}
+                            onChange={(e) => setShowWaypoints(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-gray-700">Waypoints</span>
+                        </label>
+                        
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={showMetrics}
+                            onChange={(e) => setShowMetrics(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-2 text-gray-700">Metrics</span>
+                        </label>
+                      </div>
+                      
                       <div className="text-xs text-gray-500">
                         {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
                       </div>
@@ -761,18 +801,30 @@ const ScreenTracking: React.FC = () => {
                   </div>
                 )}
                 {showMap && (
-                  <MapView 
-                    key={`map-${forceMapRemount}-${selectedDate}-${mapKey}`}
-                    center={mapCenter}
-                    zoom={zoom}
-                  onMapLoad={(map: Map) => {
-                    if (mapRef) {
-                      (mapRef as React.MutableRefObject<Map | null>).current = map;
-                    }
-                    // Any map initialization code can go here
-                  }}
-                >
-                  {activeTab === 'live' ? (
+                  activeTab === 'historical' && selectedScreen && historicalRouteData ? (
+                    // Enhanced Strava-like route visualization for historical data
+                    <EnhancedRouteMap
+                      deviceId={selectedScreen.deviceId}
+                      showSpeedColors={showSpeedColors}
+                      showWaypoints={showWaypoints}
+                      showMetrics={showMetrics}
+                      onRouteLoad={(data) => {
+                        console.log('Enhanced route loaded:', data);
+                      }}
+                    />
+                  ) : (
+                    <MapView 
+                      key={`map-${forceMapRemount}-${selectedDate}-${mapKey}`}
+                      center={mapCenter}
+                      zoom={zoom}
+                      onMapLoad={(map: Map) => {
+                        if (mapRef) {
+                          (mapRef as React.MutableRefObject<Map | null>).current = map;
+                        }
+                        // Any map initialization code can go here
+                      }}
+                    >
+                      {activeTab === 'live' ? (
                     // Live tracking markers and routes
                     <>
                       {/* Individual device markers - show one marker per device */}
@@ -984,11 +1036,12 @@ const ScreenTracking: React.FC = () => {
                       )}
                     </>
                   )}
-                </MapView>
+                    </MapView>
+                  )
                 )}
                 
-                {/* Historical Route Information */}
-                {activeTab === 'historical' && historicalRouteData && (
+                {/* Historical Route Information - Only show for non-enhanced map */}
+                {activeTab === 'historical' && historicalRouteData && !(selectedScreen && historicalRouteData) && (
                   <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-sm">
                     <h4 className="font-semibold text-gray-900 mb-2">Historical Route Info</h4>
                     <div className="space-y-1 text-sm">

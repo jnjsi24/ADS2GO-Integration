@@ -78,7 +78,7 @@ const typeDefs = gql`
     hasSpecialChar: String
   }
 
-  # Analytics Types
+  # Analytics Types - Updated for UserAnalytics system
   type UserAnalyticsSummary {
     totalAdImpressions: Int!
     totalAdsPlayed: Int!
@@ -86,16 +86,35 @@ const typeDefs = gql`
     averageCompletionRate: Float!
     totalAds: Int!
     activeAds: Int!
+    totalMaterials: Int!
+    totalDevices: Int!
+    totalQRScans: Int!
+    qrScanConversionRate: Float!
   }
 
   type UserAdPerformance {
     adId: String!
     adTitle: String!
-    impressions: Int!
-    totalPlayTime: Float!
+    totalMaterials: Int!
+    totalDevices: Int!
+    totalAdPlayTime: Float!
+    totalAdImpressions: Int!
+    totalQRScans: Int!
+    averageAdCompletionRate: Float!
+    qrScanConversionRate: Float!
+    lastUpdated: String!
+    materials: [UserMaterialPerformance!]!
+  }
+
+  type UserMaterialPerformance {
+    materialId: String!
+    materialName: String
+    carGroupId: String
+    totalAdPlayTime: Float!
+    totalAdImpressions: Int!
+    totalQRScans: Int!
     averageCompletionRate: Float!
-    playCount: Int!
-    lastPlayed: String
+    lastActivity: String
   }
 
   type UserDailyStats {
@@ -103,6 +122,8 @@ const typeDefs = gql`
     impressions: Int!
     adsPlayed: Int!
     displayTime: Float!
+    qrScans: Int!
+    completionRate: Float!
   }
 
   type UserDeviceStats {
@@ -113,6 +134,7 @@ const typeDefs = gql`
     displayTime: Float!
     lastActivity: String
     isOnline: Boolean!
+    qrScans: Int!
   }
 
   type UserAnalytics {
@@ -123,6 +145,8 @@ const typeDefs = gql`
     period: String!
     startDate: String
     endDate: String
+    lastUpdated: String!
+    isActive: Boolean!
   }
 
   type UserAdDetails {

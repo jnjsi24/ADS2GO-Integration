@@ -16,6 +16,10 @@ const ConnectionStatusBar: React.FC<ConnectionStatusBarProps> = ({ materialId })
     return null;
   }
 
+  // Temporarily hide connection status bar to avoid "Error: Connecting" message
+  // The app works fine without WebSocket connection
+  return null;
+
   let statusText = '';
   let iconName: keyof typeof MaterialIcons.glyphMap = 'wifi-off';
   let backgroundColor = '#f8d7da'; // Light red
