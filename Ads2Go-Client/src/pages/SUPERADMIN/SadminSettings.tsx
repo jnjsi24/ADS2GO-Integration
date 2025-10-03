@@ -3,6 +3,7 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { User, Lock, Bell, CheckCircle } from 'lucide-react';
+import ToastNotifications from './tabs/SadminAdmin/ToastNotifications';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -105,9 +106,6 @@ const SadminSettings: React.FC = () => {
   const addToast = (message: string, type: 'error' | 'success' = 'error') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
   };
 
   // Remove toast notification
@@ -451,42 +449,9 @@ const SadminSettings: React.FC = () => {
         )}
       </main>
 
-      {/* Toast Notifications Container */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
+      {/* Toast Notifications */}
+      <ToastNotifications toasts={toasts} onRemove={removeToast} />
 
-      {/* Inline CSS for animations */}
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
     </div>
   );
 };
