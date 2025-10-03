@@ -636,97 +636,73 @@ const Reports: React.FC = () => {
         ))
       )}
 
-      {/* Footer with pagination controls - Fixed at bottom */}
-      <div className="mt-auto">
-        {/* Action buttons */}
-        <div className="flex space-x-2 mb-4">
-          <button className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
-            Export All Reports to Excel
+      {/* Pagination */}
+      <div className="mt-auto flex justify-center py-4">
+        <div className="flex items-center space-x-2">
+          {/* Previous button */}
+          <button
+            onClick={handlePreviousPage}
+            disabled={currentPage === 1}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            Previous
           </button>
-        </div>
 
-        {/* Pagination controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredReports.length)} of {filteredReports.length} reports
-            </span>
-            <span className="text-sm text-gray-600">Selected: {selectedReports.length}</span>
-          </div>
-          
-          {/* Pagination Controls */}
-          <div className="flex items-center space-x-4">
-            {/* Page size selector */}
-            <div className="flex items-center space-x-2">
-              <label className="text-sm text-gray-600">Show:</label>
-              <select
-                value={itemsPerPage}
-                onChange={(e) => {
-                  setItemsPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-              <span className="text-sm text-gray-600">per page</span>
-            </div>
+          {/* Page numbers */}
+          <div className="flex space-x-1">
+            {(() => {
+              const pages = [];
+              const maxVisiblePages = 3; // show 3 numbers before ellipsis
+              let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-            {/* Pagination buttons */}
-            {totalPages > 1 && (
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                
-                {/* Page numbers - show only a few pages around current page */}
-                <div className="flex space-x-1">
-                  {(() => {
-                    const pages = [];
-                    const maxVisiblePages = 5;
-                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                    
-                    if (endPage - startPage + 1 < maxVisiblePages) {
-                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                    }
-                    
-                    for (let i = startPage; i <= endPage; i++) {
-                      pages.push(
-                        <button
-                          key={i}
-                          onClick={() => handlePageChange(i)}
-                          className={`px-3 py-1 text-sm border rounded ${
-                            currentPage === i
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {i}
-                        </button>
-                      );
-                    }
-                    return pages;
-                  })()}
-                </div>
-                
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+              if (endPage - startPage + 1 < maxVisiblePages) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+              }
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => handlePageChange(i)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      currentPage === i
+                        ? "border border-gray-300 text-black" 
+                        : "text-gray-700 hover:border border-gray-300"
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              // Add ellipsis if not at the last page
+              if (endPage < totalPages) {
+                pages.push(
+                  <span key="ellipsis" className="px-2 text-gray-500">
+                    …
+                  </span>
+                );
+              }
+
+              return pages;
+            })()}
           </div>
+
+          {/* Next button */}
+          <button
+            onClick={handleNextPage}
+            disabled={currentPage === totalPages}
+            className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
 

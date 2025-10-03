@@ -34,7 +34,7 @@ const NewsletterManagement: React.FC = () => {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   const filterOptions = [
     'All Subscribers',
@@ -80,40 +80,40 @@ const NewsletterManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        setError('API URL not configured');
-        return;
-      }
       
-      // Clean the URL to remove any extra characters or comments
-      const cleanApiUrl = apiUrl.split('#')[0].trim();
-      // Ensure the URL doesn't end with a slash to avoid double slashes
-      const baseUrl = cleanApiUrl.endsWith('/') ? cleanApiUrl.slice(0, -1) : cleanApiUrl;
-      const fullUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
+      // Use the same fallback approach as other services
+      const envApiUrl = process.env.REACT_APP_API_URL;
+      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
       
-      console.log('Original API URL:', apiUrl);
-      console.log('Clean API URL:', cleanApiUrl);
-      console.log('Base URL:', baseUrl);
-      console.log('Full URL:', fullUrl);
+      console.log('🔍 Newsletter API Configuration:', {
+        envUrl: envApiUrl,
+        finalUrl: actualServerUrl,
+        usingFallback: true,
+        reason: 'Forced localhost due to connection issues'
+      });
+      
+      const fullUrl = `${actualServerUrl}/api/newsletter/subscribers?t=${Date.now()}`;
+      console.log('📡 Fetching from URL:', fullUrl);
       
       const response = await fetch(fullUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
       
-      console.log('Response status:', response.status);
+      console.log('📊 Response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API Error:', errorText);
+        console.error('❌ API Error:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
-      console.log('API Response:', data);
+      console.log('✅ API Response:', data);
       
       if (data.success) {
         const subscribers = data.subscribers || [];
@@ -141,8 +141,23 @@ const NewsletterManagement: React.FC = () => {
         setError(`Failed to fetch subscribers: ${data.message || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('Fetch error:', err);
-      setError(`Failed to fetch subscribers: ${err instanceof Error ? err.message : 'Network error'}`);
+      console.error('❌ Fetch error:', err);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Network error';
+      if (err instanceof Error) {
+        if (err.name === 'TimeoutError') {
+          errorMessage = 'Request timed out - server may be down';
+        } else if (err.message.includes('Failed to fetch')) {
+          errorMessage = 'Cannot connect to server - please check if the backend is running';
+        } else if (err.message.includes('CORS')) {
+          errorMessage = 'CORS error - server configuration issue';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(`Failed to fetch subscribers: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -198,22 +213,19 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        alert('API URL not configured');
-        return;
-      }
+      // Use the same fallback approach as other services
+      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
       
-      // Clean the URL to remove any extra characters or comments
-      const cleanApiUrl = apiUrl.split('#')[0].trim();
-      // Ensure the URL doesn't end with a slash to avoid double slashes
-      const baseUrl = cleanApiUrl.endsWith('/') ? cleanApiUrl.slice(0, -1) : cleanApiUrl;
-      const response = await fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
+      console.log('📡 Unsubscribing from URL:', `${actualServerUrl}/api/newsletter/unsubscribe`);
+      
+      const response = await fetch(`${actualServerUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email: emailToUnsubscribe }),
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
 
       const data = await response.json();
@@ -226,7 +238,8 @@ const NewsletterManagement: React.FC = () => {
         alert('Failed to unsubscribe: ' + data.message);
       }
     } catch (err) {
-      alert('Failed to unsubscribe');
+      console.error('❌ Unsubscribe error:', err);
+      alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
     }
   };
 
@@ -275,18 +288,48 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Server is not running on {process.env.REACT_APP_API_URL ? process.env.REACT_APP_API_URL.split('#')[0].trim() : 'API URL not configured'}</li>
+                <li>Backend server is not running on <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>
+                <li>CORS configuration problems</li>
               </ul>
             </div>
-            <button
-              onClick={fetchSubscribers}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
-            >
-              Retry
-            </button>
+            <div className="text-sm text-blue-600 mb-4">
+              <strong>Troubleshooting steps:</strong>
+              <ul className="list-disc list-inside mt-2">
+                <li>Check if the backend server is running: <code className="bg-gray-100 px-1 rounded">npm start</code> in the Ads2Go-Server directory</li>
+                <li>Verify the server is accessible at <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
+                <li>Check browser console for detailed error messages</li>
+                <li>Ensure the newsletter API endpoint exists on the backend</li>
+              </ul>
+            </div>
+            <div className="flex space-x-4">
+              <button
+                onClick={fetchSubscribers}
+                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => {
+                  // Show offline mode with empty data
+                  setError('');
+                  setSubscribers([]);
+                  setFilteredSubscribers([]);
+                  setStats({
+                    total: 0,
+                    active: 0,
+                    inactive: 0,
+                    userSubscribers: 0,
+                    nonUserSubscribers: 0
+                  });
+                }}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-200"
+              >
+                Continue Offline
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -517,97 +560,73 @@ const NewsletterManagement: React.FC = () => {
           )}
         </div>
 
-        {/* Pagination Controls - Fixed at bottom */}
-        <div className="mt-auto">
-          {/* Action buttons */}
-          <div className="flex space-x-2 mb-4">
-            <button className="px-4 py-2 text-sm text-green-600 transition-colors border border-green-600 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed">
-              Export All Subscribers to Excel
+        {/* Pagination */}
+        <div className="mt-auto flex justify-center py-4">
+          <div className="flex items-center space-x-2">
+            {/* Previous button */}
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
             </button>
-          </div>
 
-          {/* Pagination controls */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
-                Showing {startIndex + 1}-{Math.min(endIndex, filteredSubscribers.length)} of {filteredSubscribers.length} subscribers
-              </span>
-              <span className="text-sm text-gray-600">Selected: 0</span>
-            </div>
-            
-            {/* Pagination Controls */}
-            <div className="flex items-center space-x-4">
-              {/* Page size selector */}
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600">Show:</label>
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-600">per page</span>
-              </div>
+            {/* Page numbers */}
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 3; // show 3 numbers before ellipsis
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-              {/* Pagination buttons */}
-              {totalPages > 1 && (
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={handlePreviousPage}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  
-                  {/* Page numbers - show only a few pages around current page */}
-                  <div className="flex space-x-1">
-                    {(() => {
-                      const pages = [];
-                      const maxVisiblePages = 5;
-                      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                      
-                      if (endPage - startPage + 1 < maxVisiblePages) {
-                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                      }
-                      
-                      for (let i = startPage; i <= endPage; i++) {
-                        pages.push(
-                          <button
-                            key={i}
-                            onClick={() => handlePageChange(i)}
-                            className={`px-3 py-1 text-sm border rounded ${
-                              currentPage === i
-                                ? 'bg-blue-500 text-white border-blue-500'
-                                : 'border-gray-300 hover:bg-gray-50'
-                            }`}
-                          >
-                            {i}
-                          </button>
-                        );
-                      }
-                      return pages;
-                    })()}
-                  </div>
-                  
-                  <button
-                    onClick={handleNextPage}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black" 
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                // Add ellipsis if not at the last page
+                if (endPage < totalPages) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
+
+                return pages;
+              })()}
             </div>
+
+            {/* Next button */}
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </div>
 
