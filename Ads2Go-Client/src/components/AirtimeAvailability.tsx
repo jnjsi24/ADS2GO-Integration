@@ -429,7 +429,7 @@ const AirtimeAvailability: React.FC<AirtimeAvailabilityProps> = ({
                 {/* Hourly Schedule */}
                 <div>
                   <h5 className="text-sm font-medium text-gray-900 mb-3">Hourly Availability Schedule</h5>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-2">
                     {vehicle.hourlyAvailability
                       .filter(slot => {
                         if (timeFilter === 'available') return slot.isAvailable;

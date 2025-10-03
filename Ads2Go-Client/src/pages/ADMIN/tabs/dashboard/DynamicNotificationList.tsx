@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { Bell, ArrowUpRight, RefreshCw, CheckSquare, Square } from 'lucide-react';
+import { Bell, ArrowUpRight, RefreshCw, CheckSquare, Square, AlertTriangle, DollarSign, Users, FileText } from 'lucide-react';
 import { motion, type Transition } from 'framer-motion';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ } from '../../../../graphql/admin/queries';
@@ -126,14 +126,22 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
 
   const getNotificationIcon = (category: string) => {
     switch (category) {
-      case 'NEW_AD_SUBMISSION': return <Bell className="w-5 h-5 text-blue-500" />;
-      case 'NEW_USER_REGISTRATION': return <Bell className="w-5 h-5 text-green-500" />;
-      case 'NEW_DRIVER_APPLICATION': return <Bell className="w-5 h-5 text-purple-500" />;
-      case 'PAYMENT_SUCCESS': return <Bell className="w-5 h-5 text-green-600" />;
-      case 'PAYMENT_FAILURE': return <Bell className="w-5 h-5 text-red-600" />;
-      case 'PAYMENT_ISSUE': return <Bell className="w-5 h-5 text-red-500" />;
-      case 'SYSTEM_ALERT': return <Bell className="w-5 h-5 text-orange-500" />;
-      default: return <Bell className="w-5 h-5 text-gray-500" />;
+      case 'NEW_AD_SUBMISSION':
+        return <FileText className="w-5 h-5 text-blue-500" />;
+      case 'NEW_USER_REGISTRATION':
+        return <Users className="w-5 h-5 text-green-500" />;
+      case 'NEW_DRIVER_APPLICATION':
+        return <Users className="w-5 h-5 text-purple-500" />;
+      case 'PAYMENT_SUCCESS':
+        return <DollarSign className="w-6 h-6 text-green-600" />;
+      case 'PAYMENT_FAILURE':
+        return <DollarSign className="w-5 h-5 text-red-600" />;
+      case 'PAYMENT_ISSUE':
+        return <DollarSign className="w-5 h-5 text-red-500" />;
+      case 'SYSTEM_ALERT':
+        return <AlertTriangle className="w-5 h-5 text-orange-500" />;
+      default:
+        return <Bell className="w-5 h-5 text-gray-500" />;
     }
   };
 
@@ -163,18 +171,6 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
         initial="collapsed"
         whileHover="expanded"
       >
-        <div className="p-2 border-gray-200">
-          <div className="flex items-center justify-between">
-            <h4 className="text-lg font-semibold text-gray-800">Recent Notifications</h4>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
         <div>
           {filteredNotifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
@@ -182,7 +178,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
               <p>No notifications found</p>
             </div>
           ) : (
-            filteredNotifications.map((notification, i) => (
+            filteredNotifications.slice(0, 3).map((notification, i) => (
               <motion.div
                 key={notification.id}
                 className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-4 py-2 shadow-sm hover:shadow-lg transition-shadow duration-200 relative"
@@ -218,7 +214,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
                         <span>{notification.message}</span>
                         {notification.adTitle && (
                           <>
-                            &nbsp;•&nbsp;
+                            &nbsp;|&nbsp;
                             <span>Ad: {notification.adTitle}</span>
                           </>
                         )}
