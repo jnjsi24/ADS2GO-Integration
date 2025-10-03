@@ -128,53 +128,8 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
         className="bg-white rounded-lg shadow-xl w-96 max-h-[80vh] flex flex-col mt-32 mr-4"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Controls */}
+        {/* Header */}
         <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">Date Filter</h3>
-            <button
-              onClick={onDeleteFilter}
-              className="text-red-500 hover:text-red-700 text-sm"
-            >
-              Delete
-            </button>
-          </div>
-          
-          {/* Filter Controls */}
-          <div className="flex items-center gap-2 mb-4">
-            {/* Start Date Button */}
-            <div className="relative">
-              <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm">
-                Start Date
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Condition Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowConditionDropdown(!showConditionDropdown)}
-                className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50 text-sm"
-              >
-                {condition}
-                <ChevronDown className="w-4 h-4" />
-              </button>
-              
-              {showConditionDropdown && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                  {conditions.map((cond) => (
-                    <button
-                      key={cond}
-                      onClick={() => handleConditionSelect(cond)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm first:rounded-t-md last:rounded-b-md"
-                    >
-                      {cond}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Calendar Section */}
@@ -236,33 +191,6 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
             </div>
           </div>
 
-          {/* Selected Date Display */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-md">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">Selected Date</h4>
-            {condition === 'Is in between' ? (
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
-                  <div className="p-2 bg-white border border-gray-300 rounded text-xs">
-                    {startDate ? formatDate(startDate) : 'No date selected'}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
-                  <div className="p-2 bg-white border border-gray-300 rounded text-xs">
-                    {endDate ? formatDate(endDate) : 'No date selected'}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
-                <div className="p-2 bg-white border border-gray-300 rounded text-xs">
-                  {startDate ? formatDate(startDate) : 'No date selected'}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Action Buttons */}
