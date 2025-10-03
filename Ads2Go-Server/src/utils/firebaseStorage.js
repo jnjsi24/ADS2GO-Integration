@@ -48,7 +48,7 @@ const validateFile = (file) => {
 /**
  * Uploads a file to Firebase Storage
  * @param {Object} file - File object with createReadStream and filename
- * @param {'drivers'|'advertisements'} type - The type of upload (determines folder structure)
+ * @param {'drivers'|'advertisements'|'admin'} type - The type of upload (determines folder structure)
  * @param {string} userId - ID of the user uploading the file
  * @param {string} [subfolder] - Subfolder for driver documents (e.g., 'licenses', 'vehicles')
  * @returns {Promise<{url: string, path: string, filename: string, originalName: string, contentType: string}>}
@@ -87,6 +87,9 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
     if (type === 'drivers') {
       if (!subfolder) throw new Error('Subfolder is required for driver uploads');
       storagePath = `drivers/${userId}/${subfolder}/${newFilename}`;
+    } else if (type === 'admin') {
+      // For admin profile pictures and other admin uploads
+      storagePath = `admin/${userId}/${newFilename}`;
     } else {
       // For advertisements or other client uploads
       storagePath = `advertisements/${userId}/${newFilename}`;
@@ -108,7 +111,8 @@ const uploadToFirebase = async (file, type, userId, subfolder = '') => {
     let stream;
     if (createReadStream) {
       // Handle GraphQL file uploads with createReadStream
-      stream = createReadStream().pipe(firebaseFile.createWriteStream({
+      const readStream = createReadStream();
+      stream = readStream.pipe(firebaseFile.createWriteStream({
         metadata,
         public: false,
         validation: 'md5'

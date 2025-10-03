@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
+import { useAdminNotifications } from '../contexts/AdminNotificationContext';
 import {
   LayoutDashboard,
   Users,
@@ -12,12 +13,27 @@ import {
   MapPin,
   HelpCircle,
   Mail,
+  Bell,
 } from 'lucide-react';
 
 const AdminSidebar: React.FC = () => {
-  const { logout, admin } = useAdminAuth();
+  const { logout, admin, isAuthenticated } = useAdminAuth();
+  const { displayBadgeCount, unreadCount, enableNotificationBadge, notifications, isLoading, totalPendingCount, totalDisplayCount } = useAdminNotifications();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Debug logging
+  console.log('🔔 AdminNavbar Debug:', {
+    displayBadgeCount,
+    unreadCount,
+    enableNotificationBadge,
+    notificationsCount: notifications.length,
+    unreadNotifications: notifications.filter(n => !n.read).length,
+    totalPendingCount,
+    totalDisplayCount,
+    isLoading,
+    admin: admin?.email
+  });
 
   const handleLogout = async () => {
     await logout();
@@ -66,29 +82,47 @@ const AdminSidebar: React.FC = () => {
         </nav>
       </div>
       <div className="pt-5 border-t border-gray-400 text-sm text-gray-500 flex flex-col">
-        {/* Profile Section - FIXED: Navigate to admin settings */}
-        <div
-          className="flex items-center space-x-3 mb-4 cursor-pointer"
-          onClick={() => navigate('/admin/SiteSettings')} // CHANGED THIS LINE
-        >
-          <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
-            <span className="text-white font-semibold">
-              {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
-            </span>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+        {/* Profile Section with Notification Bell */}
+        <div className="flex items-center justify-between mb-4">
+          {/* Profile Section - Navigate to admin settings */}
+          <div
+            className="flex items-center space-x-3 cursor-pointer flex-1"
+            onClick={() => navigate('/admin/SiteSettings')}
+          >
+            <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative">
+              <span className="text-white font-semibold">
+                {admin ? getInitials(admin.firstName, admin.lastName) : '...'}
+              </span>
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+            </div>
+            <div>
+              {admin ? (
+                <p className="font-semibold ">
+                  {`${admin.firstName} ${admin.lastName}`}
+                </p>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-800">Loading...</p>
+                  <p className="text-sm text-gray-500">Please wait</p>
+                </>
+              )}
+            </div>
           </div>
-          <div>
-            {admin ? (
-              <p className="font-semibold ">
-                {`${admin.firstName} ${admin.lastName}`}
-              </p>
-            ) : (
-              <>
-                <p className="font-semibold text-gray-800">Loading...</p>
-                <p className="text-sm text-gray-500">Please wait</p>
-              </>
+          
+          {/* Notification Bell Button */}
+          <button
+            onClick={() => navigate('/admin/notifications')} // Navigate to dedicated notifications page
+            className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors"
+            title="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {/* Show total count only when notification badge is enabled */}
+            {totalDisplayCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {totalDisplayCount > 99 ? '99+' : totalDisplayCount}
+              </span>
             )}
-          </div>
+          </button>
         </div>
 
         <button

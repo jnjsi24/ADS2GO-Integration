@@ -80,6 +80,7 @@ const cleanupRoutes = require('./routes/cleanup');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
+const EmailService = require('./utils/emailService');
 
 // ✅ MongoDB connection
 if (!process.env.MONGODB_URI) {
@@ -95,6 +96,23 @@ mongoose.connect(process.env.MONGODB_URI, {
   .catch(err => {
     console.error('\n❌ MongoDB connection error:', err);
     process.exit(1);
+  });
+
+// ✅ Initialize Email Service
+console.log('\n📧 Initializing Email Service...');
+EmailService.initializeTransporter();
+EmailService.verifyConfiguration()
+  .then(isConfigured => {
+    if (isConfigured) {
+      console.log('✅ Email Service: Ready and configured');
+    } else {
+      console.log('⚠️  Email Service: Configuration issues detected');
+      console.log('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
+      console.log('   Run: node verify-gmail-setup.js to test email configuration');
+    }
+  })
+  .catch(err => {
+    console.error('❌ Email Service initialization error:', err.message);
   });
 
 // ✅ Apollo Server setup

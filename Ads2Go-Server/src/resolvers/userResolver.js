@@ -29,6 +29,55 @@ const resolvers = {
 
     checkPasswordStrength: (_, { password }) => checkPasswordStrength(password),
 
+    getUserNotificationPreferences: async (_, __, { user }) => {
+      try {
+        console.log('🔔 getUserNotificationPreferences called for user:', user?.id);
+        checkAuth(user);
+        
+        const userRecord = await User.findById(user.id);
+        if (!userRecord) {
+          console.error('❌ User not found for ID:', user.id);
+          throw new Error('User not found');
+        }
+        
+        console.log('✅ User found:', userRecord.email);
+        console.log('📋 Current notification preferences:', userRecord.notificationPreferences);
+        
+        // Return default preferences if none exist
+        if (!userRecord.notificationPreferences) {
+          console.log('🔧 Returning default preferences');
+          return {
+            enableDesktopNotifications: false,
+            enableNotificationBadge: true,
+            pushNotificationTimeout: '10',
+            communicationEmails: false,
+            announcementsEmails: true
+          };
+        }
+        
+        return userRecord.notificationPreferences;
+      } catch (error) {
+        console.error('❌ Error in getUserNotificationPreferences:', error);
+        throw error;
+      }
+    },
+
+    getQueuedEmailStats: async (_, __, { user }) => {
+      try {
+        console.log('📧 getQueuedEmailStats called for user:', user?.id);
+        checkAuth(user);
+        
+        const EnhancedEmailNotificationService = require('../services/notifications/EnhancedEmailNotificationService');
+        const stats = await EnhancedEmailNotificationService.getQueuedEmailStats(user.id);
+        
+        console.log('📧 Queued email stats:', stats);
+        return stats;
+      } catch (error) {
+        console.error('❌ Error in getQueuedEmailStats:', error);
+        throw error;
+      }
+    },
+
         getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
           checkAuth(user);
           try {
@@ -101,7 +150,13 @@ const resolvers = {
           emailVerificationCodeExpires: new Date(Date.now() + 15 * 60 * 1000),
         });
 
-        await EmailService.sendVerificationEmail(newUser.email, verificationCode);
+        // Try to send verification email
+        const emailSent = await EmailService.sendVerificationEmail(newUser.email, verificationCode);
+        if (!emailSent) {
+          console.error(`❌ Failed to send verification email to ${newUser.email}`);
+          console.error('   User will still be created, but they may need to request a new verification code');
+        }
+        
         await newUser.save();
 
         // Send notification to admins about new user registration
@@ -480,6 +535,70 @@ const resolvers = {
   await user.save();
   return true;
 },
+
+    updateUserNotificationPreferences: async (_, { input }, { user }) => {
+      try {
+        console.log('🔔 updateUserNotificationPreferences called with:', { input, userId: user?.id });
+        
+        checkAuth(user);
+        
+        const userRecord = await User.findById(user.id);
+        if (!userRecord) {
+          console.error('❌ User not found for ID:', user.id);
+          throw new Error('User not found');
+        }
+
+        console.log('✅ User found:', userRecord.email);
+
+        // Initialize notification preferences if they don't exist
+        if (!userRecord.notificationPreferences) {
+          console.log('🔧 Initializing notification preferences');
+          userRecord.notificationPreferences = {
+            enableDesktopNotifications: false,
+            enableNotificationBadge: true,
+            pushNotificationTimeout: '10',
+            communicationEmails: false,
+            announcementsEmails: true
+          };
+        }
+
+        // Store previous announcements emails setting
+        const wasAnnouncementsEmailsEnabled = userRecord.notificationPreferences.announcementsEmails;
+
+        // Update only the provided fields
+        Object.keys(input).forEach(key => {
+          if (input[key] !== undefined && input[key] !== null) {
+            console.log(`🔄 Updating ${key} from ${userRecord.notificationPreferences[key]} to ${input[key]}`);
+            userRecord.notificationPreferences[key] = input[key];
+          }
+        });
+
+        await userRecord.save();
+        console.log('✅ Notification preferences saved successfully');
+
+        // If announcements emails were just enabled, process any queued emails
+        if (!wasAnnouncementsEmailsEnabled && input.announcementsEmails === true) {
+          console.log('📧 Announcements emails enabled, processing queued emails...');
+          try {
+            const EnhancedEmailNotificationService = require('../services/notifications/EnhancedEmailNotificationService');
+            const queueResult = await EnhancedEmailNotificationService.processQueuedEmails(user.id);
+            console.log('📧 Queued emails processed:', queueResult);
+          } catch (queueError) {
+            console.error('❌ Error processing queued emails:', queueError);
+            // Don't throw error - notification preferences were still saved successfully
+          }
+        }
+
+        return {
+          success: true,
+          message: 'Notification preferences updated successfully',
+          user: userRecord
+        };
+      } catch (error) {
+        console.error('❌ Error in updateUserNotificationPreferences:', error);
+        throw error;
+      }
+    }
   },
 
   User: {

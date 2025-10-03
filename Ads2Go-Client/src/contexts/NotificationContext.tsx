@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_USER_NOTIFICATIONS, MARK_NOTIFICATION_AS_READ, MARK_ALL_NOTIFICATIONS_AS_READ, DELETE_NOTIFICATION, DELETE_ALL_NOTIFICATIONS } from '../graphql/notifications';
+import { GET_USER_NOTIFICATION_PREFERENCES } from '../graphql/user/queries/getUserNotificationPreferences';
 import { useUserAuth } from './UserAuthContext';
 import ConfirmationModal from '../components/ConfirmationModal';
 
@@ -18,6 +19,8 @@ export interface Notification {
 interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
+  displayBadgeCount: number; // This will be 0 if badge is disabled, otherwise same as unreadCount
+  enableNotificationBadge: boolean;
   markAsRead: (notificationId: string) => void;
   markAllAsRead: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
@@ -48,6 +51,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
+  const [enableNotificationBadge, setEnableNotificationBadge] = useState(true); // Default to true
   const { user, isAuthenticated } = useUserAuth();
 
   // GraphQL mutations
@@ -55,6 +59,21 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [markAllNotificationsAsReadMutation] = useMutation(MARK_ALL_NOTIFICATIONS_AS_READ);
   const [deleteNotificationMutation] = useMutation(DELETE_NOTIFICATION);
   const [deleteAllNotificationsMutation] = useMutation(DELETE_ALL_NOTIFICATIONS);
+
+  // Fetch user notification preferences
+  const { data: preferencesData } = useQuery(GET_USER_NOTIFICATION_PREFERENCES, {
+    skip: !isAuthenticated || !user,
+    onCompleted: (data) => {
+      console.log('🔔 Notification preferences loaded:', data);
+      if (data?.getUserNotificationPreferences) {
+        setEnableNotificationBadge(data.getUserNotificationPreferences.enableNotificationBadge);
+      }
+    },
+    onError: (error) => {
+      console.error('❌ Error fetching notification preferences:', error);
+      // Keep default value (true) if there's an error
+    }
+  });
 
   // Debug user authentication
   console.log('🔔 NotificationContext: User auth state:', { user, isAuthenticated });
@@ -98,6 +117,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   // For now, notifications will be fetched on page load and refresh
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const displayBadgeCount = enableNotificationBadge ? unreadCount : 0;
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -301,6 +321,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const contextValue: NotificationContextType = {
     notifications,
     unreadCount,
+    displayBadgeCount,
+    enableNotificationBadge,
     markAsRead,
     markAllAsRead,
     addNotification,
