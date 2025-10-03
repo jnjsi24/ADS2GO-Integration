@@ -659,18 +659,6 @@ const Register: React.FC = () => {
           <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
             <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
           </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
-            <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />
-          </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
-            <img src="/image/i.png" alt="Instagram logo" className="h-6 w-6" />
-          </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
-            <img src="/image/t.png" alt="Twitter logo" className="h-6 w-6" />
-          </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
-            <img src="/image/l.png" alt="LinkedIn logo" className="h-6 w-6" />
-          </button>
         </div>
 
         <div className="text-center mt-6 text-sm">
