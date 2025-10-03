@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff, ChevronRight, ChevronLeft} from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff } from 'lucide-react';
 
 interface Subscriber {
   _id: string;
@@ -31,27 +31,10 @@ const NewsletterManagement: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All Subscribers');
   const [searchTerm, setSearchTerm] = useState<string>('');
-
+  
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const subscribersPerPage = 5; // adjust how many to show per page
-  const totalPages = Math.ceil(filteredSubscribers.length / subscribersPerPage);
-
-  // slice for current page
-  const indexOfLast = currentPage * subscribersPerPage;
-  const indexOfFirst = indexOfLast - subscribersPerPage;
-  const currentSubscribers = filteredSubscribers.slice(indexOfFirst, indexOfLast);
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handlePreviousPage = () => {
-    if (currentPage > 1) setCurrentPage(prev => prev - 1);
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
-  };
+  const [itemsPerPage, setItemsPerPage] = useState(5);
 
   const filterOptions = [
     'All Subscribers',
@@ -61,6 +44,34 @@ const NewsletterManagement: React.FC = () => {
     'Unsubscribed'
   ];
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredSubscribers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSubscribers = filteredSubscribers.slice(startIndex, endIndex);
+
+  // Pagination handlers
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedFilter]);
+
   useEffect(() => {
     fetchSubscribers();
   }, []);
@@ -69,32 +80,40 @@ const NewsletterManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        setError('API URL not configured');
-        return;
-      }
-      const fullUrl = `${apiUrl}/api/newsletter/subscribers?t=${Date.now()}`;
       
-      console.log('Fetching subscribers from:', fullUrl);
+      // Use the same fallback approach as other services
+      const envApiUrl = process.env.REACT_APP_API_URL;
+      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
+      
+      console.log('🔍 Newsletter API Configuration:', {
+        envUrl: envApiUrl,
+        finalUrl: actualServerUrl,
+        usingFallback: true,
+        reason: 'Forced localhost due to connection issues'
+      });
+      
+      const fullUrl = `${actualServerUrl}/api/newsletter/subscribers?t=${Date.now()}`;
+      console.log('📡 Fetching from URL:', fullUrl);
       
       const response = await fetch(fullUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
       
-      console.log('Response status:', response.status);
+      console.log('📊 Response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('API Error:', errorText);
+        console.error('❌ API Error:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       const data = await response.json();
-      console.log('API Response:', data);
+      console.log('✅ API Response:', data);
       
       if (data.success) {
         const subscribers = data.subscribers || [];
@@ -122,8 +141,23 @@ const NewsletterManagement: React.FC = () => {
         setError(`Failed to fetch subscribers: ${data.message || 'Unknown error'}`);
       }
     } catch (err) {
-      console.error('Fetch error:', err);
-      setError(`Failed to fetch subscribers: ${err instanceof Error ? err.message : 'Network error'}`);
+      console.error('❌ Fetch error:', err);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Network error';
+      if (err instanceof Error) {
+        if (err.name === 'TimeoutError') {
+          errorMessage = 'Request timed out - server may be down';
+        } else if (err.message.includes('Failed to fetch')) {
+          errorMessage = 'Cannot connect to server - please check if the backend is running';
+        } else if (err.message.includes('CORS')) {
+          errorMessage = 'CORS error - server configuration issue';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(`Failed to fetch subscribers: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -179,17 +213,19 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const apiUrl = process.env.REACT_APP_API_URL;
-      if (!apiUrl) {
-        alert('API URL not configured');
-        return;
-      }
-      const response = await fetch(`${apiUrl}/api/newsletter/unsubscribe`, {
+      // Use the same fallback approach as other services
+      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
+      
+      console.log('📡 Unsubscribing from URL:', `${actualServerUrl}/api/newsletter/unsubscribe`);
+      
+      const response = await fetch(`${actualServerUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email: emailToUnsubscribe }),
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
 
       const data = await response.json();
@@ -202,7 +238,8 @@ const NewsletterManagement: React.FC = () => {
         alert('Failed to unsubscribe: ' + data.message);
       }
     } catch (err) {
-      alert('Failed to unsubscribe');
+      console.error('❌ Unsubscribe error:', err);
+      alert('Failed to unsubscribe: ' + (err instanceof Error ? err.message : 'Network error'));
     }
   };
 
@@ -251,18 +288,48 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Server is not running on {process.env.REACT_APP_API_URL || 'API URL not configured'}</li>
+                <li>Backend server is not running on <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>
+                <li>CORS configuration problems</li>
               </ul>
             </div>
-            <button
-              onClick={fetchSubscribers}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
-            >
-              Retry
-            </button>
+            <div className="text-sm text-blue-600 mb-4">
+              <strong>Troubleshooting steps:</strong>
+              <ul className="list-disc list-inside mt-2">
+                <li>Check if the backend server is running: <code className="bg-gray-100 px-1 rounded">npm start</code> in the Ads2Go-Server directory</li>
+                <li>Verify the server is accessible at <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
+                <li>Check browser console for detailed error messages</li>
+                <li>Ensure the newsletter API endpoint exists on the backend</li>
+              </ul>
+            </div>
+            <div className="flex space-x-4">
+              <button
+                onClick={fetchSubscribers}
+                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => {
+                  // Show offline mode with empty data
+                  setError('');
+                  setSubscribers([]);
+                  setFilteredSubscribers([]);
+                  setStats({
+                    total: 0,
+                    active: 0,
+                    inactive: 0,
+                    userSubscribers: 0,
+                    nonUserSubscribers: 0
+                  });
+                }}
+                className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors duration-200"
+              >
+                Continue Offline
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -270,8 +337,8 @@ const NewsletterManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10 flex flex-col">
+      <div className="max-w-7xl mx-auto flex-1 flex flex-col">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-3xl font-bold text-[#3674B5]">Newsletter Management</h1>
@@ -318,7 +385,7 @@ const NewsletterManagement: React.FC = () => {
           <div className="flex justify-end space-x-4">
             <button
               onClick={fetchSubscribers}
-              className="flex items-center text-sm gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
+              className="flex items-center gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh List
@@ -333,7 +400,7 @@ const NewsletterManagement: React.FC = () => {
                       .join(",")
                 )
               }
-              className="bg-green-600 text-sm text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
               disabled={stats.active === 0}
             >
               Email All Active Subscribers
@@ -408,7 +475,7 @@ const NewsletterManagement: React.FC = () => {
             </div>
 
             {/* Rows */}
-            {currentSubscribers.map((subscriber) => (
+            {paginatedSubscribers.map((subscriber) => (
               <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
                 <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
                   {/* Email */}
@@ -491,72 +558,76 @@ const NewsletterManagement: React.FC = () => {
               No subscribers found
             </div>
           )}
+        </div>
 
-          {totalPages > 1 && (
-            <div className="mt-auto flex justify-center py-4">
-              <div className="flex items-center space-x-2">
-                {/* Previous */}
-                <button
-                  onClick={handlePreviousPage}
-                  disabled={currentPage === 1}
-                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Previous
-                </button>
+        {/* Pagination */}
+        <div className="mt-auto flex justify-center py-4">
+          <div className="flex items-center space-x-2">
+            {/* Previous button */}
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
 
-                {/* Page numbers */}
-                <div className="flex space-x-1">
-                  {(() => {
-                    const pages = [];
-                    const maxVisiblePages = 3;
-                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            {/* Page numbers */}
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 3; // show 3 numbers before ellipsis
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-                    if (endPage - startPage + 1 < maxVisiblePages) {
-                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                    }
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
 
-                    for (let i = startPage; i <= endPage; i++) {
-                      pages.push(
-                        <button
-                          key={i}
-                          onClick={() => handlePageChange(i)}
-                          className={`px-3 py-1 text-sm rounded ${
-                            currentPage === i
-                              ? "border border-gray-300 text-black"
-                              : "text-gray-700 hover:border border-gray-300"
-                          }`}
-                        >
-                          {i}
-                        </button>
-                      );
-                    }
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black" 
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
 
-                    if (endPage < totalPages) {
-                      pages.push(
-                        <span key="ellipsis" className="px-2 text-gray-500">
-                          …
-                        </span>
-                      );
-                    }
+                // Add ellipsis if not at the last page
+                if (endPage < totalPages) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
 
-                    return pages;
-                  })()}
-                </div>
-
-                {/* Next */}
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage === totalPages}
-                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
-              </div>
+                return pages;
+              })()}
             </div>
-          )}
+
+            {/* Next button */}
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {showUnsubscribeModal && (

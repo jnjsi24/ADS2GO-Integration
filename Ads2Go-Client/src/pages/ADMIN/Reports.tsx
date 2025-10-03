@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Mail, CalendarClock, CalendarCheck, ChevronDown, Pencil, AlertCircle, CheckCircle, Clock, XCircle, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Mail, CalendarClock, CalendarCheck, ChevronDown, Edit, AlertCircle, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
 
@@ -45,9 +45,10 @@ const Reports: React.FC = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showModalStatusDropdown, setShowModalStatusDropdown] = useState(false);
-
+  
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(6);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const { data, loading, error, refetch } = useQuery(GET_ALL_USER_REPORTS, {
     variables: { filters, limit: 50, offset: 0 },
@@ -67,22 +68,33 @@ const Reports: React.FC = () => {
     return matchSearch;
   });
 
+  // Pagination calculations
   const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedReports = filteredReports.slice(startIndex, endIndex);
 
+  // Pagination handlers
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
 
   const handlePreviousPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
   };
 
   const handleNextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
   };
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters]);
 
   const handleRowClick = (id: string) => {
     setExpandedRow(expandedRow === id ? null : id);
@@ -258,7 +270,7 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Reports Management</h1>
@@ -409,7 +421,7 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Rows */}
-      {paginatedReports.length === 0 ? (
+      {filteredReports.length === 0 ? (
         <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
       ) : (
         paginatedReports.map((report) => (
@@ -450,7 +462,7 @@ const Reports: React.FC = () => {
                   className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
                   title="Update Report"
                 >
-                  <Pencil className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                  <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                   <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
                     Update
                   </span>
@@ -619,19 +631,23 @@ const Reports: React.FC = () => {
               </div>
             </div>
           )}
+
           </div>
         ))
       )}
 
+      {/* Pagination */}
       <div className="mt-auto flex justify-center py-4">
         <div className="flex items-center space-x-2">
-          {/* Previous */}
+          {/* Previous button */}
           <button
             onClick={handlePreviousPage}
             disabled={currentPage === 1}
             className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ChevronLeft className="w-4 h-4 mr-1" />
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
             Previous
           </button>
 
@@ -639,7 +655,7 @@ const Reports: React.FC = () => {
           <div className="flex space-x-1">
             {(() => {
               const pages = [];
-              const maxVisiblePages = 3;
+              const maxVisiblePages = 3; // show 3 numbers before ellipsis
               let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
               let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -654,7 +670,7 @@ const Reports: React.FC = () => {
                     onClick={() => handlePageChange(i)}
                     className={`px-3 py-1 text-sm rounded ${
                       currentPage === i
-                        ? "border border-gray-300 text-black"
+                        ? "border border-gray-300 text-black" 
                         : "text-gray-700 hover:border border-gray-300"
                     }`}
                   >
@@ -663,6 +679,7 @@ const Reports: React.FC = () => {
                 );
               }
 
+              // Add ellipsis if not at the last page
               if (endPage < totalPages) {
                 pages.push(
                   <span key="ellipsis" className="px-2 text-gray-500">
@@ -675,14 +692,16 @@ const Reports: React.FC = () => {
             })()}
           </div>
 
-          {/* Next */}
+          {/* Next button */}
           <button
             onClick={handleNextPage}
             disabled={currentPage === totalPages}
             className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
-            <ChevronRight className="w-4 h-4 ml-1" />
+            <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
       </div>
@@ -747,6 +766,7 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
+
 
               {/* Admin Notes */}
               <div>
