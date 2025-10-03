@@ -18,7 +18,7 @@ import { GET_ADS_BY_USER, GET_ALL_ADS,
   DELETE_AD,
   type Ad,
   type User } from "../../graphql/admin/ads";
-import { ToastContainer } from "../../components/ToastNotification";
+import { GET_ALL_USERS } from "../../graphql/admin/queries/manageUsers";
 
 interface QueryResult {
   getAdsByUser: Ad[];
@@ -70,12 +70,6 @@ const UserAdsPage: React.FC = () => {
   const [updateAd] = useMutation(UPDATE_AD, {
       onCompleted: (data) => {
         console.log('Ad updated successfully:', data);
-        addToast({
-          type: 'success',
-          title: 'Update Successful',
-          message: 'Ad updated successfully!',
-          duration: 4000
-        });
         refetch(); // Refresh the ads list
       },
       onError: (error) => {
@@ -91,12 +85,6 @@ const UserAdsPage: React.FC = () => {
   
     const [deleteAd] = useMutation(DELETE_AD, {
       onCompleted: () => {
-        addToast({
-          type: 'success',
-          title: 'Deletion Successful',
-          message: 'Ad deleted successfully!',
-          duration: 4000
-        });
         refetch(); // Refresh the ads list
       },
       onError: (error) => {
@@ -119,17 +107,35 @@ const UserAdsPage: React.FC = () => {
     "ENDED",
   ];
 
-  const { data, loading, error, refetch } = useQuery<QueryResult>(GET_ADS_BY_USER, {
+  const { data, loading, error } = useQuery<QueryResult>(GET_ADS_BY_USER, {
     variables: { userId },
     skip: !userId,
   });
 
-  const userName =
-    data?.getAdsByUser?.[0]?.userId
-      ? `${data.getAdsByUser[0].userId.firstName || ""} ${
-          data.getAdsByUser[0].userId.lastName || ""
-        }`.trim()
-      : "";
+  // Fetch all users to get user information even when no ads exist
+  const { data: usersData } = useQuery(GET_ALL_USERS, {
+    skip: !userId,
+  });
+
+  // Get user name from ads data if available, otherwise from users data
+  const userName = (() => {
+    // First try to get from ads data
+    if (data?.getAdsByUser?.[0]?.userId) {
+      return `${data.getAdsByUser[0].userId.firstName || ""} ${
+        data.getAdsByUser[0].userId.lastName || ""
+      }`.trim();
+    }
+    
+    // If no ads, get from users data
+    if (usersData?.getAllUsers && userId) {
+      const user = usersData.getAllUsers.find((u: any) => u.id === userId);
+      if (user) {
+        return `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      }
+    }
+    
+    return "";
+  })();
 
   useEffect(() => {
     if (data?.getAdsByUser) {
@@ -484,7 +490,7 @@ const UserAdsPage: React.FC = () => {
                                     <Info size={16} className="text-gray-500" />
                                     <div className="flex flex-col">
                                       <p className="font-semibold">Plan Name</p>
-                                      <p>{ad.planId?.id || 'N/A'}</p>
+                                      <p>{ad.planId?.name || 'N/A'}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -533,9 +539,6 @@ const UserAdsPage: React.FC = () => {
           ))
         )}
       </div>
-
-      {/* Toast Notifications */}
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

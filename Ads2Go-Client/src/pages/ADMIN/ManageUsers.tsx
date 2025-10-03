@@ -744,7 +744,9 @@ const handleCityFilterChange = (city: string) => {
                                 <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.city}</td>
                               </tr>
                               <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2">Email Verified:</td>
+                                <td className="font-bold text-gray-700 py-1 pr-2">
+                                  <span className="break-words">Email<br/>Verified:</span>
+                                </td>
                                 <td className="text-black text-right py-1">
                                   {selectedUser.isEmailVerified ? "✔" : "✘"}
                                 </td>
