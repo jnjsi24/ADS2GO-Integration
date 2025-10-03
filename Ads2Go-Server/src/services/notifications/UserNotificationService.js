@@ -30,7 +30,7 @@ class UserNotificationService extends BaseNotificationService {
       const notification = await this.createNotification(
         user._id,
         '🎉 Ad Approved!',
-        `Your advertisement "${ad.title}" has been approved and is now live!`,
+        `Your advertisement "${ad.title}" has been approved. You can pay it now`,
         'SUCCESS',
         {
           userRole: 'USER',
@@ -361,7 +361,7 @@ class UserNotificationService extends BaseNotificationService {
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h2 style="color: #333; text-align: center;">🎉 Great News, ${firstName}!</h2>
-            <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been approved and is now live!</p>
+            <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been approved You can now Pay the Your advertisment</p>
             
             <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4CAF50;">
               <h3 style="color: #4CAF50; margin: 0 0 10px 0;">Ad Details:</h3>
@@ -638,7 +638,7 @@ class UserNotificationService extends BaseNotificationService {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
             <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
               <h2 style="color: #333; text-align: center;">🎉 Great News, ${firstName}!</h2>
-              <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been approved and is now live!</p>
+              <p style="text-align: center; font-size: 16px; color: #666;">Your advertisement has been approved and You can pay it now</p>
               
               <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
                 <h3 style="color: #4A90E2; margin: 0 0 10px 0;">Ad Details:</h3>
