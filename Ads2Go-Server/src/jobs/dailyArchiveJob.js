@@ -37,8 +37,18 @@ class DailyArchiveJob {
 
       console.log(`📊 Found ${dailyData.length} device records to archive`);
 
-      // Process each device record
-      const archivePromises = dailyData.map(device => this.archiveDeviceData(device, dateStr));
+      // Process each device record and reset daily sessions if needed
+      const archivePromises = dailyData.map(async device => {
+        // Check if device needs daily reset (new day)
+        const wasReset = device.resetDailySession();
+        if (wasReset) {
+          console.log(`🔄 Daily session reset for ${device.materialId} - new day started`);
+          await device.save();
+        }
+        
+        // Archive the device data
+        return this.archiveDeviceData(device, dateStr);
+      });
       await Promise.all(archivePromises);
 
       // Skip clearing data during testing (normally clears yesterday's data)
@@ -113,6 +123,7 @@ class DailyArchiveJob {
         
         // QR scan details
         qrScans: device.qrScans,
+        qrScansByAd: device.qrScansByAd,
         
         // Ad playback details
         adPlaybacks: device.adPlaybacks,
@@ -194,6 +205,7 @@ class DailyArchiveJob {
         
         // QR scan details
         qrScans: device.qrScans,
+        qrScansByAd: device.qrScansByAd,
         
         // Ad playback details
         adPlaybacks: device.adPlaybacks,

@@ -330,13 +330,14 @@ router.post('/ad-playback', async (req, res) => {
       const adPlayback = {
         adId,
         adTitle,
+        materialId: materialId,
+        slotNumber: parseInt(deviceSlot),
         adDuration: parseInt(adDuration),
         startTime: new Date(),
         endTime: null,
         viewTime: parseInt(viewTime),
         completionRate: (parseInt(viewTime) / parseInt(adDuration)) * 100,
-        impressions: 1,
-        slotNumber: parseInt(deviceSlot)
+        impressions: 1
       };
       
       deviceTracking.adPlaybacks.push(adPlayback);

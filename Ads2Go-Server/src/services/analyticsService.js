@@ -49,95 +49,213 @@ class AnalyticsService {
     }
   }
   
-  // Track ad playback
-  static async trackAdPlayback(deviceId, materialId, slotNumber, adId, adTitle, adDuration, viewTime = 0) {
+  // Get ad playback data from deviceTracking (no longer stores its own copy)
+  static async getAdPlaybackData(materialId, startDate, endDate) {
     try {
-      // Skip processing if materialId is invalid or unknown
-      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
-        console.log(`⚠️  Skipping ad playback analytics - invalid materialId: ${materialId}`);
-        return null;
-      }
-
-      // Skip processing if slotNumber is invalid
-      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
-        console.log(`⚠️  Skipping ad playback analytics - invalid slotNumber: ${slotNumber}`);
-        return null;
-      }
-
-      // Get the ad to find the userId
-      const Ad = mongoose.models.Ad || require('../models/ad');
-      const ad = await Ad.findById(adId);
-      const userId = ad ? ad.userId : null;
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistory = require('../models/deviceDataHistory');
       
-      // Get the material to find the material type
-      const Material = mongoose.models.Material || require('../models/Material');
-      const material = await Material.findOne({ materialId: materialId });
-      const materialType = material ? material.materialType : 'HEADDRESS';
+      // Get current day data from deviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: materialId,
+        date: currentDay
+      });
       
-      // Create or update analytics for this ad
-      const analytics = await Analytics.createOrUpdateAdAnalytics(
-        adId,
-        adTitle,
-        materialId,
-        slotNumber,
-        deviceId,
-        { userId, materialType }
-      );
+      // Get historical data from deviceDataHistory
+      const historicalData = await DeviceDataHistory.find({
+        materialId: materialId,
+        date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      });
       
-      // Add ad playback to the specific material
-      await analytics.addAdPlayback(materialId, slotNumber, adId, adTitle, adDuration, viewTime);
+      // Combine and process ad playback data
+      const allAdPlaybacks = [];
+      const adPlaybacksByAd = {};
+      let totalAdPlays = 0;
+      let totalAdPlayTime = 0;
+      let totalAdImpressions = 0;
       
-      // ScreenTracking collection deprecated: skip screen-level updates
+      // Process current day data
+      currentData.forEach(device => {
+        if (device.adPlaybacks && device.adPlaybacks.length > 0) {
+          allAdPlaybacks.push(...device.adPlaybacks);
+        }
+        
+        totalAdPlays += device.totalAdPlays || 0;
+        totalAdPlayTime += device.totalAdPlayTime || 0;
+        totalAdImpressions += device.totalAdImpressions || 0;
+        
+        if (device.adPerformance && device.adPerformance.length > 0) {
+          device.adPerformance.forEach(adPerf => {
+            if (!adPlaybacksByAd[adPerf.adId]) {
+              adPlaybacksByAd[adPerf.adId] = {
+                adId: adPerf.adId,
+                adTitle: adPerf.adTitle,
+                playCount: 0,
+                totalViewTime: 0,
+                averageViewTime: 0,
+                completionRate: 0,
+                firstPlayed: adPerf.firstPlayed,
+                lastPlayed: adPerf.lastPlayed,
+                impressions: 0
+              };
+            }
+            adPlaybacksByAd[adPerf.adId].playCount += adPerf.playCount || 0;
+            adPlaybacksByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
+            adPlaybacksByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+            if (adPerf.lastPlayed > adPlaybacksByAd[adPerf.adId].lastPlayed) {
+              adPlaybacksByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+            }
+          });
+        }
+      });
       
-      return analytics;
+      // Process historical data
+      historicalData.forEach(archive => {
+        if (archive.adPlaybacks && archive.adPlaybacks.length > 0) {
+          allAdPlaybacks.push(...archive.adPlaybacks);
+        }
+        
+        totalAdPlays += archive.totalAdPlays || 0;
+        totalAdPlayTime += archive.totalAdPlayTime || 0;
+        totalAdImpressions += archive.totalAdImpressions || 0;
+        
+        if (archive.adPerformance && archive.adPerformance.length > 0) {
+          archive.adPerformance.forEach(adPerf => {
+            if (!adPlaybacksByAd[adPerf.adId]) {
+              adPlaybacksByAd[adPerf.adId] = {
+                adId: adPerf.adId,
+                adTitle: adPerf.adTitle,
+                playCount: 0,
+                totalViewTime: 0,
+                averageViewTime: 0,
+                completionRate: 0,
+                firstPlayed: adPerf.firstPlayed,
+                lastPlayed: adPerf.lastPlayed,
+                impressions: 0
+              };
+            }
+            adPlaybacksByAd[adPerf.adId].playCount += adPerf.playCount || 0;
+            adPlaybacksByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
+            adPlaybacksByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+            if (adPerf.lastPlayed > adPlaybacksByAd[adPerf.adId].lastPlayed) {
+              adPlaybacksByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+            }
+          });
+        }
+      });
+      
+      // Calculate averages for ad playbacks by ad
+      Object.values(adPlaybacksByAd).forEach(ad => {
+        ad.averageViewTime = ad.playCount > 0 ? ad.totalViewTime / ad.playCount : 0;
+        ad.completionRate = ad.totalViewTime > 0 ? (ad.totalViewTime / (ad.totalViewTime + (ad.playCount * 30))) * 100 : 0; // Rough completion rate
+      });
+      
+      return {
+        totalAdPlays,
+        totalAdPlayTime,
+        totalAdImpressions,
+        adPlaybacks: allAdPlaybacks,
+        adPlaybacksByAd: Object.values(adPlaybacksByAd),
+        currentDayData: currentData,
+        historicalData: historicalData
+      };
+      
     } catch (error) {
-      console.error('Error tracking ad playback:', error);
+      console.error('Error fetching ad playback data:', error);
       throw error;
     }
   }
   
-  // Track QR scan
-  static async trackQRScan(deviceId, materialId, slotNumber, qrScanData) {
+  // Get QR scan data from deviceTracking (no longer stores its own copy)
+  static async getQRScanData(materialId, startDate, endDate) {
     try {
-      // Skip processing if materialId is invalid or unknown
-      if (!materialId || materialId === 'unknown' || !mongoose.Types.ObjectId.isValid(materialId)) {
-        console.log(`⚠️  Skipping QR scan analytics - invalid materialId: ${materialId}`);
-        return null;
-      }
-
-      // Skip processing if slotNumber is invalid
-      if (!slotNumber || isNaN(slotNumber) || slotNumber < 1) {
-        console.log(`⚠️  Skipping QR scan analytics - invalid slotNumber: ${slotNumber}`);
-        return null;
-      }
-
-      // Get the material to find the material type
-      const Material = mongoose.models.Material || require('../models/Material');
-      const material = await Material.findOne({ materialId: materialId });
-      const materialType = material ? material.materialType : 'HEADDRESS';
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistory = require('../models/deviceDataHistory');
       
-      // Create or update analytics for this ad
-      const analytics = await Analytics.createOrUpdateAdAnalytics(
-        qrScanData.adId,
-        qrScanData.adTitle || `Ad ${qrScanData.adId}`,
-        materialId,
-        slotNumber,
-        deviceId,
-        { materialType }
-      );
+      // Get current day data from deviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: materialId,
+        date: currentDay
+      });
       
-      // Add QR scan to the specific material
-      await analytics.addQRScan(materialId, slotNumber, qrScanData);
+      // Get historical data from deviceDataHistory
+      const historicalData = await DeviceDataHistory.find({
+        materialId: materialId,
+        date: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
+        }
+      });
       
-      // QR scan tracking is now handled directly in the ads.js route
-      // No need to create separate QRScanTracking documents here
+      // Combine and process QR scan data
+      const allQRScans = [];
+      const qrScansByAd = {};
       
-      // DeviceCompliance is now PHOTOS ONLY - no analytics data
-      // QR scan analytics are handled by DeviceTracking and Analytics collections
+      // Process current day data
+      currentData.forEach(device => {
+        if (device.qrScans && device.qrScans.length > 0) {
+          allQRScans.push(...device.qrScans);
+        }
+        
+        if (device.qrScansByAd && device.qrScansByAd.length > 0) {
+          device.qrScansByAd.forEach(adScan => {
+            if (!qrScansByAd[adScan.adId]) {
+              qrScansByAd[adScan.adId] = {
+                adId: adScan.adId,
+                adTitle: adScan.adTitle,
+                scanCount: 0,
+                firstScanned: adScan.firstScanned,
+                lastScanned: adScan.lastScanned
+              };
+            }
+            qrScansByAd[adScan.adId].scanCount += adScan.scanCount;
+            if (adScan.lastScanned > qrScansByAd[adScan.adId].lastScanned) {
+              qrScansByAd[adScan.adId].lastScanned = adScan.lastScanned;
+            }
+          });
+        }
+      });
       
-      return analytics;
+      // Process historical data
+      historicalData.forEach(archive => {
+        if (archive.qrScans && archive.qrScans.length > 0) {
+          allQRScans.push(...archive.qrScans);
+        }
+        
+        if (archive.qrScansByAd && archive.qrScansByAd.length > 0) {
+          archive.qrScansByAd.forEach(adScan => {
+            if (!qrScansByAd[adScan.adId]) {
+              qrScansByAd[adScan.adId] = {
+                adId: adScan.adId,
+                adTitle: adScan.adTitle,
+                scanCount: 0,
+                firstScanned: adScan.firstScanned,
+                lastScanned: adScan.lastScanned
+              };
+            }
+            qrScansByAd[adScan.adId].scanCount += adScan.scanCount;
+            if (adScan.lastScanned > qrScansByAd[adScan.adId].lastScanned) {
+              qrScansByAd[adScan.adId].lastScanned = adScan.lastScanned;
+            }
+          });
+        }
+      });
+      
+      return {
+        totalQRScans: allQRScans.length,
+        qrScans: allQRScans,
+        qrScansByAd: Object.values(qrScansByAd),
+        currentDayData: currentData,
+        historicalData: historicalData
+      };
+      
     } catch (error) {
-      console.error('Error tracking QR scan:', error);
+      console.error('Error fetching QR scan data:', error);
       throw error;
     }
   }

@@ -400,42 +400,6 @@ router.post('/qr-scan', async (req, res) => {
       };
     }
 
-    // Create QR scan tracking record
-    const qrScanData = {
-      adId,
-      adTitle: adTitle || `Ad ${adId}`,
-      materialId,
-      slotNumber: parseInt(slotNumber),
-      qrCodeUrl: qrCodeUrl,
-      website: website || null, // Advertiser website
-      redirectUrl: redirectUrl || qrCodeUrl, // The actual URL the QR code points to
-      userAgent: userAgent || 'Android App',
-      deviceType,
-      browser,
-      operatingSystem,
-      ipAddress,
-      country,
-      city,
-      location: locationData,
-      scanTimestamp: timestamp ? new Date(timestamp) : new Date(),
-      // Additional Android player data
-      deviceInfo: deviceInfo || null,
-      gpsData: gpsData || null,
-      registrationData: registrationData || null,
-      networkStatus: networkStatus || false,
-      isOffline: isOffline || false,
-      screenData: screenData || null,
-      // Metadata
-      metadata: {
-        source: 'android_player',
-        hasGpsData: !!gpsData,
-        hasDeviceInfo: !!deviceInfo,
-        hasRegistrationData: !!registrationData,
-        hasAdvertiserWebsite: !!website,
-        timestamp: new Date().toISOString()
-      }
-    };
-
     // QR scan will only be saved to device analytics document (no separate QRScanTracking documents)
 
     // DeviceCompliance is now PHOTOS ONLY - no analytics data
@@ -457,84 +421,102 @@ router.post('/qr-scan', async (req, res) => {
       console.log(`\u001b[32m✅ USING PROVIDED DEVICE ID: ${deviceIdToUse}\u001b[0m`);
     }
     
-    if (deviceIdToUse) {
-      try {
-        const Analytics = require('../models/analytics');
-        
-        // Get the material to find the material type
-        const Material = require('../models/Material');
-        const material = await Material.findOne({ materialId: materialId });
-        const materialType = material ? material.materialType : 'HEADDRESS';
-        
-        // Create or update analytics for this ad
-        const analytics = await Analytics.createOrUpdateAdAnalytics(
-          adId,
-          adTitle || `Ad ${adId}`,
-          materialId,
-          parseInt(slotNumber),
-          deviceIdToUse,
-          {
-            materialType: materialType,
-            deviceInfo: deviceInfo || null,
-            currentLocation: gpsData ? {
-              type: 'Point',
-              coordinates: [gpsData.lng || 0, gpsData.lat || 0],
-              accuracy: gpsData.accuracy || 0,
-              speed: gpsData.speed || 0,
-              heading: gpsData.heading || 0,
-              timestamp: new Date()
-            } : null,
-            networkStatus: {
-              isOnline: networkStatus || false,
-              lastSeen: new Date()
-            }
+    // Create QR scan data
+    const qrScanData = {
+      adId: adId,
+      adTitle: adTitle || `Ad ${adId}`,
+      materialId: materialId,
+      slotNumber: parseInt(slotNumber),
+      scanTimestamp: timestamp ? new Date(timestamp) : new Date(),
+      qrCodeUrl: qrCodeUrl,
+      userAgent: userAgent || 'Android App',
+      deviceType: deviceType,
+      browser: browser,
+      operatingSystem: operatingSystem,
+      ipAddress: ipAddress,
+      country: country,
+      city: city,
+      location: locationData,
+      timeOnPage: 0,
+      converted: false,
+      conversionType: null,
+      conversionValue: 0
+    };
+    
+    // Save QR scan to deviceTracking collection (analytics will fetch from here)
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      
+      // Find or create device tracking record for today
+      let deviceTracking = await DeviceTracking.findOne({
+        materialId: materialId,
+        date: new Date().toISOString().split('T')[0]
+      });
+      
+      if (!deviceTracking) {
+        // Create new device tracking record for today
+        deviceTracking = new DeviceTracking({
+          materialId: materialId,
+          carGroupId: 'GRP-UNKNOWN', // Will be updated when device connects
+          screenType: 'HEADDRESS',
+          date: new Date().toISOString().split('T')[0],
+          slots: [],
+          isOnline: false,
+          totalAdPlays: 0,
+          totalQRScans: 0,
+          totalDistanceTraveled: 0,
+          totalHoursOnline: 0,
+          totalAdImpressions: 0,
+          totalAdPlayTime: 0,
+          adPlaybacks: [],
+          qrScans: [],
+          locationHistory: [],
+          hourlyStats: [],
+          adPerformance: [],
+          qrScansByAd: [],
+          complianceData: {
+            offlineIncidents: 0,
+            displayIssues: 0
+          },
+          currentSession: {
+            date: new Date(),
+            startTime: new Date(),
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            isActive: true,
+            targetHours: 8,
+            complianceStatus: 'PENDING',
+            locationHistory: []
           }
-        );
-        
-        // Add QR scan to the specific material
-        const qrScanData = {
-          adId: adId,
-          adTitle: adTitle || `Ad ${adId}`,
-          materialId: materialId, // Add required field
-          slotNumber: parseInt(slotNumber), // Add required field
-          scanTimestamp: timestamp ? new Date(timestamp) : new Date(),
-          qrCodeUrl: qrCodeUrl,
-          userAgent: userAgent || 'Android App',
-          deviceType: deviceType,
-          browser: browser,
-          operatingSystem: operatingSystem,
-          ipAddress: ipAddress,
-          country: country,
-          city: city,
-          location: locationData,
-          timeOnPage: 0,
-          converted: false,
-          conversionType: null,
-          conversionValue: 0
-        };
-        
-        await analytics.addQRScan(materialId, parseInt(slotNumber), qrScanData);
-        console.log('\u001b[32m✅ Updated device analytics with QR scan data\u001b[0m');
-        console.log('\u001b[1m\u001b[33m📊 DEVICE ANALYTICS UPDATED:\u001b[0m');
-        console.log(`   Ad: \u001b[36m${analytics.adTitle}\u001b[0m`);
-        console.log(`   Material: \u001b[36m${materialId}\u001b[0m`);
-        console.log(`   Slot: \u001b[36m${slotNumber}\u001b[0m`);
-        console.log(`   Device: \u001b[36m${deviceIdToUse}\u001b[0m`);
-        console.log(`   Total QR Scans: \u001b[32m${analytics.totalQRScans}\u001b[0m`);
-        
-        // Find the specific material to show its QR scan count
-        const materialAnalytics = analytics.materials.find(m => 
-          m.materialId === materialId && m.slotNumber === parseInt(slotNumber)
-        );
-        if (materialAnalytics) {
-          console.log(`   Material QR Scans: \u001b[32m${materialAnalytics.totalQRScans}\u001b[0m`);
-          console.log(`   QR Scans in Array: \u001b[32m${materialAnalytics.qrScans.length}\u001b[0m`);
-        }
-        console.log(`   Conversion Rate: \u001b[32m${analytics.qrScanConversionRate.toFixed(2)}%\u001b[0m`);
-        
-      } catch (analyticsError) {
-        console.log('\u001b[31m❌ Could not update device analytics with QR scan:\u001b[0m', analyticsError.message);
+        });
       }
+      
+      // Add QR scan to deviceTracking
+      deviceTracking.qrScans.push(qrScanData);
+      deviceTracking.totalQRScans += 1;
+      
+      // Update QR scans by ad
+      const existingAdScan = deviceTracking.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+      if (existingAdScan) {
+        existingAdScan.scanCount += 1;
+        existingAdScan.lastScanned = new Date();
+      } else {
+        deviceTracking.qrScansByAd.push({
+          adId: qrScanData.adId,
+          adTitle: qrScanData.adTitle,
+          scanCount: 1,
+          lastScanned: new Date(),
+          firstScanned: new Date()
+        });
+      }
+      
+      await deviceTracking.save();
+      console.log('\u001b[32m✅ Updated deviceTracking with QR scan data\u001b[0m');
+      console.log(`   DeviceTracking QR Scans: \u001b[32m${deviceTracking.totalQRScans}\u001b[0m`);
+      console.log(`   QR Scans in Array: \u001b[32m${deviceTracking.qrScans.length}\u001b[0m`);
+      
+    } catch (deviceTrackingError) {
+      console.log('\u001b[31m❌ Could not update deviceTracking with QR scan:\u001b[0m', deviceTrackingError.message);
     }
 
     // ScreenTracking collection deprecated: skip screen-level QR scan updates

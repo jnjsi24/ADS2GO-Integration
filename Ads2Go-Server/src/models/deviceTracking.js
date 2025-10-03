@@ -34,19 +34,22 @@ const HourlyStatsSchema = new mongoose.Schema({
 const AdPlaybackSchema = new mongoose.Schema({
   adId: { type: String, required: true },
   adTitle: { type: String, required: true },
+  materialId: { type: String, required: true },
+  slotNumber: { type: Number, required: true, min: 1, max: 5 },
   adDuration: { type: Number, required: true }, // in seconds
   startTime: { type: Date, required: true },
   endTime: { type: Date },
   viewTime: { type: Number, default: 0 }, // actual time viewed in seconds
   completionRate: { type: Number, default: 0 }, // percentage
-  impressions: { type: Number, default: 1 },
-  slotNumber: { type: Number, required: true, min: 1, max: 5 }
+  impressions: { type: Number, default: 1 }
 }, { _id: false });
 
 // QR Scan Schema for real-time tracking
 const QRScanSchema = new mongoose.Schema({
   adId: { type: String, required: true },
   adTitle: { type: String, required: true },
+  materialId: { type: String, required: true },
+  slotNumber: { type: Number, required: true, min: 1, max: 5 },
   scanTimestamp: { type: Date, default: Date.now },
   qrCodeUrl: { type: String },
   website: { type: String },
@@ -109,43 +112,11 @@ const SlotSchema = new mongoose.Schema({
     default: Date.now 
   },
   deviceInfo: DeviceInfoSchema,
-  currentAd: {
-    adId: String,
-    adTitle: String,
-    adDuration: Number,
-    startTime: Date,
-    endTime: Date,
-    currentTime: Number,
-    state: String,
-    progress: Number,
-    completionRate: Number,
-    impressions: Number,
-    totalViewTime: Number
-  },
-  screenMetrics: {
-    isDisplaying: { type: Boolean, default: false },
-    brightness: { type: Number, default: 100 },
-    volume: { type: Number, default: 50 },
-    adPlayCount: { type: Number, default: 0 },
-    maintenanceMode: { type: Boolean, default: false },
-    displayHours: { type: Number, default: 0 },
-    lastAdPlayed: String,
-    dailyAdStats: {
-      totalAdsPlayed: { type: Number, default: 0 },
-      totalDisplayTime: { type: Number, default: 0 },
-      uniqueAdsPlayed: { type: Number, default: 0 },
-      averageAdDuration: { type: Number, default: 0 },
-      adCompletionRate: { type: Number, default: 0 }
-    },
-    adPerformance: [{
-      adId: String,
-      adTitle: String,
-      playCount: Number,
-      totalViewTime: Number,
-      completionRate: Number,
-      lastPlayed: Date
-    }]
-  }
+  // Basic slot status
+  isDisplaying: { type: Boolean, default: false },
+  brightness: { type: Number, default: 100 },
+  volume: { type: Number, default: 50 },
+  maintenanceMode: { type: Boolean, default: false }
 }, { _id: false });
 
 // Main DeviceTracking Schema (One document per car per day)
@@ -231,42 +202,9 @@ const DeviceTrackingSchema = new mongoose.Schema({
     displayIssues: { type: Number, default: 0 }
   },
   
-  // Screen-specific tracking (from ScreenTracking)
-  screenMetrics: {
-    displayHours: { type: Number, default: 0 }, // Hours displaying ads
-    adPlayCount: { type: Number, default: 0 }, // Total number of ads played
-    lastAdPlayed: { type: Date },
-    brightness: { type: Number, min: 0, max: 100, default: 100 }, // Screen brightness
-    volume: { type: Number, min: 0, max: 100, default: 50 }, // Audio volume
-    isDisplaying: { type: Boolean, default: true }, // Currently showing ads
-    maintenanceMode: { type: Boolean, default: false }, // Under maintenance
-    
-    // Enhanced ad tracking
-    currentAd: {
-      adId: { type: String },
-      adTitle: { type: String },
-      adDuration: { type: Number }, // in seconds
-      startTime: { type: Date },
-      endTime: { type: Date },
-      impressions: { type: Number, default: 0 }, // How many times this ad was shown
-      totalViewTime: { type: Number, default: 0 }, // Total time viewed in seconds
-      completionRate: { type: Number, default: 0 }, // Percentage of ad completed
-      // Real-time playback fields
-      currentTime: { type: Number, default: 0 }, // Current playback time in seconds
-      state: { type: String, enum: ['playing', 'paused', 'buffering', 'loading', 'ended'], default: 'loading' },
-      progress: { type: Number, default: 0, min: 0, max: 100 } // Progress percentage
-    },
-    
-    // Daily ad statistics
-    dailyAdStats: {
-      date: { type: Date },
-      totalAdsPlayed: { type: Number, default: 0 },
-      totalDisplayTime: { type: Number, default: 0 }, // in seconds
-      uniqueAdsPlayed: { type: Number, default: 0 },
-      averageAdDuration: { type: Number, default: 0 },
-      adCompletionRate: { type: Number, default: 0 },
-    }
-  },
+  // Basic vehicle display status
+  isDisplaying: { type: Boolean, default: true },
+  maintenanceMode: { type: Boolean, default: false },
   
   // Daily session tracking (from ScreenTracking)
   currentSession: {
@@ -351,13 +289,13 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
   // Get device timezone from current location
   const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
   
-  // Check if this is a new day in device timezone - if so, reset to 8 hours
+  // Check if this is a new day in device timezone - if so, return 0 hours (fresh start)
   const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
   const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(this.currentSession.date, deviceTimezone);
   
-  // If it's a new day in device timezone, return 8 hours (fresh start)
+  // If it's a new day in device timezone, return 0 hours (fresh start)
   if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
-    return 8;
+    return 0;
   }
   
   // Enhanced session management for offline/online transitions
@@ -407,11 +345,11 @@ DeviceTrackingSchema.virtual('isCompliantToday').get(function() {
   return this.currentHoursToday >= (this.currentSession?.targetHours || 8);
 });
 
-// Virtual for display status (from ScreenTracking)
+// Virtual for display status
 DeviceTrackingSchema.virtual('displayStatus').get(function() {
   if (!this.isOnline) return 'OFFLINE';
-  if (this.screenMetrics?.maintenanceMode) return 'MAINTENANCE';
-  if (!this.screenMetrics?.isDisplaying) return 'DISPLAY_OFF';
+  if (this.maintenanceMode) return 'MAINTENANCE';
+  if (!this.isDisplaying) return 'DISPLAY_OFF';
   return 'ACTIVE';
 });
 
@@ -423,9 +361,12 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split('T')[0];
+  // Get today's date in local timezone (Philippines GMT+8)
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
@@ -449,7 +390,7 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
     
     // Reset the daily session for the new day
     car.currentSession = {
-      date: today,
+      date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
       startTime: new Date(),
       endTime: null,
       totalHoursOnline: 0,
@@ -499,9 +440,12 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split('T')[0];
+  // Get today's date in local timezone (Philippines GMT+8)
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
   
   // First try to find today's record for this material
   let car = await this.findOne({ materialId, date: todayStr });
@@ -522,7 +466,7 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
     
     // Reset the daily session for the new day
     car.currentSession = {
-      date: today,
+      date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
       startTime: new Date(),
       endTime: null,
       totalHoursOnline: 0,
@@ -671,9 +615,9 @@ DeviceTrackingSchema.statics.findNonCompliantDrivers = function(date = new Date(
 DeviceTrackingSchema.statics.findDisplayIssues = function() {
   return this.find({
     $or: [
-      { 'screenMetrics.isDisplaying': false },
-      { 'screenMetrics.maintenanceMode': true },
-      { 'screenMetrics.brightness': { $lt: 50 } }
+      { 'isDisplaying': false },
+      { 'maintenanceMode': true },
+      { 'slots.brightness': { $lt: 50 } }
     ]
   });
 };
@@ -871,6 +815,7 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
 DeviceTrackingSchema.methods.resetDailySession = function() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   
   // Check if we need to reset (new day)
   const sessionDate = new Date(this.currentSession?.date);
@@ -878,8 +823,10 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
     sessionDate.setHours(0, 0, 0, 0);
     if (sessionDate.getTime() !== today.getTime()) {
       // Reset for new day
+      this.date = todayStr; // Update the main date field
+      
       this.currentSession = {
-        date: today,
+        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -890,11 +837,33 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
         locationHistory: []
       };
       
+      // Reset daily counters
+      this.totalAdPlays = 0;
+      this.totalQRScans = 0;
+      this.totalDistanceTraveled = 0;
+      this.totalHoursOnline = 0;
+      this.totalAdImpressions = 0;
+      this.totalAdPlayTime = 0;
+      
+      // Clear daily data arrays
+      this.adPlaybacks = [];
+      this.qrScans = [];
+      this.locationHistory = [];
+      this.hourlyStats = [];
+      this.adPerformance = [];
+      this.qrScansByAd = [];
+      
+      // Reset current ad
+      this.currentAd = null;
+      
+      // Reset compliance data
+      this.complianceData = {
+        offlineIncidents: 0,
+        displayIssues: 0
+      };
+      
       // Also reset the current location to prevent invalid distance calculations
       this.currentLocation = null;
-      
-      // Reset total distance as well
-      this.totalDistanceTraveled = 0;
       
       return true; // Session was reset
     }
@@ -969,130 +938,10 @@ DeviceTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDI
   return this.save();
 };
 
-// Method to track ad playback (from ScreenTracking)
-DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0) {
-  const now = new Date();
-  
-  // Update current ad
-  this.screenMetrics.currentAd = {
-    adId,
-    adTitle,
-    adDuration,
-    startTime: now,
-    endTime: null,
-    impressions: (this.screenMetrics.currentAd?.impressions || 0) + 1,
-    totalViewTime: (this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime,
-    completionRate: adDuration > 0 ? Math.min(100, ((this.screenMetrics.currentAd?.totalViewTime || 0) + viewTime) / adDuration * 100) : 0,
-    // Real-time playback fields
-    currentTime: 0,
-    state: 'playing',
-    progress: 0
-  };
-  
-  // Update total ad play count
-  this.screenMetrics.adPlayCount += 1;
-  this.screenMetrics.lastAdPlayed = now;
-  
-  // Update daily ad stats
-  if (!this.screenMetrics.dailyAdStats || 
-      !this.screenMetrics.dailyAdStats.date || 
-      this.screenMetrics.dailyAdStats.date.toDateString() !== now.toDateString()) {
-    this.screenMetrics.dailyAdStats = {
-      date: now,
-      totalAdsPlayed: 0,
-      totalDisplayTime: 0,
-      uniqueAdsPlayed: 0,
-      averageAdDuration: 0,
-      adCompletionRate: 0
-    };
-  }
-  
-  this.screenMetrics.dailyAdStats.totalAdsPlayed += 1;
-  this.screenMetrics.dailyAdStats.totalDisplayTime += viewTime;
-  
-  // Update ad performance tracking
-  let adPerformance = this.adPerformance.find(ad => ad.adId === adId);
-  if (!adPerformance) {
-    adPerformance = {
-      adId,
-      adTitle,
-      playCount: 0,
-      totalViewTime: 0,
-      averageViewTime: 0,
-      completionRate: 0,
-      firstPlayed: now,
-      lastPlayed: now,
-      impressions: 0
-    };
-    this.adPerformance.push(adPerformance);
-    this.screenMetrics.dailyAdStats.uniqueAdsPlayed += 1;
-  }
-  
-  adPerformance.playCount += 1;
-  adPerformance.totalViewTime += viewTime;
-  adPerformance.averageViewTime = adPerformance.totalViewTime / adPerformance.playCount;
-  adPerformance.completionRate = adDuration > 0 ? Math.min(100, adPerformance.totalViewTime / adDuration * 100) : 0;
-  adPerformance.lastPlayed = now;
-  adPerformance.impressions += 1;
-  
-  // Update daily stats
-  this.screenMetrics.dailyAdStats.averageAdDuration = 
-    this.screenMetrics.dailyAdStats.totalDisplayTime / this.screenMetrics.dailyAdStats.totalAdsPlayed;
-  this.screenMetrics.dailyAdStats.adCompletionRate = 
-    this.adPerformance.reduce((sum, ad) => sum + ad.completionRate, 0) / this.adPerformance.length;
-  
-  return this.save();
-};
+// Note: Ad playback tracking is now handled by the main trackAdPlayback method
+// which uses the adPlaybacks array instead of screenMetrics
 
-// Method to end ad playback (from ScreenTracking)
-DeviceTrackingSchema.methods.endAdPlayback = function() {
-  if (this.screenMetrics.currentAd && this.screenMetrics.currentAd.startTime) {
-    const now = new Date();
-    const totalViewTime = (now - this.screenMetrics.currentAd.startTime) / 1000; // in seconds
-    
-    this.screenMetrics.currentAd.endTime = now;
-    this.screenMetrics.currentAd.totalViewTime = totalViewTime;
-    
-    if (this.screenMetrics.currentAd.adDuration > 0) {
-      this.screenMetrics.currentAd.completionRate = Math.min(100, totalViewTime / this.screenMetrics.currentAd.adDuration * 100);
-    }
-  }
-  
-  return this.save();
-};
-
-// Method to update driver activity hours (from ScreenTracking)
-DeviceTrackingSchema.methods.updateDriverActivity = function(isActive = true) {
-  const now = new Date();
-  
-  if (!this.screenMetrics.dailyAdStats || 
-      !this.screenMetrics.dailyAdStats.date || 
-      this.screenMetrics.dailyAdStats.date.toDateString() !== now.toDateString()) {
-    this.screenMetrics.dailyAdStats = {
-      date: now,
-      totalAdsPlayed: 0,
-      totalDisplayTime: 0,
-      uniqueAdsPlayed: 0,
-      averageAdDuration: 0,
-      adCompletionRate: 0
-    };
-  }
-  
-  // Update display hours based on activity
-  if (isActive) {
-    this.screenMetrics.displayHours += 0.5 / 3600; // Add 30 seconds in hours
-  }
-  
-  // Update current session hours
-  if (this.currentSession && this.currentSession.isActive) {
-    this.currentSession.totalHoursOnline += 0.5 / 3600; // Add 30 seconds in hours
-  }
-  
-  // Update total lifetime hours
-  this.totalHoursOnline += 0.5 / 3600;
-  
-  return this.save();
-};
+// Note: Driver activity tracking is now handled by the main hours tracking methods
 
 // Method to calculate and update online hours based on session time
 DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {

@@ -88,7 +88,10 @@ class HoursUpdateService {
       
       if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
         // New day - reset session
+        console.log(`🔄 [HoursUpdate] New day detected for ${device.materialId}, resetting session`);
         await device.resetDailySession();
+        await device.save();
+        console.log(`✅ [HoursUpdate] Reset ${device.materialId}: ${device.totalHoursOnline.toFixed(2)} hours`);
         return;
       }
 
@@ -109,10 +112,8 @@ class HoursUpdateService {
           device.currentSession.totalHoursOnline >= device.currentSession.targetHours ? 
           'COMPLIANT' : 'NON_COMPLIANT';
         
-        // Update total lifetime hours
-        if (device.currentSession.totalHoursOnline > device.totalHoursOnline) {
-          device.totalHoursOnline = device.currentSession.totalHoursOnline;
-        }
+        // Update total daily hours (not lifetime)
+        device.totalHoursOnline = device.currentSession.totalHoursOnline;
         
         // Update average daily hours
         device.averageDailyHours = device.totalHoursOnline;

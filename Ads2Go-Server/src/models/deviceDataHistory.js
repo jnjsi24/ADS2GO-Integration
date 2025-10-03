@@ -146,6 +146,8 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   qrScans: [{
     adId: { type: String, required: true },
     adTitle: { type: String, required: true },
+    materialId: { type: String, required: true },
+    slotNumber: { type: Number, required: true, min: 1, max: 5 },
     scanTimestamp: { type: Date, required: true },
     qrCodeUrl: { type: String },
     website: { type: String },
@@ -168,13 +170,14 @@ const DeviceDataHistorySchema = new mongoose.Schema({
   adPlaybacks: [{
     adId: { type: String, required: true },
     adTitle: { type: String, required: true },
+    materialId: { type: String, required: true },
+    slotNumber: { type: Number, required: true, min: 1, max: 5 },
     adDuration: { type: Number, required: true }, // in seconds
     startTime: { type: Date, required: true },
     endTime: { type: Date },
     viewTime: { type: Number, default: 0 }, // actual time viewed in seconds
     completionRate: { type: Number, default: 0 }, // percentage
-    impressions: { type: Number, default: 1 },
-    slotNumber: { type: Number, required: true, min: 1, max: 5 }
+    impressions: { type: Number, default: 1 }
   }],
   
   // Network and connectivity
@@ -190,6 +193,19 @@ const DeviceDataHistorySchema = new mongoose.Schema({
     offlineIncidents: { type: Number, default: 0 },
     displayIssues: { type: Number, default: 0 }
   },
+  
+  // Basic vehicle display status
+  isDisplaying: { type: Boolean, default: true },
+  maintenanceMode: { type: Boolean, default: false },
+  
+  // QR scans per ad
+  qrScansByAd: [{
+    adId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    scanCount: { type: Number, default: 0 },
+    lastScanned: { type: Date },
+    firstScanned: { type: Date }
+  }],
   
   // Metadata
   archivedAt: { type: Date, default: Date.now },

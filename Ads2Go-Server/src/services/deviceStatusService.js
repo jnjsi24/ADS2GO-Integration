@@ -617,11 +617,90 @@ class DeviceStatusService {
     }
   }
 
+  async updateDeviceStatusWithMaterialId(deviceId, materialId, status) {
+    try {
+      const now = new Date();
+      
+      console.log(`🔄 [updateDeviceStatusWithMaterialId] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
+      
+      // Find existing record by materialId
+      console.log(`🔍 [updateDeviceStatusWithMaterialId] Searching for device by materialId: ${materialId}`);
+      let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
+      
+      if (!deviceTracking) {
+        console.log(`⚠️ [updateDeviceStatusWithMaterialId] No DeviceTracking record found for materialId: ${materialId}. Device may not be registered.`);
+        return;
+      }
+      
+      // Update the specific slot for this device
+      const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+      if (slot) {
+        slot.isOnline = status;
+        slot.lastSeen = now;
+        deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
+        deviceTracking.lastSeen = now;
+        await deviceTracking.save();
+        console.log(`✅ [updateDeviceStatusWithMaterialId] Updated slot for device ${deviceId} in material ${materialId}`);
+      } else {
+        console.log(`⚠️ [updateDeviceStatusWithMaterialId] Device ${deviceId} not found in slots for material ${materialId}`);
+      }
+
+      console.log(`✅ [updateDeviceStatusWithMaterialId] Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
+      
+      // Update DeviceStatusManager with database status
+      deviceStatusManager.setDatabaseStatus(deviceId, status, now);
+      
+      // Broadcast the status update to all connected clients
+      this.broadcastDeviceUpdate(deviceTracking);
+      
+      // Also update the device list
+      this.broadcastDeviceList();
+      
+    } catch (error) {
+      console.error(`❌ Error updating status for device ${deviceId} with materialId ${materialId}:`, error);
+    }
+  }
+
   async handleDisconnect(deviceId) {
+    // Get materialId before removing connection
+    const connection = this.activeConnections.get(deviceId);
+    let materialId = connection?.materialId;
+    
+    // Debug logging
+    console.log(`🔍 [handleDisconnect] Debug info:`);
+    console.log(`   Device ID: "${deviceId}"`);
+    console.log(`   Connection found: ${!!connection}`);
+    console.log(`   Material ID from connection: ${materialId || 'undefined'}`);
+    console.log(`   Active connections: ${this.activeConnections.size}`);
+    console.log(`   Active connection keys:`, Array.from(this.activeConnections.keys()));
+    
+    // If no materialId from connection, try to find it from database
+    if (!materialId) {
+      console.log(`🔍 [handleDisconnect] No materialId from connection, searching database...`);
+      try {
+        const DeviceTracking = require('../models/deviceTracking');
+        const device = await DeviceTracking.findOne({ 'slots.deviceId': deviceId });
+        if (device) {
+          materialId = device.materialId;
+          console.log(`✅ [handleDisconnect] Found materialId from database: ${materialId}`);
+        } else {
+          console.log(`❌ [handleDisconnect] No device found in database for deviceId: ${deviceId}`);
+        }
+      } catch (error) {
+        console.error(`❌ [handleDisconnect] Error finding materialId from database:`, error);
+      }
+    }
+    
     this.removeConnection(deviceId);
     try {
       console.log(`🔄 [handleDisconnect] Starting disconnect process for device: ${deviceId}`);
-      await this.updateDeviceStatus(deviceId, false);
+      
+      // Update device status with materialId if available
+      if (materialId) {
+        await this.updateDeviceStatusWithMaterialId(deviceId, materialId, false);
+      } else {
+        console.log(`⚠️ [handleDisconnect] No materialId found for device ${deviceId}, skipping database update`);
+      }
       
       // Also update tablet registration status to OFFLINE
       await this.updateTabletStatus(deviceId, false);
