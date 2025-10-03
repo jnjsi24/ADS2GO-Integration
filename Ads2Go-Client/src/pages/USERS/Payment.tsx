@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useMutation, gql } from "@apollo/client";
 import { X, ChevronDown } from "lucide-react";
+import { useToast, ToastContainer } from "../../components/ToastNotification";
 
 // Define Status type to match backend PaymentStatus enum
 type Status = "PAID" | "PENDING" | "FAILED";
@@ -45,12 +46,11 @@ const Payment: React.FC<PaymentProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { toasts, addToast, removeToast } = useToast();
   const [createPayment, { loading }] = useMutation(CREATE_PAYMENT, {
     // Refetch the query used in PaymentHistory to reflect DB changes
     refetchQueries: ["GetUserAdsWithPayments"],
   });
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState(paymentType || "CREDIT_CARD");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,15 +78,21 @@ const Payment: React.FC<PaymentProps> = ({
   ];
 
   const showError = (msg: string) => {
-    setErrorMessage(msg);
-    setSuccessMessage(null);
-    setTimeout(() => setErrorMessage(null), 5000);
+    addToast({
+      type: 'error',
+      title: 'Error!',
+      message: msg,
+      duration: 5000
+    });
   };
 
   const showSuccess = (msg: string) => {
-    setSuccessMessage(msg);
-    setErrorMessage(null);
-    setTimeout(() => setSuccessMessage(null), 5000);
+    addToast({
+      type: 'success',
+      title: 'Success!',
+      message: msg,
+      duration: 5000
+    });
   };
 
   const getStatusStyle = (status: Status) => {
@@ -442,16 +448,8 @@ const Payment: React.FC<PaymentProps> = ({
             )}
           </div>
         </div>
-        {errorMessage && (
-          <div className="fixed bottom-5 right-5 w-auto text-center bg-red-200 text-red-500 px-4 py-3 rounded-lg shadow-lg text-sm font-bold animate-slide-right z-[9999]">
-            {errorMessage}
-          </div>
-        )}
-        {successMessage && (
-          <div className="fixed bottom-5 right-5 w-auto text-center bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg text-sm font-bold animate-slide-right z-[9999]">
-            {successMessage}
-          </div>
-        )}
+        {/* Toast Notifications */}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </div>
     </div>
   );

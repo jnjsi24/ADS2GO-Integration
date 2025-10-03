@@ -8,6 +8,7 @@ import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 
 // Form data type
@@ -22,12 +23,6 @@ type FormData = {
   status: 'PENDING';
 };
 
-// Toast notification type
-type Toast = {
-  id: number;
-  message: string;
-  type: 'error' | 'success';
-};
 
 // Ad type
 type Ad = {
@@ -69,7 +64,7 @@ const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'R
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
   const navigate = useNavigate();
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toasts, addToast, removeToast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,19 +96,19 @@ const Advertisements: React.FC = () => {
   const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
     onCompleted: () => {
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Success!', 
         message: 'Advertisement deleted successfully!', 
-        type: 'success' as const 
-      }]);
+        type: 'success' 
+      });
     },
     onError: (error) => {
       console.error('Error deleting ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Error!', 
         message: 'Failed to delete advertisement', 
-        type: 'error' as const 
-      }]);
+        type: 'error' 
+      });
     },
   });
   
@@ -207,17 +202,6 @@ const Advertisements: React.FC = () => {
     setEstimatedPrice(price);
   }, [formData.vehicleType, formData.materialsUsed, formData.plan]);
 
-  const addToast = (message: string, type: 'error' | 'success') => {
-    const id = Date.now();
-    setToasts((prev: Toast[]) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
-  };
-
-  const removeToast = (id: number) => {
-    setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
-  };
 
   const handleDeleteAd = (adId: string) => {
     setAdToDelete(adId);
@@ -355,41 +339,41 @@ const Advertisements: React.FC = () => {
     
     // Validate required fields
     if (!formData.title.trim()) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a title', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please enter a title', type: 'error' });
       return;
     }
     if (!formData.description.trim()) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a description', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please enter a description', type: 'error' });
       return;
     }
     if (!formData.materialsUsed) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a material', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select a material', type: 'error' });
       return;
     }
     if (!formData.plan) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a plan', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select a plan', type: 'error' });
       return;
     }
     if (!formData.adFormat) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select an ad format', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select an ad format', type: 'error' });
       return;
     }
     if (!formData.media) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please upload a media file', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please upload a media file', type: 'error' });
       return;
     }
     
     try {
       // For now, redirect to the proper create advertisement page
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Error!', 
         message: 'Please use the "Create Advertisement" page for full functionality', 
         type: 'error' 
-      }]);
+      });
       setShowCreateAdPopup(false);
     } catch (error) {
       console.error('Error creating ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Failed to create ad', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Failed to create ad', type: 'error' });
     }
   };
 
@@ -648,22 +632,7 @@ const Advertisements: React.FC = () => {
       </div>
 
       {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Create Ad Popup - Right Side Version (Updated layout) */}
       {showCreateAdPopup && (
