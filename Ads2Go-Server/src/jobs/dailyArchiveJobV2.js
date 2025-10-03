@@ -16,13 +16,20 @@ class DailyArchiveJobV2 {
     console.log('🔄 Starting daily archive job V2 (Array Structure)...');
 
     try {
-      const today = new Date();
-      const dateStr = today.toISOString().split('T')[0];
-      console.log(`📅 Archiving data for date: ${dateStr} (TESTING MODE)`);
+      // Get today's date in Philippines timezone for archiving
+      const now = new Date();
+      const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+      
+      const year = philippinesTime.getFullYear();
+      const month = String(philippinesTime.getMonth() + 1).padStart(2, '0');
+      const day = String(philippinesTime.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      console.log(`📅 Archiving data for date: ${dateStr} (Current day)`);
 
       // Get all device tracking records for today
       const devices = await DeviceTracking.find({
-        date: new Date(dateStr)
+        date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate())
       });
 
       console.log(`📊 Found ${devices.length} device records to archive`);

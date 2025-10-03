@@ -24,9 +24,9 @@ class CronJobs {
     // Start the user analytics sync job (every 10 minutes)
     userAnalyticsSyncJob.start();
 
-    // Daily archive job - runs every 5 minutes for testing (normally at midnight)
-    const dailyArchiveTask = cron.schedule('*/5 * * * *', async () => {
-      console.log('⏰ Daily archive job triggered (TESTING: every 5 minutes)');
+    // Daily archive job - runs at 11:55 PM Philippines time (before reset)
+    const dailyArchiveTask = cron.schedule('55 23 * * *', async () => {
+      console.log('⏰ Daily archive job triggered at 11:55 PM (Philippines time)');
       try {
         // Use the new V2 archive job for array-based structure
         await dailyArchiveJobV2.archiveDailyData();
@@ -35,10 +35,25 @@ class CronJobs {
         console.error('❌ Daily archive job (V2) failed:', error);
       }
     }, {
-      scheduled: false,
-      timezone: 'UTC'
+      scheduled: true,
+      timezone: 'Asia/Manila'
     });
 
+    // Daily reset job - runs at midnight Philippines time to reset DeviceTracking
+    const dailyResetTask = cron.schedule('0 0 * * *', async () => {
+      console.log('🔄 Daily reset job triggered at midnight (Philippines time)');
+      try {
+        await this.resetAllDeviceTracking();
+        console.log('✅ Daily reset job completed successfully');
+      } catch (error) {
+        console.error('❌ Daily reset job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
 
     // Hourly cleanup job - runs every hour to clean up old data
@@ -145,6 +160,106 @@ class CronJobs {
       console.log(`✅ Manual archive (V2) completed for date: ${dateStr}`);
     } catch (error) {
       console.error(`❌ Manual archive (V2) failed for date ${dateStr}:`, error);
+      throw error;
+    }
+  }
+
+  // Manual trigger for daily reset
+  async triggerDailyReset() {
+    console.log('🔄 Manual trigger for daily reset job');
+    try {
+      await this.resetAllDeviceTracking();
+      console.log('✅ Manual daily reset completed');
+    } catch (error) {
+      console.error('❌ Manual daily reset failed:', error);
+      throw error;
+    }
+  }
+
+  // Reset all DeviceTracking records for new day
+  async resetAllDeviceTracking() {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      
+      console.log('🔄 Starting daily reset of all DeviceTracking records...');
+      
+      // Get today's date in Philippines timezone
+      const now = new Date();
+      const philippinesTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+      const year = philippinesTime.getFullYear();
+      const month = String(philippinesTime.getMonth() + 1).padStart(2, '0');
+      const day = String(philippinesTime.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+      
+      console.log(`📅 Resetting to date: ${todayStr}`);
+      
+      // Find all DeviceTracking records
+      const devices = await DeviceTracking.find({});
+      console.log(`📱 Found ${devices.length} DeviceTracking records to reset`);
+      
+      let resetCount = 0;
+      
+      for (const device of devices) {
+        try {
+          // Reset the daily session for the new day
+          device.currentSession = {
+            date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate()),
+            startTime: new Date(),
+            endTime: null,
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            isActive: true,
+            targetHours: 8,
+            complianceStatus: 'PENDING',
+            locationHistory: []
+          };
+          
+          // Reset daily counters
+          device.totalAdPlays = 0;
+          device.totalQRScans = 0;
+          device.totalDistanceTraveled = 0;
+          device.totalHoursOnline = 0;
+          device.totalAdImpressions = 0;
+          device.totalAdPlayTime = 0;
+          
+          // Clear daily data arrays
+          device.adPlaybacks = [];
+          device.qrScans = [];
+          device.locationHistory = [];
+          device.hourlyStats = [];
+          device.adPerformance = [];
+          device.qrScansByAd = [];
+          
+          // Reset current ad
+          device.currentAd = null;
+          
+          // Reset compliance data
+          device.complianceData = {
+            offlineIncidents: 0,
+            displayIssues: 0
+          };
+          
+          // Update lastSeen to now
+          device.lastSeen = new Date();
+          
+          // Update the date to today
+          device.date = todayStr;
+          
+          // Save the updated record
+          await device.save();
+          resetCount++;
+          
+          console.log(`✅ Reset ${device.materialId}: ${device.totalAdPlays} plays, ${device.totalQRScans} QR scans`);
+          
+        } catch (error) {
+          console.error(`❌ Error resetting device ${device.materialId}:`, error.message);
+        }
+      }
+      
+      console.log(`🎉 Daily reset completed: ${resetCount}/${devices.length} devices reset successfully`);
+      
+    } catch (error) {
+      console.error('❌ Error in resetAllDeviceTracking:', error);
       throw error;
     }
   }
