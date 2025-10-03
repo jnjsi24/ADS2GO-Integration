@@ -200,8 +200,8 @@ router.get('/route/:deviceId', async (req, res) => {
     if (date) {
       console.log(`🔍 [ROUTE] Looking for historical data for device ${deviceId} on date ${date}`);
       
-      // Import DeviceDataHistory model
-      const DeviceDataHistory = require('../models/deviceDataHistory');
+      // Import DeviceDataHistoryV2 model
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       
       // Find historical data for the specific date
       const targetDate = new Date(date);
@@ -210,7 +210,7 @@ router.get('/route/:deviceId', async (req, res) => {
       nextDay.setDate(nextDay.getDate() + 1);
       
       // First try with the exact deviceId
-      let historicalData = await DeviceDataHistory.findOne({
+      let historicalData = await DeviceDataHistoryV2.findOne({
         deviceId: deviceId,
         date: {
           $gte: targetDate,
@@ -226,7 +226,7 @@ router.get('/route/:deviceId', async (req, res) => {
         
         // Try to find by materialId if deviceId is actually a materialId
         console.log(`🔍 [ROUTE] Trying to find by materialId ${deviceId} on date ${date}`);
-        historicalData = await DeviceDataHistory.findOne({
+        historicalData = await DeviceDataHistoryV2.findOne({
           deviceId: deviceId, // This might actually be a materialId
           date: {
             $gte: targetDate,
@@ -241,7 +241,7 @@ router.get('/route/:deviceId', async (req, res) => {
           console.log(`❌ [ROUTE] No historical data found for materialId ${deviceId} on date ${date}`);
           
           // Debug: List all available deviceIds for this date
-          const allHistoricalData = await DeviceDataHistory.find({
+          const allHistoricalData = await DeviceDataHistoryV2.find({
             date: {
               $gte: targetDate,
               $lt: nextDay
@@ -346,13 +346,13 @@ router.get('/route/:deviceId', async (req, res) => {
     let additionalMetrics = {};
     if (date) {
       try {
-        const DeviceDataHistory = require('../models/deviceDataHistory');
+        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
         const targetDate = new Date(date);
         targetDate.setHours(0, 0, 0, 0);
         const nextDay = new Date(targetDate);
         nextDay.setDate(nextDay.getDate() + 1);
         
-        const historicalData = await DeviceDataHistory.findOne({
+        const historicalData = await DeviceDataHistoryV2.findOne({
           deviceId: deviceId,
           date: {
             $gte: targetDate,

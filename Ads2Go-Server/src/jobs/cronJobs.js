@@ -1,6 +1,7 @@
 const cron = require('node-cron');
-const dailyArchiveJob = require('./dailyArchiveJob');
+const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
 const hoursUpdateService = require('../services/hoursUpdateService');
+const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
 
 class CronJobs {
   constructor() {
@@ -20,14 +21,18 @@ class CronJobs {
     // Start the high-precision hours update service (30-second intervals)
     hoursUpdateService.start();
 
+    // Start the user analytics sync job (every 10 minutes)
+    userAnalyticsSyncJob.start();
+
     // Daily archive job - runs every 5 minutes for testing (normally at midnight)
     const dailyArchiveTask = cron.schedule('*/5 * * * *', async () => {
       console.log('⏰ Daily archive job triggered (TESTING: every 5 minutes)');
       try {
-        await dailyArchiveJob.archiveDailyData();
-        console.log('✅ Daily archive job completed successfully');
+        // Use the new V2 archive job for array-based structure
+        await dailyArchiveJobV2.archiveDailyData();
+        console.log('✅ Daily archive job (V2) completed successfully');
       } catch (error) {
-        console.error('❌ Daily archive job failed:', error);
+        console.error('❌ Daily archive job (V2) failed:', error);
       }
     }, {
       scheduled: false,
@@ -89,6 +94,9 @@ class CronJobs {
     // Stop the hours update service
     hoursUpdateService.stop();
 
+    // Stop the user analytics sync job
+    userAnalyticsSyncJob.stop();
+
     this.jobs.forEach((job, name) => {
       job.stop();
       console.log(`⏹️  Stopped cron job: ${name}`);
@@ -103,7 +111,8 @@ class CronJobs {
   getStatus() {
     const status = {
       isRunning: this.isRunning,
-      jobs: {}
+      jobs: {},
+      userAnalyticsSync: userAnalyticsSyncJob.getStatus()
     };
 
     this.jobs.forEach((job, name) => {
@@ -120,10 +129,10 @@ class CronJobs {
   async triggerDailyArchive() {
     console.log('🔄 Manual trigger for daily archive job');
     try {
-      await dailyArchiveJob.archiveDailyData();
-      console.log('✅ Manual daily archive completed');
+      await dailyArchiveJobV2.archiveDailyData();
+      console.log('✅ Manual daily archive (V2) completed');
     } catch (error) {
-      console.error('❌ Manual daily archive failed:', error);
+      console.error('❌ Manual daily archive (V2) failed:', error);
       throw error;
     }
   }
@@ -132,10 +141,10 @@ class CronJobs {
   async triggerArchiveForDate(dateStr) {
     console.log(`🔄 Manual trigger for archive job - date: ${dateStr}`);
     try {
-      await dailyArchiveJob.manualArchive(dateStr);
-      console.log(`✅ Manual archive completed for date: ${dateStr}`);
+      await dailyArchiveJobV2.archiveDailyData();
+      console.log(`✅ Manual archive (V2) completed for date: ${dateStr}`);
     } catch (error) {
-      console.error(`❌ Manual archive failed for date ${dateStr}:`, error);
+      console.error(`❌ Manual archive (V2) failed for date ${dateStr}:`, error);
       throw error;
     }
   }
@@ -231,7 +240,7 @@ class CronJobs {
 
   // Get archive status
   async getArchiveStatus() {
-    return await dailyArchiveJob.getArchiveStatus();
+    return await dailyArchiveJobV2.getArchiveStatus();
   }
 }
 

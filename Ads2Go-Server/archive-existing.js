@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 
 const DeviceTracking = require('./src/models/deviceTracking');
-const DeviceDataHistory = require('./src/models/deviceDataHistory');
-const dailyArchiveJob = require('./src/jobs/dailyArchiveJob');
+const DeviceDataHistoryV2 = require('./src/models/deviceDataHistoryV2');
+const dailyArchiveJobV2V2 = require('./src/jobs/dailyArchiveJobV2V2');
 
 async function archiveExistingData() {
   try {
@@ -34,7 +34,7 @@ async function archiveExistingData() {
     
     // Archive this specific record manually
     console.log('🔄 Archiving existing record...');
-    await dailyArchiveJob.archiveDeviceData(existingRecord, existingRecord.date.toISOString().split('T')[0]);
+    await dailyArchiveJobV2.archiveDeviceData(existingRecord, existingRecord.date.toISOString().split('T')[0]);
     
     // Check if it was created
     const archivedRecord = await DeviceDataHistory.findOne({ materialId: existingRecord.materialId });

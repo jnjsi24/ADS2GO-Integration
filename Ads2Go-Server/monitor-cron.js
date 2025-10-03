@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const DeviceTracking = require('./src/models/deviceTracking');
-const DeviceDataHistory = require('./src/models/deviceDataHistory');
+const DeviceDataHistoryV2V2 = require('./src/models/deviceDataHistoryV2');
 
 require('dotenv').config({ path: './.env' });
 
@@ -29,13 +29,13 @@ async function monitorCron() {
     const onlineDevices = await DeviceTracking.countDocuments({ isOnline: true });
     console.log(`📋 DeviceTracking: ${deviceTrackingCount} total, ${onlineDevices} online`);
 
-    // Check DeviceDataHistory records
-    const deviceDataHistoryCount = await DeviceDataHistory.countDocuments();
-    console.log(`📚 DeviceDataHistory: ${deviceDataHistoryCount} total`);
+    // Check DeviceDataHistoryV2 records
+    const deviceDataHistoryCount = await DeviceDataHistoryV2.countDocuments();
+    console.log(`📚 DeviceDataHistoryV2: ${deviceDataHistoryCount} total`);
 
     // Check recent archives (last 10 minutes)
     const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-    const recentArchives = await DeviceDataHistory.find({
+    const recentArchives = await DeviceDataHistoryV2.find({
       archivedAt: { $gte: tenMinutesAgo }
     }).sort({ archivedAt: -1 });
 
@@ -61,11 +61,11 @@ async function monitorCron() {
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().split('T')[0];
     
-    const todayDeviceDataHistory = await DeviceDataHistory.countDocuments({ date: todayStr });
-    console.log(`📅 Today's archives: ${todayDeviceDataHistory}`);
+    const todayDeviceDataHistoryV2 = await DeviceDataHistoryV2.countDocuments({ date: todayStr });
+    console.log(`📅 Today's archives: ${todayDeviceDataHistoryV2}`);
 
     // Check material-level records
-    const materialRecords = await DeviceDataHistory.find({ 
+    const materialRecords = await DeviceDataHistoryV2.find({ 
       materialId: { $exists: true, $ne: null } 
     }).sort({ archivedAt: -1 }).limit(3);
     

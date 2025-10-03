@@ -53,7 +53,7 @@ class AnalyticsService {
   static async getAdPlaybackData(materialId, startDate, endDate) {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const DeviceDataHistory = require('../models/deviceDataHistory');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       
       // Get current day data from deviceTracking
       const currentDay = new Date().toISOString().split('T')[0];
@@ -62,10 +62,10 @@ class AnalyticsService {
         date: currentDay
       });
       
-      // Get historical data from deviceDataHistory
-      const historicalData = await DeviceDataHistory.find({
+      // Get historical data from deviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.find({
         materialId: materialId,
-        date: {
+        'dailyData.date': {
           $gte: new Date(startDate),
           $lte: new Date(endDate)
         }
@@ -113,36 +113,44 @@ class AnalyticsService {
         }
       });
       
-      // Process historical data
+      // Process historical data (now in dailyData array)
       historicalData.forEach(archive => {
-        if (archive.adPlaybacks && archive.adPlaybacks.length > 0) {
-          allAdPlaybacks.push(...archive.adPlaybacks);
-        }
-        
-        totalAdPlays += archive.totalAdPlays || 0;
-        totalAdPlayTime += archive.totalAdPlayTime || 0;
-        totalAdImpressions += archive.totalAdImpressions || 0;
-        
-        if (archive.adPerformance && archive.adPerformance.length > 0) {
-          archive.adPerformance.forEach(adPerf => {
-            if (!adPlaybacksByAd[adPerf.adId]) {
-              adPlaybacksByAd[adPerf.adId] = {
-                adId: adPerf.adId,
-                adTitle: adPerf.adTitle,
-                playCount: 0,
-                totalViewTime: 0,
-                averageViewTime: 0,
-                completionRate: 0,
-                firstPlayed: adPerf.firstPlayed,
-                lastPlayed: adPerf.lastPlayed,
-                impressions: 0
-              };
-            }
-            adPlaybacksByAd[adPerf.adId].playCount += adPerf.playCount || 0;
-            adPlaybacksByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
-            adPlaybacksByAd[adPerf.adId].impressions += adPerf.impressions || 0;
-            if (adPerf.lastPlayed > adPlaybacksByAd[adPerf.adId].lastPlayed) {
-              adPlaybacksByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+        if (archive.dailyData && archive.dailyData.length > 0) {
+          archive.dailyData.forEach(dailyData => {
+            // Check if this daily data is within the date range
+            const dailyDate = new Date(dailyData.date);
+            if (dailyDate >= new Date(startDate) && dailyDate <= new Date(endDate)) {
+              if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
+                allAdPlaybacks.push(...dailyData.adPlaybacks);
+              }
+              
+              totalAdPlays += dailyData.totalAdPlays || 0;
+              totalAdPlayTime += dailyData.totalAdPlayTime || 0;
+              totalAdImpressions += dailyData.totalAdImpressions || 0;
+              
+              if (dailyData.adPerformance && dailyData.adPerformance.length > 0) {
+                dailyData.adPerformance.forEach(adPerf => {
+                  if (!adPlaybacksByAd[adPerf.adId]) {
+                    adPlaybacksByAd[adPerf.adId] = {
+                      adId: adPerf.adId,
+                      adTitle: adPerf.adTitle,
+                      playCount: 0,
+                      totalViewTime: 0,
+                      averageViewTime: 0,
+                      completionRate: 0,
+                      firstPlayed: adPerf.firstPlayed,
+                      lastPlayed: adPerf.lastPlayed,
+                      impressions: 0
+                    };
+                  }
+                  adPlaybacksByAd[adPerf.adId].playCount += adPerf.playCount || 0;
+                  adPlaybacksByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
+                  adPlaybacksByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+                  if (adPerf.lastPlayed > adPlaybacksByAd[adPerf.adId].lastPlayed) {
+                    adPlaybacksByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+                  }
+                });
+              }
             }
           });
         }
@@ -174,7 +182,7 @@ class AnalyticsService {
   static async getQRScanData(materialId, startDate, endDate) {
     try {
       const DeviceTracking = require('../models/deviceTracking');
-      const DeviceDataHistory = require('../models/deviceDataHistory');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
       
       // Get current day data from deviceTracking
       const currentDay = new Date().toISOString().split('T')[0];
@@ -183,10 +191,10 @@ class AnalyticsService {
         date: currentDay
       });
       
-      // Get historical data from deviceDataHistory
-      const historicalData = await DeviceDataHistory.find({
+      // Get historical data from deviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.find({
         materialId: materialId,
-        date: {
+        'dailyData.date': {
           $gte: new Date(startDate),
           $lte: new Date(endDate)
         }
@@ -221,26 +229,34 @@ class AnalyticsService {
         }
       });
       
-      // Process historical data
+      // Process historical data (now in dailyData array)
       historicalData.forEach(archive => {
-        if (archive.qrScans && archive.qrScans.length > 0) {
-          allQRScans.push(...archive.qrScans);
-        }
-        
-        if (archive.qrScansByAd && archive.qrScansByAd.length > 0) {
-          archive.qrScansByAd.forEach(adScan => {
-            if (!qrScansByAd[adScan.adId]) {
-              qrScansByAd[adScan.adId] = {
-                adId: adScan.adId,
-                adTitle: adScan.adTitle,
-                scanCount: 0,
-                firstScanned: adScan.firstScanned,
-                lastScanned: adScan.lastScanned
-              };
-            }
-            qrScansByAd[adScan.adId].scanCount += adScan.scanCount;
-            if (adScan.lastScanned > qrScansByAd[adScan.adId].lastScanned) {
-              qrScansByAd[adScan.adId].lastScanned = adScan.lastScanned;
+        if (archive.dailyData && archive.dailyData.length > 0) {
+          archive.dailyData.forEach(dailyData => {
+            // Check if this daily data is within the date range
+            const dailyDate = new Date(dailyData.date);
+            if (dailyDate >= new Date(startDate) && dailyDate <= new Date(endDate)) {
+              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+                allQRScans.push(...dailyData.qrScans);
+              }
+              
+              if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
+                dailyData.qrScansByAd.forEach(adScan => {
+                  if (!qrScansByAd[adScan.adId]) {
+                    qrScansByAd[adScan.adId] = {
+                      adId: adScan.adId,
+                      adTitle: adScan.adTitle,
+                      scanCount: 0,
+                      firstScanned: adScan.firstScanned,
+                      lastScanned: adScan.lastScanned
+                    };
+                  }
+                  qrScansByAd[adScan.adId].scanCount += adScan.scanCount;
+                  if (adScan.lastScanned > qrScansByAd[adScan.adId].lastScanned) {
+                    qrScansByAd[adScan.adId].lastScanned = adScan.lastScanned;
+                  }
+                });
+              }
             }
           });
         }

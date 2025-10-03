@@ -1,8 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const DeviceTracking = require('../models/deviceTracking');
-const DeviceDataHistory = require('../models/deviceDataHistory');
-const dailyArchiveJob = require('../jobs/dailyArchiveJob');
 const cronJobs = require('../jobs/cronJobs');
 
 // Helper function to determine if location should be updated
@@ -521,7 +519,7 @@ router.get('/history', async (req, res) => {
       };
     }
 
-    const history = await DeviceDataHistory.find(query)
+    const history = await DeviceDataHistoryV2.find(query)
       .sort({ date: -1 })
       .limit(parseInt(limit));
 
@@ -575,7 +573,7 @@ router.get('/route/:deviceId', async (req, res) => {
     console.log(`🔍 [DEVICE_TRACKING_ROUTE] Query:`, JSON.stringify(query, null, 2));
 
     // Find historical records
-    const historyRecords = await DeviceDataHistory.find(query)
+    const historyRecords = await DeviceDataHistoryV2.find(query)
       .sort({ date: -1 })
       .limit(parseInt(limit));
 
@@ -583,7 +581,7 @@ router.get('/route/:deviceId', async (req, res) => {
     
     if (historyRecords.length === 0) {
       // Debug: List all available records for this device
-      const allRecords = await DeviceDataHistory.find({ deviceId }).select('date totalDistanceTraveled locationHistory').sort({ date: -1 }).limit(10);
+      const allRecords = await DeviceDataHistoryV2.find({ materialId: deviceId }).select('dailyData.date dailyData.totalDistanceTraveled dailyData.locationHistory').sort({ 'dailyData.date': -1 }).limit(10);
       console.log(`🔍 [DEVICE_TRACKING_ROUTE] Available records for device ${deviceId}:`, allRecords.map(r => ({
         date: r.date,
         totalDistanceTraveled: r.totalDistanceTraveled,
