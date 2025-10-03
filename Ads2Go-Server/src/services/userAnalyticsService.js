@@ -132,16 +132,44 @@ class UserAnalyticsService {
   static async getDailyStatsFromHistory(userId, startDate, endDate) {
     try {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const User = require('../models/User');
+      const Ad = require('../models/Ad');
       
-      // Get user's materials
-      const user = await User.findById(userId);
-      if (!user || !user.materialIds) {
+      // Get user's PAID, DEPLOYED ads only
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return [];
+      }
+
+      // Get all materials associated with user's ads using targetDevices
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          // Multi-device ad: use all target devices
+          ad.targetDevices.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
+        } else if (ad.materialId) {
+          // Single-device ad: use primary material
+          if (!materialIds.includes(ad.materialId.toString())) {
+            materialIds.push(ad.materialId.toString());
+          }
+        }
+      }
+
+      if (materialIds.length === 0) {
         return [];
       }
 
       const historicalData = await DeviceDataHistoryV2.find({
-        materialId: { $in: user.materialIds },
+        materialId: { $in: materialIds },
         'dailyData.date': {
           $gte: new Date(startDate),
           $lte: new Date(endDate)
@@ -188,16 +216,44 @@ class UserAnalyticsService {
   static async getDeviceStatsFromHistory(userId, startDate, endDate) {
     try {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const User = require('../models/User');
+      const Ad = require('../models/Ad');
       
-      // Get user's materials
-      const user = await User.findById(userId);
-      if (!user || !user.materialIds) {
+      // Get user's PAID, DEPLOYED ads only
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return [];
+      }
+
+      // Get all materials associated with user's ads using targetDevices
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          // Multi-device ad: use all target devices
+          ad.targetDevices.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
+        } else if (ad.materialId) {
+          // Single-device ad: use primary material
+          if (!materialIds.includes(ad.materialId.toString())) {
+            materialIds.push(ad.materialId.toString());
+          }
+        }
+      }
+
+      if (materialIds.length === 0) {
         return [];
       }
 
       const historicalData = await DeviceDataHistoryV2.find({
-        materialId: { $in: user.materialIds },
+        materialId: { $in: materialIds },
         'dailyData.date': {
           $gte: new Date(startDate),
           $lte: new Date(endDate)
@@ -246,25 +302,28 @@ class UserAnalyticsService {
     try {
       const DeviceTracking = require('../models/deviceTracking');
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Ad = require('../models/Ad');
       
-      // Get user analytics to find associated materials
-      const userAnalytics = await UserAnalytics.findOne({ userId });
-      if (!userAnalytics) {
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ userId: userId });
+      if (!userAds || userAds.length === 0) {
         return {
           success: false,
-          message: 'User analytics not found'
+          message: 'No ads found for this user'
         };
       }
 
       // Get all materials for this user
       const materialIds = [];
-      userAnalytics.ads.forEach(ad => {
-        ad.materials.forEach(material => {
-          if (!materialIds.includes(material.materialId)) {
-            materialIds.push(material.materialId);
-          }
-        });
-      });
+      for (const ad of userAds) {
+        if (ad.materials && ad.materials.length > 0) {
+          ad.materials.forEach(material => {
+            if (material.materialId && !materialIds.includes(material.materialId)) {
+              materialIds.push(material.materialId);
+            }
+          });
+        }
+      }
 
       if (materialIds.length === 0) {
         return {
@@ -405,25 +464,28 @@ class UserAnalyticsService {
     try {
       const DeviceTracking = require('../models/deviceTracking');
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Ad = require('../models/Ad');
       
-      // Get user analytics to find associated materials
-      const userAnalytics = await UserAnalytics.findOne({ userId });
-      if (!userAnalytics) {
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ userId: userId });
+      if (!userAds || userAds.length === 0) {
         return {
           success: false,
-          message: 'User analytics not found'
+          message: 'No ads found for this user'
         };
       }
 
       // Get all materials for this user
       const materialIds = [];
-      userAnalytics.ads.forEach(ad => {
-        ad.materials.forEach(material => {
-          if (!materialIds.includes(material.materialId)) {
-            materialIds.push(material.materialId);
-          }
-        });
-      });
+      for (const ad of userAds) {
+        if (ad.materials && ad.materials.length > 0) {
+          ad.materials.forEach(material => {
+            if (material.materialId && !materialIds.includes(material.materialId)) {
+              materialIds.push(material.materialId);
+            }
+          });
+        }
+      }
 
       if (materialIds.length === 0) {
         return {
@@ -532,21 +594,28 @@ class UserAnalyticsService {
   static async fetchAndUpdateUserAnalyticsFromHistory(userId, startDate, endDate) {
     try {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const User = require('../models/User');
+      const Ad = require('../models/Ad');
       
-      // Get user to find associated materials
-      const user = await User.findById(userId);
-      if (!user) {
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ userId: userId });
+      if (!userAds || userAds.length === 0) {
         return {
           success: false,
-          message: 'User not found'
+          message: 'No ads found for this user'
         };
       }
 
-      // Find all materials associated with this user
-      // This assumes you have a way to link users to materials
-      // You might need to add materialId to User schema or use a different approach
-      const materialIds = user.materialIds || [];
+      // Get all materials associated with user's ads
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.materials && ad.materials.length > 0) {
+          ad.materials.forEach(material => {
+            if (material.materialId && !materialIds.includes(material.materialId)) {
+              materialIds.push(material.materialId);
+            }
+          });
+        }
+      }
       
       if (materialIds.length === 0) {
         return {

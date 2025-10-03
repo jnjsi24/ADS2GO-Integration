@@ -4,6 +4,7 @@ const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 const { checkDriver } = require('../middleware/driverAuth');
+const { checkAdminMiddleware } = require('../middleware/auth');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 
@@ -1263,7 +1264,7 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
 });
 
 // GET /adAnalytics - Get ad analytics for all devices (filtered by user if provided)
-router.get('/adAnalytics', async (req, res) => {
+router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
   try {
     const { date, materialId, userId } = req.query;
 

@@ -677,32 +677,14 @@ class AnalyticsService {
         };
       }
 
-      // Get analytics for user's ads only - try both with userId and without (for existing data)
-      let userAnalytics = await Analytics.find({
+      // Get analytics for user's ads only - STRICT user filtering
+      const userAnalytics = await Analytics.find({
         userId: userId,
         'adPlaybacks.adId': { $in: userAdIds },
         ...dateFilter
       }).populate('userId', 'firstName lastName email');
 
       // ScreenTracking collection deprecated: skip sync from ScreenTracking to Analytics
-
-      // If no analytics found with userId, try to find analytics that have the user's ads
-      if (userAnalytics.length === 0) {
-        userAnalytics = await Analytics.find({
-          'adPlaybacks.adId': { $in: userAdIds },
-          ...dateFilter
-        }).populate('userId', 'firstName lastName email');
-        
-        // Update these analytics documents with the correct userId
-        if (userAnalytics.length > 0) {
-          await Promise.all(userAnalytics.map(analytics => {
-            if (!analytics.userId) {
-              analytics.userId = userId;
-              return analytics.save();
-            }
-          }));
-        }
-      }
 
       // Aggregate data
       const summary = {

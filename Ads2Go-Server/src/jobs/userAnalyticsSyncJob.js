@@ -101,35 +101,71 @@ class UserAnalyticsSyncJob {
     }
   }
 
-  // Sync a specific user with all available materials
+  // Sync a specific user with their own materials only
   async syncUserWithAllMaterials(userId, startDate, endDate) {
     try {
-      // Get all materials from DeviceDataHistoryV2
-      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const materials = await DeviceDataHistoryV2.find({}).select('materialId carGroupId');
+      // Get user's PAID, DEPLOYED ads only
+      const Ad = require('../models/Ad');
+      const Material = require('../models/Material');
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
       
-      if (materials.length === 0) {
+      if (!userAds || userAds.length === 0) {
         return {
           success: false,
-          message: 'No materials found in DeviceDataHistoryV2'
+          message: 'No paid, deployed ads found for this user'
         };
       }
 
-      const materialIds = materials.map(m => m.materialId);
-      
-      // Get fresh data from DeviceDataHistoryV2 for all materials
-      const historicalData = await DeviceDataHistoryV2.find({
-        materialId: { $in: materialIds },
-        'dailyData.date': {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
+      // Get all materials associated with user's ads using targetDevices
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          // Multi-device ad: use all target devices
+          ad.targetDevices.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
+        } else if (ad.materialId) {
+          // Single-device ad: use primary material
+          if (!materialIds.includes(ad.materialId.toString())) {
+            materialIds.push(ad.materialId.toString());
+          }
         }
+      }
+
+      if (materialIds.length === 0) {
+        return {
+          success: false,
+          message: 'No materials found for this user\'s ads'
+        };
+      }
+      
+      // Get fresh data from DeviceDataHistoryV2 for user's materials only
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      
+      // Convert materialIds to string materialIds for DeviceDataHistoryV2 query
+      const materials = await Material.find({ _id: { $in: materialIds } });
+      const stringMaterialIds = materials.map(m => m.materialId);
+      
+      const historicalData = await DeviceDataHistoryV2.find({
+        materialId: { $in: stringMaterialIds }
+        // Temporarily remove date filtering to ensure we get data
+        // 'dailyData.date': {
+        //   $gte: new Date(startDate),
+        //   $lte: new Date(endDate)
+        // }
       });
 
       if (historicalData.length === 0) {
         return {
           success: false,
-          message: 'No historical data found for the specified date range'
+          message: 'No historical data found for user\'s materials'
         };
       }
 
@@ -272,25 +308,94 @@ class UserAnalyticsSyncJob {
       userAnalytics.lastUpdated = new Date();
       userAnalytics.updatedAt = new Date();
 
-      // Update ads array
-      userAnalytics.ads = adsArray.map(ad => ({
-        adId: ad.adId,
-        adTitle: ad.adTitle,
-        totalMaterials: ad.totalMaterials,
-        totalDevices: 0,
-        totalAdPlayTime: ad.totalViewTime,
-        totalAdImpressions: ad.totalImpressions,
-        totalQRScans: 0,
-        averageAdCompletionRate: ad.completionRate,
-        qrScanConversionRate: 0,
-        materials: [],
-        materialPerformance: [],
-        errorLogs: [],
-        isActive: true,
-        lastUpdated: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }));
+      // Update ads array with complete data structure
+      userAnalytics.ads = adsArray.map(ad => {
+        // Get materials for this ad from targetDevices
+        const adMaterials = [];
+        const adMaterialPerformance = [];
+        
+        // Find the ad in userAds to get targetDevices
+        const userAd = userAds.find(ua => ua._id.toString() === ad.adId);
+        if (userAd && userAd.targetDevices && userAd.targetDevices.length > 0) {
+          // Get material details for each target device
+          userAd.targetDevices.forEach((materialId, index) => {
+            const material = materials.find(m => m._id.toString() === materialId.toString());
+            if (material) {
+              adMaterials.push({
+                materialId: material.materialId,
+                materialType: material.materialType,
+                slotNumber: index + 1,
+                deviceId: material.materialId, // Use materialId as deviceId
+                carGroupId: material.carGroupId || 'UNKNOWN',
+                driverId: material.driverId || null,
+                isOnline: false,
+                currentLocation: null,
+                networkStatus: { isOnline: false, lastSeen: new Date() },
+                deviceInfo: null,
+                adPlaybacks: [],
+                totalAdPlayTime: 0,
+                totalAdImpressions: 0,
+                averageAdCompletionRate: 0,
+                currentAd: null,
+                qrScans: [],
+                totalQRScans: 0,
+                qrScanConversionRate: 0,
+                lastQRScan: null,
+                qrScansByAd: [],
+                totalDistanceTraveled: 0,
+                averageSpeed: 0,
+                maxSpeed: 0,
+                uptimePercentage: 0,
+                complianceRate: 0,
+                averageDailyHours: 0,
+                totalInteractions: 0,
+                totalScreenTaps: 0,
+                totalDebugActivations: 0,
+                dailySessions: [],
+                locationHistory: [],
+                isActive: true,
+                lastSeen: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date()
+              });
+              
+              // Add material performance data
+              adMaterialPerformance.push({
+                materialId: material.materialId,
+                slotNumber: index + 1,
+                materialName: material.materialId,
+                totalDevices: 1,
+                onlineDevices: 0,
+                totalAdPlayTime: 0,
+                totalAdImpressions: 0,
+                totalQRScans: 0,
+                averageCompletionRate: 0,
+                lastActivity: new Date()
+              });
+            }
+          });
+        }
+        
+        return {
+          adId: ad.adId,
+          adTitle: ad.adTitle,
+          adDeploymentId: null,
+          totalMaterials: adMaterials.length,
+          totalDevices: adMaterials.length,
+          totalAdPlayTime: ad.totalViewTime,
+          totalAdImpressions: ad.totalImpressions,
+          totalQRScans: 0, // Will be calculated from materials
+          averageAdCompletionRate: ad.completionRate,
+          qrScanConversionRate: 0, // Will be calculated from materials
+          materials: adMaterials,
+          materialPerformance: adMaterialPerformance,
+          errorLogs: [],
+          isActive: true,
+          lastUpdated: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+      });
 
       userAnalytics.totalAds = userAnalytics.ads.length;
 
