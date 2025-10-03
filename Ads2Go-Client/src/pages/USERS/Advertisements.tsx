@@ -551,9 +551,9 @@ const Advertisements: React.FC = () => {
                         e.stopPropagation();
                         navigate(`/ad-details/${ad.id}`);
                       }}
-                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                      className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-center flex-1 transition-all duration-300 shadow-md hover:shadow-lg"
                     >
-                      View Details →
+                      View Details <span className="ml-1">›</span>
                     </button>
                     {ad.status === 'PENDING' && (
                       <button

@@ -493,9 +493,9 @@ const Dashboard = () => {
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
             <Link
               to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+              className="text-white text-sm font-medium bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-6 py-3 flex items-center justify-between hover:scale-105 transition-all duration-300 shadow-md hover:shadow-lg"
             >
-              View Analytics <span>→</span>
+              View Analytics <span className="ml-2">›</span>
             </Link>
           </div>
         </div>
@@ -517,9 +517,9 @@ const Dashboard = () => {
             <div className="pt-6 border-t border-gray-300 mb-2"></div>
             <Link
               to="/advertisements"
-              className="text-white text-sm bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-between hover:scale-105 transition-all duration-300"
+              className="text-white text-sm font-medium bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-6 py-3 flex items-center justify-between hover:scale-105 transition-all duration-300 shadow-md hover:shadow-lg"
             >
-              View Performance <span>→</span>
+              View Performance <span className="ml-2">›</span>
             </Link>
           </div>
         </div>

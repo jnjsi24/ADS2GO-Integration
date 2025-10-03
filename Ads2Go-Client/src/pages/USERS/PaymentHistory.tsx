@@ -314,9 +314,9 @@ const PaymentHistory: React.FC = () => {
                     setSelectedPaymentType(item.paymentType || "");
                     setIsModalOpen(true);
                   }}
-                  className="text-gray-500 text-xs font-semibold px-4 py-2 flex justify-center items-center text-center w-full"
+                  className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex justify-center items-center text-center w-full transition-all duration-300 shadow-md hover:shadow-lg"
                 >
-                  View Details →
+                  View Details <span className="ml-1">›</span>
                 </button>
               </div>
             </div>
