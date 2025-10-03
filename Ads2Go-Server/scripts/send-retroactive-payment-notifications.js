@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 
 const AdminNotificationService = require('../src/services/notifications/AdminNotificationService');
 

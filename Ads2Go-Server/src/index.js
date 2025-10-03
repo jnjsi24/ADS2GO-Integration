@@ -5,7 +5,7 @@ const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
@@ -194,9 +194,6 @@ async function startServer() {
         'http://127.0.0.1:3000',
         'http://localhost',
         'http://127.0.0.1',
-        'http://192.168.1.5:3000',
-        'http://192.168.100.22:3000',
-        'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
         // Additional development origins
@@ -206,8 +203,9 @@ async function startServer() {
         'http://localhost:8000',
         'http://10.0.2.2:3000', // Android emulator
         'http://10.0.2.2:5000', // Android emulator
-        'exp://192.168.1.5:19000', // Expo development
-        'exp://192.168.100.22:19000', // Expo development
+        // Dynamic origins from environment
+        ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
+        ...(process.env.EXPO_URL ? [process.env.EXPO_URL] : []),
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);

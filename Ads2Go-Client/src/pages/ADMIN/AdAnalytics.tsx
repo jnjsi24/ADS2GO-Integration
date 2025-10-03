@@ -75,7 +75,7 @@ const AdAnalytics: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/screenTracking/adAnalytics`);
       const data = await response.json();
       

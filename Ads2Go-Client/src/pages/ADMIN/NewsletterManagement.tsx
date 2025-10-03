@@ -32,7 +32,7 @@ const NewsletterManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(''); // Clear previous errors
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
       const apiUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
       
       console.log('Fetching subscribers from:', apiUrl);
@@ -98,7 +98,7 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
