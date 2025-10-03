@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { NewsletterService } from '../../services/newsletterService';
+import ToastNotifications from '../SUPERADMIN/tabs/SadminAdmin/ToastNotifications';
 
 // Toast notification type
 type Toast = {
@@ -125,10 +126,6 @@ const Settings: React.FC = () => {
   const addToast = (message: string, type: 'error' | 'success' = 'error') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
-    // Auto-dismiss after 5 seconds
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
   };
 
   // Remove toast notification
@@ -277,40 +274,9 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
+      {/* Toast Notifications */}
+      <ToastNotifications toasts={toasts} onRemove={removeToast} />
 
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
     </div>
   );
 };
