@@ -15,18 +15,7 @@ interface DateFilterProps {
 const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter, onDeleteFilter }) => {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [condition, setCondition] = useState<string>('Is');
-  const [showConditionDropdown, setShowConditionDropdown] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  const conditions = [
-    'Is',
-    'Is before',
-    'Is after',
-    'Is on or before',
-    'Is on or after',
-    'Is in between'
-  ];
 
   const formatDate = (date: Date | null): string => {
     if (!date) return '';
@@ -37,37 +26,19 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
     });
   };
 
-  const handleConditionSelect = (selectedCondition: string) => {
-    setCondition(selectedCondition);
-    setShowConditionDropdown(false);
-  };
-
   const handleDateSelect = (date: Date) => {
-    if (condition === 'Is in between') {
-      if (!startDate) {
-        setStartDate(date);
-      } else if (!endDate) {
-        setEndDate(date);
-      } else {
-        // Reset and set new start date
-        setStartDate(date);
-        setEndDate(null);
-      }
-    } else {
-      setStartDate(date);
-      setEndDate(null);
-    }
+    setStartDate(date);
+    setEndDate(null);
   };
 
   const handleApplyFilter = () => {
-    onApplyFilter({ startDate, endDate, condition });
+    onApplyFilter({ startDate, endDate, condition: 'Is' });
     onClose();
   };
 
   const handleCancel = () => {
     setStartDate(null);
     setEndDate(null);
-    setCondition('Is');
     onClose();
   };
 
@@ -125,41 +96,42 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl w-96 max-h-[80vh] flex flex-col mt-32 mr-4"
+        className="bg-white rounded-lg shadow-xl w-64 max-h-[50vh] flex flex-col mt-32 mr-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-2 border-b border-gray-200">
         </div>
 
+
         {/* Calendar Section */}
-        <div className="p-4 flex-1 overflow-y-auto">
-          <div className="border border-gray-200 rounded-md p-3">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-md font-medium text-gray-900">
+        <div className="p-2 flex-1 overflow-y-auto">
+          <div className="border border-gray-200 rounded-md p-1.5">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-sm font-medium text-gray-900">
                 {currentMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
               </h4>
-              <div className="flex gap-1">
+              <div className="flex gap-0.5">
                 <button
                   onClick={() => navigateMonth('prev')}
-                  className="p-1 hover:bg-gray-100 rounded"
+                  className="p-0.5 hover:bg-gray-100 rounded"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3 h-3" />
                 </button>
                 <button
                   onClick={() => navigateMonth('next')}
-                  className="p-1 hover:bg-gray-100 rounded"
+                  className="p-0.5 hover:bg-gray-100 rounded"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
             </div>
 
             {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0">
               {/* Day headers */}
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="text-center text-xs font-medium text-gray-500 py-1">
+                <div key={day} className="text-center text-xs font-medium text-gray-500 py-0.5 h-5 flex items-center justify-center">
                   {day}
                 </div>
               ))}
@@ -175,9 +147,9 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
                     key={index}
                     onClick={() => handleDateSelect(day)}
                     className={`
-                      p-1 text-xs rounded hover:bg-gray-100
+                      p-0 text-xs rounded hover:bg-gray-100 h-5 w-5 flex items-center justify-center
                       ${isSelected 
-                        ? 'bg-black text-white' 
+                        ? 'bg-blue-600 text-white' 
                         : isCurrentMonthDay 
                           ? 'text-gray-900' 
                           : 'text-gray-400'
@@ -194,18 +166,18 @@ const DateFilter: React.FC<DateFilterProps> = ({ isOpen, onClose, onApplyFilter,
         </div>
 
         {/* Action Buttons */}
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex gap-2">
+        <div className="p-2 border-t border-gray-200">
+          <div className="flex gap-1.5">
             <button
               onClick={handleCancel}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm"
+              className="flex-1 px-2 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-xs"
             >
               Cancel
             </button>
             <button
               onClick={handleApplyFilter}
-              className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
-              disabled={!startDate || (condition === 'Is in between' && !endDate)}
+              className="flex-1 px-2 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-xs"
+              disabled={!startDate}
             >
               Apply Filter
             </button>

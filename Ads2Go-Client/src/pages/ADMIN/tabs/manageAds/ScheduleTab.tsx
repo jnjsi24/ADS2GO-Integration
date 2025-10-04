@@ -70,6 +70,12 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
       : 'N/A';
   };
 
+  const isSameDay = (date1: Date, date2: Date): boolean => {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  };
+
   const period = useMemo(() => {
     const start = new Date(cursorDate);
     const end = new Date(cursorDate);
@@ -142,11 +148,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
     return filtered;
   }, [adsInPeriod, statusFilter, dateFilter]);
 
-  const isSameDay = (date1: Date, date2: Date): boolean => {
-    return date1.getDate() === date2.getDate() &&
-           date1.getMonth() === date2.getMonth() &&
-           date1.getFullYear() === date2.getFullYear();
-  };
 
 
 
