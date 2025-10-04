@@ -9,6 +9,7 @@ import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSupe
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
 import { UPDATE_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/mutations/updateSuperAdminNotificationPreferences';
 import { GET_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/queries/getSuperAdminNotificationPreferences';
+import { ToastContainer, useToast } from '../../components/ToastNotification';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -22,16 +23,10 @@ const getInitials = (name: string | undefined) => {
 };
 
 
-// Toast notification type
-type Toast = {
-  id: number;
-  message: string;
-  type: 'error' | 'success';
-};
-
 const SadminSettings: React.FC = () => {
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
+  const { toasts, addToast, removeToast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Security and Privacy');
   
@@ -66,9 +61,6 @@ const SadminSettings: React.FC = () => {
     communicationEmails: false,
     announcementsEmails: true,
   });
-  
-  // State for toast notifications
-  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // State to toggle form editability
   const [isFormEditable, setIsFormEditable] = useState(false);
@@ -124,32 +116,23 @@ const SadminSettings: React.FC = () => {
     'Mandaluyong City',
   ];
 
-  // Add toast notification
-  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
-  };
-
-  // Remove toast notification
-  const removeToast = (id: number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
 
   const handleToggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
 
   const handleManageUsers = () => {
-    addToast('Navigating to Manage Users page (feature not implemented in this component).', 'success');
+    addToast({
+      type: 'success',
+      title: 'Success!',
+      message: 'Navigating to Manage Users page (feature not implemented in this component).',
+      duration: 5000
+    });
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setSecurityForm({ recoveryEmail: '', recoveryPhone: '' });
-    setToasts([]);
   };
 
   // Handle form input changes for Security and Notification
@@ -183,24 +166,38 @@ const SadminSettings: React.FC = () => {
   // Handle Recovery Email form submission
   const handleRecoveryEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     const { recoveryEmail } = securityForm;
 
     if (!recoveryEmail) {
-      addToast('Recovery email is required.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Recovery email is required.',
+        duration: 5000
+      });
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(recoveryEmail)) {
-      addToast('Please enter a valid email address.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please enter a valid email address.',
+        duration: 5000
+      });
       return;
     }
 
     // Check if recovery email is the same as primary email
     if (recoveryEmail === admin?.email) {
-      addToast('Recovery email cannot be the same as your primary email address.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Recovery email cannot be the same as your primary email address.',
+        duration: 5000
+      });
       return;
     }
 
@@ -213,17 +210,26 @@ const SadminSettings: React.FC = () => {
           }
         }
       });
-      addToast('Recovery email updated successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Recovery email updated successfully!',
+        duration: 5000
+      });
       // Keep the recovery email in the form field instead of clearing it
     } catch (err: any) {
-      addToast(err.message || 'Failed to update recovery email. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to update recovery email. Please try again.',
+        duration: 5000
+      });
     }
   };
 
   // Handle Notification Settings form submission
   const handleNotificationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     try {
       await updateNotificationPreferences({
@@ -238,33 +244,77 @@ const SadminSettings: React.FC = () => {
         }
       });
       
-      addToast('Notification settings saved successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Notification settings saved successfully!',
+        duration: 5000
+      });
       // Refetch the data to ensure UI is in sync
       refetchNotifications();
     } catch (err: any) {
-      addToast(err.message || 'Failed to save notification settings. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to save notification settings. Please try again.',
+        duration: 5000
+      });
     }
   };
 
   // Handle password change
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      addToast('All password fields are required.', 'error');
+    if (!currentPassword) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please fill out this field.',
+        duration: 5000
+      });
+      return;
+    }
+
+    if (!newPassword) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please fill out this field.',
+        duration: 5000
+      });
+      return;
+    }
+
+    if (!confirmPassword) {
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please fill out this field.',
+        duration: 5000
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      addToast('New passwords do not match.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'New passwords do not match.',
+        duration: 5000
+      });
       return;
     }
 
     if (newPassword.length < 8) {
-      addToast('New password must be at least 8 characters long.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'New password must be at least 8 characters long.',
+        duration: 5000
+      });
       return;
     }
 
@@ -275,18 +325,33 @@ const SadminSettings: React.FC = () => {
           newPassword
         }
       });
-      addToast('Password changed successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Password changed successfully!',
+        duration: 5000
+      });
       setShowPasswordModal(false);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {
-      addToast(err.message || 'Failed to change password. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to change password. Please try again.',
+        duration: 5000
+      });
     }
   };
 
   // Handle Deactivate Account
   const handleDeactivateAccount = async () => {
     if (deactivateConfirmText !== 'DEACTIVATE') {
-      addToast('Please type DEACTIVATE to confirm.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please type DEACTIVATE to confirm.',
+        duration: 5000
+      });
       return;
     }
 
@@ -296,25 +361,33 @@ const SadminSettings: React.FC = () => {
           id: admin?.userId
         }
       });
-      addToast('Account deactivated successfully. You will be logged out.', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Account deactivated successfully. You will be logged out.',
+        duration: 5000
+      });
       setTimeout(() => {
         navigate('/superadmin/login');
       }, 2000);
     } catch (err: any) {
-      addToast(err.message || 'Failed to deactivate account. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to deactivate account. Please try again.',
+        duration: 5000
+      });
     }
   };
 
   // Toggle form editability
   const toggleFormEditable = () => {
     setIsFormEditable(!isFormEditable);
-    setToasts([]);
   };
 
   // Handle Back button click
   const handleBack = () => {
     setIsFormEditable(false);
-    setToasts([]);
   };
 
   return (
@@ -574,7 +647,6 @@ const SadminSettings: React.FC = () => {
                     value={passwordForm.currentPassword}
                     onChange={handlePasswordInputChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
                   />
                   <button
                     type="button"
@@ -599,8 +671,6 @@ const SadminSettings: React.FC = () => {
                     value={passwordForm.newPassword}
                     onChange={handlePasswordInputChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
-                    minLength={8}
                   />
                   <button
                     type="button"
@@ -626,8 +696,6 @@ const SadminSettings: React.FC = () => {
                     value={passwordForm.confirmPassword}
                     onChange={handlePasswordInputChange}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
-                    minLength={8}
                   />
                   <button
                     type="button"
@@ -708,42 +776,8 @@ const SadminSettings: React.FC = () => {
         </div>
       )}
 
-      {/* Toast Notifications Container */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Inline CSS for animations */}
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
