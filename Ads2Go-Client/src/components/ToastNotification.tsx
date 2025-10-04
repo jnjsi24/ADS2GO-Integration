@@ -146,7 +146,7 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed top-4 right-4 z-[60] space-y-2">
       <AnimatePresence>
         {toasts.map((toast) => (
           <ToastNotification

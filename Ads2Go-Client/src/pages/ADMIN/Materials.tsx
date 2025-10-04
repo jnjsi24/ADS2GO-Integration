@@ -22,6 +22,7 @@ import TabletConnectionModal from './tabs/materials/TabletConnectionModal';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
+import { ToastContainer, useToast } from '../../components/ToastNotification';
 
 interface Driver {
   driverId: string;
@@ -121,6 +122,7 @@ interface TabletConnectionStatus {
 
 
 const Materials: React.FC = () => {
+  const { toasts, addToast, removeToast } = useToast();
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Used' | 'Available'>('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -479,6 +481,7 @@ const Materials: React.FC = () => {
     }
   }, [materials]);
 
+
   // Helper function to determine status
   const getStatus = (material: Material): 'Used' | 'Available' => {
     return material.driverId ? 'Used' : 'Available';
@@ -628,6 +631,15 @@ const Materials: React.FC = () => {
     } catch (error) {
       console.error('Error creating material:', error);
     }
+  };
+
+  const handleValidationError = (message: string) => {
+    addToast({
+      type: 'error',
+      title: 'Error!',
+      message: message,
+      duration: 5000
+    });
   };
 
   // Date editing functions
@@ -933,6 +945,7 @@ const Materials: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
         onSubmit={handleCreateSubmit}
         creating={creating}
+        onValidationError={handleValidationError}
       />
       
 
@@ -1046,6 +1059,9 @@ const Materials: React.FC = () => {
         </div>
       </div>
     )}
+
+    {/* Toast Notifications */}
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
