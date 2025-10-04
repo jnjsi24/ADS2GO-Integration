@@ -587,13 +587,15 @@ const SadminPricing: React.FC = () => {
               </div>
 
               {/* Category (Auto-determined) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="relative">
+                <div className="w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-0 transition">
+                  <div className="text-sm text-gray-600">
+                    {formData.category || 'Will be determined automatically'}
+                  </div>
+                </div>
+                <label className="absolute left-0 -top-2 text-sm text-gray-700/70 font-semibold">
                   Category
                 </label>
-                <div className="w-full px-4 py-3 text-sm border-b text-gray-600">
-                  {formData.category || 'Will be determined automatically'}
-                </div>
                 {validationErrors.category && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.category}</p>
                 )}

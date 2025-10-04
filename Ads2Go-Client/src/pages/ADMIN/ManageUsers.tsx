@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import AdminLayout from '../../components/AdminLayout';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
 import { DELETE_USER } from '../../graphql/admin/mutations/manageUsers';
@@ -495,8 +494,7 @@ const handleCityFilterChange = (city: string) => {
   }
 
   return (
-    <AdminLayout>
-      <div className="min-h-screen bg-gray-100 pr-5 p-10 flex flex-col">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
@@ -879,8 +877,6 @@ const handleCityFilterChange = (city: string) => {
             </button>
           </div>
         </div>
-
-      </div>
       
       {/* Confirmation Modal */}
       <ConfirmationModal
@@ -893,7 +889,7 @@ const handleCityFilterChange = (city: string) => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
-    </AdminLayout>
+    </div>
   );
 };
 
