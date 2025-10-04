@@ -157,7 +157,7 @@ const SadminAnalytics: React.FC = () => {
           </div>
           {/* Right side: Icon + Label */}
           <div className="flex flex-col text-right">
-            <p className="text-3xl font-bold text-gray-900">{stats?.totalUsers || 0} Users</p>
+            <p className="text-2xl font-bold text-gray-900">{stats?.totalUsers || 0} Users</p>
             <div className="mt-1 text-right">
               <span className="text-sm text-green-600 font-medium">+12.5%</span>
             </div>
@@ -174,7 +174,7 @@ const SadminAnalytics: React.FC = () => {
 
           {/* Right side: Stats */}
           <div className="flex flex-col text-right">
-            <p className="text-3xl font-bold text-gray-900">{stats?.totalDrivers || 0} Drivers</p>
+            <p className="text-2xl font-bold text-gray-900">{stats?.totalDrivers || 0} Drivers</p>
             <div className="mt-1 text-right">
               <span className="text-sm text-green-600 font-medium">+8.3%</span>
             </div>
@@ -190,7 +190,7 @@ const SadminAnalytics: React.FC = () => {
 
           {/* Right side: Stats */}
           <div className="flex flex-col text-right">
-            <p className="text-3xl font-bold text-gray-900">{stats?.totalAds || 0} Ads</p>
+            <p className="text-2xl font-bold text-gray-900">{stats?.totalAds || 0} Ads</p>
             <div className="mt-1 text-right">
               <span className="text-sm text-green-600 font-medium">+15.2%</span>
             </div>
@@ -206,7 +206,7 @@ const SadminAnalytics: React.FC = () => {
 
           {/* Right side: Stats */}
           <div className="flex flex-col text-right">
-            <p className="text-3xl font-bold text-gray-900">₱{stats?.totalRevenue?.toLocaleString() || 0}</p>
+            <p className="text-2xl font-bold text-gray-900">₱{stats?.totalRevenue?.toLocaleString() || 0}</p>
             <div className="mt-1 text-right">
               <span className="text-sm text-green-600 font-medium">+22.1%</span>
             </div>

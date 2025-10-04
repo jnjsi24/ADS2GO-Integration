@@ -311,27 +311,36 @@ const SadminPricing: React.FC = () => {
         {/* Tabs */}
         <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
           {/* Tabs on the left */}
-          <div className="flex space-x-1 bg-gray-100 rounded-lg">
-            <button
-              onClick={() => setActiveTab('active')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'active'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Active ({configs.filter(c => c.isActive).length})
-            </button>
-            <button
-              onClick={() => setActiveTab('inactive')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'inactive'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Inactive ({configs.filter(c => !c.isActive).length})
-            </button>
+          <div className="flex space-x-1 rounded-lg p-1">
+            {["active", "inactive"].map((tab) => {
+              const isActive = activeTab === tab;
+              const count =
+                tab === "active"
+                  ? configs.filter((c) => c.isActive).length
+                  : configs.filter((c) => !c.isActive).length;
+
+              return (
+                <button
+                  key={tab} // ✅ fixed here
+                  onClick={() => setActiveTab(tab as "active" | "inactive")}
+                  className={`relative group px-4 py-2 rounded-md text-sm font-medium transition-colors duration-300 ${
+                    isActive
+                      ? "text-blue-600" : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab === "active" ? "Active" : "Inactive"}
+
+                  {/* Underline animation */}
+                  <span
+                    className={`absolute bottom-0 left-0 h-0.5 w-full rounded-full transform origin-left transition-transform duration-300 ease-out ${
+                      isActive
+                        ? "bg-blue-500 scale-x-100"
+                        : "bg-blue-500 scale-x-0 group-hover:scale-x-100"
+                    }`}
+                  />
+                </button>
+              );
+            })}
           </div>
 
           {/* Create button on the right */}
