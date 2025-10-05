@@ -841,6 +841,37 @@ class DeviceStatusService {
     });
   }
 
+  /**
+   * Send unregister notification to a specific device
+   * @param {string} deviceId - Device identifier
+   */
+  sendUnregisterNotification(deviceId) {
+    try {
+      const connection = this.activeConnections.get(deviceId);
+      if (connection && connection.readyState === WebSocket.OPEN) {
+        const message = {
+          type: 'unregister',
+          deviceId: deviceId,
+          message: 'This device has been unregistered by an administrator',
+          timestamp: new Date().toISOString()
+        };
+        connection.send(JSON.stringify(message));
+        console.log(`✅ Sent unregister notification to device: ${deviceId}`);
+        
+        // Close the connection after sending the message
+        setTimeout(() => {
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.close(1000, 'Device unregistered');
+          }
+        }, 1000); // Wait 1 second before closing to ensure message is delivered
+      } else {
+        console.log(`⚠️ No active WebSocket connection found for device: ${deviceId}`);
+      }
+    } catch (error) {
+      console.error(`Error sending unregister notification to device ${deviceId}:`, error);
+    }
+  }
+
   broadcastDeviceList() {
     const deviceList = Array.from(this.activeConnections.entries()).map(([deviceId, ws]) => ({
       deviceId,

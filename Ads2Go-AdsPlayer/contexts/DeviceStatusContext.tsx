@@ -8,6 +8,7 @@ type DeviceStatus = {
   isOnline: boolean;
   lastSeen?: Date;
   error?: string;
+  unregistered?: boolean;
 };
 
 type DeviceStatusContextType = {
@@ -86,11 +87,25 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Set up periodic check to sync material ID with registration data
     const syncInterval = setInterval(async () => {
       try {
+        // Check if we're already on the registration screen to avoid unnecessary checks
+        const { router } = require('expo-router');
+        const currentRoute = router.pathname || '';
+        if (currentRoute.includes('/registration')) {
+          console.log('Already on registration screen, skipping sync check');
+          return;
+        }
+
         // Check if device is still registered
         const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
         if (!isRegistered) {
-          console.log('Device became unregistered, clearing material ID');
+          console.log('Device became unregistered, clearing material ID and stopping sync');
           setMaterialIdState(null);
+          
+          // Clear the interval to prevent infinite loop
+          clearInterval(syncInterval);
+          
+          // Navigate to registration screen
+          router.replace('/registration?force=true');
           return;
         }
 
@@ -147,6 +162,15 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Status update:', { prev, newStatus, updatedStatus });
         return updatedStatus;
       });
+      
+      // If device was unregistered, navigate to registration screen
+      if (newStatus.unregistered) {
+        console.log('🚨 Device unregistered, navigating to registration screen');
+        const { router } = require('expo-router');
+        setTimeout(() => {
+          router.replace('/registration?force=true');
+        }, 1000);
+      }
     };
 
     // Set a timeout to handle connection failures

@@ -420,6 +420,16 @@ module.exports = {
         // Get the old deviceId before removing it
         const oldDeviceId = tabletUnit.deviceId;
 
+        // Send WebSocket message to notify tablet it has been unregistered
+        try {
+          const deviceStatusService = require('../services/deviceStatusService');
+          console.log(`📤 Sending unregister notification to device: ${oldDeviceId}`);
+          deviceStatusService.sendUnregisterNotification(oldDeviceId);
+        } catch (wsError) {
+          console.error('Error sending unregister notification via WebSocket:', wsError);
+          // Don't fail the unregister if WebSocket notification fails
+        }
+
         // Clear the device connection by removing the deviceId field entirely from Tablet collection
         tabletUnit.deviceId = undefined; // Explicitly set to undefined
         tabletUnit.status = 'OFFLINE';
