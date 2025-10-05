@@ -242,11 +242,40 @@ class DeviceStatusService {
         this.handleDisconnect(error);
       };
       
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = async (event) => {
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'pong') {
             this.lastPong = Date.now();
+          } else if (message.type === 'unregister') {
+            // Device has been unregistered by admin
+            console.log('🚨 [WebSocket] Device unregistered by administrator:', message.message);
+            
+            // Clear registration data
+            const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+            const tabletRegistrationService = require('./tabletRegistration').default;
+            
+            await tabletRegistrationService.clearRegistration();
+            
+            // Close WebSocket connection
+            this.cleanup();
+            
+            // Notify through status change callback
+            if (this.onStatusChange) {
+              this.onStatusChange({
+                isOnline: false,
+                isConnected: false,
+                error: 'Device has been unregistered by administrator',
+                unregistered: true
+              });
+            }
+            
+            // Navigate to registration screen
+            // Using a small delay to ensure state updates are processed
+            setTimeout(() => {
+              const { router } = require('expo-router');
+              router.replace('/registration?force=true');
+            }, 500);
           }
         } catch (error) {
           console.error('Error processing WebSocket message:', error);

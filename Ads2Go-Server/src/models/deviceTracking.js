@@ -100,7 +100,8 @@ const SlotSchema = new mongoose.Schema({
   },
   deviceId: { 
     type: String, 
-    required: true,
+    required: false, // Allow null when device is unregistered
+    default: null,
     index: true
   },
   isOnline: { 

@@ -279,6 +279,7 @@ class DeviceStatusService {
           // Respond to ping with pong
           ws.send(JSON.stringify({ type: 'pong' }));
           ws.isAlive = true;
+          ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
           console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
@@ -355,6 +356,7 @@ class DeviceStatusService {
           // Respond to ping with pong
           ws.send(JSON.stringify({ type: 'pong' }));
           ws.isAlive = true;
+          ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
           console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
@@ -839,6 +841,37 @@ class DeviceStatusService {
     });
   }
 
+  /**
+   * Send unregister notification to a specific device
+   * @param {string} deviceId - Device identifier
+   */
+  sendUnregisterNotification(deviceId) {
+    try {
+      const connection = this.activeConnections.get(deviceId);
+      if (connection && connection.readyState === WebSocket.OPEN) {
+        const message = {
+          type: 'unregister',
+          deviceId: deviceId,
+          message: 'This device has been unregistered by an administrator',
+          timestamp: new Date().toISOString()
+        };
+        connection.send(JSON.stringify(message));
+        console.log(`✅ Sent unregister notification to device: ${deviceId}`);
+        
+        // Close the connection after sending the message
+        setTimeout(() => {
+          if (connection.readyState === WebSocket.OPEN) {
+            connection.close(1000, 'Device unregistered');
+          }
+        }, 1000); // Wait 1 second before closing to ensure message is delivered
+      } else {
+        console.log(`⚠️ No active WebSocket connection found for device: ${deviceId}`);
+      }
+    } catch (error) {
+      console.error(`Error sending unregister notification to device ${deviceId}:`, error);
+    }
+  }
+
   broadcastDeviceList() {
     const deviceList = Array.from(this.activeConnections.entries()).map(([deviceId, ws]) => ({
       deviceId,
@@ -881,9 +914,9 @@ class DeviceStatusService {
 
       // Check all active connections
       this.activeConnections.forEach((ws, deviceId) => {
-        // If we haven't received a pong in the last 30 seconds, mark as dead (faster detection)
-        if (ws.lastPong && (now - ws.lastPong) > 30000) {
-          console.log(`Device ${deviceId} connection timed out (no pong for 30s)`);
+        // If we haven't received a pong in the last 15 seconds, mark as dead (faster detection)
+        if (ws.lastPong && (now - ws.lastPong) > 15000) {
+          console.log(`Device ${deviceId} connection timed out (no pong for 15s)`);
           deadConnections.push(deviceId);
           ws.close(1000, 'Connection timeout - no pong received');
           return;
