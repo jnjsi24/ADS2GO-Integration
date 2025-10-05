@@ -106,7 +106,7 @@ export default function HomeScreen() {
         try {
           await tabletRegistrationService.startLocationTracking();
           setIsTracking(true);
-          setTrackingStatus('Active - Sending data every 30 seconds');
+          setTrackingStatus('Active - Sending data every 7 seconds');
           console.log('Continuous location tracking started successfully');
         } catch (error) {
           console.error('Error starting continuous tracking:', error);
@@ -134,7 +134,7 @@ export default function HomeScreen() {
       
       await tabletRegistrationService.startLocationTracking();
       setIsTracking(true);
-      setTrackingStatus('Active - Sending data every 30 seconds');
+      setTrackingStatus('Active - Sending data every 7 seconds');
       console.log('Location tracking started manually');
       
       // Start ad tracking simulation
@@ -146,7 +146,7 @@ export default function HomeScreen() {
   };
 
   const startAdTrackingSimulation = () => {
-    // Simulate ad tracking every 30 seconds
+    // Simulate ad tracking every 7 seconds
     const adTrackingInterval = setInterval(async () => {
       if (!isTracking) {
         clearInterval(adTrackingInterval);
@@ -181,7 +181,7 @@ export default function HomeScreen() {
       } catch (error) {
         console.error('Error in ad tracking simulation:', error);
       }
-    }, 30000); // Every 30 seconds
+    }, 7000); // Every 7 seconds
 
     // Store interval ID for cleanup
     (window as any).adTrackingInterval = adTrackingInterval;
