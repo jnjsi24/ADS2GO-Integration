@@ -6,12 +6,41 @@ if (!process.env.FIREBASE_PRIVATE_KEY) {
   throw new Error("❌ FIREBASE_PRIVATE_KEY is not defined in .env");
 }
 
+// Debug private key format
+console.log(`🔍 Private key length: ${process.env.FIREBASE_PRIVATE_KEY.length}`);
+console.log(`🔍 Private key starts with: ${process.env.FIREBASE_PRIVATE_KEY.substring(0, 50)}...`);
+console.log(`🔍 Private key ends with: ...${process.env.FIREBASE_PRIVATE_KEY.substring(process.env.FIREBASE_PRIVATE_KEY.length - 50)}`);
+
+// Fix private key formatting
+let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+// Handle different private key formats
+if (privateKey.includes('\\n')) {
+  // Replace literal \n with actual newlines
+  privateKey = privateKey.replace(/\\n/g, '\n');
+} else if (!privateKey.includes('\n')) {
+  // If no newlines at all, add them manually
+  privateKey = privateKey.replace(/-----BEGIN PRIVATE KEY-----/, '-----BEGIN PRIVATE KEY-----\n')
+                         .replace(/-----END PRIVATE KEY-----/, '\n-----END PRIVATE KEY-----');
+}
+
+// Ensure proper newline formatting
+if (!privateKey.startsWith('-----BEGIN PRIVATE KEY-----\n')) {
+  privateKey = '-----BEGIN PRIVATE KEY-----\n' + privateKey.replace('-----BEGIN PRIVATE KEY-----', '');
+}
+if (!privateKey.endsWith('\n-----END PRIVATE KEY-----')) {
+  privateKey = privateKey.replace('-----END PRIVATE KEY-----', '') + '\n-----END PRIVATE KEY-----';
+}
+
+console.log(`🔍 Formatted private key length: ${privateKey.length}`);
+console.log(`🔍 Formatted private key starts with: ${privateKey.substring(0, 50)}...`);
+
 // Build service account object
 const serviceAccount = {
   type: "service_account",
   project_id: process.env.FIREBASE_PROJECT_ID,
   private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-  private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  private_key: privateKey,
   client_email: process.env.FIREBASE_CLIENT_EMAIL,
   client_id: process.env.FIREBASE_CLIENT_ID,
   auth_uri: process.env.FIREBASE_AUTH_URI,
@@ -27,15 +56,35 @@ const bucketName =
 
 console.log(`🔍 Using Firebase Storage bucket: ${bucketName}`);
 
+// Validate service account object
+console.log(`🔍 Service account validation:`);
+console.log(`   Project ID: ${serviceAccount.project_id ? '✅' : '❌'}`);
+console.log(`   Client Email: ${serviceAccount.client_email ? '✅' : '❌'}`);
+console.log(`   Private Key ID: ${serviceAccount.private_key_id ? '✅' : '❌'}`);
+console.log(`   Private Key: ${serviceAccount.private_key ? '✅' : '❌'}`);
+
 // Initialize Firebase Admin
 try {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     storageBucket: bucketName,
   });
-  console.log("✅ Firebase Admin SDK initialized");
+  console.log("✅ Firebase Admin SDK initialized successfully");
 } catch (error) {
   console.error("❌ Failed to initialize Firebase Admin SDK:", error.message);
+  console.error("🔍 Error details:", error);
+  
+  // Additional debugging for private key issues
+  if (error.message.includes('private key') || error.message.includes('ASN.1')) {
+    console.error("🔧 Private key debugging:");
+    console.error(`   Key length: ${serviceAccount.private_key.length}`);
+    console.error(`   Contains BEGIN: ${serviceAccount.private_key.includes('-----BEGIN PRIVATE KEY-----')}`);
+    console.error(`   Contains END: ${serviceAccount.private_key.includes('-----END PRIVATE KEY-----')}`);
+    console.error(`   Contains newlines: ${serviceAccount.private_key.includes('\n')}`);
+    console.error(`   First 100 chars: ${serviceAccount.private_key.substring(0, 100)}`);
+    console.error(`   Last 100 chars: ${serviceAccount.private_key.substring(serviceAccount.private_key.length - 100)}`);
+  }
+  
   process.exit(1);
 }
 
