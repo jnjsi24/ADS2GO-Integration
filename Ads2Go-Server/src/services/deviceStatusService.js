@@ -279,6 +279,7 @@ class DeviceStatusService {
           // Respond to ping with pong
           ws.send(JSON.stringify({ type: 'pong' }));
           ws.isAlive = true;
+          ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
           console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
@@ -355,6 +356,7 @@ class DeviceStatusService {
           // Respond to ping with pong
           ws.send(JSON.stringify({ type: 'pong' }));
           ws.isAlive = true;
+          ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
           console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
@@ -881,9 +883,9 @@ class DeviceStatusService {
 
       // Check all active connections
       this.activeConnections.forEach((ws, deviceId) => {
-        // If we haven't received a pong in the last 30 seconds, mark as dead (faster detection)
-        if (ws.lastPong && (now - ws.lastPong) > 30000) {
-          console.log(`Device ${deviceId} connection timed out (no pong for 30s)`);
+        // If we haven't received a pong in the last 15 seconds, mark as dead (faster detection)
+        if (ws.lastPong && (now - ws.lastPong) > 15000) {
+          console.log(`Device ${deviceId} connection timed out (no pong for 15s)`);
           deadConnections.push(deviceId);
           ws.close(1000, 'Connection timeout - no pong received');
           return;
