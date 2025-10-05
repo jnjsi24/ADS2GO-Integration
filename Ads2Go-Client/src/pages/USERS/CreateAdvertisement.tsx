@@ -10,6 +10,7 @@ import {
   FlexiblePricingCalculation 
 } from '../../graphql/queries/flexibleAdQueries';
 import { uploadFileToFirebase } from '../../utils/fileUpload';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 type VehicleType = 'CAR' | 'MOTORCYCLE' | '';
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
@@ -31,7 +32,7 @@ type AdvertisementForm = {
 const CreateAdvertisement: React.FC = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
-  const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { toasts, addToast, removeToast } = useToast();
   const [isSubmissionInProgress, setIsSubmissionInProgress] = useState(false);
   const [pricingCalculation, setPricingCalculation] = useState<FlexiblePricingCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -67,16 +68,22 @@ const CreateAdvertisement: React.FC = () => {
   const [calculatePricing] = useLazyQuery(CALCULATE_FLEXIBLE_PRICING);
   const [createAd] = useMutation(CREATE_FLEXIBLE_AD, {
     onCompleted: () => {
-      setShowToast({ message: 'Advertisement created successfully! Redirecting...', type: 'success' });
+      addToast({ 
+        title: 'Success!', 
+        message: 'Advertisement created successfully! Redirecting...', 
+        type: 'success' 
+      });
       setTimeout(() => {
-        setShowToast(null);
         navigate('/advertisements');
-      }, 5000); // Changed to 10 seconds
+      }, 3000);
     },
     onError: (error) => {
       console.error('Error creating ad:', error);
-      setShowToast({ message: error.message, type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: error.message, 
+        type: 'error' 
+      });
     }
   });
 
@@ -226,8 +233,11 @@ const CreateAdvertisement: React.FC = () => {
     if (validateStep(currentStep)) {
       setCurrentStep(prev => Math.min(3, prev + 1));
     } else {
-      setShowToast({ message: 'Please complete all required information.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please complete all required information.', 
+        type: 'error' 
+      });
     }
   };
 
@@ -242,13 +252,19 @@ const CreateAdvertisement: React.FC = () => {
     }
     
     if (!validateStep(2) || !validateStep(1)) {
-      setShowToast({ message: 'Please fix the errors before submitting.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please fix the errors before submitting.', 
+        type: 'error' 
+      });
       return;
     }
     if (!pricingCalculation) {
-      setShowToast({ message: 'Please wait for pricing calculation to complete.', type: 'error' });
-      setTimeout(() => setShowToast(null), 5000); // Clear toast after 10 seconds
+      addToast({ 
+        title: 'Error!', 
+        message: 'Please wait for pricing calculation to complete.', 
+        type: 'error' 
+      });
       return;
     }
 
@@ -300,7 +316,11 @@ const CreateAdvertisement: React.FC = () => {
       await createAd({ variables: { input } });
     } catch (error) {
       console.error('Error creating ad:', error);
-      setShowToast({ message: 'Failed to create advertisement. Please try again.', type: 'error' });
+      addToast({ 
+        title: 'Error!', 
+        message: 'Failed to create advertisement. Please try again.', 
+        type: 'error' 
+      });
     } finally {
       setIsSubmissionInProgress(false);
       setIsUploading(false);
@@ -466,75 +486,75 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.website}</p>
           )}
         </div>
-<div>
-  <label className="block text-sm font-bold text-gray-700 mb-2">
-    Media File
-  </label>
-  <div
-    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-      isDragging ? 'border-blue-500 bg-blue-50' : 
-      mediaFileError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
-    }`}
-    onDragOver={handleDragOver}
-    onDragLeave={handleDragLeave}
-    onDrop={handleDrop}
-  >
-    <CloudUpload className={`w-12 h-12 mx-auto mb-4 ${
-      mediaFileError ? 'text-red-400' : 'text-gray-400'
-    }`} />
-    <p className="text-gray-600 mb-4">
-      Drag your file image/video here
-    </p>
-    <div className="flex items-center justify-center mb-4">
-      <div className={`grow max-w-40 h-px ${
-        mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-      }`}></div>
-      <span className={`mx-3 text-sm ${
-        mediaFileError ? 'text-red-400' : 'text-gray-400'
-      }`}>or</span>
-      <div className={`grow max-w-40 h-px ${
-        mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-      }`}></div>
-    </div>
-    <button
-      type="button"
-      onClick={() => {
-        setMediaFileError(''); // Clear error when clicking upload
-        document.getElementById('media-upload')?.click();
-      }}
-      className={`p-3 rounded-md hover:text-white/90 font-medium ${
-        mediaFileError 
-          ? 'text-white/80 bg-red-500 hover:bg-red-600' 
-          : 'text-white/80 bg-[#3674B5] hover:bg-[#1B5087]'
-      }`}
-    >
-      Click to upload file
-    </button>
-    <p className={`text-sm mt-2 ${
-      mediaFileError ? 'text-red-500' : 'text-gray-500'
-    }`}>
-    </p>
-    <input
-      type="file"
-      accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
-      onChange={handleFileInputChange}
-      className="hidden"
-      id="media-upload"
-      required
-    />
-    {formData.mediaFile && !mediaFileError && (
-      <p className="text-sm text-green-600 mt-2">
-        Selected: {formData.mediaFile.name}
-      </p>
-    )}
-  </div>
-  {/* Show validation errors from form validation OR media file error */}
-  {(errors.mediaFile || mediaFileError) && (
-    <p className="text-sm text-red-600 mt-1">
-      {mediaFileError || errors.mediaFile}
-    </p>
-  )}
-</div>
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            Media File
+          </label>
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              isDragging ? 'border-blue-500 bg-blue-50' : 
+              mediaFileError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <CloudUpload className={`w-12 h-12 mx-auto mb-4 ${
+              mediaFileError ? 'text-red-400' : 'text-gray-400'
+            }`} />
+            <p className="text-gray-600 mb-4">
+              Drag your file image/video here
+            </p>
+            <div className="flex items-center justify-center mb-4">
+              <div className={`grow max-w-40 h-px ${
+                mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+              }`}></div>
+              <span className={`mx-3 text-sm ${
+                mediaFileError ? 'text-red-400' : 'text-gray-400'
+              }`}>or</span>
+              <div className={`grow max-w-40 h-px ${
+                mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+              }`}></div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMediaFileError(''); // Clear error when clicking upload
+                document.getElementById('media-upload')?.click();
+              }}
+              className={`p-3 rounded-md hover:text-white/90 font-medium ${
+                mediaFileError 
+                  ? 'text-white/80 bg-red-500 hover:bg-red-600' 
+                  : 'text-white/80 bg-[#3674B5] hover:bg-[#1B5087]'
+              }`}
+            >
+              Click to upload file
+            </button>
+            <p className={`text-sm mt-2 ${
+              mediaFileError ? 'text-red-500' : 'text-gray-500'
+            }`}>
+            </p>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
+              onChange={handleFileInputChange}
+              className="hidden"
+              id="media-upload"
+              required
+            />
+            {formData.mediaFile && !mediaFileError && (
+              <p className="text-sm text-green-600 mt-2">
+                Selected: {formData.mediaFile.name}
+              </p>
+            )}
+          </div>
+          {/* Show validation errors from form validation OR media file error */}
+          {(errors.mediaFile || mediaFileError) && (
+            <p className="text-sm text-red-600 mt-1">
+              {mediaFileError || errors.mediaFile}
+            </p>
+          )}
+        </div>
       </div>
       {fieldCombinationsLoading ? (
         <div className="flex justify-center items-center py-12">
@@ -551,7 +571,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <button
                 type="button"
                 onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
-                className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center bg-white justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none gap-2"
               >
                 {formData.vehicleType ? formData.vehicleType : 'Select Vehicle Type'}
                 <ChevronDown
@@ -907,7 +927,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           {/* RIGHT COLUMN - Campaign Details */}
           <div className="space-y-4 text-sm">
             <div className="flex justify-between">
-              <span className="font-bold text-2xl text-gray-600">
+              <span className="font-bold text-2xl">
                 {formData.title || "Not specified"}
               </span>
             </div>
@@ -1119,23 +1139,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
         </form>
       </div>
-      <AnimatePresence>
-        {showToast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 50 }}
-            transition={{ duration: 0.3 }}
-            className={`fixed bottom-4 right-4 px-6 py-3 z-50 rounded-md ${
-              showToast.type === 'error' 
-                ? 'text-red-600 bg-red-100' 
-                : 'text-green-600 bg-green-100'
-            }`}
-          >
-            {showToast.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
