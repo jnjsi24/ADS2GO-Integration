@@ -571,7 +571,7 @@ const ManageAds: React.FC = () => {
                 >
                   <Calendar className="w-4 h-4" />
                   {calendarSelectedDate 
-                    ? calendarSelectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    ? calendarSelectedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                     : 'Select Date'
                   }
                 </button>
