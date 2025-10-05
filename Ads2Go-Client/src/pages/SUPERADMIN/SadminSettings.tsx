@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Lock, Bell, ChevronDown, CheckCircle, Eye, EyeOff, AlertTriangle, User } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../../components/ToastNotification';
 import { CHANGE_SUPERADMIN_PASSWORD } from '../../graphql/superadmin/mutations/changeSuperAdminPassword';
 import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSuperAdmin';
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
@@ -71,11 +73,18 @@ const SadminSettings: React.FC = () => {
     disableNotificationSounds: true,
   });
   
-  // State for toast notifications
-  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // State to toggle form editability
   const [isFormEditable, setIsFormEditable] = useState(false);
+  
+  // State for profile image
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  
+  // Tab configuration
+  const tabs = [
+    { id: 'Security and Privacy', label: 'Security and Privacy', icon: Lock },
+    { id: 'Notification Settings', label: 'Notification Settings', icon: Bell },
+  ];
 
   // GraphQL mutations
   const [changePassword] = useMutation(CHANGE_SUPERADMIN_PASSWORD);
@@ -267,6 +276,11 @@ const SadminSettings: React.FC = () => {
     } catch (err: any) {
       addToast(err.message || 'Failed to save notification settings. Please try again.', 'error');
     }
+  };
+
+  // Handle Change Password form submission (alias for handleChangePasswordSubmit)
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    return handleChangePasswordSubmit(e);
   };
 
   // Handle Change Password form submission
