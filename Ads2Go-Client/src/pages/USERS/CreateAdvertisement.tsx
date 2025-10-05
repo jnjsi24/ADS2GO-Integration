@@ -1029,7 +1029,20 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
   ];
 
   return (
-    <div className="min-h-screen pl-72 bg-gray-50">
+    <div className="relative min-h-screen overflow-hidden">
+    {/* Background Image */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
+    ></div>
+
+    {/* Overlay (optional subtle tint) */}
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+    {/* Content */}
+    <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
       <button
         onClick={() => navigate('/advertisements')}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-10"
@@ -1140,6 +1153,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         </form>
       </div>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </div>
     </div>
   );
 };
