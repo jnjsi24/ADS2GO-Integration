@@ -25,6 +25,7 @@ const typeDefs = gql`
     updatedAt: String!
     permissions: SuperAdminPermissions!
     profilePicture: String
+    notificationPreferences: SuperAdminNotificationPreferences
   }
 
   type SuperAdminPermissions {
@@ -38,6 +39,15 @@ const typeDefs = gql`
     systemSettings: Boolean!
     databaseManagement: Boolean!
     auditLogs: Boolean!
+  }
+
+  type SuperAdminNotificationPreferences {
+    enableDesktopNotifications: Boolean!
+    enableNotificationBadge: Boolean!
+    pushNotificationTimeout: String!
+    communicationEmails: Boolean!
+    announcementsEmails: Boolean!
+    disableNotificationSounds: Boolean!
   }
 
   type AuthPayload {

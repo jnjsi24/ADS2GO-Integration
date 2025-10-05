@@ -33,9 +33,13 @@ const DetailedAnalytics: React.FC = () => {
   // Fetch analytics data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { period: selectedPeriod },
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    // pollInterval: 5000, // Temporarily disabled to prevent repeated errors
+    errorPolicy: 'all', // Allow partial data even with errors
     onError: (error) => {
-      console.error('Analytics fetch error:', error);
+      // Don't log "User analytics not found" as an error - it's expected for new users
+      if (error.message !== 'Failed to fetch analytics data') {
+        console.error('Unexpected analytics error:', error);
+      }
     }
   });
 
@@ -927,6 +931,28 @@ const DetailedAnalytics: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* No Analytics Data Message */}
+      {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                No Analytics Data Yet
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>You don't have any analytics data yet. This is normal for new users or users without deployed ads.</p>
+                <p className="mt-1">Once you create and deploy ads, your detailed analytics will appear here.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">

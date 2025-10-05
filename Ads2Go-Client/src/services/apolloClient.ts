@@ -68,6 +68,15 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
         return;
       }
       
+      // Don't log "Failed to fetch analytics data" as an error - it's expected for new users
+      if (message === 'Failed to fetch analytics data' && 
+          (operation.operationName === 'getUserAnalytics' || 
+           operation.operationName === 'GetUserAnalytics' ||
+           path?.includes('getUserAnalytics'))) {
+        console.log(`[GraphQL]: No analytics data found for user - this is normal for new users`);
+        return;
+      }
+      
       console.error(
         `[GraphQL error]: Message: ${message}, Location: ${JSON.stringify(locations)}, Path: ${path}`
       );
