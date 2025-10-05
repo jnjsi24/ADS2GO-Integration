@@ -8,8 +8,6 @@ import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSupe
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
 import { UPDATE_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/mutations/updateSuperAdminNotificationPreferences';
 import { GET_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/queries/getSuperAdminNotificationPreferences';
-import ToastNotifications from './tabs/SadminAdmin/ToastNotifications';
-import { motion, AnimatePresence } from 'framer-motion';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -22,6 +20,7 @@ const getInitials = (name: string | undefined) => {
     .slice(0, 2);
 };
 
+
 // Toast notification type
 type Toast = {
   id: number;
@@ -29,15 +28,10 @@ type Toast = {
   type: 'error' | 'success';
 };
 
-// Tab configuration
-const tabs = [
-  { id: 'Security and Privacy', label: 'Security and Privacy', icon: Lock },
-  { id: 'Notification Settings', label: 'Notification Settings', icon: Bell },
-];
-
 const SadminSettings: React.FC = () => {
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
+  const { toasts, addToast, removeToast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Security and Privacy');
   const [showTimeoutDropdown, setShowTimeoutDropdown] = useState(false);
@@ -77,8 +71,6 @@ const SadminSettings: React.FC = () => {
     disableNotificationSounds: true,
   });
   
-  // State for profile image
-  const [profileImage, setProfileImage] = useState<string | null>(null);
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
   
@@ -164,32 +156,23 @@ const SadminSettings: React.FC = () => {
     }
   };
 
-  // Add toast notification
-  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
-  };
-
-  // Remove toast notification
-  const removeToast = (id: number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  };
 
   const handleToggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
 
   const handleManageUsers = () => {
-    addToast('Navigating to Manage Users page (feature not implemented in this component).', 'success');
+    addToast({
+      type: 'success',
+      title: 'Success!',
+      message: 'Navigating to Manage Users page (feature not implemented in this component).',
+      duration: 5000
+    });
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setSecurityForm({ recoveryEmail: '', recoveryPhone: '' });
-    setToasts([]);
   };
 
   // Handle form input changes for Security and Notification
@@ -224,28 +207,39 @@ const SadminSettings: React.FC = () => {
   const handleRecoveryEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setToasts([]);
+
     const { recoveryEmail } = securityForm;
     if (!recoveryEmail) {
-      addToast('Recovery email is required.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Recovery email is required.',
+        duration: 5000
+      });
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(recoveryEmail)) {
-      addToast('Please enter a valid email address.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please enter a valid email address.',
+        duration: 5000
+      });
       return;
     }
     if (recoveryEmail === admin?.email) {
-      addToast('Recovery email cannot be the same as your current email.', 'error');
+      addToast('Recovery email cannot be the same as your primary email address.', 'error');
       return;
     }
     try {
       await updateSuperAdmin({
         variables: { input: { recoveryEmail } },
       });
-      addToast('Recovery email set successfully!', 'success');
-      setSecurityForm((prev) => ({ ...prev, recoveryEmail: '' }));
-    } catch (err) {
-      addToast('Failed to set recovery email. Please try again.', 'error');
+      addToast('Recovery email updated successfully!', 'success');
+      // Keep the recovery email in the form field instead of clearing it
+    } catch (err: any) {
+      addToast(err.message || 'Failed to update recovery email. Please try again.', 'error');
     }
   };
 
@@ -253,14 +247,25 @@ const SadminSettings: React.FC = () => {
   const handleNotificationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setToasts([]);
+
     try {
       await updateNotificationPreferences({
-        variables: { input: notificationForm },
+        variables: {
+          input: {
+            enableDesktopNotifications: notificationForm.enableDesktopNotifications,
+            enableNotificationBadge: notificationForm.enableNotificationBadge,
+            pushNotificationTimeout: notificationForm.pushNotificationTimeout,
+            communicationEmails: notificationForm.communicationEmails,
+            announcementsEmails: notificationForm.announcementsEmails,
+          }
+        }
       });
-      refetchNotifications();
+      
       addToast('Notification settings saved successfully!', 'success');
-    } catch (err) {
-      addToast('Failed to save notification settings. Please try again.', 'error');
+      // Refetch the data to ensure UI is in sync
+      refetchNotifications();
+    } catch (err: any) {
+      addToast(err.message || 'Failed to save notification settings. Please try again.', 'error');
     }
   };
 
@@ -268,13 +273,25 @@ const SadminSettings: React.FC = () => {
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setToasts([]);
+
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      addToast('All password fields are required.', 'error');
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
-      addToast('New passwords do not match.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'New passwords do not match.',
+        duration: 5000
+      });
       return;
     }
     if (newPassword.length < 8) {
-      addToast('New password must be at least 8 characters.', 'error');
+      addToast('New password must be at least 8 characters long.', 'error');
       return;
     }
     try {
@@ -284,38 +301,50 @@ const SadminSettings: React.FC = () => {
           newPassword,
         },
       });
-      addToast('Password changed successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Password changed successfully!',
+        duration: 5000
+      });
       setShowPasswordModal(false);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err) {
-      addToast('Failed to change password. Please check your current password.', 'error');
+    } catch (err: any) {
+      addToast(err.message || 'Failed to change password. Please try again.', 'error');
     }
   };
 
   // Handle Deactivate Account
   const handleDeactivateAccount = async () => {
+    if (deactivateConfirmText !== 'DEACTIVATE') {
+      addToast('Please type DEACTIVATE to confirm.', 'error');
+      return;
+    }
+
     try {
-      await deactivateSuperAdmin();
+      await deactivateSuperAdmin({
+        variables: {
+          id: admin?.userId
+        }
+      });
       addToast('Account deactivated successfully. You will be logged out.', 'success');
       setTimeout(() => {
-        navigate('/login');
-      }, 3000);
-    } catch (err) {
-      addToast('Failed to deactivate account. Please try again.', 'error');
+        navigate('/superadmin/login');
+      }, 2000);
+    } catch (err: any) {
+      addToast(err.message || 'Failed to deactivate account. Please try again.', 'error');
     }
   };
 
   // Toggle form editability
   const toggleFormEditable = () => {
     setIsFormEditable(!isFormEditable);
-    setToasts([]);
   };
 
   // Handle Back button click
   const handleBack = () => {
     setIsFormEditable(false);
     setToasts([]);
-    setProfileImage(null);
   };
 
   return (
@@ -607,108 +636,87 @@ const SadminSettings: React.FC = () => {
 
       {/* Password Change Modal */}
       {showPasswordModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
-          <div className="flex items-center mb-6">
-            <h3 className="text-2xl font-bold text-gray-800">Change Password</h3>
-          </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold text-gray-800 mb-6">Change Password</h3>
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              {/* Current Password */}
+              <div>
+                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="currentPassword"
+                    name="currentPassword"
+                    type={showPasswords.current ? 'text' : 'password'}
+                    value={passwordForm.currentPassword}
+                    onChange={handlePasswordInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('current')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPasswords.current ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
 
-          <form className="space-y-8" onSubmit={handleChangePasswordSubmit}>
-            {/* Current Password */}
-            <div className="relative">
-              <input
-                id="currentPassword"
-                name="currentPassword"
-                type={showPasswords.current ? 'text' : 'password'}
-                value={passwordForm.currentPassword}
-                onChange={handlePasswordInputChange}
-                required
-                placeholder=" " // important for floating label alignment
-                className="peer w-full px-0 pt-4 pb-2 text-black border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 transition"
-              />
-              <label
-                htmlFor="currentPassword"
-                className={`absolute left-0 text-gray-600 transition-all duration-200 ${
-                  passwordForm.currentPassword
-                    ? '-top-1.5 text-sm text-gray-500 font-bold'
-                    : 'top-4 text-base text-gray-400'
-                } peer-focus:-top-1.5 peer-focus:text-sm peer-focus:text-gray-500 peer-focus:font-bold`}
-              >
-                Current Password
-              </label>
-              <button
-                type="button"
-                onClick={() => togglePasswordVisibility('current')}
-                className="absolute right-0 top-3 text-gray-400 hover:text-gray-600"
-              >
-                {showPasswords.current ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
+              {/* New Password */}
+              <div>
+                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="newPassword"
+                    name="newPassword"
+                    type={showPasswords.new ? 'text' : 'password'}
+                    value={passwordForm.newPassword}
+                    onChange={handlePasswordInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('new')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPasswords.new ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+              </div>
 
-            {/* New Password */}
-            <div className="relative">
-              <input
-                id="newPassword"
-                name="newPassword"
-                type={showPasswords.new ? 'text' : 'password'}
-                value={passwordForm.newPassword}
-                onChange={handlePasswordInputChange}
-                required
-                minLength={8}
-                placeholder=" "
-                className="peer w-full px-0 pt-4 pb-2 text-black border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 transition"
-              />
-              <label
-                htmlFor="newPassword"
-                className={`absolute left-0 text-gray-600 transition-all duration-200 ${
-                  passwordForm.newPassword
-                    ? '-top-1.5 text-sm text-gray-500 font-bold'
-                    : 'top-4 text-base text-gray-400'
-                } peer-focus:-top-1.5 peer-focus:text-sm peer-focus:text-gray-500 peer-focus:font-bold`}
-              >
-                New Password
-              </label>
-              <button
-                type="button"
-                onClick={() => togglePasswordVisibility('new')}
-                className="absolute right-0 top-3 text-gray-400 hover:text-gray-600"
-              >
-                {showPasswords.new ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-              <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
-            </div>
-
-            {/* Confirm Password */}
-            <div className="relative">
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type={showPasswords.confirm ? 'text' : 'password'}
-                value={passwordForm.confirmPassword}
-                onChange={handlePasswordInputChange}
-                required
-                minLength={8}
-                placeholder=" "
-                className="peer w-full px-0 pt-4 pb-2 text-black border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 transition"
-              />
-              <label
-                htmlFor="confirmPassword"
-                className={`absolute left-0 text-gray-600 transition-all duration-200 ${
-                  passwordForm.confirmPassword
-                    ? '-top-1.5 text-sm text-gray-500 font-bold'
-                    : 'top-4 text-base text-gray-400'
-                } peer-focus:-top-1.5 peer-focus:text-sm peer-focus:text-gray-500 peer-focus:font-bold`}
-              >
-                Confirm New Password
-              </label>
-              <button
-                type="button"
-                onClick={() => togglePasswordVisibility('confirm')}
-                className="absolute right-0 top-3 text-gray-400 hover:text-gray-600"
-              >
-                {showPasswords.confirm ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
+              {/* Confirm Password */}
+              <div>
+                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showPasswords.confirm ? 'text' : 'password'}
+                    value={passwordForm.confirmPassword}
+                    onChange={handlePasswordInputChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
+                    required
+                    minLength={8}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => togglePasswordVisibility('confirm')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPasswords.confirm ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
 
             {/* Buttons */}
             <div className="flex justify-between space-x-3 pt-6">
@@ -782,8 +790,23 @@ const SadminSettings: React.FC = () => {
         </div>
       )}
 
-      {/* Toast Notifications */}
-      <ToastNotifications toasts={toasts} onRemove={removeToast} />
+      {/* Toast Notifications Container */}
+      <div className="fixed bottom-4 right-4 space-y-2 z-50">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
+          >
+            <span>{toast.message}</span>
+            <button
+              onClick={() => removeToast(toast.id)}
+              className="ml-4 text-white hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
 
       {/* Inline CSS for animations */}
       <style>
