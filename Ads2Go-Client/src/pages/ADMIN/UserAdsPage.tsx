@@ -18,6 +18,7 @@ import { GET_ADS_BY_USER, GET_ALL_ADS,
   DELETE_AD,
   type Ad,
   type User } from "../../graphql/admin/ads";
+import { GET_ALL_USERS } from "../../graphql/admin/queries/manageUsers";
 
 interface QueryResult {
   getAdsByUser: Ad[];
@@ -111,12 +112,30 @@ const UserAdsPage: React.FC = () => {
     skip: !userId,
   });
 
-  const userName =
-    data?.getAdsByUser?.[0]?.userId
-      ? `${data.getAdsByUser[0].userId.firstName || ""} ${
-          data.getAdsByUser[0].userId.lastName || ""
-        }`.trim()
-      : "";
+  // Fetch all users to get user information even when no ads exist
+  const { data: usersData } = useQuery(GET_ALL_USERS, {
+    skip: !userId,
+  });
+
+  // Get user name from ads data if available, otherwise from users data
+  const userName = (() => {
+    // First try to get from ads data
+    if (data?.getAdsByUser?.[0]?.userId) {
+      return `${data.getAdsByUser[0].userId.firstName || ""} ${
+        data.getAdsByUser[0].userId.lastName || ""
+      }`.trim();
+    }
+    
+    // If no ads, get from users data
+    if (usersData?.getAllUsers && userId) {
+      const user = usersData.getAllUsers.find((u: any) => u.id === userId);
+      if (user) {
+        return `${user.firstName || ""} ${user.lastName || ""}`.trim();
+      }
+    }
+    
+    return "";
+  })();
 
   useEffect(() => {
     if (data?.getAdsByUser) {

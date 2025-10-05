@@ -159,13 +159,14 @@ useEffect(() => {
     });
   };
 
-  // Toast helper
+  // Toast helpers
   const addToast = (message: string, type: 'error' | 'success') => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3000);
+  };
+
+  const removeToast = (id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
   };
 
   // Handle form input changes
@@ -496,7 +497,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
       />
 
       {/* Toast Notifications */}
-      <ToastNotifications toasts={toasts} />
+      <ToastNotifications toasts={toasts} onRemove={removeToast} />
 
       <style>
         {`

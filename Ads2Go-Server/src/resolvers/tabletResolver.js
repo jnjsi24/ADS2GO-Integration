@@ -90,23 +90,24 @@ module.exports = {
           };
         }
 
-        // Determine online status via DeviceStatusManager for real-time accuracy
+        // Check if device is connected (has deviceId) and get online status
+        const hasDeviceId = !!tabletUnit.deviceId;
         const statusInfo = deviceStatusService.getDeviceStatus(tabletUnit.deviceId);
-        const isConnected = !!statusInfo.isOnline;
+        const isOnline = !!statusInfo.isOnline;
 
         // Fetch latest tracking info for lastSeen/GPS
         const tracking = await DeviceTracking.findOne({ deviceId: tabletUnit.deviceId });
-        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || null;
-        const gps = tracking?.currentLocation || null;
+        const lastSeen = statusInfo.lastSeen || tracking?.lastSeen || tabletUnit.lastSeen || null;
+        const gps = tracking?.currentLocation || tabletUnit.gps || null;
         
         return {
-          isConnected,
-          connectedDevice: {
+          isConnected: hasDeviceId, // Connected if has deviceId, regardless of online status
+          connectedDevice: hasDeviceId ? {
             deviceId: tabletUnit.deviceId,
-            status: isConnected ? 'ONLINE' : 'OFFLINE',
+            status: isOnline ? 'ONLINE' : 'OFFLINE',
             lastSeen,
             gps
-          },
+          } : null,
           materialId,
           slotNumber,
           carGroupId: tablet.carGroupId || null
@@ -147,6 +148,12 @@ module.exports = {
           throw new Error('Invalid car group ID');
         }
         
+        // Check if the device ID is already in use by any tablet in the system
+        const existingDevice = await Tablet.findOne({ 'tablets.deviceId': deviceId });
+        if (existingDevice) {
+          throw new Error(`Device ID ${deviceId} is already registered to another tablet`);
+        }
+
         // Check if the slot is already occupied by another device
         const existingTablet = tablet.tablets.find(t => t.tabletNumber === slotNumber);
         if (existingTablet && existingTablet.deviceId && existingTablet.deviceId !== deviceId) {
@@ -169,6 +176,68 @@ module.exports = {
         };
         
         await tablet.save();
+        
+        // Create deviceTracking record for this device
+        try {
+          const DeviceTracking = require('../models/deviceTracking');
+          let existingDeviceTracking = await DeviceTracking.findByMaterialId(materialId);
+          
+          // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
+          if (!existingDeviceTracking) {
+            console.log(`🔍 DeviceTracking not found by materialId: ${materialId}, trying deviceId: ${deviceId}`);
+            existingDeviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+            
+            if (existingDeviceTracking) {
+              console.log(`🔄 Found existing DeviceTracking by deviceId, updating materialId to: ${materialId}`);
+              existingDeviceTracking.materialId = materialId;
+              existingDeviceTracking.carGroupId = material.carGroupId;
+              await existingDeviceTracking.save();
+            }
+          }
+          
+          if (!existingDeviceTracking) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const deviceTracking = new DeviceTracking({
+              materialId,
+              carGroupId: material.carGroupId,
+              screenType: 'HEADDRESS',
+              date: today,
+              isOnline: true,
+              lastSeen: new Date(),
+              slots: [{
+                slotNumber: parseInt(slotNumber),
+                deviceId,
+                isOnline: true,
+                lastSeen: new Date(),
+                deviceInfo: {}
+              }],
+              currentSession: {
+                date: today,
+                startTime: new Date(),
+                totalHoursOnline: 0,
+                totalDistanceTraveled: 0,
+                targetHours: 8,
+                complianceStatus: 'NON_COMPLIANT',
+                isActive: true
+              }
+            });
+            await deviceTracking.save();
+            console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+          } else {
+            // Update existing car record with new slot
+            await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
+              deviceId,
+              isOnline: true,
+              deviceInfo: {}
+            });
+            console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+          }
+        } catch (deviceTrackingError) {
+          console.error('Error creating deviceTracking record:', deviceTrackingError);
+          // Don't fail the registration if deviceTracking creation fails
+        }
         
         // Update analytics to link tablet device with deployment analytics
         try {
@@ -200,7 +269,7 @@ module.exports = {
                     deviceInfo: {
                       deviceId: deviceId,
                       deviceName: 'Tablet Device',
-                      deviceType: 'Tablet',
+                      deviceType: 'tablet',
                       osName: 'Android',
                       osVersion: 'Unknown',
                       platform: 'Android',
@@ -328,14 +397,17 @@ module.exports = {
         // Get the old deviceId before removing it
         const oldDeviceId = tabletUnit.deviceId;
 
-        // Replace the slot object entirely to ensure Mongoose persists removal of deviceId
-        tablet.tablets[tabletIndex] = {
-          tabletNumber: slotNumber,
-          // deviceId intentionally omitted
-          status: 'OFFLINE',
-          lastSeen: null,
-          gps: { lat: null, lng: null }
-        };
+        // Clear the device connection by removing the deviceId field entirely
+        tabletUnit.deviceId = undefined; // Explicitly set to undefined
+        tabletUnit.status = 'OFFLINE';
+        tabletUnit.lastSeen = null;
+        tabletUnit.gps = { lat: null, lng: null };
+        
+        // Use $unset to completely remove the deviceId field from MongoDB
+        await tablet.updateOne(
+          { _id: tablet._id },
+          { $unset: { [`tablets.${tabletIndex}.deviceId`]: 1 } }
+        );
 
         await tablet.save();
 

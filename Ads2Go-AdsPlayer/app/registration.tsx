@@ -42,8 +42,8 @@ export default function RegistrationScreen() {
       const registration = await tabletRegistrationService.getRegistrationData();
       console.log('Registration check - found registration:', registration);
       
-      if (registration && registration.materialId && registration.deviceId) {
-        // Only redirect if we have a complete registration
+      if (registration && registration.materialId && registration.deviceId && registration.isRegistered) {
+        // Only redirect if we have a complete and valid registration
         Alert.alert(
           'Already Registered',
           'This tablet is already registered. You will be redirected to the main screen.',
@@ -55,8 +55,8 @@ export default function RegistrationScreen() {
           ]
         );
       } else if (registration) {
-        // If we have partial registration data, clear it and continue
-        console.log('Found incomplete registration data, clearing it');
+        // If we have partial or invalid registration data, clear it and continue
+        console.log('Found incomplete or invalid registration data, clearing it');
         await tabletRegistrationService.clearRegistration();
       }
     } catch (error) {

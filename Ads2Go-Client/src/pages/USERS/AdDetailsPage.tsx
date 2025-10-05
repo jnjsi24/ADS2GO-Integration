@@ -174,7 +174,7 @@ const AdDetailsPage: React.FC = () => {
   const fetchDeviceId = async (materialId: string) => {
     try {
       const response = await fetch(
-        `${(process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000').replace(/\/$/, '')}/screenTracking/deviceByMaterial/${materialId}`
+        `${(process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '')}/screenTracking/deviceByMaterial/${materialId}`
       );
       const result = await response.json();
       

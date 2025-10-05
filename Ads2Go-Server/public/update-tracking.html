@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Update Tracking</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .search-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .search-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .search-form button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .search-form button:hover {
+            background: #0056b3;
+        }
+        .record-info {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .timestamp-section {
+            margin-bottom: 25px;
+        }
+        .timestamp-section h3 {
+            color: #1976d2;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .timestamp-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .timestamp-item:last-child {
+            border-bottom: none;
+        }
+        .timestamp-label {
+            font-weight: 500;
+            color: #555;
+        }
+        .timestamp-value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-fresh {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-stale {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .summary {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .summary h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .recent-records {
+            margin-top: 30px;
+        }
+        .recent-record {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .recent-record:hover {
+            background: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Device Update Tracking</h1>
+        
+        <div class="search-form">
+            <input type="text" id="recordId" placeholder="Enter Record ID (e.g., 68dfbac07b0082330f474bde)" value="68dfbac07b0082330f474bde">
+            <button onclick="loadRecord()">Load Record</button>
+        </div>
+        
+        <div id="loading" class="loading" style="display: none;">
+            Loading record information...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="recordDetails" style="display: none;">
+            <div class="record-info">
+                <h2 id="recordTitle"></h2>
+                <p><strong>Record ID:</strong> <span id="recordIdDisplay"></span></p>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>🕐 Mongoose Automatic Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Created At:</span>
+                    <span class="timestamp-value" id="createdAt"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Updated At:</span>
+                    <span class="timestamp-value" id="updatedAt"></span>
+                </div>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>📦 Archive-Specific Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Archived At:</span>
+                    <span class="timestamp-value" id="archivedAt"></span>
+                </div>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>🔍 Enhanced Tracking Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Data Update:</span>
+                    <span class="timestamp-value" id="lastDataUpdate"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Archive Update:</span>
+                    <span class="timestamp-value" id="lastArchiveUpdate"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Update Count:</span>
+                    <span class="timestamp-value" id="updateCount"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Update Source:</span>
+                    <span class="timestamp-value" id="lastUpdateSource"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Update Type:</span>
+                    <span class="timestamp-value" id="lastUpdateType"></span>
+                </div>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>📱 Device-Specific Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Seen:</span>
+                    <span class="timestamp-value" id="lastSeen"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Network Last Seen:</span>
+                    <span class="timestamp-value" id="networkLastSeen"></span>
+                </div>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>⏰ Hours Tracking Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Session Start Time:</span>
+                    <span class="timestamp-value" id="sessionStartTime"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Session End Time:</span>
+                    <span class="timestamp-value" id="sessionEndTime"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Last Online Update:</span>
+                    <span class="timestamp-value" id="lastOnlineUpdate"></span>
+                </div>
+            </div>
+            
+            <div class="timestamp-section">
+                <h3>📈 Recent Activity Timestamps</h3>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Latest Ad Playback:</span>
+                    <span class="timestamp-value" id="latestAdPlayback"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Latest QR Scan:</span>
+                    <span class="timestamp-value" id="latestQrScan"></span>
+                </div>
+                <div class="timestamp-item">
+                    <span class="timestamp-label">Latest Location:</span>
+                    <span class="timestamp-value" id="latestLocation"></span>
+                </div>
+            </div>
+            
+            <div class="summary">
+                <h3>📋 Summary</h3>
+                <p><strong>Most Recent Update:</strong> <span id="mostRecentUpdate"></span></p>
+                <p><strong>Time Since Update:</strong> <span id="timeSinceUpdate"></span></p>
+                <p><strong>Status:</strong> <span id="statusBadge" class="status-badge"></span></p>
+            </div>
+        </div>
+        
+        <div class="recent-records">
+            <h3>📋 Recent Records</h3>
+            <div id="recentRecordsList"></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadRecord() {
+            const recordId = document.getElementById('recordId').value.trim();
+            if (!recordId) {
+                showError('Please enter a record ID');
+                return;
+            }
+            
+            showLoading(true);
+            hideError();
+            hideRecordDetails();
+            
+            try {
+                const response = await fetch(`/updateTracking/${recordId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayRecord(data);
+                } else {
+                    showError(data.message || 'Failed to load record');
+                }
+            } catch (error) {
+                showError('Error loading record: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        function displayRecord(data) {
+            const tracking = data.updateTracking;
+            
+            document.getElementById('recordTitle').textContent = `Material: ${data.materialId}`;
+            document.getElementById('recordIdDisplay').textContent = data.recordId;
+            
+            // Mongoose timestamps
+            document.getElementById('createdAt').textContent = formatDate(tracking.createdAt);
+            document.getElementById('updatedAt').textContent = formatDate(tracking.updatedAt);
+            
+            // Archive timestamps
+            document.getElementById('archivedAt').textContent = formatDate(tracking.archivedAt);
+            
+            // Enhanced tracking
+            document.getElementById('lastDataUpdate').textContent = formatDate(tracking.lastDataUpdate);
+            document.getElementById('lastArchiveUpdate').textContent = formatDate(tracking.lastArchiveUpdate);
+            document.getElementById('updateCount').textContent = tracking.updateCount || 'N/A';
+            document.getElementById('lastUpdateSource').textContent = tracking.lastUpdateSource || 'N/A';
+            document.getElementById('lastUpdateType').textContent = tracking.lastUpdateType || 'N/A';
+            
+            // Device timestamps
+            document.getElementById('lastSeen').textContent = formatDate(tracking.lastSeen);
+            document.getElementById('networkLastSeen').textContent = formatDate(tracking.networkLastSeen);
+            
+            // Hours tracking
+            document.getElementById('sessionStartTime').textContent = formatDate(tracking.sessionStartTime);
+            document.getElementById('sessionEndTime').textContent = formatDate(tracking.sessionEndTime);
+            document.getElementById('lastOnlineUpdate').textContent = formatDate(tracking.lastOnlineUpdate);
+            
+            // Recent activity
+            document.getElementById('latestAdPlayback').textContent = formatDate(tracking.latestAdPlayback);
+            document.getElementById('latestQrScan').textContent = formatDate(tracking.latestQrScan);
+            document.getElementById('latestLocation').textContent = formatDate(tracking.latestLocation);
+            
+            // Summary
+            document.getElementById('mostRecentUpdate').textContent = formatDate(tracking.mostRecentUpdate);
+            document.getElementById('timeSinceUpdate').textContent = tracking.timeSinceUpdate;
+            
+            const statusBadge = document.getElementById('statusBadge');
+            if (tracking.isStale) {
+                statusBadge.textContent = 'Stale';
+                statusBadge.className = 'status-badge status-stale';
+            } else {
+                statusBadge.textContent = 'Fresh';
+                statusBadge.className = 'status-badge status-fresh';
+            }
+            
+            showRecordDetails();
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return 'Not set';
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', {
+                timeZone: 'Asia/Manila',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        function showRecordDetails() {
+            document.getElementById('recordDetails').style.display = 'block';
+        }
+        
+        function hideRecordDetails() {
+            document.getElementById('recordDetails').style.display = 'none';
+        }
+        
+        // Load recent records on page load
+        async function loadRecentRecords() {
+            try {
+                const response = await fetch('/updateTracking/recent?limit=5');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const list = document.getElementById('recentRecordsList');
+                    list.innerHTML = '';
+                    
+                    data.recentRecords.forEach(record => {
+                        const div = document.createElement('div');
+                        div.className = 'recent-record';
+                        div.innerHTML = `
+                            <span>${record.materialId} - ${record.timeSinceUpdate}</span>
+                            <span>Updates: ${record.updateCount}</span>
+                        `;
+                        div.onclick = () => {
+                            document.getElementById('recordId').value = record.recordId;
+                            loadRecord();
+                        };
+                        list.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading recent records:', error);
+            }
+        }
+        
+        // Load the default record on page load
+        window.onload = function() {
+            loadRecord();
+            loadRecentRecords();
+        };
+    </script>
+</body>
+</html>

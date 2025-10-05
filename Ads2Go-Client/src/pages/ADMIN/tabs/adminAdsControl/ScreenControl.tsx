@@ -30,10 +30,10 @@ const ScreenControl: React.FC<ScreenControlProps> = ({
         {screens.map((screen) => (
           <div key={screen.deviceId} className="bg-gray-50 p-4 rounded-lg">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium">{screen.deviceId}</h4>
+              <h4 className="font-medium">{screen.displayId || screen.materialId || screen.deviceId}</h4>
               <div className="flex items-center space-x-2">
                 {getStatusIcon(screen.isOnline ? 'online' : 'offline')}
-                <span className="text-sm">{getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
+                <span className="text-sm">{screen.statusText || getStatusText(screen.isOnline ? 'online' : 'offline')}</span>
               </div>
             </div>
             
@@ -52,7 +52,7 @@ const ScreenControl: React.FC<ScreenControlProps> = ({
                     realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
                       currentTime: screen.screenMetrics.currentAd.currentTime,
                       progress: screen.screenMetrics.currentAd.progress || 0,
-                      state: screen.screenMetrics.currentAd.state || 'playing'
+                      state: (screen.screenMetrics.currentAd.state as "playing" | "paused" | "buffering" | "loading" | "ended") || 'playing'
                     } : undefined}
                   />
                 </div>

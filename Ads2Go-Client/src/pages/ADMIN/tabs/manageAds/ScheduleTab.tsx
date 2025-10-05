@@ -6,10 +6,15 @@ import { GET_ALL_ADS, type Ad } from '../../../../graphql/admin/ads';
 interface ScheduleTabProps {
   statusFilter: string;
   onStatusChange: (status: string) => void;
+  dateFilter?: {
+    startDate: Date | null;
+    endDate: Date | null;
+    condition: string;
+  } | null;
 }
 
 
-const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange }) => {
+const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange, dateFilter }) => {
   const [scheduleView, setScheduleView] = useState<'month' | 'week' | 'day'>('month');
   const [cursorDate, setCursorDate] = useState<Date>(new Date());
 
@@ -103,10 +108,45 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange 
   }, [data, period.start, period.end]);
 
   const filteredAds = useMemo(() => {
-    return adsInPeriod.filter(ad => 
+    let filtered = adsInPeriod.filter(ad => 
       statusFilter === 'All Status' || ad.status.toLowerCase() === statusFilter.toLowerCase()
     );
-  }, [adsInPeriod, statusFilter]);
+
+    // Apply date filter if active
+    if (dateFilter) {
+      filtered = filtered.filter(ad => {
+        const adStartDate = parseDate(ad.startTime) || parseDate(ad.createdAt);
+        if (!adStartDate) return false;
+
+        const { startDate, endDate, condition } = dateFilter;
+        
+        switch (condition) {
+          case 'Is':
+            return startDate && isSameDay(adStartDate, startDate);
+          case 'Is before':
+            return startDate && adStartDate < startDate;
+          case 'Is after':
+            return startDate && adStartDate > startDate;
+          case 'Is on or before':
+            return startDate && adStartDate <= startDate;
+          case 'Is on or after':
+            return startDate && adStartDate >= startDate;
+          case 'Is in between':
+            return startDate && endDate && adStartDate >= startDate && adStartDate <= endDate;
+          default:
+            return true;
+        }
+      });
+    }
+
+    return filtered;
+  }, [adsInPeriod, statusFilter, dateFilter]);
+
+  const isSameDay = (date1: Date, date2: Date): boolean => {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  };
 
 
 
@@ -152,63 +192,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange 
         <h2 className="text-xl font-semibold text-gray-800">Ad Schedule</h2>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex items-center justify-between">
-        {/* Date Filter Group */}
-        <div className="flex items-center gap-3">
-          {/* Filter Type Buttons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setFilterType("day")}
-              className={`px-3 py-1 text-sm rounded ${
-                filterType === "day" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Day
-            </button>
-            <button
-              onClick={() => setFilterType("month")}
-              className={`px-3 py-1 text-sm rounded ${
-                filterType === "month" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Month
-            </button>
-            <button
-              onClick={() => setFilterType("year")}
-              className={`px-3 py-1 text-sm rounded ${
-                filterType === "year" ? "bg-blue-500 text-white" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              Year
-            </button>
-          </div>
-
-          {/* Date Picker */}
-          <input
-            type={
-              filterType === "day"
-                ? "date"
-                : filterType === "month"
-                ? "month"
-                : "number" // or "text" for custom year input
-            }
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
-            placeholder={filterType === "year" ? "YYYY" : ""}
-            min={filterType === "year" ? "1900" : undefined}
-            max={filterType === "year" ? "2100" : undefined}
-          />
-        </div>
-
-        {/* Refresh Button */}
-        <button
-          onClick={() => refetch()}
-          className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Refresh
-        </button>
-      </div>
 
 
       {loading ? (

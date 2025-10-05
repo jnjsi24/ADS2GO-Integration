@@ -9,6 +9,7 @@ import * as Device from 'expo-device';
 import tabletRegistrationService from '../services/tabletRegistration';
 import playbackWebSocketService from '../services/playbackWebSocketService';
 import companyAdService, { CompanyAd } from '../services/companyAdService';
+import offlineQueueService from '../services/offlineQueueService';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
@@ -55,21 +56,175 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [videoActuallyStarted, setVideoActuallyStarted] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [maxRetries] = useState(3);
+  const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncData, setSyncData] = useState<any>(null);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
   const getCacheKey = () => `ads_${materialId}_${slotNumber}`;
 
+  // Check registration status on mount
+  useEffect(() => {
+    const checkRegistration = async () => {
+      try {
+        const registered = await tabletRegistrationService.checkRegistrationStatus();
+        setIsRegistered(registered);
+        if (!registered) {
+          setError('Device not registered. Please register the tablet first.');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error checking registration status:', error);
+        setError('Failed to verify registration status');
+        setLoading(false);
+      }
+    };
+    
+    checkRegistration();
+  }, []);
+
+  // Setup WebSocket synchronization
+  useEffect(() => {
+    if (isRegistered) {
+      // Set up slot synchronization callback
+      playbackWebSocketService.setSlotSyncCallback(handleSlotSync);
+      
+      // Connect to WebSocket
+      playbackWebSocketService.connect().then((connected) => {
+        if (connected) {
+          // Start periodic sync requests for late-connecting devices
+          playbackWebSocketService.startPeriodicSync();
+          
+          // Request initial synchronization after a delay to allow ads to start
+          setTimeout(() => {
+            playbackWebSocketService.requestSync();
+          }, 5000); // Wait 5 seconds before first sync request
+        }
+      });
+    }
+
+    return () => {
+      playbackWebSocketService.setSlotSyncCallback(() => {});
+      playbackWebSocketService.stopPeriodicSync();
+    };
+  }, [isRegistered]);
+
+  // Handle slot synchronization messages
+  const handleSlotSync = (message: any) => {
+    console.log('🔄 [AdPlayer] Received slot sync:', message);
+    
+    if (message.sourceSlot !== slotNumber) {
+      setSyncData(message);
+      setIsSyncing(true);
+      
+      // Only sync if we're not currently playing or if the other slot is playing a different ad
+      if (message.state === 'playing' && message.adId) {
+        // Only sync to a different ad if we're not currently playing anything
+        if (!currentAd || message.adId !== currentAd.adId) {
+          console.log(`🔄 [AdPlayer] Syncing to playing ad: ${message.adTitle} at ${message.currentTime}s`);
+          syncToAd(message);
+        } else {
+          // Same ad, just sync position
+          console.log(`🔄 [AdPlayer] Syncing position for same ad: ${message.adTitle}`);
+          if (videoRef.current && message.currentTime) {
+            const seekTime = message.currentTime * 1000;
+            videoRef.current.setPositionAsync(seekTime);
+          }
+          setIsSyncing(false);
+        }
+      } else if (message.state === 'paused') {
+        console.log(`🔄 [AdPlayer] Syncing to paused state`);
+        // Pause current playback to match other slot
+        if (videoRef.current) {
+          videoRef.current.pauseAsync();
+        }
+        setIsSyncing(false);
+      } else if (message.state === 'loading' || message.state === 'buffering') {
+        console.log(`🔄 [AdPlayer] Syncing to loading/buffering state`);
+        // Don't interrupt current playback for loading states
+        setIsSyncing(false);
+      }
+    }
+  };
+
+  // Sync to a specific ad from another slot
+  const syncToAd = async (syncMessage: any) => {
+    try {
+      console.log('🔄 [AdPlayer] Syncing to ad:', syncMessage.adTitle);
+      
+      // Find the ad in our current ads list
+      const adIndex = ads.findIndex(ad => ad.adId === syncMessage.adId);
+      
+      if (adIndex !== -1) {
+        console.log(`🔄 [AdPlayer] Found ad at index ${adIndex}, switching to it`);
+        
+        // Stop current playback
+        if (videoRef.current) {
+          try {
+            await videoRef.current.pauseAsync();
+          } catch (error) {
+            console.log('Error pausing video during sync:', error);
+          }
+        }
+        
+        // Switch to the synced ad
+        setCurrentAdIndex(adIndex);
+        
+        // Wait a moment for the ad to load, then sync position
+        setTimeout(async () => {
+          try {
+            if (videoRef.current && syncMessage.currentTime) {
+              const seekTime = syncMessage.currentTime * 1000; // Convert to milliseconds
+              console.log(`🔄 [AdPlayer] Seeking to position: ${syncMessage.currentTime}s`);
+              
+              await videoRef.current.setPositionAsync(seekTime);
+              
+              // Start playing if the source is playing
+              if (syncMessage.state === 'playing') {
+                console.log(`🔄 [AdPlayer] Starting playback to match source`);
+                await videoRef.current.playAsync();
+              }
+            }
+          } catch (error) {
+            console.error('Error during position sync:', error);
+          }
+        }, 1500); // Wait 1.5 seconds for the video to load
+        
+        // Also send a sync confirmation back
+        if (syncMessage.state === 'playing') {
+          setTimeout(() => {
+            playbackWebSocketService.updatePlaybackDataAndSend({
+              adId: syncMessage.adId,
+              adTitle: syncMessage.adTitle,
+              state: 'playing',
+              currentTime: syncMessage.currentTime || 0,
+              duration: syncMessage.duration || 0,
+              progress: syncMessage.progress || 0,
+            });
+          }, 2000);
+        }
+      } else {
+        console.log('⚠️ [AdPlayer] Synced ad not found in current ads list, available ads:', ads.map(ad => ad.adTitle));
+        
+        // If we don't have the ad yet, try to fetch ads again
+        if (ads.length === 0) {
+          console.log('🔄 [AdPlayer] No ads loaded, attempting to fetch ads...');
+          // This will trigger the ad fetching logic
+          setLoading(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing to ad:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Track ad playback
   const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
     try {
-      // Don't track ad playback if offline
-      if (isOffline) {
-        console.log(`Skipping ad tracking - device is offline: ${adTitle}`);
-        return;
-      }
-      
-      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s`);
+      console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s - ${isOffline ? 'OFFLINE' : 'ONLINE'}`);
       
       // If this is a company ad, increment play count
       if (currentAdIndex === -1 && companyAds.length > 0) {
@@ -80,81 +235,65 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Get registration data for analytics
       const registrationData = await tabletRegistrationService.getRegistrationData();
       
-      // Send to analytics service
-      const analyticsData = {
-        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-        materialId: materialId,
-        slotNumber: slotNumber,
+      // Create ad playback data for queuing
+      const adPlaybackData = {
         adId: adId,
         adTitle: adTitle,
         adDuration: adDuration,
-        viewTime: viewTime, // Use actual view time instead of 0
-        timestamp: new Date().toISOString(),
-        // Note: userId and adDeploymentId would need to be fetched from the ad data
-        // For now, we'll use the adId as a string reference
-        userId: null, // This should be populated from ad data
-        adDeploymentId: null, // This should be populated from ad data
-        deviceInfo: {
-          deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
-          deviceName: Device.deviceName || 'Unknown',
-          deviceType: Device.deviceType === 2 ? 'tablet' : Device.deviceType === 1 ? 'mobile' : 'unknown',
-          osName: Device.osName || 'Unknown',
-          osVersion: Device.osVersion || 'Unknown',
-          platform: Platform.OS || 'Unknown',
-          brand: Device.brand || 'Unknown',
-          modelName: Device.modelName || 'Unknown',
-          screenWidth: screenData.width,
-          screenHeight: screenData.height,
-          screenScale: screenData.scale
-        },
-        gpsData: null, // Will be updated when location is available
-        networkStatus: networkStatus,
-        isOffline: isOffline
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        viewTime: viewTime,
+        completionRate: viewTime && adDuration ? Math.round((viewTime / adDuration) * 100) : 100,
+        impressions: 1,
+        slotNumber: slotNumber
+      };
+
+      // Queue the ad playback data (will send immediately if online, queue if offline)
+      await offlineQueueService.queueAdPlayback(adPlaybackData);
+      
+      // Send to analytics service
+      const analyticsData = {
+        deviceId: registrationData?.deviceId || await tabletRegistrationService.generateDeviceId(),
+        deviceSlot: slotNumber, // Server expects 'deviceSlot' not 'slotNumber'
+        adId: adId,
+        adTitle: adTitle,
+        adDuration: adDuration,
+        viewTime: viewTime // Use actual view time instead of 0
       };
       
-      // Send to device tracking endpoint (new daily staging system)
-      const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          deviceId: analyticsData.deviceId,
-          deviceSlot: analyticsData.slotNumber,
-          adId: analyticsData.adId,
-          adTitle: analyticsData.adTitle,
-          adDuration: analyticsData.adDuration,
-          viewTime: analyticsData.viewTime
-        }),
-      });
-      
-      if (deviceTrackingResponse.ok) {
-        console.log(`✅ Ad playback tracked in device tracking: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback in device tracking: ${adTitle}`);
-      }
-      
-      // Also send to analytics endpoint for backward compatibility
-      const analyticsResponse = await fetch(`${API_BASE_URL}/analytics/track-ad`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(analyticsData),
-      });
-      
-      if (analyticsResponse.ok) {
-        console.log(`✅ Ad playback tracked in analytics: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
+      // Send to analytics endpoint (only if online)
+      if (!isOffline) {
+        try {
+          const analyticsResponse = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(analyticsData),
+          });
+          
+          if (analyticsResponse.ok) {
+            console.log(`✅ Ad playback tracked in analytics: ${adTitle}`);
+          } else {
+            console.log(`❌ Failed to track ad playback in analytics: ${adTitle}`);
+          }
+        } catch (error) {
+          console.error('❌ Error sending analytics data:', error);
+        }
       }
       
       // Also send to existing screen tracking (start of ad playback)
-      const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
-      if (success) {
-        console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
-      } else {
-        console.log(`❌ Failed to track ad playback: ${adTitle}`);
+      if (!isOffline) {
+        try {
+          const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
+          if (success) {
+            console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
+          } else {
+            console.log(`❌ Failed to track ad playback: ${adTitle}`);
+          }
+        } catch (error) {
+          console.error('❌ Error sending to tablet registration service:', error);
+        }
       }
     } catch (error) {
       console.error('Error tracking ad playback:', error);
@@ -806,6 +945,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   }, [isOffline]);
 
   useEffect(() => {
+    // Only fetch ads if device is registered
+    if (isRegistered === false) {
+      return; // Don't fetch ads if not registered
+    }
+    
+    if (isRegistered === null) {
+      return; // Still checking registration status
+    }
+    
     // Fetch both user ads and company ads
     const fetchAllAds = async () => {
       await Promise.all([
@@ -829,7 +977,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     return () => {
       playbackWebSocketService.disconnect();
     };
-  }, [materialId, slotNumber]);
+  }, [materialId, slotNumber, isRegistered]);
 
   // Listen for orientation changes
   useEffect(() => {
@@ -1008,6 +1156,20 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#3498db" />
           <Text style={styles.loadingText}>Loading advertisements...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error if device is not registered
+  if (isRegistered === false) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Device Not Registered</Text>
+          <Text style={styles.errorText}>
+            This tablet needs to be registered before it can display advertisements.
+          </Text>
         </View>
       </View>
     );
@@ -1256,6 +1418,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                   const duration = status.durationMillis ? status.durationMillis / 1000 : currentAd.duration;
                   
                   playbackWebSocketService.updatePlaybackDataAndSend({
+                    adId: currentAd.adId,
+                    adTitle: currentAd.adTitle,
                     state: 'buffering',
                     currentTime: 0, // Always 0 during buffering
                     duration: duration,
@@ -1291,6 +1455,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               if (currentAd) {
                 const errorStatus = status as any;
                 playbackWebSocketService.updatePlaybackDataAndSend({
+                  adId: currentAd.adId,
+                  adTitle: currentAd.adTitle,
                   state: 'buffering',
                   currentTime: errorStatus.positionMillis ? errorStatus.positionMillis / 1000 : 0,
                   duration: currentAd.duration,
@@ -1320,6 +1486,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             console.log('Video loading started:', currentAd?.mediaFile);
             if (currentAd) {
               playbackWebSocketService.updatePlaybackDataAndSend({
+                adId: currentAd.adId,
+                adTitle: currentAd.adTitle,
                 state: 'loading',
                 currentTime: 0,
                 duration: currentAd.duration, // Use ad duration for loading states
@@ -1346,6 +1514,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             console.log('Video loaded successfully:', currentAd?.mediaFile);
             if (currentAd) {
               playbackWebSocketService.updatePlaybackDataAndSend({
+                adId: currentAd.adId,
+                adTitle: currentAd.adTitle,
                 state: 'buffering',
                 currentTime: 0,
                 duration: currentAd.duration, // Use ad duration for loading states
@@ -1379,6 +1549,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
               // DON'T start WebSocket updates yet - wait for actual playback
               // Just send a single buffering state to indicate video is ready
               playbackWebSocketService.updatePlaybackDataAndSend({
+                adId: currentAd.adId,
+                adTitle: currentAd.adTitle,
                 state: 'buffering', // Still buffering until actually playing
                 currentTime: 0,
                 duration: currentAd.duration,

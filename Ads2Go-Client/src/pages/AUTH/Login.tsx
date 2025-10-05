@@ -413,22 +413,6 @@ const Login: React.FC = () => {
               <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
             )}
           </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
-            <img src="/image/f.png" alt="Facebook logo" className="h-6 w-6" />
-          </button>
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/X_logo_2023.svg" alt="X logo" className="h-6 w-6" />
-          </button>
-          <button
-            type="button"
-            className="p-2 border border-gray-300 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <img
-              src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Instagram_icon.png"
-              alt="Instagram logo"
-              className="h-6 w-6"
-            />
-          </button>
         </div>
 
         <div className="text-center mt-6 text-sm">

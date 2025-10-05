@@ -1,6 +1,6 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
@@ -14,7 +14,15 @@ export interface ScreenData {
   carGroupId: string;
   slotNumber: number;
   isOnline: boolean;
-  currentLocation: string;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
   lastSeen: string;
   currentHours: number;
   hoursRemaining: number;
@@ -112,11 +120,11 @@ class AdsPanelServiceV4 {
     materialId?: string;
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
     try {
-      // Use the compliance endpoint to get real-time screen data with displayId
-      console.log('🔍 [getScreens] Using compliance endpoint: /screenTracking/compliance');
+      // Use the screens endpoint to get real-time screen data
+      console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
       // Add cache-busting parameter to ensure fresh data
       const cacheBuster = `?t=${Date.now()}`;
-      const response = await this.makeRequest(`/screenTracking/compliance${cacheBuster}`);
+      const response = await this.makeRequest(`/screenTracking/screens${cacheBuster}`);
       
       if (!response || !response.data || !response.data.screens) {
         console.error('❌ Invalid response format from compliance endpoint:', response);
@@ -157,9 +165,9 @@ class AdsPanelServiceV4 {
           displayId: screen.displayId, // Include the displayId from compliance endpoint
           screenType: screen.screenType || 'HEADDRESS',
           carGroupId: screen.carGroupId || '',
-          slotNumber: screen.slotNumber || 1,
+          slotNumber: screen.deviceSlot || screen.slotNumber || 1,
           isOnline: screen.isOnline,
-          currentLocation: screen.currentLocation?.address || 'Unknown Location',
+          currentLocation: screen.currentLocation,
           lastSeen: screen.lastSeen,
           currentHours: screen.currentHours || 0,
           hoursRemaining: screen.hoursRemaining || 0,

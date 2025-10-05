@@ -152,13 +152,13 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
       onClick={handleClose}
     >
       <div
-        className={`fixed top-2 bottom-2 right-2 max-w-2xl w-full bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
           isModalOpen ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 border-b pb-4 p-6">
+        <div className="flex justify-between items-center mb-6 pb-4 p-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <User className="w-5 h-5 text-blue-600" />
@@ -214,7 +214,7 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
               ) : (
                 <div className="space-y-4">
                   {data.getMaterialUsageHistory.usageHistory.map((entry, index) => (
-                    <div key={entry.id} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+                    <div key={entry.id} className="border border-gray-200 rounded-lg p-4 bg-white shadow-md">
                       {/* Entry Header */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
@@ -232,27 +232,29 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
                             </p>
                           </div>
                         </div>
-                        {getStatusBadge(entry)}
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(entry)}
+                          {getReasonBadge(entry.assignmentReason, 'assignment')}
+                        </div>
                       </div>
 
                       {/* Driver Info */}
                       <div className="grid grid-cols-2 gap-4 mb-3">
                         <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Contact</p>
-                          <p className="text-sm text-gray-900">{entry.driverInfo.contactNumber}</p>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Contact</p>
+                          <p className="text-sm font-medium text-gray-900">{entry.driverInfo.contactNumber}</p>
                         </div>
                         <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Vehicle</p>
-                          <p className="text-sm text-gray-900">{entry.driverInfo.vehiclePlateNumber}</p>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Vehicle</p>
+                          <p className="text-sm font-medium text-gray-900">{entry.driverInfo.vehiclePlateNumber}</p>
                         </div>
                       </div>
 
                       {/* Assignment Info */}
                       <div className="grid grid-cols-2 gap-4 mb-3">
                         <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Assigned</p>
-                          <p className="text-sm text-gray-900">{formatDate(entry.assignedAt)}</p>
-                          {getReasonBadge(entry.assignmentReason, 'assignment')}
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Assigned</p>
+                          <p className="text-sm font-medium text-gray-900">{formatDate(entry.assignedAt)}</p>
                           {entry.assignedByAdmin && (
                             <div className="mt-1">
                               <p className="text-xs text-blue-600 font-medium">
@@ -262,8 +264,8 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
                           )}
                         </div>
                         <div>
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Unassigned</p>
-                          <p className="text-sm text-gray-900">{formatDate(entry.unassignedAt)}</p>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Unassigned</p>
+                          <p className="text-sm font-medium text-gray-900">{formatDate(entry.unassignedAt)}</p>
                           {entry.unassignmentReason && getReasonBadge(entry.unassignmentReason, 'unassignment')}
                           {entry.unassignedByAdmin && (
                             <div className="mt-1">
@@ -320,18 +322,6 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
               )}
             </>
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 border-t mt-auto">
-          <div className="flex justify-end">
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              Close
-            </button>
-          </div>
         </div>
       </div>
     </div>

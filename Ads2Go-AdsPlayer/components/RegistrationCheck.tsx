@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { router } from 'expo-router';
 import tabletRegistrationService from '../services/tabletRegistration';
 
 interface RegistrationCheckProps {
@@ -19,11 +20,18 @@ export default function RegistrationCheck({ children }: RegistrationCheckProps) 
       const registered = await tabletRegistrationService.checkRegistrationStatus();
       setIsRegistered(registered);
       
-      // For now, we'll always show the main content
-      // In a real implementation, you would redirect to manual connect if not registered
       console.log('Registration status:', registered);
+      
+      // If not registered, redirect to registration screen
+      if (!registered) {
+        console.log('Device not registered, redirecting to registration screen');
+        router.replace('/registration');
+        return;
+      }
     } catch (error) {
       console.error('Error checking registration status:', error);
+      // On error, redirect to registration screen as well
+      router.replace('/registration');
     } finally {
       setIsChecking(false);
     }

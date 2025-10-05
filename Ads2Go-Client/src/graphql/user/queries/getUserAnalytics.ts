@@ -10,21 +10,40 @@ export const GET_USER_ANALYTICS = gql`
         averageCompletionRate
         totalAds
         activeAds
+        totalMaterials
+        totalDevices
+        totalQRScans
+        qrScanConversionRate
       }
       adPerformance {
         adId
         adTitle
-        impressions
-        totalPlayTime
-        averageCompletionRate
-        playCount
-        lastPlayed
+        totalMaterials
+        totalDevices
+        totalAdPlayTime
+        totalAdImpressions
+        totalQRScans
+        averageAdCompletionRate
+        qrScanConversionRate
+        lastUpdated
+        materials {
+          materialId
+          materialName
+          carGroupId
+          totalAdPlayTime
+          totalAdImpressions
+          totalQRScans
+          averageCompletionRate
+          lastActivity
+        }
       }
       dailyStats {
         date
         impressions
         adsPlayed
         displayTime
+        qrScans
+        completionRate
       }
       deviceStats {
         deviceId
@@ -34,10 +53,13 @@ export const GET_USER_ANALYTICS = gql`
         displayTime
         lastActivity
         isOnline
+        qrScans
       }
       period
       startDate
       endDate
+      lastUpdated
+      isActive
     }
   }
 `;
@@ -54,15 +76,15 @@ export const GET_USER_AD_DETAILS = gql`
       startTime
       endTime
       totalImpressions
-      totalPlayTime
-      averageCompletionRate
+      totalAdPlayTime
+      averageAdCompletionRate
       devicePerformance {
         deviceId
         materialId
         impressions
         playTime
         completionRate
-        lastPlayed
+        lastUpdated
       }
       dailyPerformance {
         date

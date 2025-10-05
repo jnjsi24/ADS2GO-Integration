@@ -81,13 +81,19 @@ const resolvers = {
         getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
           checkAuth(user);
           try {
-            const analytics = await AnalyticsService.getUserAnalytics(
+            // Use the new UserAnalytics system
+            const UserAnalyticsService = require('../services/userAnalyticsService');
+            const analytics = await UserAnalyticsService.getUserAnalytics(
               user.id,
               startDate,
-              endDate,
-              period
+              endDate
             );
-            return analytics;
+            
+            if (!analytics.success) {
+              throw new Error(analytics.message || 'Failed to fetch analytics data');
+            }
+            
+            return analytics.data;
           } catch (error) {
             console.error('Error fetching user analytics:', error);
             throw new Error('Failed to fetch analytics data');

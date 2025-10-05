@@ -4,6 +4,7 @@ const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 const { checkDriver } = require('../middleware/driverAuth');
+const { checkAdminMiddleware } = require('../middleware/auth');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
 
@@ -63,17 +64,23 @@ router.post('/updateLocation', async (req, res) => {
       await deviceTracking.save();
     }
     
-    // Check if device was offline and just reconnected - clear location history to prevent invalid distance calculation
+    // Enhanced session management for offline/online transitions
     const hasWebSocketConnection = deviceStatus.source === 'websocket' && deviceStatus.isOnline;
     const wasOffline = !deviceTracking.isOnline && hasWebSocketConnection;
+    
+    // Handle offline to online transition
+    if (wasOffline) {
+      console.log(`🔄 Device ${deviceId} reconnected after being offline - preserving session state`);
+      deviceTracking.handleOfflineTransition(wasOffline, hasWebSocketConnection);
+    }
     
     // Also check if this is a fresh connection (no recent location history or invalid coordinates)
     const hasInvalidLocationHistory = deviceTracking.currentSession?.locationHistory?.some(point => 
       point.coordinates && point.coordinates[0] === 0 && point.coordinates[1] === 0
     );
     
-    if (wasOffline || hasInvalidLocationHistory) {
-      console.log(`🔄 Device ${deviceId} reconnected after being offline or has invalid location history - clearing location history to prevent invalid distance calculation`);
+    if (hasInvalidLocationHistory) {
+      console.log(`🔄 Device ${deviceId} has invalid location history - clearing to prevent invalid distance calculation`);
       deviceTracking.currentSession.locationHistory = [];
       deviceTracking.currentLocation = null;
       deviceTracking.currentSession.totalDistanceTraveled = 0;
@@ -188,10 +195,72 @@ router.get('/route/:deviceId', async (req, res) => {
       });
     }
 
-    // Get location history from current session
     let locationHistory = [];
     
-    if (deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+    // If date is provided, look in historical data first
+    if (date) {
+      console.log(`🔍 [ROUTE] Looking for historical data for device ${deviceId} on date ${date}`);
+      
+      // Import DeviceDataHistoryV2 model
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      
+      // Find historical data for the specific date
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      // First try with the exact deviceId
+      let historicalData = await DeviceDataHistoryV2.findOne({
+        deviceId: deviceId,
+        date: {
+          $gte: targetDate,
+          $lt: nextDay
+        }
+      });
+      
+      if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
+        console.log(`✅ [ROUTE] Found historical data with exact deviceId ${deviceId}: ${historicalData.locationHistory.length} points`);
+        locationHistory = historicalData.locationHistory;
+      } else {
+        console.log(`❌ [ROUTE] No historical data found for exact deviceId ${deviceId} on date ${date}`);
+        
+        // Try to find by materialId if deviceId is actually a materialId
+        console.log(`🔍 [ROUTE] Trying to find by materialId ${deviceId} on date ${date}`);
+        historicalData = await DeviceDataHistoryV2.findOne({
+          deviceId: deviceId, // This might actually be a materialId
+          date: {
+            $gte: targetDate,
+            $lt: nextDay
+          }
+        });
+        
+        if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
+          console.log(`✅ [ROUTE] Found historical data with materialId ${deviceId}: ${historicalData.locationHistory.length} points`);
+          locationHistory = historicalData.locationHistory;
+        } else {
+          console.log(`❌ [ROUTE] No historical data found for materialId ${deviceId} on date ${date}`);
+          
+          // Debug: List all available deviceIds for this date
+          const allHistoricalData = await DeviceDataHistoryV2.find({
+            date: {
+              $gte: targetDate,
+              $lt: nextDay
+            }
+          }).select('deviceId materialId date locationHistory');
+          
+          console.log(`🔍 [ROUTE] Available historical data for date ${date}:`, allHistoricalData.map(d => ({
+            deviceId: d.deviceId,
+            hasLocationHistory: d.locationHistory && d.locationHistory.length > 0,
+            locationHistoryLength: d.locationHistory ? d.locationHistory.length : 0
+          })));
+        }
+      }
+    }
+    
+    // If no historical data found or no date provided, try current session
+    if (locationHistory.length === 0 && deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
+      console.log(`🔍 [ROUTE] Using current session data for device ${deviceId}`);
       locationHistory = deviceTracking.currentSession.locationHistory;
       
       // Filter by date if provided
@@ -206,11 +275,11 @@ router.get('/route/:deviceId', async (req, res) => {
           return pointDate >= targetDate && pointDate < nextDay;
         });
       }
-      
-      // Limit results
-      if (limit && parseInt(limit) > 0) {
-        locationHistory = locationHistory.slice(-parseInt(limit));
-      }
+    }
+    
+    // Limit results
+    if (limit && parseInt(limit) > 0) {
+      locationHistory = locationHistory.slice(-parseInt(limit));
     }
 
     // Convert to route format for frontend
@@ -228,8 +297,29 @@ router.get('/route/:deviceId', async (req, res) => {
     let totalDistance = 0;
     let totalDuration = 0;
     let averageSpeed = 0;
+    let totalAdPlays = 0;
+    let totalQRScans = 0;
+    let totalHoursOnline = 0;
     
-    if (routeData.length > 1) {
+    // If we have historical data, use the stored metrics first
+    if (date && historicalData) {
+      totalDistance = historicalData.totalDistanceTraveled || 0;
+      totalAdPlays = historicalData.totalAdPlays || 0;
+      totalQRScans = historicalData.totalQRScans || 0;
+      totalHoursOnline = historicalData.totalHoursOnline || 0;
+      
+      console.log(`📊 [ROUTE] Using stored metrics from historical data:`, {
+        totalDistance,
+        totalAdPlays,
+        totalQRScans,
+        totalHoursOnline
+      });
+    }
+    
+    // If no stored distance or we need to calculate from route points
+    if (totalDistance === 0 && routeData.length > 1) {
+      console.log(`📊 [ROUTE] Calculating distance from ${routeData.length} route points`);
+      
       // Calculate total distance using Haversine formula
       for (let i = 1; i < routeData.length; i++) {
         const prev = routeData[i - 1];
@@ -238,7 +328,11 @@ router.get('/route/:deviceId', async (req, res) => {
         totalDistance += distance;
       }
       
-      // Calculate duration
+      console.log(`📊 [ROUTE] Calculated distance from route points: ${totalDistance} km`);
+    }
+    
+    // Calculate duration from route points
+    if (routeData.length > 1) {
       const startTime = new Date(routeData[0].timestamp);
       const endTime = new Date(routeData[routeData.length - 1].timestamp);
       totalDuration = (endTime.getTime() - startTime.getTime()) / 1000; // seconds
@@ -246,6 +340,40 @@ router.get('/route/:deviceId', async (req, res) => {
       // Calculate average speed
       if (totalDuration > 0) {
         averageSpeed = (totalDistance / totalDuration) * 3600; // km/h
+      }
+    }
+
+    // Get additional metrics from historical data if available
+    let additionalMetrics = {};
+    if (date) {
+      try {
+        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+        const targetDate = new Date(date);
+        targetDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(targetDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const historicalData = await DeviceDataHistoryV2.findOne({
+          deviceId: deviceId,
+          date: {
+            $gte: targetDate,
+            $lt: nextDay
+          }
+        });
+        
+        if (historicalData) {
+          additionalMetrics = {
+            totalAdPlays: historicalData.totalAdPlays || 0,
+            totalQRScans: historicalData.totalQRScans || 0,
+            totalHoursOnline: historicalData.totalHoursOnline || 0,
+            totalAdImpressions: historicalData.dailySummary?.totalAdImpressions || 0,
+            totalAdPlayTime: historicalData.dailySummary?.totalAdPlayTime || 0,
+            complianceRate: historicalData.dailySummary?.complianceRate || 0,
+            uptimePercentage: historicalData.dailySummary?.uptimePercentage || 0
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching additional metrics:', error);
       }
     }
 
@@ -262,7 +390,11 @@ router.get('/route/:deviceId', async (req, res) => {
           averageSpeed: Math.round(averageSpeed * 100) / 100, // Round to 2 decimal places
           pointCount: routeData.length,
           startTime: routeData.length > 0 ? routeData[0].timestamp : null,
-          endTime: routeData.length > 0 ? routeData[routeData.length - 1].timestamp : null
+          endTime: routeData.length > 0 ? routeData[routeData.length - 1].timestamp : null,
+          totalAdPlays: totalAdPlays,
+          totalQRScans: totalQRScans,
+          totalHoursOnline: totalHoursOnline,
+          ...additionalMetrics
         }
       }
     });
@@ -448,13 +580,16 @@ router.post('/endSession', async (req, res) => {
       const isOnline = !!statusInfo.isOnline;
       const lastSeen = statusInfo.lastSeen || deviceTracking.lastSeen;
 
+    // Get slot information for this device
+    const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
+    
     res.json({
       success: true,
       data: {
-        deviceId: deviceTracking.deviceId,
+        deviceId: deviceId,
         materialId: deviceTracking.materialId,
         carGroupId: deviceTracking.carGroupId,
-        deviceSlot: deviceTracking.deviceSlot,
+        deviceSlot: slot?.slotNumber,
         isOnline,
         currentLocation: deviceTracking.currentLocation,
         lastSeen,
@@ -579,30 +714,46 @@ router.get('/compliance', async (req, res) => {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
 
-    // Only fetch devices that have actual connected devices (not just temporary records)
-    const allDevices = await DeviceTracking.find({ 
-      isActive: true,
-      $and: [
-        {
-          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-          deviceId: { $exists: true, $ne: null } // Has a real device ID
-        },
-        {
-          $or: [
-            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { screenType: { $exists: true } } // Or has screen type (legacy records)
-          ]
+    // First, get all registered devices from tablet system
+    const Tablet = require('../models/Tablet');
+    const registeredDevices = new Map();
+    
+    const tablets = await Tablet.find({});
+    tablets.forEach(tablet => {
+      tablet.tablets.forEach(tabletDevice => {
+        if (tabletDevice.deviceId) {
+          registeredDevices.set(tabletDevice.deviceId, {
+            materialId: tablet.materialId,
+            carGroupId: tablet.carGroupId,
+            slotNumber: tabletDevice.tabletNumber,
+            status: tabletDevice.status,
+            lastSeen: tabletDevice.lastSeen
+          });
         }
+      });
+    });
+    
+    console.log('📱 Registered devices from tablet system:', registeredDevices.size);
+    registeredDevices.forEach((info, deviceId) => {
+      console.log(`   - ${deviceId} -> ${info.materialId} (Slot ${info.slotNumber})`);
+    });
+
+    // Get all device tracking records for registered devices
+    const registeredDeviceIds = Array.from(registeredDevices.keys());
+    const registeredMaterialIds = Array.from(new Set(Array.from(registeredDevices.values()).map(info => info.materialId)));
+    
+    // Query by materialId (new system) and deviceId in slots
+    const allDevices = await DeviceTracking.find({ 
+      $or: [
+        { 'slots.deviceId': { $in: registeredDeviceIds } },
+        { materialId: { $in: registeredMaterialIds } }
       ]
     });
     
-    console.log('🔍 Found devices:', allDevices.length);
-    console.log('🔍 Device details:', allDevices.map(d => ({
-      deviceId: d.deviceId,
-      materialId: d.materialId,
-      screenType: d.screenType,
-      isOnline: d.isOnline
-    })));
+    console.log('🔍 Found device tracking records for registered devices:', allDevices.length);
+    allDevices.forEach((device, index) => {
+      console.log(`  Device ${index + 1}: ${device.materialId} (${device.slots?.length || 0} slots)`);
+    });
     
     // Initialize screens array to collect individual device records
     const individualScreens = [];
@@ -612,25 +763,139 @@ router.get('/compliance', async (req, res) => {
     let totalHours = 0;
     let totalDistance = 0;
     
-    // Process each device and create individual device records
+    // Group devices by material ID to consolidate display
+    const materialGroups = new Map();
+    
+    
+    // First, group all devices by material
     allDevices.forEach(device => {
-      // Debug: Log device data to see what fields are available
-      console.log('🔍 Device data:', {
-        deviceId: device.deviceId,
-        materialId: device.materialId,
-        screenType: device.screenType,
-        deviceSlot: device.deviceSlot,
-        isOnline: device.isOnline
-      });
+      // For new schema, device is a car record with slots
+      const materialId = device.materialId;
       
-      // Use device-specific values
-      const deviceHours = device.currentHoursToday || 0;
-      const deviceDistance = device.currentSession?.totalDistanceTraveled || 0;
+      if (!materialId) {
+        console.log(`⚠️ Skipping device ${device._id} - no materialId`);
+        return;
+      }
       
-      // Determine online status using DeviceStatusManager (WebSocket > DB fallback > timeout)
-      const statusInfo = deviceStatusService.getDeviceStatus(device.deviceId);
-      const isDeviceOnline = !!statusInfo.isOnline;
+      if (!materialGroups.has(materialId)) {
+        materialGroups.set(materialId, {
+          materialId: materialId,
+          carGroupId: device.carGroupId,
+          devices: [],
+          totalAdPlays: 0,
+          totalQRScans: 0,
+          totalDistanceTraveled: 0,
+          totalHoursOnline: 0,
+          totalAdImpressions: 0,
+          totalAdPlayTime: 0,
+          isOnline: false,
+          lastSeen: null,
+          currentLocation: null,
+          screenMetrics: {},
+          adPlaybacks: [],
+          qrScans: [],
+          locationHistory: [],
+          hourlyStats: [],
+          adPerformance: [],
+          alerts: [],
+          slotStatus: {
+            slot1: { online: false, deviceId: null, lastSeen: null },
+            slot2: { online: false, deviceId: null, lastSeen: null }
+          }
+        });
+      }
       
+      const group = materialGroups.get(materialId);
+      
+      // Process each slot in the car record
+      if (device.slots && device.slots.length > 0) {
+        device.slots.forEach(slot => {
+          // Find registration info for this slot
+          const registrationInfo = registeredDevices.get(slot.deviceId);
+          if (registrationInfo) {
+            group.devices.push({
+              device: slot,
+              registrationInfo,
+              carRecord: device
+            });
+            
+            // Update slot status - use tablet registration status as primary source
+            const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
+            const deviceStatusOnline = !!statusInfo.isOnline;
+            
+            // Check if tablet registration status is recent (within last 30 seconds)
+            const now = new Date();
+            const lastSeen = new Date(slot.lastSeen);
+            const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
+            const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
+            
+            // Use tablet registration status if recent, otherwise use device status
+            const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
+            
+            // Update slot status based on the actual slot number
+            const slotNumber = slot.slotNumber;
+            if (slotNumber === 1) {
+              group.slotStatus.slot1 = {
+                online: isDeviceOnline,
+                deviceId: slot.deviceId,
+                lastSeen: slot.lastSeen
+              };
+            } else if (slotNumber === 2) {
+              group.slotStatus.slot2 = {
+                online: isDeviceOnline,
+                deviceId: slot.deviceId,
+                lastSeen: slot.lastSeen
+              };
+            }
+          }
+        });
+      }
+      
+      // Sum up all metrics from the car record
+      group.totalAdPlays += device.totalAdPlays || 0;
+      group.totalQRScans += device.totalQRScans || 0;
+      group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
+      group.totalHoursOnline += device.totalHoursOnline || 0;
+      group.totalAdImpressions += device.totalAdImpressions || 0;
+      group.totalAdPlayTime += device.totalAdPlayTime || 0;
+      
+      // Use the most recent lastSeen
+      if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
+        group.lastSeen = device.lastSeen;
+      }
+      
+      // Use the most recent location
+      if (device.currentLocation && (!group.currentLocation || 
+          (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
+        group.currentLocation = device.currentLocation;
+      }
+      
+      // Merge arrays
+      if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
+      if (device.qrScans) group.qrScans.push(...device.qrScans);
+      if (device.locationHistory) group.locationHistory.push(...device.locationHistory);
+      if (device.hourlyStats) group.hourlyStats.push(...device.hourlyStats);
+      if (device.adPerformance) group.adPerformance.push(...device.adPerformance);
+      if (device.alerts) group.alerts.push(...device.alerts);
+      
+      // Use the most recent screen metrics
+      if (device.screenMetrics && Object.keys(device.screenMetrics).length > 0) {
+        group.screenMetrics = { ...group.screenMetrics, ...device.screenMetrics };
+      }
+      
+      // If any device is online, mark the group as online
+      if (device.isOnline) {
+        group.isOnline = true;
+      }
+    });
+    
+    // Process each material group and create consolidated display
+    materialGroups.forEach((group, materialId) => {
+      
+      // Calculate totals
+      const deviceHours = group.totalHoursOnline || 0;
+      const deviceDistance = group.totalDistanceTraveled || 0;
+      const isDeviceOnline = group.isOnline;
       const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
       
       totalHours += deviceHours;
@@ -638,16 +903,8 @@ router.get('/compliance', async (req, res) => {
       if (isDeviceOnline) totalOnlineScreens++;
       if (isDeviceCompliant) totalCompliantScreens++;
       
-      // Create unique display ID by combining materialId with slot info
-      // If materialId is missing, try to use deviceId as fallback
-      const materialId = device.materialId || device.deviceId || 'UNKNOWN';
-      const displayId = `${materialId}-SLOT-${device.deviceSlot || 1}`;
-      
-      // Skip devices without proper materialId for now (they need to be linked to materials)
-      if (!device.materialId) {
-        console.log(`⚠️ Skipping device ${device.deviceId} - no materialId assigned`);
-        return;
-      }
+      // Create display ID (just material ID, no slot suffix)
+      const displayId = materialId;
       
       // Skip if we've already seen this display ID (deduplication)
       if (seenDisplayIds.has(displayId)) {
@@ -657,11 +914,9 @@ router.get('/compliance', async (req, res) => {
       seenDisplayIds.add(displayId);
       
       // Convert coordinates format for individual screens
-      let deviceLocation = device.currentLocation;
+      let deviceLocation = group.currentLocation;
       let frontendDeviceLocation = null;
       
-      // Debug: Log location data
-      console.log('🔍 Location data for device', device.deviceId, ':', deviceLocation);
       
       if (deviceLocation) {
         if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
@@ -687,47 +942,76 @@ router.get('/compliance', async (req, res) => {
         };
       }
 
+      // Create status text showing both slots explicitly
+      let slot1Status = group.slotStatus.slot1.online ? 'ONLINE' : 'OFFLINE';
+      let slot2Status = group.slotStatus.slot2.online ? 'ONLINE' : 'OFFLINE';
+      let statusText = `SLOT 1: ${slot1Status} | SLOT 2: ${slot2Status}`;
+      
+      // Also create a combined status for overall device status
+      let combinedStatus = 'OFFLINE';
+      if (group.slotStatus.slot1.online && group.slotStatus.slot2.online) {
+        combinedStatus = 'BOTH SLOTS ONLINE';
+      } else if (group.slotStatus.slot1.online || group.slotStatus.slot2.online) {
+        const onlineSlots = [];
+        if (group.slotStatus.slot1.online) onlineSlots.push('1');
+        if (group.slotStatus.slot2.online) onlineSlots.push('2');
+        combinedStatus = `SLOT ${onlineSlots.join(' & ')} ONLINE`;
+      } else {
+        combinedStatus = 'BOTH SLOTS OFFLINE';
+      }
+
       individualScreens.push({
-        deviceId: device.deviceId,
-        displayId: displayId, // Unique identifier for frontend display
-        materialId: materialId, // Use the fallback materialId
-        screenType: device.screenType,
-        carGroupId: device.carGroupId,
-        deviceSlot: device.deviceSlot,
+        deviceId: group.devices[0].device.deviceId, // Use first device as primary
+        displayId: displayId, // Just material ID, no slot suffix
+        materialId: materialId, // Use the materialId from tablet registration
+        screenType: 'HEADDRESS',
+        carGroupId: group.carGroupId,
+        deviceSlot: undefined, // Don't show slot for consolidated entries
+        slotNumber: undefined, // Don't show slot for consolidated entries
         isOnline: isDeviceOnline,
         currentLocation: frontendDeviceLocation,
-        lastSeen: device.lastSeen,
+        lastSeen: group.lastSeen,
         currentHours: deviceHours,
         hoursRemaining: Math.max(0, 8 - deviceHours), // 8 hours target
         isCompliant: isDeviceCompliant,
         totalDistanceToday: deviceDistance,
-        averageDailyHours: device.averageDailyHours || deviceHours,
+        averageDailyHours: deviceHours,
         complianceRate: Math.min(100, (deviceHours / 8) * 100), // Percentage of 8-hour target
-        totalHoursOnline: device.totalHoursOnline || deviceHours,
-        totalDistanceTraveled: device.totalDistanceTraveled || deviceDistance,
+        totalHoursOnline: group.totalHoursOnline,
+        totalDistanceTraveled: group.totalDistanceTraveled,
         displayStatus: isDeviceOnline ? 'ACTIVE' : 'OFFLINE',
+        statusText: statusText, // Show both slot statuses explicitly
+        combinedStatus: combinedStatus, // Show combined status
+        slot1Status: slot1Status, // Individual slot 1 status
+        slot2Status: slot2Status, // Individual slot 2 status
+        slotStatus: group.slotStatus, // Include detailed slot status
         screenMetrics: {
-          ...(device.screenMetrics || {}),
+          ...group.screenMetrics,
           displayHours: deviceHours,
-          adPlayCount: device.screenMetrics?.adPlayCount || 0,
-          lastAdPlayed: device.screenMetrics?.lastAdPlayed || null,
-          brightness: device.screenMetrics?.brightness || 100,
-          volume: device.screenMetrics?.volume || 50,
+          adPlayCount: group.screenMetrics?.adPlayCount || 0,
+          lastAdPlayed: group.lastAdPlayed || null,
+          brightness: group.brightness || 100,
+          volume: group.volume || 50,
           isDisplaying: isDeviceOnline,
-          maintenanceMode: device.screenMetrics?.maintenanceMode || false,
-          currentAd: device.screenMetrics?.currentAd || null
+          maintenanceMode: group.maintenanceMode || false,
+          currentAd: group.currentAd || null
         },
-        alerts: device.alerts || []
+        alerts: group.alerts,
+        // Add consolidated totals for display
+        totalAdPlays: group.totalAdPlays,
+        totalQRScans: group.totalQRScans,
+        totalAdImpressions: group.totalAdImpressions,
+        totalAdPlayTime: group.totalAdPlayTime
       });
     });
 
     // Create material-level records for map display (one per material)
     const materialScreens = [];
-    allDevices.forEach(device => {
-      // Use the device's location
-      let displayLocation = device.currentLocation;
-      let displayStatus = device.isOnline ? 'ACTIVE' : 'OFFLINE';
-      let hasOnlineDevice = device.isOnline;
+    materialGroups.forEach((group, materialId) => {
+      // Use the group's location
+      let displayLocation = group.currentLocation;
+      let displayStatus = group.isOnline ? 'ACTIVE' : 'OFFLINE';
+      let hasOnlineDevice = group.isOnline;
       
       // Convert coordinates format from [lng, lat] to {lat, lng} for frontend compatibility
       let frontendLocation = null;
@@ -749,22 +1033,31 @@ router.get('/compliance', async (req, res) => {
         }
       }
 
+      // Create status text for material screens
+      let materialSlot1Status = group.slotStatus.slot1.online ? 'ONLINE' : 'OFFLINE';
+      let materialSlot2Status = group.slotStatus.slot2.online ? 'ONLINE' : 'OFFLINE';
+      let materialStatusText = `SLOT 1: ${materialSlot1Status} | SLOT 2: ${materialSlot2Status}`;
+
       materialScreens.push({
-        materialId: device.materialId,
-        deviceId: device.deviceId, // Legacy deviceId for compatibility
-        screenType: device.screenType,
-        carGroupId: device.carGroupId,
+        materialId: materialId,
+        deviceId: group.devices[0].device.deviceId, // Use first device as primary
+        screenType: 'HEADDRESS',
+        carGroupId: group.carGroupId,
         isOnline: hasOnlineDevice,
         currentLocation: frontendLocation,
-        lastSeen: device.lastSeen,
+        lastSeen: group.lastSeen,
         displayStatus: displayStatus,
-        totalDevices: 1,
-        onlineDevices: device.isOnline ? 1 : 0,
+        statusText: materialStatusText, // Show both slot statuses
+        totalDevices: group.devices.length, // Show total devices in this material
+        onlineDevices: group.slotStatus.slot1.online + group.slotStatus.slot2.online ? 1 : 0, // Count online slots
+        slot1Status: materialSlot1Status, // Individual slot 1 status
+        slot2Status: materialSlot2Status, // Individual slot 2 status
+        slotStatus: group.slotStatus, // Include slot status
         // Aggregate data for display
-        totalHours: device.currentHoursToday || 0,
-        totalDistance: device.currentSession?.totalDistanceTraveled || 0,
-        screenMetrics: device.screenMetrics,
-        alerts: device.alerts
+        totalHours: group.totalHoursOnline || 0,
+        totalDistance: group.totalDistanceTraveled || 0,
+        screenMetrics: group.screenMetrics,
+        alerts: group.alerts
       });
     });
 
@@ -797,7 +1090,7 @@ router.get('/compliance', async (req, res) => {
 // POST /trackAd - Track ad playback
 router.post('/trackAd', async (req, res) => {
   try {
-    const { deviceId, adId, adTitle, adDuration, viewTime = 0 } = req.body;
+    const { deviceId, adId, adTitle, adDuration, viewTime = 0, slotNumber = 1 } = req.body;
 
     // Validate required fields
     if (!deviceId || !adId || !adTitle) {
@@ -816,16 +1109,17 @@ router.post('/trackAd', async (req, res) => {
     }
 
     // Track ad playback
-    await deviceTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime);
+    await deviceTracking.trackAdPlayback(adId, adTitle, adDuration, viewTime, slotNumber);
 
     res.json({
       success: true,
       message: 'Ad playback tracked successfully',
       data: {
         deviceId: deviceTracking.deviceId,
-        currentAd: deviceTracking.screenMetrics.currentAd,
-        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
-        dailyStats: deviceTracking.screenMetrics.dailyAdStats
+        currentAd: deviceTracking.currentAd,
+        totalAdsPlayed: deviceTracking.totalAdPlays,
+        totalAdImpressions: deviceTracking.totalAdImpressions,
+        totalAdPlayTime: deviceTracking.totalAdPlayTime
       }
     });
 
@@ -866,7 +1160,7 @@ router.post('/endAd', async (req, res) => {
       message: 'Ad playback ended successfully',
       data: {
         deviceId: deviceTracking.deviceId,
-        completedAd: deviceTracking.screenMetrics.currentAd
+        completedAd: deviceTracking.currentAd
       }
     });
 
@@ -951,12 +1245,12 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
       data: {
         deviceId: deviceTracking.deviceId,
         materialId: deviceTracking.materialId,
-        currentAd: deviceTracking.screenMetrics.currentAd,
+        currentAd: deviceTracking.currentAd,
         dailyStats: dailyStats,
         adPerformance: adPerformance,
-        totalAdsPlayed: deviceTracking.screenMetrics.adPlayCount,
-        displayHours: deviceTracking.screenMetrics.displayHours,
-        lastAdPlayed: deviceTracking.screenMetrics.lastAdPlayed
+        totalAdsPlayed: deviceTracking.totalAdPlays,
+        totalAdImpressions: deviceTracking.totalAdImpressions,
+        totalAdPlayTime: deviceTracking.totalAdPlayTime
       }
     });
 
@@ -970,7 +1264,7 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
 });
 
 // GET /adAnalytics - Get ad analytics for all devices (filtered by user if provided)
-router.get('/adAnalytics', async (req, res) => {
+router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
   try {
     const { date, materialId, userId } = req.query;
 
@@ -985,12 +1279,12 @@ router.get('/adAnalytics', async (req, res) => {
       deviceId: device.deviceId,
       materialId: device.materialId,
       screenType: device.screenType,
-      currentAd: device.screenMetrics.currentAd,
-      dailyStats: device.screenMetrics.dailyAdStats,
-      totalAdsPlayed: device.screenMetrics.adPlayCount,
-      displayHours: device.screenMetrics.displayHours,
+      currentAd: device.currentAd,
+      dailyStats: device.dailySummary || {},
+      totalAdsPlayed: device.totalAdPlays,
+      totalAdImpressions: device.totalAdImpressions,
+      totalAdPlayTime: device.totalAdPlayTime,
       adPerformance: device.adPerformance || [],
-      lastAdPlayed: device.screenMetrics.lastAdPlayed,
       isOnline: device.isOnline,
       lastSeen: device.lastSeen
     }));
@@ -1425,16 +1719,19 @@ router.get('/screens', async (req, res) => {
     );
     
     let query = {
-      // Only fetch devices that have actual connected devices (not just temporary records)
+      // Only fetch devices that have actual connected devices (new system)
       $and: [
         {
-          deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-          deviceId: { $exists: true, $ne: null } // Has a real device ID
+          $or: [
+            { 'slots.deviceId': { $not: { $regex: /^TEMP-/ }, $exists: true, $ne: null } }, // Not a temporary device ID
+            { materialId: { $exists: true, $ne: null } } // Or has materialId (new system)
+          ]
         },
         {
           $or: [
-            { deviceId: { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-            { screenType: { $exists: true } } // Or has screen type (legacy records)
+            { 'slots.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+            { screenType: { $exists: true } }, // Or has screen type (legacy records)
+            { materialId: { $exists: true } } // Or has materialId (new system)
           ]
         }
       ]
@@ -1470,9 +1767,11 @@ router.get('/screens', async (req, res) => {
       const allStatuses = deviceStatusService.getAllDeviceStatuses();
       const materialStatus = allStatuses.find(status => {
         // Check if this device ID matches the materialId pattern
-        return status.deviceId === screen.materialId || 
-               status.deviceId.includes(screen.materialId) ||
-               screen.materialId.includes(status.deviceId);
+        return status.deviceId && screen.materialId && (
+          status.deviceId === screen.materialId || 
+          status.deviceId.includes(screen.materialId) ||
+          screen.materialId.includes(status.deviceId)
+        );
       });
       
       if (materialStatus) {
@@ -1496,71 +1795,90 @@ router.get('/screens', async (req, res) => {
     const THIRTY_SECONDS = 30 * 1000; // 30 seconds in milliseconds
     
     const screensData = screens.map(screen => {
-      // Use DeviceStatusManager as the new source of truth
-      let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
-      let isActuallyOnline = deviceStatus.isOnline;
+      // For the new schema, screen is a car record with slots
+      // We need to create individual entries for each slot
+      const carData = [];
       
-      // If DeviceStatusManager doesn't have this device, try to find it by materialId
-      if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
-        console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${screen.deviceId}, checking by materialId: ${screen.materialId}`);
-        
-        // Try to find the device by materialId in the DeviceStatusManager
-        const allStatuses = deviceStatusService.getAllDeviceStatuses();
-        const foundStatus = allStatuses.find(status => {
-          // Check if this device ID matches the materialId pattern
-          return status.deviceId === screen.materialId || 
-                 status.deviceId.includes(screen.materialId) ||
-                 screen.materialId.includes(status.deviceId);
+      if (screen.slots && screen.slots.length > 0) {
+        screen.slots.forEach(slot => {
+          // Use DeviceStatusManager as the new source of truth for each slot
+          let deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+          let isActuallyOnline = deviceStatus.isOnline;
+          
+          // If DeviceStatusManager doesn't have this device, use slot status
+          if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
+            console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${slot.deviceId}, using slot status`);
+            isActuallyOnline = slot.isOnline;
+          } else {
+            // Use the status from DeviceStatusManager
+            isActuallyOnline = deviceStatus.isOnline;
+          }
+          
+          // Log the status source for debugging
+          console.log(`🎯 [SCREEN TRACKING] Slot ${slot.slotNumber} (${slot.deviceId}) in ${screen.materialId}:`);
+          console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
+          console.log(`  - Source: ${deviceStatus.source}`);
+          console.log(`  - Confidence: ${deviceStatus.confidence}`);
+          console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
+          
+          const lastSeen = new Date(slot.lastSeen);
+          const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
+          
+          // Override online status if timeout threshold is exceeded
+          if (timeSinceLastSeen > 120) {
+            isActuallyOnline = false;
+            console.log(`  - Overriding to OFFLINE due to timeout: ${timeSinceLastSeen}s > 120s`);
+          }
+          
+          // Check device status based on last seen time
+          console.log(`  - Final isOnline: ${isActuallyOnline}`);
+          console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
+          
+          // Determine display status based on actual online status
+          let displayStatus;
+          if (isActuallyOnline) {
+            displayStatus = 'ONLINE';
+          } else {
+            displayStatus = 'OFFLINE';
+          }
+          
+          carData.push({
+            deviceId: slot.deviceId,
+            materialId: screen.materialId,
+            screenType: screen.screenType,
+            carGroupId: screen.carGroupId,
+            deviceSlot: slot.slotNumber,
+            isOnline: isActuallyOnline,
+            currentLocation: screen.currentLocation,
+            lastSeen: slot.lastSeen,
+            currentHours: screen.currentHoursToday,
+            hoursRemaining: screen.hoursRemaining,
+            totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+            displayStatus: displayStatus,
+            screenMetrics: slot.screenMetrics || screen.screenMetrics
+          });
         });
-        
-        if (foundStatus) {
-          console.log(`🔍 [SCREEN TRACKING] Found matching device in DeviceStatusManager: ${foundStatus.deviceId} -> ${foundStatus.isOnline ? 'ONLINE' : 'OFFLINE'}`);
-          // Update the DeviceStatusManager with the full device ID
-          deviceStatusService.updateDeviceStatus(screen.deviceId, foundStatus.isOnline, new Date());
-          // Re-get the status after updating
-          deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
-          isActuallyOnline = deviceStatus.isOnline;
-        }
-      }
-      
-      // Log the status source for debugging
-      console.log(`🎯 [SCREEN TRACKING] Device ${screen.deviceId} (${screen.materialId}):`);
-      console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
-      console.log(`  - Source: ${deviceStatus.source}`);
-      console.log(`  - Confidence: ${deviceStatus.confidence}`);
-      console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
-      
-      const lastSeen = new Date(screen.lastSeen);
-      const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
-      
-      // Check device status based on last seen time
-      console.log(`  - Final isOnline: ${isActuallyOnline}`);
-      console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
-      
-      // Determine display status based on actual online status
-      let displayStatus;
-      if (isActuallyOnline) {
-        displayStatus = 'ONLINE';
       } else {
-        displayStatus = 'OFFLINE';
+        // Fallback for records without slots (legacy)
+        carData.push({
+          deviceId: 'Unknown',
+          materialId: screen.materialId,
+          screenType: screen.screenType,
+          carGroupId: screen.carGroupId,
+          deviceSlot: 0,
+          isOnline: screen.isOnline,
+          currentLocation: screen.currentLocation,
+          lastSeen: screen.lastSeen,
+          currentHours: screen.currentHoursToday,
+          hoursRemaining: screen.hoursRemaining,
+          totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+          displayStatus: screen.isOnline ? 'ONLINE' : 'OFFLINE',
+          screenMetrics: screen.screenMetrics
+        });
       }
       
-      return {
-        deviceId: screen.deviceId,
-        materialId: screen.materialId,
-        screenType: screen.screenType,
-        carGroupId: screen.carGroupId,
-        deviceSlot: screen.deviceSlot,
-        isOnline: isActuallyOnline,
-        currentLocation: screen.currentLocation,
-        lastSeen: screen.lastSeen,
-        currentHours: screen.currentHoursToday,
-        hoursRemaining: screen.hoursRemaining,
-        totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
-        displayStatus: displayStatus, // Use the determined status instead of screen.displayStatus
-        screenMetrics: screen.screenMetrics
-      };
-    });
+      return carData;
+    }).flat(); // Flatten the array of arrays
     
     console.log('Screens data mapping result:', screensData);
     console.log('Screens data mapping result length:', screensData.length);
@@ -1572,10 +1890,10 @@ router.get('/screens', async (req, res) => {
       success: true,
       data: {
         screens: screensData,
-        totalScreens: screens.length,
-        onlineScreens: screens.filter(s => s.isOnline).length,
-        displayingScreens: screens.filter(s => s.screenMetrics?.isDisplaying).length,
-        maintenanceScreens: screens.filter(s => s.screenMetrics?.maintenanceMode).length
+        totalScreens: screensData.length,
+        onlineScreens: screensData.filter(s => s.isOnline).length,
+        displayingScreens: screensData.filter(s => s.screenMetrics?.isDisplaying).length,
+        maintenanceScreens: screensData.filter(s => s.screenMetrics?.maintenanceMode).length
       }
     });
 
@@ -1691,10 +2009,10 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
         // Daily performance
         dailyPerformance: deviceTracking.dailyPerformance || [],
         
-        // Device info
-        deviceId: deviceTracking.deviceId,
+        // Device info - get from slot
+        deviceId: deviceTracking.slots?.[0]?.deviceId || 'Unknown',
         screenType: deviceTracking.screenType,
-        displayStatus: deviceTracking.displayStatus,
+        displayStatus: deviceTracking.isOnline ? 'ONLINE' : 'OFFLINE',
         
         // Alerts
         totalAlerts: deviceTracking.alerts?.length || 0,

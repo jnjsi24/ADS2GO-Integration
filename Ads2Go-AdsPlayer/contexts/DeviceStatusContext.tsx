@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import deviceStatusService from '../services/deviceStatusService';
+import tabletRegistrationService from '../services/tabletRegistration';
 
 type DeviceStatus = {
   isOnline: boolean;
@@ -68,25 +69,60 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
 
     loadMaterialId();
-  }, []);
+    
+    // Set up periodic check to sync material ID with registration data
+    const syncInterval = setInterval(async () => {
+      try {
+        const currentMaterialId = await SecureStore.getItemAsync('device_material_id');
+        if (currentMaterialId && currentMaterialId !== materialId) {
+          console.log('Material ID changed, updating context:', currentMaterialId);
+          setMaterialIdState(currentMaterialId);
+        }
+      } catch (error) {
+        console.error('Error syncing material ID:', error);
+      }
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(syncInterval);
+  }, [materialId]);
 
   // Initialize WebSocket when materialId changes
   useEffect(() => {
     if (!materialId) {
-      console.log('No materialId set, skipping WebSocket initialization');
-      setStatus({ isOnline: false, error: 'Please register the tablet to set a material ID' });
+      console.log('No materialId set, checking if registration can provide one...');
+      
+      // Try to get material ID from registration data if not available
+      const checkForMaterialId = async () => {
+        try {
+          const registration = await tabletRegistrationService.getRegistrationData();
+          if (registration && registration.materialId) {
+            console.log('Found material ID from registration, updating:', registration.materialId);
+            setMaterialIdState(registration.materialId);
+            return;
+          }
+        } catch (error) {
+          console.error('Error getting registration data:', error);
+        }
+        
+        // If still no material ID, show error
+        setStatus({ isOnline: false, error: 'Please register the tablet to set a material ID' });
+      };
+      
+      checkForMaterialId();
       return;
     }
 
-    console.log('Initializing WebSocket with materialId:', materialId);
-    
     const handleStatusChange = (newStatus: DeviceStatus) => {
       console.log('Device status changed:', newStatus);
-      setStatus(prev => ({
-        ...prev,
-        ...newStatus,
-        lastSeen: new Date(),
-      }));
+      setStatus(prev => {
+        const updatedStatus = {
+          ...prev,
+          ...newStatus,
+          lastSeen: new Date(),
+        };
+        console.log('Status update:', { prev, newStatus, updatedStatus });
+        return updatedStatus;
+      });
     };
 
     // Set a timeout to handle connection failures
@@ -105,12 +141,16 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const initializeWebSocket = async () => {
       try {
+        // Reset status to connecting state
+        setStatus({ isOnline: false, error: 'Connecting...' });
+        
         // Initialize WebSocket connection
         await deviceStatusService.initialize({
           materialId,
           onStatusChange: (newStatus) => {
             // Clear timeout if connection succeeds
             clearTimeout(connectionTimeout);
+            console.log('WebSocket status change received:', newStatus);
             handleStatusChange(newStatus);
           }
         });
@@ -124,7 +164,33 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
 
-    initializeWebSocket();
+    // Check if device is registered before initializing WebSocket
+    const checkRegistrationAndInitialize = async () => {
+      try {
+        const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
+        if (!isRegistered) {
+          console.log('Device not registered, skipping WebSocket initialization');
+          setStatus({ isOnline: false, error: 'Device not registered. Please register the tablet first.' });
+          return;
+        }
+        
+        // Get the updated material ID in case it was restored from database
+        const updatedMaterialId = await SecureStore.getItemAsync('device_material_id');
+        if (updatedMaterialId && updatedMaterialId !== materialId) {
+          console.log('Material ID updated from database:', updatedMaterialId);
+          setMaterialIdState(updatedMaterialId);
+          return; // This will trigger the effect again with the correct material ID
+        }
+        
+        console.log('Device is registered, initializing WebSocket with materialId:', materialId);
+        initializeWebSocket();
+      } catch (error) {
+        console.error('Error checking registration status:', error);
+        setStatus({ isOnline: false, error: 'Failed to verify registration status' });
+      }
+    };
+
+    checkRegistrationAndInitialize();
 
     // Clean up on unmount or when materialId changes
     return () => {

@@ -82,34 +82,85 @@ const AdminAdsControl: React.FC = () => {
       
       console.log('🔄 Fetching data from server...');
       
-      // Fetch screens data using REST API (compliance endpoint)
+      // Fetch screens data using compliance endpoint for real-time status
       try {
-        console.log('🔍 Fetching screens data via REST API...');
-        const screensResponse = await apiService.getScreens();
-        console.log('📊 Screens data received:', screensResponse);
+        console.log('🔍 Fetching screens data via compliance API for real-time status...');
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+        const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
         
-        if (screensResponse && Array.isArray(screensResponse.screens)) {
-          console.log(`✅ Found ${screensResponse.screens.length} screens`);
-          setScreens(screensResponse.screens);
+        const response = await fetch(complianceUrl, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const complianceData = await response.json();
+          console.log('📊 Compliance data received:', complianceData);
           
-          // Log all device IDs for debugging
-          console.log('📋 Device IDs:', screensResponse.screens.map((s: any) => ({
-            deviceId: s.deviceId,
-            materialId: s.materialId,
-            isOnline: s.isOnline,
-            lastSeen: s.lastSeen,
-            screenMetrics: s.screenMetrics,
-            currentAd: s.screenMetrics?.currentAd
-          })));
-          
-          // Log current ad information for debugging
-          screensResponse.screens.forEach((screen: any) => {
-            if (screen.screenMetrics?.currentAd) {
-              console.log(`🎬 Initial load - Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
-            }
-          });
+          if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
+            console.log(`✅ Found ${complianceData.data.screens.length} screens with real-time status`);
+            
+            // Process the screens data to create consolidated entries (one per device)
+            const processedScreens = complianceData.data.screens.map((screen: any) => {
+              // Create consolidated entry with slot status information
+              if (screen.slotStatus && (screen.slotStatus.slot1 || screen.slotStatus.slot2)) {
+                // Determine overall online status (at least one slot online)
+                const hasOnlineSlot = (screen.slotStatus.slot1?.online || false) || (screen.slotStatus.slot2?.online || false);
+                
+                // Create status text showing both slots
+                const slot1Status = screen.slotStatus.slot1?.online ? 'ONLINE' : 'OFFLINE';
+                const slot2Status = screen.slotStatus.slot2?.online ? 'ONLINE' : 'OFFLINE';
+                const statusText = `${slot1Status} | ${slot2Status}`;
+                
+                return {
+                  ...screen,
+                  deviceId: screen.materialId, // Use materialId as deviceId for consolidated view
+                  displayId: screen.materialId,
+                  slotNumber: 'Consolidated', // Show as consolidated
+                  isOnline: hasOnlineSlot, // Overall online status
+                  statusText: statusText,
+                  slot1Status: slot1Status,
+                  slot2Status: slot2Status,
+                  slotStatus: screen.slotStatus // Keep original slot status for reference
+                };
+              } else {
+                // Single device without slots
+                return {
+                  ...screen,
+                  displayId: screen.displayId || screen.deviceId,
+                  slotNumber: screen.slotNumber || 1,
+                  statusText: screen.statusText || (screen.isOnline ? 'ONLINE' : 'OFFLINE')
+                };
+              }
+            });
+            
+            setScreens(processedScreens);
+            
+            // Log all device IDs for debugging
+            console.log('📋 Processed Device IDs:', processedScreens.map((s: any) => ({
+              deviceId: s.deviceId,
+              materialId: s.materialId,
+              slotNumber: s.slotNumber,
+              isOnline: s.isOnline,
+              statusText: s.statusText,
+              lastSeen: s.lastSeen,
+              screenMetrics: s.screenMetrics,
+              currentAd: s.screenMetrics?.currentAd
+            })));
+            
+            // Log current ad information for debugging
+            processedScreens.forEach((screen: any) => {
+              if (screen.screenMetrics?.currentAd) {
+                console.log(`🎬 Initial load - Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+              }
+            });
+          } else {
+            console.warn('⚠️ Unexpected compliance data format:', complianceData);
+            setScreens([]);
+          }
         } else {
-          console.warn('⚠️ Unexpected screens data format:', screensResponse);
+          console.error('❌ Error fetching compliance data:', response.status, response.statusText);
           setScreens([]);
         }
       } catch (screensError) {
@@ -149,25 +200,71 @@ const AdminAdsControl: React.FC = () => {
     try {
       console.log('🔄 Auto-refresh - fetching data silently...');
       
-      // Fetch screens data using REST API
+      // Fetch screens data using compliance endpoint for real-time status
       try {
-        const screensResponse = await apiService.getScreens();
-        if (screensResponse && Array.isArray(screensResponse.screens)) {
-          setScreens(prevScreens => {
-            const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(screensResponse.screens);
-            if (hasChanged) {
-              console.log('📊 Screen data updated via auto-refresh');
-              // Log current ad information for debugging
-              screensResponse.screens.forEach((screen: any) => {
-                if (screen.screenMetrics?.currentAd) {
-                  console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
-                }
-              });
-            } else {
-              console.log('📊 No changes detected in screen data');
-            }
-            return screensResponse.screens;
-          });
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+        const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+        
+        const response = await fetch(complianceUrl, {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const complianceData = await response.json();
+          
+          if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
+            // Process the screens data to create consolidated entries (one per device)
+            const processedScreens = complianceData.data.screens.map((screen: any) => {
+              // Create consolidated entry with slot status information
+              if (screen.slotStatus && (screen.slotStatus.slot1 || screen.slotStatus.slot2)) {
+                // Determine overall online status (at least one slot online)
+                const hasOnlineSlot = (screen.slotStatus.slot1?.online || false) || (screen.slotStatus.slot2?.online || false);
+                
+                // Create status text showing both slots
+                const slot1Status = screen.slotStatus.slot1?.online ? 'ONLINE' : 'OFFLINE';
+                const slot2Status = screen.slotStatus.slot2?.online ? 'ONLINE' : 'OFFLINE';
+                const statusText = `${slot1Status} | ${slot2Status}`;
+                
+                return {
+                  ...screen,
+                  deviceId: screen.materialId, // Use materialId as deviceId for consolidated view
+                  displayId: screen.materialId,
+                  slotNumber: 'Consolidated', // Show as consolidated
+                  isOnline: hasOnlineSlot, // Overall online status
+                  statusText: statusText,
+                  slot1Status: slot1Status,
+                  slot2Status: slot2Status,
+                  slotStatus: screen.slotStatus // Keep original slot status for reference
+                };
+              } else {
+                // Single device without slots
+                return {
+                  ...screen,
+                  displayId: screen.displayId || screen.deviceId,
+                  slotNumber: screen.slotNumber || 1,
+                  statusText: screen.statusText || (screen.isOnline ? 'ONLINE' : 'OFFLINE')
+                };
+              }
+            });
+            
+            setScreens(prevScreens => {
+              const hasChanged = JSON.stringify(prevScreens) !== JSON.stringify(processedScreens);
+              if (hasChanged) {
+                console.log('📊 Screen data updated via auto-refresh with real-time status');
+                // Log current ad information for debugging
+                processedScreens.forEach((screen: any) => {
+                  if (screen.screenMetrics?.currentAd) {
+                    console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
+                  }
+                });
+              } else {
+                console.log('📊 No changes detected in screen data');
+              }
+              return processedScreens;
+            });
+          }
         }
       } catch (screensError) {
         console.error('❌ Error fetching screens during auto-refresh:', screensError);
@@ -447,7 +544,7 @@ const AdminAdsControl: React.FC = () => {
       <div className="mb-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">🎛️ AdsPanel - LCD Control Center</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">AdsPanel - LCD Control Center</h1>
           </div>
           <button 
             onClick={() => fetchData(true)}
@@ -704,7 +801,7 @@ const AdminAdsControl: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Location</label>
                       <p className="text-lg font-medium">
-                        {screen.currentLocation?.address || 'Unknown Location'}
+                        {screen.currentLocation?.address || 'Location not available'}
                       </p>
                     </div>
                   </div>
@@ -892,7 +989,7 @@ const AdminAdsControl: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                 <div className="p-3 bg-gray-50 rounded-lg text-sm text-gray-900">
-                  {selectedDeviceForModal.currentLocation?.address || 'Unknown Location'}
+                  {selectedDeviceForModal.currentLocation?.address || 'Location not available'}
                 </div>
               </div>
             </div>
