@@ -1,8 +1,8 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
 const serverUrl = process.env.REACT_APP_API_URL;
-// Force localhost for now to fix connection issues
-const API_BASE_URL = 'http://localhost:5000';
+// Use environment variable or fallback to localhost for development
+const API_BASE_URL = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();

@@ -28,17 +28,18 @@ class PlaybackWebSocketService {
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Force localhost for now to fix connection issues
-    const actualServerUrl = 'http://localhost:5000';
+    // Use environment variable or fallback to localhost for development
+    const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
+    const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    console.log('🔧 Playback WebSocket Service Configuration (FORCED LOCALHOST):', {
-      envUrl: process.env.REACT_APP_API_URL,
+    console.log('🔧 Playback WebSocket Service Configuration:', {
+      envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
       finalUrl: actualServerUrl,
-      usingFallback: true,
-      reason: 'Forced localhost due to connection issues'
+      usingFallback: !serverUrl,
+      reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
     });
     
-    const host = actualServerUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     return `${protocol}//${host}/ws/playback?admin=true`;
   }
 

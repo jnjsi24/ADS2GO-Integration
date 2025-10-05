@@ -199,6 +199,7 @@ async function startServer() {
         'http://192.168.100.22:5000',
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
+        'https://ads2go-client.onrender.com',
         // Additional development origins
         'http://localhost:3001',
         'http://localhost:5000',
@@ -215,7 +216,9 @@ async function startServer() {
       const isRailwayApp = /^https?:\/\/([a-z0-9-]+)\.up\.railway\.app$/i.test(origin) ||
                            /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
 
-      if (allowedOrigins.has(origin) || isRailwayApp) {
+      const isRenderApp = /^https?:\/\/([a-z0-9-]+)\.onrender\.com$/i.test(origin);
+
+      if (allowedOrigins.has(origin) || isRailwayApp || isRenderApp) {
         callback(null, true);
       } else {
         console.log(`🚫 CORS blocked origin: ${origin}`);
@@ -298,6 +301,17 @@ app.use('/api/deviceDataHistoryV2', require('./routes/deviceDataHistoryV2'));
       },
     })
   );
+
+  // ✅ Health check endpoint (must be before error handler)
+  app.get('/health', (req, res) => {
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      port: process.env.PORT || 5000
+    });
+  });
 
   // ✅ Global error handler
   app.use((err, req, res, next) => {

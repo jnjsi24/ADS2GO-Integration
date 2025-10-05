@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: ads2go-server
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    rootDir: Ads2Go-Server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+
+  - type: web
+    name: ads2go-client
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    rootDir: Ads2Go-Client
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8080

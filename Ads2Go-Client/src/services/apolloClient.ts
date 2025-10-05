@@ -16,17 +16,17 @@ console.log('🔍 Environment Debug:', {
   allEnvVars: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
 });
 
-// Force localhost for now to fix connection issues
-const actualServerUrl = 'http://localhost:5000';
+// Use environment variable or fallback to localhost for development
+const actualServerUrl = serverUrl || 'http://localhost:5000';
 
-console.log('🔧 Apollo Client Configuration (FORCED LOCALHOST):', {
+console.log('🔧 Apollo Client Configuration:', {
   envUrl: serverUrl,
   finalUrl: actualServerUrl,
-  usingFallback: true,
-  reason: 'Forced localhost due to connection issues'
+  usingFallback: !serverUrl,
+  reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
 });
 
-const graphqlUri = 'http://localhost:5000/graphql';
+const graphqlUri = actualServerUrl.endsWith('/graphql') ? actualServerUrl : actualServerUrl + '/graphql';
 
 const httpLink = createHttpLink({
   uri: graphqlUri,
