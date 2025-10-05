@@ -118,7 +118,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ statusFilter, onStatusChange,
       statusFilter === 'All Status' || ad.status.toLowerCase() === statusFilter.toLowerCase()
     );
 
-    // Apply date filter if active
+    // Apply date filter if active (from parent component)
     if (dateFilter) {
       filtered = filtered.filter(ad => {
         const adStartDate = parseDate(ad.startTime) || parseDate(ad.createdAt);
