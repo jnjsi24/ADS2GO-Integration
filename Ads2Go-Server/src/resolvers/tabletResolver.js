@@ -177,7 +177,7 @@ module.exports = {
         
         await tablet.save();
         
-        // Create deviceTracking record for this device
+        // Create or update deviceTracking record for this device
         try {
           const DeviceTracking = require('../models/deviceTracking');
           let existingDeviceTracking = await DeviceTracking.findByMaterialId(materialId);
@@ -226,13 +226,36 @@ module.exports = {
             await deviceTracking.save();
             console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
           } else {
-            // Update existing car record with new slot
-            await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
-              deviceId,
-              isOnline: true,
-              deviceInfo: {}
-            });
-            console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+            // Check if slot already exists with null deviceId (previously unregistered)
+            const existingSlot = existingDeviceTracking.slots.find(s => s.slotNumber === parseInt(slotNumber));
+            
+            if (existingSlot && (existingSlot.deviceId === null || !existingSlot.deviceId)) {
+              console.log(`🔄 Slot ${slotNumber} found with null deviceId - updating with new device: ${deviceId}`);
+              console.log('📊 Historical data will be preserved for this slot');
+              
+              // Update the deviceId in the existing slot while preserving all historical data
+              const slotIndex = existingDeviceTracking.slots.findIndex(s => s.slotNumber === parseInt(slotNumber));
+              await DeviceTracking.updateOne(
+                { _id: existingDeviceTracking._id },
+                { 
+                  $set: { 
+                    [`slots.${slotIndex}.deviceId`]: deviceId,
+                    [`slots.${slotIndex}.isOnline`]: true,
+                    [`slots.${slotIndex}.lastSeen`]: new Date(),
+                    [`slots.${slotIndex}.deviceInfo`]: {}
+                  }
+                }
+              );
+              console.log(`✅ Updated slot ${slotNumber} with new deviceId: ${deviceId}`);
+            } else {
+              // Normal update - slot doesn't exist or already has a different deviceId
+              await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
+                deviceId,
+                isOnline: true,
+                deviceInfo: {}
+              });
+              console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+            }
           }
         } catch (deviceTrackingError) {
           console.error('Error creating deviceTracking record:', deviceTrackingError);
@@ -397,7 +420,7 @@ module.exports = {
         // Get the old deviceId before removing it
         const oldDeviceId = tabletUnit.deviceId;
 
-        // Clear the device connection by removing the deviceId field entirely
+        // Clear the device connection by removing the deviceId field entirely from Tablet collection
         tabletUnit.deviceId = undefined; // Explicitly set to undefined
         tabletUnit.status = 'OFFLINE';
         tabletUnit.lastSeen = null;
@@ -411,7 +434,41 @@ module.exports = {
 
         await tablet.save();
 
-        // ScreenTracking collection deprecated: no shared tracking update needed
+        // Update DeviceTracking collection - set deviceId to null while preserving historical data
+        try {
+          const deviceTracking = await DeviceTracking.findOne({ 
+            materialId: normalizedMaterialId,
+            'slots.slotNumber': slotNumber
+          });
+
+          if (deviceTracking) {
+            // Find the slot in the slots array
+            const slotIndex = deviceTracking.slots.findIndex(s => s.slotNumber === slotNumber);
+            
+            if (slotIndex !== -1) {
+              console.log(`🔄 Setting deviceId to null for slot ${slotNumber} in DeviceTracking`);
+              
+              // Set deviceId to null and mark as offline, but keep all historical data intact
+              await DeviceTracking.updateOne(
+                { _id: deviceTracking._id },
+                { 
+                  $set: { 
+                    [`slots.${slotIndex}.deviceId`]: null,
+                    [`slots.${slotIndex}.isOnline`]: false,
+                    [`slots.${slotIndex}.lastSeen`]: new Date()
+                  }
+                }
+              );
+              
+              console.log(`✅ DeviceTracking updated - deviceId set to null for slot ${slotNumber}`);
+            }
+          } else {
+            console.log(`⚠️ No DeviceTracking record found for materialId: ${normalizedMaterialId}`);
+          }
+        } catch (deviceTrackingError) {
+          console.error('Error updating DeviceTracking:', deviceTrackingError);
+          // Don't fail the unregister if DeviceTracking update fails
+        }
 
         return {
           success: true,
