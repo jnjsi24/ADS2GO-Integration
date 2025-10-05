@@ -605,11 +605,17 @@ class UserAnalyticsService {
         };
       }
 
-      // Get all materials associated with user's ads
+      // Get all materials and adIds associated with user's ads
       const materialIds = [];
+      const userAdIds = userAds.map(ad => ad._id.toString());
+      
+      // Get materials from targetDevices (ObjectIds) and convert to materialIds (strings)
+      const Material = require('../models/Material');
       for (const ad of userAds) {
-        if (ad.materials && ad.materials.length > 0) {
-          ad.materials.forEach(material => {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          // Get material documents to extract materialId strings
+          const materials = await Material.find({ _id: { $in: ad.targetDevices } }, 'materialId');
+          materials.forEach(material => {
             if (material.materialId && !materialIds.includes(material.materialId)) {
               materialIds.push(material.materialId);
             }
@@ -674,24 +680,40 @@ class UserAnalyticsService {
           materialData.dailyData.forEach(dailyData => {
             const dailyDate = new Date(dailyData.date);
             if (dailyDate >= new Date(startDate) && dailyDate <= new Date(endDate)) {
-              // Add to material totals
-              processedData.materials[materialId].totalAdPlays += dailyData.totalAdPlays || 0;
-              processedData.materials[materialId].totalAdPlayTime += dailyData.totalAdPlayTime || 0;
-              processedData.materials[materialId].totalAdImpressions += dailyData.totalAdImpressions || 0;
-              processedData.materials[materialId].totalQRScans += dailyData.totalQRScans || 0;
+              // Filter ad playbacks to only include user's ads
+              const userAdPlaybacks = dailyData.adPlaybacks ? dailyData.adPlaybacks.filter(playback => 
+                userAdIds.includes(playback.adId)
+              ) : [];
               
-              // Add to overall totals
-              processedData.totalAdPlays += dailyData.totalAdPlays || 0;
-              processedData.totalAdPlayTime += dailyData.totalAdPlayTime || 0;
-              processedData.totalAdImpressions += dailyData.totalAdImpressions || 0;
-              processedData.totalQRScans += dailyData.totalQRScans || 0;
+              // Filter QR scans to only include user's ads
+              const userQRScans = dailyData.qrScans ? dailyData.qrScans.filter(scan => 
+                userAdIds.includes(scan.adId)
+              ) : [];
               
-              // Collect ad playbacks
-              if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
-                processedData.materials[materialId].adPlaybacks.push(...dailyData.adPlaybacks);
+              // Calculate totals only for user's ads
+              const userAdPlays = userAdPlaybacks.length;
+              const userAdPlayTime = userAdPlaybacks.reduce((sum, playback) => sum + (playback.viewTime || 0), 0);
+              const userAdImpressions = userAdPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 0), 0);
+              const userQRScansCount = userQRScans.length;
+              
+              // Add to material totals (only user's data)
+              processedData.materials[materialId].totalAdPlays += userAdPlays;
+              processedData.materials[materialId].totalAdPlayTime += userAdPlayTime;
+              processedData.materials[materialId].totalAdImpressions += userAdImpressions;
+              processedData.materials[materialId].totalQRScans += userQRScansCount;
+              
+              // Add to overall totals (only user's data)
+              processedData.totalAdPlays += userAdPlays;
+              processedData.totalAdPlayTime += userAdPlayTime;
+              processedData.totalAdImpressions += userAdImpressions;
+              processedData.totalQRScans += userQRScansCount;
+              
+              // Collect ad playbacks (only user's ads)
+              if (userAdPlaybacks.length > 0) {
+                processedData.materials[materialId].adPlaybacks.push(...userAdPlaybacks);
                 
-                // Group by ad
-                dailyData.adPlaybacks.forEach(playback => {
+                // Group by ad (only user's ads)
+                userAdPlaybacks.forEach(playback => {
                   const adId = playback.adId;
                   if (!processedData.ads[adId]) {
                     processedData.ads[adId] = {
@@ -713,9 +735,9 @@ class UserAnalyticsService {
                 });
               }
               
-              // Collect QR scans
-              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
-                processedData.materials[materialId].qrScans.push(...dailyData.qrScans);
+              // Collect QR scans (only user's ads)
+              if (userQRScans.length > 0) {
+                processedData.materials[materialId].qrScans.push(...userQRScans);
               }
               
               // Collect location history
