@@ -5,12 +5,16 @@ interface CalendarWidgetProps {
   selectedDate: Date | null;
   onDateSelect: (date: Date | null) => void;
   className?: string;
+  minDate?: Date;
+  showActionButtons?: boolean;
 }
 
 const CalendarWidget: React.FC<CalendarWidgetProps> = ({ 
   selectedDate, 
   onDateSelect, 
-  className = '' 
+  className = '',
+  minDate,
+  showActionButtons = true
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -100,20 +104,24 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
           const isSelected = selectedDate && isSameDay(day, selectedDate);
           const isCurrentMonthDay = isCurrentMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
+          const isDisabled = minDate && day < minDate;
           
           return (
             <button
               key={index}
-              onClick={() => handleDateSelect(day)}
+              onClick={() => !isDisabled && handleDateSelect(day)}
+              disabled={isDisabled}
               className={`
-                text-sm font-medium rounded-md hover:bg-gray-100 transition-colors h-10 w-10 flex items-center justify-center
-                ${isSelected 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                  : isCurrentMonthDay 
-                    ? isToday
-                      ? 'bg-blue-50 text-blue-600 font-semibold'
-                      : 'text-gray-900 hover:bg-gray-100'
-                    : 'text-gray-400 hover:bg-gray-50'
+                text-sm font-medium rounded-md transition-colors h-10 w-10 flex items-center justify-center
+                ${isDisabled
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : isSelected 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : isCurrentMonthDay 
+                      ? isToday
+                        ? 'bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100'
+                        : 'text-gray-900 hover:bg-gray-100'
+                      : 'text-gray-400 hover:bg-gray-50'
                 }
               `}
             >
@@ -124,20 +132,22 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2 mt-4 pt-3 border-t border-gray-200">
-        <button
-          onClick={() => onDateSelect(null)}
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => onDateSelect(selectedDate)}
-          className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium transition-colors"
-        >
-          Apply Filter
-        </button>
-      </div>
+      {showActionButtons && (
+        <div className="flex gap-2 mt-4 pt-3 border-t border-gray-200">
+          <button
+            onClick={() => onDateSelect(null)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onDateSelect(selectedDate)}
+            className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium transition-colors"
+          >
+            Apply Filter
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,6 +11,7 @@ import {
 } from '../../graphql/queries/flexibleAdQueries';
 import { uploadFileToFirebase } from '../../utils/fileUpload';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
+import CalendarWidget from '../../components/CalendarWidget';
 
 type VehicleType = 'CAR' | 'MOTORCYCLE' | '';
 type MaterialCategory = 'DIGITAL' | 'NON-DIGITAL';
@@ -43,6 +44,8 @@ const CreateAdvertisement: React.FC = () => {
   const [showAdLengthDropdown, setShowAdLengthDropdown] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [mediaFileError, setMediaFileError] = useState<string>('');
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
 
   // Form data
@@ -196,6 +199,65 @@ const CreateAdvertisement: React.FC = () => {
     }
   };
 
+  // Calendar handlers
+  const handleCalendarDateSelect = (date: Date | null) => {
+    setSelectedDate(date);
+    if (date) {
+      const dateString = date.toISOString().split('T')[0];
+      setFormData(prev => ({ ...prev, startDate: dateString }));
+      // Clear any existing startDate error when a valid date is selected
+      if (errors.startDate) {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.startDate;
+          return newErrors;
+        });
+      }
+    } else {
+      setFormData(prev => ({ ...prev, startDate: '' }));
+    }
+    setShowCalendar(false);
+  };
+
+  const toggleCalendar = () => {
+    // Clear any existing startDate error when opening the calendar
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.startDate;
+      return newErrors;
+    });
+    setShowCalendar(!showCalendar);
+  };
+
+  // Sync selectedDate with formData.startDate
+  useEffect(() => {
+    if (formData.startDate) {
+      const date = new Date(formData.startDate);
+      if (!isNaN(date.getTime())) {
+        setSelectedDate(date);
+      }
+    } else {
+      setSelectedDate(null);
+    }
+  }, [formData.startDate]);
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCalendar) {
+        const target = event.target as Element;
+        if (!target.closest('.calendar-container')) {
+          setShowCalendar(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
+
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -207,7 +269,18 @@ const CreateAdvertisement: React.FC = () => {
       if (!formData.category) newErrors.category = 'Category is required';
       if (!formData.mediaFile) newErrors.mediaFile = 'Media file is required';
     } else if (step === 2) {
-      if (!formData.startDate) newErrors.startDate = 'Start date is required';
+      if (!formData.startDate) {
+        newErrors.startDate = 'Start date is required';
+      } else {
+        // Validate that the start date is not in the past
+        const selectedDate = new Date(formData.startDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+        
+        if (selectedDate < today) {
+          newErrors.startDate = 'Start date cannot be in the past';
+        }
+      }
       // Validate ad length - only allow 20, 40, or 60 seconds
       const allowedAdLengths = [20, 40, 60];
       if (!allowedAdLengths.includes(formData.adLengthSeconds)) {
@@ -847,6 +920,9 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.adLengthSeconds}</p>
           )}
         </div>
+        
+        {/* Number of Devices and Campaign Start Date side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Number of Devices
@@ -874,17 +950,75 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Campaign Start Date
           </label>
-          <input
-            type="date"
-            value={formData.startDate}
-            onChange={(e) => handleInputChange('startDate', e.target.value)}
-            min={new Date().toISOString().split('T')[0]}
-            className="w-full p-3 shadow-md rounded-md focus:outline-none focus:ring-0 focus:border-gray-400"
-            required
-          />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={toggleCalendar}
+              className="w-full p-3 shadow-md rounded-md focus:outline-none focus:ring-0 focus:border-gray-400 bg-white border border-gray-300 text-left flex items-center justify-between"
+            >
+              <span className={selectedDate ? 'text-gray-900' : 'text-gray-500'}>
+                {selectedDate 
+                  ? selectedDate.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })
+                  : 'Select a date'
+                }
+              </span>
+              <Calendar className="w-4 h-4 text-gray-400" />
+            </button>
+            
+            {/* Calendar Dropdown */}
+            {showCalendar && (
+              <div 
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                onClick={() => setShowCalendar(false)}
+              >
+                <div 
+                  className="bg-white rounded-lg shadow-2xl border border-gray-200 calendar-container ml-16"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CalendarWidget
+                    selectedDate={selectedDate}
+                    onDateSelect={handleCalendarDateSelect}
+                    className="w-80"
+                    minDate={new Date()}
+                    showActionButtons={false}
+                  />
+                  <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const today = new Date();
+                        setSelectedDate(today);
+                        setFormData(prev => ({
+                          ...prev,
+                          startDate: today.toISOString().split('T')[0]
+                        }));
+                        setShowCalendar(false);
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCalendar(false)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-gray-600 border border-transparent rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           {errors.startDate && (
             <p className="text-sm text-red-600 mt-1">{errors.startDate}</p>
           )}
+        </div>
         </div>
       </div>
     </div>
