@@ -27,10 +27,8 @@ class DailyArchiveJobV2 {
       
       console.log(`📅 Archiving data for date: ${dateStr} (Current day)`);
 
-      // Get all device tracking records for today
-      const devices = await DeviceTracking.find({
-        date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate())
-      });
+      // Get all device tracking records using flexible date matching
+      const devices = await this.getDevicesForArchiving(philippinesTime);
 
       console.log(`📊 Found ${devices.length} device records to archive`);
 
@@ -45,6 +43,68 @@ class DailyArchiveJobV2 {
       throw error;
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  // New method to handle flexible date matching for archiving
+  async getDevicesForArchiving(philippinesTime) {
+    try {
+      // Create multiple date formats to match different DeviceTracking record formats
+      const targetYear = philippinesTime.getFullYear();
+      const targetMonth = philippinesTime.getMonth();
+      const targetDay = philippinesTime.getDate();
+      
+      // Format 1: Midnight Philippines time (original format)
+      const midnightPhilippines = new Date(targetYear, targetMonth, targetDay);
+      
+      // Format 2: Midnight UTC (common format)
+      const midnightUTC = new Date(Date.UTC(targetYear, targetMonth, targetDay));
+      
+      // Format 3: Previous day at 4 PM UTC (to catch records created with different timezone handling)
+      const previousDay4PM = new Date(Date.UTC(targetYear, targetMonth, targetDay - 1, 16, 0, 0));
+      
+      // Format 4: Current day at 4 PM UTC
+      const currentDay4PM = new Date(Date.UTC(targetYear, targetMonth, targetDay, 16, 0, 0));
+      
+      console.log(`🔍 Searching for devices with dates:`);
+      console.log(`   - Midnight Philippines: ${midnightPhilippines.toISOString()}`);
+      console.log(`   - Midnight UTC: ${midnightUTC.toISOString()}`);
+      console.log(`   - Previous day 4PM UTC: ${previousDay4PM.toISOString()}`);
+      console.log(`   - Current day 4PM UTC: ${currentDay4PM.toISOString()}`);
+      
+      // Query for devices with any of these date formats
+      const devices = await DeviceTracking.find({
+        $or: [
+          { date: midnightPhilippines },
+          { date: midnightUTC },
+          { date: previousDay4PM },
+          { date: currentDay4PM },
+          // Also search for records within the last 2 days to catch any missed records
+          { 
+            date: { 
+              $gte: new Date(Date.UTC(targetYear, targetMonth, targetDay - 2, 0, 0, 0)),
+              $lte: new Date(Date.UTC(targetYear, targetMonth, targetDay + 1, 23, 59, 59))
+            }
+          }
+        ]
+      });
+      
+      console.log(`📊 Found ${devices.length} devices with flexible date matching`);
+      
+      // Log the dates found for debugging
+      devices.forEach((device, index) => {
+        console.log(`   Device ${index + 1}: ${device.materialId} - Date: ${device.date?.toISOString()}`);
+      });
+      
+      return devices;
+      
+    } catch (error) {
+      console.error('❌ Error getting devices for archiving:', error);
+      // Fallback to original method if flexible matching fails
+      console.log('🔄 Falling back to original date matching method');
+      return await DeviceTracking.find({
+        date: new Date(philippinesTime.getFullYear(), philippinesTime.getMonth(), philippinesTime.getDate())
+      });
     }
   }
 
@@ -336,6 +396,128 @@ class DailyArchiveJobV2 {
     });
     
     return merged;
+  }
+
+  // Method to archive all unarchived records (useful for catching missed records)
+  async archiveAllUnarchivedRecords() {
+    if (this.isRunning) {
+      console.log('⏭️ Archive job already running, skipping...');
+      return;
+    }
+
+    this.isRunning = true;
+    console.log('🔄 Starting archive for all unarchived records...');
+
+    try {
+      // Get all DeviceTracking records
+      const allDevices = await DeviceTracking.find({});
+      console.log(`📊 Found ${allDevices.length} total DeviceTracking records`);
+
+      let archivedCount = 0;
+      let skippedCount = 0;
+
+      for (const device of allDevices) {
+        try {
+          // Check if this material already has archived data
+          const existingArchive = await DeviceDataHistoryV2.findOne({
+            materialId: device.materialId
+          });
+
+          if (existingArchive) {
+            // Check if this specific date is already archived with similar data
+            const deviceDate = device.date;
+            const deviceDateStr = deviceDate.toISOString().split('T')[0];
+            
+            // Find existing daily data for the same date
+            const existingDailyData = existingArchive.dailyData.find(dailyData => {
+              if (!dailyData.date) return false;
+              const dailyDataDateStr = dailyData.date.toISOString().split('T')[0];
+              return dailyDataDateStr === deviceDateStr;
+            });
+
+            if (existingDailyData) {
+              // Check if the data is significantly different (more than 10% difference in key metrics)
+              const currentAdPlays = device.totalAdPlays || 0;
+              const archivedAdPlays = existingDailyData.totalAdPlays || 0;
+              const currentHoursOnline = device.totalHoursOnline || 0;
+              const archivedHoursOnline = existingDailyData.totalHoursOnline || 0;
+              
+              const adPlaysDiff = Math.abs(currentAdPlays - archivedAdPlays);
+              const hoursDiff = Math.abs(currentHoursOnline - archivedHoursOnline);
+              
+              // If data is similar (less than 10% difference), skip
+              const adPlaysSimilar = adPlaysDiff < Math.max(10, currentAdPlays * 0.1);
+              const hoursSimilar = hoursDiff < Math.max(0.1, currentHoursOnline * 0.1);
+              
+              if (adPlaysSimilar && hoursSimilar) {
+                console.log(`⏭️ Skipping ${device.materialId} - already archived with similar data for date ${deviceDateStr} (${archivedAdPlays} plays, ${archivedHoursOnline.toFixed(2)}h)`);
+                skippedCount++;
+                continue;
+              } else {
+                console.log(`🔄 Updating ${device.materialId} - data has changed for date ${deviceDateStr} (${archivedAdPlays} → ${currentAdPlays} plays, ${archivedHoursOnline.toFixed(2)} → ${currentHoursOnline.toFixed(2)}h)`);
+              }
+            }
+          }
+
+          // Archive this device
+          const dateStr = device.date.toISOString().split('T')[0];
+          await this.archiveMaterialDataV2(device, dateStr);
+          archivedCount++;
+          console.log(`✅ Archived ${device.materialId} for date ${dateStr}`);
+
+        } catch (error) {
+          console.error(`❌ Failed to archive ${device.materialId}:`, error.message);
+        }
+      }
+
+      console.log(`✅ Archive completed: ${archivedCount} archived, ${skippedCount} skipped`);
+
+    } catch (error) {
+      console.error('❌ Archive all unarchived records failed:', error);
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
+  // Method to force archive all records (ignores existing data checks)
+  async forceArchiveAllRecords() {
+    if (this.isRunning) {
+      console.log('⏭️ Archive job already running, skipping...');
+      return;
+    }
+
+    this.isRunning = true;
+    console.log('🔄 Starting FORCE archive for all records...');
+
+    try {
+      // Get all DeviceTracking records
+      const allDevices = await DeviceTracking.find({});
+      console.log(`📊 Found ${allDevices.length} total DeviceTracking records`);
+
+      let archivedCount = 0;
+
+      for (const device of allDevices) {
+        try {
+          // Force archive this device regardless of existing data
+          const dateStr = device.date.toISOString().split('T')[0];
+          await this.archiveMaterialDataV2(device, dateStr);
+          archivedCount++;
+          console.log(`✅ Force archived ${device.materialId} for date ${dateStr}`);
+
+        } catch (error) {
+          console.error(`❌ Failed to force archive ${device.materialId}:`, error.message);
+        }
+      }
+
+      console.log(`✅ Force archive completed: ${archivedCount} records processed`);
+
+    } catch (error) {
+      console.error('❌ Force archive all records failed:', error);
+      throw error;
+    } finally {
+      this.isRunning = false;
+    }
   }
 
   // Get archive status

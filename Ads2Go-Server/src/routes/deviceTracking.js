@@ -740,6 +740,52 @@ router.post('/archive', async (req, res) => {
   }
 });
 
+// POST /deviceTracking/archive-all - Archive all unarchived records
+router.post('/archive-all', async (req, res) => {
+  try {
+    const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
+    
+    console.log('🧪 Manual trigger for archive all unarchived records');
+    await dailyArchiveJobV2.archiveAllUnarchivedRecords();
+    
+    res.json({
+      success: true,
+      message: 'Archive all unarchived records completed successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Manual archive all failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger archive all',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /deviceTracking/force-archive - Force archive all records (ignores existing data)
+router.post('/force-archive', async (req, res) => {
+  try {
+    const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
+    
+    console.log('🧪 Manual trigger for FORCE archive all records');
+    await dailyArchiveJobV2.forceArchiveAllRecords();
+    
+    res.json({
+      success: true,
+      message: 'Force archive all records completed successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Manual force archive failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger force archive',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // GET /deviceTracking/archive-status - Get archive status
 router.get('/archive-status', async (req, res) => {
   try {

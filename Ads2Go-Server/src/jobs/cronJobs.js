@@ -24,6 +24,34 @@ class CronJobs {
     // Start the user analytics sync job (every 10 minutes)
     userAnalyticsSyncJob.start();
 
+    // Frequent archive job - runs every 3 minutes to capture real-time updates
+    const frequentArchiveTask = cron.schedule('*/3 * * * *', async () => {
+      console.log('⏰ Frequent archive job triggered (every 3 minutes)');
+      try {
+        await dailyArchiveJobV2.archiveDailyData();
+        console.log('✅ Frequent archive job completed successfully');
+      } catch (error) {
+        console.error('❌ Frequent archive job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Hourly archive job - runs every hour to capture real-time updates
+    const hourlyArchiveTask = cron.schedule('0 * * * *', async () => {
+      console.log('⏰ Hourly archive job triggered');
+      try {
+        await dailyArchiveJobV2.archiveDailyData();
+        console.log('✅ Hourly archive job completed successfully');
+      } catch (error) {
+        console.error('❌ Hourly archive job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     // Daily archive job - runs at 11:55 PM Philippines time (before reset)
     const dailyArchiveTask = cron.schedule('55 23 * * *', async () => {
       console.log('⏰ Daily archive job triggered at 11:55 PM (Philippines time)');
@@ -53,6 +81,8 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
+    this.jobs.set('frequentArchive', frequentArchiveTask);
+    this.jobs.set('hourlyArchive', hourlyArchiveTask);
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
 
