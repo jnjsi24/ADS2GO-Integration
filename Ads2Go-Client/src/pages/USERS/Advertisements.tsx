@@ -378,16 +378,29 @@ const Advertisements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white pl-64 pr-5">
-      <div className="bg-white w-full min-h-screen">
-      {/* Header with Title*/}
-      <div className="flex justify-between items-center mb-6 pt-10">
-        <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
+    <div className="relative min-h-screen overflow-hidden">
+    {/* Background Image */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
+    ></div>
+
+    {/* Overlay (optional subtle tint) */}
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+    {/* Main Content */}
+    <div className="relative min-h-screen bg-transparent pl-64 pr-5">
+      <div className="bg-transparent w-full min-h-screen">
+        {/* Header with Title */}
+        <div className="flex justify-between items-center mb-6 pt-10">
+          <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
         <div className="flex flex-col items-end gap-3">
           <div className="flex gap-1">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -397,7 +410,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -428,7 +441,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -471,7 +484,7 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className=" bg-white p-6 grid grid-cols-4 gap-6">
+      <div className="p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
@@ -518,18 +531,18 @@ const Advertisements: React.FC = () => {
                     </div>
                   )
                 ) : (
-                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
+                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-black/70">
                     No Media
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-white flex-grow flex flex-col">
+              <div className="p-4 bg-white/70 flex-grow flex flex-col">
                 <div
                   className="flex-grow cursor-pointer"
                   onClick={() => navigate(`/ad-details/${ad.id}`)}
                 >
-                  <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
+                  <h3 className="text-2xl font-semibold text-black/80">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
                 </div>
 
@@ -551,22 +564,10 @@ const Advertisements: React.FC = () => {
                         e.stopPropagation();
                         navigate(`/ad-details/${ad.id}`);
                       }}
-                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                      className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-center flex-1 transition-all duration-300 shadow-md hover:shadow-lg"
                     >
-                      View Details →
+                      View Details <span className="ml-1">›</span>
                     </button>
-                    {ad.status === 'PENDING' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAd(ad.id);
-                        }}
-                        disabled={deleteLoading}
-                        className="text-red-600 text-xs font-semibold rounded-md px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deleteLoading ? '...' : 'Delete'}
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -829,6 +830,7 @@ const Advertisements: React.FC = () => {
         `}
       </style>
     </div>
+  </div>
   );
 };
 

@@ -15,6 +15,7 @@ interface CreateMaterialModalProps {
   onClose: () => void;
   onSubmit: (formData: CreateMaterialInput) => void;
   creating: boolean;
+  onValidationError?: (message: string) => void;
 }
 
 // Vehicle-Material mapping based on your requirements
@@ -52,7 +53,8 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  creating
+  creating,
+  onValidationError
 }) => {
   const [createForm, setCreateForm] = useState<CreateMaterialInput>({
     vehicleType: 'CAR',
@@ -90,7 +92,11 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createForm.requirements.trim()) {
-      alert('Please fill out this field');
+      if (onValidationError) {
+        onValidationError('Please fill out this field');
+      } else {
+        alert('Please fill out this field');
+      }
       return;
     }
 
@@ -279,7 +285,6 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
               className="w-full px-3 py-2 border border-gray-200 shadow-md rounded-lg focus:outline-none"
               placeholder="Enter material requirements"
               rows={3}
-              required
             />
           </div>
           <div className="flex justify-between gap-3 pt-5">

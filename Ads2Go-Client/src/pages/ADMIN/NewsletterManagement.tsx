@@ -337,76 +337,76 @@ const NewsletterManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10 flex flex-col">
-      <div className="max-w-7xl mx-auto flex-1 flex flex-col">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold text-[#3674B5]">Newsletter Management</h1>
-            <div className="flex space-x-4">
-              <input
-                type="text"
-                className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-                placeholder="Search Subscribers"
-                value={searchTerm}
-                onChange={(e) => handleSearchChange(e.target.value)}
-              />
-              <div className="relative w-48">
-                <button
-                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
+      {/* Header with Title and Filters */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">Newsletter Management</h1>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+            placeholder="Search Subscribers"
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+          />
+          <div className="relative w-48">
+            <button
+              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+            >
+              {selectedFilter}
+              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
+            </button>
+            <AnimatePresence>
+              {showFilterDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                 >
-                  {selectedFilter}
-                  <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
-                </button>
-                <AnimatePresence>
-                  {showFilterDropdown && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  {filterOptions.map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => handleFilterChange(filter)}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                     >
-                      {filterOptions.map((filter) => (
-                        <button
-                          key={filter}
-                          onClick={() => handleFilterChange(filter)}
-                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                        >
-                          {filter}
-                        </button>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end space-x-4">
-            <button
-              onClick={fetchSubscribers}
-              className="flex items-center gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh List
-            </button>
-            <button
-              onClick={() =>
-                window.open(
-                  "mailto:" +
-                    filteredSubscribers
-                      .filter((s) => s.isActive)
-                      .map((s) => s.email)
-                      .join(",")
-                )
-              }
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
-              disabled={stats.active === 0}
-            >
-              Email All Active Subscribers
-            </button>
+                      {filter}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-4 mb-6">
+        <button
+          onClick={fetchSubscribers}
+          className="flex items-center gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh List
+        </button>
+        <button
+          onClick={() =>
+            window.open(
+              "mailto:" +
+                filteredSubscribers
+                  .filter((s) => s.isActive)
+                  .map((s) => s.email)
+                  .join(",")
+            )
+          }
+          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
+          disabled={stats.active === 0}
+        >
+          Email All Active Subscribers
+        </button>
+      </div>
 
         <div className="grid md:grid-cols-5 gap-4 mb-8">
           <div className="bg-blue-50 rounded-lg p-6">
@@ -628,9 +628,9 @@ const NewsletterManagement: React.FC = () => {
               </svg>
             </button>
           </div>
-        </div>
+      </div>
 
-        {showUnsubscribeModal && (
+      {showUnsubscribeModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-96">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
@@ -657,7 +657,6 @@ const NewsletterManagement: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 };

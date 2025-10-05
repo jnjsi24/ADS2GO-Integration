@@ -35,6 +35,7 @@ import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 import DateFilter from '../../components/DateFilter';
+import CalendarWidget from '../../components/CalendarWidget';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
@@ -97,8 +98,29 @@ const ManageAds: React.FC = () => {
     endDate: Date | null;
     condition: string;
   } | null>(null);
+  
+  // Calendar widget state for schedule tab
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
+
+  // Close calendar when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCalendar) {
+        const target = event.target as Element;
+        if (!target.closest('.calendar-container')) {
+          setShowCalendar(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
 
   
 
@@ -368,6 +390,24 @@ const ManageAds: React.FC = () => {
     setDateFilter(null);
   };
 
+  // Calendar widget handlers
+  const handleCalendarDateSelect = (date: Date | null) => {
+    setCalendarSelectedDate(date);
+    if (date) {
+      setDateFilter({
+        startDate: date,
+        endDate: null,
+        condition: 'Is'
+      });
+    } else {
+      setDateFilter(null);
+    }
+  };
+
+  const toggleCalendar = () => {
+    setShowCalendar(!showCalendar);
+  };
+
   const formatDateRange = (): string => {
     if (!dateFilter) return '';
     if (dateFilter.startDate && dateFilter.endDate) {
@@ -520,16 +560,36 @@ const ManageAds: React.FC = () => {
       {/* Filters on the right */}
       {['ads', 'schedule', 'deployment'].includes(activeTab) && (
         <div className="flex flex-col items-end gap-2">
-          {/* Top row: Add Filter and All Status */}
+          {/* Top row: Calendar and All Status */}
           <div className="flex items-center gap-3">
-            {/* Add Filter button for schedule tab */}
+            {/* Calendar Widget for schedule tab */}
             {activeTab === 'schedule' && (
-              <button
-                onClick={() => setShowDateFilterModal(true)}
-                className="px-4 py-3 shadow-md text-xs bg-white text-black rounded-md"
-              >
-                Add Filter
-              </button>
+              <div className="relative calendar-container">
+                <button
+                  onClick={toggleCalendar}
+                  className="px-4 py-3 shadow-md text-xs bg-white text-black rounded-md flex items-center gap-2"
+                >
+                  <Calendar className="w-4 h-4" />
+                  {calendarSelectedDate 
+                    ? calendarSelectedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                    : 'Select Date'
+                  }
+                </button>
+                
+                {/* Calendar Dropdown */}
+                {showCalendar && (
+                  <div className="absolute top-full right-0 mt-2 z-50">
+                    <CalendarWidget
+                      selectedDate={calendarSelectedDate}
+                      onDateSelect={(date) => {
+                        handleCalendarDateSelect(date);
+                        setShowCalendar(false);
+                      }}
+                      className="w-80"
+                    />
+                  </div>
+                )}
+              </div>
             )}
             
             {/* All Status Filter */}

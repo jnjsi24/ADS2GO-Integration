@@ -66,15 +66,18 @@ const SideNavbar: React.FC = () => {
   ], []);
 
   // Navigation item with smooth animations but static behavior
-  const NavigationItem = React.memo(({ link }: { link: typeof navLinks[0] }) => (
+  const NavigationItem = React.memo(({ link, isActive }: { link: typeof navLinks[0], isActive: boolean }) => (
     <li className="relative group">
       <Link
         to={link.path}
-        className="nav-link relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-all duration-300 ease-out text-gray-200 hover:text-white hover:bg-[#3367cc]"
+        className={`
+          nav-link relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-all duration-300 ease-out
+          ${isActive 
+            ? 'border-l border-blue-500 text-blue-500 bg-white/90 backdrop-blur-md'
+            : 'border-l-3 text-black/70 hover:border-green-500 hover:border-blue-500 hover:text-yellow-500 hover:bg-white/80 backdrop-blur-md'}
+        `}
+        
       >
-        {/* Background animation */}
-        <span className="absolute left-0 top-0 w-0 h-full bg-[#3367cc] transition-all duration-300 ease-out group-hover:w-full rounded-md z-0"></span>
-
         <span className="relative z-10 flex items-center space-x-3">
           {link.icon}
           <span>{link.label}</span>
@@ -82,6 +85,8 @@ const SideNavbar: React.FC = () => {
       </Link>
     </li>
   ));
+  
+  
 
 
   // Only show navbar for authenticated users
@@ -112,30 +117,32 @@ const SideNavbar: React.FC = () => {
       
       {/* Static navbar with smooth animations */}
       <div 
-        className="h-screen w-60 bg-[#1B4F9C] text-gray-200 flex flex-col justify-between fixed transition-all duration-500 ease-in-out"
+        className="h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out
+                  shadow-xl"
         style={{
           willChange: 'auto',
           transform: 'translateZ(0)',
           backfaceVisibility: 'hidden',
-          position: 'fixed',
           top: 0,
           left: 0,
           zIndex: 1000,
         }}
       >
+
       <div className="p-6">
         {/* Logo */}
-        <div className="flex items-center pl-3 space-x-3 mb-10">
-          <img src="/image/white-logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-2xl text-white font-bold">Ads2Go</span>
+        <div className="flex mt-6 items-center pl-3 space-x-3 mb-10">
+          <img src="/image/black-logo.png" alt="Logo" className="w-8 h-8" />
+          <span className="text-2xl text-black/70 font-bold">Ads2Go</span>
         </div>
 
         {/* Navigation - Completely Static */}
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => (
-            <NavigationItem 
-              key={link.label} 
-              link={link} 
+            <NavigationItem
+              key={link.label}
+              link={link}
+              isActive={window.location.pathname === link.path} // checks current URL
             />
           ))}
         </ul>
@@ -145,7 +152,7 @@ const SideNavbar: React.FC = () => {
       <div className="p-6 relative">
         <div className="flex items-center justify-between mb-4">
           <div
-            className="flex items-center space-x-3 cursor-pointer flex-1 hover:bg-gray-700 rounded-lg p-2 transition-all duration-300 ease-out"
+            className="flex items-center space-x-3 cursor-pointer hover:bg-black/10 flex-1 rounded-lg p-2 transition-all duration-300 ease-out"
             onClick={toggleDropup}
           >
             <div className="w-10 h-10 rounded-full bg-[#FF9D3D] flex items-center justify-center relative overflow-hidden">
@@ -163,7 +170,7 @@ const SideNavbar: React.FC = () => {
                 />
               ) : null}
               <span 
-                className="text-white font-semibold flex items-center justify-center w-full h-full"
+                className="text-black/70 font-semibold flex items-center justify-center w-full h-full"
                 style={{ display: user?.profilePicture ? 'none' : 'flex' }}
               >
                 {user ? getInitials(user.firstName, user.lastName) : '...'}
@@ -172,7 +179,7 @@ const SideNavbar: React.FC = () => {
             </div>
             <div>
               {user ? (
-                <p className="font-semibold text-white">
+                <p className="font-bold text-black/70">
                   {`${user.firstName} ${user.lastName}`}
                 </p>
               ) : (
@@ -185,7 +192,7 @@ const SideNavbar: React.FC = () => {
           </div>
           <button
             onClick={() => navigate('/notifications')}
-            className="relative p-2 text-gray-200 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-300 ease-out"
+            className="relative p-2 text-black/70 hover:text-black/90 rounded-lg transition-all duration-300 ease-out"
             title="View notifications"
           >
             <Bell size={20} />
@@ -201,12 +208,15 @@ const SideNavbar: React.FC = () => {
         {/* Dropup Menu */}
         <div 
           ref={dropupRef}
-          className={`absolute bottom-20 left-6 right-6 bg-white rounded-lg shadow-lg border border-gray-200 transition-all duration-300 ease-in-out transform ${
-            isDropupOpen 
-              ? 'opacity-100 translate-y-0 scale-100' 
-              : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
-          }`}
+          className={`absolute bottom-24 left-8 right-6 
+                    bg-white/20 backdrop-blur-md border border-white/30 rounded-lg shadow-lg
+                    transition-all duration-300 ease-in-out transform ${
+                      isDropupOpen 
+                        ? 'opacity-100 translate-y-0 scale-100' 
+                        : 'opacity-0 translate-y-4 scale-95 pointer-events-none'
+                    }`}
         >
+
           <div className="py-2">
             <button
               onClick={() => {
