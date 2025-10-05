@@ -18,7 +18,8 @@ import {
   Tag,
   FileVideo,
   Image as ImageIcon,
-  X, ChevronDown
+  X, ChevronDown,
+  CloudUpload
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { 
@@ -81,6 +82,8 @@ const CompanyAdsManagement: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [mediaFileError, setMediaFileError] = useState('');
   
   const [validationErrors, setValidationErrors] = useState<{
     title?: string;
@@ -173,6 +176,37 @@ const CompanyAdsManagement: React.FC = () => {
       console.error('Error uploading file:', error);
       setIsUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      setMediaFileError(''); // Clear any previous errors
+      handleFileUpload(file);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setMediaFileError(''); // Clear any previous errors
+      handleFileUpload(file);
     }
   };
 
@@ -592,14 +626,15 @@ const CompanyAdsManagement: React.FC = () => {
 
       {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 top-0 flex items-center justify-center z-50">    
-        <motion.div
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -50 }}
-          transition={{ duration: 0.3 }}
-          className="w-full max-w-xl bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
-        >
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50"></div>
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            transition={{ duration: 0.3 }}
+            className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
           <div className="p-6 sm:p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">
@@ -673,11 +708,18 @@ const CompanyAdsManagement: React.FC = () => {
 
               {/* Media Upload */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">
                   Media File *
                 </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
-                  <div className="space-y-2 text-center">
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragging ? 'border-blue-500 bg-blue-50' : 
+                    mediaFileError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                     {isUploading ? (
                       <div className="space-y-2">
                         <Upload className="mx-auto h-12 w-12 text-gray-400" />
@@ -702,33 +744,60 @@ const CompanyAdsManagement: React.FC = () => {
                         <p className="text-xs text-gray-500 truncate max-w-xs">{formData.mediaFile}</p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
-                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="flex text-sm text-gray-600">
-                          <label
-                            htmlFor="file-upload"
-                            className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                          >
-                            <span>Upload a file</span>
-                            <input
-                              id="file-upload"
-                              name="file-upload"
-                              type="file"
-                              className="sr-only"
-                              accept="video/*,image/*"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleFileUpload(file);
-                              }}
-                            />
-                          </label>
-                          <p className="pl-1">or drag and drop</p>
-                        </div>
-                        <p className="text-xs text-gray-500">PNG, JPG, MP4, MOV up to 100MB</p>
+                    <>
+                      <CloudUpload className={`w-12 h-12 mx-auto mb-4 ${
+                        mediaFileError ? 'text-red-400' : 'text-gray-400'
+                      }`} />
+                      <p className="text-gray-600 mb-4">
+                        Drag your file image/video here
+                      </p>
+                      <div className="flex items-center justify-center mb-4">
+                        <div className={`grow max-w-40 h-px ${
+                          mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                        }`}></div>
+                        <span className={`mx-3 text-sm ${
+                          mediaFileError ? 'text-red-400' : 'text-gray-400'
+                        }`}>or</span>
+                        <div className={`grow max-w-40 h-px ${
+                          mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                        }`}></div>
                       </div>
-                    )}
-                  </div>
-                </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMediaFileError(''); // Clear error when clicking upload
+                          document.getElementById('media-upload')?.click();
+                        }}
+                        className={`p-3 rounded-md hover:text-white/90 font-medium ${
+                          mediaFileError 
+                            ? 'text-white/80 bg-red-500 hover:bg-red-600' 
+                            : 'text-white/80 bg-[#3674B5] hover:bg-[#1B5087]'
+                        }`}
+                      >
+                        Click to upload file
+                      </button>
+                      <p className={`text-sm mt-2 ${
+                        mediaFileError ? 'text-red-500' : 'text-gray-500'
+                      }`}>
+                        PNG, JPG, MP4, MOV up to 100MB
+                      </p>
+                            <input
+                              type="file"
+                        accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
+                        onChange={handleFileInputChange}
+                        className="hidden"
+                        id="media-upload"
+                        required
+                      />
+                    </>
+                  )}
+                        </div>
+                {/* Show validation errors from form validation OR media file error */}
+                {(validationErrors.mediaFile || mediaFileError) && (
+                  <p className="text-sm text-red-600 mt-1">
+                    {mediaFileError || validationErrors.mediaFile}
+                  </p>
+                )}
               </div>
 
               {/* Duration and Priority */}
@@ -854,9 +923,9 @@ const CompanyAdsManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </motion.div>
-      </div>
-    )}
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

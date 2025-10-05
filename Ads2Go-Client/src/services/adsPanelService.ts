@@ -1,6 +1,8 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const serverUrl = process.env.REACT_APP_API_URL;
+// Force localhost for now to fix connection issues
+const API_BASE_URL = 'http://localhost:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
@@ -93,6 +95,8 @@ class AdsPanelServiceV4 {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      // Add timeout to prevent hanging
+      signal: AbortSignal.timeout(10000), // 10 second timeout
       ...options,
     });
 
