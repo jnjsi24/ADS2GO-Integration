@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const DeviceTracking = require('../src/models/deviceTracking');
-const DeviceDataHistory = require('../src/models/deviceDataHistory');
+const DeviceDataHistory = require('../src/models/deviceDataHistoryV2');
 
 require('dotenv').config({ path: './.env' });
 
@@ -8,11 +8,11 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ads2go
 
 // Configuration for location history limits
 const LOCATION_LIMITS = {
-  DEVICE_TRACKING: 960,    // Real-time data (was 200) - 8 hours at 30s intervals
-  DEVICE_DATA_HISTORY: 960, // Archived data (was 240) - 8 hours at 30s intervals
+  DEVICE_TRACKING: 4114,    // Real-time data - 8 hours at 7s intervals (28,800s ÷ 7s = 4,114)
+  DEVICE_DATA_HISTORY: 4114, // Archived data - 8 hours at 7s intervals
   AD_PLAYBACKS: 800,       // Ad playbacks (was 50) - 8 hours × 160 plays × 5 ads
   QR_SCANS: 'No limit',    // QR scans (no limit - matches DeviceTracking)
-  LOCATION_HISTORY_ARCHIVE: 960 // Location history in archives (was 240)
+  LOCATION_HISTORY_ARCHIVE: 4114 // Location history in archives - 8 hours at 7s intervals
 };
 
 async function updateLocationLimits() {
@@ -26,8 +26,8 @@ async function updateLocationLimits() {
     console.log(`   AdPlaybacks: 20 entries`);
     
     console.log('\n🔧 New limits (IMPLEMENTED):');
-    console.log(`   DeviceTracking: ${LOCATION_LIMITS.DEVICE_TRACKING} entries (8 hours at 30s intervals)`);
-    console.log(`   DeviceDataHistory: ${LOCATION_LIMITS.DEVICE_DATA_HISTORY} entries (8 hours at 30s intervals)`);
+    console.log(`   DeviceTracking: ${LOCATION_LIMITS.DEVICE_TRACKING} entries (8 hours at 7s intervals)`);
+    console.log(`   DeviceDataHistory: ${LOCATION_LIMITS.DEVICE_DATA_HISTORY} entries (8 hours at 7s intervals)`);
     console.log(`   AdPlaybacks: ${LOCATION_LIMITS.AD_PLAYBACKS} entries (8 hours × 160 plays × 5 ads)`);
     console.log(`   QRScans: ${LOCATION_LIMITS.QR_SCANS} entries`);
     
