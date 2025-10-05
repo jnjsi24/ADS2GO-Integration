@@ -375,6 +375,42 @@ const paymentResolvers = {
               deploymentStatus: ad.deploymentStatus
             });
             
+            // Create UserAnalytics record if it doesn't exist
+            try {
+              const UserAnalytics = require('../models/userAnalytics');
+              let userAnalytics = await UserAnalytics.findOne({ userId: ad.userId });
+              
+              if (!userAnalytics) {
+                console.log(`📊 Creating UserAnalytics record for user ${ad.userId} during payment`);
+                
+                userAnalytics = new UserAnalytics({
+                  userId: ad.userId,
+                  ads: [],
+                  totalAds: 0,
+                  totalMaterials: 0,
+                  totalDevices: 0,
+                  totalAdPlays: 0,
+                  totalAdPlayTime: 0,
+                  totalAdImpressions: 0,
+                  totalQRScans: 0,
+                  averageAdCompletionRate: 0,
+                  qrScanConversionRate: 0,
+                  adPerformance: [],
+                  materialBreakdown: [],
+                  errorLogs: [],
+                  isActive: true
+                });
+                
+                await userAnalytics.save();
+                console.log(`✅ Created UserAnalytics record for user ${ad.userId}`);
+              } else {
+                console.log(`ℹ️ UserAnalytics already exists for user ${ad.userId}`);
+              }
+            } catch (userAnalyticsError) {
+              console.error(`⚠️ Warning: Could not create UserAnalytics during payment:`, userAnalyticsError.message);
+              // Don't fail the payment if UserAnalytics creation fails
+            }
+            
             // Manually trigger deployment logic since post-save hook is skipped
             await triggerAdDeployment(ad);
             console.log('Ad deployment triggered successfully');

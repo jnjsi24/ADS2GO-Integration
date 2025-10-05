@@ -324,6 +324,48 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
       // Don't fail the deployment if DeviceTracking creation fails
     }
     
+    // Create UserAnalytics record if it doesn't exist
+    try {
+      const UserAnalytics = require('./userAnalytics');
+      const Ad = require('./Ad');
+      
+      // Get the ad to find the userId
+      const ad = await Ad.findById(adId);
+      if (ad && ad.userId) {
+        let userAnalytics = await UserAnalytics.findOne({ userId: ad.userId });
+        
+        if (!userAnalytics) {
+          console.log(`📊 Creating UserAnalytics record for user ${ad.userId} during ad deployment`);
+          
+          userAnalytics = new UserAnalytics({
+            userId: ad.userId,
+            ads: [],
+            totalAds: 0,
+            totalMaterials: 0,
+            totalDevices: 0,
+            totalAdPlays: 0,
+            totalAdPlayTime: 0,
+            totalAdImpressions: 0,
+            totalQRScans: 0,
+            averageAdCompletionRate: 0,
+            qrScanConversionRate: 0,
+            adPerformance: [],
+            materialBreakdown: [],
+            errorLogs: [],
+            isActive: true
+          });
+          
+          await userAnalytics.save();
+          console.log(`✅ Created UserAnalytics record for user ${ad.userId}`);
+        } else {
+          console.log(`ℹ️ UserAnalytics already exists for user ${ad.userId}`);
+        }
+      }
+    } catch (userAnalyticsError) {
+      console.error(`⚠️ Warning: Could not create UserAnalytics during deployment:`, userAnalyticsError.message);
+      // Don't fail the deployment if UserAnalytics creation fails
+    }
+    
     console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on HEADDRESS material ${materialId} (available to both tablet slots)`);
     return savedDeployment;
     
@@ -477,6 +519,48 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     } catch (deviceTrackingError) {
       console.error(`⚠️ Warning: Could not create DeviceTracking for LCD material ${materialId}:`, deviceTrackingError.message);
       // Don't fail the deployment if DeviceTracking creation fails
+    }
+    
+    // Create UserAnalytics record if it doesn't exist
+    try {
+      const UserAnalytics = require('./userAnalytics');
+      const Ad = require('./Ad');
+      
+      // Get the ad to find the userId
+      const ad = await Ad.findById(adId);
+      if (ad && ad.userId) {
+        let userAnalytics = await UserAnalytics.findOne({ userId: ad.userId });
+        
+        if (!userAnalytics) {
+          console.log(`📊 Creating UserAnalytics record for user ${ad.userId} during LCD ad deployment`);
+          
+          userAnalytics = new UserAnalytics({
+            userId: ad.userId,
+            ads: [],
+            totalAds: 0,
+            totalMaterials: 0,
+            totalDevices: 0,
+            totalAdPlays: 0,
+            totalAdPlayTime: 0,
+            totalAdImpressions: 0,
+            totalQRScans: 0,
+            averageAdCompletionRate: 0,
+            qrScanConversionRate: 0,
+            adPerformance: [],
+            materialBreakdown: [],
+            errorLogs: [],
+            isActive: true
+          });
+          
+          await userAnalytics.save();
+          console.log(`✅ Created UserAnalytics record for user ${ad.userId}`);
+        } else {
+          console.log(`ℹ️ UserAnalytics already exists for user ${ad.userId}`);
+        }
+      }
+    } catch (userAnalyticsError) {
+      console.error(`⚠️ Warning: Could not create UserAnalytics during LCD deployment:`, userAnalyticsError.message);
+      // Don't fail the deployment if UserAnalytics creation fails
     }
     
     console.log(`✅ Successfully added ad ${adId} to slot ${nextSlot} on material ${materialId}`);
