@@ -920,6 +920,9 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <p className="text-sm text-red-600 mt-1">{errors.adLengthSeconds}</p>
           )}
         </div>
+        
+        {/* Number of Devices and Campaign Start Date side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Number of Devices
@@ -969,20 +972,29 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             
             {/* Calendar Dropdown */}
             {showCalendar && (
-              <div className="absolute top-full left-0 mt-2 z-50 calendar-container">
-                <CalendarWidget
-                  selectedDate={selectedDate}
-                  onDateSelect={handleCalendarDateSelect}
-                  className="w-80"
-                  minDate={new Date()}
-                  showActionButtons={false}
-                />
+              <div 
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                onClick={() => setShowCalendar(false)}
+              >
+                <div 
+                  className="bg-white rounded-lg shadow-2xl border border-gray-200 calendar-container ml-16"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CalendarWidget
+                    selectedDate={selectedDate}
+                    onDateSelect={handleCalendarDateSelect}
+                    className="w-80"
+                    minDate={new Date()}
+                    showActionButtons={false}
+                  />
+                </div>
               </div>
             )}
           </div>
           {errors.startDate && (
             <p className="text-sm text-red-600 mt-1">{errors.startDate}</p>
           )}
+        </div>
         </div>
       </div>
     </div>
