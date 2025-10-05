@@ -111,7 +111,7 @@ const AdminSidebar: React.FC = () => {
           
           {/* Notification Bell Button */}
           <button
-            onClick={() => navigate('/admin/ads?tab=notifications')} // Navigate to ads control page with notifications tab
+            onClick={() => navigate('/admin/notifications')} // Navigate to dedicated notifications page
             className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors"
             title="Notifications"
           >

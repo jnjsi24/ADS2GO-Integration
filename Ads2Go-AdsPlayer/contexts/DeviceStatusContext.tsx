@@ -8,6 +8,7 @@ type DeviceStatus = {
   isOnline: boolean;
   lastSeen?: Date;
   error?: string;
+  unregistered?: boolean;
 };
 
 type DeviceStatusContextType = {
@@ -27,6 +28,24 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const loadMaterialId = async () => {
       try {
+        // Check if device is registered first
+        const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
+        if (!isRegistered) {
+          console.log('Device not registered, not loading material ID');
+          setMaterialIdState(null);
+          return;
+        }
+
+        // Try to get material ID from registration data
+        const registration = await tabletRegistrationService.getRegistrationData();
+        if (registration && registration.materialId) {
+          console.log('Using material ID from registration:', registration.materialId);
+          setMaterialIdState(registration.materialId);
+          // Save to SecureStore for future use
+          await SecureStore.setItemAsync('device_material_id', registration.materialId);
+          return;
+        }
+
         // First try to load from SecureStore
         const savedMaterialId = await SecureStore.getItemAsync('device_material_id');
         if (savedMaterialId) {
@@ -52,19 +71,14 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
           // Save to SecureStore for future use
           await SecureStore.setItemAsync('device_material_id', envMaterialId);
         } else {
-          // Use a default fallback material ID if none found
-          const fallbackMaterialId = 'DGL-HEADDRESS-CAR-001';
-          console.log('No material ID found in SecureStore or environment variables, using fallback:', fallbackMaterialId);
-          setMaterialIdState(fallbackMaterialId);
-          // Save fallback to SecureStore
-          await SecureStore.setItemAsync('device_material_id', fallbackMaterialId);
+          // Don't set a fallback if device is registered but no material ID found
+          console.log('No material ID found for registered device');
+          setMaterialIdState(null);
         }
       } catch (error) {
         console.error('Failed to load material ID:', error);
-        // Even if there's an error, set a fallback material ID
-        const fallbackMaterialId = 'DGL-HEADDRESS-CAR-001';
-        console.log('Error loading material ID, using fallback:', fallbackMaterialId);
-        setMaterialIdState(fallbackMaterialId);
+        // Don't set a fallback on error
+        setMaterialIdState(null);
       }
     };
 
@@ -73,10 +87,35 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Set up periodic check to sync material ID with registration data
     const syncInterval = setInterval(async () => {
       try {
+        // Check if we're already on the registration screen to avoid unnecessary checks
+        const { router } = require('expo-router');
+        const currentRoute = router.pathname || '';
+        if (currentRoute.includes('/registration')) {
+          console.log('Already on registration screen, skipping sync check');
+          return;
+        }
+
+        // Check if device is still registered
+        const isRegistered = await tabletRegistrationService.checkRegistrationStatus();
+        if (!isRegistered) {
+          console.log('Device became unregistered, clearing material ID and stopping sync');
+          setMaterialIdState(null);
+          
+          // Clear the interval to prevent infinite loop
+          clearInterval(syncInterval);
+          
+          // Navigate to registration screen
+          router.replace('/registration?force=true');
+          return;
+        }
+
         const currentMaterialId = await SecureStore.getItemAsync('device_material_id');
         if (currentMaterialId && currentMaterialId !== materialId) {
           console.log('Material ID changed, updating context:', currentMaterialId);
           setMaterialIdState(currentMaterialId);
+        } else if (!currentMaterialId && materialId) {
+          console.log('Material ID was cleared, updating context');
+          setMaterialIdState(null);
         }
       } catch (error) {
         console.error('Error syncing material ID:', error);
@@ -123,6 +162,15 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Status update:', { prev, newStatus, updatedStatus });
         return updatedStatus;
       });
+      
+      // If device was unregistered, navigate to registration screen
+      if (newStatus.unregistered) {
+        console.log('🚨 Device unregistered, navigating to registration screen');
+        const { router } = require('expo-router');
+        setTimeout(() => {
+          router.replace('/registration?force=true');
+        }, 1000);
+      }
     };
 
     // Set a timeout to handle connection failures

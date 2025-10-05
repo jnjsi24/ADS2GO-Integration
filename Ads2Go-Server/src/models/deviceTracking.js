@@ -100,7 +100,8 @@ const SlotSchema = new mongoose.Schema({
   },
   deviceId: { 
     type: String, 
-    required: true,
+    required: false, // Allow null when device is unregistered
+    default: null,
     index: true
   },
   isOnline: { 
@@ -393,61 +394,87 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
   }
   
   // If no record for today, find the most recent record for this device
-  car = await this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
+  const recentCar = await this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
   
-  if (car) {
-    // Update the existing record to today's date and reset session
-    console.log(`🔄 Updating existing DeviceTracking record for device ${deviceId} to today's date: ${todayStr}`);
+  if (recentCar) {
+    // Check if the recent record is from a different day using timezone-aware comparison
+    const recentDate = new Date(recentCar.date);
     
-    // Update the date to today
-    car.date = todayStr;
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
     
-    // Reset the daily session for the new day
-    car.currentSession = {
-      date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-      startTime: new Date(),
-      endTime: null,
-      totalHoursOnline: 0,
-      totalDistanceTraveled: 0,
-      isActive: true,
-      targetHours: 8,
-      complianceStatus: 'PENDING',
-      locationHistory: []
-    };
+    // Compare just the date parts (year, month, day) in Philippines timezone
+    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
+    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
     
-    // Reset daily counters
-    car.totalAdPlays = 0;
-    car.totalQRScans = 0;
-    car.totalDistanceTraveled = 0;
-    car.totalHoursOnline = 0;
-    car.totalAdImpressions = 0;
-    car.totalAdPlayTime = 0;
-    
-    // Clear daily data arrays
-    car.adPlaybacks = [];
-    car.qrScans = [];
-    car.locationHistory = [];
-    car.hourlyStats = [];
-    car.adPerformance = [];
-    car.qrScansByAd = [];
-    
-    // Reset current ad
-    car.currentAd = null;
-    
-    // Reset compliance data
-    car.complianceData = {
-      offlineIncidents: 0,
-      displayIssues: 0
-    };
-    
-    // Update lastSeen to now
-    car.lastSeen = new Date();
-    
-    // Save the updated record
-    await car.save();
-    console.log(`✅ Successfully updated DeviceTracking record for device ${deviceId} to today's date`);
-    
-    return car;
+    if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
+      // Different day - update the existing record to today's date and reset daily data
+      console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for device ${deviceId} to today: ${todayStr}`);
+      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
+      
+      // Update the existing record to today's date and reset daily data
+      recentCar.date = todayStr;
+      
+      // Reset daily counters for new day
+      recentCar.totalAdPlays = 0;
+      recentCar.totalQRScans = 0;
+      recentCar.totalDistanceTraveled = 0;
+      recentCar.totalHoursOnline = 0;
+      recentCar.totalAdImpressions = 0;
+      recentCar.totalAdPlayTime = 0;
+      
+      // Clear daily data arrays
+      recentCar.adPlaybacks = [];
+      recentCar.qrScans = [];
+      recentCar.locationHistory = [];
+      recentCar.hourlyStats = [];
+      recentCar.adPerformance = [];
+      recentCar.qrScansByAd = [];
+      
+      // Reset current ad
+      recentCar.currentAd = null;
+      
+      // Reset compliance data
+      recentCar.complianceData = {
+        offlineIncidents: 0,
+        displayIssues: 0
+      };
+      
+      // Reset current session for new day
+      recentCar.currentSession = {
+        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        startTime: new Date(),
+        endTime: null,
+        totalHoursOnline: 0,
+        totalDistanceTraveled: 0,
+        isActive: true,
+        targetHours: 8,
+        complianceStatus: 'PENDING',
+        locationHistory: []
+      };
+      
+      // Set online status for the current device
+      recentCar.isOnline = true;
+      recentCar.slots.forEach(slot => {
+        slot.isOnline = slot.deviceId === deviceId;
+        slot.lastSeen = new Date();
+      });
+      
+      // Update lastSeen
+      recentCar.lastSeen = new Date();
+      
+      // Save the updated record
+      await recentCar.save();
+      console.log(`✅ Successfully updated existing DeviceTracking record for device ${deviceId} to today's date`);
+      
+      return recentCar;
+    } else {
+      // Same day - return the existing record
+      console.log(`📅 Same day detected: Using existing record for device ${deviceId}`);
+      return recentCar;
+    }
   }
   
   return null; // No existing record found
@@ -469,61 +496,87 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
   }
   
   // If no record for today, find the most recent record for this material
-  car = await this.findOne({ materialId }).sort({ date: -1 });
+  const recentCar = await this.findOne({ materialId }).sort({ date: -1 });
   
-  if (car) {
-    // Update the existing record to today's date and reset session
-    console.log(`🔄 Updating existing DeviceTracking record for ${materialId} to today's date: ${todayStr}`);
+  if (recentCar) {
+    // Check if the recent record is from a different day using timezone-aware comparison
+    const recentDate = new Date(recentCar.date);
     
-    // Update the date to today
-    car.date = todayStr;
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
     
-    // Reset the daily session for the new day
-    car.currentSession = {
-      date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
-      startTime: new Date(),
-      endTime: null,
-      totalHoursOnline: 0,
-      totalDistanceTraveled: 0,
-      isActive: true,
-      targetHours: 8,
-      complianceStatus: 'PENDING',
-      locationHistory: []
-    };
+    // Compare just the date parts (year, month, day) in Philippines timezone
+    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
+    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
     
-    // Reset daily counters
-    car.totalAdPlays = 0;
-    car.totalQRScans = 0;
-    car.totalDistanceTraveled = 0;
-    car.totalHoursOnline = 0;
-    car.totalAdImpressions = 0;
-    car.totalAdPlayTime = 0;
-    
-    // Clear daily data arrays
-    car.adPlaybacks = [];
-    car.qrScans = [];
-    car.locationHistory = [];
-    car.hourlyStats = [];
-    car.adPerformance = [];
-    car.qrScansByAd = [];
-    
-    // Reset current ad
-    car.currentAd = null;
-    
-    // Reset compliance data
-    car.complianceData = {
-      offlineIncidents: 0,
-      displayIssues: 0
-    };
-    
-    // Update lastSeen to now
-    car.lastSeen = new Date();
-    
-    // Save the updated record
-    await car.save();
-    console.log(`✅ Successfully updated DeviceTracking record for ${materialId} to today's date`);
-    
-    return car;
+    if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
+      // Different day - update the existing record to today's date and reset daily data
+      console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for ${materialId} to today: ${todayStr}`);
+      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
+      
+      // Update the existing record to today's date and reset daily data
+      recentCar.date = todayStr;
+      
+      // Reset daily counters for new day
+      recentCar.totalAdPlays = 0;
+      recentCar.totalQRScans = 0;
+      recentCar.totalDistanceTraveled = 0;
+      recentCar.totalHoursOnline = 0;
+      recentCar.totalAdImpressions = 0;
+      recentCar.totalAdPlayTime = 0;
+      
+      // Clear daily data arrays
+      recentCar.adPlaybacks = [];
+      recentCar.qrScans = [];
+      recentCar.locationHistory = [];
+      recentCar.hourlyStats = [];
+      recentCar.adPerformance = [];
+      recentCar.qrScansByAd = [];
+      
+      // Reset current ad
+      recentCar.currentAd = null;
+      
+      // Reset compliance data
+      recentCar.complianceData = {
+        offlineIncidents: 0,
+        displayIssues: 0
+      };
+      
+      // Reset current session for new day
+      recentCar.currentSession = {
+        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        startTime: new Date(),
+        endTime: null,
+        totalHoursOnline: 0,
+        totalDistanceTraveled: 0,
+        isActive: true,
+        targetHours: 8,
+        complianceStatus: 'PENDING',
+        locationHistory: []
+      };
+      
+      // Reset online status for new day
+      recentCar.isOnline = false;
+      recentCar.slots.forEach(slot => {
+        slot.isOnline = false;
+        slot.lastSeen = new Date();
+      });
+      
+      // Update lastSeen
+      recentCar.lastSeen = new Date();
+      
+      // Save the updated record
+      await recentCar.save();
+      console.log(`✅ Successfully updated existing DeviceTracking record for ${materialId} to today's date`);
+      
+      return recentCar;
+    } else {
+      // Same day - return the existing record
+      console.log(`📅 Same day detected: Using existing record for ${materialId}`);
+      return recentCar;
+    }
   }
   
   return null; // No existing record found
@@ -606,6 +659,66 @@ DeviceTrackingSchema.statics.findByMaterialAndSlot = function(materialId, slotNu
     'slots.slotNumber': slotNumber 
   });
 };
+
+// Post-save hook to trigger archiving when DeviceTracking data changes
+DeviceTrackingSchema.post('save', async function(doc) {
+  try {
+    // Only trigger archiving for significant data changes (not just status updates)
+    if (this.isModified('totalAdPlays') || 
+        this.isModified('totalQRScans') || 
+        this.isModified('totalDistanceTraveled') || 
+        this.isModified('totalHoursOnline') ||
+        this.isModified('adPlaybacks') ||
+        this.isModified('qrScans') ||
+        this.isModified('locationHistory')) {
+      
+      console.log(`🔄 DeviceTracking data changed for ${this.materialId}, triggering archive...`);
+      
+      // Import and trigger archive (use setTimeout to avoid blocking the save operation)
+      setTimeout(async () => {
+        try {
+          const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
+          const dateStr = this.date.toISOString().split('T')[0];
+          await dailyArchiveJobV2.archiveMaterialDataV2(this, dateStr);
+          console.log(`✅ Auto-archived updated data for ${this.materialId}`);
+        } catch (error) {
+          console.error(`❌ Auto-archive failed for ${this.materialId}:`, error.message);
+        }
+      }, 1000); // 1 second delay to ensure save is complete
+    }
+  } catch (error) {
+    console.error('❌ Error in DeviceTracking post-save hook:', error.message);
+  }
+});
+
+// Post-update hook to trigger archiving when DeviceTracking data is updated via updateOne, updateMany, etc.
+DeviceTrackingSchema.post(['updateOne', 'updateMany', 'findOneAndUpdate'], async function(result) {
+  try {
+    if (result && (result.modifiedCount > 0 || result.nModified > 0)) {
+      // Get the updated document(s)
+      const filter = this.getFilter();
+      const updatedDocs = await this.model.find(filter);
+      
+      for (const doc of updatedDocs) {
+        console.log(`🔄 DeviceTracking data updated for ${doc.materialId}, triggering archive...`);
+        
+        // Import and trigger archive
+        setTimeout(async () => {
+          try {
+            const dailyArchiveJobV2 = require('../jobs/dailyArchiveJobV2');
+            const dateStr = doc.date.toISOString().split('T')[0];
+            await dailyArchiveJobV2.archiveMaterialDataV2(doc, dateStr);
+            console.log(`✅ Auto-archived updated data for ${doc.materialId}`);
+          } catch (error) {
+            console.error(`❌ Auto-archive failed for ${doc.materialId}:`, error.message);
+          }
+        }, 1000);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in DeviceTracking post-update hook:', error.message);
+  }
+});
 
 DeviceTrackingSchema.statics.findOnlineScreens = function() {
   return this.find({ isOnline: true });

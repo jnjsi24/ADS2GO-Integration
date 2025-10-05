@@ -10,13 +10,23 @@ import { onError } from '@apollo/client/link/error';
 // Get server configuration from environment variables
 const serverUrl = process.env.REACT_APP_API_URL;
 
-if (!serverUrl) {
-  console.error('❌ Missing required environment variables:');
-  console.error('   REACT_APP_API_URL:', serverUrl);
-  console.error('   Please check your .env file');
-}
+console.log('🔍 Environment Debug:', {
+  REACT_APP_API_URL: process.env.REACT_APP_API_URL,
+  NODE_ENV: process.env.NODE_ENV,
+  allEnvVars: Object.keys(process.env).filter(key => key.startsWith('REACT_APP_'))
+});
 
-const graphqlUri = process.env.REACT_APP_GRAPHQL_URL || `${serverUrl}/graphql`;
+// Force localhost for now to fix connection issues
+const actualServerUrl = 'http://localhost:5000';
+
+console.log('🔧 Apollo Client Configuration (FORCED LOCALHOST):', {
+  envUrl: serverUrl,
+  finalUrl: actualServerUrl,
+  usingFallback: true,
+  reason: 'Forced localhost due to connection issues'
+});
+
+const graphqlUri = 'http://localhost:5000/graphql';
 
 const httpLink = createHttpLink({
   uri: graphqlUri,

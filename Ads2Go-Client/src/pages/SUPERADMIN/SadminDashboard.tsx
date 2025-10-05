@@ -8,7 +8,6 @@ import { GET_SUPERADMIN_NOTIFICATIONS, GET_SUPERADMIN_DASHBOARD_STATS } from '..
 // GraphQL query to get superadmin details
 const GET_SUPERADMIN_DETAILS = GET_OWN_SUPERADMIN_DETAILS;
 
-
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("SuperAdmin");
   
@@ -47,6 +46,25 @@ const Dashboard = () => {
   const unreadCount = notificationsData?.getSuperAdminNotifications?.unreadCount || 0;
   const stats = statsData?.getSuperAdminDashboardStats;
 
+  // Sample data for bar charts (adapt based on your stats; use derived values)
+  const usersData = [
+    { label: 'Total Users', value: stats?.totalUsers || 0, color: 'bg-blue-500' },
+    { label: 'Active Users', value: Math.floor((stats?.totalUsers || 0) * 0.85), color: 'bg-green-500' },
+    { label: 'New This Month', value: Math.floor((stats?.totalUsers || 0) * 0.12), color: 'bg-purple-500' },
+  ];
+
+  const driversData = [
+    { label: 'Total Drivers', value: stats?.totalDrivers || 0, color: 'bg-blue-500' },
+    { label: 'Active Drivers', value: Math.floor((stats?.totalDrivers || 0) * 0.78), color: 'bg-green-500' },
+    { label: 'Pending Approval', value: Math.floor((stats?.totalDrivers || 0) * 0.15), color: 'bg-yellow-500' },
+  ];
+
+  const adsData = [
+    { label: 'Total Ads', value: stats?.totalAds || 0, color: 'bg-blue-500' },
+    { label: 'Active Ads', value: Math.floor((stats?.totalAds || 0) * 0.72), color: 'bg-green-500' },
+    { label: 'Pending Review', value: Math.floor((stats?.totalAds || 0) * 0.18), color: 'bg-yellow-500' },
+  ];
+
   if (loading || statsLoading) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
       <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -58,6 +76,12 @@ const Dashboard = () => {
       <div className="text-red-500">Error loading superadmin details: {error.message}</div>
     </div>
   );
+
+  const maxValue = Math.max(
+    ...usersData.map(d => d.value),
+    ...driversData.map(d => d.value),
+    ...adsData.map(d => d.value)
+  ) || 1; // Avoid division by zero
 
   return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
@@ -75,7 +99,7 @@ const Dashboard = () => {
           {/* Notifications Button */}
           <Link
             to="/sadmin-notifications"
-            className="relative flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm hover:bg-gray-50 transition-colors"
+            className="relative flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-md text-gray-700 text-sm hover:bg-gray-50 transition-colors"
           >
             <Bell className="h-5 w-5 mr-2 text-gray-500" />
             <span>Notifications</span>
@@ -87,7 +111,7 @@ const Dashboard = () => {
           </Link>
           
           {/* Calendar icon and 'This month' button */}
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
+          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-md text-gray-700 text-sm cursor-pointer">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-5 w-5 mr-2 text-gray-500"
@@ -121,152 +145,182 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {[
-          { 
-            label: "Total Drivers", 
-            value: stats?.totalDrivers || 0, 
-            change: "Active drivers", 
-            up: true 
-          },
-          { 
-            label: "Total Ads", 
-            value: stats?.totalAds || 0, 
-            change: "All advertisements", 
-            up: true 
-          },
-          { 
-            label: "Total Users", 
-            value: stats?.totalUsers || 0, 
-            change: "Registered users", 
-            up: true 
-          },
-          { 
-            label: "Total Plans", 
-            value: stats?.totalPlans || 0, 
-            change: "Available plans", 
-            up: true 
-          },
-        ].map((stat, i) => (
-          <div
-            key={i}
-            className="bg-white p-5 rounded-2xl shadow-sm flex flex-col justify-between"
-          >
-            <div className="flex justify-between items-center mb-2">
-              <p className="text-sm text-gray-500">{stat.label}</p>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+      {/* Main Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        {/* LEFT SIDE: Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+  {[
+    { 
+      label: "Total Drivers", 
+      value: stats?.totalDrivers || 0, 
+      change: "Active drivers", 
+      color: "green", 
+      icon: "LifeBuoy" 
+    },
+    { 
+      label: "Total Ads", 
+      value: stats?.totalAds || 0, 
+      change: "All advertisements", 
+      color: "blue", 
+      icon: "Megaphone" 
+    },
+    { 
+      label: "Total Users", 
+      value: stats?.totalUsers || 0, 
+      change: "Registered users", 
+      color: "yellow", 
+      icon: "Users" 
+    },
+    { 
+      label: "Total Plans", 
+      value: stats?.totalPlans || 0, 
+      change: "Available plans", 
+      color: "purple", 
+      icon: "ClipboardList" 
+    },
+  ].map((stat, i) => {
+    const Icon =
+      {
+        LifeBuoy: require("lucide-react").LifeBuoy,
+        Megaphone: require("lucide-react").Megaphone,
+        Users: require("lucide-react").Users,
+        ClipboardList: require("lucide-react").ClipboardList,
+      }[stat.icon];
+
+    return (
+      <div
+        key={i}
+        className={`bg-${stat.color}-100 p-6 rounded-xl shadow-md border flex items-center justify-between`}
+      >
+        {/* Left side: Icon */}
+        <div>
+          <Icon className={`h-12 w-12 text-white rounded-full bg-${stat.color}-500 p-2`} />
+        </div>
+
+        {/* Right side: Label + Value */}
+        <div className="flex flex-col items-end text-right">
+          <p className={`text-3xl font-bold text-${stat.color}-600`}>
+            {stat.value.toLocaleString()}
+          </p>
+          <h3 className="text-sm font-medium text-gray-600">{stat.label}</h3>
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+
+        {/* RIGHT SIDE: Analytics Panels */}
+        <div className="space-y-6">
+          {/* Users Analytics */}
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Users Analytics</h3>
+              <Link
+                to="/sadmin-analytics?tab=users"
+                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+                View Details
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
             </div>
-            <p className="text-2xl font-bold text-gray-800 mb-1">
-              {stat.value}
-            </p>
-            <p className="text-sm font-medium text-gray-600">
-              {stat.change}
-            </p>
-          </div>
-        ))}
-      </div>
 
-      {/* Analytics Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Users Analytics */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Users Analytics</h3>
-            <Link
-              to="/sadmin-analytics?tab=users"
-              className="text-blue-600 text-sm flex items-center hover:text-blue-700 transition-colors"
-            >
-              View Details
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Link>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total Users</span>
-              <span className="text-lg font-semibold text-gray-800">{stats?.totalUsers || 0}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Active Users</span>
-              <span className="text-lg font-semibold text-green-600">{Math.floor((stats?.totalUsers || 0) * 0.85)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">New This Month</span>
-              <span className="text-lg font-semibold text-blue-600">{Math.floor((stats?.totalUsers || 0) * 0.12)}</span>
+            <div className="space-y-4">
+              {usersData.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between w-full space-x-3"
+                >
+                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
+                    {item.label}
+                  </p>
+                  <div className="flex-1">
+                    <div
+                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
+                      style={{ width: `${(item.value / maxValue) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
+                    {item.value.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
 
-        {/* Drivers Analytics */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Drivers Analytics</h3>
-            <Link
-              to="/sadmin-analytics?tab=drivers"
-              className="text-blue-600 text-sm flex items-center hover:text-blue-700 transition-colors"
-            >
-              View Details
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Link>
-          </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total Drivers</span>
-              <span className="text-lg font-semibold text-gray-800">{stats?.totalDrivers || 0}</span>
+          {/* Drivers Analytics */}
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Drivers Analytics</h3>
+              <Link
+                to="/sadmin-analytics?tab=drivers"
+                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
+              >
+                View Details
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Active Drivers</span>
-              <span className="text-lg font-semibold text-green-600">{Math.floor((stats?.totalDrivers || 0) * 0.78)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Pending Approval</span>
-              <span className="text-lg font-semibold text-yellow-600">{Math.floor((stats?.totalDrivers || 0) * 0.15)}</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Ads Analytics */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Ads Analytics</h3>
-            <Link
-              to="/sadmin-analytics?tab=ads"
-              className="text-blue-600 text-sm flex items-center hover:text-blue-700 transition-colors"
-            >
-              View Details
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </Link>
+            <div className="space-y-4">
+              {driversData.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between w-full space-x-3"
+                >
+                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
+                    {item.label}
+                  </p>
+                  <div className="flex-1">
+                    <div
+                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
+                      style={{ width: `${(item.value / maxValue) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
+                    {item.value.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Total Ads</span>
-              <span className="text-lg font-semibold text-gray-800">{stats?.totalAds || 0}</span>
+
+          {/* Ads Analytics */}
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Ads Analytics</h3>
+              <Link
+                to="/sadmin-analytics?tab=ads"
+                className="text-black/70 text-sm flex font-semibold items-center hover:text-black transition-colors"
+              >
+                View Details
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </Link>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Active Ads</span>
-              <span className="text-lg font-semibold text-green-600">{Math.floor((stats?.totalAds || 0) * 0.72)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Pending Review</span>
-              <span className="text-lg font-semibold text-yellow-600">{Math.floor((stats?.totalAds || 0) * 0.18)}</span>
+
+            <div className="space-y-4">
+              {adsData.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between w-full space-x-3"
+                >
+                  <p className="text-sm font-medium text-gray-900 w-32 truncate">
+                    {item.label}
+                  </p>
+                  <div className="flex-1">
+                    <div
+                      className={`h-3 ${item.color} rounded-full transition-all duration-300`}
+                      style={{ width: `${(item.value / maxValue) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900 min-w-[50px] text-right">
+                    {item.value.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 };

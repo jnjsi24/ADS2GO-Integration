@@ -8,6 +8,7 @@ import { CREATE_AD } from '../../graphql/admin/mutations/createAd';
 import { DELETE_AD } from '../../graphql/user';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { useToast, ToastContainer } from '../../components/ToastNotification';
 
 
 // Form data type
@@ -22,12 +23,6 @@ type FormData = {
   status: 'PENDING';
 };
 
-// Toast notification type
-type Toast = {
-  id: number;
-  message: string;
-  type: 'error' | 'success';
-};
 
 // Ad type
 type Ad = {
@@ -69,7 +64,7 @@ const statusFilterOptions = ['All Status', 'Pending', 'Approved', 'Rejected', 'R
 const Advertisements: React.FC = () => {
   const { user } = useUserAuth();
   const navigate = useNavigate();
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toasts, addToast, removeToast } = useToast();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,19 +96,19 @@ const Advertisements: React.FC = () => {
   const [deleteAd, { loading: deleteLoading }] = useMutation(DELETE_AD, {
     refetchQueries: [{ query: GET_MY_ADS }],
     onCompleted: () => {
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Success!', 
         message: 'Advertisement deleted successfully!', 
-        type: 'success' as const 
-      }]);
+        type: 'success' 
+      });
     },
     onError: (error) => {
       console.error('Error deleting ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Error!', 
         message: 'Failed to delete advertisement', 
-        type: 'error' as const 
-      }]);
+        type: 'error' 
+      });
     },
   });
   
@@ -207,17 +202,6 @@ const Advertisements: React.FC = () => {
     setEstimatedPrice(price);
   }, [formData.vehicleType, formData.materialsUsed, formData.plan]);
 
-  const addToast = (message: string, type: 'error' | 'success') => {
-    const id = Date.now();
-    setToasts((prev: Toast[]) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
-  };
-
-  const removeToast = (id: number) => {
-    setToasts((prev: Toast[]) => prev.filter((toast) => toast.id !== id));
-  };
 
   const handleDeleteAd = (adId: string) => {
     setAdToDelete(adId);
@@ -355,55 +339,68 @@ const Advertisements: React.FC = () => {
     
     // Validate required fields
     if (!formData.title.trim()) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a title', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please enter a title', type: 'error' });
       return;
     }
     if (!formData.description.trim()) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please enter a description', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please enter a description', type: 'error' });
       return;
     }
     if (!formData.materialsUsed) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a material', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select a material', type: 'error' });
       return;
     }
     if (!formData.plan) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select a plan', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select a plan', type: 'error' });
       return;
     }
     if (!formData.adFormat) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please select an ad format', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please select an ad format', type: 'error' });
       return;
     }
     if (!formData.media) {
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Please upload a media file', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Please upload a media file', type: 'error' });
       return;
     }
     
     try {
       // For now, redirect to the proper create advertisement page
-      setToasts((prev: Toast[]) => [...prev, { 
-        id: Date.now(), 
+      addToast({ 
+        title: 'Error!', 
         message: 'Please use the "Create Advertisement" page for full functionality', 
         type: 'error' 
-      }]);
+      });
       setShowCreateAdPopup(false);
     } catch (error) {
       console.error('Error creating ad:', error);
-      setToasts((prev: Toast[]) => [...prev, { id: Date.now(), message: 'Failed to create ad', type: 'error' }]);
+      addToast({ title: 'Error!', message: 'Failed to create ad', type: 'error' });
     }
   };
 
   return (
-    <div className="min-h-screen bg-white pl-64 pr-5">
-      <div className="bg-white w-full min-h-screen">
-      {/* Header with Title*/}
-      <div className="flex justify-between items-center mb-6 pt-10">
-        <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
+    <div className="relative min-h-screen overflow-hidden">
+    {/* Background Image */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
+    ></div>
+
+    {/* Overlay (optional subtle tint) */}
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+    {/* Main Content */}
+    <div className="relative min-h-screen bg-transparent pl-64 pr-5">
+      <div className="bg-transparent w-full min-h-screen">
+        {/* Header with Title */}
+        <div className="flex justify-between items-center mb-6 pt-10">
+          <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
         <div className="flex flex-col items-end gap-3">
           <div className="flex gap-1">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -413,7 +410,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowPlanDropdown(!showPlanDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2">
                 {selectedPlanFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showPlanDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -444,7 +441,7 @@ const Advertisements: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2">
                 {selectedStatusFilter}
                 <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
               </button>
@@ -487,7 +484,7 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className=" bg-white p-6 grid grid-cols-4 gap-6">
+      <div className="p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div
@@ -534,18 +531,18 @@ const Advertisements: React.FC = () => {
                     </div>
                   )
                 ) : (
-                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-white">
+                  <div className="w-full h-full bg-gray-500 flex items-center justify-center text-black/70">
                     No Media
                   </div>
                 )}
               </div>
 
-              <div className="p-4 bg-white flex-grow flex flex-col">
+              <div className="p-4 bg-white/70 flex-grow flex flex-col">
                 <div
                   className="flex-grow cursor-pointer"
                   onClick={() => navigate(`/ad-details/${ad.id}`)}
                 >
-                  <h3 className="text-2xl font-semibold text-black">{ad.title}</h3>
+                  <h3 className="text-2xl font-semibold text-black/80">{ad.title}</h3>
                   <p className="text-md text-gray-600">{ad.planId?.name} Plan</p>
                 </div>
 
@@ -567,22 +564,10 @@ const Advertisements: React.FC = () => {
                         e.stopPropagation();
                         navigate(`/ad-details/${ad.id}`);
                       }}
-                      className="text-gray-500 text-xs font-semibold rounded-md px-4 py-2 flex items-center justify-center flex-1 hover:bg-[#1B5087] hover:text-white transition-colors"
+                      className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex items-center justify-center flex-1 transition-all duration-300 shadow-md hover:shadow-lg"
                     >
-                      View Details →
+                      View Details <span className="ml-1">›</span>
                     </button>
-                    {ad.status === 'PENDING' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteAd(ad.id);
-                        }}
-                        disabled={deleteLoading}
-                        className="text-red-600 text-xs font-semibold rounded-md px-3 py-2 border border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deleteLoading ? '...' : 'Delete'}
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -648,22 +633,7 @@ const Advertisements: React.FC = () => {
       </div>
 
       {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Create Ad Popup - Right Side Version (Updated layout) */}
       {showCreateAdPopup && (
@@ -860,6 +830,7 @@ const Advertisements: React.FC = () => {
         `}
       </style>
     </div>
+  </div>
   );
 };
 

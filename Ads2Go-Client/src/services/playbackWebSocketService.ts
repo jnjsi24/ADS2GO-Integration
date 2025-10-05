@@ -27,14 +27,18 @@ class PlaybackWebSocketService {
 
   private getWebSocketUrl(): string {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiUrl = process.env.REACT_APP_API_URL;
     
-    if (!apiUrl) {
-      console.error('❌ Missing REACT_APP_API_URL environment variable');
-      throw new Error('REACT_APP_API_URL is required in .env file');
-    }
+    // Force localhost for now to fix connection issues
+    const actualServerUrl = 'http://localhost:5000';
     
-    const host = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    console.log('🔧 Playback WebSocket Service Configuration (FORCED LOCALHOST):', {
+      envUrl: process.env.REACT_APP_API_URL,
+      finalUrl: actualServerUrl,
+      usingFallback: true,
+      reason: 'Forced localhost due to connection issues'
+    });
+    
+    const host = actualServerUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     return `${protocol}//${host}/ws/playback?admin=true`;
   }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, Calendar, UserPlus, UserX, QrCode, Edit, History } from 'lucide-react';
+import { X, Check, Calendar, UserPlus, UserX, QrCode, Edit, History, Pencil } from 'lucide-react';
 import MaterialUsageHistoryModal from './MaterialUsageHistoryModal';
 
 interface Driver {
@@ -130,21 +130,13 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 border-b pb-4 p-6">
+        <div className="flex gap-3 items-center mb-3 border-b pb-4 p-6">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-gray-800">
               {material.materialId}
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowUsageHistory(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
-              title="View driver usage history"
-            >
-              <History size={16} />
-              Usage History
-            </button>
             <span
               className={`px-3 py-1 text-xs font-medium rounded-full ${
                 getStatus(material) === "Used"
@@ -154,99 +146,56 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
             >
               {getStatus(material)}
             </span>
-            <button
-              onClick={handleClose}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X size={20} />
-            </button>
           </div>
         </div>
+        
 
         {/* Body */}
         <div className="flex-grow overflow-y-auto px-6 pb-6">
-          {/* Material Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div>
-              <span className="text-xs font-semibold">Name:</span>
-              <div className="w-full text-xl py-2 font-bold">
-                {material.materialType}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-semibold">Category:</span>
-              <div className="w-full text-xl py-2 font-bold">
-                {material.category}
-              </div>
-            </div>
-            <div>
-              <span className="text-xs font-semibold">Vehicle Type:</span>
-              <div className="w-full text-xl py-2 font-bold">
-                {material.vehicleType}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <div>
-              <span className="text-sm font-semibold">Description:</span>
-              <textarea
-                value={material.description || "N/A"}
-                readOnly
-                className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="text-sm font-semibold">Requirements:</span>
-              <textarea
-                value={material.requirements || "N/A"}
-                readOnly
-                className="w-full text-sm px-3 mt-2 py-2 border rounded-lg h-20 resize-none focus:ring-1 focus:outline-none ring-gray-200"
-              />
-            </div>
-          </div>
-
           {/* Driver Details Table */}
-          <div className="rounded-lg overflow-hidden border border-gray-200 mb-6">
-            <h3 className="text-sm font-bold text-gray-800 text-center px-4 py-2 bg-gray-50 border-b">
-              Driver Details
-            </h3>
-            <table className="table-auto w-full border-collapse">
-              <tbody className="bg-white text-sm">
-                <tr className="border-b">
-                  <td className="px-4 py-2 text-left text-gray-700 font-semibold">Driver Name</td>
-                  <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                    {material.driver?.fullName || "N/A"}
-                  </td>
-                </tr>
-                <tr className="border-b">
-                  <td className="px-4 py-2 text-left text-gray-700 font-semibold">Plate Number</td>
-                  <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                    {material.driver?.vehiclePlateNumber || "N/A"}
-                  </td>
-                </tr>
-                <tr className="border-b">
-                  <td className="px-4 py-2 text-left text-gray-700 font-semibold">Car Type</td>
-                  <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                    {material.vehicleType || "N/A"}
-                  </td>
-                </tr>
-                <tr className="border-b">
-                  <td className="px-4 py-2 text-left text-gray-700 font-semibold">Contact</td>
-                  <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                    {material.driver?.contactNumber || "N/A"}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2 text-left text-gray-700 font-semibold">Email</td>
-                  <td className="px-4 py-2 text-left pl-20 text-gray-900">
-                    {material.driver?.email || "N/A"}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <div className="rounded-lg overflow-hidden mb-6">
+  <h3 className="text-md font-bold text-gray-800 py-2">
+    Driver Details
+  </h3>
+
+  <div className="bg-white text-sm grid grid-cols-2 gap-4 px-4 py-2">
+    <div className="pb-2">
+      <span className="block text-gray-900">Driver Name</span>
+      <span className="block font-semibold">{material.driver?.fullName || "N/A"}</span>
+    </div>
+
+    <div className="pb-2">
+      <span className="block text-gray-900">Plate Number</span>
+      <span className="block font-semibold">{material.driver?.vehiclePlateNumber || "N/A"}</span>
+    </div>
+
+    <div className="pb-2">
+      <span className="block text-gray-900">Car Type</span>
+      <span className="block font-semibold">{material.vehicleType || "N/A"}</span>
+    </div>
+
+    <div className="pb-2">
+      <span className="block text-gray-900">Contact</span>
+      <span className="block font-semibold">{material.driver?.contactNumber || "N/A"}</span>
+    </div>
+
+    <div className="pb-2">
+      <span className="block text-gray-900">Email</span>
+      <span className="block font-semibold">{material.driver?.email || "N/A"}</span>
+    </div>
+
+    <div className="pb-2">
+      <span className="block text-gray-900">Created</span>
+      <span className="block font-semibold">{formatDate(material.createdAt)}</span>
+    </div>
+
+    <div>
+      <span className="block text-gray-900">Updated</span>
+      <span className="block font-semibold">{formatDate(material.updatedAt)}</span>
+    </div>
+  </div>
+</div>
+
 
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -256,12 +205,14 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                 <span className="text-sm font-semibold text-gray-700">Mounted Date:</span>
                 {!editingDates[material.id] && (
                   <button
-                    onClick={() => onStartEditingDates(material.id, material)}
-                    className="text-blue-500 hover:text-blue-600 text-xs flex items-center gap-1"
-                  >
-                    <Edit size={12} />
+                  onClick={() => onStartEditingDates(material.id, material)}
+                  className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                >
+                  <Calendar className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                  <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
                     Edit
-                  </button>
+                  </span>
+                </button>                
                 )}
               </div>
               {editingDates[material.id] ? (
@@ -280,7 +231,14 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                       className="w-full text-sm px-3 py-2 border rounded-lg appearance-none [::-webkit-calendar-picker-indicator]:opacity-0"
                     />
                   </div>
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex justify-between gap-2 pt-2">
+                    <button
+                      onClick={() => onCancelEditingDates(material.id)}
+                      disabled={savingDates[material.id]}
+                      className="px-3 py-1 text-black border text-xs rounded hover:bg-gray-100 disabled:bg-gray-400 flex items-center gap-1"
+                    >
+                      Cancel
+                    </button>
                     <button
                       onClick={() => onSaveDateChanges(material.id)}
                       disabled={savingDates[material.id]}
@@ -288,16 +246,9 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                     >
                       {savingDates[material.id] ? "Saving..." : (
                         <>
-                          <Check size={12} /> Save
+                        Save
                         </>
                       )}
-                    </button>
-                    <button
-                      onClick={() => onCancelEditingDates(material.id)}
-                      disabled={savingDates[material.id]}
-                      className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 disabled:bg-gray-400 flex items-center gap-1"
-                    >
-                      <X size={12} /> Cancel
                     </button>
                   </div>
                 </>
@@ -315,11 +266,13 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                 {!editingDates[material.id] && (
                   <button
                     onClick={() => onStartEditingDates(material.id, material)}
-                    className="text-blue-500 hover:text-blue-600 text-xs flex items-center gap-1"
+                    className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
                   >
-                    <Edit size={12} />
-                    Edit
-                  </button>
+                    <Calendar className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                      Edit
+                    </span>
+                  </button>  
                 )}
               </div>
               {editingDates[material.id] ? (
@@ -343,28 +296,35 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                 </div>
               )}
             </div>
-
-            {/* Created */}
-            <div>
-              <span className="text-sm font-semibold text-gray-700">Created:</span>
-              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
-                {formatDate(material.createdAt)}
+          </div>
+          <div className="mb-6">
+            <div className="flex gap-6">
+              {/* Description */}
+              <div className="w-1/2">
+                <span className="text-sm font-semibold">Description:</span>
+                <textarea
+                  value={material.description || "N/A"}
+                  readOnly
+                  className="w-full text-sm mt-2 py-2 h-20 resize-none focus:outline-none px-3"
+                />
               </div>
-            </div>
 
-            {/* Updated */}
-            <div>
-              <span className="text-sm font-semibold text-gray-700">Updated:</span>
-              <div className="w-full text-sm px-3 py-2 bg-gray-100 border rounded-lg">
-                {formatDate(material.updatedAt)}
+              {/* Requirements */}
+              <div className="w-1/2">
+                <span className="text-sm font-semibold">Requirements:</span>
+                <textarea
+                  value={material.requirements || "N/A"}
+                  readOnly
+                  className="w-full text-sm mt-2 py-2 h-20 resize-none focus:ring-1 focus:outline-none px-3 ring-gray-200"
+                />
               </div>
             </div>
           </div>
 
           {/* QR Code Section for HEADDRESS materials */}
           {material.materialType === "HEADDRESS" && (
-            <div className="mt-6 space-y-4">
-              <h4 className="text-md font-semibold text-gray-800 border-b pb-2">
+            <div className="mt-10 space-y-4">
+              <h4 className="text-md font-bold text-gray-800 border-b pb-2">
                 QR Codes
               </h4>
               <div className="flex gap-2">
@@ -393,8 +353,8 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
           )}
 
           {/* Material Condition and Inspection Photos Section */}
-          <div className="mt-6 space-y-4">
-            <h4 className="text-md font-semibold text-gray-800 border-b pb-2">
+          <div className="mt-10 space-y-4">
+            <h4 className="text-md font-bold text-gray-800">
               Material Condition & Inspection
             </h4>
             
@@ -508,12 +468,20 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t mt-auto">
-          <div className="flex justify-end">
+        <div className="p-6 mt-auto">
+          <div className="flex justify-between">
+            <button
+              onClick={() => setShowUsageHistory(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+              title="View driver usage history"
+            >
+              <History size={16} />
+              Usage History
+            </button>
             {getStatus(material) === "Available" ? (
               <button
                 onClick={() => onAssignDriver(material)}
-                className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 text-sm text-white rounded-lg hover:bg-blue-600"
               >
                 <UserPlus size={16} />
                 Assign Driver
@@ -521,7 +489,7 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
             ) : (
               <button
                 onClick={() => onRemoveFromDriver(material.id)}
-                className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                className="w-48 flex items-center justify-center gap-2 px-4 py-2 bg-red-500 text-sm text-white rounded-lg hover:bg-red-600"
               >
                 <UserX size={16} />
                 Remove Driver

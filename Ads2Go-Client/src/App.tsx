@@ -49,6 +49,7 @@ import ScreenTracking from './pages/ADMIN/ScreenTracking';
 import FAQManagement from './pages/ADMIN/FAQManagement';
 import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
 import UserAdsPage from './pages/ADMIN/UserAdsPage';
+import AdminNotifications from './pages/ADMIN/AdminNotifications';
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
@@ -179,7 +180,14 @@ const AdminAppContent: React.FC = () => {
             </ProtectedRoute>
           }
         />
-
+        <Route
+          path="/admin/notifications"
+          element={
+            <ProtectedRoute>
+              <AdminNotifications />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected SuperAdmin Routes */}
         <Route

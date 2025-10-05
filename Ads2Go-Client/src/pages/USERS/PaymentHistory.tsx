@@ -63,7 +63,12 @@ const getInitials = (firstName?: string, lastName?: string) => {
   return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
 };
 
-const statusFilterOptions = ['All Status', 'PAID', 'PENDING', 'FAILED'];
+const statusFilterOptions = [
+  { label: 'All Status', value: 'All Status' },
+  { label: 'Paid', value: 'PAID' },
+  { label: 'Pending', value: 'PENDING' },
+  { label: 'Failed', value: 'FAILED' },
+];
 
 const PaymentHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -218,9 +223,22 @@ const PaymentHistory: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pl-72 pr-5 p-10 bg-gradient-to-b from-[#EEEEEE] to-[#F8FAFC]">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background Image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+        style={{
+          backgroundImage: "url('/image/bg.jpg')",
+        }}
+      ></div>
+
+      {/* Overlay (optional subtle tint) */}
+      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+  {/* Main Content */}
+  <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 pt-10 p-8">
+    {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
 
         {/* Search + Filters */}
@@ -228,7 +246,7 @@ const PaymentHistory: React.FC = () => {
           <div className="flex gap-2">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -237,9 +255,9 @@ const PaymentHistory: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
               >
-                {selectedStatusFilter}
+                {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All Status'}
                 <ChevronDown
                   size={16}
                   className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
@@ -254,13 +272,13 @@ const PaymentHistory: React.FC = () => {
                     transition={{ duration: 0.2 }}
                     className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                   >
-                    {statusFilterOptions.map((status) => (
+                    {statusFilterOptions.map((option) => (
                       <button
-                        key={status}
-                        onClick={() => handleStatusFilterChange(status)}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        key={option.value}
+                        onClick={() => handleStatusFilterChange(option.value)}
+                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
-                        {status}
+                        {option.label}
                       </button>
                     ))}
                   </motion.div>
@@ -314,9 +332,9 @@ const PaymentHistory: React.FC = () => {
                     setSelectedPaymentType(item.paymentType || "");
                     setIsModalOpen(true);
                   }}
-                  className="text-gray-500 text-xs font-semibold px-4 py-2 flex justify-center items-center text-center w-full"
+                  className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex justify-center items-center text-center w-full transition-all duration-300 shadow-md hover:shadow-lg"
                 >
-                  View Details →
+                  View Details <span className="ml-1">›</span>
                 </button>
               </div>
             </div>
@@ -371,6 +389,7 @@ const PaymentHistory: React.FC = () => {
           onSuccess={handlePaymentSuccess} // Added to refresh UI after payment
         />
       )}
+    </div>
     </div>
   );
 };

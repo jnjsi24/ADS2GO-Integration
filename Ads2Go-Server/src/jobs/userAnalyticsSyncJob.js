@@ -9,20 +9,20 @@ class UserAnalyticsSyncJob {
     this.lastSync = null;
   }
 
-  // Start the sync job - runs every 10 minutes
+  // Start the sync job - runs every 3 minutes
   start() {
     if (this.isRunning) {
       console.log('⚠️ UserAnalyticsSyncJob is already running');
       return;
     }
 
-    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 10 minutes');
+    console.log('🚀 Starting UserAnalyticsSyncJob - will sync every 3 minutes');
     
     // Run immediately on start
     this.syncAllUsers();
     
-    // Schedule to run every 10 minutes
-    this.cronJob = cron.schedule('*/10 * * * *', () => {
+    // Schedule to run every 3 minutes
+    this.cronJob = cron.schedule('*/3 * * * *', () => {
       this.syncAllUsers();
     }, {
       scheduled: true,
@@ -104,14 +104,19 @@ class UserAnalyticsSyncJob {
   // Sync a specific user with their own materials only
   async syncUserWithAllMaterials(userId, startDate, endDate) {
     try {
-      // Get user's PAID, DEPLOYED ads only
+      // Get user's PAID, DEPLOYED ads only (exclude deleted ads)
       const Ad = require('../models/Ad');
       const Material = require('../models/Material');
       const userAds = await Ad.find({ 
         userId: userId,
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
-        status: { $in: ['RUNNING', 'APPROVED'] }
+        status: { $in: ['RUNNING', 'APPROVED'] },
+        // Explicitly exclude deleted ads (status: 'DELETED' or null/undefined)
+        $and: [
+          { status: { $ne: 'DELETED' } },
+          { status: { $exists: true } }
+        ]
       });
       
       if (!userAds || userAds.length === 0) {
@@ -179,7 +184,8 @@ class UserAnalyticsSyncJob {
         totalAdImpressions: 0,
         totalQRScans: 0,
         ads: {},
-        materials: {}
+        materials: {},
+        materialBreakdown: {} // New: Clear breakdown by material
       };
 
       // Process each material's data
@@ -198,6 +204,20 @@ class UserAnalyticsSyncJob {
           dailyData: []
         };
 
+        // Initialize material breakdown
+        processedData.materialBreakdown[materialId] = {
+          materialId,
+          carGroupId: materialData.carGroupId,
+          totalAdPlays: 0,
+          totalAdPlayTime: 0,
+          totalAdImpressions: 0,
+          totalQRScans: 0,
+          ads: {},
+          lastActivity: null,
+          isOnline: false,
+          totalDays: 0
+        };
+
         // Process daily data
         if (materialData.dailyData && materialData.dailyData.length > 0) {
           materialData.dailyData.forEach(dailyData => {
@@ -208,6 +228,18 @@ class UserAnalyticsSyncJob {
               processedData.materials[materialId].totalAdPlayTime += dailyData.totalAdPlayTime || 0;
               processedData.materials[materialId].totalAdImpressions += dailyData.totalAdImpressions || 0;
               processedData.materials[materialId].totalQRScans += dailyData.totalQRScans || 0;
+              
+              // Add to material breakdown
+              processedData.materialBreakdown[materialId].totalAdPlays += dailyData.totalAdPlays || 0;
+              processedData.materialBreakdown[materialId].totalAdPlayTime += dailyData.totalAdPlayTime || 0;
+              processedData.materialBreakdown[materialId].totalAdImpressions += dailyData.totalAdImpressions || 0;
+              processedData.materialBreakdown[materialId].totalQRScans += dailyData.totalQRScans || 0;
+              processedData.materialBreakdown[materialId].totalDays += 1;
+              
+              // Update last activity
+              if (!processedData.materialBreakdown[materialId].lastActivity || dailyDate > processedData.materialBreakdown[materialId].lastActivity) {
+                processedData.materialBreakdown[materialId].lastActivity = dailyDate;
+              }
               
               // Add to overall totals
               processedData.totalAdPlays += dailyData.totalAdPlays || 0;
@@ -259,8 +291,12 @@ class UserAnalyticsSyncJob {
         }
       });
 
+      // Filter out ads that are no longer valid (deleted or inactive)
+      const validAdIds = userAds.map(ad => ad._id.toString());
+      const filteredAds = Object.values(processedData.ads).filter(ad => validAdIds.includes(ad.adId));
+      
       // Convert ads object to array
-      const adsArray = Object.values(processedData.ads).map(ad => ({
+      const adsArray = filteredAds.map(ad => ({
         ...ad,
         totalMaterials: ad.materials.length,
         averageViewTime: ad.totalPlays > 0 ? ad.totalViewTime / ad.totalPlays : 0,
@@ -295,11 +331,30 @@ class UserAnalyticsSyncJob {
           errorLogs: [],
           isActive: true
         });
+      } else {
+        // Clean up stale ad data - remove ads that no longer exist or are deleted
+        const validAdIds = userAds.map(ad => ad._id.toString());
+        
+        // Filter ads array
+        const originalAdsCount = userAnalytics.ads.length;
+        userAnalytics.ads = userAnalytics.ads.filter(ad => validAdIds.includes(ad.adId.toString()));
+        
+        // Filter adPerformance array
+        const originalPerformanceCount = userAnalytics.adPerformance.length;
+        userAnalytics.adPerformance = userAnalytics.adPerformance.filter(ad => validAdIds.includes(ad.adId.toString()));
+        
+        const cleanedAds = originalAdsCount - userAnalytics.ads.length;
+        const cleanedPerformance = originalPerformanceCount - userAnalytics.adPerformance.length;
+        
+        if (cleanedAds > 0 || cleanedPerformance > 0) {
+          console.log(`🧹 Cleaned up stale ad data for user ${userId}: ${cleanedAds} ads, ${cleanedPerformance} performance entries`);
+        }
       }
 
       // Update with fresh data
       userAnalytics.totalMaterials = processedData.totalMaterials;
       userAnalytics.totalDevices = processedData.totalDevices;
+      userAnalytics.totalAdPlays = processedData.totalAdPlays;
       userAnalytics.totalAdPlayTime = processedData.totalAdPlayTime;
       userAnalytics.totalAdImpressions = processedData.totalAdImpressions;
       userAnalytics.totalQRScans = processedData.totalQRScans;
@@ -307,6 +362,22 @@ class UserAnalyticsSyncJob {
       userAnalytics.qrScanConversionRate = qrScanConversionRate;
       userAnalytics.lastUpdated = new Date();
       userAnalytics.updatedAt = new Date();
+
+      // Add material breakdown for clear data source tracking
+      userAnalytics.materialBreakdown = Object.values(processedData.materialBreakdown).map(material => ({
+        materialId: material.materialId,
+        carGroupId: material.carGroupId,
+        totalAdPlays: material.totalAdPlays,
+        totalAdPlayTime: material.totalAdPlayTime,
+        totalAdImpressions: material.totalAdImpressions,
+        totalQRScans: material.totalQRScans,
+        totalDays: material.totalDays,
+        lastActivity: material.lastActivity,
+        isOnline: material.isOnline,
+        averageDailyAdPlays: material.totalDays > 0 ? (material.totalAdPlays / material.totalDays).toFixed(2) : 0,
+        averageDailyPlayTime: material.totalDays > 0 ? (material.totalAdPlayTime / material.totalDays).toFixed(2) : 0,
+        qrScanRate: material.totalAdImpressions > 0 ? ((material.totalQRScans / material.totalAdImpressions) * 100).toFixed(2) : 0
+      }));
 
       // Update ads array with complete data structure
       userAnalytics.ads = adsArray.map(ad => {

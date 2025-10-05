@@ -268,6 +268,7 @@ const UserAnalyticsSchema = new mongoose.Schema({
   totalAds: { type: Number, default: 0 },
   totalMaterials: { type: Number, default: 0 },
   totalDevices: { type: Number, default: 0 },
+  totalAdPlays: { type: Number, default: 0 },
   totalAdPlayTime: { type: Number, default: 0 },
   totalAdImpressions: { type: Number, default: 0 },
   totalQRScans: { type: Number, default: 0 },
@@ -285,6 +286,22 @@ const UserAnalyticsSchema = new mongoose.Schema({
     totalQRScans: { type: Number, default: 0 },
     averageCompletionRate: { type: Number, default: 0 },
     lastActivity: { type: Date }
+  }],
+
+  // Material breakdown - shows which data comes from which material
+  materialBreakdown: [{
+    materialId: { type: String, required: true },
+    carGroupId: { type: String },
+    totalAdPlays: { type: Number, default: 0 },
+    totalAdPlayTime: { type: Number, default: 0 },
+    totalAdImpressions: { type: Number, default: 0 },
+    totalQRScans: { type: Number, default: 0 },
+    totalDays: { type: Number, default: 0 },
+    lastActivity: { type: Date },
+    isOnline: { type: Boolean, default: false },
+    averageDailyAdPlays: { type: String, default: '0' },
+    averageDailyPlayTime: { type: String, default: '0' },
+    qrScanRate: { type: String, default: '0' }
   }],
   
   // Error logs for this user

@@ -115,7 +115,12 @@ class AdsPanelServiceV4 {
     }
     
     const response = await fetch(url, {
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      // Add timeout to prevent hanging
+      signal: AbortSignal.timeout(10000), // 10 second timeout
       ...options,
     });
 

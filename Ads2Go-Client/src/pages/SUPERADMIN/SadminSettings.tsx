@@ -1,9 +1,10 @@
-
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Lock, Bell, CheckCircle, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Lock, Bell, ChevronDown, CheckCircle, Eye, EyeOff, AlertTriangle, User } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../../components/ToastNotification';
 import { CHANGE_SUPERADMIN_PASSWORD } from '../../graphql/superadmin/mutations/changeSuperAdminPassword';
 import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSuperAdmin';
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
@@ -32,8 +33,12 @@ type Toast = {
 const SadminSettings: React.FC = () => {
   const { admin } = useAdminAuth();
   const navigate = useNavigate();
+  const { toasts, addToast, removeToast } = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('Security and Privacy');
+  const [showTimeoutDropdown, setShowTimeoutDropdown] = useState(false);
+  const [selectedTimeoutOption, setSelectedTimeoutOption] = useState('10 Minutes');
+  const timeoutOptions = ['5 Minutes', '10 Minutes', '15 Minutes', '30 Minutes'];
   
   // State for Security and Privacy form
   const [securityForm, setSecurityForm] = useState({
@@ -65,13 +70,21 @@ const SadminSettings: React.FC = () => {
     pushNotificationTimeout: '10',
     communicationEmails: false,
     announcementsEmails: true,
+    disableNotificationSounds: true,
   });
   
-  // State for toast notifications
-  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // State to toggle form editability
   const [isFormEditable, setIsFormEditable] = useState(false);
+  
+  // State for profile image
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  
+  // Tab configuration
+  const tabs = [
+    { id: 'Security and Privacy', label: 'Security and Privacy', icon: Lock },
+    { id: 'Notification Settings', label: 'Notification Settings', icon: Bell },
+  ];
 
   // GraphQL mutations
   const [changePassword] = useMutation(CHANGE_SUPERADMIN_PASSWORD);
@@ -92,6 +105,7 @@ const SadminSettings: React.FC = () => {
         pushNotificationTimeout: prefs.pushNotificationTimeout,
         communicationEmails: prefs.communicationEmails,
         announcementsEmails: prefs.announcementsEmails,
+        disableNotificationSounds: prefs.disableNotificationSounds,
       });
     }
   }, [notificationData]);
@@ -124,32 +138,50 @@ const SadminSettings: React.FC = () => {
     'Mandaluyong City',
   ];
 
-  // Add toast notification
-  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
+  const handleTimeoutChange = (option) => {
+    setSelectedTimeoutOption(option);
+    setShowTimeoutDropdown(false);
+    // optional: also update form or mutation here
+    // setNotificationForm({ ...notificationForm, pushNotificationTimeout: option });
   };
 
-  // Remove toast notification
-  const removeToast = (id: number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  // Handle file input change for profile image
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        addToast('Please upload an image file.', 'error');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        addToast('Image size must be less than 5MB.', 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
+
 
   const handleToggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
 
   const handleManageUsers = () => {
-    addToast('Navigating to Manage Users page (feature not implemented in this component).', 'success');
+    addToast({
+      type: 'success',
+      title: 'Success!',
+      message: 'Navigating to Manage Users page (feature not implemented in this component).',
+      duration: 5000
+    });
   };
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     setSecurityForm({ recoveryEmail: '', recoveryPhone: '' });
-    setToasts([]);
   };
 
   // Handle form input changes for Security and Notification
@@ -186,32 +218,32 @@ const SadminSettings: React.FC = () => {
     setToasts([]);
 
     const { recoveryEmail } = securityForm;
-
     if (!recoveryEmail) {
-      addToast('Recovery email is required.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Recovery email is required.',
+        duration: 5000
+      });
       return;
     }
-
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(recoveryEmail)) {
-      addToast('Please enter a valid email address.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please enter a valid email address.',
+        duration: 5000
+      });
       return;
     }
-
-    // Check if recovery email is the same as primary email
     if (recoveryEmail === admin?.email) {
       addToast('Recovery email cannot be the same as your primary email address.', 'error');
       return;
     }
-
     try {
       await updateSuperAdmin({
-        variables: {
-          superAdminId: admin?.userId,
-          input: {
-            recoveryEmail: recoveryEmail
-          }
-        }
+        variables: { input: { recoveryEmail } },
       });
       addToast('Recovery email updated successfully!', 'success');
       // Keep the recovery email in the form field instead of clearing it
@@ -246,8 +278,13 @@ const SadminSettings: React.FC = () => {
     }
   };
 
-  // Handle password change
+  // Handle Change Password form submission (alias for handleChangePasswordSubmit)
   const handlePasswordChange = async (e: React.FormEvent) => {
+    return handleChangePasswordSubmit(e);
+  };
+
+  // Handle Change Password form submission
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setToasts([]);
 
@@ -259,23 +296,31 @@ const SadminSettings: React.FC = () => {
     }
 
     if (newPassword !== confirmPassword) {
-      addToast('New passwords do not match.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'New passwords do not match.',
+        duration: 5000
+      });
       return;
     }
-
     if (newPassword.length < 8) {
       addToast('New password must be at least 8 characters long.', 'error');
       return;
     }
-
     try {
       await changePassword({
         variables: {
           currentPassword,
-          newPassword
-        }
+          newPassword,
+        },
       });
-      addToast('Password changed successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Password changed successfully!',
+        duration: 5000
+      });
       setShowPasswordModal(false);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {
@@ -308,7 +353,6 @@ const SadminSettings: React.FC = () => {
   // Toggle form editability
   const toggleFormEditable = () => {
     setIsFormEditable(!isFormEditable);
-    setToasts([]);
   };
 
   // Handle Back button click
@@ -318,43 +362,65 @@ const SadminSettings: React.FC = () => {
   };
 
   return (
-    <div className="font-sans min-h-screen bg-gray-100 p-9 ml-60 flex"> 
-      {/* Left Navigation */}
-      <aside className="w-64 bg-white shadow-lg h-min p-6 rounded-3xl mr-6">
-        <nav className="space-y-4">
-          <button
-            className={`w-full flex items-center p-3 rounded-xl text-left transition-colors duration-200 ${
-              activeTab === 'Security and Privacy'
-                ? 'bg-[#E6F0F8] text-[#3674B5] font-semibold'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-            onClick={() => handleTabChange('Security and Privacy')}
-          >
-            <Lock size={20} className="mr-3" />
-            Security and Privacy
-          </button>
-          <button
-            className={`w-full flex items-center p-3 rounded-xl text-left transition-colors duration-200 ${
-              activeTab === 'Notification Settings'
-                ? 'bg-[#E6F0F8] text-[#3674B5] font-semibold'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-            onClick={() => handleTabChange('Notification Settings')}
-          >
-            <Bell size={20} className="mr-3" />
-            Notification Settings
-          </button>
-        </nav>
-      </aside>
+    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
+      {/* Top Navigation */}
+      <nav className="flex space-x-8 px-2 mb-6">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`relative group flex items-center py-3 px-1 font-medium text-sm transition-colors ${
+                isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <Icon className="h-4 w-4 mr-2" />
+              {tab.label}
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                  isActive ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`}
+              />
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Main Content Area */}
       <main className="flex-1">
         {activeTab === 'Security and Privacy' && (
-          <div className="bg-white rounded-3xl shadow-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Security and Privacy</h2>
+          <div className="">
             <div className="space-y-6">
+              {/* Profile Image Upload */}
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
+                <h3 className="text-lg font-semibold text-gray-800">Profile Image</h3>
+                <p className="text-sm text-gray-600 mb-4">Upload or change your profile image.</p>
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold text-xl">
+                    {profileImage ? (
+                      <img src={profileImage} alt="Profile" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      getInitials(admin?.name)
+                    )}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="profile-upload"
+                  />
+                  <label htmlFor="profile-upload" className="cursor-pointer px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1b5087] transition-colors">
+                    Upload Image
+                  </label>
+                </div>
+              </div>
+
               {/* Verify Email Address */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Verify Email Address</h3>
                 <p className="text-sm text-gray-600 mb-4">Verify your email address to confirm your credentials.</p>
                 <div className="flex justify-end">
@@ -366,9 +432,8 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               {/* Update Password */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Update Password</h3>
                 <p className="text-sm text-gray-600 mb-4">Change your password to update and protect your account.</p>
                 <div className="flex justify-end">
@@ -380,32 +445,14 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-4">Recovery Settings</h2>
-
               {/* Recovery Email Address */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Recovery Email Address</h3>
-                <p className="text-sm text-gray-600 mb-2">Set recovery email to secure your account.</p>
-                <p className="text-xs text-blue-600 mb-4">💡 You can use this recovery email to log in to your account.</p>
-                
-                {/* Current Recovery Email Display */}
-                {admin?.recoveryEmail && (
-                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center">
-                      <CheckCircle className="text-green-500 mr-2" size={16} />
-                      <span className="text-sm text-green-700">
-                        Current recovery email: <strong>{admin.recoveryEmail}</strong>
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
+                <p className="text-sm text-gray-600 mb-4">Set recovery email to secure your account.</p>
                 <form className="space-y-4" onSubmit={handleRecoveryEmailSubmit}>
                   <div>
-                    <label htmlFor="recoveryEmail" className="block text-sm font-medium text-gray-700">
-                      {admin?.recoveryEmail ? 'Update Recovery Email Address' : 'Another Email Address'}
-                    </label>
+                    <label htmlFor="recoveryEmail" className="block text-sm font-medium text-gray-700">Another Email Address</label>
                     <input
                       id="recoveryEmail"
                       type="email"
@@ -421,15 +468,26 @@ const SadminSettings: React.FC = () => {
                       type="submit"
                       className="px-6 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1b5087] transition-colors"
                     >
-                      {admin?.recoveryEmail ? 'Update Recovery Email' : 'Save Recovery Email'}
+                      Save
                     </button>
                   </div>
                 </form>
               </div>
-
-
+              {/* Recovery Phone Number */}
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
+                <h3 className="text-lg font-semibold text-gray-800">Recovery Phone Number</h3>
+                <p className="text-sm text-gray-600 mb-4">Add phone number to set up SMS recovery for your account.</p>
+                <div className="flex justify-end">
+                  <button
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+                    onClick={() => addToast('Setup Phone Recovery functionality not implemented.', 'success')}
+                  >
+                    Setup
+                  </button>
+                </div>
+              </div>
               {/* Deactivate Account */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Deactivate Account</h3>
                 <p className="text-sm text-gray-600 mb-4">This will deactivate your account and will reactivate upon signing in again.</p>
                 <div className="flex justify-end">
@@ -444,19 +502,11 @@ const SadminSettings: React.FC = () => {
             </div>
           </div>
         )}
-
         {activeTab === 'Notification Settings' && (
-          <div className="bg-white rounded-3xl shadow-lg p-8">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Notification Settings</h2>
-            {notificationLoading ? (
-              <div className="flex justify-center items-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3674B5]"></div>
-                <span className="ml-3 text-gray-600">Loading notification settings...</span>
-              </div>
-            ) : (
+          <div>
             <form className="space-y-6" onSubmit={handleNotificationSubmit}>
               {/* Enable Desktop Notification */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800">Enable Desktop Notification</h3>
@@ -471,9 +521,8 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               {/* Enable Notification Badge */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800">Enable Notification Badge</h3>
@@ -488,27 +537,57 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               {/* Push Notification Time-out */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <h3 className="text-lg font-semibold text-gray-800">Push Notification Time-out</h3>
-                <select
-                  name="pushNotificationTimeout"
-                  value={notificationForm.pushNotificationTimeout}
-                  onChange={handleInputChange}
-                  className="mt-2 block w-full md:w-48 p-2 border border-gray-300 rounded-md focus:ring-[#3674B5] focus:border-[#3674B5] bg-white"
-                >
-                  <option value="5">5 Minutes</option>
-                  <option value="10">10 Minutes</option>
-                  <option value="15">15 Minutes</option>
-                  <option value="30">30 Minutes</option>
-                </select>
+                <p className="text-sm text-gray-600 mb-3">
+                  Set how long notifications will stay visible on screen.
+                </p>
+
+                {/* Dropdown directly below text */}
+                <div className="relative w-40">
+                  <button
+                    type="button"
+                    onClick={() => setShowTimeoutDropdown(!showTimeoutDropdown)}
+                    className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-4 pr-3 py-2.5 shadow-md focus:outline-none bg-white gap-2"
+                  >
+                    {selectedTimeoutOption}
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showTimeoutDropdown ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence>
+                    {showTimeoutDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden border border-gray-200"
+                      >
+                        {timeoutOptions.map((option) => (
+                          <button
+                            key={option}
+                            onClick={() => handleTimeoutChange(option)}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
-              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-4">Email Notifications</h2>
 
+              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-4">Email Notifications</h2>
               {/* Communication Emails */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800">Communication Emails</h3>
@@ -523,9 +602,8 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
               {/* Announcements & Updates */}
-              <div className="border border-gray-200 p-4 rounded-xl shadow-sm">
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800">Announcements & Updates</h3>
@@ -540,7 +618,23 @@ const SadminSettings: React.FC = () => {
                   </button>
                 </div>
               </div>
-
+              <h2 className="text-xl font-semibold text-gray-800 mt-8 mb-4">Sounds</h2>
+              {/* Disable All Notification Sounds */}
+              <div className="border bg-white border-gray-200 p-4 rounded-xl shadow-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">Disable All Notification Sounds</h3>
+                    <p className="text-sm text-gray-600">Mute all notifications for messages, contacts, and documents.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-all duration-300 ${notificationForm.disableNotificationSounds ? 'bg-[#3674B5]' : 'bg-gray-300'}`}
+                    onClick={() => handleToggleChange('disableNotificationSounds')}
+                  >
+                    <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.disableNotificationSounds ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-200`}></span>
+                  </button>
+                </div>
+              </div>
               <div className="flex justify-end mt-6">
                 <button
                   type="submit"
@@ -550,7 +644,6 @@ const SadminSettings: React.FC = () => {
                 </button>
               </div>
             </form>
-            )}
           </div>
         )}
       </main>
@@ -639,28 +732,31 @@ const SadminSettings: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1b5087] transition-colors"
-                >
-                  Change Password
-                </button>
-              </div>
-            </form>
-          </div>
+            {/* Buttons */}
+            <div className="flex justify-between space-x-3 pt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#1b5087] transition-colors"
+              >
+                Change Password
+              </button>
+            </div>
+          </form>
         </div>
-      )}
+      </div>
+    )}
+
+
 
       {/* Account Deactivation Modal */}
       {showDeactivateModal && (
@@ -749,8 +845,3 @@ const SadminSettings: React.FC = () => {
 };
 
 export default SadminSettings;
-
-
-
-//
-

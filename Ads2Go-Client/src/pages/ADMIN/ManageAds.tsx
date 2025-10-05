@@ -16,7 +16,8 @@ import {
   Check,
   CheckCircle,
   AlertCircle,
-  XCircle
+  XCircle,
+  RefreshCw
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
@@ -33,6 +34,8 @@ import {
 import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
+import DateFilter from '../../components/DateFilter';
+import CalendarWidget from '../../components/CalendarWidget';
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
@@ -87,8 +90,37 @@ const ManageAds: React.FC = () => {
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
   const [deploymentStatusFilter, setDeploymentStatusFilter] = useState('All Status');
+  
+  // Date filter state for schedule tab
+  const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [dateFilter, setDateFilter] = useState<{
+    startDate: Date | null;
+    endDate: Date | null;
+    condition: string;
+  } | null>(null);
+  
+  // Calendar widget state for schedule tab
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
+
+  // Close calendar when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showCalendar) {
+        const target = event.target as Element;
+        if (!target.closest('.calendar-container')) {
+          setShowCalendar(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
 
   
 
@@ -345,6 +377,45 @@ const ManageAds: React.FC = () => {
     setShowStatusDropdown(false);
   };
 
+  // Date filter handlers
+  const handleApplyDateFilter = (filter: {
+    startDate: Date | null;
+    endDate: Date | null;
+    condition: string;
+  }) => {
+    setDateFilter(filter);
+  };
+
+  const handleDeleteDateFilter = () => {
+    setDateFilter(null);
+  };
+
+  // Calendar widget handlers
+  const handleCalendarDateSelect = (date: Date | null) => {
+    setCalendarSelectedDate(date);
+    if (date) {
+      setDateFilter({
+        startDate: date,
+        endDate: null,
+        condition: 'Is'
+      });
+    } else {
+      setDateFilter(null);
+    }
+  };
+
+  const toggleCalendar = () => {
+    setShowCalendar(!showCalendar);
+  };
+
+  const formatDateRange = (): string => {
+    if (!dateFilter) return '';
+    if (dateFilter.startDate && dateFilter.endDate) {
+      return `${dateFilter.startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })} - ${dateFilter.endDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    }
+    return dateFilter.startDate ? dateFilter.startDate.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  };
+
 
   const handleRowClick = (ad: Ad) => {
     handleViewAdDetails(ad);
@@ -486,50 +557,95 @@ const ManageAds: React.FC = () => {
         ))}
       </nav>
 
-      {/* All Status Filter on the right */}
+      {/* Filters on the right */}
       {['ads', 'schedule', 'deployment'].includes(activeTab) && (
-        <div className="relative w-32">
-          <button
-            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-            className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-          >
-            {activeTab === 'ads'
-              ? adsStatusFilter
-              : activeTab === 'schedule'
-              ? scheduleStatusFilter
-              : deploymentStatusFilter}
-            <ChevronDown
-              size={16}
-              className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
-            />
-          </button>
-
-          <AnimatePresence>
-            {showStatusDropdown && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-              >
-                {(activeTab === 'deployment' ? deploymentStatusFilterOptions : statusFilterOptions).map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => {
-                      if (activeTab === 'ads') setAdsStatusFilter(status);
-                      else if (activeTab === 'schedule') setScheduleStatusFilter(status);
-                      else if (activeTab === 'deployment') setDeploymentStatusFilter(status);
-                      setShowStatusDropdown(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
-                  >
-                    {status}
-                  </button>
-                ))}
-              </motion.div>
+        <div className="flex flex-col items-end gap-2">
+          {/* Top row: Calendar and All Status */}
+          <div className="flex items-center gap-3">
+            {/* Calendar Widget for schedule tab */}
+            {activeTab === 'schedule' && (
+              <div className="relative calendar-container">
+                <button
+                  onClick={toggleCalendar}
+                  className="px-4 py-3 shadow-md text-xs bg-white text-black rounded-md flex items-center gap-2"
+                >
+                  <Calendar className="w-4 h-4" />
+                  {calendarSelectedDate 
+                    ? calendarSelectedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                    : 'Select Date'
+                  }
+                </button>
+                
+                {/* Calendar Dropdown */}
+                {showCalendar && (
+                  <div className="absolute top-full right-0 mt-2 z-50">
+                    <CalendarWidget
+                      selectedDate={calendarSelectedDate}
+                      onDateSelect={(date) => {
+                        handleCalendarDateSelect(date);
+                        setShowCalendar(false);
+                      }}
+                      className="w-80"
+                    />
+                  </div>
+                )}
+              </div>
             )}
-          </AnimatePresence>
+            
+            {/* All Status Filter */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                {activeTab === 'ads'
+                  ? adsStatusFilter
+                  : activeTab === 'schedule'
+                  ? scheduleStatusFilter
+                  : deploymentStatusFilter}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {(activeTab === 'deployment' ? deploymentStatusFilterOptions : statusFilterOptions).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => {
+                          if (activeTab === 'ads') setAdsStatusFilter(status);
+                          else if (activeTab === 'schedule') setScheduleStatusFilter(status);
+                          else if (activeTab === 'deployment') setDeploymentStatusFilter(status);
+                          setShowStatusDropdown(false);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          
+          {/* Bottom row: Refresh button */}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-2 text-sm bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600 flex items-center gap-2"
+          >
+            <RefreshCw className="w-5 h-5" />
+            Refresh
+          </button>
         </div>
       )}
     </div>
@@ -689,6 +805,7 @@ const ManageAds: React.FC = () => {
           <ScheduleTab
             statusFilter={scheduleStatusFilter}
             onStatusChange={setScheduleStatusFilter}
+            dateFilter={dateFilter}
           />
         )}
         {activeTab === 'deployment' && (
@@ -920,6 +1037,14 @@ const ManageAds: React.FC = () => {
         confirmText="Delete"
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
+      {/* Date Filter Modal */}
+      <DateFilter
+        isOpen={showDateFilterModal}
+        onClose={() => setShowDateFilterModal(false)}
+        onApplyFilter={handleApplyDateFilter}
+        onDeleteFilter={handleDeleteDateFilter}
       />
     </div>
   );

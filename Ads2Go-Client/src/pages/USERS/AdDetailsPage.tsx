@@ -280,7 +280,7 @@ const AdDetailsPage: React.FC = () => {
       <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
         <div className="flex flex-col items-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-white/90">Loading ad details...</p>
+          <p className="text-black/90">Loading ad details...</p>
         </div>
       </div>
     );
@@ -292,10 +292,10 @@ const AdDetailsPage: React.FC = () => {
       <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold text-red-600 mb-2">Error loading ad</h2>
-          <p className="text-white/90 mb-4">{error.message}</p>
+          <p className="text-black/90 mb-4">{error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-4 py-2 bg-blue-500 text-black rounded hover:bg-blue-600"
           >
             Try Again
           </button>
@@ -311,12 +311,12 @@ const AdDetailsPage: React.FC = () => {
   if (!ad) {
     return (
       <div className="flex-1 ml-60 p-6  h-screen flex items-center justify-center">
-        <div className="text-center text-white/90">
+        <div className="text-center text-black/90">
           <h1 className="text-3xl font-bold mb-4">Ad Not Found</h1>
           <p className="mb-6">The advertisement you are looking for does not exist.</p>
           <button
             onClick={() => navigate('/advertisements')}
-            className="py-3 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors flex items-center justify-center mx-auto"
+            className="py-3 bg-[#3674B5] text-black rounded-lg hover:bg-[#578FCA] transition-colors flex items-center justify-center mx-auto"
           >
             <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
           </button>
@@ -349,274 +349,283 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-<div
-    className="min-h-screen pl-72 pr-5 p-5 bg-cover bg-center bg-no-repeat"
-    style={{
-      backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)"
-    }}
-  >      <button
-      onClick={() => navigate('/advertisements')}
-      className="py-2 text-white/90 rounded-lg hover:text-white/90 transition-colors flex items-center mb-4"
+    <div className="relative min-h-screen overflow-hidden pl-72 pr-5 p-5">
+    {/* Background Image */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
     >
-      <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
-    </button>
-
-    {/* Top Row: Media (Left) + Info (Right) */}
-    <div className="grid grid-cols-2 gap-8">
-      {/* Left: Media */}
-      <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center h-96">
-        {ad.mediaFile ? (
-          ad.adFormat === 'IMAGE' ? (
-            <img
-              src={ad.mediaFile}
-              alt={ad.title}
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                e.currentTarget.src =
-                  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
-              }}
-            />
-          ) : (
-            <video controls className="w-full h-full object-contain">
-              <source src={ad.mediaFile} />
-              Your browser does not support the video tag.
-            </video>
-          )
-        ) : (
-          <div className="text-white/90 text-xl">No Media Available</div>
-        )}
-      </div>
-
-      {/* Right: Status, Title, Description, Price, Properties */}
-      <div className="flex flex-col space-y-4">
-        <span
-            className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-full px-3 py-1 ${
-
-            ad.status === 'PENDING'
-              ? 'bg-yellow-100 text-yellow-800'
-              : ad.status === 'APPROVED'
-              ? 'bg-green-100 text-green-800'
-              : ad.status === 'REJECTED'
-              ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-white/90'
-          }`}
-        >
-          {ad.status}
-        </span>
-
-        {ad.status === 'REJECTED' && ad.reasonForReject && (
-          <span className="text-red-600 text-sm flex items-center">
-            <XCircle size={16} className="mr-1" />
-            {ad.reasonForReject}
-          </span>
-        )}
-
-        <h2 className="text-4xl text-white/90 font-bold">{ad.title}</h2>
-        <p className="text-2xl text-white/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
-        <p className="text-white/70">{ad.description}</p>
-      </div>
     </div>
 
-    {/* Bottom Row: Left (Tabs + Delete) + Right (Tablet Activity) */}
-    <div className="grid grid-cols-2 gap-8 pt-10">
-      {/* Left: Tabs + Delete */}
-      <div className="space-y-4">
-  <div className="flex items-center justify-between mb-4 ">
-    {/* Tabs */}
-    <div className="flex space-x-4 relative">
-      {['Details', 'AdActivity'].map((tab) => (
-        <div key={tab} className="relative">
-          <button
-            onClick={() =>
-              setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
-            }
-            className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
-              activeTab === tab ? 'text-orange-400' : 'text-white/60 hover:text-white/90'
-            }`}
-          >
-            {tab === 'AdActivity' ? 'Ad Activity' : tab}
+    {/* Overlay (adds soft tint and readability over the image) */}
+    <div className="absolute inset-0 bg-white/30 backdrop-blur-lg"></div>
 
-            {/* Hover underline with framer-motion */}
-            <motion.div
-              className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: activeTab === tab ? '100%' : 0 }}
-              whileHover={{ width: '100%' }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            />
-          </button>
-        </div>
-      ))}
-    </div>
+    {/* Content Layer */}
+    <div className="relative z-10 min-h-screen rounded-xl p-5">
+      <button
+        onClick={() => navigate('/advertisements')}
+        className="py-2 text-black/90 rounded-lg hover:text-black/90 transition-colors flex items-center mb-4"
+      >
+        <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
+      </button>
 
-    {/* Delete Button */}
-    <button
-      onClick={() => setShowDeleteModal(true)}
-      disabled={deleteLoading || ad?.status !== 'PENDING'}
-      className="px-4 py-2 bg-red-300 text-red-900 font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
-    >
-      {deleteLoading ? 'Deleting...' : 'Delete Ad'}
-    </button>
-  </div>
-
-        {/* Tab Content */}
-        {activeTab === 'Details' && (
-          <div className="grid grid-cols-2 gap-4 mt-6">
-  {/* Left: Table-style info */}
-  <div>
-    <table className="w-full text-sm mt-5 text-white/80">
-      <tbody>
-        <tr>
-          <td className="font-semibold py-2">Start Date:</td>
-          <td className="py-2 text-right">{formatDate(ad.startTime)}</td>
-        </tr>
-        <tr>
-          <td className="font-semibold py-2">End Date:</td>
-          <td className="py-2 text-right">{formatDate(ad.endTime)}</td>
-        </tr>
-        <tr>
-          <td className="font-semibold py-2">Duration:</td>
-          <td className="py-2 text-right">{ad.planId?.durationDays || 'N/A'} days</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  {/* Right: Ad Properties */}
-  <div className="flex flex-col mt-5 items-end space-y-2">
-    <p className="text-sm font-semibold text-center text-white/90">{ad.materialId?.materialId || 'N/A'}</p>
-
-    <p className="text-sm font-semibold text-center text-white/90">{ad.planId?.name}</p>
-
-    <p className="text-sm font-semibold text-center text-white/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
-
-    <p className="text-sm font-semibold text-center text-white/90">{ad.adFormat || 'N/A'}</p>
-  </div>
-</div>
-
-        )}
-        
-        {activeTab === 'AdActivity' && (
-          <div className="space-y-2 max-h-80 rounded-lg shadow-md overflow-y-auto custom-scrollbar">
-            {/* Replace sampleNotifications with sampleQrImpressions */}
-            {sampleQrImpressions.map((impression) => (
-              <div key={impression.id} className="flex items-start bg-white/10 space-x-3 p-3 rounded-lg shadow-md">
-                {/* You can use an icon to represent a QR code, e.g., QrCode from lucide-react */}
-                <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  {/* Display the impression details */}
-                  <p className="text-white/90 text-sm font-medium">QR code scanned {impression.scans} times.</p>
-                  <p className="text-white/70 text-xs">{impression.timestamp}</p>
-                </div>
-              </div>
-            ))}
-            {/* Update the empty state message */}
-            {sampleQrImpressions.length === 0 && (
-              <p className="text-center text-white/90 py-10">No QR impressions found for this ad.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Right: Tablet Activity */}
-      <div className="space-y-4">
-        {/* Filter Dropdown */}
-        <div className="relative mb-4 w-60">
-          <button
-            onClick={() => setShowAdDropdown(!showAdDropdown)}
-            className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
-            {selectedAd}
-            <ChevronDown
-              size={16}
-              className={`transform transition-transform duration-200 ${
-                showAdDropdown ? 'rotate-180' : 'rotate-0'
-              }`}
-            />
-          </button>
-
-          <AnimatePresence>
-            {showAdDropdown && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-                className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
-              >
-                {adOptions.map((adOption) => (
-                  <button
-                    key={adOption}
-                    onClick={() => {
-                      setSelectedAd(adOption);
-                      setShowAdDropdown(false);
-                    }}
-                    className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
-                  >
-                    {adOption}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Map + Activity List */}
-        <div className="flex items-start space-x-6">
-          {/* Map */}
-          <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
-            {deviceId ? (
-              <RouteMap 
-                deviceId={deviceId} 
-                style={{ height: '100%', width: '100%' }}
-                showMetrics={false}
+      {/* Top Row: Media (Left) + Info (Right) */}
+      <div className="grid grid-cols-2 gap-8">
+        {/* Left: Media */}
+        <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center h-96">
+          {ad.mediaFile ? (
+            ad.adFormat === 'IMAGE' ? (
+              <img
+                src={ad.mediaFile}
+                alt={ad.title}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                }}
               />
             ) : (
-              <div className="flex items-center justify-center h-full bg-gray-100">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                  <p className="text-xs text-gray-600">Loading device...</p>
-                </div>
-              </div>
-            )}
-          </div>
+              <video controls className="w-full h-full object-contain">
+                <source src={ad.mediaFile} />
+                Your browser does not support the video tag.
+              </video>
+            )
+          ) : (
+            <div className="text-black/90 text-xl">No Media Available</div>
+          )}
+        </div>
 
-          {/* Activity List */}
-          <div className="flex flex-col space-y-4 flex-1 max-h-64 overflow-y-auto">
-            {tabletActivities
-              .filter((activity) => activity.ad === selectedAd)
-              .map((activity, index) => (
-                <div key={activity.id} className="flex items-start space-x-2">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3674B5] text-white flex items-center justify-center font-bold text-xs">
-                    {index + 1}
-                  </div>
-                  <div className="flex flex-col">
-                    <p className="text-sm font-semibold text-white/90">{activity.gps}</p>
-                    <p className="text-xs text-white/90">
-                      {activity.lastSeen} | {activity.kmTraveled} km
-                    </p>
-                    <p className="text-xs text-white/90">{activity.timestamp}</p>
+        {/* Right: Status, Title, Description, Price, Properties */}
+        <div className="flex flex-col space-y-4">
+          <span
+              className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-full px-3 py-1 ${
+
+              ad.status === 'PENDING'
+                ? 'bg-yellow-100 text-yellow-800'
+                : ad.status === 'APPROVED'
+                ? 'bg-green-100 text-green-800'
+                : ad.status === 'REJECTED'
+                ? 'bg-red-100 text-red-800'
+                : 'bg-gray-100 text-black/90'
+            }`}
+          >
+            {ad.status}
+          </span>
+
+          {ad.status === 'REJECTED' && ad.reasonForReject && (
+            <span className="text-red-600 text-sm flex items-center">
+              <XCircle size={16} className="mr-1" />
+              {ad.reasonForReject}
+            </span>
+          )}
+
+          <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
+          <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
+          <p className="text-black/70">{ad.description}</p>
+        </div>
+      </div>
+
+      {/* Bottom Row: Left (Tabs + Delete) + Right (Tablet Activity) */}
+      <div className="grid grid-cols-2 gap-8 pt-10">
+        {/* Left: Tabs + Delete */}
+        <div className="space-y-4">
+    <div className="flex items-center justify-between mb-4 ">
+      {/* Tabs */}
+      <div className="flex space-x-4 relative">
+        {['Details', 'AdActivity'].map((tab) => (
+          <div key={tab} className="relative">
+            <button
+              onClick={() =>
+                setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
+              }
+              className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                activeTab === tab ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+              }`}
+            >
+              {tab === 'AdActivity' ? 'Ad Activity' : tab}
+
+              {/* Hover underline with framer-motion */}
+              <motion.div
+                className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: activeTab === tab ? '100%' : 0 }}
+                whileHover={{ width: '100%' }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Delete Button */}
+      <button
+        onClick={() => setShowDeleteModal(true)}
+        disabled={deleteLoading || ad?.status !== 'PENDING'}
+        className="px-4 py-2 bg-red-200 text-red-600 font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
+      >
+        {deleteLoading ? 'Deleting...' : 'Delete Ad'}
+      </button>
+    </div>
+
+          {/* Tab Content */}
+          {activeTab === 'Details' && (
+            <div className="grid grid-cols-2 bg-white/60 p-3 rounded-lg shadow-md">
+              {/* Left: Table-style info */}
+              <div>
+                <table className="w-full text-sm mt-5 text-black/80">
+                  <tbody>
+                    <tr>
+                      <td className="py-2">Start Date:</td>
+                      <td className="py-2 font-semibold text-right">{formatDate(ad.startTime)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2">End Date:</td>
+                      <td className="py-2 font-semibold text-right">{formatDate(ad.endTime)}</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2">Duration:</td>
+                      <td className="py-2 font-semibold text-right">{ad.planId?.durationDays || 'N/A'} days</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col mt-5 items-end space-y-2">
+                <p className="text-sm font-semibold text-center text-black/90">{ad.materialId?.materialId || 'N/A'}</p>
+
+                <p className="text-sm font-semibold text-center text-black/90">{ad.planId?.name}</p>
+
+                <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
+
+                <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
+              </div>
+            </div>
+          )}
+          
+          {activeTab === 'AdActivity' && (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {/* Replace sampleNotifications with sampleQrImpressions */}
+              {sampleQrImpressions.map((impression) => (
+                <div key={impression.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 rounded-lg shadow-md">
+                  {/* You can use an icon to represent a QR code, e.g., QrCode from lucide-react */}
+                  <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    {/* Display the impression details */}
+                    <p className="text-black/90 text-sm font-medium">QR code scanned {impression.scans} times.</p>
+                    <p className="text-black/70 text-xs">{impression.timestamp}</p>
                   </div>
                 </div>
               ))}
-            {tabletActivities.filter((activity) => activity.ad === selectedAd).length === 0 && (
-              <p className="text-center text-white/90 py-10">No activity found for this ad.</p>
-            )}
+              {/* Update the empty state message */}
+              {sampleQrImpressions.length === 0 && (
+                <p className="text-center bg-white/60 rounded-lg text-black/90 py-5">No QR impressions found for this ad.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Tablet Activity */}
+        <div className="space-y-4">
+          {/* Filter Dropdown */}
+          <div className="relative mb-4 w-60">
+            <button
+              onClick={() => setShowAdDropdown(!showAdDropdown)}
+              className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
+              {selectedAd}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${
+                  showAdDropdown ? 'rotate-180' : 'rotate-0'
+                }`}
+              />
+            </button>
+
+            <AnimatePresence>
+              {showAdDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
+                >
+                  {adOptions.map((adOption) => (
+                    <button
+                      key={adOption}
+                      onClick={() => {
+                        setSelectedAd(adOption);
+                        setShowAdDropdown(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
+                    >
+                      {adOption}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Map + Activity List */}
+          <div className="flex items-start space-x-6">
+            {/* Map */}
+            <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
+              {deviceId ? (
+                <RouteMap 
+                  deviceId={deviceId} 
+                  style={{ height: '100%', width: '100%' }}
+                  showMetrics={false}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full bg-gray-100">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                    <p className="text-xs text-gray-600">Loading device...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Activity List */}
+            <div className="flex flex-col space-y-4 flex-1 max-h-64 overflow-y-auto">
+              {tabletActivities
+                .filter((activity) => activity.ad === selectedAd)
+                .map((activity, index) => (
+                  <div key={activity.id} className="flex items-start space-x-2">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3674B5]/70 text-white flex items-center justify-center font-bold text-xs">
+                      {index + 1}
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-sm font-semibold text-black/90">{activity.gps}</p>
+                      <p className="text-xs text-black/90">
+                        {activity.lastSeen} | {activity.kmTraveled} km
+                      </p>
+                      <p className="text-xs text-black/90">{activity.timestamp}</p>
+                    </div>
+                  </div>
+                ))}
+              {tabletActivities.filter((activity) => activity.ad === selectedAd).length === 0 && (
+                <p className="text-center text-black/90 py-10">No activity found for this ad.</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    {/* Confirmation Modal */}
-    <ConfirmationModal
-      isOpen={showDeleteModal}
-      onClose={cancelDelete}
-      onConfirm={confirmDelete}
-      title="Delete Advertisement"
-      message="Are you sure you want to delete this advertisement? This action cannot be undone."
-      confirmText="Delete"
-      cancelText="Cancel"
-      confirmButtonClass="bg-red-600 hover:bg-red-700"
-    />
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+    </div>
   </div>
 );
 };
