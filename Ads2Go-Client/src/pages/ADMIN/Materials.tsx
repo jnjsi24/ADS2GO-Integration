@@ -758,8 +758,8 @@ const Materials: React.FC = () => {
   if (error) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center text-red-500">Error: {error.message}</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <div className="bg-gray-100 w-full min-h-screen">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
+      <div className="bg-gray-100 w-full flex-1 flex flex-col">
         {/* Header with Filters */}
         <MaterialFilters
           searchTerm={searchTerm}
@@ -772,7 +772,7 @@ const Materials: React.FC = () => {
         />
 
         {/* Table */}
-        <div className="rounded-xl mb-5 overflow-hidden">
+        <div className="flex-1 rounded-xl mb-5 overflow-hidden">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
             <div className="flex items-center gap-6 col-span-2">

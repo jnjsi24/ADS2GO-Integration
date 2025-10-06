@@ -421,10 +421,11 @@ const Reports: React.FC = () => {
       </div>
 
       {/* Rows */}
-      {filteredReports.length === 0 ? (
-        <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
-      ) : (
-        paginatedReports.map((report) => (
+      <div className="flex-1">
+        {filteredReports.length === 0 ? (
+          <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
+        ) : (
+          paginatedReports.map((report) => (
           <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
             <div
               className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
@@ -634,7 +635,8 @@ const Reports: React.FC = () => {
 
           </div>
         ))
-      )}
+        )}
+      </div>
 
       {/* Pagination */}
       <div className="mt-auto flex justify-center py-4">
