@@ -475,7 +475,8 @@ const NewsletterManagement: React.FC = () => {
             </div>
 
             {/* Rows */}
-            {paginatedSubscribers.map((subscriber) => (
+            <div className="flex-1">
+              {paginatedSubscribers.map((subscriber) => (
               <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
                 <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
                   {/* Email */}
@@ -550,14 +551,13 @@ const NewsletterManagement: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
 
-
-          {filteredSubscribers.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No subscribers found
+              {filteredSubscribers.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No subscribers found
+                </div>
+              )}
             </div>
-          )}
         </div>
 
         {/* Pagination */}
@@ -657,6 +657,7 @@ const NewsletterManagement: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
     </div>
   );
 };

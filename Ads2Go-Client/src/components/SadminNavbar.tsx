@@ -1,5 +1,5 @@
 // src/components/SadminNavbar.tsx
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import {
@@ -9,16 +9,34 @@ import {
   LogOut,
   BarChart3,
   DollarSign,
+  User,
+  Bell,
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
   const { logout, admin } = useAdminAuth(); // Use the useAdminAuth hook
   const navigate = useNavigate();
   const location = useLocation();
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleLogout = async () => {
     await logout();
-    navigate('/sadmin-login'); // Redirect to general login after logout
+    navigate('/superadmin-login'); // Redirect to superadmin login after logout
   };
 
   // Generate initials using firstName and lastName (similar to AdminNavbar/UserNavbar)
@@ -63,34 +81,87 @@ const SadminNavbar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Footer combining Profile and Logout */}
-      <div className="pt-4 border-t border-gray-600 text-sm text-gray-200 flex flex-col">
-        {/* Profile Section */}
-        <div className="flex items-center gap-3 pb-4 mb-4 cursor-pointer" onClick={() => navigate('/sadmin-account')}> {/* Assuming settings page is shared or sadmin has a dedicated one */}
-          {admin?.profilePicture ? ( // Assuming admin object might have a profilePicture
-            <img
-              src={admin.profilePicture}
-              alt="Profile"
-              className="rounded-full w-10 h-10 object-cover"
-            />
-          ) : (
-            <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
-              {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
-            </div>
-          )}
-          <div className="font-semibold text-white">
-            {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
-          </div>
-        </div>
-
-        {/* Logout Button */}
+      {/* Profile Section with Dropdown */}
+      <div ref={dropdownRef} className="pt-4 border-t border-gray-600 text-sm text-gray-200 relative">
+        {/* Profile Bar */}
         <button
-          onClick={handleLogout}
-          className="w-full text-left bg-red-700 text-white hover:bg-red-800 px-3 py-2 rounded-xl flex items-center gap-3 transition"
+          onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+          className="w-full flex items-center justify-between bg-white/10 rounded-lg p-3 mb-2 hover:bg-white/20 transition-colors cursor-pointer"
         >
-          <LogOut size={18} />
-          <span>Logout</span>
+          <div className="flex items-center gap-3">
+            {admin?.profilePicture ? (
+              <img
+                src={admin.profilePicture}
+                alt="Profile"
+                className="rounded-full w-10 h-10 object-cover"
+              />
+            ) : (
+              <div className="relative">
+                <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
+                  {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0E2A47]"></div>
+              </div>
+            )}
+            <div className="font-semibold text-white">
+              {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative text-gray-300">
+              <Bell size={18} />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-xs text-white font-bold">7</span>
+              </div>
+            </div>
+          </div>
         </button>
+
+        {/* Dropdown Menu */}
+        {showProfileDropdown && (
+          <div className="absolute bottom-16 left-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+            <div className="py-2">
+              {/* Profile Option */}
+              <button
+                onClick={() => {
+                  navigate('/sadmin-profile');
+                  setShowProfileDropdown(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <User size={18} className="text-gray-500" />
+                <span>Profile</span>
+              </button>
+
+              {/* Settings Option */}
+              <button
+                onClick={() => {
+                  navigate('/sadmin-settings');
+                  setShowProfileDropdown(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <Settings size={18} className="text-gray-500" />
+                <span>Settings</span>
+              </button>
+
+              {/* Divider */}
+              <div className="border-t border-gray-200 my-1"></div>
+
+              {/* Logout Option */}
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setShowProfileDropdown(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut size={18} />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

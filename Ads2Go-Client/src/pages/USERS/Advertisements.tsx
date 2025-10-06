@@ -391,8 +391,8 @@ const Advertisements: React.FC = () => {
     <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
     {/* Main Content */}
-    <div className="relative min-h-screen bg-transparent pl-64 pr-5">
-      <div className="bg-transparent w-full min-h-screen">
+    <div className="relative min-h-screen bg-transparent pl-64 pr-5 flex flex-col">
+      <div className="bg-transparent w-full flex-1 flex flex-col">
         {/* Header with Title */}
         <div className="flex justify-between items-center mb-6 pt-10">
           <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
@@ -484,7 +484,7 @@ const Advertisements: React.FC = () => {
       
 
       {/* Ad Cards */}
-      <div className="p-6 grid grid-cols-4 gap-6">
+      <div className="flex-1 p-6 grid grid-cols-4 gap-6">
         {currentAds.length > 0 ? (
           currentAds.map((ad) => (
             <div

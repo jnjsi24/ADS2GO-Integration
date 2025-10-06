@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Lock, Bell, ChevronDown, CheckCircle, Eye, EyeOff, AlertTriangle, User } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
+import { AnimatePresence, motion } from 'framer-motion';
 import { CHANGE_SUPERADMIN_PASSWORD } from '../../graphql/superadmin/mutations/changeSuperAdminPassword';
 import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSuperAdmin';
 import { DEACTIVATE_SUPERADMIN } from '../../graphql/superadmin/mutations/deactivateSuperAdmin';
 import { UPDATE_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/mutations/updateSuperAdminNotificationPreferences';
 import { GET_SUPERADMIN_NOTIFICATION_PREFERENCES } from '../../graphql/superadmin/queries/getSuperAdminNotificationPreferences';
+import { useToast, ToastContainer, Toast } from '../../components/ToastNotification';
 
 // Function to get initials from name
 const getInitials = (name: string | undefined) => {
@@ -21,12 +23,6 @@ const getInitials = (name: string | undefined) => {
 };
 
 
-// Toast notification type
-type Toast = {
-  id: number;
-  message: string;
-  type: 'error' | 'success';
-};
 
 const SadminSettings: React.FC = () => {
   const { admin } = useAdminAuth();
@@ -37,6 +33,7 @@ const SadminSettings: React.FC = () => {
   const [showTimeoutDropdown, setShowTimeoutDropdown] = useState(false);
   const [selectedTimeoutOption, setSelectedTimeoutOption] = useState('10 Minutes');
   const timeoutOptions = ['5 Minutes', '10 Minutes', '15 Minutes', '30 Minutes'];
+  const [profileImage, setProfileImage] = useState<string | null>(null);
   
   // State for Security and Privacy form
   const [securityForm, setSecurityForm] = useState({
@@ -71,11 +68,15 @@ const SadminSettings: React.FC = () => {
     disableNotificationSounds: true,
   });
   
-  // State for toast notifications
-  const [toasts, setToasts] = useState<Toast[]>([]);
   
   // State to toggle form editability
   const [isFormEditable, setIsFormEditable] = useState(false);
+
+  // Tab configuration
+  const tabs = [
+    { id: 'Security and Privacy', label: 'Security and Privacy', icon: Lock },
+    { id: 'Notification Settings', label: 'Notification Settings', icon: Bell },
+  ];
 
   // GraphQL mutations
   const [changePassword] = useMutation(CHANGE_SUPERADMIN_PASSWORD);
@@ -129,7 +130,7 @@ const SadminSettings: React.FC = () => {
     'Mandaluyong City',
   ];
 
-  const handleTimeoutChange = (option) => {
+  const handleTimeoutChange = (option: string) => {
     setSelectedTimeoutOption(option);
     setShowTimeoutDropdown(false);
     // optional: also update form or mutation here
@@ -141,11 +142,19 @@ const SadminSettings: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        addToast('Please upload an image file.', 'error');
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Please upload an image file.'
+        });
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        addToast('Image size must be less than 5MB.', 'error');
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Image size must be less than 5MB.'
+        });
         return;
       }
       const reader = new FileReader();
@@ -206,7 +215,6 @@ const SadminSettings: React.FC = () => {
   // Handle Recovery Email form submission
   const handleRecoveryEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     const { recoveryEmail } = securityForm;
     if (!recoveryEmail) {
@@ -229,24 +237,35 @@ const SadminSettings: React.FC = () => {
       return;
     }
     if (recoveryEmail === admin?.email) {
-      addToast('Recovery email cannot be the same as your primary email address.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Recovery email cannot be the same as your primary email address.'
+      });
       return;
     }
     try {
       await updateSuperAdmin({
         variables: { input: { recoveryEmail } },
       });
-      addToast('Recovery email updated successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Recovery email updated successfully!'
+      });
       // Keep the recovery email in the form field instead of clearing it
     } catch (err: any) {
-      addToast(err.message || 'Failed to update recovery email. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to update recovery email. Please try again.'
+      });
     }
   };
 
   // Handle Notification Settings form submission
   const handleNotificationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     try {
       await updateNotificationPreferences({
@@ -261,23 +280,34 @@ const SadminSettings: React.FC = () => {
         }
       });
       
-      addToast('Notification settings saved successfully!', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Notification settings saved successfully!'
+      });
       // Refetch the data to ensure UI is in sync
       refetchNotifications();
     } catch (err: any) {
-      addToast(err.message || 'Failed to save notification settings. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to save notification settings. Please try again.'
+      });
     }
   };
 
   // Handle Change Password form submission
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setToasts([]);
 
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      addToast('All password fields are required.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'All password fields are required.'
+      });
       return;
     }
 
@@ -291,7 +321,11 @@ const SadminSettings: React.FC = () => {
       return;
     }
     if (newPassword.length < 8) {
-      addToast('New password must be at least 8 characters long.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'New password must be at least 8 characters long.'
+      });
       return;
     }
     try {
@@ -310,14 +344,22 @@ const SadminSettings: React.FC = () => {
       setShowPasswordModal(false);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {
-      addToast(err.message || 'Failed to change password. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to change password. Please try again.'
+      });
     }
   };
 
   // Handle Deactivate Account
   const handleDeactivateAccount = async () => {
     if (deactivateConfirmText !== 'DEACTIVATE') {
-      addToast('Please type DEACTIVATE to confirm.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Please type DEACTIVATE to confirm.'
+      });
       return;
     }
 
@@ -327,12 +369,20 @@ const SadminSettings: React.FC = () => {
           id: admin?.userId
         }
       });
-      addToast('Account deactivated successfully. You will be logged out.', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Account deactivated successfully. You will be logged out.'
+      });
       setTimeout(() => {
-        navigate('/superadmin/login');
+        navigate('/superadmin-login');
       }, 2000);
     } catch (err: any) {
-      addToast(err.message || 'Failed to deactivate account. Please try again.', 'error');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: err.message || 'Failed to deactivate account. Please try again.'
+      });
     }
   };
 
@@ -344,7 +394,6 @@ const SadminSettings: React.FC = () => {
   // Handle Back button click
   const handleBack = () => {
     setIsFormEditable(false);
-    setToasts([]);
   };
 
   return (
@@ -389,7 +438,7 @@ const SadminSettings: React.FC = () => {
                     {profileImage ? (
                       <img src={profileImage} alt="Profile" className="w-full h-full rounded-full object-cover" />
                     ) : (
-                      getInitials(admin?.name)
+                      getInitials(admin ? `${admin.firstName} ${admin.lastName}` : '')
                     )}
                   </div>
                   <input
@@ -466,7 +515,11 @@ const SadminSettings: React.FC = () => {
                 <div className="flex justify-end">
                   <button
                     className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
-                    onClick={() => addToast('Setup Phone Recovery functionality not implemented.', 'success')}
+                    onClick={() => addToast({
+                      type: 'success',
+                      title: 'Info',
+                      message: 'Setup Phone Recovery functionality not implemented.'
+                    })}
                   >
                     Setup
                   </button>
@@ -639,83 +692,92 @@ const SadminSettings: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
             <h3 className="text-xl font-bold text-gray-800 mb-6">Change Password</h3>
-            <form onSubmit={handlePasswordChange} className="space-y-4">
+            <form onSubmit={handleChangePasswordSubmit} className="space-y-6">
               {/* Current Password */}
-              <div>
-                <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="relative">
+                <input
+                  id="currentPassword"
+                  name="currentPassword"
+                  type={showPasswords.current ? 'text' : 'password'}
+                  placeholder=" "
+                  value={passwordForm.currentPassword}
+                  onChange={handlePasswordInputChange}
+                  className="peer w-full pr-8 text-gray-800 px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300"
+                  style={{ backgroundColor: 'transparent' }}
+                  required
+                />
+                <label
+                  htmlFor="currentPassword"
+                  className={`absolute left-0 bg-transparent text-gray-600 transition-all duration-200 ${passwordForm.currentPassword ? '-top-2 text-sm text-gray-800 font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-600'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-800 peer-focus:font-bold`}
+                >
                   Current Password
                 </label>
-                <div className="relative">
-                  <input
-                    id="currentPassword"
-                    name="currentPassword"
-                    type={showPasswords.current ? 'text' : 'password'}
-                    value={passwordForm.currentPassword}
-                    onChange={handlePasswordInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => togglePasswordVisibility('current')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPasswords.current ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('current')}
+                  className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+                >
+                  {showPasswords.current ? <EyeOff size={20} className="text-gray-400" /> : <Eye size={20} className="text-gray-400" />}
+                </button>
               </div>
 
               {/* New Password */}
-              <div>
-                <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="relative">
+                <input
+                  id="newPassword"
+                  name="newPassword"
+                  type={showPasswords.new ? 'text' : 'password'}
+                  placeholder=" "
+                  value={passwordForm.newPassword}
+                  onChange={handlePasswordInputChange}
+                  className="peer w-full pr-8 text-gray-800 px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300"
+                  style={{ backgroundColor: 'transparent' }}
+                  required
+                  minLength={8}
+                />
+                <label
+                  htmlFor="newPassword"
+                  className={`absolute left-0 bg-transparent text-gray-600 transition-all duration-200 ${passwordForm.newPassword ? '-top-2 text-sm text-gray-800 font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-600'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-800 peer-focus:font-bold`}
+                >
                   New Password
                 </label>
-                <div className="relative">
-                  <input
-                    id="newPassword"
-                    name="newPassword"
-                    type={showPasswords.new ? 'text' : 'password'}
-                    value={passwordForm.newPassword}
-                    onChange={handlePasswordInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => togglePasswordVisibility('new')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPasswords.new ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('new')}
+                  className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+                >
+                  {showPasswords.new ? <EyeOff size={20} className="text-gray-400" /> : <Eye size={20} className="text-gray-400" />}
+                </button>
                 <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
               </div>
 
               {/* Confirm Password */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="relative">
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showPasswords.confirm ? 'text' : 'password'}
+                  placeholder=" "
+                  value={passwordForm.confirmPassword}
+                  onChange={handlePasswordInputChange}
+                  className="peer w-full pr-8 text-gray-800 px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-[#3674B5] focus:ring-0 placeholder-transparent transition border-gray-300"
+                  style={{ backgroundColor: 'transparent' }}
+                  required
+                  minLength={8}
+                />
+                <label
+                  htmlFor="confirmPassword"
+                  className={`absolute left-0 bg-transparent text-gray-600 transition-all duration-200 ${passwordForm.confirmPassword ? '-top-2 text-sm text-gray-800 font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-600'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-800 peer-focus:font-bold`}
+                >
                   Confirm New Password
                 </label>
-                <div className="relative">
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type={showPasswords.confirm ? 'text' : 'password'}
-                    value={passwordForm.confirmPassword}
-                    onChange={handlePasswordInputChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-[#3674B5] focus:border-[#3674B5] pr-10"
-                    required
-                    minLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => togglePasswordVisibility('confirm')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPasswords.confirm ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => togglePasswordVisibility('confirm')}
+                  className="absolute inset-y-0 right-0 flex items-center px-2 cursor-pointer"
+                >
+                  {showPasswords.confirm ? <EyeOff size={20} className="text-gray-400" /> : <Eye size={20} className="text-gray-400" />}
+                </button>
               </div>
 
             {/* Buttons */}
@@ -791,41 +853,7 @@ const SadminSettings: React.FC = () => {
       )}
 
       {/* Toast Notifications Container */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* Inline CSS for animations */}
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
