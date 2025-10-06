@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,6 +34,7 @@ const GET_DRIVER_MATERIALS = gql`
         description
         status
         assignedDate
+        mountedAt
         location {
           address
           coordinates
@@ -82,6 +84,7 @@ interface Material {
   description: string;
   status: string;
   assignedDate: string;
+  mountedAt: string;
   location: {
     address: string;
     coordinates: number[];
@@ -124,6 +127,19 @@ export default function Home() {
   useEffect(() => {
     loadDriverData();
   }, []);
+
+  // Refresh data when app comes to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      if (nextAppState === 'active' && driverId) {
+        console.log('📱 App became active, refreshing driver data...');
+        loadDriverData();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [driverId]);
 
   const loadDriverData = async () => {
     try {
@@ -365,10 +381,31 @@ export default function Home() {
           const dayOfMonth = today.getDate();
           const isFirstOfMonth = dayOfMonth === 1;
           
+          // Debug: Log all materials and their mountedAt dates
+          console.log('🔍 Debug - All materials:', materials.map(m => ({
+            materialId: m.materialId,
+            mountedAt: m.mountedAt,
+            hasMountedAt: !!m.mountedAt,
+            assignedDate: m.assignedDate,
+            status: m.status
+          })));
+          
+          // Test: Force show photo prompt for testing
+          console.log('🧪 TESTING: Forcing photo prompt for testing purposes');
+          const testNewMaterials = materials.filter(m => m.materialId); // Show for all materials for testing
+          
           const newMaterials = materials.filter(material => {
+            if (!material.mountedAt) {
+              console.log(`❌ Material ${material.materialId}: No mountedAt date`);
+              return false;
+            }
+            
             const mountedDate = new Date(material.mountedAt);
             const today = new Date();
-            return mountedDate.toDateString() === today.toDateString();
+            const isNewlyMounted = mountedDate.toDateString() === today.toDateString();
+            
+            console.log(`📸 Material ${material.materialId}: mountedAt=${material.mountedAt}, isNewlyMounted=${isNewlyMounted}`);
+            return isNewlyMounted;
           });
           
           const materialsNeedingMonthlyPhotos = materials.filter(material => {
@@ -377,7 +414,11 @@ export default function Home() {
             return isFirstOfMonth && !hasCurrentMonthPhoto;
           });
           
-          const needsPhotos = newMaterials.length > 0 || materialsNeedingMonthlyPhotos.length > 0;
+          console.log(`📸 Photo check: newMaterials=${newMaterials.length}, monthlyDue=${materialsNeedingMonthlyPhotos.length}, isFirstOfMonth=${isFirstOfMonth}`);
+          console.log(`🧪 TEST: testNewMaterials=${testNewMaterials.length}`);
+          
+          // Use test materials for now to verify the UI works
+          const needsPhotos = testNewMaterials.length > 0 || materialsNeedingMonthlyPhotos.length > 0;
           
           if (!needsPhotos) return null;
           
@@ -393,10 +434,10 @@ export default function Home() {
                 <Text style={styles.notificationTitle}>📸 Photo Submission Required</Text>
               </View>
               <Text style={styles.notificationText}>
-                {newMaterials.length > 0 && materialsNeedingMonthlyPhotos.length > 0
-                  ? `You have ${newMaterials.length} new material(s) and ${materialsNeedingMonthlyPhotos.length} material(s) needing monthly photos.`
-                  : newMaterials.length > 0
-                  ? `You have ${newMaterials.length} newly mounted material(s) that need photos.`
+                {testNewMaterials.length > 0 && materialsNeedingMonthlyPhotos.length > 0
+                  ? `You have ${testNewMaterials.length} new material(s) and ${materialsNeedingMonthlyPhotos.length} material(s) needing monthly photos.`
+                  : testNewMaterials.length > 0
+                  ? `You have ${testNewMaterials.length} newly mounted material(s) that need photos.`
                   : `You have ${materialsNeedingMonthlyPhotos.length} material(s) needing monthly photos.`
                 }
               </Text>
@@ -510,6 +551,20 @@ export default function Home() {
             </View>
           ))
         )}
+      </View>
+
+      {/* Test Section - Remove this in production */}
+      <View style={styles.testSection}>
+        <Text style={styles.testTitle}>🧪 Debug Tools</Text>
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={() => {
+            console.log('🧪 Test button pressed - refreshing data...');
+            loadDriverData();
+          }}
+        >
+          <Text style={styles.testButtonText}>Refresh Data</Text>
+        </TouchableOpacity>
       </View>
 
     </ScrollView>
@@ -829,5 +884,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  testSection: {
+    backgroundColor: '#FFF3CD',
+    margin: 20,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFEAA7',
+  },
+  testTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#856404',
+    marginBottom: 12,
+  },
+  testButton: {
+    backgroundColor: '#F39C12',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
