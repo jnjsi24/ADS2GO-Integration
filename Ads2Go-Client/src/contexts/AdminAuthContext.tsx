@@ -313,7 +313,7 @@ export const AdminAuthProvider: React.FC<{
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'SuperAdmin login failed';
-      console.error('SuperAdmin-only login error:', message);
+      console.log('SuperAdmin-only login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {
@@ -390,7 +390,7 @@ export const AdminAuthProvider: React.FC<{
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'Admin login failed';
-      console.error('Admin-only login error:', message);
+      console.log('Admin-only login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {
@@ -424,8 +424,8 @@ export const AdminAuthProvider: React.FC<{
       // Clear localStorage
       localStorage.removeItem('adminToken');
 
-      // Reset Apollo store AFTER clearing tokens and state
-      await apolloClient.resetStore();
+      // Clear Apollo store AFTER clearing tokens and state (no refetch)
+      await apolloClient.clearStore();
     } catch (error) {
       console.error('Logout error:', error);
       // Even if there's an error, ensure we clear everything and navigate

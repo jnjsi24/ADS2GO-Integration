@@ -63,6 +63,30 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
         console.log(`[GraphQL]: Auth state missing during ${operation.operationName || 'unknown operation'} (likely after logout)`);
         return;
       }
+      // Soften login credential errors (common/expected during failed login attempts)
+      if (
+        (message === 'Invalid password' ||
+         message === 'Invalid credentials' ||
+         message?.includes('temporarily locked')) &&
+        (
+          operation.operationName === 'loginAdmin' ||
+          operation.operationName === 'LoginAdmin' ||
+          operation.operationName === 'loginSuperAdmin' ||
+          operation.operationName === 'LoginSuperAdmin' ||
+          operation.operationName === 'loginUser' ||
+          operation.operationName === 'LoginUser' ||
+          operation.operationName === 'login' ||
+          operation.operationName === 'Login'
+        )
+      ) {
+        console.log(`[GraphQL]: Expected login failure for ${operation.operationName}: ${message}`);
+        return;
+      }
+      // Soften logging for SUPERADMIN-only authorization guard
+      if (message === 'Unauthorized: Only SUPERADMIN can view pricing configurations') {
+        console.log('[GraphQL]: Skipping SUPERADMIN-only data for non-superadmin user');
+        return;
+      }
       
       // Don't log "Failed to fetch analytics data" as an error - it's expected for new users
       if (message === 'Failed to fetch analytics data' && 

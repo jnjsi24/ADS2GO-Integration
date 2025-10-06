@@ -44,7 +44,8 @@ const AdminLogin: React.FC = () => {
         setError('Login failed. Please check your credentials.');
       }
     } catch (error: any) {
-      console.error('Admin login error:', error);
+      // Wrong credentials are common; log as info only
+      console.log('Admin login attempt failed:', error?.message || error);
       setError(error.message || 'Login failed');
     } finally {
       setIsLoggingIn(false);
