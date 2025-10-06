@@ -197,19 +197,7 @@ const resolvers = {
         } = input;
 
         // Check if user already exists
-        console.log('🔍 Checking for existing user with email:', email);
         const existingUser = await User.findOne({ email });
-        console.log('🔍 Database query result:', existingUser);
-        console.log('🔍 Existing user found:', existingUser ? 'YES' : 'NO');
-        if (existingUser) {
-          console.log('🔍 Existing user details:', {
-            id: existingUser.id,
-            email: existingUser.email,
-            firstName: existingUser.firstName,
-            lastName: existingUser.lastName
-          });
-        }
-        
         if (existingUser) {
           console.log('✅ User already exists, logging them in directly');
           // User already exists, generate new token and return user data

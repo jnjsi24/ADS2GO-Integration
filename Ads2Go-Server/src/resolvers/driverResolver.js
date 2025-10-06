@@ -191,19 +191,26 @@ Upload: GraphQLUpload,
           throw new Error('Unauthorized access');
         }
 
-        // If driver is requesting, verify they're requesting their own profile
+        // If driver is authenticated, always use the driver's own ID from context
+        // to avoid mismatches or spoofed IDs from the client
+        const effectiveDriverId = driver ? driver.driverId : driverId;
+        
+        // If a driver is authenticated but the requested ID doesn't match, log it and continue with effectiveDriverId
         if (driver && driver.driverId !== driverId) {
-          throw new Error('Drivers can only view their own profile');
+          console.warn('getDriver: driverId mismatch; using context driverId instead', {
+            requested: driverId,
+            contextDriverId: driver.driverId,
+          });
         }
 
         // Find driver by driverId (not _id)
-        const driverProfile = await Driver.findOne({ driverId }).select('-password');
+        const driverProfile = await Driver.findOne({ driverId: effectiveDriverId }).select('-password');
         
         if (!driverProfile) {
           throw new Error('Driver not found');
         }
 
-        console.log(`✅ Found driver profile for ${driverId}`);
+        console.log(`✅ Found driver profile for ${effectiveDriverId}`);
         
         return {
           success: true,

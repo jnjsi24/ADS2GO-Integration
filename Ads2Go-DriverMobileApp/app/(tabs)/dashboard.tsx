@@ -62,7 +62,6 @@ const Dashboard: React.FC = () => {
           
           // Use driverId (string like "DRV-008") instead of _id (ObjectId)
           const driverId = driver.driverId || driver.id;
-          console.log('🔍 Initial load - Fetching analytics for driverId:', driverId);
           
           // Fetch real analytics data
           await fetchDriverAnalytics(driverId);
@@ -98,7 +97,6 @@ const Dashboard: React.FC = () => {
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
     try {
       if (!silent) {
-        console.log('🔍 fetchDriverAnalytics called with driverId:', driverId);
       }
       
       // Get auth token

@@ -17,7 +17,6 @@ import API_CONFIG from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 const API_URL = API_CONFIG.API_URL;
-console.log('🔍 API_URL from config:', API_URL);
 
 // GraphQL query to get driver's materials
 const GET_DRIVER_MATERIALS = gql`
@@ -127,7 +126,6 @@ export default function Home() {
 
   const loadDriverData = async () => {
     try {
-      console.log('🔍 Loading driver data...');
       
       // Debug: Check what's in AsyncStorage
       const allKeys = await AsyncStorage.getAllKeys();
@@ -209,7 +207,8 @@ export default function Home() {
       if (data.getDriver?.success) {
         setDriverProfile(data.getDriver.driver);
       } else {
-        console.error('Driver profile request failed:', data.getDriver?.message);
+        // Soften failure: keep UI functional even if profile fails (e.g., auth edge cases)
+        setDriverProfile(null);
       }
     } catch (error) {
       console.error('Error loading driver profile:', error);
@@ -220,6 +219,11 @@ export default function Home() {
     try {
       // Get the stored token
       const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.error('No token found for driver materials request');
+        return;
+      }
+      
       const data = await request(API_URL, GET_DRIVER_MATERIALS, { driverId: id }, {
         Authorization: `Bearer ${token}`
       }) as any;
@@ -227,10 +231,13 @@ export default function Home() {
       if (data.getDriverMaterials?.success) {
         setMaterials(data.getDriverMaterials.materials || []);
       } else {
-        console.error('Materials request failed:', data.getDriverMaterials?.message);
+        // Treat non-success as empty materials to show empty state instead of error
+        setMaterials([]);
       }
     } catch (error) {
-      console.error('Error loading materials:', error);
+      console.error('Error loading driver materials:', error);
+      // Treat GraphQL 400/Unauthorized as empty state for a better UX
+      setMaterials([]);
     }
   };
 

@@ -117,27 +117,32 @@ EmailService.verifyConfiguration()
 
 // ✅ Apollo Server setup
 const server = new ApolloServer({
-  typeDefs: mergeTypeDefs([
-    userTypeDefs,
-    adminTypeDefs,
-    superAdminTypeDefs,
-    adTypeDefs,
-    driverTypeDefs,
-    paymentTypeDefs,
-    materialTypeDefs,
-    adsPlanTypeDefs,
-    pricingConfigTypeDefs,
-    flexibleAdTypeDefs,
-    materialTrackingTypeDefs,
-    tabletTypeDefs,
-    adsDeploymentTypeDefs,
-    // screenTrackingTypeDefs, // deprecated
-    notificationTypeDefs,
-    userReportTypeDefs,
-    faqTypeDefs,
-    companyAdTypeDefs,
-  ]),
-  resolvers: mergeResolvers([
+  typeDefs: (() => {
+    const schemas = [
+      userTypeDefs,
+      adminTypeDefs,
+      superAdminTypeDefs,
+      adTypeDefs,
+      driverTypeDefs,
+      paymentTypeDefs,
+      materialTypeDefs,
+      adsPlanTypeDefs,
+      pricingConfigTypeDefs,
+      flexibleAdTypeDefs,
+      materialTrackingTypeDefs,
+      tabletTypeDefs,
+      adsDeploymentTypeDefs,
+      // screenTrackingTypeDefs, // deprecated
+      notificationTypeDefs,
+      userReportTypeDefs,
+      faqTypeDefs,
+      companyAdTypeDefs,
+    ];
+    
+    return mergeTypeDefs(schemas);
+  })(),
+  resolvers: (() => {
+    const resolvers = [
     {
       JSON: {
         serialize: (value) => value,
@@ -163,7 +168,10 @@ const server = new ApolloServer({
     userReportResolvers,
     faqResolvers,
     companyAdResolvers,
-  ]),
+  ];
+    
+    return mergeResolvers(resolvers);
+  })(),
 });
 
 const app = express();

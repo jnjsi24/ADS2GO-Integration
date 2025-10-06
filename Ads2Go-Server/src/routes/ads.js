@@ -260,7 +260,7 @@ router.get('/qr-scans/stats', async (req, res) => {
       
       // Debug: Log the first ad to see if website field is included
       if (allActiveAds.length > 0) {
-        console.log('🔍 First ad data being sent to Android player:', {
+        console.log('First ad data:', {
           adId: allActiveAds[0].adId,
           adTitle: allActiveAds[0].adTitle,
           website: allActiveAds[0].website,
@@ -319,13 +319,6 @@ router.post('/qr-scan', async (req, res) => {
     // Accept data from both Slot 1 and Slot 2 since they are different physical devices
     console.log(`📱 Processing QR scan from Slot ${slotNumber} for material ${materialId}`);
 
-    // Enhanced QR scan logging with sound alert and colors
-    console.log('\n\n\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m');
-    console.log('\u001b[42m\u001b[30m' + ' '.repeat(20) + '🔍 QR CODE SCANNED! 🔍' + ' '.repeat(20) + '\u001b[0m');
-    console.log('\u001b[42m\u001b[30m' + '='.repeat(60) + '\u001b[0m\n');
-    
-    // Sound alert (beep)
-    process.stdout.write('\u0007');
     
     console.log('\u001b[1m\u001b[33m📱 AD INFORMATION:\u001b[0m');
     console.log(`   Title: \u001b[36m${adTitle}\u001b[0m`);
@@ -408,7 +401,6 @@ router.post('/qr-scan', async (req, res) => {
     // Process registration data
     
     // Use the new ad-based analytics structure
-    console.log('\u001b[33m🔍 USING NEW AD-BASED ANALYTICS STRUCTURE...\u001b[0m');
     
     // Try to get device ID from registration or device info first
     let deviceIdToUse = (registrationData && registrationData.deviceId) || (deviceInfo && deviceInfo.deviceId);
@@ -416,9 +408,7 @@ router.post('/qr-scan', async (req, res) => {
     if (!deviceIdToUse) {
       // Use fallback device ID for QR scans without device info
       deviceIdToUse = `QR-SCAN-${materialId}-${slotNumber}-${Date.now()}`;
-      console.log(`\u001b[33m🔍 USING QR-SCAN DEVICE ID: ${deviceIdToUse}\u001b[0m`);
     } else {
-      console.log(`\u001b[32m✅ USING PROVIDED DEVICE ID: ${deviceIdToUse}\u001b[0m`);
     }
     
     // Create QR scan data

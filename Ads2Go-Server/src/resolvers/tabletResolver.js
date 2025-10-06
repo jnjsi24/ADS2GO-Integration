@@ -125,7 +125,6 @@ module.exports = {
       try {
         const { deviceId, materialId, slotNumber, carGroupId } = input;
         
-        console.log('GraphQL registerTablet called with:', { deviceId, materialId, slotNumber, carGroupId });
         
         // Validate required fields
         if (!deviceId || !materialId || !slotNumber || !carGroupId) {
@@ -330,7 +329,6 @@ module.exports = {
       try {
         const { deviceId, gps, isOnline } = input;
         
-        console.log('GraphQL updateTabletStatus called with:', { deviceId, gps, isOnline });
         
         // Find tablet by device ID in the tablets array
         const tablet = await Tablet.findOne({

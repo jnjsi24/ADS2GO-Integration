@@ -199,7 +199,6 @@ router.get('/route/:deviceId', async (req, res) => {
     
     // If date is provided, look in historical data first
     if (date) {
-      console.log(`🔍 [ROUTE] Looking for historical data for device ${deviceId} on date ${date}`);
       
       // Import DeviceDataHistoryV2 model
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
@@ -226,7 +225,6 @@ router.get('/route/:deviceId', async (req, res) => {
         console.log(`❌ [ROUTE] No historical data found for exact deviceId ${deviceId} on date ${date}`);
         
         // Try to find by materialId if deviceId is actually a materialId
-        console.log(`🔍 [ROUTE] Trying to find by materialId ${deviceId} on date ${date}`);
         historicalData = await DeviceDataHistoryV2.findOne({
           deviceId: deviceId, // This might actually be a materialId
           date: {
@@ -248,19 +246,12 @@ router.get('/route/:deviceId', async (req, res) => {
               $lt: nextDay
             }
           }).select('deviceId materialId date locationHistory');
-          
-          console.log(`🔍 [ROUTE] Available historical data for date ${date}:`, allHistoricalData.map(d => ({
-            deviceId: d.deviceId,
-            hasLocationHistory: d.locationHistory && d.locationHistory.length > 0,
-            locationHistoryLength: d.locationHistory ? d.locationHistory.length : 0
-          })));
         }
       }
     }
     
     // If no historical data found or no date provided, try current session
     if (locationHistory.length === 0 && deviceTracking.currentSession && deviceTracking.currentSession.locationHistory) {
-      console.log(`🔍 [ROUTE] Using current session data for device ${deviceId}`);
       locationHistory = deviceTracking.currentSession.locationHistory;
       
       // Filter by date if provided
@@ -750,7 +741,6 @@ router.get('/compliance', async (req, res) => {
       ]
     });
     
-    console.log('🔍 Found device tracking records for registered devices:', allDevices.length);
     allDevices.forEach((device, index) => {
       console.log(`  Device ${index + 1}: ${device.materialId} (${device.slots?.length || 0} slots)`);
     });
@@ -1291,7 +1281,6 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
 
     // Filter by user if userId is provided
     if (userId) {
-      console.log(`🔍 Filtering ad analytics for user: ${userId}`);
       
       // Get all ads created by this user
       const Ad = require('../models/Ad');
@@ -1744,11 +1733,6 @@ router.get('/screens', async (req, res) => {
     if (status === 'online') {
       query.isOnline = true;
       query.lastSeen = { $gte: twoMinutesAgo };
-      
-      console.log('🔍 Online devices query:', JSON.stringify({
-        isOnline: true,
-        lastSeen: { $gte: twoMinutesAgo }
-      }, null, 2));
     }
     if (status === 'offline') {
       query['$or'] = [
@@ -1759,7 +1743,6 @@ router.get('/screens', async (req, res) => {
     if (status === 'displaying') query['screenMetrics.isDisplaying'] = true;
     if (status === 'maintenance') query['screenMetrics.maintenanceMode'] = true;
 
-    console.log('🔍 Running query:', JSON.stringify(query, null, 2));
     const screens = await DeviceTracking.find(query);
     
     // Sync with DeviceStatusManager - check if we have a WebSocket connection for this materialId
@@ -1807,7 +1790,6 @@ router.get('/screens', async (req, res) => {
           
           // If DeviceStatusManager doesn't have this device, use slot status
           if (deviceStatus.source === 'timeout' && deviceStatus.confidence === 'low') {
-            console.log(`🔍 [SCREEN TRACKING] DeviceStatusManager doesn't have ${slot.deviceId}, using slot status`);
             isActuallyOnline = slot.isOnline;
           } else {
             // Use the status from DeviceStatusManager
@@ -1960,6 +1942,7 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
     
     // Find the material assigned to this driver
     const material = await Material.findOne({ driverId: driverId });
+    
     if (!material) {
       return res.status(404).json({
         success: false,
