@@ -52,14 +52,8 @@ class UserAnalyticsService {
   // Get user analytics data - formatted for GraphQL
   static async getUserAnalytics(userId, startDate, endDate) {
     try {
-      const userAnalytics = await UserAnalytics.findOne({ userId });
-      
-      if (!userAnalytics) {
-        return {
-          success: false,
-          message: 'User analytics not found'
-        };
-      }
+      // Initialize UserAnalytics if it doesn't exist
+      const userAnalytics = await this.initializeUserAnalytics(userId);
 
       // Filter ads by date range if provided
       let filteredAds = userAnalytics.ads;
@@ -77,16 +71,16 @@ class UserAnalyticsService {
           totalAdsPlayed: userAnalytics.totalAdImpressions || 0, // Using impressions as plays
           totalDisplayTime: userAnalytics.totalAdPlayTime || 0,
           averageCompletionRate: userAnalytics.averageAdCompletionRate || 0,
-          totalAds: filteredAds.length,
-          activeAds: filteredAds.filter(ad => ad.isActive).length,
+          totalAds: filteredAds ? filteredAds.length : 0,
+          activeAds: filteredAds ? filteredAds.filter(ad => ad.isActive).length : 0,
           totalMaterials: userAnalytics.totalMaterials || 0,
           totalDevices: userAnalytics.totalDevices || 0,
           totalQRScans: userAnalytics.totalQRScans || 0,
           qrScanConversionRate: userAnalytics.qrScanConversionRate || 0
         },
-        adPerformance: filteredAds.map(ad => ({
-          adId: ad.adId.toString(),
-          adTitle: ad.adTitle,
+        adPerformance: (filteredAds || []).map(ad => ({
+          adId: ad.adId ? ad.adId.toString() : '',
+          adTitle: ad.adTitle || '',
           totalMaterials: ad.totalMaterials || 0,
           totalDevices: ad.totalDevices || 0,
           totalAdPlayTime: ad.totalAdPlayTime || 0,
@@ -94,16 +88,25 @@ class UserAnalyticsService {
           totalQRScans: ad.totalQRScans || 0,
           averageAdCompletionRate: ad.averageAdCompletionRate || 0,
           qrScanConversionRate: ad.qrScanConversionRate || 0,
-          lastUpdated: ad.lastUpdated,
-          materials: ad.materials || []
+          lastUpdated: ad.lastUpdated || new Date().toISOString(),
+          materials: (ad.materials || []).map(material => ({
+            materialId: material.materialId || '',
+            materialName: material.materialName || null,
+            carGroupId: material.carGroupId || null,
+            totalAdPlayTime: material.totalAdPlayTime || 0,
+            totalAdImpressions: material.totalAdImpressions || 0,
+            totalQRScans: material.totalQRScans || 0,
+            averageCompletionRate: material.averageAdCompletionRate || 0,
+            lastActivity: material.lastActivity || null
+          }))
         })),
         dailyStats: [], // Will be populated from DeviceDataHistoryV2
         deviceStats: [], // Will be populated from DeviceDataHistoryV2
         period: startDate && endDate ? 'custom' : '7d',
         startDate: startDate,
         endDate: endDate,
-        lastUpdated: userAnalytics.lastUpdated,
-        isActive: userAnalytics.isActive
+        lastUpdated: userAnalytics.lastUpdated || new Date().toISOString(),
+        isActive: userAnalytics.isActive !== undefined ? userAnalytics.isActive : true
       };
 
       // Get daily stats from DeviceDataHistoryV2
@@ -879,6 +882,1064 @@ class UserAnalyticsService {
 
     } catch (error) {
       console.error('Error syncing user analytics from history:', error);
+      throw error;
+    }
+  }
+
+  // Initialize UserAnalytics for a user if it doesn't exist
+  static async initializeUserAnalytics(userId) {
+    try {
+      let userAnalytics = await UserAnalytics.findOne({ userId });
+      
+      if (!userAnalytics) {
+        console.log(`📊 Creating initial UserAnalytics record for user ${userId}`);
+        
+        userAnalytics = new UserAnalytics({
+          userId: userId,
+          ads: [],
+          totalAds: 0,
+          totalMaterials: 0,
+          totalDevices: 0,
+          totalAdPlays: 0,
+          totalAdPlayTime: 0,
+          totalAdImpressions: 0,
+          totalQRScans: 0,
+          averageAdCompletionRate: 0,
+          qrScanConversionRate: 0,
+          adPerformance: [],
+          materialBreakdown: [],
+          errorLogs: [],
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastUpdated: new Date()
+        });
+        
+        await userAnalytics.save();
+        console.log(`✅ Created initial UserAnalytics record for user ${userId}`);
+      }
+      
+      return userAnalytics;
+    } catch (error) {
+      console.error('Error initializing user analytics:', error);
+      throw error;
+    }
+  }
+
+  // ===========================================
+  // DETAILED ANALYTICS FUNCTIONS
+  // ===========================================
+
+  // Get total plays of ads for a specific user
+  static async getTotalAdPlays(userId, startDate = null, endDate = null) {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Ad = require('../models/Ad');
+      
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return {
+          success: false,
+          message: 'No active ads found for this user',
+          totalPlays: 0,
+          ads: []
+        };
+      }
+
+      // Get all materials associated with user's ads
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          ad.targetDevices.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
+        } else if (ad.materialId) {
+          if (!materialIds.includes(ad.materialId.toString())) {
+            materialIds.push(ad.materialId.toString());
+          }
+        }
+      }
+
+      if (materialIds.length === 0) {
+        return {
+          success: false,
+          message: 'No materials found for this user',
+          totalPlays: 0,
+          ads: []
+        };
+      }
+
+      let totalPlays = 0;
+      const adPlaysByAd = {};
+      const adPlaysByMaterial = {};
+
+      // Set default date range if not provided
+      const now = new Date();
+      const defaultStartDate = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const defaultEndDate = endDate || now;
+
+      // Get current day data from DeviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: { $in: materialIds },
+        date: currentDay
+      });
+
+      // Process current day data
+      currentData.forEach(device => {
+        if (device.adPerformance && device.adPerformance.length > 0) {
+          device.adPerformance.forEach(adPerf => {
+            // Only count plays for user's ads
+            const userAd = userAds.find(ad => ad._id.toString() === adPerf.adId);
+            if (userAd) {
+              if (!adPlaysByAd[adPerf.adId]) {
+                adPlaysByAd[adPerf.adId] = {
+                  adId: adPerf.adId,
+                  adTitle: adPerf.adTitle,
+                  totalPlays: 0,
+                  totalViewTime: 0,
+                  averageViewTime: 0,
+                  completionRate: 0,
+                  firstPlayed: adPerf.firstPlayed,
+                  lastPlayed: adPerf.lastPlayed,
+                  impressions: 0
+                };
+              }
+              adPlaysByAd[adPerf.adId].totalPlays += adPerf.playCount || 0;
+              adPlaysByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
+              adPlaysByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+              if (adPerf.lastPlayed > adPlaysByAd[adPerf.adId].lastPlayed) {
+                adPlaysByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+              }
+              totalPlays += adPerf.playCount || 0;
+            }
+          });
+        }
+
+        // Track by material
+        if (!adPlaysByMaterial[device.materialId]) {
+          adPlaysByMaterial[device.materialId] = {
+            materialId: device.materialId,
+            carGroupId: device.carGroupId,
+            totalPlays: 0,
+            totalViewTime: 0,
+            ads: []
+          };
+        }
+        adPlaysByMaterial[device.materialId].totalPlays += device.totalAdPlays || 0;
+        adPlaysByMaterial[device.materialId].totalViewTime += device.totalAdPlayTime || 0;
+      });
+
+      // Get historical data from DeviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.find({
+        materialId: { $in: materialIds },
+        'dailyData.date': {
+          $gte: new Date(defaultStartDate),
+          $lte: new Date(defaultEndDate)
+        }
+      });
+
+      // Process historical data
+      historicalData.forEach(archive => {
+        if (archive.dailyData && archive.dailyData.length > 0) {
+          archive.dailyData.forEach(dailyData => {
+            const dailyDate = new Date(dailyData.date);
+            if (dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate)) {
+              if (dailyData.adPerformance && dailyData.adPerformance.length > 0) {
+                dailyData.adPerformance.forEach(adPerf => {
+                  // Only count plays for user's ads
+                  const userAd = userAds.find(ad => ad._id.toString() === adPerf.adId);
+                  if (userAd) {
+                    if (!adPlaysByAd[adPerf.adId]) {
+                      adPlaysByAd[adPerf.adId] = {
+                        adId: adPerf.adId,
+                        adTitle: adPerf.adTitle,
+                        totalPlays: 0,
+                        totalViewTime: 0,
+                        averageViewTime: 0,
+                        completionRate: 0,
+                        firstPlayed: adPerf.firstPlayed,
+                        lastPlayed: adPerf.lastPlayed,
+                        impressions: 0
+                      };
+                    }
+                    adPlaysByAd[adPerf.adId].totalPlays += adPerf.playCount || 0;
+                    adPlaysByAd[adPerf.adId].totalViewTime += adPerf.totalViewTime || 0;
+                    adPlaysByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+                    if (adPerf.lastPlayed > adPlaysByAd[adPerf.adId].lastPlayed) {
+                      adPlaysByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+                    }
+                    totalPlays += adPerf.playCount || 0;
+                  }
+                });
+              }
+
+              // Track by material
+              if (!adPlaysByMaterial[archive.materialId]) {
+                adPlaysByMaterial[archive.materialId] = {
+                  materialId: archive.materialId,
+                  carGroupId: archive.carGroupId,
+                  totalPlays: 0,
+                  totalViewTime: 0,
+                  ads: []
+                };
+              }
+              adPlaysByMaterial[archive.materialId].totalPlays += dailyData.totalAdPlays || 0;
+              adPlaysByMaterial[archive.materialId].totalViewTime += dailyData.totalAdPlayTime || 0;
+            }
+          });
+        }
+      });
+
+      // Calculate averages for ad plays
+      Object.values(adPlaysByAd).forEach(ad => {
+        ad.averageViewTime = ad.totalPlays > 0 ? ad.totalViewTime / ad.totalPlays : 0;
+        ad.completionRate = ad.totalViewTime > 0 ? (ad.totalViewTime / (ad.totalViewTime + (ad.totalPlays * 30))) * 100 : 0;
+      });
+
+      return {
+        success: true,
+        userId,
+        totalPlays,
+        ads: Object.values(adPlaysByAd),
+        materials: Object.values(adPlaysByMaterial),
+        dateRange: {
+          startDate: defaultStartDate,
+          endDate: defaultEndDate
+        },
+        summary: {
+          totalAds: Object.keys(adPlaysByAd).length,
+          totalMaterials: Object.keys(adPlaysByMaterial).length,
+          averagePlaysPerAd: Object.keys(adPlaysByAd).length > 0 ? totalPlays / Object.keys(adPlaysByAd).length : 0
+        }
+      };
+    } catch (error) {
+      console.error('Error getting total ad plays:', error);
+      throw error;
+    }
+  }
+
+  // Get total QR scans of ads for a specific user
+  static async getTotalQRScans(userId, startDate = null, endDate = null) {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const QRScanTracking = require('../models/qrScanTracking');
+      const Ad = require('../models/Ad');
+      
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return {
+          success: false,
+          message: 'No active ads found for this user',
+          totalScans: 0,
+          ads: []
+        };
+      }
+
+      const userAdIds = userAds.map(ad => ad._id.toString());
+
+      // Set default date range if not provided
+      const now = new Date();
+      const defaultStartDate = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const defaultEndDate = endDate || now;
+
+      let totalScans = 0;
+      const qrScansByAd = {};
+      const qrScansByMaterial = {};
+
+      // QRScanTracking is deprecated - QR scans are now in DeviceTracking and DeviceDataHistoryV2
+      // Skip the deprecated QRScanTracking collection
+
+      // QR scans are now processed from DeviceTracking and DeviceDataHistoryV2 below
+
+      // Get additional data from DeviceTracking and DeviceDataHistoryV2
+      const materialIds = userAds.map(ad => ad.materialId).filter(Boolean);
+
+      // Get current day data from DeviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: { $in: materialIds },
+        date: currentDay
+      });
+
+      // Process current day QR scans
+      currentData.forEach(device => {
+        if (device.qrScansByAd && device.qrScansByAd.length > 0) {
+          device.qrScansByAd.forEach(adScan => {
+            if (userAdIds.includes(adScan.adId)) {
+              if (!qrScansByAd[adScan.adId]) {
+                qrScansByAd[adScan.adId] = {
+                  adId: adScan.adId,
+                  adTitle: adScan.adTitle,
+                  totalScans: 0,
+                  firstScanned: adScan.firstScanned,
+                  lastScanned: adScan.lastScanned,
+                  scans: []
+                };
+              }
+              qrScansByAd[adScan.adId].totalScans += adScan.scanCount || 0;
+              totalScans += adScan.scanCount || 0;
+            }
+          });
+        }
+      });
+
+      // Get historical data from DeviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.find({
+        materialId: { $in: materialIds },
+        'dailyData.date': {
+          $gte: new Date(defaultStartDate),
+          $lte: new Date(defaultEndDate)
+        }
+      });
+
+      // Process historical QR scans
+      historicalData.forEach(archive => {
+        if (archive.dailyData && archive.dailyData.length > 0) {
+          archive.dailyData.forEach(dailyData => {
+            const dailyDate = new Date(dailyData.date);
+            if (dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate)) {
+              if (dailyData.qrScansByAd && dailyData.qrScansByAd.length > 0) {
+                dailyData.qrScansByAd.forEach(adScan => {
+                  if (userAdIds.includes(adScan.adId)) {
+                    if (!qrScansByAd[adScan.adId]) {
+                      qrScansByAd[adScan.adId] = {
+                        adId: adScan.adId,
+                        adTitle: adScan.adTitle,
+                        totalScans: 0,
+                        firstScanned: adScan.firstScanned,
+                        lastScanned: adScan.lastScanned,
+                        scans: []
+                      };
+                    }
+                    qrScansByAd[adScan.adId].totalScans += adScan.scanCount || 0;
+                    totalScans += adScan.scanCount || 0;
+                  }
+                });
+              }
+            }
+          });
+        }
+      });
+
+      return {
+        success: true,
+        userId,
+        totalScans,
+        ads: Object.values(qrScansByAd),
+        materials: Object.values(qrScansByMaterial),
+        dateRange: {
+          startDate: defaultStartDate,
+          endDate: defaultEndDate
+        },
+        summary: {
+          totalAds: Object.keys(qrScansByAd).length,
+          totalMaterials: Object.keys(qrScansByMaterial).length,
+          averageScansPerAd: Object.keys(qrScansByAd).length > 0 ? totalScans / Object.keys(qrScansByAd).length : 0
+        }
+      };
+    } catch (error) {
+      console.error('Error getting total QR scans:', error);
+      throw error;
+    }
+  }
+
+  // Get active total materials for a specific user
+  static async getActiveTotalMaterials(userId) {
+    try {
+      const Material = require('../models/Material');
+      const Ad = require('../models/Ad');
+      const DeviceTracking = require('../models/deviceTracking');
+      
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return {
+          success: false,
+          message: 'No active ads found for this user',
+          totalMaterials: 0,
+          materials: []
+        };
+      }
+
+      // Get all materials associated with user's ads
+      const materialIds = [];
+      const materialDetails = [];
+
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          // Get material documents to extract materialId strings
+          const materials = await Material.find({ _id: { $in: ad.targetDevices } });
+          materials.forEach(material => {
+            if (material.materialId && !materialIds.includes(material.materialId)) {
+              materialIds.push(material.materialId);
+              materialDetails.push({
+                materialId: material.materialId,
+                materialName: material.materialName,
+                materialType: material.materialType,
+                vehicleType: material.vehicleType,
+                category: material.category,
+                status: material.status,
+                assignedDate: material.assignedDate,
+                mountedAt: material.mountedAt,
+                dismountedAt: material.dismountedAt,
+                driverId: material.driverId,
+                location: material.location,
+                ads: []
+              });
+            }
+          });
+        } else if (ad.materialId) {
+          const material = await Material.findById(ad.materialId);
+          if (material && material.materialId && !materialIds.includes(material.materialId)) {
+            materialIds.push(material.materialId);
+            materialDetails.push({
+              materialId: material.materialId,
+              materialName: material.materialName,
+              materialType: material.materialType,
+              vehicleType: material.vehicleType,
+              category: material.category,
+              status: material.status,
+              assignedDate: material.assignedDate,
+              mountedAt: material.mountedAt,
+              dismountedAt: material.dismountedAt,
+              driverId: material.driverId,
+              location: material.location,
+              ads: []
+            });
+          }
+        }
+      }
+
+      // Get current status from DeviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: { $in: materialIds },
+        date: currentDay
+      });
+
+      // Add current status and performance data
+      materialDetails.forEach(material => {
+        const currentDevice = currentData.find(device => device.materialId === material.materialId);
+        if (currentDevice) {
+          material.currentStatus = {
+            isOnline: currentDevice.isOnline,
+            lastSeen: currentDevice.lastSeen,
+            currentLocation: currentDevice.currentLocation,
+            totalAdPlays: currentDevice.totalAdPlays || 0,
+            totalQRScans: currentDevice.totalQRScans || 0,
+            totalAdPlayTime: currentDevice.totalAdPlayTime || 0,
+            totalAdImpressions: currentDevice.totalAdImpressions || 0,
+            carGroupId: currentDevice.carGroupId,
+            screenType: currentDevice.screenType,
+            isDisplaying: currentDevice.isDisplaying,
+            maintenanceMode: currentDevice.maintenanceMode
+          };
+        } else {
+          material.currentStatus = {
+            isOnline: false,
+            lastSeen: null,
+            currentLocation: null,
+            totalAdPlays: 0,
+            totalQRScans: 0,
+            totalAdPlayTime: 0,
+            totalAdImpressions: 0,
+            carGroupId: null,
+            screenType: null,
+            isDisplaying: false,
+            maintenanceMode: false
+          };
+        }
+
+        // Add associated ads
+        material.ads = userAds.filter(ad => {
+          if (ad.targetDevices && ad.targetDevices.length > 0) {
+            return ad.targetDevices.some(targetDevice => {
+              return material.materialId === targetDevice.toString();
+            });
+          }
+          return ad.materialId && ad.materialId.toString() === material.materialId;
+        }).map(ad => ({
+          adId: ad._id,
+          adTitle: ad.title,
+          adType: ad.adType,
+          adFormat: ad.adFormat,
+          status: ad.status,
+          adStatus: ad.adStatus,
+          durationDays: ad.durationDays,
+          totalPrice: ad.totalPrice
+        }));
+      });
+
+      // Calculate summary statistics
+      const activeMaterials = materialDetails.filter(material => material.currentStatus.isOnline);
+      const totalAdPlays = materialDetails.reduce((sum, material) => sum + material.currentStatus.totalAdPlays, 0);
+      const totalQRScans = materialDetails.reduce((sum, material) => sum + material.currentStatus.totalQRScans, 0);
+      const totalAdPlayTime = materialDetails.reduce((sum, material) => sum + material.currentStatus.totalAdPlayTime, 0);
+
+      return {
+        success: true,
+        userId,
+        totalMaterials: materialDetails.length,
+        activeMaterials: activeMaterials.length,
+        materials: materialDetails,
+        summary: {
+          totalAdPlays,
+          totalQRScans,
+          totalAdPlayTime,
+          onlinePercentage: materialDetails.length > 0 ? (activeMaterials.length / materialDetails.length) * 100 : 0,
+          averagePlaysPerMaterial: materialDetails.length > 0 ? totalAdPlays / materialDetails.length : 0,
+          averageScansPerMaterial: materialDetails.length > 0 ? totalQRScans / materialDetails.length : 0
+        }
+      };
+    } catch (error) {
+      console.error('Error getting active total materials:', error);
+      throw error;
+    }
+  }
+
+  // Get total display time of ads for a specific user
+  static async getTotalDisplayTime(userId, startDate = null, endDate = null) {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Ad = require('../models/Ad');
+      
+      // Get user's ads to find associated materials
+      const userAds = await Ad.find({ 
+        userId: userId,
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+      
+      if (!userAds || userAds.length === 0) {
+        return {
+          success: false,
+          message: 'No active ads found for this user',
+          totalDisplayTime: 0,
+          ads: []
+        };
+      }
+
+      // Get all materials associated with user's ads
+      const materialIds = [];
+      for (const ad of userAds) {
+        if (ad.targetDevices && ad.targetDevices.length > 0) {
+          ad.targetDevices.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
+        } else if (ad.materialId) {
+          if (!materialIds.includes(ad.materialId.toString())) {
+            materialIds.push(ad.materialId.toString());
+          }
+        }
+      }
+
+      if (materialIds.length === 0) {
+        return {
+          success: false,
+          message: 'No materials found for this user',
+          totalDisplayTime: 0,
+          ads: []
+        };
+      }
+
+      // Set default date range if not provided
+      const now = new Date();
+      const defaultStartDate = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const defaultEndDate = endDate || now;
+
+      let totalDisplayTime = 0;
+      const displayTimeByAd = {};
+      const displayTimeByMaterial = {};
+
+      // Get current day data from DeviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.find({
+        materialId: { $in: materialIds },
+        date: currentDay
+      });
+
+      // Process current day data
+      currentData.forEach(device => {
+        if (device.adPerformance && device.adPerformance.length > 0) {
+          device.adPerformance.forEach(adPerf => {
+            // Only count display time for user's ads
+            const userAd = userAds.find(ad => ad._id.toString() === adPerf.adId);
+            if (userAd) {
+              if (!displayTimeByAd[adPerf.adId]) {
+                displayTimeByAd[adPerf.adId] = {
+                  adId: adPerf.adId,
+                  adTitle: adPerf.adTitle,
+                  totalDisplayTime: 0,
+                  totalPlays: 0,
+                  averageDisplayTime: 0,
+                  completionRate: 0,
+                  firstPlayed: adPerf.firstPlayed,
+                  lastPlayed: adPerf.lastPlayed,
+                  impressions: 0
+                };
+              }
+              displayTimeByAd[adPerf.adId].totalDisplayTime += adPerf.totalViewTime || 0;
+              displayTimeByAd[adPerf.adId].totalPlays += adPerf.playCount || 0;
+              displayTimeByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+              if (adPerf.lastPlayed > displayTimeByAd[adPerf.adId].lastPlayed) {
+                displayTimeByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+              }
+              totalDisplayTime += adPerf.totalViewTime || 0;
+            }
+          });
+        }
+
+        // Track by material
+        if (!displayTimeByMaterial[device.materialId]) {
+          displayTimeByMaterial[device.materialId] = {
+            materialId: device.materialId,
+            carGroupId: device.carGroupId,
+            totalDisplayTime: 0,
+            totalPlays: 0,
+            ads: []
+          };
+        }
+        displayTimeByMaterial[device.materialId].totalDisplayTime += device.totalAdPlayTime || 0;
+        displayTimeByMaterial[device.materialId].totalPlays += device.totalAdPlays || 0;
+      });
+
+      // Get historical data from DeviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.find({
+        materialId: { $in: materialIds },
+        'dailyData.date': {
+          $gte: new Date(defaultStartDate),
+          $lte: new Date(defaultEndDate)
+        }
+      });
+
+      // Process historical data
+      historicalData.forEach(archive => {
+        if (archive.dailyData && archive.dailyData.length > 0) {
+          archive.dailyData.forEach(dailyData => {
+            const dailyDate = new Date(dailyData.date);
+            if (dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate)) {
+              if (dailyData.adPerformance && dailyData.adPerformance.length > 0) {
+                dailyData.adPerformance.forEach(adPerf => {
+                  // Only count display time for user's ads
+                  const userAd = userAds.find(ad => ad._id.toString() === adPerf.adId);
+                  if (userAd) {
+                    if (!displayTimeByAd[adPerf.adId]) {
+                      displayTimeByAd[adPerf.adId] = {
+                        adId: adPerf.adId,
+                        adTitle: adPerf.adTitle,
+                        totalDisplayTime: 0,
+                        totalPlays: 0,
+                        averageDisplayTime: 0,
+                        completionRate: 0,
+                        firstPlayed: adPerf.firstPlayed,
+                        lastPlayed: adPerf.lastPlayed,
+                        impressions: 0
+                      };
+                    }
+                    displayTimeByAd[adPerf.adId].totalDisplayTime += adPerf.totalViewTime || 0;
+                    displayTimeByAd[adPerf.adId].totalPlays += adPerf.playCount || 0;
+                    displayTimeByAd[adPerf.adId].impressions += adPerf.impressions || 0;
+                    if (adPerf.lastPlayed > displayTimeByAd[adPerf.adId].lastPlayed) {
+                      displayTimeByAd[adPerf.adId].lastPlayed = adPerf.lastPlayed;
+                    }
+                    totalDisplayTime += adPerf.totalViewTime || 0;
+                  }
+                });
+              }
+
+              // Track by material
+              if (!displayTimeByMaterial[archive.materialId]) {
+                displayTimeByMaterial[archive.materialId] = {
+                  materialId: archive.materialId,
+                  carGroupId: archive.carGroupId,
+                  totalDisplayTime: 0,
+                  totalPlays: 0,
+                  ads: []
+                };
+              }
+              displayTimeByMaterial[archive.materialId].totalDisplayTime += dailyData.totalAdPlayTime || 0;
+              displayTimeByMaterial[archive.materialId].totalPlays += dailyData.totalAdPlays || 0;
+            }
+          });
+        }
+      });
+
+      // Calculate averages for display time
+      Object.values(displayTimeByAd).forEach(ad => {
+        ad.averageDisplayTime = ad.totalPlays > 0 ? ad.totalDisplayTime / ad.totalPlays : 0;
+        ad.completionRate = ad.totalDisplayTime > 0 ? (ad.totalDisplayTime / (ad.totalDisplayTime + (ad.totalPlays * 30))) * 100 : 0;
+      });
+
+      // Convert seconds to hours for better readability
+      const totalDisplayTimeHours = totalDisplayTime / 3600;
+      Object.values(displayTimeByAd).forEach(ad => {
+        ad.totalDisplayTimeHours = ad.totalDisplayTime / 3600;
+        ad.averageDisplayTimeHours = ad.averageDisplayTime / 3600;
+      });
+      Object.values(displayTimeByMaterial).forEach(material => {
+        material.totalDisplayTimeHours = material.totalDisplayTime / 3600;
+      });
+
+      return {
+        success: true,
+        userId,
+        totalDisplayTime,
+        totalDisplayTimeHours,
+        ads: Object.values(displayTimeByAd),
+        materials: Object.values(displayTimeByMaterial),
+        dateRange: {
+          startDate: defaultStartDate,
+          endDate: defaultEndDate
+        },
+        summary: {
+          totalAds: Object.keys(displayTimeByAd).length,
+          totalMaterials: Object.keys(displayTimeByMaterial).length,
+          averageDisplayTimePerAd: Object.keys(displayTimeByAd).length > 0 ? totalDisplayTimeHours / Object.keys(displayTimeByAd).length : 0,
+          averageDisplayTimePerMaterial: Object.keys(displayTimeByMaterial).length > 0 ? totalDisplayTimeHours / Object.keys(displayTimeByMaterial).length : 0
+        }
+      };
+    } catch (error) {
+      console.error('Error getting total display time:', error);
+      throw error;
+    }
+  }
+
+  // Get analytics data for a specific device
+  static async getDeviceAnalytics(deviceId, startDate = null, endDate = null) {
+    try {
+      const DeviceTracking = require('../models/deviceTracking');
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const Material = require('../models/Material');
+      const Ad = require('../models/Ad');
+      
+      // Find the material associated with this device
+      const material = await Material.findOne({ materialId: deviceId });
+      if (!material) {
+        return {
+          success: false,
+          message: 'Device not found'
+        };
+      }
+
+      // Set default date range if not provided
+      const now = new Date();
+      const defaultStartDate = startDate || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+      const defaultEndDate = endDate || now;
+
+      // Get current day data from DeviceTracking
+      const currentDay = new Date().toISOString().split('T')[0];
+      const currentData = await DeviceTracking.findOne({
+        materialId: deviceId,
+        date: currentDay
+      });
+
+      // Get historical data from DeviceDataHistoryV2
+      const historicalData = await DeviceDataHistoryV2.findOne({
+        materialId: deviceId,
+        'dailyData.date': {
+          $gte: new Date(defaultStartDate),
+          $lte: new Date(defaultEndDate)
+        }
+      });
+
+      // Get ads associated with this device
+      const deviceAds = await Ad.find({
+        $or: [
+          { materialId: material._id },
+          { targetDevices: material._id }
+        ],
+        paymentStatus: 'PAID',
+        adStatus: 'ACTIVE',
+        status: { $in: ['RUNNING', 'APPROVED'] }
+      });
+
+      // Process current day data
+      let currentDayStats = {
+        totalAdPlays: 0,
+        totalQRScans: 0,
+        totalAdPlayTime: 0,
+        totalAdImpressions: 0,
+        totalDistanceTraveled: 0,
+        totalHoursOnline: 0,
+        isOnline: false,
+        currentLocation: null,
+        lastSeen: null,
+        adPerformance: [],
+        qrScansByAd: []
+      };
+
+      if (currentData) {
+        currentDayStats = {
+          totalAdPlays: currentData.totalAdPlays || 0,
+          totalQRScans: currentData.totalQRScans || 0,
+          totalAdPlayTime: currentData.totalAdPlayTime || 0,
+          totalAdImpressions: currentData.totalAdImpressions || 0,
+          totalDistanceTraveled: currentData.totalDistanceTraveled || 0,
+          totalHoursOnline: currentData.totalHoursOnline || 0,
+          isOnline: currentData.isOnline || false,
+          currentLocation: currentData.currentLocation,
+          lastSeen: currentData.lastSeen,
+          adPerformance: currentData.adPerformance || [],
+          qrScansByAd: currentData.qrScansByAd || [],
+          currentAd: currentData.currentAd,
+          slots: currentData.slots || [],
+          networkStatus: currentData.networkStatus,
+          complianceData: currentData.complianceData,
+          isDisplaying: currentData.isDisplaying,
+          maintenanceMode: currentData.maintenanceMode
+        };
+      }
+
+      // Process historical data
+      let historicalStats = {
+        totalAdPlays: 0,
+        totalQRScans: 0,
+        totalAdPlayTime: 0,
+        totalAdImpressions: 0,
+        totalDistanceTraveled: 0,
+        totalHoursOnline: 0,
+        dailyData: [],
+        adPerformance: [],
+        qrScansByAd: []
+      };
+
+      if (historicalData && historicalData.dailyData) {
+        historicalData.dailyData.forEach(dailyData => {
+          const dailyDate = new Date(dailyData.date);
+          if (dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate)) {
+            historicalStats.totalAdPlays += dailyData.totalAdPlays || 0;
+            historicalStats.totalQRScans += dailyData.totalQRScans || 0;
+            historicalStats.totalAdPlayTime += dailyData.totalAdPlayTime || 0;
+            historicalStats.totalAdImpressions += dailyData.totalAdImpressions || 0;
+            historicalStats.totalDistanceTraveled += dailyData.totalDistanceTraveled || 0;
+            historicalStats.totalHoursOnline += dailyData.totalHoursOnline || 0;
+
+            historicalStats.dailyData.push({
+              date: dailyData.date,
+              totalAdPlays: dailyData.totalAdPlays || 0,
+              totalQRScans: dailyData.totalQRScans || 0,
+              totalAdPlayTime: dailyData.totalAdPlayTime || 0,
+              totalAdImpressions: dailyData.totalAdImpressions || 0,
+              totalDistanceTraveled: dailyData.totalDistanceTraveled || 0,
+              totalHoursOnline: dailyData.totalHoursOnline || 0,
+              isDisplaying: dailyData.isDisplaying,
+              maintenanceMode: dailyData.maintenanceMode,
+              adPerformance: dailyData.adPerformance || [],
+              qrScansByAd: dailyData.qrScansByAd || []
+            });
+
+            // Aggregate ad performance
+            if (dailyData.adPerformance) {
+              dailyData.adPerformance.forEach(adPerf => {
+                const existingAd = historicalStats.adPerformance.find(ad => ad.adId === adPerf.adId);
+                if (existingAd) {
+                  existingAd.playCount += adPerf.playCount || 0;
+                  existingAd.totalViewTime += adPerf.totalViewTime || 0;
+                  existingAd.impressions += adPerf.impressions || 0;
+                  if (adPerf.lastPlayed > existingAd.lastPlayed) {
+                    existingAd.lastPlayed = adPerf.lastPlayed;
+                  }
+                } else {
+                  historicalStats.adPerformance.push({
+                    adId: adPerf.adId,
+                    adTitle: adPerf.adTitle,
+                    playCount: adPerf.playCount || 0,
+                    totalViewTime: adPerf.totalViewTime || 0,
+                    averageViewTime: adPerf.averageViewTime || 0,
+                    completionRate: adPerf.completionRate || 0,
+                    firstPlayed: adPerf.firstPlayed,
+                    lastPlayed: adPerf.lastPlayed,
+                    impressions: adPerf.impressions || 0
+                  });
+                }
+              });
+            }
+
+            // Aggregate QR scans by ad
+            if (dailyData.qrScansByAd) {
+              dailyData.qrScansByAd.forEach(adScan => {
+                const existingScan = historicalStats.qrScansByAd.find(scan => scan.adId === adScan.adId);
+                if (existingScan) {
+                  existingScan.scanCount += adScan.scanCount || 0;
+                  if (adScan.lastScanned > existingScan.lastScanned) {
+                    existingScan.lastScanned = adScan.lastScanned;
+                  }
+                } else {
+                  historicalStats.qrScansByAd.push({
+                    adId: adScan.adId,
+                    adTitle: adScan.adTitle,
+                    scanCount: adScan.scanCount || 0,
+                    lastScanned: adScan.lastScanned,
+                    firstScanned: adScan.firstScanned
+                  });
+                }
+              });
+            }
+          }
+        });
+      }
+
+      // Calculate averages for ad performance
+      historicalStats.adPerformance.forEach(ad => {
+        ad.averageViewTime = ad.playCount > 0 ? ad.totalViewTime / ad.playCount : 0;
+        ad.completionRate = ad.totalViewTime > 0 ? (ad.totalViewTime / (ad.totalViewTime + (ad.playCount * 30))) * 100 : 0;
+      });
+
+      // Calculate totals
+      const totalAdPlays = currentDayStats.totalAdPlays + historicalStats.totalAdPlays;
+      const totalQRScans = currentDayStats.totalQRScans + historicalStats.totalQRScans;
+      const totalAdPlayTime = currentDayStats.totalAdPlayTime + historicalStats.totalAdPlayTime;
+      const totalAdImpressions = currentDayStats.totalAdImpressions + historicalStats.totalAdImpressions;
+      const totalDistanceTraveled = currentDayStats.totalDistanceTraveled + historicalStats.totalDistanceTraveled;
+      const totalHoursOnline = currentDayStats.totalHoursOnline + historicalStats.totalHoursOnline;
+
+      return {
+        success: true,
+        deviceId,
+        material: {
+          materialId: material.materialId,
+          materialName: material.materialName,
+          materialType: material.materialType,
+          vehicleType: material.vehicleType,
+          category: material.category,
+          status: material.status,
+          driverId: material.driverId,
+          location: material.location
+        },
+        currentDay: currentDayStats,
+        historical: historicalStats,
+        totals: {
+          totalAdPlays,
+          totalQRScans,
+          totalAdPlayTime,
+          totalAdPlayTimeHours: totalAdPlayTime / 3600,
+          totalAdImpressions,
+          totalDistanceTraveled,
+          totalHoursOnline,
+          averagePlaysPerDay: historicalStats.dailyData.length > 0 ? totalAdPlays / historicalStats.dailyData.length : 0,
+          averageScansPerDay: historicalStats.dailyData.length > 0 ? totalQRScans / historicalStats.dailyData.length : 0,
+          averageDisplayTimePerDay: historicalStats.dailyData.length > 0 ? (totalAdPlayTime / 3600) / historicalStats.dailyData.length : 0
+        },
+        ads: deviceAds.map(ad => ({
+          adId: ad._id,
+          adTitle: ad.title,
+          adType: ad.adType,
+          adFormat: ad.adFormat,
+          status: ad.status,
+          adStatus: ad.adStatus,
+          durationDays: ad.durationDays,
+          totalPrice: ad.totalPrice
+        })),
+        dateRange: {
+          startDate: defaultStartDate,
+          endDate: defaultEndDate
+        },
+        summary: {
+          isOnline: currentDayStats.isOnline,
+          lastSeen: currentDayStats.lastSeen,
+          currentLocation: currentDayStats.currentLocation,
+          totalAds: deviceAds.length,
+          activeAds: deviceAds.filter(ad => ad.status === 'RUNNING').length,
+          complianceStatus: currentDayStats.complianceData?.complianceStatus || 'PENDING',
+          displayStatus: currentDayStats.isDisplaying ? 'ACTIVE' : 'INACTIVE',
+          maintenanceMode: currentDayStats.maintenanceMode
+        }
+      };
+    } catch (error) {
+      console.error('Error getting device analytics:', error);
+      throw error;
+    }
+  }
+
+  // Get comprehensive analytics summary for a user
+  static async getComprehensiveAnalytics(userId, startDate = null, endDate = null) {
+    try {
+      // Set default date range if not provided
+      const now = new Date();
+      const defaultStartDate = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days ago
+      const defaultEndDate = endDate || now;
+
+      // Get all analytics data in parallel
+      const [
+        adPlaysData,
+        qrScansData,
+        materialsData,
+        displayTimeData
+      ] = await Promise.all([
+        this.getTotalAdPlays(userId, defaultStartDate, defaultEndDate),
+        this.getTotalQRScans(userId, defaultStartDate, defaultEndDate),
+        this.getActiveTotalMaterials(userId),
+        this.getTotalDisplayTime(userId, defaultStartDate, defaultEndDate)
+      ]);
+
+      // Calculate conversion rates
+      const totalImpressions = adPlaysData.totalPlays || 0;
+      const totalQRScans = qrScansData.totalScans || 0;
+      const qrScanConversionRate = totalImpressions > 0 ? (totalQRScans / totalImpressions) * 100 : 0;
+
+      // Calculate engagement metrics
+      const totalDisplayTimeHours = displayTimeData.totalDisplayTimeHours || 0;
+      const averageEngagementTime = totalImpressions > 0 ? totalDisplayTimeHours / totalImpressions : 0;
+
+      return {
+        success: true,
+        userId,
+        dateRange: {
+          startDate: defaultStartDate,
+          endDate: defaultEndDate
+        },
+        overview: {
+          totalAdPlays: adPlaysData.totalPlays || 0,
+          totalQRScans: qrScansData.totalScans || 0,
+          totalDisplayTimeHours: totalDisplayTimeHours,
+          totalMaterials: materialsData.totalMaterials || 0,
+          activeMaterials: materialsData.activeMaterials || 0,
+          totalAds: adPlaysData.summary?.totalAds || 0
+        },
+        metrics: {
+          qrScanConversionRate: qrScanConversionRate,
+          averageEngagementTimeHours: averageEngagementTime,
+          averagePlaysPerAd: adPlaysData.summary?.averagePlaysPerAd || 0,
+          averageScansPerAd: qrScansData.summary?.averageScansPerAd || 0,
+          averageDisplayTimePerAd: displayTimeData.summary?.averageDisplayTimePerAd || 0,
+          onlinePercentage: materialsData.summary?.onlinePercentage || 0
+        },
+        adPlays: adPlaysData,
+        qrScans: qrScansData,
+        materials: materialsData,
+        displayTime: displayTimeData
+      };
+    } catch (error) {
+      console.error('Error getting comprehensive analytics:', error);
       throw error;
     }
   }

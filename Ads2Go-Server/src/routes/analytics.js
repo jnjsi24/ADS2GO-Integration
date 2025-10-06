@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const AnalyticsService = require('../services/analyticsService');
+const UserAnalyticsService = require('../services/userAnalyticsService');
 const Analytics = require('../models/analytics');
 
 // GET /analytics/admin - Get comprehensive admin analytics
@@ -364,6 +365,169 @@ router.post('/track-qr', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to track QR scan',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// ===========================================
+// DETAILED ANALYTICS ROUTES
+// ===========================================
+
+// GET /analytics/user/:userId/total-plays - Get total plays of ads for a user
+router.get('/user/:userId/total-plays', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getTotalAdPlays(userId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Total ad plays retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting total ad plays:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get total ad plays',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/total-qr-scans - Get total QR scans of ads for a user
+router.get('/user/:userId/total-qr-scans', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getTotalQRScans(userId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Total QR scans retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting total QR scans:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get total QR scans',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/active-materials - Get active total materials for a user
+router.get('/user/:userId/active-materials', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const analytics = await UserAnalyticsService.getActiveTotalMaterials(userId);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Active materials retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting active materials:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get active materials',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/total-display-time - Get total display time of ads for a user
+router.get('/user/:userId/total-display-time', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getTotalDisplayTime(userId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Total display time retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting total display time:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get total display time',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/device/:deviceId - Get analytics data for a specific device
+router.get('/device/:deviceId', async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Device analytics retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting device analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get device analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/comprehensive - Get comprehensive analytics summary for a user
+router.get('/user/:userId/comprehensive', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getComprehensiveAnalytics(userId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Comprehensive analytics retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting comprehensive analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get comprehensive analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /analytics/initialize-user/:userId - Initialize UserAnalytics for a user
+router.post('/initialize-user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const userAnalytics = await UserAnalyticsService.initializeUserAnalytics(userId);
+    
+    res.json({
+      success: true,
+      data: userAnalytics,
+      message: 'User analytics initialized successfully'
+    });
+  } catch (error) {
+    console.error('Error initializing user analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to initialize user analytics',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
