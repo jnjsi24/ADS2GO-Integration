@@ -55,13 +55,13 @@ const SadminNavbar: React.FC = () => {
   ];
 
   return (
-    <div className="w-64 h-full bg-[#0E2A47] fixed shadow-2xl text-white flex flex-col justify-between pt-10 p-6"> {/* Distinct color for SadminNavbar */}
+    <div className="w-64 h-full bg-[#0E2A47] fixed shadow-2xl text-white flex flex-col justify-between pt-10 p-4"> {/* Distinct color for SadminNavbar */}
       <div>
         {/* Logo */}
-        <div className="flex items-center space-x-3 mb-10">
+        <div className="flex space-x-3 mb-10">
           {/* Placeholder for SuperAdmin Logo */}
-          <img alt="Ads2Go SAdmin Logo" className="mx-auto w-8 h-8 " src="https://placehold.co/32x32/0E2A47/FFFFFF?text=S" />
-          <span className="text-2xl text-white font-bold">SuperAdmin</span>
+          <img alt="Ads2Go SAdmin Logo" className="w-8 h-8 " src="https://placehold.co/32x32/0E2A47/FFFFFF?text=S" />
+          <span className="text-2xl mr-20 text-white font-bold">SuperAdmin</span>
         </div>
 
         {/* Menu Items */}
@@ -82,11 +82,11 @@ const SadminNavbar: React.FC = () => {
       </div>
 
       {/* Profile Section with Dropdown */}
-      <div ref={dropdownRef} className="pt-4 border-t border-gray-600 text-sm text-gray-200 relative">
+      <div ref={dropdownRef} className="pt-4 text-sm text-gray-200 relative">
         {/* Profile Bar */}
         <button
           onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-          className="w-full flex items-center justify-between bg-white/10 rounded-lg p-3 mb-2 hover:bg-white/20 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between rounded-lg p-3 mb-2 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
             {admin?.profilePicture ? (
@@ -103,7 +103,7 @@ const SadminNavbar: React.FC = () => {
                 <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0E2A47]"></div>
               </div>
             )}
-            <div className="font-semibold text-white">
+            <div className="font-semibold text-left ml-1 text-white">
               {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
             </div>
           </div>
@@ -119,12 +119,12 @@ const SadminNavbar: React.FC = () => {
 
         {/* Dropdown Menu */}
         {showProfileDropdown && (
-          <div className="absolute bottom-16 left-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+          <div className="absolute bottom-16 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
             <div className="py-2">
               {/* Profile Option */}
               <button
                 onClick={() => {
-                  navigate('/sadmin-profile');
+                  navigate('/sadmin-account');
                   setShowProfileDropdown(false);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 transition-colors"

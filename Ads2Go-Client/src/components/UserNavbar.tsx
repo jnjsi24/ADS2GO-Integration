@@ -233,7 +233,7 @@ const SideNavbar: React.FC = () => {
         {/* Dropup Menu */}
         <div 
           ref={dropupRef}
-          className={`absolute bottom-24 left-8 right-6 
+          className={`absolute bottom-24 left-2 w-56
                     bg-white/20 backdrop-blur-md border border-white/30 rounded-lg shadow-lg
                     transition-all duration-300 ease-in-out transform ${
                       isDropupOpen 
@@ -248,7 +248,7 @@ const SideNavbar: React.FC = () => {
                 navigate('/account');
                 closeDropup();
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-white/30 transition-colors"
             >
               <User size={18} />
               <span>Profile</span>
@@ -259,7 +259,7 @@ const SideNavbar: React.FC = () => {
                 navigate('/settings');
                 closeDropup();
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-white/30 transition-colors"
             >
               <Settings size={18} />
               <span>Settings</span>
@@ -272,7 +272,7 @@ const SideNavbar: React.FC = () => {
                 handleLogout();
                 closeDropup();
               }}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:text-red-400 transition-colors"
             >
               <LogOut size={18} />
               <span>Logout</span>

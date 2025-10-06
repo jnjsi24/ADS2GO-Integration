@@ -264,7 +264,7 @@ const SadminPricing: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Pricing Management</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mt-4">Pricing Management</h1>
             </div>
           </div>
         </div>
