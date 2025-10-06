@@ -533,4 +533,57 @@ router.post('/initialize-user/:userId', async (req, res) => {
   }
 });
 
+// ===========================================
+// DEVICE-SPECIFIC ANALYTICS ROUTES
+// ===========================================
+
+// GET /analytics/user/:userId/device/:deviceId - Get detailed analytics for a specific device
+router.get('/user/:userId/device/:deviceId', async (req, res) => {
+  try {
+    const { userId, deviceId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    const analytics = await UserAnalyticsService.getDeviceSpecificAnalytics(userId, deviceId, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Device-specific analytics retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting device-specific analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get device-specific analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user/:userId/devices - Get analytics summary for multiple devices
+router.get('/user/:userId/devices', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { deviceIds, startDate, endDate } = req.query;
+    
+    // Parse deviceIds if provided as comma-separated string
+    const parsedDeviceIds = deviceIds ? deviceIds.split(',') : [];
+    
+    const analytics = await UserAnalyticsService.getMultipleDevicesAnalytics(userId, parsedDeviceIds, startDate, endDate);
+    
+    res.json({
+      success: true,
+      data: analytics,
+      message: 'Multiple devices analytics retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting multiple devices analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get multiple devices analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;

@@ -86,7 +86,8 @@ const resolvers = {
             const analytics = await UserAnalyticsService.getUserAnalytics(
               user.id,
               startDate,
-              endDate
+              endDate,
+              period
             );
             
             if (!analytics.success) {
