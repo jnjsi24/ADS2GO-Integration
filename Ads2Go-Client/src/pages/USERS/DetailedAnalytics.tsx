@@ -38,8 +38,11 @@ const DetailedAnalytics: React.FC = () => {
 
   // Fetch analytics data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
-    variables: { period: selectedPeriod },
+    variables: { 
+      period: selectedDevice === 'all' ? 'all' : selectedPeriod 
+    },
     pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    fetchPolicy: 'cache-and-network', // Always fetch fresh data from network
     onError: (error) => {
       console.error('Analytics fetch error:', error);
     }
@@ -132,8 +135,49 @@ const DetailedAnalytics: React.FC = () => {
     fetchDeviceAnalytics(deviceId);
   };
 
+  // State for direct API data (bypassing GraphQL)
+  const [directAnalyticsData, setDirectAnalyticsData] = useState<any>(null);
+  const [directAnalyticsLoading, setDirectAnalyticsLoading] = useState(false);
+
+  // Fetch direct analytics data when "All Devices" is selected
+  const fetchDirectAnalytics = async () => {
+    if (selectedDevice !== 'all' || !user?.userId) return;
+    
+    try {
+      setDirectAnalyticsLoading(true);
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
+      const url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
+      
+      console.log('🔍 Fetching direct analytics from:', url);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('✅ Direct analytics fetched successfully:', data.data.summary);
+        setDirectAnalyticsData(data.data);
+      } else {
+        console.error('❌ Failed to fetch direct analytics:', data.message);
+        setDirectAnalyticsData(null);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching direct analytics:', error);
+      setDirectAnalyticsData(null);
+    } finally {
+      setDirectAnalyticsLoading(false);
+    }
+  };
+
+  // Fetch direct analytics when "All Devices" is selected
+  useEffect(() => {
+    if (selectedDevice === 'all') {
+      fetchDirectAnalytics();
+    }
+  }, [selectedDevice, selectedPeriod, user?.userId]);
+
   // Get analytics summary data - Updated for UserAnalytics system
-  // Use device-specific data if a device is selected, otherwise use overall data
+  // Use device-specific data if a device is selected, otherwise use direct API data (bypassing GraphQL)
   const analyticsSummary = selectedDevice !== 'all' && deviceAnalytics ? {
     totalAdImpressions: deviceAnalytics.totals?.totalAdImpressions || 0,
     totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
@@ -145,7 +189,7 @@ const DetailedAnalytics: React.FC = () => {
     totalDevices: 1, // Single device
     totalQRScans: deviceAnalytics.totals?.totalQRScans || 0,
     qrScanConversionRate: deviceAnalytics.performance?.qrScanConversionRate || 0
-  } : (analyticsData?.getUserAnalytics?.summary || {
+  } : (directAnalyticsData?.summary || analyticsData?.getUserAnalytics?.summary || {
     totalAdImpressions: 0,
     totalAdsPlayed: 0,
     totalDisplayTime: 0,
@@ -161,6 +205,10 @@ const DetailedAnalytics: React.FC = () => {
   console.log('📊 Current analyticsSummary:', analyticsSummary);
   console.log('📱 Selected device:', selectedDevice);
   console.log('📊 Device analytics:', deviceAnalytics);
+  console.log('🔍 Raw analyticsData from GraphQL:', analyticsData);
+  console.log('🔍 getUserAnalytics summary:', analyticsData?.getUserAnalytics?.summary);
+  console.log('🔍 Direct analytics data:', directAnalyticsData);
+  console.log('🔍 Direct analytics summary:', directAnalyticsData?.summary);
 
   // Format display time
   const formatDisplayTime = (seconds: number) => {
@@ -391,8 +439,16 @@ const DetailedAnalytics: React.FC = () => {
   const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newPeriod = e.target.value as '1d' | '7d' | '30d';
     setSelectedPeriod(newPeriod);
-    refetchAnalytics({ period: newPeriod });
   };
+
+  // Refetch analytics when period or device selection changes
+  useEffect(() => {
+    const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
+    if (currentPeriod) {
+      console.log('🔄 Period changed to:', currentPeriod, '- Refetching analytics...');
+      refetchAnalytics({ period: currentPeriod });
+    }
+  }, [selectedPeriod, selectedDevice, refetchAnalytics]);
 
   const handleRefresh = () => {
     refetchAnalytics();
@@ -1208,12 +1264,14 @@ const DetailedAnalytics: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {(analyticsLoading || deviceLoading) && (
+      {(analyticsLoading || deviceLoading || directAnalyticsLoading) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg flex items-center space-x-3">
             <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
             <span className="text-gray-700">
-              {deviceLoading ? 'Loading device-specific analytics...' : 'Loading analytics data...'}
+              {deviceLoading ? 'Loading device-specific analytics...' : 
+               directAnalyticsLoading ? 'Loading direct analytics data...' : 
+               'Loading analytics data...'}
             </span>
           </div>
         </div>

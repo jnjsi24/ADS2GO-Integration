@@ -533,6 +533,66 @@ router.post('/initialize-user/:userId', async (req, res) => {
   }
 });
 
+// POST /analytics/user/:userId/sync - Manual sync endpoint for testing
+router.post('/user/:userId/sync', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.body;
+    
+    console.log('🔄 Manual sync requested for user:', userId);
+    
+    const syncResult = await UserAnalyticsService.syncUserAnalyticsFromHistory(
+      userId, 
+      startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Default to 7 days ago
+      endDate || new Date()
+    );
+    
+    if (!syncResult.success) {
+      return res.status(400).json({ success: false, message: syncResult.message });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Analytics synced successfully',
+      data: syncResult.userAnalytics
+    });
+  } catch (error) {
+    console.error('Error syncing user analytics:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// GET /analytics/user/:userId/direct - Direct API endpoint bypassing GraphQL
+router.get('/user/:userId/direct', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate, period } = req.query;
+    
+    console.log('🔍 Direct API call for user:', userId, 'period:', period);
+    
+    const analytics = await UserAnalyticsService.getUserAnalytics(
+      userId,
+      startDate,
+      endDate,
+      period
+    );
+    
+    if (!analytics.success) {
+      return res.status(400).json({ success: false, message: analytics.message });
+    }
+    
+    console.log('✅ Direct API returning data:', JSON.stringify(analytics.data.summary, null, 2));
+    
+    res.json({ 
+      success: true, 
+      data: analytics.data
+    });
+  } catch (error) {
+    console.error('Error in direct API:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // ===========================================
 // DEVICE-SPECIFIC ANALYTICS ROUTES
 // ===========================================
