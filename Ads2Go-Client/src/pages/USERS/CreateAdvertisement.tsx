@@ -763,6 +763,17 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     {pricingCalculation?.availableDevices ||
                       (isCalculating ? "⏳ Calculating..." : "⏳ Loading...")}
                   </p>
+                  {pricingCalculation && (
+                    <>
+                      <p className="text-xs text-yellow-600">
+                        <strong>With Driver:</strong> {pricingCalculation.devicesWithDriver} |{" "}
+                        <strong>Mounted:</strong> {pricingCalculation.devicesMounted}
+                      </p>
+                      <p className="text-xs text-yellow-600">
+                        <strong>Available:</strong> {pricingCalculation.availableDevices} devices ready for ads
+                      </p>
+                    </>
+                  )}
                   <p><strong>Ad Length Options:</strong> 20s, 40s, or 60s</p>
                 </div>
               </div>

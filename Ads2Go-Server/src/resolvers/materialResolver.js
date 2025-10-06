@@ -504,6 +504,23 @@ const materialResolvers = {
       } 
       // Handle mounting (when mountedAt is set)
       if (input.mountedAt !== undefined) {
+        // VALIDATION: Only allow setting mountedAt if device is connected
+        if (input.mountedAt) {
+          // Check if there's a connected device for this material
+          const DeviceTracking = require('../models/deviceTracking');
+          const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+          
+          if (!deviceTracking || !deviceTracking.isOnline) {
+            throw new Error('Cannot set mounted date: No connected device found. Please connect the physical device first via QR code.');
+          }
+          
+          // Check if any slot is online
+          const hasOnlineSlot = deviceTracking.slots.some(slot => slot.isOnline);
+          if (!hasOnlineSlot) {
+            throw new Error('Cannot set mounted date: No online slots found. Please ensure the device is connected and online.');
+          }
+        }
+        
         material.mountedAt = input.mountedAt ? new Date(input.mountedAt) : null;
         
         // If there's a driver assigned, update the driver's installedMaterialType

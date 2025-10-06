@@ -223,6 +223,20 @@ router.post('/registerTablet', async (req, res) => {
         });
         await deviceTracking.save();
         console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+        
+        // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
+        try {
+          const Material = require('../models/Material');
+          const material = await Material.findOne({ materialId: materialId });
+          if (material && !material.mountedAt) {
+            material.mountedAt = new Date();
+            await material.save();
+            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
+          }
+        } catch (mountError) {
+          console.error('Error auto-setting mountedAt date:', mountError);
+          // Don't fail the registration if mountedAt setting fails
+        }
       } else {
         // Update existing car record with new slot
         await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
@@ -231,6 +245,20 @@ router.post('/registerTablet', async (req, res) => {
           deviceInfo: {}
         });
         console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
+        
+        // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
+        try {
+          const Material = require('../models/Material');
+          const material = await Material.findOne({ materialId: materialId });
+          if (material && !material.mountedAt) {
+            material.mountedAt = new Date();
+            await material.save();
+            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected`);
+          }
+        } catch (mountError) {
+          console.error('Error auto-setting mountedAt date:', mountError);
+          // Don't fail the registration if mountedAt setting fails
+        }
       }
     } catch (deviceTrackingError) {
       console.error('Error creating deviceTracking record:', deviceTrackingError);
