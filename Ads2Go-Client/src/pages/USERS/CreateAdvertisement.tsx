@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect,  MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
 import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload } from 'lucide-react';
@@ -501,7 +501,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             onChange={(e) => handleInputChange('title', e.target.value)}
             className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent 
               focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition
-              ${errors.title ? 'border-red-400' : 'border-gray-300'}`}
+              ${errors.title ? 'border-red-400' : 'border-black/40'}`}
             style={{ backgroundColor: 'transparent' }}
           />
           <label
@@ -509,7 +509,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200
               ${formData.title
                 ? '-top-2 text-sm text-gray-700 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400'}
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-semibold peer-placeholder-shown:text-black/80'}
               peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
           >
             Advertisement Title
@@ -525,7 +525,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <textarea
             value={formData.description}
             onChange={(e) => handleInputChange('description', e.target.value)}
-            className="w-full p-3 bg-gray-50 border-b border-gray-300 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition h-28"
+            className="w-full p-3 bg-transparent border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition h-"
             placeholder="Describe your advertisement"
             required
           />
@@ -542,7 +542,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             onChange={(e) => handleInputChange('website', e.target.value)}
             className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent 
               focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition
-              ${errors.website ? 'border-red-400' : 'border-gray-300'}`}
+              ${errors.website ? 'border-red-400' : 'border-black/40'}`}
             style={{ backgroundColor: 'transparent' }}
           />
           <label
@@ -550,7 +550,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200
               ${formData.website
                 ? '-top-2 text-sm text-gray-700 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400'}
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-semibold peer-placeholder-shown:text-black/80'}
               peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold`}
           >
             Website URL (Optional)
@@ -563,50 +563,89 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Media File
           </label>
+
           <div
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-              isDragging ? 'border-blue-500 bg-blue-50' : 
-              mediaFileError ? 'border-red-500 bg-red-50' : 'border-gray-300 bg-white'
-            }`}
+            className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center text-center
+              ${isDragging
+                ? 'border-blue-500 bg-blue-50'
+                : mediaFileError
+                ? 'border-red-500 bg-red-50'
+                : 'border-black/60 bg-transparent'}
+            `}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <CloudUpload className={`w-12 h-12 mx-auto mb-4 ${
-              mediaFileError ? 'text-red-400' : 'text-gray-400'
-            }`} />
-            <p className="text-gray-600 mb-4">
-              Drag your file image/video here
-            </p>
-            <div className="flex items-center justify-center mb-4">
-              <div className={`grow max-w-40 h-px ${
-                mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-              }`}></div>
-              <span className={`mx-3 text-sm ${
-                mediaFileError ? 'text-red-400' : 'text-gray-400'
-              }`}>or</span>
-              <div className={`grow max-w-40 h-px ${
-                mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-              }`}></div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setMediaFileError(''); // Clear error when clicking upload
-                document.getElementById('media-upload')?.click();
-              }}
-              className={`p-3 rounded-md hover:text-white/90 font-medium ${
-                mediaFileError 
-                  ? 'text-white/80 bg-red-500 hover:bg-red-600' 
-                  : 'text-white/80 bg-[#3674B5] hover:bg-[#1B5087]'
+            <CloudUpload
+              className={`w-12 h-12 mb-4 ${
+                mediaFileError ? 'text-red-400' : 'text-black/60'
               }`}
-            >
-              Click to upload file
-            </button>
-            <p className={`text-sm mt-2 ${
-              mediaFileError ? 'text-red-500' : 'text-gray-500'
-            }`}>
-            </p>
+            />
+            <p className="text-black/80 mb-4">Drag your file image/video here</p>
+
+            {/* Divider with 'or' */}
+            <div className="flex items-center justify-center mb-4 w-full">
+              <div
+                className={`grow max-w-40 h-px ${
+                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                }`}
+              ></div>
+              <span
+                className={`mx-3 text-sm ${
+                  mediaFileError ? 'text-red-400' : 'text-black/80'
+                }`}
+              >
+                or
+              </span>
+              <div
+                className={`grow max-w-40 h-px ${
+                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                }`}
+              ></div>
+            </div>
+
+            {/* Centered Upload Button */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setMediaFileError('');
+                  document.getElementById('media-upload')?.click();
+                }}
+                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  const button = e.currentTarget;
+                  const rect = button.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const y = e.clientY - rect.top;
+                  button.style.setProperty('--x', `${x}px`);
+                  button.style.setProperty('--y', `${y}px`);
+                }}
+                className={`relative p-3 rounded-md font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
+                  ${
+                    mediaFileError
+                      ? 'bg-red-500 hover:bg-red-600'
+                      : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5]'
+                  }`}
+              >
+                {/* Shiny Hover Effect */}
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    background:
+                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                  }}
+                />
+                <span className="relative z-10">Click to upload file</span>
+              </button>
+            </div>
+
+            {/* File feedback */}
+            <p
+              className={`text-sm mt-2 ${
+                mediaFileError ? 'text-red-500' : 'text-gray-500'
+              }`}
+            ></p>
+
             <input
               type="file"
               accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
@@ -615,19 +654,21 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               id="media-upload"
               required
             />
+
             {formData.mediaFile && !mediaFileError && (
               <p className="text-sm text-green-600 mt-2">
                 Selected: {formData.mediaFile.name}
               </p>
             )}
           </div>
-          {/* Show validation errors from form validation OR media file error */}
+
           {(errors.mediaFile || mediaFileError) && (
             <p className="text-sm text-red-600 mt-1">
               {mediaFileError || errors.mediaFile}
             </p>
           )}
         </div>
+
       </div>
       {fieldCombinationsLoading ? (
         <div className="flex justify-center items-center py-12">
@@ -644,7 +685,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <button
                 type="button"
                 onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
-                className="flex items-center bg-white justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none gap-2"
+                className="flex items-center bg-white/70 justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none gap-2"
               >
                 {formData.vehicleType ? formData.vehicleType : 'Select Vehicle Type'}
                 <ChevronDown
@@ -703,7 +744,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 onClick={() =>
                   formData.vehicleType && setShowMaterialTypeDropdown(!showMaterialTypeDropdown)
                 }
-                className={`flex items-center justify-between w-full text-sm rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2 ${
+                className={`flex items-center justify-between w-full text-sm rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 ${
                   formData.vehicleType
                     ? 'text-black cursor-pointer'
                     : 'text-gray-400 cursor-not-allowed'
@@ -763,6 +804,17 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     {pricingCalculation?.availableDevices ||
                       (isCalculating ? "⏳ Calculating..." : "⏳ Loading...")}
                   </p>
+                  {pricingCalculation && (
+                    <>
+                      <p className="text-xs text-yellow-600">
+                        <strong>With Driver:</strong> {pricingCalculation.devicesWithDriver} |{" "}
+                        <strong>Mounted:</strong> {pricingCalculation.devicesMounted}
+                      </p>
+                      <p className="text-xs text-yellow-600">
+                        <strong>Available:</strong> {pricingCalculation.availableDevices} devices ready for ads
+                      </p>
+                    </>
+                  )}
                   <p><strong>Ad Length Options:</strong> 20s, 40s, or 60s</p>
                 </div>
               </div>
@@ -1168,7 +1220,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div
       className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
       style={{
-        backgroundImage: "url('/image/bg.jpg')",
+        backgroundImage: "url('/image/bg3.jpg')",
       }}
     ></div>
 
@@ -1179,7 +1231,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
       <button
         onClick={() => navigate('/advertisements')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-10"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-3"
       >
         <ChevronLeft className="w-5 h-5" />
         Back to Advertisement

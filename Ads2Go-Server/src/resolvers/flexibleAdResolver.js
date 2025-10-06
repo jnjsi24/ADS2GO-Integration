@@ -83,16 +83,43 @@ module.exports = {
       
       // Calculate actual available devices (not slots)
       let availableDevices = 0;
+      let devicesWithDriver = 0;
+      let devicesMounted = 0;
+      
       for (const material of materials) {
         const availability = await MaterialAvailability.findOne({ materialId: material._id });
+        
+        // Count devices with driver assigned
+        if (material.driverId) {
+          devicesWithDriver += 1;
+        }
+        
+        // Count devices that are physically mounted
+        if (material.mountedAt) {
+          devicesMounted += 1;
+        }
+        
+        // Check if device has been connected (has DeviceTracking record)
+        const DeviceTracking = require('../models/deviceTracking');
+        const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+        
         if (availability) {
-          // Count devices that have at least one available slot
-          if (availability.availableSlots > 0) {
+          // Count devices that have at least one available slot AND meet all requirements
+          if (availability.availableSlots > 0 && 
+              material.driverId && 
+              material.mountedAt && 
+              !material.dismountedAt &&
+              deviceTracking) { // Device has been connected before
             availableDevices += 1;
           }
         } else {
-          // If no availability record, assume material is fully available
-          availableDevices += 1;
+          // If no availability record, check if material meets requirements
+          if (material.driverId && 
+              material.mountedAt && 
+              !material.dismountedAt &&
+              deviceTracking) { // Device has been connected before
+            availableDevices += 1;
+          }
         }
       }
 
@@ -109,7 +136,9 @@ module.exports = {
         dailyRevenue: pricing.dailyRevenue,
         totalPrice: pricing.totalPrice,
         maxDevices: pricingConfig.maxDevices,
-        availableDevices: availableDevices, // Count of devices with available slots
+        availableDevices: availableDevices, // Count of devices that meet ALL requirements
+        devicesWithDriver: devicesWithDriver, // Count of devices with driver assigned
+        devicesMounted: devicesMounted, // Count of devices that are physically mounted
         minAdLengthSeconds: pricingConfig.minAdLengthSeconds,
         maxAdLengthSeconds: pricingConfig.maxAdLengthSeconds
       };
@@ -194,11 +223,35 @@ module.exports = {
         for (const material of sortedMaterials) {
           if (devicesSelected >= numberOfDevices) break;
           
+          // Additional validation: ensure material has driver and is mounted
+          if (!material.driverId) {
+            console.log(`❌ Skipping ${material.materialId}: No driver assigned`);
+            continue;
+          }
+          
+          if (!material.mountedAt) {
+            console.log(`❌ Skipping ${material.materialId}: Not physically mounted`);
+            continue;
+          }
+          
+          if (material.dismountedAt) {
+            console.log(`❌ Skipping ${material.materialId}: Already dismounted`);
+            continue;
+          }
+          
+          // Check if device has been connected (has DeviceTracking record)
+          const DeviceTracking = require('../models/deviceTracking');
+          const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+          if (!deviceTracking) {
+            console.log(`❌ Skipping ${material.materialId}: No connected device (no DeviceTracking record)`);
+            continue;
+          }
+          
           const availability = await MaterialAvailability.findOne({ materialId: material._id });
           if (availability && availability.canAcceptAd(new Date(startTime), new Date(endTime))) {
             selectedMaterials.push(material);
             devicesSelected++;
-            console.log(`🎯 Selected device ${devicesSelected}/${numberOfDevices}: ${material.materialId} (${material.materialType} ${material.vehicleType}) - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+            console.log(`🎯 Selected device ${devicesSelected}/${numberOfDevices}: ${material.materialId} (${material.materialType} ${material.vehicleType}) - Driver: ${material.driverId}, Mounted: ${material.mountedAt ? 'Yes' : 'No'} - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
           }
         }
         
@@ -216,7 +269,7 @@ module.exports = {
         title,
         description,
         website: website || null,
-        materialId: selectedMaterials[0]._id, // Primary device (first selected)
+        materialId: selectedMaterials.map(m => m._id), // All materials as array
         targetDevices: selectedMaterials.map(m => m._id), // All target devices
         planId: null, // No plan for flexible ads
         adType,

@@ -12,8 +12,8 @@ import {
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
-import { motion, Transition } from 'framer-motion';
-import { RotateCcw, ArrowUpRight } from 'lucide-react';
+import { motion, Transition, AnimatePresence } from 'framer-motion';
+import { RotateCcw, ArrowUpRight, ChevronDown } from 'lucide-react';
 
 // NotificationList Component
 const notifications = [
@@ -73,7 +73,7 @@ const viewAllTextVariants = {
 function NotificationList() {
   return (
     <motion.div
-      className="bg-white/30 dark:bg-neutral-900/80 backdrop-blur-md p-3 rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-white/20"
+      className="bg-white/30 dark:bg-neutral-900/80 backdrop-blur-md p-3 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-white/20"
       initial="collapsed"
       whileHover="expanded"
     >
@@ -81,7 +81,7 @@ function NotificationList() {
         {notifications.map((notification, i) => (
           <motion.div
             key={notification.id}
-            className="bg-white dark:bg-neutral-800/80 rounded-xl px-4 py-2 shadow-sm hover:shadow-md transition-shadow duration-200 relative"
+            className="bg-white dark:bg-neutral-800/80 px-4 py-2 shadow-sm rounded-md hover:shadow-md transition-shadow duration-200 relative"
             variants={getCardVariants(i)}
             transition={transition}
             style={{
@@ -141,6 +141,8 @@ const Dashboard = () => {
   const [displayProfit, setDisplayProfit] = useState(0);
   const [displayPeriodLabel, setDisplayPeriodLabel] = useState('');
   const [userFirstName, setUserFirstName] = useState('User');
+  const [showQrPeriodDropdown, setShowQrPeriodDropdown] = useState(false);
+  const [showAnalyticsPeriodDropdown, setShowAnalyticsPeriodDropdown] = useState(false);
 
   // Fetch analytics data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
@@ -250,6 +252,9 @@ const Dashboard = () => {
     { name: 'Sun', value: 10 },
   ];
 
+  const qrPeriodOptions = ['Today', 'Daily', 'Weekly'];
+  const analyticsPeriodOptions = ['Daily', 'Weekly', 'Monthly'];
+
   const colors = ['#0E2A47', '#1b5087', '#3674B5', '#E78B48', '#FFAB5B', '#D4C9BE', '#EFEEEA'];
 
   const calculateFinancials = (period: 'Monthly' | 'Weekly' | 'Daily') => {
@@ -318,14 +323,15 @@ const Dashboard = () => {
     }
   };
 
-  const handleQrPeriodChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    setQrSelectedPeriod(e.target.value as 'Weekly' | 'Daily' | 'Today');
+  const handleQrPeriodChange = (period: 'Weekly' | 'Daily' | 'Today') => {
+    setQrSelectedPeriod(period);
+    setShowQrPeriodDropdown(false);
   };
 
-  const handleAnalyticsPeriodChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newPeriod = e.target.value as '1d' | '7d' | '30d';
-    setAnalyticsPeriod(newPeriod);
-    refetchAnalytics({ period: newPeriod });
+  const handleAnalyticsPeriodChange = (period: '1d' | '7d' | '30d') => {
+    setAnalyticsPeriod(period);
+    setShowAnalyticsPeriodDropdown(false);
+    refetchAnalytics({ period });
   };
 
   const analyticsSummary = analyticsData?.getUserAnalytics?.summary || {
@@ -375,28 +381,45 @@ const Dashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
           {/* Column 1: Ad Performance Overview */}
           <div
-            className="relative p-6 rounded-2xl shadow-xl col-span-2 text-white cursor-pointer
+            className="relative p-6 shadow-xl col-span-2 text-white cursor-pointer
                        bg-[#1b5087]/60 backdrop-blur-md border border-white/20
                        hover:bg-[#1b5087]/70 transition-all duration-300"
             onClick={() => window.location.href = '/detailed-analytics'}
           >
             <div className="flex justify-between items-center mb-4">
               <span className="text-lg font-semibold">Ad Performance Overview</span>
-              <div className="relative" onClick={(e) => e.stopPropagation()}>
-                <select
-                  className="text-xs text-white bg-[#1b5087] rounded-md pl-5 pr-10 py-3 border border-white focus:outline-none appearance-none"
-                  value={analyticsPeriod}
-                  onChange={handleAnalyticsPeriodChange}
+              <div className="relative w-32" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setShowAnalyticsPeriodDropdown(!showAnalyticsPeriodDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/80 gap-2"
                 >
-                  <option className="rounded-lg" value="1d">Daily</option>
-                  <option className="rounded-lg" value="7d">Weekly</option>
-                  <option className="rounded-lg" value="30d">Monthly</option>
-                </select>
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                  {analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showAnalyticsPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showAnalyticsPeriodDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white/80 overflow-hidden"
+                    >
+                      {analyticsPeriodOptions.map((period) => (
+                        <button
+                          key={period}
+                          onClick={() => handleAnalyticsPeriodChange(period === 'Daily' ? '1d' : period === 'Weekly' ? '7d' : '30d')}
+                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={150}>
@@ -425,7 +448,7 @@ const Dashboard = () => {
                 <Area
                   type="monotone"
                   dataKey="impressions"
-                  stroke="#A8FF35"
+                  stroke="#A18FF35"
                   fill="#2876c7"
                   fillOpacity={0.6}
                   name="impressions"
@@ -441,16 +464,16 @@ const Dashboard = () => {
               </AreaChart>
             </ResponsiveContainer>
             <div className="mt-6 mb-4">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+              <div className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-white/90">Currently Playing</h4>
                   <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
                     <span className="text-xs text-white/70">LIVE</span>
                   </div>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <div className="w-16 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                  <div className="w-16 h-12 bg-white/20 flex items-center justify-center">
                     <svg className="w-8 h-8 text-white/70" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z"/>
                     </svg>
@@ -467,21 +490,21 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="grid grid-cols-3 gap-4 mt-4 text-center">
-              <div className="bg-[#1b5087] p-3 rounded-lg">
+              <div className="bg-[#1b5087]/60 p-3">
                 <p className="text-2xl font-bold">
                   {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-300">Total Airtime (Minutes)</p>
                 <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
               </div>
-              <div className="bg-[#2876c7] p-3 rounded-lg">
+              <div className="bg-[#2876c7]/60 p-3">
                 <p className="text-2xl font-bold">
                   {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-300">Total Ad Plays</p>
                 <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
               </div>
-              <div className="bg-[#1b5087] p-3 rounded-lg">
+              <div className="bg-[#1b5087]/60 p-3">
                 <p className="text-2xl font-bold">
                   {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
                 </p>
@@ -492,30 +515,50 @@ const Dashboard = () => {
           </div>
           {/* Column 2: QR Impressions */}
           <div
-            className="relative p-4 rounded-2xl shadow-xl cursor-pointer
-                       bg-white/30 backdrop-blur-md border border-white/20
-                       hover:bg-white/40 transition-all duration-300"
-            onClick={() => window.location.href = '/detailed-analytics'}
+            className="relative p-4 shadow-xl cursor-pointer
+                      bg-white/30 backdrop-blur-md border border-white/20
+                      hover:bg-white/40 transition-all duration-300
+                      flex flex-col"
+            onClick={() => (window.location.href = '/detailed-analytics')}
           >
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-gray-800">QR Impressions</h2>
-              <div className="relative" onClick={(e) => e.stopPropagation()}>
-                <select
-                  className="appearance-none w-full text-xs text-black border border-gray-200 rounded-md pl-5 pr-10 py-3 focus:outline-none bg-white"
-                  value={qrSelectedPeriod}
-                  onChange={handleQrPeriodChange}
+              <div className="relative w-24" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => setShowQrPeriodDropdown(!showQrPeriodDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
                 >
-                  <option value="Today">Today</option>
-                  <option value="Daily">Daily</option>
-                  <option value="Weekly">Weekly</option>
-                </select>
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
+                  {qrSelectedPeriod}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showQrPeriodDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showQrPeriodDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                    >
+                      {qrPeriodOptions.map((period) => (
+                        <button
+                          key={period}
+                          onClick={() => handleQrPeriodChange(period as 'Weekly' | 'Daily' | 'Today')}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {period}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
+
+            {/* Chart */}
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={getQrChartData()}>
@@ -545,12 +588,14 @@ const Dashboard = () => {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+
+            {/* Today data list */}
             {qrSelectedPeriod === 'Today' && (
-              <ul className="text-sm text-gray-600 space-y-1 pl-10">
+              <ul className="text-sm text-gray-600 space-y-1 pl-10 mt-4">
                 {qrTodayData.map((item, index) => (
                   <li key={index} className="flex items-center space-x-2">
                     <span
-                      className="w-3 h-3 rounded-full"
+                      className="w-3 h-3"
                       style={{ backgroundColor: colors[index % colors.length] }}
                     ></span>
                     <span>
@@ -560,20 +605,22 @@ const Dashboard = () => {
                 ))}
               </ul>
             )}
-            <div className="mt-6">
-              <div className="pt-6 border-t border-gray-300 mb-2"></div>
+
+            {/* View Analytics at the bottom */}
+            <div className="mt-auto pt-6 items-center justify-center">
               <Link
                 to="/advertisements"
-                className="text-white text-sm font-medium bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-6 py-3 flex items-center justify-between hover:scale-105 transition-all duration-300 shadow-md hover:shadow-lg"
+                className="text-white bg-[#1b5087]/90 text-sm font-medium px-6 py-3 flex items-center justify-center gap-2 hover:bg-[#3674B5] transition-all duration-300"
               >
-                View Analytics <span className="ml-2">›</span>
+                View Analytics →
               </Link>
             </div>
           </div>
+
           {/* Column 3: Average Mileage and Notification List */}
-          <div className="flex flex-col space-y-6">
+          <div className="flex flex-col space-y-3">
             {/* Average Mileage */}
-            <div className="min-h-[268px] bg-white/30 backdrop-blur-md p-4 rounded-2xl shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
+            <div className="min-h-[268px] bg-white/30 backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
               {/* Header */}
               <div className="flex justify-between items-center mb-4">
                 <span className="text-gray-800 text-lg font-semibold">Average Mileage</span>
@@ -586,18 +633,18 @@ const Dashboard = () => {
                   <span className="text-lg text-gray-500 ml-1">km/h</span>
                 </p>
                 <p className="text-sm pt-2 pl-4">
-                  <span className="text-green-600">🚗 Per Car</span>
+                  <span className="text-green-600">Per Car</span>
                   <span className="text-gray-800"> {analyticsSummary?.activeCars || 0} active vehicles</span>
                 </p>
               </div>
 
               {/* Divider + Button (sticks to bottom) */}
-              <div className="mt-auto pt-6 border-t border-gray-300">
+              <div className="mt-auto pt-6">
                 <Link
                   to="/advertisements"
-                  className="text-white text-sm font-medium bg-[#1b5087] hover:bg-[#0E2A47] rounded-lg px-6 py-3 flex items-center justify-between hover:scale-105 transition-all duration-300 shadow-md hover:shadow-lg mt-2"
+                  className="text-white bg-[#1b5087]/90 text-sm font-medium px-6 py-3 flex items-center justify-center gap-2 hover:bg-[#3674B5] transition-all duration-300"
                 >
-                  View Performance <span className="ml-2">›</span>
+                  View Performance →
                 </Link>
               </div>
             </div>
@@ -608,14 +655,14 @@ const Dashboard = () => {
           </div>
         </div>
         {/* Car Location Heat Map */}
-        <div className="bg-white p-6 rounded-lg shadow-lg mb-6 cursor-pointer hover:shadow-xl transition-shadow" onClick={() => window.location.href = '/detailed-analytics'}>
+        <div className="pt-10" onClick={() => window.location.href = '/detailed-analytics'}>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">Car Location Heat Map</h2>
             <div className="text-sm text-gray-500">
               Last updated: {new Date().toLocaleTimeString()}
             </div>
           </div>
-          <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ height: '400px' }}>
+          <div className="relative bg-gray-100 overflow-hidden" style={{ height: '400px' }}>
             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
               <div className="absolute inset-0 opacity-20">
                 <svg width="100%" height="100%" className="w-full h-full">
@@ -628,51 +675,51 @@ const Dashboard = () => {
                 </svg>
               </div>
               <div className="absolute inset-0 p-4">
-                <div className="absolute top-8 left-12 w-16 h-16 bg-red-500 rounded-full opacity-60 animate-pulse"></div>
-                <div className="absolute top-20 right-16 w-12 h-12 bg-orange-500 rounded-full opacity-50"></div>
-                <div className="absolute bottom-16 left-20 w-14 h-14 bg-red-400 rounded-full opacity-55"></div>
-                <div className="absolute top-32 left-1/3 w-10 h-10 bg-yellow-500 rounded-full opacity-45"></div>
-                <div className="absolute bottom-32 right-1/4 w-8 h-8 bg-yellow-400 rounded-full opacity-40"></div>
-                <div className="absolute top-1/2 left-1/4 w-12 h-12 bg-yellow-500 rounded-full opacity-50"></div>
-                <div className="absolute top-16 left-2/3 w-6 h-6 bg-green-500 rounded-full opacity-35"></div>
-                <div className="absolute bottom-20 left-1/2 w-8 h-8 bg-green-400 rounded-full opacity-30"></div>
-                <div className="absolute top-2/3 right-8 w-7 h-7 bg-green-500 rounded-full opacity-40"></div>
-                <div className="absolute top-40 right-1/3 w-5 h-5 bg-blue-500 rounded-full opacity-25"></div>
-                <div className="absolute bottom-40 left-1/5 w-6 h-6 bg-purple-500 rounded-full opacity-30"></div>
-                <div className="absolute top-1/4 right-1/5 w-4 h-4 bg-indigo-500 rounded-full opacity-35"></div>
+                <div className="absolute top-8 left-12 w-16 h-16 bg-red-500 opacity-60 animate-pulse"></div>
+                <div className="absolute top-20 right-16 w-12 h-12 bg-orange-500 opacity-50"></div>
+                <div className="absolute bottom-16 left-20 w-14 h-14 bg-red-400 opacity-55"></div>
+                <div className="absolute top-32 left-1/3 w-10 h-10 bg-yellow-500 opacity-45"></div>
+                <div className="absolute bottom-32 right-1/4 w-8 h-8 bg-yellow-400 opacity-40"></div>
+                <div className="absolute top-1/2 left-1/4 w-12 h-12 bg-yellow-500 opacity-50"></div>
+                <div className="absolute top-16 left-2/3 w-6 h-6 bg-green-500 opacity-35"></div>
+                <div className="absolute bottom-20 left-1/2 w-8 h-8 bg-green-400 opacity-30"></div>
+                <div className="absolute top-2/3 right-8 w-7 h-7 bg-green-500 opacity-40"></div>
+                <div className="absolute top-40 right-1/3 w-5 h-5 bg-blue-500 opacity-25"></div>
+                <div className="absolute bottom-40 left-1/5 w-6 h-6 bg-purple-500 opacity-30"></div>
+                <div className="absolute top-1/4 right-1/5 w-4 h-4 bg-indigo-500 opacity-35"></div>
               </div>
-              <div className="absolute top-4 left-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              <div className="absolute top-4 left-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
                 Downtown Area
               </div>
-              <div className="absolute top-4 right-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              <div className="absolute top-4 right-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
                 Mall District
               </div>
-              <div className="absolute bottom-4 left-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              <div className="absolute bottom-4 left-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
                 Residential Zone
               </div>
-              <div className="absolute bottom-4 right-4 bg-white/80 px-2 py-1 rounded text-xs font-medium text-gray-700">
+              <div className="absolute bottom-4 right-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
                 Highway Access
               </div>
             </div>
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-4 py-2 rounded-lg shadow-sm">
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-4 py-2 shadow-sm">
               <div className="flex items-center space-x-4 text-xs">
                 <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-red-500"></div>
                   <span>High Activity</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-yellow-500"></div>
                   <span>Medium Activity</span>
                 </div>
                 <div className="flex items-center space-x-1">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-green-500"></div>
                   <span>Low Activity</span>
                 </div>
               </div>
             </div>
           </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-red-50 p-3 rounded-lg">
+            <div className="bg-red-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-red-600">High Traffic Zones</p>
@@ -681,7 +728,7 @@ const Dashboard = () => {
                 <div className="text-red-500">🔥</div>
               </div>
             </div>
-            <div className="bg-yellow-50 p-3 rounded-lg">
+            <div className="bg-yellow-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-yellow-600">Medium Traffic</p>
@@ -690,7 +737,7 @@ const Dashboard = () => {
                 <div className="text-yellow-500">⚡</div>
               </div>
             </div>
-            <div className="bg-green-50 p-3 rounded-lg">
+            <div className="bg-green-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-green-600">Low Traffic</p>

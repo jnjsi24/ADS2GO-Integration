@@ -15,6 +15,8 @@ module.exports = gql`
     totalPrice: Float!
     maxDevices: Int!
     availableDevices: Int!
+    devicesWithDriver: Int!
+    devicesMounted: Int!
     minAdLengthSeconds: Int!
     maxAdLengthSeconds: Int!
   }

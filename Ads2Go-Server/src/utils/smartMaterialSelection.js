@@ -16,23 +16,64 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       availabilityMap.set(avail.materialId.toString(), avail);
     });
 
-    // Filter out full materials and materials with time conflicts
-    const availableMaterials = materials.filter(material => {
+    // Filter out materials that don't meet all requirements
+    const availableMaterials = [];
+    
+    for (const material of materials) {
       const avail = availabilityMap.get(material._id.toString());
       const availableSlots = avail ? avail.availableSlots : 5;
       
-      // Check if material has available slots
+      // 1. Check if material has available slots
       if (availableSlots <= 0) {
-        return false;
+        continue;
       }
       
-      // If time period is provided, check for time conflicts
+      // 2. Check if material has a driver assigned
+      if (!material.driverId) {
+        console.log(`❌ Material ${material.materialId} excluded: No driver assigned`);
+        continue;
+      }
+      
+      // 3. Check if material is physically mounted (has mountedAt date)
+      if (!material.mountedAt) {
+        console.log(`❌ Material ${material.materialId} excluded: Not physically mounted (no mountedAt date)`);
+        continue;
+      }
+      
+      // 4. Check if device has been connected (has DeviceTracking record)
+      try {
+        const DeviceTracking = require('../models/deviceTracking');
+        const deviceTracking = await DeviceTracking.findByMaterialId(material.materialId);
+        
+        if (!deviceTracking) {
+          console.log(`❌ Material ${material.materialId} excluded: No connected device (no DeviceTracking record)`);
+          continue;
+        }
+        
+        // Device is available if it has been connected before, regardless of current online status
+        // The device can be temporarily offline but still eligible for ads
+        console.log(`✅ Material ${material.materialId} included: Device connected (online: ${deviceTracking.isOnline}, slots: ${deviceTracking.slots.length})`);
+      } catch (deviceError) {
+        console.log(`❌ Material ${material.materialId} excluded: Error checking device status - ${deviceError.message}`);
+        continue;
+      }
+      
+      // 5. Check if material is not dismounted
+      if (material.dismountedAt) {
+        console.log(`❌ Material ${material.materialId} excluded: Already dismounted`);
+        continue;
+      }
+      
+      // 6. If time period is provided, check for time conflicts
       if (startTime && endTime && avail) {
-        return avail.canAcceptAd(startTime, endTime);
+        if (!avail.canAcceptAd(startTime, endTime)) {
+          continue;
+        }
       }
       
-      return true; // If no time period provided, just check slots
-    });
+      // If all checks pass, add to available materials
+      availableMaterials.push(material);
+    }
 
     // Sort available materials by occupied slots (descending) to fill materials ASAP, then by specific priority order
     const sortedMaterials = availableMaterials.sort((a, b) => {

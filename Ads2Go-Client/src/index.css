@@ -19,11 +19,16 @@ code {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  @apply w-2 bg-transparent;
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: rgba(0, 0, 0, 0.1);
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-primary-300 rounded-full;
+  background-color: rgba(0, 0, 0, 0.8);
+  border-radius: 9999px;
 }
 
 /* Form input styles */

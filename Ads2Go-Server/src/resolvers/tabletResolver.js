@@ -177,6 +177,20 @@ module.exports = {
         
         await tablet.save();
         
+        // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
+        try {
+          const Material = require('../models/Material');
+          const material = await Material.findOne({ materialId: materialId });
+          if (material && !material.mountedAt) {
+            material.mountedAt = new Date();
+            await material.save();
+            console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected via GraphQL`);
+          }
+        } catch (mountError) {
+          console.error('Error auto-setting mountedAt date:', mountError);
+          // Don't fail the registration if mountedAt setting fails
+        }
+        
         // Create or update deviceTracking record for this device
         try {
           const DeviceTracking = require('../models/deviceTracking');

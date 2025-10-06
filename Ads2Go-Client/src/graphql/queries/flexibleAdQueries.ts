@@ -42,11 +42,13 @@ export const CALCULATE_FLEXIBLE_PRICING = gql`
       playsPerDayPerDevice
       totalPlaysPerDay
       dailyRevenue
-        totalPrice
-        maxDevices
-        availableDevices
-        minAdLengthSeconds
-        maxAdLengthSeconds
+      totalPrice
+      maxDevices
+      availableDevices
+      devicesWithDriver
+      devicesMounted
+      minAdLengthSeconds
+      maxAdLengthSeconds
     }
   }
 `;
@@ -76,6 +78,8 @@ export interface FlexiblePricingCalculation {
   totalPrice: number;
   maxDevices: number;
   availableDevices: number;
+  devicesWithDriver: number;
+  devicesMounted: number;
   minAdLengthSeconds: number;
   maxAdLengthSeconds: number;
 }

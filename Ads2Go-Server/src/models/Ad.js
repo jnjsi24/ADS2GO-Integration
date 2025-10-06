@@ -11,11 +11,11 @@ const AdSchema = new mongoose.Schema({
     ref: 'Driver',
     default: null
   },
-  materialId: {
+  materialId: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Material',
     required: true
-  },
+  }],
   planId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AdsPlan',
@@ -253,14 +253,13 @@ AdSchema.post('save', async function (doc) {
         // Multi-device ad: deploy to all target devices
         console.log(`🔄 Deploying multi-device Ad ${doc._id} to ${doc.targetDevices.length} devices`);
         targetMaterials = await Material.find({ _id: { $in: doc.targetDevices } });
+      } else if (doc.materialId && doc.materialId.length > 0) {
+        // Use materialId array if targetDevices is empty
+        console.log(`🔄 Deploying Ad ${doc._id} to ${doc.materialId.length} materials from materialId array`);
+        targetMaterials = await Material.find({ _id: { $in: doc.materialId } });
       } else {
-        // Single device ad: deploy to primary material
-        const material = await Material.findById(doc.materialId);
-        if (!material) {
-          console.error(`❌ Cannot deploy Ad ${doc._id}: Material not found`);
-          return;
-        }
-        targetMaterials = [material];
+        console.error(`❌ Cannot deploy Ad ${doc._id}: No materials specified`);
+        return;
       }
       
       if (targetMaterials.length === 0) {

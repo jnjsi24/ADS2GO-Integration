@@ -220,12 +220,25 @@ const Settings: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 pl-60 pr-1">
-      <div className="flex">
-        <div className="flex-1 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-2">Notifications</h2>
+    <div className="relative min-h-screen overflow-hidden">
+  {/* Background Image */}
+  <div
+    className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+    style={{
+      backgroundImage: "url('/image/bg2.jpg')",
+    }}
+  ></div>
+
+  {/* Overlay */}
+  <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+  {/* Main Content */}
+  <div className="relative min-h-screen bg-transparent pl-60 pr-1 mt-7">
+    <div className="flex">
+      <div className="flex-1 p-6 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-2">Notifications</h2>
           <form className="space-y-6" onSubmit={handleNotificationSubmit}>
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Enable Desktop Notification</h3>
@@ -233,7 +246,7 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableDesktopNotifications ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableDesktopNotifications ? 'bg-[#3674B5]/80' : 'bg-gray-300'}`}
                   onClick={() => handleToggleChange('enableDesktopNotifications')}
                 >
                   <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableDesktopNotifications ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
@@ -241,7 +254,7 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Enable Notification Badge</h3>
@@ -249,7 +262,7 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableNotificationBadge ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.enableNotificationBadge ? 'bg-[#3674B5]/80' : 'bg-gray-300'}`}
                   onClick={() => handleToggleChange('enableNotificationBadge')}
                 >
                   <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.enableNotificationBadge ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
@@ -257,13 +270,13 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
               <select
                 name="pushNotificationTimeout"
                 value={notificationForm.pushNotificationTimeout}
                 onChange={handleInputChange}
-                className="mt-2 block w-32 border-gray-300 rounded-md focus:outline-none"
+                className="mt-2 block w-32 border-gray-300  focus:outline-none"
               >
                 <option value="5">5 Minutes</option>
                 <option value="10">10 Minutes</option>
@@ -274,7 +287,7 @@ const Settings: React.FC = () => {
 
             <h2 className="text-xl font-semibold mt-6">Email Notifications</h2>
 
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Communication Emails</h3>
@@ -282,7 +295,7 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.communicationEmails ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.communicationEmails ? 'bg-[#3674B5]/80' : 'bg-gray-300'}`}
                   onClick={() => handleToggleChange('communicationEmails')}
                 >
                   <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.communicationEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
@@ -290,13 +303,13 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Announcements & Updates</h3>
                   <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
                   {!notificationForm.announcementsEmails && queuedEmailStats.pending > 0 && (
-                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 ">
                       <p className="text-xs text-yellow-700">
                         📧 You have {queuedEmailStats.pending} email{queuedEmailStats.pending !== 1 ? 's' : ''} waiting to be sent. 
                         Turn on Announcements & Updates to receive them.
@@ -304,7 +317,7 @@ const Settings: React.FC = () => {
                     </div>
                   )}
                   {notificationForm.announcementsEmails && queuedEmailStats.pending > 0 && (
-                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+                    <div className="mt-2 p-2 bg-green-50 border border-green-200">
                       <p className="text-xs text-green-700">
                         ✅ Your queued emails are being processed and sent.
                       </p>
@@ -313,7 +326,7 @@ const Settings: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.announcementsEmails ? 'bg-[#F3A26D]' : 'bg-gray-300'}`}
+                  className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 ${notificationForm.announcementsEmails ? 'bg-[#3674B5]/80' : 'bg-gray-300'}`}
                   onClick={() => handleToggleChange('announcementsEmails')}
                 >
                   <span className={`w-5 h-5 bg-white rounded-full transform ${notificationForm.announcementsEmails ? 'translate-x-7' : 'translate-x-0'} transition-transform duration-300`}></span>
@@ -323,7 +336,7 @@ const Settings: React.FC = () => {
 
             <h2 className="text-xl font-semibold mt-6">Newsletter Subscription</h2>
 
-            <div className="border p-4 rounded-md">
+            <div className="bg-white/70 shadow-md p-4 ">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold">Company Newsletter</h3>
@@ -338,7 +351,7 @@ const Settings: React.FC = () => {
                   type="button"
                   disabled={newsletterLoading}
                   className={`w-14 h-7 rounded-full flex items-center px-1 hover:scale-105 transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    newsletterSubscribed ? 'bg-[#F3A26D]' : 'bg-gray-300'
+                    newsletterSubscribed ? 'bg-[#3674B5]/80' : 'bg-gray-300'
                   }`}
                   onClick={handleNewsletterToggle}
                 >
@@ -360,10 +373,10 @@ const Settings: React.FC = () => {
               <button
                 type="submit"
                 disabled={updateLoading || notificationPreferencesLoading}
-                className={`px-6 py-2 rounded-md font-medium transition-colors duration-200 ${
+                className={`px-6 py-2  font-medium transition-colors duration-200 ${
                   updateLoading || notificationPreferencesLoading
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-[#F3A26D] text-white hover:bg-[#E8915A]'
+                    : 'bg-[#3674B5]/80 text-white hover:bg-[#1B5087]/70'
                 }`}
               >
                 {updateLoading ? 'Saving...' : 'Save Settings'}
@@ -377,7 +390,7 @@ const Settings: React.FC = () => {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
+            className={`text-white px-4 py-2  shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'}`}
           >
             <span>{toast.message}</span>
             <button
@@ -407,6 +420,7 @@ const Settings: React.FC = () => {
           }
         `}
       </style>
+    </div>
     </div>
   );
 };

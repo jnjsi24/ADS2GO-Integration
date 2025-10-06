@@ -52,9 +52,9 @@ class AdDeploymentService {
         };
       }
 
-      // Check if there's already a deployment for this material
+      // Check if there's already a deployment for this material (use first material from array)
       let deployment = await AdsDeployment.findOne({
-        materialId: ad.materialId._id,
+        materialId: ad.materialId[0]._id,
         status: 'ACTIVE'
       });
 
@@ -81,7 +81,7 @@ class AdDeploymentService {
       } else {
         // Create a new deployment
         deployment = new AdsDeployment({
-          materialId: ad.materialId._id,
+          materialId: ad.materialId[0]._id,
           driverId: ad.userId,
           status: 'ACTIVE',
           lcdSlots: [{

@@ -71,12 +71,28 @@ const SideNavbar: React.FC = () => {
       <Link
         to={link.path}
         className={`
-          nav-link relative flex items-center px-4 rounded-md py-2 overflow-hidden transition-all duration-300 ease-out
-          ${isActive 
-            ? 'border-l border-blue-500 text-blue-500 bg-white/90 backdrop-blur-md'
-            : 'border-l-3 text-black/70 hover:border-green-500 hover:border-blue-500 hover:text-yellow-500 hover:bg-white/80 backdrop-blur-md'}
+          nav-link relative flex items-center px-4 py-2 overflow-hidden transition-all duration-300 ease-out
         `}
-        
+        style={{
+          borderLeft: isActive ? '4px solid #3674B5' : '4px solid transparent',
+          transition: 'border-left-color 0.3s ease-out',
+          color: isActive ? '#1B5087' : '#374151',
+          fontWeight: isActive ? 'bold' : 'normal',
+          textDecoration: 'none',
+          backgroundColor: 'transparent'
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.borderLeftColor = '#3674B5';
+            e.currentTarget.style.color = '#1B5087';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            e.currentTarget.style.borderLeftColor = 'transparent';
+            e.currentTarget.style.color = '#374151';
+          }
+        }}
       >
         <span className="relative z-10 flex items-center space-x-3">
           {link.icon}
@@ -101,15 +117,20 @@ const SideNavbar: React.FC = () => {
         __html: `
           .nav-link {
             text-decoration: none !important;
-            border: none !important;
+            border-top: none !important;
+            border-right: none !important;
+            border-bottom: none !important;
             outline: none !important;
-            will-change: transform, background-color, color;
+            will-change: transform, background-color, color, border-left-color;
             backface-visibility: hidden;
           }
           .nav-link:focus {
             outline: none !important;
           }
           .nav-link:visited {
+            color: inherit !important;
+          }
+          .nav-link span {
             color: inherit !important;
           }
         `
@@ -138,13 +159,17 @@ const SideNavbar: React.FC = () => {
 
         {/* Navigation - Completely Static */}
         <ul className="space-y-5 mt-16">
-          {navLinks.map(link => (
-            <NavigationItem
-              key={link.label}
-              link={link}
-              isActive={window.location.pathname === link.path} // checks current URL
-            />
-          ))}
+          {navLinks.map(link => {
+            const isActive = window.location.pathname === link.path;
+            console.log(`Nav item ${link.label}: path=${link.path}, current=${window.location.pathname}, isActive=${isActive}`);
+            return (
+              <NavigationItem
+                key={link.label}
+                link={link}
+                isActive={isActive}
+              />
+            );
+          })}
         </ul>
       </div>
 
