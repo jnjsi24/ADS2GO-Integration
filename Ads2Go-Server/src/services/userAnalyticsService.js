@@ -223,7 +223,7 @@ class UserAnalyticsService {
       // Get all materials associated with user's ads using targetDevices
       const materialIds = [];
       for (const ad of userAds) {
-        console.log(`📊 Processing ad: ${ad._id}, materialId: ${ad.materialId}, targetDevices: ${ad.targetDevices?.length || 0}`);
+        console.log(`📊 Processing ad: ${ad._id}, materialId: ${ad.materialId?.length || 0}, targetDevices: ${ad.targetDevices?.length || 0}`);
         if (ad.targetDevices && ad.targetDevices.length > 0) {
           // Multi-device ad: use all target devices
           ad.targetDevices.forEach(materialId => {
@@ -232,12 +232,14 @@ class UserAnalyticsService {
               console.log(`   ➕ Added target device: ${materialId}`);
             }
           });
-        } else if (ad.materialId) {
-          // Single-device ad: use primary material
-          if (!materialIds.includes(ad.materialId.toString())) {
-            materialIds.push(ad.materialId.toString());
-            console.log(`   ➕ Added primary material: ${ad.materialId}`);
-          }
+        } else if (ad.materialId && ad.materialId.length > 0) {
+          // Multi-device ad: use all materials from materialId array
+          ad.materialId.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+              console.log(`   ➕ Added material from materialId array: ${materialId}`);
+            }
+          });
         }
       }
 
@@ -1196,7 +1198,7 @@ class UserAnalyticsService {
 
       // If no device IDs provided, get all devices for user's ads
       if (!deviceIds || deviceIds.length === 0) {
-        deviceIds = userAds.map(ad => ad.materialId).filter(Boolean);
+        deviceIds = userAds.flatMap(ad => ad.materialId || []).filter(Boolean);
       }
 
       // Set default date range if not provided (last 7 days)
@@ -1312,10 +1314,12 @@ class UserAnalyticsService {
               materialIds.push(materialId.toString());
             }
           });
-        } else if (ad.materialId) {
-          if (!materialIds.includes(ad.materialId.toString())) {
-            materialIds.push(ad.materialId.toString());
-          }
+        } else if (ad.materialId && ad.materialId.length > 0) {
+          ad.materialId.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
         }
       }
 
@@ -1520,7 +1524,7 @@ class UserAnalyticsService {
       // QR scans are now processed from DeviceTracking and DeviceDataHistoryV2 below
 
       // Get additional data from DeviceTracking and DeviceDataHistoryV2
-      const materialIds = userAds.map(ad => ad.materialId).filter(Boolean);
+      const materialIds = userAds.flatMap(ad => ad.materialId || []).filter(Boolean);
 
       // Get current day data from DeviceTracking
       const currentDay = new Date().toISOString().split('T')[0];
@@ -1662,25 +1666,27 @@ class UserAnalyticsService {
               });
             }
           });
-        } else if (ad.materialId) {
-          const material = await Material.findById(ad.materialId);
-          if (material && material.materialId && !materialIds.includes(material.materialId)) {
-            materialIds.push(material.materialId);
-            materialDetails.push({
-              materialId: material.materialId,
-              materialName: material.materialName,
-              materialType: material.materialType,
-              vehicleType: material.vehicleType,
-              category: material.category,
-              status: material.status,
-              assignedDate: material.assignedDate,
-              mountedAt: material.mountedAt,
-              dismountedAt: material.dismountedAt,
-              driverId: material.driverId,
-              location: material.location,
-              ads: []
-            });
-          }
+        } else if (ad.materialId && ad.materialId.length > 0) {
+          const materials = await Material.find({ _id: { $in: ad.materialId } });
+          materials.forEach(material => {
+            if (material && material.materialId && !materialIds.includes(material.materialId)) {
+              materialIds.push(material.materialId);
+              materialDetails.push({
+                materialId: material.materialId,
+                materialName: material.materialName,
+                materialType: material.materialType,
+                vehicleType: material.vehicleType,
+                category: material.category,
+                status: material.status,
+                assignedDate: material.assignedDate,
+                mountedAt: material.mountedAt,
+                dismountedAt: material.dismountedAt,
+                driverId: material.driverId,
+                location: material.location,
+                ads: []
+              });
+            }
+          });
         }
       }
 
@@ -1731,7 +1737,7 @@ class UserAnalyticsService {
               return material.materialId === targetDevice.toString();
             });
           }
-          return ad.materialId && ad.materialId.toString() === material.materialId;
+          return ad.materialId && ad.materialId.some(materialId => materialId.toString() === material.materialId);
         }).map(ad => ({
           adId: ad._id,
           adTitle: ad.title,
@@ -1804,10 +1810,12 @@ class UserAnalyticsService {
               materialIds.push(materialId.toString());
             }
           });
-        } else if (ad.materialId) {
-          if (!materialIds.includes(ad.materialId.toString())) {
-            materialIds.push(ad.materialId.toString());
-          }
+        } else if (ad.materialId && ad.materialId.length > 0) {
+          ad.materialId.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
         }
       }
 

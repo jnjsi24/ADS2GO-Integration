@@ -18,7 +18,7 @@ const adTypeDefs = gql`
     id: ID!                
     userId: User!          
     driverId: ID
-    materialId: Material   
+    materialId: [Material!]   # Array of materials where this ad is deployed
     targetDevices: [Material!]  # Array of devices where this ad should be deployed
     planId: AdsPlan        
     title: String!
@@ -55,7 +55,7 @@ const adTypeDefs = gql`
 
   input CreateAdInput {
     driverId: ID
-    materialId: ID!
+    materialId: [ID!]!
     planId: ID!
     title: String!
     description: String
@@ -74,7 +74,7 @@ const adTypeDefs = gql`
     description: String
     adFormat: String
     mediaFile: String
-    materialId: ID
+    materialId: [ID]
     planId: ID
     status: AdStatus
     startTime: String      # update start time, auto-adjusts endTime

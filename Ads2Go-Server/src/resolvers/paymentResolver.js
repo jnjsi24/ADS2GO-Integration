@@ -54,14 +54,13 @@ async function triggerAdDeployment(ad) {
       // Multi-device ad: deploy to all target devices
       console.log(`🔄 Deploying multi-device Ad ${ad._id} to ${ad.targetDevices.length} devices`);
       targetMaterials = await Material.find({ _id: { $in: ad.targetDevices } });
+    } else if (ad.materialId && ad.materialId.length > 0) {
+      // Use materialId array if targetDevices is empty
+      console.log(`🔄 Deploying Ad ${ad._id} to ${ad.materialId.length} materials from materialId array`);
+      targetMaterials = await Material.find({ _id: { $in: ad.materialId } });
     } else {
-      // Single device ad: deploy to primary material
-      const material = await Material.findById(ad.materialId);
-      if (!material) {
-        console.error(`❌ Cannot deploy Ad ${ad._id}: Material not found`);
-        return;
-      }
-      targetMaterials = [material];
+      console.error(`❌ Cannot deploy Ad ${ad._id}: No materials specified`);
+      return;
     }
     
     if (targetMaterials.length === 0) {
