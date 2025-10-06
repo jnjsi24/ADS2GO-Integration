@@ -425,7 +425,7 @@ export const AuthProvider: React.FC<{
 
       setUser(null);
       setUserEmail('');
-      await apolloClient.resetStore();
+      await apolloClient.clearStore();
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);

@@ -409,8 +409,8 @@ export const UserAuthProvider: React.FC<{
         // Continue with logout even if mutation fails
       }
 
-      // Reset Apollo store AFTER clearing tokens and state
-      await apolloClient.resetStore();
+      // Clear Apollo store AFTER clearing tokens and state (no refetch)
+      await apolloClient.clearStore();
       
       // Navigate to login
       navigate('/login');

@@ -95,7 +95,16 @@ class UserAnalyticsService {
           averageAdCompletionRate: ad.averageAdCompletionRate || 0,
           qrScanConversionRate: ad.qrScanConversionRate || 0,
           lastUpdated: ad.lastUpdated,
-          materials: ad.materials || []
+          materials: (ad.materials || []).map(material => ({
+            materialId: material.materialId || '',
+            materialName: material.materialName || null,
+            carGroupId: material.carGroupId || null,
+            totalAdPlayTime: material.totalAdPlayTime || 0,
+            totalAdImpressions: material.totalAdImpressions || 0,
+            totalQRScans: material.totalQRScans || 0,
+            averageCompletionRate: material.averageAdCompletionRate || 0,
+            lastActivity: material.lastActivity || null
+          }))
         })),
         dailyStats: [], // Will be populated from DeviceDataHistoryV2
         deviceStats: [], // Will be populated from DeviceDataHistoryV2

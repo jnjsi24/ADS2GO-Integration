@@ -58,13 +58,9 @@ const authLink = setContext((_, { headers }) => {
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path, extensions }) => {
-      // Don't log authentication errors during logout process
-      if (message === 'Not authenticated' && 
-          (operation.operationName === 'logout' || 
-           operation.operationName === 'getOwnUserDetails' ||
-           operation.operationName === 'getUserNotifications' ||
-           operation.operationName === 'getUserAnalytics')) {
-        console.log(`[GraphQL]: Expected auth error during ${operation.operationName} - user is logging out`);
+      // Soften logging for expected unauthenticated states (e.g., after logout)
+      if (message === 'Not authenticated') {
+        console.log(`[GraphQL]: Auth state missing during ${operation.operationName || 'unknown operation'} (likely after logout)`);
         return;
       }
       
