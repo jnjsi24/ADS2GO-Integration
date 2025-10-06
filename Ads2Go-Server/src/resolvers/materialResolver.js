@@ -866,14 +866,9 @@ const materialResolvers = {
           deviceCompliance = new DeviceCompliance({
             materialId: material._id,
             driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
-            location: {
-              type: 'Point',
-              coordinates: [0, 0] // Default coordinates
-            },
-            address: 'Location not set',
             materialCondition: 'GOOD',
             monthlyPhotos: [],
-            photoComplianceStatus: 'PENDING'
+            photoComplianceStatus: 'COMPLIANT'
           });
         }
 
@@ -885,7 +880,23 @@ const materialResolvers = {
         return {
           success: true,
           message: 'Monthly photo uploaded successfully',
-          deviceCompliance: deviceCompliance
+          materialTracking: {
+            id: deviceCompliance._id.toString(),
+            materialId: deviceCompliance.materialId.toString(),
+            driverId: deviceCompliance.driverId?.toString(),
+            materialCondition: deviceCompliance.materialCondition,
+            monthlyPhotos: (deviceCompliance.monthlyPhotos || []).map(photo => ({
+              month: photo.month,
+              status: photo.status,
+              photoUrls: photo.photoUrls,
+              uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+              uploadedBy: photo.uploadedBy,
+              adminNotes: photo.adminNotes
+            })),
+            photoComplianceStatus: deviceCompliance.photoComplianceStatus,
+            lastPhotoUpload: deviceCompliance.lastPhotoUpload ? deviceCompliance.lastPhotoUpload.toISOString() : null,
+            nextPhotoDue: deviceCompliance.nextPhotoDue ? deviceCompliance.nextPhotoDue.toISOString() : null
+          }
         };
 
       } catch (error) {

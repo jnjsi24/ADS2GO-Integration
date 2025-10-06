@@ -3,27 +3,11 @@ const gql = require('graphql-tag');
 
 const typeDefs = gql`
   """
-  Geographic coordinates of the tracked material.
-  """
-  type GPS {
-    lat: Float
-    lng: Float
-  }
-
-  """
   Error logs for device or tracking issues.
   """
   type ErrorLog {
     timestamp: String
     message: String
-  }
-
-  """
-  Possible status values for the tracking device.
-  """
-  enum DeviceStatus {
-    ONLINE
-    OFFLINE
   }
 
   """
@@ -41,40 +25,35 @@ const typeDefs = gql`
   """
   type DeviceCompliance {
     id: ID!
-    deviceId: String!
     materialId: ID!
     driverId: ID
-    deploymentId: ID
-    gps: GPS
-    speed: Float
-    totalDistanceTraveled: Float
-    lastKnownLocationTime: String
-    deviceStatus: DeviceStatus
-    lastHeartbeat: String
-    currentAdId: ID
-    adStartTime: String
-    adLoopCount: Int
-    totalAdImpressions: Int
-    totalViewCount: Int
-    averageViewTime: Float
-    qrCodeScans: Int
-    interactions: Int
-    uptimePercentage: Float
-    lastMaintenanceDate: String
-    errorLogs: [ErrorLog]
     materialCondition: MaterialCondition
     inspectionPhotos: [String]
     lastInspectionDate: String
+    monthlyPhotos: [MonthlyPhoto]
+    lastPhotoUpload: String
+    nextPhotoDue: String
+    photoComplianceStatus: String
+    lastMaintenanceDate: String
+    errorLogs: [ErrorLog]
+    isActive: Boolean
+    metadata: String
     createdAt: String
     updatedAt: String
   }
 
   """
-  Input type for GPS coordinates.
+  Monthly photo tracking for compliance.
   """
-  input GPSInput {
-    lat: Float
-    lng: Float
+  type MonthlyPhoto {
+    month: String!
+    photoUrls: [String!]!
+    uploadedAt: String!
+    uploadedBy: String!
+    status: String!
+    adminNotes: String
+    reviewedBy: String
+    reviewedAt: String
   }
 
   """
@@ -89,30 +68,15 @@ const typeDefs = gql`
   Input type for creating/updating device compliance records.
   """
   input DeviceComplianceInput {
-    deviceId: String!
     materialId: ID!
     driverId: ID
-    deploymentId: ID
-    gps: GPSInput
-    speed: Float
-    totalDistanceTraveled: Float
-    lastKnownLocationTime: String
-    deviceStatus: DeviceStatus
-    lastHeartbeat: String
-    currentAdId: ID
-    adStartTime: String
-    adLoopCount: Int
-    totalAdImpressions: Int
-    totalViewCount: Int
-    averageViewTime: Float
-    qrCodeScans: Int
-    interactions: Int
-    uptimePercentage: Float
-    lastMaintenanceDate: String
-    errorLogs: [ErrorLogInput]
     materialCondition: MaterialCondition
     inspectionPhotos: [String]
     lastInspectionDate: String
+    lastMaintenanceDate: String
+    errorLogs: [ErrorLogInput]
+    isActive: Boolean
+    metadata: String
   }
 
   type Query {

@@ -367,8 +367,8 @@ export default function Home() {
           
           const newMaterials = materials.filter(material => {
             const mountedDate = new Date(material.mountedAt);
-            const daysSinceMounted = Math.floor((Date.now() - mountedDate.getTime()) / (1000 * 60 * 60 * 24));
-            return daysSinceMounted <= 7;
+            const today = new Date();
+            return mountedDate.toDateString() === today.toDateString();
           });
           
           const materialsNeedingMonthlyPhotos = materials.filter(material => {
