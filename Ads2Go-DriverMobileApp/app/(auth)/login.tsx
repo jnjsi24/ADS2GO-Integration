@@ -349,13 +349,7 @@ export default function Login() {
         {/* Socials */}
         <View style={styles.socials}>
           <TouchableOpacity style={styles.socialBtn}>
-            <Ionicons name="logo-facebook" size={22} color="#1877F2" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialBtn}>
             <Ionicons name="logo-google" size={22} color="#DB4437" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialBtn}>
-            <Ionicons name="logo-apple" size={22} color="#000" />
           </TouchableOpacity>
         </View>
       </View>

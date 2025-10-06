@@ -4,6 +4,7 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
+import { LinearGradient } from 'react-native-svg';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -11,6 +12,7 @@ const { width: screenWidth } = Dimensions.get('window');
 interface DriverAnalytics {
   driverId: string;
   vehiclePlateNumber: string;
+  vehicleModel: string;
   vehicleType: string;
   deviceId: string;
   screenType: string;
@@ -151,6 +153,7 @@ const Dashboard: React.FC = () => {
         const transformedAnalytics: DriverAnalytics = {
           driverId: data.driverId || 'Unknown',
           vehiclePlateNumber: data.vehiclePlateNumber || 'Unknown',
+          vehicleModel: data.vehicleModel || 'Unknown',
           vehicleType: data.vehicleType || 'Unknown',
           deviceId: data.deviceId || 'Unknown',
           screenType: data.screenType || 'Unknown',
@@ -295,7 +298,7 @@ const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color="#3674B5" />
         <Text style={styles.loadingText}>Loading analytics...</Text>
       </View>
     );
@@ -316,65 +319,95 @@ const Dashboard: React.FC = () => {
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Driver Analytics</Text>
-        <Text style={styles.headerSubtitle}>Welcome back, {user?.firstName || 'Driver'}</Text>
-        <View style={styles.statusContainer}>
-          <View style={[styles.statusDot, { backgroundColor: analytics.isOnline ? '#22c55e' : '#ef4444' }]} />
-          <Text style={styles.statusText}>
-            {analytics.isOnline ? 'ONLINE' : 'OFFLINE'}
-          </Text>
+        <View style={styles.headerContent}>
+          {/* Profile Image */}
+          <View style={styles.profileContainer}>
+            <Ionicons name="person-circle" size={60} color="#3674B5" />
+          </View>
+
+          {/* Text and Status */}
+          <View style={styles.textContainer}>
+            <Text style={styles.headerSubtitle}>
+              Welcome back, {user?.firstName || 'Driver'}
+            </Text>
+            <View style={styles.statusContainer}>
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: analytics.isOnline ? '#22c55e' : '#ef4444' },
+                ]}
+              />
+              <Text style={styles.statusText}>
+                {analytics.isOnline ? 'ONLINE' : 'OFFLINE'}
+              </Text>
+            </View>
+          </View>
+
+          {/* 🔔 Bell Icon */}
+          <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
+            <Ionicons
+              name="notifications-outline"
+              size={28}
+              color="#374151"
+              style={styles.bellIcon}
+            />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Driver Info Card */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoRow}>
-          <View style={styles.infoItem}>
-            <Ionicons name="car" size={24} color="#3b82f6" />
-            <Text style={styles.infoLabel}>Vehicle</Text>
-            <Text style={styles.infoValue}>{analytics.vehiclePlateNumber}</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="speedometer" size={24} color="#3b82f6" />
-            <Text style={styles.infoLabel}>Avg Speed</Text>
-            <Text style={styles.infoValue}>{analytics.averageSpeed} km/h</Text>
-          </View>
-          <View style={styles.infoItem}>
-            <Ionicons name="map" size={24} color="#3b82f6" />
-            <Text style={styles.infoLabel}>Routes</Text>
-            <Text style={styles.infoValue}>{analytics.totalRoutes}</Text>
-          </View>
+
+      {/* Balance Container */}
+      <View style={styles.cardContainer}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.balanceLabel}>Payout Balance</Text>
         </View>
-        
-        {/* Device Info Section */}
-        <View style={styles.deviceInfoSection}>
-          <View style={styles.deviceInfoItem}>
-            <View style={styles.deviceInfoHeader}>
-              <Ionicons name="tablet-portrait" size={20} color="#3b82f6" />
-              <Text style={styles.deviceInfoLabel}>Device ID</Text>
-            </View>
-            <Text style={styles.deviceInfoValue} numberOfLines={1} ellipsizeMode="middle">
-              {analytics.deviceId}
+        <Text style={styles.balanceCurrency}>PHP</Text>
+        <Text style={styles.balanceAmount}>2,450.00</Text>
+      </View>
+
+
+      {/* Vehicle */}
+      <View style={styles.infoCard}>
+        {/* --- Top Row: Icon + Route + Vehicle Plate --- */}
+        <View style={styles.vehicleTopRow}>
+          <View style={styles.vehicleLeft}>
+            <Ionicons name="car" size={26} color="#3674B5" style={{ marginRight: 8 }} />
+            <Text style={styles.routeText}>
+              {analytics.totalRoutes} Route{analytics.totalRoutes > 1 ? 's' : ''}
             </Text>
           </View>
-          
+
+          <View style={styles.vehicleRight}>
+            <Text style={styles.vehiclePlate}>{analytics.vehiclePlateNumber}</Text>
+          </View>
+        </View>
+
+        {/* --- Second Line: Vehicle Model --- */}
+        <Text style={styles.vehicleModel}>{analytics.vehicleModel}</Text>
+
+        {/* --- Divider --- */}
+        <View style={styles.divider} />
+
+        {/* --- Device Info Section --- */}
+        <View style={styles.deviceInfoSection}>
           <View style={styles.deviceInfoRow}>
             <View style={styles.deviceInfoItem}>
-              <View style={styles.deviceInfoHeader}>
-                <Ionicons name="tv" size={20} color="#3b82f6" />
-                <Text style={styles.deviceInfoLabel}>Screen Type</Text>
-              </View>
-              <Text style={styles.deviceInfoValue} numberOfLines={1}>
-                {analytics.screenType}
-              </Text>
+              <Ionicons name="tablet-portrait" size={20} color="#3674B5" />
+              <Text style={styles.deviceInfoValue}>{analytics.deviceId}</Text>
             </View>
-            
+
             <View style={styles.deviceInfoItem}>
-              <View style={styles.deviceInfoHeader}>
-                <Ionicons name="cube" size={20} color="#3b82f6" />
-                <Text style={styles.deviceInfoLabel}>Material ID</Text>
-              </View>
-              <Text style={styles.deviceInfoValue} numberOfLines={1} ellipsizeMode="middle">
+              <Ionicons name="tv" size={20} color="#3674B5" />
+              <Text style={styles.deviceInfoValue}>{analytics.screenType}</Text>
+            </View>
+
+            <View style={styles.deviceInfoItem}>
+              <Ionicons name="cube" size={20} color="#3674B5" />
+              <Text
+                style={styles.deviceInfoValue}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
                 {analytics.materialId}
               </Text>
             </View>
@@ -382,35 +415,84 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
-      {/* Performance Metrics */}
-      <View style={styles.metricsContainer}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Distance Today</Text>
-          <Text style={styles.metricValue}>{analytics.totalDistance.toFixed(2)} km</Text>
+      {/* --- Ad Campaign Card --- */}
+      <View style={styles.adCard}>
+        {/* Header Section */}
+        <View style={styles.metricsHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.titleRow}>
+              <Text style={styles.adTitle}>Ad Campaign</Text>
+              <View style={styles.periodTag}>
+                <Text style={styles.periodText}>30 Days</Text>
+              </View>
+            </View>
+
+            <Text style={styles.companyInfo}>
+              Sample Company <Text style={styles.adId}>#AdID3264</Text>
+            </Text>
+
+          </View>
         </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Hours Today</Text>
-          <Text style={styles.metricValue}>{analytics.totalHours.toFixed(1)}h</Text>
+
+        {/* QR and Distance Row */}
+        <View style={styles.qrDistanceRow}>
+          <Ionicons name="qr-code" size={22} color="#3674B5" style={{ marginRight: 6 }} />
+          <Text style={styles.qrValue}>{analytics.qrImpressions}</Text>
+          <Text style={styles.verticalDivider}>|</Text>
+          <Text style={styles.distanceValue}>
+            {analytics.totalDistance.toFixed(2)} km Today
+          </Text>
         </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Hours Remaining</Text>
-          <Text style={styles.metricValue}>{analytics.hoursRemaining.toFixed(1)}h</Text>
+        
+        <View style={styles.divider} />
+
+        {/* Location Card: EDSA */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="location" size={16} color="#ffffff" />
+            </View>
+            <View style={styles.dashedLineFull} />
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>EDSA Street</Text>
+            <Text style={styles.locationSubText}>
+              {analytics.hoursRemaining.toFixed(1)} hours remaining • 11:59 PM
+            </Text>
+          </View>
         </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Compliance Rate</Text>
-          <Text style={styles.metricValue}>{analytics.complianceRate.toFixed(0)}%</Text>
+
+        {/* Distance + Hours Pill */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.dashedLineFull} />
+          </View>
+          <View style={styles.textContainer}>
+            <View style={styles.locationPill}>
+              <Text style={styles.locationPillText}>
+                {analytics.totalDistance.toFixed(2)} km - {analytics.totalHours.toFixed(1)} hours
+              </Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>QR Impressions</Text>
-          <Text style={styles.metricValue}>{analytics.qrImpressions}</Text>
-        </View>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Km Distance</Text>
-          <Text style={styles.metricValue}>{analytics.totalDistance.toFixed(1)} km</Text>
+
+        {/* Kalayaan Section */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle2}>
+              <Ionicons name="locate" size={16} color="#ffffff" />
+            </View>
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>Kalayaan Street</Text>
+            <Text style={styles.locationSubText}>
+              {analytics.hoursRemaining.toFixed(1)} hours remaining • 11:59 PM
+            </Text>
+          </View>
         </View>
       </View>
-
-
 
       {/* Chart Controls */}
       <View style={styles.chartControls}>
@@ -492,7 +574,7 @@ const Dashboard: React.FC = () => {
               propsForDots: {
                 r: '6',
                 strokeWidth: '2',
-                stroke: '#3b82f6'
+                stroke: '#3674B5'
               }
             }}
             bezier
@@ -535,27 +617,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ef4444',
   },
+
+  // Header
   header: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileContainer: {
+    marginRight: 12,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginTop: 4,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
   },
+  
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
   },
   statusDot: {
     width: 8,
@@ -563,109 +647,351 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginRight: 6,
   },
+  
   statusText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#6b7280',
   },
-  infoCard: {
-    margin: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+
+  bellIcon: {
+    marginLeft: 10,
+  },
+
+  // Balance Container
+  cardContainer: {
+    backgroundColor: '#3674B5', // elegant blue tone
+    borderRadius: 20,
     padding: 20,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  infoItem: {
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  // Device Info Section Styles
-  deviceInfoSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-  },
-  deviceInfoRow: {
+  
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  deviceInfoItem: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  deviceInfoHeader: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
   },
-  deviceInfoLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginLeft: 6,
+  
+  balanceLabel: {
+    color: '#E5E7EB',
+    fontSize: 14,
     fontWeight: '500',
   },
-  deviceInfoValue: {
+  
+  cardLogo: {
+    width: 40,
+    height: 30,
+    resizeMode: 'contain',
+  },
+  
+  balanceCurrency: {
+    color: '#E5E7EB',
     fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    textAlign: 'center',
+    marginTop: 10,
   },
-  metricsContainer: {
+  
+  balanceAmount: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  
+  cardNumber: {
+    color: '#E5E7EB',
+    letterSpacing: 3,
+    fontSize: 16,
+    marginVertical: 10,
+  },
+  
+  cardFooter: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: 20,
-    marginBottom: 20,
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
   },
-  metricCard: {
-    width: '30%',
+  
+  cardHolder: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  expLabel: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    textAlign: 'right',
+  },
+  
+  expValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
+  
+
+  
+  // Section 2
+  infoCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  
+  vehicleTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  
+  vehicleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  vehicleRight: {
+    alignItems: 'flex-end',
+  },
+  
+  routeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  
+  vehiclePlate: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  
+  vehicleModel: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+    textAlign: 'right'
+  },
+  
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 10,
+  },
+
+  deviceInfoSection: {
+    marginTop: 1,
+  },
+  
+  deviceInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start', 
+    alignItems: 'center',
+    gap: 12, 
+  },
+  
+  deviceInfoItem: {
+    flexDirection: 'row', 
+    alignItems: 'center',
+  },
+  
+  deviceInfoHeader: {
+    marginRight: 10, 
+  },
+  
+  deviceInfoValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    maxWidth: 110,
+    marginLeft: 6, 
+  },
+  
+  
+
+
+  // Metrics Container Styles
+  adCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
   },
-  metricLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginBottom: 6,
-    textAlign: 'center',
+  
+  metricsHeader: {
+    marginBottom: 12,
   },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  
+  headerLeft: {
+    flexDirection: 'column',
+  },
+  
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  
+  adTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#111827',
-    textAlign: 'center',
   },
+  
+  periodTag: {
+    backgroundColor: '#22c55e',
+    borderRadius: 9999, // fully rounded
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  
+  periodText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  adId: {
+    color: '#22c55e',
+    fontWeight: '700',
+  },
+  companyInfo: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  
+  qrDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start', // keep everything inline on the left
+    marginBottom: 12,
+  },
+  
+  qrValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginRight: 8,
+  },
+  
+  verticalDivider: {
+    fontSize: 16,
+    color: '#9ca3af', // light gray divider
+    marginHorizontal: 8,
+  },
+  
+  distanceValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  
+  routeContainer: {
+    flexDirection: 'column',
+    marginTop: 10,
+  },
+  
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  
+  iconLineContainer: {
+    alignItems: 'center',
+    width: 30,
+  },
+  
+  dashedLineFull: {
+    width: 2,
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderLeftWidth: 2,
+    borderColor: '#9ca3af',
+    borderStyle: 'dashed',
+    marginVertical: 2,
+  },
+  
+  textContainer: {
+    flex: 1,
+    paddingBottom: 8,
+  },
+  
+  locationName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginLeft: 10,
+  },
+  
+  locationSubText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+    marginLeft: 10,
+  },
+  
+  locationPill: {
+    backgroundColor: '#e5e7eb',
+    borderRadius: 9999,
+    paddingVertical: 8,
+    paddingHorizontal: 40,
+    alignSelf: 'flex-start',
+    marginVertical: 6,
+  },
+  
+  locationPillText: {
+    color: '#3674B5',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3674B5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+
+  iconCircle2: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  
+  
+  
+
+  // Chart Controls
   chartControls: {
     marginHorizontal: 20,
     marginBottom: 20,
@@ -697,7 +1023,7 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   periodButtonTextActive: {
-    color: '#3b82f6',
+    color: '#3674B5',
   },
   metricSelector: {
     flexDirection: 'row',
@@ -710,9 +1036,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: '#f3f4f6',
     borderRadius: 20,
+    gap: 10,
   },
   metricButtonActive: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#3674B5',
   },
   metricButtonText: {
     fontSize: 12,
@@ -732,6 +1059,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    
   },
   chartTitle: {
     fontSize: 16,
@@ -739,6 +1067,7 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 16,
     textAlign: 'center',
+   
   },
   chart: {
     borderRadius: 16,
