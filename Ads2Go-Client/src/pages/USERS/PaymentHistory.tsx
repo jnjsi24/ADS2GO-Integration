@@ -150,8 +150,51 @@ const PaymentHistory: React.FC = () => {
     return status as Status;
   };
 
-  if (loading) return <p>Loading payments...</p>;
-  if (error) return <p>Error loading payments: {error.message}</p>;
+  if (loading)
+    return (
+      <div className="relative min-h-screen overflow-hidden">
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+          style={{
+            backgroundImage: "url('/image/bg2.jpg')",
+          }}
+        ></div>
+  
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+  
+        {/* Centered Content */}
+        <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
+          <h1 className="text-2xl text-gray-800 px-6 py-3">
+            Loading payments...
+          </h1>
+        </div>
+      </div>
+    );
+  
+  if (error)
+    return (
+      <div className="relative min-h-screen overflow-hidden">
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+          style={{
+            backgroundImage: "url('/image/bg2.jpg')",
+          }}
+        ></div>
+  
+        {/* Overlay */}
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+  
+        {/* Centered Content */}
+        <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
+          <h1 className="text-2xl font-medium text-red-700 px-6 py-3">
+            Error loading payment: {error.message}
+          </h1>
+        </div>
+      </div>
+    );
 
   const filteredPayments = payments.filter((item) => {
     const matchesSearchTerm =
@@ -228,7 +271,7 @@ const PaymentHistory: React.FC = () => {
       <div
         className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
         style={{
-          backgroundImage: "url('/image/bg.jpg')",
+          backgroundImage: "url('/image/bg3.jpg')",
         }}
       ></div>
 
@@ -324,7 +367,7 @@ const PaymentHistory: React.FC = () => {
               </span>
 
               {/* Footer for the button */}
-              <div className="p-1 bg-gray-100 hover:bg-gray-200 mt-auto transition-colors">
+              <div className="p-1 mt-auto transition-colors">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -332,7 +375,7 @@ const PaymentHistory: React.FC = () => {
                     setSelectedPaymentType(item.paymentType || "");
                     setIsModalOpen(true);
                   }}
-                  className="text-white text-xs font-medium bg-[#1B5087] hover:bg-[#0E2A47] rounded-lg px-4 py-2 flex justify-center items-center text-center w-full transition-all duration-300 shadow-md hover:shadow-lg"
+                  className="text-black text-xs font-medium px-4 py-3 flex justify-center items-center text-center w-full transition-all duration-300s"
                 >
                   View Details <span className="ml-1">›</span>
                 </button>

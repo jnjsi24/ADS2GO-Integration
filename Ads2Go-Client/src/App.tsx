@@ -50,6 +50,8 @@ import FAQManagement from './pages/ADMIN/FAQManagement';
 import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
 import UserAdsPage from './pages/ADMIN/UserAdsPage';
 import AdminNotifications from './pages/ADMIN/AdminNotifications';
+import AdminAccount from './pages/ADMIN/AdminAccount';
+
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
 import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
@@ -161,6 +163,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <NewsletterManagement />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/account"
+          element={
+            <ProtectedRoute>
+              <AdminAccount />
             </ProtectedRoute>
           }
         />

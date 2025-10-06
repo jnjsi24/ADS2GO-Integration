@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect,  MouseEvent } from 'react';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { Search, ChevronDown, Plus } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -291,8 +291,51 @@ const Advertisements: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPlan;
   });
 
-  if (loading) return <div className="min-h-screen bg-white pl-64 pr-5 pt-10">Loading ads...</div>;
-  if (error) return <div className="min-h-screen bg-white pl-64 pr-5 pt-10 text-red-600">Error loading ads: {error.message}</div>;
+  if (loading)
+  return (
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background Image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+        style={{
+          backgroundImage: "url('/image/bg2.jpg')",
+        }}
+      ></div>
+
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+      {/* Centered Content */}
+      <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
+        <h1 className="text-2xl text-gray-800 px-6 py-3">
+          Loading ads...
+        </h1>
+      </div>
+    </div>
+  );
+
+if (error)
+  return (
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Background Image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+        style={{
+          backgroundImage: "url('/image/bg2.jpg')",
+        }}
+      ></div>
+
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+      {/* Centered Content */}
+      <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
+        <h1 className="text-2xl font-medium text-red-700 px-6 py-3">
+          Error loading ads: {error.message}
+        </h1>
+      </div>
+    </div>
+  );
   const currentAds = filteredAds.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
 
@@ -383,7 +426,7 @@ const Advertisements: React.FC = () => {
     <div
       className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
       style={{
-        backgroundImage: "url('/image/bg.jpg')",
+        backgroundImage: "url('/image/bg2.jpg')",
       }}
     ></div>
 
@@ -475,10 +518,23 @@ const Advertisements: React.FC = () => {
       <div className="flex justify-end mb-6">
         <button
           onClick={() => navigate('/create-advertisement')}
-          className="py-3 bg-[#feb011] text-xs text-white rounded-lg w-40 hover:bg-[#FF9B45] hover:scale-105 transition-all duration-300 flex items-center justify-center gap-2"
+          className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white rounded-lg w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
+          onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
+            const button = e.currentTarget;
+            const rect = button.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            button.style.setProperty('--x', `${x}px`);
+            button.style.setProperty('--y', `${y}px`);
+          }}
         >
-          <Plus size={16} />
-          Add New Ads
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{
+            background: 'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.2) 0%, transparent 50%)',
+          }} />
+          <span className="relative z-10 flex items-center gap-2">
+            <Plus size={16} />
+            Add New Ads
+          </span>
         </button>
       </div>
       
@@ -548,7 +604,7 @@ const Advertisements: React.FC = () => {
 
                 {/* Campaign info fixed above button */}
                 {ad.startTime && ad.endTime ? (
-                  <p className="text-sm text-blue-600 mt-5 mb-2 font-medium">
+                  <p className="text-sm text-[#1B5087] mt-5 mb-2 font-medium">
                     Campaign: {formatDateRange(ad.startTime, ad.endTime)}
                   </p>
                 ) : (

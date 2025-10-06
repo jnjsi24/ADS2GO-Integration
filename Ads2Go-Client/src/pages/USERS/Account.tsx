@@ -165,16 +165,24 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
 
   return (
-<div
-      className="min-h-screen pl-72 pr-5 bg-cover bg-center bg-no-repeat flex items-center justify-center"
-      style={{
-        backgroundImage: "linear-gradient(135deg, #3674B5 0%, black 100%)",
-      }}
-    >      
+    <div className="relative min-h-screen overflow-hidden pl-72 pr-5 flex items-center justify-center">
+  {/* Background Image */}
+  <div
+    className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+    style={{
+      backgroundImage: "url('/image/bg2.jpg')",
+    }}
+  ></div>
+
+  {/* Overlay with gradient tint */}
+  <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+  {/* Main Content */}
+  <div className="relative z-10 w-full flex items-center justify-center min-h-screen bg-transparent">
     <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
-        {/* Left Section: Profile Card */}
+      {/* Left Section: Profile Card */}
         <div className="flex flex-col items-center justify-center p-8 bg-white/10 bg-opacity-70 sm:w-1/3">
-          <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">
+          <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-black text-3xl font-bold">
             {formData.profilePicture ? (
               <img
                 src={formData.profilePicture}
@@ -196,14 +204,14 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
                   className="hidden"
                   onChange={handleImageChange}
                 />
-                <Pencil size={24} className="text-white" />
+                <Pencil size={24} className="text-black" />
               </label>
             )}
         </div>
-          <h2 className="text-xl font-semibold text-white mb-1">
+          <h2 className="text-xl font-semibold text-black mb-1">
             {formData.firstName} {formData.lastName}
           </h2>
-          <p className="text-sm text-white/70 mb-6">{formData.email}</p>
+          <p className="text-sm text-black/70 mb-6">{formData.email}</p>
 
           {!isEditing ? (
             // Edit Button
@@ -272,30 +280,30 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
         {/* Right Section */}
         <div className="flex-grow p-8 space-y-8 relative">
-          <h3 className="text-lg font-bold text-white mb-6">Personal Information</h3>
+          <h3 className="text-lg font-bold text-black mb-6">Personal Information</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
             {/* First Name & Middle Name */}
             <div className="flex gap-4 col-span-2 sm:col-span-2">
               <div className="flex-1 space-y-1">
-                <label className="block text-sm font-medium text-white/80">First Name</label>
+                <label className="block text-sm font-medium text-black/80">First Name</label>
                 <input
                   type="text"
                   name="firstName"
                   value={formData.firstName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
               <div className="flex-1 space-y-1">
-                <label className="block text-sm font-medium text-white/80">Middle Name</label>
+                <label className="block text-sm font-medium text-black/80">Middle Name</label>
                 <input
                   type="text"
                   name="middleName"
                   value={formData.middleName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
             </div>
@@ -303,14 +311,14 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             {/* Last Name Full Width */}
             <div className="flex gap-4 col-span-2 sm:col-span-2">
               <div className="flex-1 space-y-1">
-                <label className="block text-sm font-medium text-white/80">Last Name</label>
+                <label className="block text-sm font-medium text-black/80">Last Name</label>
                 <input
                   type="text"
                   name="lastName"
                   value={formData.lastName}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
               {/* Empty space to align with Middle Name */}
@@ -320,49 +328,49 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             {/* Contact Number & Email */}
             <div className="flex gap-4 col-span-2 sm:col-span-2">
               <div className="flex-1 space-y-1">
-                <label className="block text-sm font-medium text-white/80">Contact Number</label>
+                <label className="block text-sm font-medium text-black/80">Contact Number</label>
                 <input
                   type="text"
                   name="contactNumber"
                   value={formData.contactNumber}
                   onChange={handleInputChange}
                   disabled={!isEditing}
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
               <div className="flex-1 space-y-1">
-                <label className="block text-sm font-medium text-white/80">Email Address</label>
+                <label className="block text-sm font-medium text-black/80">Email Address</label>
                 <input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
                   disabled
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
             </div>
 
             {/* House Address Full Width */}
             <div className="col-span-2 space-y-1">
-              <label className="block text-sm font-medium text-white/80">House Address</label>
+              <label className="block text-sm font-medium text-black/80">House Address</label>
               <input
                 type="text"
                 name="houseAddress"
                 value={formData.houseAddress}
                 onChange={handleInputChange}
                 disabled={!isEditing}
-                className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
               />
             </div>
           </div>
 
 
-          <h3 className="text-lg font-bold text-white mb-6">Company Information</h3>
+          <h3 className="text-lg font-bold text-black mb-6">Company Information</h3>
           <div className="space-y-6">
             {["companyName", "companyAddress"].map((field) => (
               <div key={field} className="space-y-1">
-                <label className="block text-sm font-medium text-white/80 capitalize">
+                <label className="block text-sm font-medium text-black/80 capitalize">
                   {field.replace(/([A-Z])/g, ' $1')}
                 </label>
                 <input
@@ -371,7 +379,7 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
                   value={(formData as any)[field]}
                   onChange={handleInputChange}
                   disabled={true} // Always read-only
-                  className="w-full border-b border-gray-300 focus:outline-none focus:border-blue-500 text-white py-1 bg-transparent"
+                  className="w-full border-b border-black/60 focus:outline-none focus:border-blue-500 text-black py-1 bg-transparent"
                 />
               </div>
             ))}
@@ -379,6 +387,7 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
         </div>
       </div>
+    </div>
     </div>
   );
 };
