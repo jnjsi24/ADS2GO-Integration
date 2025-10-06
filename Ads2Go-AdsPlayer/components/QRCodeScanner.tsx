@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, TextInput, Modal, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 interface ConnectionDetails {
   materialId: string;
@@ -16,6 +17,58 @@ interface QRCodeScannerProps {
 const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose }) => {
   const [qrCodeData, setQrCodeData] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  const handleBarCodeScanned = ({ data }: { data: string }) => {
+    if (scanned) return;
+    
+    setScanned(true);
+    
+    try {
+      const connectionDetails: ConnectionDetails = JSON.parse(data);
+      
+      // Validate the scanned data
+      if (!connectionDetails.materialId || !connectionDetails.slotNumber || !connectionDetails.carGroupId) {
+        Alert.alert(
+          'Invalid QR Code',
+          'The QR code data does not contain valid connection details.',
+          [
+            { text: 'Try Again', onPress: () => setScanned(false) },
+            { text: 'Manual Input', onPress: () => setShowManualInput(true) },
+            { text: 'Cancel', onPress: onClose }
+          ]
+        );
+        return;
+      }
+
+      // Show confirmation dialog
+      Alert.alert(
+        'QR Code Scanned Successfully!',
+        `Material ID: ${connectionDetails.materialId}\nSlot: ${connectionDetails.slotNumber}\nCar Group: ${connectionDetails.carGroupId}`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setScanned(false) },
+          { 
+            text: 'Use These Details', 
+            onPress: () => {
+              onScanSuccess(connectionDetails);
+              onClose();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert(
+        'Invalid QR Code',
+        'The QR code data could not be parsed. Please check the format and try again.',
+        [
+          { text: 'Try Again', onPress: () => setScanned(false) },
+          { text: 'Manual Input', onPress: () => setShowManualInput(true) },
+          { text: 'Cancel', onPress: onClose }
+        ]
+      );
+    }
+  };
 
   const handleQRCodeInput = () => {
     if (!qrCodeData.trim()) {
@@ -66,71 +119,158 @@ const QRCodeScanner: React.FC<QRCodeScannerProps> = ({ onScanSuccess, onClose })
     }
   };
 
+  // If permission is not determined yet
+  if (!permission) {
+    return (
+      <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerText}>QR Code Scanner</Text>
+            <View style={styles.placeholder} />
+          </View>
+          <View style={styles.content}>
+            <Text style={styles.title}>Loading...</Text>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // If permission is not granted
+  if (!permission.granted) {
+    return (
+      <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerText}>QR Code Scanner</Text>
+            <View style={styles.placeholder} />
+          </View>
+          <View style={styles.content}>
+            <View style={styles.qrIconContainer}>
+              <Ionicons name="camera" size={80} color="#3674B5" />
+            </View>
+            <Text style={styles.title}>Camera Permission Required</Text>
+            <Text style={styles.subtitle}>
+              Please grant camera permission to scan QR codes
+            </Text>
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={requestPermission}
+            >
+              <Ionicons name="camera" size={20} color="white" />
+              <Text style={styles.buttonText}>Grant Camera Permission</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowManualInput(true)}
+            >
+              <Text style={styles.cancelButtonText}>Manual Input Instead</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   return (
-    <Modal
-      visible={true}
-      animationType="slide"
-      presentationStyle="fullScreen"
-    >
+    <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Ionicons name="close" size={24} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerText}>QR Code Scanner</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity 
+            style={styles.manualButton} 
+            onPress={() => setShowManualInput(true)}
+          >
+            <Ionicons name="create" size={20} color="white" />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.content}>
-          <View style={styles.qrIconContainer}>
-            <Ionicons name="qr-code" size={80} color="#3674B5" />
-          </View>
-          
-          <Text style={styles.title}>Enter QR Code Data</Text>
-          <Text style={styles.subtitle}>
-            Paste the QR code data from the admin dashboard
-          </Text>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              value={qrCodeData}
-              onChangeText={setQrCodeData}
-              placeholder="Paste QR code JSON data here..."
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-              autoCapitalize="none"
-              autoCorrect={false}
+        {!showManualInput && (
+          <View style={styles.scannerContainer}>
+            <CameraView
+              style={styles.scanner}
+              facing="back"
+              onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr'],
+              }}
             />
+            <View style={styles.scannerOverlay}>
+              <View style={styles.scannerFrame} />
+              <Text style={styles.scannerText}>Position QR code within the frame</Text>
+              {scanned && (
+                <TouchableOpacity
+                  style={styles.scanAgainButton}
+                  onPress={() => setScanned(false)}
+                >
+                  <Text style={styles.scanAgainText}>Tap to Scan Again</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+        )}
 
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.scanButton}
-              onPress={handleQRCodeInput}
-            >
-              <Ionicons name="checkmark" size={20} color="white" />
-              <Text style={styles.buttonText}>Process QR Data</Text>
-            </TouchableOpacity>
+        {showManualInput && (
+          <View style={styles.content}>
+            <View style={styles.qrIconContainer}>
+              <Ionicons name="qr-code" size={80} color="#3674B5" />
+            </View>
+            
+            <Text style={styles.title}>Enter QR Code Data</Text>
+            <Text style={styles.subtitle}>
+              Paste the QR code data from the admin dashboard
+            </Text>
 
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={onClose}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={qrCodeData}
+                onChangeText={setQrCodeData}
+                placeholder='{"materialId":"...","slotNumber":1,"carGroupId":"..."}'
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.scanButton}
+                onPress={handleQRCodeInput}
+              >
+                <Ionicons name="checkmark" size={20} color="white" />
+                <Text style={styles.buttonText}>Process QR Data</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowManualInput(false)}
+              >
+                <Text style={styles.cancelButtonText}>Back to Scanner</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.helpContainer}>
+              <Text style={styles.helpTitle}>How to get QR code data:</Text>
+              <Text style={styles.helpText}>1. Open the admin dashboard</Text>
+              <Text style={styles.helpText}>2. Go to Materials → Find your material</Text>
+              <Text style={styles.helpText}>3. Click the QR code button</Text>
+              <Text style={styles.helpText}>4. Copy the JSON data</Text>
+              <Text style={styles.helpText}>5. Paste it here</Text>
+            </View>
           </View>
-
-          <View style={styles.helpContainer}>
-            <Text style={styles.helpTitle}>How to get QR code data:</Text>
-            <Text style={styles.helpText}>1. Open the admin dashboard</Text>
-            <Text style={styles.helpText}>2. Go to Materials → Find HEADDRESS material</Text>
-            <Text style={styles.helpText}>3. Click the QR code button</Text>
-            <Text style={styles.helpText}>4. Copy the JSON data from the modal</Text>
-            <Text style={styles.helpText}>5. Paste it here</Text>
-          </View>
-        </View>
+        )}
       </View>
     </Modal>
   );
@@ -159,6 +299,56 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 44,
+  },
+  manualButton: {
+    padding: 10,
+  },
+  scannerContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  scanner: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scannerFrame: {
+    width: 250,
+    height: 250,
+    borderWidth: 3,
+    borderColor: '#3674B5',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+  },
+  scannerText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 20,
+    textAlign: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  scanAgainButton: {
+    marginTop: 20,
+    backgroundColor: '#3674B5',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  scanAgainText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
@@ -204,7 +394,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     color: '#2c3e50',
     minHeight: 120,
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   buttonContainer: {
     width: '100%',
