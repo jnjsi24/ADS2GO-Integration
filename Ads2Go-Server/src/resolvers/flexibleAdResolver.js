@@ -269,7 +269,7 @@ module.exports = {
         title,
         description,
         website: website || null,
-        materialId: selectedMaterials[0]._id, // Primary device (first selected)
+        materialId: selectedMaterials.map(m => m._id), // All materials as array
         targetDevices: selectedMaterials.map(m => m._id), // All target devices
         planId: null, // No plan for flexible ads
         adType,

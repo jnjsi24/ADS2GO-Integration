@@ -136,11 +136,13 @@ class UserAnalyticsSyncJob {
               materialIds.push(materialId.toString());
             }
           });
-        } else if (ad.materialId) {
-          // Single-device ad: use primary material
-          if (!materialIds.includes(ad.materialId.toString())) {
-            materialIds.push(ad.materialId.toString());
-          }
+        } else if (ad.materialId && ad.materialId.length > 0) {
+          // Multi-device ad: use all materials from materialId array
+          ad.materialId.forEach(materialId => {
+            if (!materialIds.includes(materialId.toString())) {
+              materialIds.push(materialId.toString());
+            }
+          });
         }
       }
 

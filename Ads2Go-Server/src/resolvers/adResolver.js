@@ -175,7 +175,7 @@ const adResolvers = {
       const ad = new Ad({
         ...input,
         userId: user.id,
-        materialId: selectedMaterial._id, // Use the selected material
+        materialId: [selectedMaterial._id], // Use array with the selected material
         durationDays: plan.durationDays,
         numberOfDevices: plan.numberOfDevices,
         adLengthSeconds: actualVideoDuration, // Use detected video duration instead of plan duration
@@ -489,7 +489,7 @@ const adResolvers = {
       return '';
     },
     userId: async (parent) => await User.findById(parent.userId),
-    materialId: async (parent) => await Material.findById(parent.materialId),
+    materialId: async (parent) => await Material.find({ _id: { $in: parent.materialId } }),
     planId: async (parent) => await Plan.findById(parent.planId),
     // Ensure date fields are consistent ISO strings to avoid client-side Invalid Date
     startTime: (parent) => {
