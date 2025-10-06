@@ -52,11 +52,11 @@ class CronJobs {
       timezone: 'Asia/Manila'
     });
 
-    // Daily archive job - runs at 11:55 PM Philippines time (before reset)
+    // Daily archive job - runs at 11:55 PM Philippines time (archives previous day)
     const dailyArchiveTask = cron.schedule('55 23 * * *', async () => {
       console.log('⏰ Daily archive job triggered at 11:55 PM (Philippines time)');
       try {
-        // Use the new V2 archive job for array-based structure
+        // Archive the current day's data before reset
         await dailyArchiveJobV2.archiveDailyData();
         console.log('✅ Daily archive job (V2) completed successfully');
       } catch (error) {
@@ -75,6 +75,21 @@ class CronJobs {
         console.log('✅ Daily reset job completed successfully');
       } catch (error) {
         console.error('❌ Daily reset job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    // Daily fresh data archive job - runs at 12:05 AM to archive fresh reset data
+    const dailyFreshArchiveTask = cron.schedule('5 0 * * *', async () => {
+      console.log('⏰ Daily fresh data archive job triggered at 12:05 AM (Philippines time)');
+      try {
+        // Archive the fresh reset data for the new day
+        await dailyArchiveJobV2.archiveDailyData();
+        console.log('✅ Daily fresh data archive job completed successfully');
+      } catch (error) {
+        console.error('❌ Daily fresh data archive job failed:', error);
       }
     }, {
       scheduled: true,
@@ -103,6 +118,7 @@ class CronJobs {
     this.jobs.set('hourlyArchive', hourlyArchiveTask);
     this.jobs.set('dailyReset', dailyResetTask);
     this.jobs.set('dailyArchive', dailyArchiveTask);
+    this.jobs.set('dailyFreshArchive', dailyFreshArchiveTask);
     this.jobs.set('createMissingDeviceTracking', createMissingDeviceTrackingTask);
 
     // Hourly cleanup job - runs every hour to clean up old data
