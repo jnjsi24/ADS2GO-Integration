@@ -463,7 +463,7 @@ const AdDetailsPage: React.FC = () => {
       <button
         onClick={() => setShowDeleteModal(true)}
         disabled={deleteLoading || ad?.status !== 'PENDING'}
-        className="px-4 py-2 bg-red-200 text-red-600 font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
+        className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
       >
         {deleteLoading ? 'Deleting...' : 'Delete Ad'}
       </button>
