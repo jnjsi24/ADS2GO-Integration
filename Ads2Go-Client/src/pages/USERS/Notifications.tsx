@@ -17,6 +17,7 @@ const Notifications: React.FC = () => {
   } = useNotifications();
 
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
+  const [pos, setPos] = useState({ x: 50, y: 50 }); // for hover shine
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Selection helper functions
@@ -100,9 +101,22 @@ const Notifications: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white pl-72 pr-5 p-10">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="relative min-h-screen overflow-hidden">
+  {/* Background Image */}
+  <div
+    className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+    style={{
+      backgroundImage: "url('/image/bg2.jpg')",
+    }}
+  ></div>
+
+  {/* Overlay (subtle tint) */}
+  <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+  {/* Main Content */}
+  <div className="relative min-h-screen pl-72 pr-5 p-10">
+    {/* Header */}
+    <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-800">Notifications</h1>
           <p className="text-gray-500 text-sm">
@@ -167,10 +181,26 @@ const Notifications: React.FC = () => {
           )}
           <button
             onClick={refreshNotifications}
-            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const x = ((e.clientX - rect.left) / rect.width) * 100;
+              const y = ((e.clientY - rect.top) / rect.height) * 100;
+              setPos({ x, y });
+            }}
+            className="relative group w-28 inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-white transition-all duration-300 hover:scale-105 rounded-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
           >
-            <RefreshCw size={16} />
-            <span>Refresh</span>
+            <span className="inline-flex items-center gap-2">
+              <RefreshCw size={16} />
+              Edit
+            </span>
+
+            {/* Hover Light Effect */}
+            <span
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+              }}
+            />
           </button>
           {unreadCount > 0 && (
             <button
@@ -188,7 +218,7 @@ const Notifications: React.FC = () => {
       <div className="space-y-4">
         {notifications.length === 0 ? (
           <div className="text-center py-12">
-            <Bell size={48} className="mx-auto text-gray-300 mb-4" />
+            <Bell size={48} className="mx-auto text-black/70 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications yet</h3>
             <p className="text-gray-500">You'll see notifications here when your ads are approved, rejected, or when there are updates.</p>
           </div>
@@ -268,6 +298,7 @@ const Notifications: React.FC = () => {
           ))
         )}
       </div>
+    </div>
     </div>
   );
 };

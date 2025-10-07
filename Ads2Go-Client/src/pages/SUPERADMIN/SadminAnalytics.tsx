@@ -43,6 +43,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import { GET_SUPERADMIN_DASHBOARD_STATS, GET_USER_COUNTS_BY_PLAN } from '../../graphql/superadmin/queries/sadminNotificationQueries';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // Mock data for comprehensive analytics
 const userGrowthData = [
@@ -808,11 +809,7 @@ const SadminAnalytics: React.FC = () => {
   };
 
   if (statsLoading || planLoading) {
-    return (
-      <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

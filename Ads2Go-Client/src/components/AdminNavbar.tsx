@@ -157,12 +157,12 @@ const AdminSidebar: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute bottom-24 left-4 right-6 bg-white border border-white/30 rounded-lg shadow-lg w-52 overflow-hidden"
+                className="absolute bottom-24 left-2 bg-white border border-white/30 rounded-lg shadow-lg w-52 overflow-hidden"
               >
                 <div className="py-2">
                 <button
                   onClick={() => {
-                    navigate('/admin/account-settings');
+                    navigate('/admin/account');
                     closeDropup();
                   }}
                   className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
@@ -172,7 +172,7 @@ const AdminSidebar: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    navigate('/admin/notification-settings');
+                    navigate('/admin/SiteSettings');
                     closeDropup();
                   }}
                   className="w-full flex items-center space-x-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 transition-colors"
@@ -183,7 +183,7 @@ const AdminSidebar: React.FC = () => {
                   <hr className="my-1" />
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-colors"
+                    className="w-full flex items-center space-x-3 px-4 py-3 text-left text-red-600 hover:text-red-400 transition-colors"
                   >
                     <LogOut size={18} />
                     <span>Logout</span>

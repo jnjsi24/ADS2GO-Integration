@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Mail, CalendarClock, CalendarCheck, ChevronDown, Edit, AlertCircle, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 type ReportStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'all';
 type ReportType = 'BUG' | 'PAYMENT' | 'ACCOUNT' | 'CONTENT_VIOLATION' | 'FEATURE_REQUEST' | 'OTHER' | 'all';
@@ -241,17 +242,6 @@ const Reports: React.FC = () => {
     ? filters.reportType.charAt(0) + filters.reportType.slice(1).toLowerCase().replace('_', ' ')
     : 'All Types';
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3674B5] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading reports...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
@@ -393,38 +383,49 @@ const Reports: React.FC = () => {
       )}
 
       {/* Table Header */}
-      <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
-        <div className="col-span-3 flex items-center gap-2">
-          <input
-            type="checkbox"
-            className="form-checkbox"
-            checked={selectedReports.length === data?.getAllUserReports?.reports?.length && data?.getAllUserReports?.reports?.length > 0}
-            onChange={handleSelectAll}
-          />
-          <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
-            Title
-          </span>
-          <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-          </svg>
+      {loading ? (
+        <AdminLoader />
+      ) : error ? (
+        <div className="text-center py-10 text-red-500">Error: {error}</div>
+      ) : filteredReports.length === 0 ? (
+        <div className="text-center py-10 text-gray-500">
+          {searchTerm ? 'No reports match your search criteria' : 'No reports found'}
         </div>
-        <div className="col-span-2 flex items-center">User</div>
-        <div className="col-span-2 flex items-center">Category</div>
-        <div className="col-span-2 flex items-center gap-1">
-          <span>Status</span>
-          <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-          </svg>
+      ) : (
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+          <div className="col-span-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={selectedReports.length === data?.getAllUserReports?.reports?.length && data?.getAllUserReports?.reports?.length > 0}
+              onChange={handleSelectAll}
+            />
+            <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
+              Title
+            </span>
+            <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+            </svg>
+          </div>
+          <div className="col-span-2 flex items-center">User</div>
+          <div className="col-span-2 flex items-center">Category</div>
+          <div className="col-span-2 flex items-center gap-1">
+            <span>Status</span>
+            <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+            </svg>
+          </div>
+          <div className="col-span-2 flex items-center">Created</div>
+          <div className="col-span-1 flex items-center justify-center">Actions</div>
         </div>
-        <div className="col-span-2 flex items-center">Created</div>
-        <div className="col-span-1 flex items-center justify-center">Actions</div>
-      </div>
+      )}
 
       {/* Rows */}
-      {filteredReports.length === 0 ? (
-        <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
-      ) : (
-        paginatedReports.map((report) => (
+      <div className="flex-1">
+        {filteredReports.length === 0 ? (
+          <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
+        ) : (
+          paginatedReports.map((report) => (
           <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
             <div
               className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
@@ -634,7 +635,8 @@ const Reports: React.FC = () => {
 
           </div>
         ))
-      )}
+        )}
+      </div>
 
       {/* Pagination */}
       <div className="mt-auto flex justify-center py-4">

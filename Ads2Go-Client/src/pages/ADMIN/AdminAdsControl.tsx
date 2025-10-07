@@ -35,6 +35,7 @@ import ContentManagement from './tabs/manageAds/ContentManagement';
 import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 const AdminAdsControl: React.FC = () => {
   // Cache busting - force component reload
@@ -511,14 +512,7 @@ const AdminAdsControl: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading AdsPanel...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   if (error) {

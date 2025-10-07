@@ -356,23 +356,6 @@ export default function Home() {
             <Ionicons name="log-out-outline" size={24} color="#F44336" />
           </TouchableOpacity>
         </View>
-        
-        <View style={styles.statusCard}>
-          <View style={styles.statusItem}>
-            <Ionicons name="car-outline" size={20} color="#007AFF" />
-            <Text style={styles.statusText}>{driverProfile?.vehicleType}</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <Ionicons name="card-outline" size={20} color="#007AFF" />
-            <Text style={styles.statusText}>{driverProfile?.vehiclePlateNumber}</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <Ionicons name="checkmark-circle-outline" size={20} color={getStatusColor(driverProfile?.accountStatus || '')} />
-            <Text style={[styles.statusText, { color: getStatusColor(driverProfile?.accountStatus || '') }]}>
-              {driverProfile?.accountStatus}
-            </Text>
-          </View>
-        </View>
       </View>
 
       {/* Materials Section */}
@@ -597,7 +580,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: '#FFFFFF',
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
@@ -628,21 +611,14 @@ const styles = StyleSheet.create({
   logoutButton: {
     padding: 8,
   },
+
+  // Status Card
   statusCard: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
     padding: 16,
-  },
-  statusItem: {
-    alignItems: 'center',
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
   },
   section: {
     backgroundColor: '#FFFFFF',

@@ -5,6 +5,7 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import { LatLngTuple, Map, Icon } from 'leaflet';
 import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -518,14 +519,7 @@ const ScreenTracking: React.FC = () => {
   };
 
   if (loading || materialsLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (
