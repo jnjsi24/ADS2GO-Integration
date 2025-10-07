@@ -2246,9 +2246,12 @@ class UserAnalyticsService {
           userAdIds.includes(adScan.adId)
         );
 
+        // Calculate user-specific QR scan total from filtered data
+        const userQRScansTotal = filteredQrScansByAd.reduce((total, adScan) => total + (adScan.scanCount || 0), 0);
+
         currentDayStats = {
           totalAdPlays: currentData.totalAdPlays || 0,
-          totalQRScans: currentData.totalQRScans || 0,
+          totalQRScans: userQRScansTotal, // ✅ Now only includes QR scans for user's ads
           totalAdPlayTime: currentData.totalAdPlayTime || 0,
           totalAdImpressions: currentData.totalAdImpressions || 0,
           totalDistanceTraveled: currentData.totalDistanceTraveled || 0,
@@ -2284,8 +2287,19 @@ class UserAnalyticsService {
         historicalData.dailyData.forEach(dailyData => {
           const dailyDate = new Date(dailyData.date);
           if (dailyDate >= new Date(defaultStartDate) && dailyDate <= new Date(defaultEndDate)) {
+            // Filter daily data to only include user's ads
+            const filteredDailyAdPerformance = (dailyData.adPerformance || []).filter(adPerf => 
+              deviceAds.some(ad => ad._id.toString() === adPerf.adId)
+            );
+            const filteredDailyQrScansByAd = (dailyData.qrScansByAd || []).filter(adScan => 
+              deviceAds.some(ad => ad._id.toString() === adScan.adId)
+            );
+            
+            // Calculate user-specific totals from filtered data
+            const userDailyQRScans = filteredDailyQrScansByAd.reduce((total, adScan) => total + (adScan.scanCount || 0), 0);
+            
             historicalStats.totalAdPlays += dailyData.totalAdPlays || 0;
-            historicalStats.totalQRScans += dailyData.totalQRScans || 0;
+            historicalStats.totalQRScans += userDailyQRScans; // ✅ Now only includes QR scans for user's ads
             historicalStats.totalAdPlayTime += dailyData.totalAdPlayTime || 0;
             historicalStats.totalAdImpressions += dailyData.totalAdImpressions || 0;
             historicalStats.totalDistanceTraveled += dailyData.totalDistanceTraveled || 0;
@@ -2294,19 +2308,15 @@ class UserAnalyticsService {
             historicalStats.dailyData.push({
               date: dailyData.date,
               totalAdPlays: dailyData.totalAdPlays || 0,
-              totalQRScans: dailyData.totalQRScans || 0,
+              totalQRScans: userDailyQRScans, // ✅ Now only includes QR scans for user's ads
               totalAdPlayTime: dailyData.totalAdPlayTime || 0,
               totalAdImpressions: dailyData.totalAdImpressions || 0,
               totalDistanceTraveled: dailyData.totalDistanceTraveled || 0,
               totalHoursOnline: dailyData.totalHoursOnline || 0,
               isDisplaying: dailyData.isDisplaying,
               maintenanceMode: dailyData.maintenanceMode,
-              adPerformance: (dailyData.adPerformance || []).filter(adPerf => 
-                deviceAds.some(ad => ad._id.toString() === adPerf.adId)
-              ),
-              qrScansByAd: (dailyData.qrScansByAd || []).filter(adScan => 
-                deviceAds.some(ad => ad._id.toString() === adScan.adId)
-              )
+              adPerformance: filteredDailyAdPerformance,
+              qrScansByAd: filteredDailyQrScansByAd
             });
 
             // Aggregate ad performance
