@@ -85,15 +85,14 @@ const NewsletterManagement: React.FC = () => {
       const apiUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
       setError('');
       
-      // Use the same fallback approach as other services
-      const envApiUrl = process.env.REACT_APP_API_URL;
-      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
+      // Use environment variable or fallback to localhost for development
+      const actualServerUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       
       console.log('🔍 Newsletter API Configuration:', {
-        envUrl: envApiUrl,
+        envUrl: process.env.REACT_APP_API_URL,
         finalUrl: actualServerUrl,
-        usingFallback: true,
-        reason: 'Forced localhost due to connection issues'
+        usingFallback: !process.env.REACT_APP_API_URL,
+        reason: process.env.REACT_APP_API_URL ? 'Using environment variable' : 'Using localhost fallback'
       });
       
       const fullUrl = `${actualServerUrl}/api/newsletter/subscribers?t=${Date.now()}`;
@@ -273,7 +272,7 @@ const NewsletterManagement: React.FC = () => {
             <div className="text-sm text-red-600 mb-4">
               <strong>Possible causes:</strong>
               <ul className="list-disc list-inside mt-2">
-                <li>Backend server is not running on <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
+                <li>Backend server is not running or not accessible</li>
                 <li>Network connectivity issues</li>
                 <li>API endpoint not accessible</li>
                 <li>Database connection issues</li>
@@ -284,7 +283,7 @@ const NewsletterManagement: React.FC = () => {
               <strong>Troubleshooting steps:</strong>
               <ul className="list-disc list-inside mt-2">
                 <li>Check if the backend server is running: <code className="bg-gray-100 px-1 rounded">npm start</code> in the Ads2Go-Server directory</li>
-                <li>Verify the server is accessible at <code className="bg-gray-100 px-1 rounded">http://localhost:5000</code></li>
+                <li>Verify the server is accessible and the API URL is correctly configured</li>
                 <li>Check browser console for detailed error messages</li>
                 <li>Ensure the newsletter API endpoint exists on the backend</li>
               </ul>
