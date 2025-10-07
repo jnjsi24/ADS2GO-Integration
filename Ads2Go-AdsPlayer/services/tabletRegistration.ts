@@ -113,6 +113,7 @@ const getAPIBaseURL = () => {
   // Check environment variables first
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.API_URL;
   if (envUrl) {
+    console.log('🔧 Using environment API URL:', envUrl);
     return envUrl;
   }
 
@@ -120,25 +121,16 @@ const getAPIBaseURL = () => {
   const serverIp = process.env.EXPO_PUBLIC_SERVER_IP;
   const serverPort = process.env.EXPO_PUBLIC_SERVER_PORT;
   
-  if (!envUrl && (!serverIp || !serverPort)) {
-    console.error('❌ Missing required environment variables:');
-    console.error('   EXPO_PUBLIC_API_URL:', envUrl);
-    console.error('   EXPO_PUBLIC_SERVER_IP:', serverIp);
-    console.error('   EXPO_PUBLIC_SERVER_PORT:', serverPort);
-    console.error('   Please check your .env file');
-    throw new Error('Missing required environment variables for API configuration');
-  }
-  
-  const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
-
-  // Platform-specific defaults
-  if (typeof navigator !== 'undefined') {
-    // Browser environment
+  if (serverIp && serverPort) {
+    const serverUrl = `http://${serverIp}:${serverPort}`;
+    console.log('🔧 Using constructed server URL:', serverUrl);
     return serverUrl;
   }
 
-  // Default fallback
-  return serverUrl;
+  // Fallback to hosted server
+  const fallbackUrl = 'https://ads2go-server.onrender.com';
+  console.log('🔧 Using fallback hosted server URL:', fallbackUrl);
+  return fallbackUrl;
 };
 
 const API_BASE_URL = getAPIBaseURL();

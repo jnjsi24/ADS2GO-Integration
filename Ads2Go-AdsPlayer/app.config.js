@@ -1,5 +1,17 @@
 import 'dotenv/config';
 
+// Load environment variables with fallbacks
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+const SYNC_INTERVAL = process.env.EXPO_PUBLIC_SYNC_INTERVAL || '30000';
+const DEFAULT_AD_DURATION = process.env.EXPO_PUBLIC_DEFAULT_AD_DURATION || '15000';
+
+console.log('🔧 Environment Configuration:', {
+  API_URL,
+  SYNC_INTERVAL,
+  DEFAULT_AD_DURATION,
+  NODE_ENV: process.env.NODE_ENV
+});
+
 export default {
   expo: {
     name: "androidPlayereExpo",
@@ -50,11 +62,11 @@ export default {
       typedRoutes: true
     },
     extra: {
-      EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+      EXPO_PUBLIC_API_URL: API_URL,
       EXPO_PUBLIC_TABLET_ID: process.env.EXPO_PUBLIC_TABLET_ID,
       EXPO_PUBLIC_MATERIAL_ID: process.env.EXPO_PUBLIC_MATERIAL_ID,
-      EXPO_PUBLIC_SYNC_INTERVAL: process.env.EXPO_PUBLIC_SYNC_INTERVAL,
-      EXPO_PUBLIC_DEFAULT_AD_DURATION: process.env.EXPO_PUBLIC_DEFAULT_AD_DURATION,
+      EXPO_PUBLIC_SYNC_INTERVAL: SYNC_INTERVAL,
+      EXPO_PUBLIC_DEFAULT_AD_DURATION: DEFAULT_AD_DURATION,
     }
   }
 };

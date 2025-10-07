@@ -1,5 +1,5 @@
 // API Base URL - should match the one in tabletRegistration service
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
 
 export interface CompanyAd {
   id: string;

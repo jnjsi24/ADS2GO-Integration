@@ -314,7 +314,7 @@ class OfflineQueueService {
 
   // Send queued ad playback to server
   private async sendQueuedAdPlayback(item: QueuedAdPlayback) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
     
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {
@@ -353,7 +353,7 @@ class OfflineQueueService {
 
   // Send queued location data to server
   private async sendQueuedLocationData(item: QueuedLocationData) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
     
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/location-data`, {
@@ -388,7 +388,7 @@ class OfflineQueueService {
 
   // Send queued device status to server
   private async sendQueuedDeviceStatus(item: QueuedDeviceStatus) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
     
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/device-status`, {
@@ -420,7 +420,7 @@ class OfflineQueueService {
 
   // Send queued QR scan to server
   private async sendQueuedQRScan(item: QueuedQRScan) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
     
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/qr-scan`, {
