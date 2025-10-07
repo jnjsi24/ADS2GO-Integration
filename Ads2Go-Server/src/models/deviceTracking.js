@@ -376,12 +376,12 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  // Get today's date in local timezone (Philippines GMT+8)
+  const TimezoneUtils = require('../utils/timezoneUtils');
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const todayStr = `${year}-${month}-${day}`;
+  
+  // Get today's date in Philippines timezone
+  const todayInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
+  const todayStr = todayInPH.toISOString().split('T')[0];
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
@@ -400,9 +400,9 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
     // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
     
-    // Convert both dates to Philippines timezone (GMT+8) for comparison
-    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    // Use TimezoneUtils for consistent timezone handling
+    const recentDateInPH = TimezoneUtils.getStartOfDayInTimezone(recentDate, 'Asia/Manila');
+    const todayDateInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
     
     // Compare just the date parts (year, month, day) in Philippines timezone
     const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
@@ -481,20 +481,20 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  // Get today's date in local timezone (Philippines GMT+8)
+  const TimezoneUtils = require('../utils/timezoneUtils');
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const todayStr = `${year}-${month}-${day}`;
+  
+  // Get today's date in Philippines timezone
+  const todayInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
+  const todayStr = todayInPH.toISOString().split('T')[0];
   
   // First try to find today's record for this material
   let car = await this.findOne({ materialId, date: todayStr });
-  
+
   if (car) {
     return car;
   }
-  
+
   // If no record for today, find the most recent record for this material
   const recentCar = await this.findOne({ materialId }).sort({ date: -1 });
   
@@ -502,9 +502,9 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
     // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
     
-    // Convert both dates to Philippines timezone (GMT+8) for comparison
-    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
-    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    // Use TimezoneUtils for consistent timezone handling
+    const recentDateInPH = TimezoneUtils.getStartOfDayInTimezone(recentDate, 'Asia/Manila');
+    const todayDateInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
     
     // Compare just the date parts (year, month, day) in Philippines timezone
     const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
@@ -963,20 +963,27 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
 
 // Method to reset daily session (from ScreenTracking)
 DeviceTrackingSchema.methods.resetDailySession = function() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split('T')[0];
+  const TimezoneUtils = require('../utils/timezoneUtils');
+  const now = new Date();
+  
+  // Get device timezone from current location or default to Philippines
+  const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
+  
+  // Get start of today in device timezone
+  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
+  const todayStr = todayInDeviceTz.toISOString().split('T')[0];
   
   // Check if we need to reset (new day)
   const sessionDate = new Date(this.currentSession?.date);
   if (sessionDate) {
-    sessionDate.setHours(0, 0, 0, 0);
-    if (sessionDate.getTime() !== today.getTime()) {
+    const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(sessionDate, deviceTimezone);
+    
+    if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
       // Reset for new day
       this.date = todayStr; // Update the main date field
       
       this.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(todayInDeviceTz.getFullYear(), todayInDeviceTz.getMonth(), todayInDeviceTz.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
