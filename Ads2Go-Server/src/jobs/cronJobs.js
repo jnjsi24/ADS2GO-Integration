@@ -158,6 +158,10 @@ class CronJobs {
       console.log(`✅ Started cron job: ${name}`);
     });
 
+    // Start the hours update service
+    hoursUpdateService.start();
+    console.log('✅ Started hours update service');
+
     this.isRunning = true;
     console.log('🎉 All cron jobs started successfully');
   }
