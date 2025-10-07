@@ -11,3 +11,5 @@ services:
         value: production
       - key: PORT
         value: 8080
+      - key: REACT_APP_API_URL
+        value: https://ads2go-server.onrender.com

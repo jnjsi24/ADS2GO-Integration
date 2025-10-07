@@ -956,6 +956,12 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
   if (isOnline) {
     this.networkStatus.isOnline = true;
     this.networkStatus.lastSeen = new Date();
+    
+    // Ensure current session is active when device comes online
+    if (this.currentSession) {
+      this.currentSession.isActive = true;
+      this.currentSession.lastOnlineUpdate = new Date();
+    }
   }
   
   return this.save();
@@ -1104,9 +1110,32 @@ DeviceTrackingSchema.methods.addAlert = function(type, message, severity = 'MEDI
 DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   const now = new Date();
   
-  // Only calculate if device is online and has a current session
-  if (!this.isOnline || !this.currentSession || !this.currentSession.isActive) {
+  // Only calculate if device is online
+  if (!this.isOnline) {
     return this;
+  }
+  
+  // Ensure we have a current session
+  if (!this.currentSession) {
+    console.log(`⚠️ No current session for device ${this.deviceId}, creating one...`);
+    this.currentSession = {
+      date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+      startTime: now,
+      endTime: null,
+      totalHoursOnline: 0,
+      totalDistanceTraveled: 0,
+      isActive: true,
+      targetHours: 8,
+      complianceStatus: 'PENDING',
+      locationHistory: []
+    };
+  }
+  
+  // Ensure session is active
+  if (!this.currentSession.isActive) {
+    console.log(`⚠️ Session not active for device ${this.deviceId}, activating...`);
+    this.currentSession.isActive = true;
+    this.currentSession.lastOnlineUpdate = now;
   }
   
   // Check if this is a new day - if so, reset session
