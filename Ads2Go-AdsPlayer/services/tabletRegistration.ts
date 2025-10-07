@@ -129,7 +129,7 @@ const getAPIBaseURL = () => {
     throw new Error('Missing required environment variables for API configuration');
   }
   
-  const serverUrl = serverIp && serverPort ? `http://192.168.100.2:8081` : null;
+  const serverUrl = serverIp && serverPort ? `http://${serverIp}:${serverPort}` : null;
 
   // Platform-specific defaults
   if (typeof navigator !== 'undefined') {
