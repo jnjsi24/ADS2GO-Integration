@@ -44,6 +44,7 @@ interface AdminAuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
+  isLoggingOut: boolean;
   navigate: (path: string) => void;
   debugToken: (token: string) => Admin | null;
 }
