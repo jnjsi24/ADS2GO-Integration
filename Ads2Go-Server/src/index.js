@@ -31,7 +31,7 @@ const flexibleAdTypeDefs = require('./schema/flexibleAdSchema');
 const materialTrackingTypeDefs = require('./schema/materialTrackingSchema');
 const tabletTypeDefs = require('./schema/tabletSchema');
 const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
-const screenTrackingTypeDefs = require('./schema/screenTrackingSchema');
+// const screenTrackingTypeDefs = require('./schema/screenTrackingSchema'); // deprecated
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
@@ -51,7 +51,7 @@ const flexibleAdResolvers = require('./resolvers/flexibleAdResolver');
 const materialTrackingResolvers = require('./resolvers/materialTrackingResolver');
 const tabletResolvers = require('./resolvers/tabletResolver');
 const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
-const screenTrackingResolvers = require('./resolvers/screenTrackingResolver');
+// const screenTrackingResolvers = require('./resolvers/screenTrackingResolver'); // deprecated
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
@@ -132,7 +132,7 @@ const server = new ApolloServer({
       materialTrackingTypeDefs,
       tabletTypeDefs,
       adsDeploymentTypeDefs,
-      screenTrackingTypeDefs,
+      // screenTrackingTypeDefs, // deprecated
       notificationTypeDefs,
       userReportTypeDefs,
       faqTypeDefs,
@@ -161,10 +161,10 @@ const server = new ApolloServer({
     pricingConfigResolvers,
     flexibleAdResolvers,
     materialTrackingResolvers,
-      tabletResolvers,
-      adsDeploymentResolvers,
-      screenTrackingResolvers,
-      notificationResolvers,
+    tabletResolvers,
+    adsDeploymentResolvers,
+    // screenTrackingResolvers, // deprecated
+    notificationResolvers,
     userReportResolvers,
     faqResolvers,
     companyAdResolvers,

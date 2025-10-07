@@ -1,4 +1,4 @@
-const DeviceTracking = require('../models/deviceTracking');
+const ScreenTracking = require('../models/screenTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const { checkAuth } = require('../middleware/auth');
 
@@ -15,14 +15,14 @@ const resolvers = {
         const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
         
         // Mark devices as offline if lastSeen is older than 2 minutes
-        await DeviceTracking.updateMany(
+        await ScreenTracking.updateMany(
           { 
-            'slots.isOnline': true,
-            'slots.lastSeen': { $lt: twoMinutesAgo }
+            'devices.isOnline': true,
+            'devices.lastSeen': { $lt: twoMinutesAgo }
           },
           { 
             $set: { 
-              'slots.$.isOnline': false,
+              'devices.$.isOnline': false,
               isOnline: false
             } 
           },
@@ -34,23 +34,23 @@ const resolvers = {
           $and: [
             {
               $or: [
-                { 'slots.0': { $exists: true } }, // Has at least one device in slots array
+                { 'devices.0': { $exists: true } }, // Has at least one device in devices array
                 { 
-                  'slots.deviceId': { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
-                  'slots.deviceId': { $exists: true, $ne: null } // Has a real device ID
+                  deviceId: { $not: { $regex: /^TEMP-/ } }, // Not a temporary device ID
+                  deviceId: { $exists: true, $ne: null } // Has a real device ID
                 }
               ]
             },
             {
-              $nor: [{ 'slots.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
+              $nor: [{ 'devices.deviceId': { $regex: /^TEMP-/ } }] // Exclude if any device in array is temporary
             },
             {
               $or: [
-                { 'slots.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
-                { 'slots': { $exists: false } }, // Or no slots array (legacy records)
+                { 'devices.deviceId': { $regex: /TABLET/ } }, // Only include devices with TABLET in name
+                { 'devices': { $exists: false } }, // Or no devices array (legacy records)
                 { 
-                  'slots': { $size: 0 }, // Or empty slots array
-                  'slots.deviceId': { $regex: /TABLET/ } // But main deviceId has TABLET
+                  'devices': { $size: 0 }, // Or empty devices array
+                  deviceId: { $regex: /TABLET/ } // But main deviceId has TABLET
                 }
               ]
             }
@@ -62,28 +62,28 @@ const resolvers = {
           if (filters.materialId) query.materialId = filters.materialId;
           
           if (filters.status === 'online') {
-            query['slots.isOnline'] = true;
-            query['slots.lastSeen'] = { $gte: twoMinutesAgo };
+            query['devices.isOnline'] = true;
+            query['devices.lastSeen'] = { $gte: twoMinutesAgo };
             query.isOnline = true;
           }
           if (filters.status === 'offline') {
             query['$or'] = [
-              { 'slots.isOnline': false },
-              { 'slots.lastSeen': { $lt: twoMinutesAgo } },
-              { 'slots': { $exists: false } },
+              { 'devices.isOnline': false },
+              { 'devices.lastSeen': { $lt: twoMinutesAgo } },
+              { 'devices': { $exists: false } },
               { isOnline: false }
             ];
           }
-          if (filters.status === 'displaying') query['isDisplaying'] = true;
-          if (filters.status === 'maintenance') query['maintenanceMode'] = true;
+          if (filters.status === 'displaying') query['screenMetrics.isDisplaying'] = true;
+          if (filters.status === 'maintenance') query['screenMetrics.maintenanceMode'] = true;
         }
 
-        const screens = await DeviceTracking.find(query);
+        const screens = await ScreenTracking.find(query);
         
-        // Auto-sync root isOnline with slots array before processing
+        // Auto-sync root isOnline with devices array before processing
         for (const screen of screens) {
-          if (screen.slots && screen.slots.length > 0) {
-            const hasOnlineDevice = screen.slots.some(slot => slot.isOnline);
+          if (screen.devices && screen.devices.length > 0) {
+            const hasOnlineDevice = screen.devices.some(device => device.isOnline);
             if (screen.isOnline !== hasOnlineDevice) {
               screen.isOnline = hasOnlineDevice;
               await screen.save();
@@ -107,25 +107,25 @@ const resolvers = {
         const individualScreens = [];
         
         screens.forEach(screen => {
-          if (screen.slots && screen.slots.length > 0) {
+          if (screen.devices && screen.devices.length > 0) {
             // New multi-device structure: create individual records per device
-            screen.slots.forEach((slot, index) => {
+            screen.devices.forEach((device, index) => {
               // Use DeviceStatusManager as the source of truth for each device
-              let deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+              let deviceStatus = deviceStatusService.getDeviceStatus(device.deviceId);
               let isActuallyOnline = false;
               
               if (deviceStatus) {
                 isActuallyOnline = deviceStatus.isOnline;
               } else {
-                // Fallback to slot status
-                isActuallyOnline = slot.isOnline;
+                // Fallback to device status
+                isActuallyOnline = device.isOnline;
               }
               
               let displayStatus = 'OFFLINE';
               if (isActuallyOnline) {
-                if (screen.maintenanceMode) {
+                if (screen.screenMetrics?.maintenanceMode) {
                   displayStatus = 'MAINTENANCE';
-                } else if (screen.isDisplaying) {
+                } else if (screen.screenMetrics?.isDisplaying) {
                   displayStatus = 'PLAYING';
                 } else {
                   displayStatus = 'ONLINE';
@@ -134,7 +134,7 @@ const resolvers = {
               
               // Parse location data if it's a string
               let locationData = null;
-              const deviceLocation = screen.currentLocation;
+              const deviceLocation = device.currentLocation || screen.currentLocation;
               if (deviceLocation) {
                 if (typeof deviceLocation === 'string') {
                   try {
@@ -149,56 +149,124 @@ const resolvers = {
 
               // Parse daily ad stats if it's a string
               let dailyAdStats = null;
-              // DeviceTracking doesn't have screenMetrics, use adPerformance instead
-              if (screen.adPerformance && screen.adPerformance.length > 0) {
-                const totalAdsPlayed = screen.adPerformance.reduce((sum, ad) => sum + ad.playCount, 0);
-                const totalDisplayTime = screen.adPerformance.reduce((sum, ad) => sum + ad.totalViewTime, 0);
-                const uniqueAdsPlayed = screen.adPerformance.length;
-                const averageAdDuration = totalAdsPlayed > 0 ? totalDisplayTime / totalAdsPlayed : 0;
-                const adCompletionRate = totalAdsPlayed > 0 ? screen.adPerformance.reduce((sum, ad) => sum + ad.completionRate, 0) / screen.adPerformance.length : 0;
-                
-                dailyAdStats = {
-                  totalAdsPlayed,
-                  totalDisplayTime,
-                  uniqueAdsPlayed,
-                  averageAdDuration,
-                  adCompletionRate
-                };
-              } else {
-                dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+              if (screen.screenMetrics?.dailyAdStats) {
+                if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+                  try {
+                    dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+                  } catch (e) {
+                    dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+                  }
+                } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+                  dailyAdStats = screen.screenMetrics.dailyAdStats;
+                }
               }
 
               individualScreens.push({
-                deviceId: slot.deviceId,
-                displayId: `${screen.materialId}-SLOT-${slot.slotNumber || (index + 1)}`, // Unique identifier for frontend
+                deviceId: device.deviceId,
+                displayId: `${screen.materialId}-SLOT-${device.slotNumber || (index + 1)}`, // Unique identifier for frontend
                 materialId: screen.materialId,
                 screenType: screen.screenType,
                 carGroupId: screen.carGroupId,
-                slotNumber: slot.slotNumber,
+                slotNumber: device.slotNumber,
                 isOnline: isActuallyOnline,
                 currentLocation: locationData,
-                lastSeen: slot.lastSeen,
-                currentHours: screen.totalHoursOnline || 0,
-                hoursRemaining: Math.max(0, 8 - (screen.totalHoursOnline || 0)), // 8 hours target
-                totalDistanceToday: screen.totalDistanceTraveled || 0,
+                lastSeen: device.lastSeen,
+                currentHours: device.totalHoursOnline || 0,
+                hoursRemaining: Math.max(0, 8 - (device.totalHoursOnline || 0)), // 8 hours target
+                totalDistanceToday: device.totalDistanceTraveled || 0,
                 displayStatus: displayStatus,
                 screenMetrics: {
-                  isDisplaying: screen.isDisplaying || false,
-                  brightness: slot.brightness || 50,
-                  volume: slot.volume || 50,
-                  adPlayCount: screen.totalAdPlays || 0,
-                  maintenanceMode: screen.maintenanceMode || false,
-                  currentAd: screen.currentAd || null,
+                  isDisplaying: screen.screenMetrics?.isDisplaying || false,
+                  brightness: screen.screenMetrics?.brightness || 50,
+                  volume: screen.screenMetrics?.volume || 50,
+                  adPlayCount: screen.screenMetrics?.adPlayCount || 0,
+                  maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
+                  currentAd: screen.screenMetrics?.currentAd || null,
                   dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
-                  adPerformance: screen.adPerformance || [],
-                  displayHours: screen.totalHoursOnline || 0,
-                  lastAdPlayed: screen.adPerformance && screen.adPerformance.length > 0 ? screen.adPerformance[screen.adPerformance.length - 1].lastPlayed : null
+                  adPerformance: screen.screenMetrics?.adPerformance || [],
+                  displayHours: device.totalHoursOnline || 0,
+                  lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
                 }
               });
             });
           } else {
-            // No slots - skip this screen as DeviceTracking requires slots
-            console.log(`⚠️ Skipping screen ${screen.materialId} - no slots found`);
+            // Legacy single-device structure: use root-level fields for backward compatibility
+            let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
+            let isActuallyOnline = false;
+            
+            if (deviceStatus) {
+              isActuallyOnline = deviceStatus.isOnline;
+            } else {
+              // Fallback to database status
+              isActuallyOnline = screen.isOnline;
+            }
+            
+            let displayStatus = 'OFFLINE';
+            if (isActuallyOnline) {
+              if (screen.screenMetrics?.maintenanceMode) {
+                displayStatus = 'MAINTENANCE';
+              } else if (screen.screenMetrics?.isDisplaying) {
+                displayStatus = 'PLAYING';
+              } else {
+                displayStatus = 'ONLINE';
+              }
+            }
+            
+            // Parse location data if it's a string
+            let locationData = null;
+            if (screen.currentLocation) {
+              if (typeof screen.currentLocation === 'string') {
+                try {
+                  locationData = JSON.parse(screen.currentLocation);
+                } catch (e) {
+                  locationData = { address: screen.currentLocation };
+                }
+              } else if (typeof screen.currentLocation === 'object') {
+                locationData = screen.currentLocation;
+              }
+            }
+
+            // Parse daily ad stats if it's a string
+            let dailyAdStats = null;
+            if (screen.screenMetrics?.dailyAdStats) {
+              if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+                try {
+                  dailyAdStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+                } catch (e) {
+                  dailyAdStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+                }
+              } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+                dailyAdStats = screen.screenMetrics.dailyAdStats;
+              }
+            }
+
+            individualScreens.push({
+              deviceId: screen.deviceId,
+              displayId: `${screen.materialId}-SLOT-${screen.slotNumber || 1}`,
+              materialId: screen.materialId,
+              screenType: screen.screenType,
+              carGroupId: screen.carGroupId,
+              slotNumber: screen.slotNumber,
+              isOnline: isActuallyOnline,
+              currentLocation: locationData,
+              lastSeen: screen.lastSeen,
+              currentHours: screen.currentHoursToday || 0,
+              hoursRemaining: screen.hoursRemaining || 0,
+              totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
+              displayStatus: displayStatus,
+              screenMetrics: {
+                isDisplaying: screen.screenMetrics?.isDisplaying || false,
+                brightness: screen.screenMetrics?.brightness || 50,
+                volume: screen.screenMetrics?.volume || 50,
+                adPlayCount: screen.screenMetrics?.adPlayCount || 0,
+                maintenanceMode: screen.screenMetrics?.maintenanceMode || false,
+                currentAd: screen.screenMetrics?.currentAd || null,
+                dailyAdStats: dailyAdStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
+                adPerformance: screen.screenMetrics?.adPerformance || [],
+                displayHours: screen.screenMetrics?.displayHours || 0,
+                lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null
+              }
+            });
           }
         });
         
@@ -223,42 +291,37 @@ const resolvers = {
       }
 
       try {
-        const screen = await DeviceTracking.findOne({ 'slots.deviceId': deviceId });
+        const screen = await ScreenTracking.findOne({ deviceId });
         if (!screen) {
           throw new Error('Screen not found');
         }
 
-        const slot = screen.slots.find(s => s.deviceId === deviceId);
-        if (!slot) {
-          throw new Error('Device slot not found');
-        }
-
         const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
-        const isActuallyOnline = deviceStatus ? deviceStatus.isOnline : slot.isOnline;
+        const isActuallyOnline = deviceStatus ? deviceStatus.isOnline : screen.isOnline;
 
         return {
-          deviceId: slot.deviceId,
+          deviceId: screen.deviceId,
           materialId: screen.materialId,
           screenType: screen.screenType,
           carGroupId: screen.carGroupId,
-          slotNumber: slot.slotNumber,
+          slotNumber: screen.slotNumber,
           isOnline: isActuallyOnline,
-          currentLocation: screen.currentLocation,
-          lastSeen: slot.lastSeen,
-          currentHours: screen.totalHoursOnline || 0,
-          hoursRemaining: Math.max(0, 8 - (screen.totalHoursOnline || 0)),
-          totalDistanceToday: screen.totalDistanceTraveled || 0,
+          currentLocation: screen.getFormattedLocation ? screen.getFormattedLocation() : screen.currentLocation,
+          lastSeen: screen.lastSeen,
+          currentHours: screen.currentHoursToday || 0,
+          hoursRemaining: screen.hoursRemaining || 0,
+          totalDistanceToday: screen.currentSession?.totalDistanceTraveled || 0,
           displayStatus: isActuallyOnline ? 'ONLINE' : 'OFFLINE',
-          screenMetrics: {
-            isDisplaying: screen.isDisplaying || false,
-            brightness: slot.brightness || 50,
-            volume: slot.volume || 50,
-            adPlayCount: screen.totalAdPlays || 0,
-            maintenanceMode: screen.maintenanceMode || false,
-            currentAd: screen.currentAd || null,
-            dailyAdStats: {},
-            adPerformance: screen.adPerformance || [],
-            displayHours: screen.totalHoursOnline || 0,
+          screenMetrics: screen.screenMetrics || {
+            isDisplaying: false,
+            brightness: 50,
+            volume: 50,
+            adPlayCount: 0,
+            maintenanceMode: false,
+            currentAd: null,
+            dailyAdStats: "{}",
+            adPerformance: [],
+            displayHours: 0,
             lastAdPlayed: null
           }
         };
@@ -273,114 +336,18 @@ const resolvers = {
         throw new Error('Not authorized');
       }
 
-      try {
-        const DeviceTracking = require('../models/deviceTracking');
-        const Tablet = require('../models/Tablet');
-        const targetDate = date ? new Date(date) : new Date();
-
-        // First, get all registered devices from tablet system
-        const registeredDevices = new Map();
-        
-        const tablets = await Tablet.find({});
-        tablets.forEach(tablet => {
-          tablet.tablets.forEach(tabletDevice => {
-            if (tabletDevice.deviceId) {
-              registeredDevices.set(tabletDevice.deviceId, {
-                materialId: tablet.materialId,
-                carGroupId: tablet.carGroupId,
-                slotNumber: tabletDevice.tabletNumber,
-                status: tabletDevice.status,
-                lastSeen: tabletDevice.lastSeen
-              });
-            }
-          });
-        });
-        
-        console.log('📱 Registered devices from tablet system:', registeredDevices.size);
-
-        // Get all device tracking records for registered devices
-        const registeredDeviceIds = Array.from(registeredDevices.keys());
-        const registeredMaterialIds = Array.from(new Set(Array.from(registeredDevices.values()).map(info => info.materialId)));
-        
-        // Query by materialId (new system) and deviceId in slots
-        const allDevices = await DeviceTracking.find({ 
-          $or: [
-            { 'slots.deviceId': { $in: registeredDeviceIds } },
-            { materialId: { $in: registeredMaterialIds } }
-          ]
-        });
-        
-        console.log(`📊 Found ${allDevices.length} device tracking records`);
-
-        // Initialize screens array to collect individual device records
-        const individualScreens = [];
-        const seenDisplayIds = new Set();
-        let totalOnlineScreens = 0;
-        let totalCompliantScreens = 0;
-        let totalHours = 0;
-        let totalDistance = 0;
-
-        // Process each device tracking record
-        allDevices.forEach(device => {
-          // Process each slot in the device
-          if (device.slots && device.slots.length > 0) {
-            device.slots.forEach(slot => {
-              if (slot.deviceId && !seenDisplayIds.has(slot.deviceId)) {
-                seenDisplayIds.add(slot.deviceId);
-                
-                const isOnline = slot.isOnline || false;
-                const isCompliant = device.currentSession?.complianceStatus === 'COMPLIANT';
-                
-                if (isOnline) totalOnlineScreens++;
-                if (isCompliant) totalCompliantScreens++;
-                
-                totalHours += device.totalHoursOnline || 0;
-                totalDistance += device.totalDistanceTraveled || 0;
-
-                individualScreens.push({
-                  deviceId: slot.deviceId,
-                  materialId: device.materialId,
-                  screenType: device.screenType || 'HEADDRESS',
-                  carGroupId: device.carGroupId,
-                  slotNumber: slot.slotNumber,
-                  isOnline,
-                  currentLocation: device.currentLocation,
-                  lastSeen: slot.lastSeen || device.lastSeen,
-                  currentHours: device.currentHoursToday || 0,
-                  hoursRemaining: device.hoursRemaining || 0,
-                  isCompliant,
-                  totalDistanceToday: device.currentSession?.totalDistanceTraveled || 0,
-                  displayStatus: isOnline ? 'ONLINE' : 'OFFLINE',
-                  screenMetrics: {
-                    isDisplaying: device.isDisplaying || false,
-                    brightness: slot.brightness || 100,
-                    volume: slot.volume || 50,
-                    adPlayCount: device.totalAdPlays || 0,
-                    maintenanceMode: device.maintenanceMode || false,
-                    currentAd: device.currentAd,
-                    displayHours: device.totalHoursOnline || 0
-                  }
-                });
-              }
-            });
-          }
-        });
-
-        return {
-          date: targetDate.toISOString().split('T')[0],
-          totalTablets: individualScreens.length,
-          onlineTablets: totalOnlineScreens,
-          compliantTablets: totalCompliantScreens,
-          nonCompliantTablets: individualScreens.length - totalCompliantScreens,
-          averageHours: individualScreens.length > 0 ? Math.round((totalHours / individualScreens.length) * 100) / 100 : 0,
-          averageDistance: individualScreens.length > 0 ? Math.round((totalDistance / individualScreens.length) * 100) / 100 : 0,
-          screens: individualScreens
-        };
-
-      } catch (error) {
-        console.error('Error getting compliance report:', error);
-        throw new Error('Failed to get compliance report: ' + error.message);
-      }
+      // For now, return a basic compliance report
+      // This would need to be implemented based on your business logic
+      return {
+        date: date || new Date().toISOString().split('T')[0],
+        totalTablets: 0,
+        onlineTablets: 0,
+        compliantTablets: 0,
+        nonCompliantTablets: 0,
+        averageHours: 0,
+        averageDistance: 0,
+        screens: []
+      };
     },
 
     getAdAnalytics: async (_, { date, materialId }, { admin, superAdmin }) => {
@@ -390,44 +357,38 @@ const resolvers = {
 
       try {
         // Get all screens for analytics
-        const screens = await DeviceTracking.find({});
+        const screens = await ScreenTracking.find({});
         
         const totalDevices = screens.length;
         const onlineDevices = screens.filter(s => s.isOnline).length;
-        const totalAdsPlayed = screens.reduce((sum, s) => sum + (s.totalAdPlays || 0), 0);
-        const totalDisplayHours = screens.reduce((sum, s) => sum + (s.totalHoursOnline || 0), 0);
+        const totalAdsPlayed = screens.reduce((sum, s) => sum + (s.screenMetrics?.adPlayCount || 0), 0);
+        const totalDisplayHours = screens.reduce((sum, s) => sum + (s.screenMetrics?.displayHours || 0), 0);
         
         const devices = screens.map(screen => {
-          // Calculate daily stats from adPerformance
+          // Parse daily ad stats if it's a string
           let dailyStats = null;
-          if (screen.adPerformance && screen.adPerformance.length > 0) {
-            const totalAdsPlayed = screen.adPerformance.reduce((sum, ad) => sum + ad.playCount, 0);
-            const totalDisplayTime = screen.adPerformance.reduce((sum, ad) => sum + ad.totalViewTime, 0);
-            const uniqueAdsPlayed = screen.adPerformance.length;
-            const averageAdDuration = totalAdsPlayed > 0 ? totalDisplayTime / totalAdsPlayed : 0;
-            const adCompletionRate = totalAdsPlayed > 0 ? screen.adPerformance.reduce((sum, ad) => sum + ad.completionRate, 0) / screen.adPerformance.length : 0;
-            
-            dailyStats = {
-              totalAdsPlayed,
-              totalDisplayTime,
-              uniqueAdsPlayed,
-              averageAdDuration,
-              adCompletionRate
-            };
-          } else {
-            dailyStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+          if (screen.screenMetrics?.dailyAdStats) {
+            if (typeof screen.screenMetrics.dailyAdStats === 'string') {
+              try {
+                dailyStats = JSON.parse(screen.screenMetrics.dailyAdStats);
+              } catch (e) {
+                dailyStats = { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 };
+              }
+            } else if (typeof screen.screenMetrics.dailyAdStats === 'object') {
+              dailyStats = screen.screenMetrics.dailyAdStats;
+            }
           }
 
           return {
-            deviceId: screen.slots && screen.slots.length > 0 ? screen.slots[0].deviceId : null,
+            deviceId: screen.deviceId,
             materialId: screen.materialId,
             screenType: screen.screenType,
-            currentAd: screen.currentAd ? JSON.stringify(screen.currentAd) : null,
-            dailyStats: dailyStats,
-            totalAdsPlayed: screen.totalAdPlays || 0,
-            displayHours: screen.totalHoursOnline || 0,
-            adPerformance: screen.adPerformance || [],
-            lastAdPlayed: screen.adPerformance && screen.adPerformance.length > 0 ? screen.adPerformance[screen.adPerformance.length - 1].lastPlayed : null,
+            currentAd: screen.screenMetrics?.currentAd ? JSON.stringify(screen.screenMetrics.currentAd) : null,
+            dailyStats: dailyStats || { totalAdsPlayed: 0, totalDisplayTime: 0, uniqueAdsPlayed: 0, averageAdDuration: 0, adCompletionRate: 0 },
+            totalAdsPlayed: screen.screenMetrics?.adPlayCount || 0,
+            displayHours: screen.screenMetrics?.displayHours || 0,
+            adPerformance: screen.screenMetrics?.adPerformance || [],
+            lastAdPlayed: screen.screenMetrics?.lastAdPlayed || null,
             isOnline: screen.isOnline,
             lastSeen: screen.lastSeen
           };
@@ -456,30 +417,18 @@ const resolvers = {
       }
 
       try {
-        const screens = await DeviceTracking.find({});
-        const tablets = [];
-        
-        screens.forEach(screen => {
-          if (screen.slots && screen.slots.length > 0) {
-            screen.slots.forEach(slot => {
-              if (slot.deviceId) {
-                tablets.push({
-                  id: `${screen._id}-${slot.slotNumber}`,
-                  deviceId: slot.deviceId,
-                  materialId: screen.materialId,
-                  screenType: screen.screenType,
-                  status: slot.isOnline ? 'online' : 'offline',
-                  lastSeen: slot.lastSeen,
-                  location: screen.currentLocation,
-                  batteryLevel: 100, // Placeholder
-                  isOnline: slot.isOnline
-                });
-              }
-            });
-          }
-        });
-        
-        return tablets;
+        const screens = await ScreenTracking.find({});
+        return screens.map(screen => ({
+          id: screen._id,
+          deviceId: screen.deviceId,
+          materialId: screen.materialId,
+          screenType: screen.screenType,
+          status: screen.isOnline ? 'online' : 'offline',
+          lastSeen: screen.lastSeen,
+          location: screen.getFormattedLocation ? screen.getFormattedLocation() : screen.currentLocation,
+          batteryLevel: 100, // Placeholder
+          isOnline: screen.isOnline
+        }));
       } catch (error) {
         console.error('Error in getTabletsList:', error);
         return [];
@@ -525,31 +474,18 @@ const resolvers = {
       }
 
       try {
-        const screen = await DeviceTracking.findOne({ 'slots.deviceId': deviceId });
+        const screen = await ScreenTracking.findOne({ deviceId });
         if (!screen) {
           throw new Error('Device not found');
         }
 
-        const slot = screen.slots.find(s => s.deviceId === deviceId);
-        if (!slot) {
-          throw new Error('Device slot not found');
-        }
-
         return {
-          deviceId: slot.deviceId,
+          deviceId: screen.deviceId,
           date: date || new Date().toISOString().split('T')[0],
-          totalAdsPlayed: screen.totalAdPlays || 0,
-          totalDisplayHours: screen.totalHoursOnline || 0,
-          adPerformance: screen.adPerformance || [],
-          dailyStats: JSON.stringify({
-            totalAdsPlayed: screen.totalAdPlays || 0,
-            totalDisplayTime: screen.totalAdPlayTime || 0,
-            uniqueAdsPlayed: screen.adPerformance ? screen.adPerformance.length : 0,
-            averageAdDuration: screen.adPerformance && screen.adPerformance.length > 0 ? 
-              screen.adPerformance.reduce((sum, ad) => sum + ad.averageViewTime, 0) / screen.adPerformance.length : 0,
-            adCompletionRate: screen.adPerformance && screen.adPerformance.length > 0 ? 
-              screen.adPerformance.reduce((sum, ad) => sum + ad.completionRate, 0) / screen.adPerformance.length : 0
-          })
+          totalAdsPlayed: screen.screenMetrics?.adPlayCount || 0,
+          totalDisplayHours: screen.screenMetrics?.displayHours || 0,
+          adPerformance: screen.screenMetrics?.adPerformance || [],
+          dailyStats: screen.screenMetrics?.dailyAdStats || "{}"
         };
       } catch (error) {
         console.error('Error in getDeviceAdAnalytics:', error);

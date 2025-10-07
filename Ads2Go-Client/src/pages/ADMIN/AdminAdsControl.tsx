@@ -351,31 +351,31 @@ const AdminAdsControl: React.FC = () => {
       setActionLoading(action);
       let result;
       
-      // Use REST API service for bulk actions
+      // Use GraphQL mutations for bulk actions
       switch (action) {
         case 'sync':
-          result = await apiService.syncAllScreens();
+          result = await graphQLService.syncAllScreens();
           break;
         case 'play':
-          result = await apiService.playAllScreens();
+          result = await graphQLService.playAllScreens();
           break;
         case 'pause':
-          result = await apiService.pauseAllScreens();
+          result = await graphQLService.pauseAllScreens();
           break;
         case 'stop':
-          result = await apiService.stopAllScreens();
+          result = await graphQLService.stopAllScreens();
           break;
         case 'restart':
-          result = await apiService.restartAllScreens();
+          result = await graphQLService.restartAllScreens();
           break;
         case 'emergency':
-          result = await apiService.emergencyStopAll();
+          result = await graphQLService.emergencyStopAll();
           break;
         case 'lockdown':
-          result = await apiService.lockdownAllScreens();
+          result = await graphQLService.lockdownAllScreens();
           break;
         case 'unlock':
-          result = await apiService.unlockAllScreens();
+          result = await graphQLService.unlockAllScreens();
           break;
         default:
           throw new Error('Unknown action');
@@ -399,22 +399,22 @@ const AdminAdsControl: React.FC = () => {
       
       switch (action) {
         case 'metrics':
-          result = await apiService.updateScreenMetrics(deviceId, value);
+          result = await graphQLService.updateScreenMetrics(deviceId, value);
           break;
         case 'start-session':
-          result = await apiService.startScreenSession(deviceId);
+          result = await graphQLService.startScreenSession(deviceId);
           break;
         case 'end-session':
-          result = await apiService.endScreenSession(deviceId);
+          result = await graphQLService.endScreenSession(deviceId);
           break;
         case 'track-ad':
-          result = await apiService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
+          result = await graphQLService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
           break;
         case 'end-ad':
-          result = await apiService.endAdPlayback(deviceId);
+          result = await graphQLService.endAdPlayback(deviceId);
           break;
         case 'driver-activity':
-          result = await apiService.updateDriverActivity(deviceId, value);
+          result = await graphQLService.updateDriverActivity(deviceId, value);
           break;
         default:
           throw new Error('Unknown action');
