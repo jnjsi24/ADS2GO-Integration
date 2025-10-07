@@ -1208,33 +1208,38 @@ class UserAnalyticsService {
 
       // Get ad performance breakdown
       const adPerformanceMap = {};
+      const userAdIds = userAds.map(ad => ad._id.toString());
+      
       filteredDailyData.forEach(day => {
         if (day.adPerformance && day.adPerformance.length > 0) {
           day.adPerformance.forEach(ad => {
-            if (!adPerformanceMap[ad.adId]) {
-              adPerformanceMap[ad.adId] = {
-                adId: ad.adId,
-                adTitle: ad.adTitle,
-                totalPlays: 0,
-                totalViewTime: 0,
-                totalImpressions: 0,
-                averageCompletionRate: 0,
-                firstPlayed: null,
-                lastPlayed: null,
-                playCount: 0
-              };
-            }
-            
-            adPerformanceMap[ad.adId].totalPlays += ad.playCount || 0;
-            adPerformanceMap[ad.adId].totalViewTime += ad.totalViewTime || 0;
-            adPerformanceMap[ad.adId].totalImpressions += ad.impressions || 0;
-            adPerformanceMap[ad.adId].playCount += ad.playCount || 0;
-            
-            if (!adPerformanceMap[ad.adId].firstPlayed || (ad.firstPlayed && new Date(ad.firstPlayed) < new Date(adPerformanceMap[ad.adId].firstPlayed))) {
-              adPerformanceMap[ad.adId].firstPlayed = ad.firstPlayed;
-            }
-            if (!adPerformanceMap[ad.adId].lastPlayed || (ad.lastPlayed && new Date(ad.lastPlayed) > new Date(adPerformanceMap[ad.adId].lastPlayed))) {
-              adPerformanceMap[ad.adId].lastPlayed = ad.lastPlayed;
+            // Only process ads that belong to the user
+            if (userAdIds.includes(ad.adId)) {
+              if (!adPerformanceMap[ad.adId]) {
+                adPerformanceMap[ad.adId] = {
+                  adId: ad.adId,
+                  adTitle: ad.adTitle,
+                  totalPlays: 0,
+                  totalViewTime: 0,
+                  totalImpressions: 0,
+                  averageCompletionRate: 0,
+                  firstPlayed: null,
+                  lastPlayed: null,
+                  playCount: 0
+                };
+              }
+              
+              adPerformanceMap[ad.adId].totalPlays += ad.playCount || 0;
+              adPerformanceMap[ad.adId].totalViewTime += ad.totalViewTime || 0;
+              adPerformanceMap[ad.adId].totalImpressions += ad.impressions || 0;
+              adPerformanceMap[ad.adId].playCount += ad.playCount || 0;
+              
+              if (!adPerformanceMap[ad.adId].firstPlayed || (ad.firstPlayed && new Date(ad.firstPlayed) < new Date(adPerformanceMap[ad.adId].firstPlayed))) {
+                adPerformanceMap[ad.adId].firstPlayed = ad.firstPlayed;
+              }
+              if (!adPerformanceMap[ad.adId].lastPlayed || (ad.lastPlayed && new Date(ad.lastPlayed) > new Date(adPerformanceMap[ad.adId].lastPlayed))) {
+                adPerformanceMap[ad.adId].lastPlayed = ad.lastPlayed;
+              }
             }
           });
         }
@@ -1250,16 +1255,19 @@ class UserAnalyticsService {
       filteredDailyData.forEach(day => {
         if (day.qrScans && day.qrScans.length > 0) {
           day.qrScans.forEach(scan => {
-            if (!qrScanMap[scan.adId]) {
-              qrScanMap[scan.adId] = {
-                adId: scan.adId,
-                adTitle: scan.adTitle,
-                totalScans: 0,
-                scans: []
-              };
+            // Only process QR scans for ads that belong to the user
+            if (userAdIds.includes(scan.adId)) {
+              if (!qrScanMap[scan.adId]) {
+                qrScanMap[scan.adId] = {
+                  adId: scan.adId,
+                  adTitle: scan.adTitle,
+                  totalScans: 0,
+                  scans: []
+                };
+              }
+              qrScanMap[scan.adId].totalScans += 1;
+              qrScanMap[scan.adId].scans.push(scan);
             }
-            qrScanMap[scan.adId].totalScans += 1;
-            qrScanMap[scan.adId].scans.push(scan);
           });
         }
       });
@@ -2229,6 +2237,15 @@ class UserAnalyticsService {
       };
 
       if (currentData) {
+        // Filter ad performance to only include user's ads
+        const userAdIds = deviceAds.map(ad => ad._id.toString());
+        const filteredAdPerformance = (currentData.adPerformance || []).filter(adPerf => 
+          userAdIds.includes(adPerf.adId)
+        );
+        const filteredQrScansByAd = (currentData.qrScansByAd || []).filter(adScan => 
+          userAdIds.includes(adScan.adId)
+        );
+
         currentDayStats = {
           totalAdPlays: currentData.totalAdPlays || 0,
           totalQRScans: currentData.totalQRScans || 0,
@@ -2239,8 +2256,8 @@ class UserAnalyticsService {
           isOnline: currentData.isOnline || false,
           currentLocation: currentData.currentLocation,
           lastSeen: currentData.lastSeen,
-          adPerformance: currentData.adPerformance || [],
-          qrScansByAd: currentData.qrScansByAd || [],
+          adPerformance: filteredAdPerformance,
+          qrScansByAd: filteredQrScansByAd,
           currentAd: currentData.currentAd,
           slots: currentData.slots || [],
           networkStatus: currentData.networkStatus,
@@ -2284,33 +2301,41 @@ class UserAnalyticsService {
               totalHoursOnline: dailyData.totalHoursOnline || 0,
               isDisplaying: dailyData.isDisplaying,
               maintenanceMode: dailyData.maintenanceMode,
-              adPerformance: dailyData.adPerformance || [],
-              qrScansByAd: dailyData.qrScansByAd || []
+              adPerformance: (dailyData.adPerformance || []).filter(adPerf => 
+                deviceAds.some(ad => ad._id.toString() === adPerf.adId)
+              ),
+              qrScansByAd: (dailyData.qrScansByAd || []).filter(adScan => 
+                deviceAds.some(ad => ad._id.toString() === adScan.adId)
+              )
             });
 
             // Aggregate ad performance
             if (dailyData.adPerformance) {
               dailyData.adPerformance.forEach(adPerf => {
-                const existingAd = historicalStats.adPerformance.find(ad => ad.adId === adPerf.adId);
-                if (existingAd) {
-                  existingAd.playCount += adPerf.playCount || 0;
-                  existingAd.totalViewTime += adPerf.totalViewTime || 0;
-                  existingAd.impressions += adPerf.impressions || 0;
-                  if (adPerf.lastPlayed > existingAd.lastPlayed) {
-                    existingAd.lastPlayed = adPerf.lastPlayed;
+                // Only process ads that belong to the user
+                const userAd = deviceAds.find(ad => ad._id.toString() === adPerf.adId);
+                if (userAd) {
+                  const existingAd = historicalStats.adPerformance.find(ad => ad.adId === adPerf.adId);
+                  if (existingAd) {
+                    existingAd.playCount += adPerf.playCount || 0;
+                    existingAd.totalViewTime += adPerf.totalViewTime || 0;
+                    existingAd.impressions += adPerf.impressions || 0;
+                    if (adPerf.lastPlayed > existingAd.lastPlayed) {
+                      existingAd.lastPlayed = adPerf.lastPlayed;
+                    }
+                  } else {
+                    historicalStats.adPerformance.push({
+                      adId: adPerf.adId,
+                      adTitle: adPerf.adTitle,
+                      playCount: adPerf.playCount || 0,
+                      totalViewTime: adPerf.totalViewTime || 0,
+                      averageViewTime: adPerf.averageViewTime || 0,
+                      completionRate: adPerf.completionRate || 0,
+                      firstPlayed: adPerf.firstPlayed,
+                      lastPlayed: adPerf.lastPlayed,
+                      impressions: adPerf.impressions || 0
+                    });
                   }
-                } else {
-                  historicalStats.adPerformance.push({
-                    adId: adPerf.adId,
-                    adTitle: adPerf.adTitle,
-                    playCount: adPerf.playCount || 0,
-                    totalViewTime: adPerf.totalViewTime || 0,
-                    averageViewTime: adPerf.averageViewTime || 0,
-                    completionRate: adPerf.completionRate || 0,
-                    firstPlayed: adPerf.firstPlayed,
-                    lastPlayed: adPerf.lastPlayed,
-                    impressions: adPerf.impressions || 0
-                  });
                 }
               });
             }
@@ -2318,20 +2343,24 @@ class UserAnalyticsService {
             // Aggregate QR scans by ad
             if (dailyData.qrScansByAd) {
               dailyData.qrScansByAd.forEach(adScan => {
-                const existingScan = historicalStats.qrScansByAd.find(scan => scan.adId === adScan.adId);
-                if (existingScan) {
-                  existingScan.scanCount += adScan.scanCount || 0;
-                  if (adScan.lastScanned > existingScan.lastScanned) {
-                    existingScan.lastScanned = adScan.lastScanned;
+                // Only process QR scans for ads that belong to the user
+                const userAd = deviceAds.find(ad => ad._id.toString() === adScan.adId);
+                if (userAd) {
+                  const existingScan = historicalStats.qrScansByAd.find(scan => scan.adId === adScan.adId);
+                  if (existingScan) {
+                    existingScan.scanCount += adScan.scanCount || 0;
+                    if (adScan.lastScanned > existingScan.lastScanned) {
+                      existingScan.lastScanned = adScan.lastScanned;
+                    }
+                  } else {
+                    historicalStats.qrScansByAd.push({
+                      adId: adScan.adId,
+                      adTitle: adScan.adTitle,
+                      scanCount: adScan.scanCount || 0,
+                      lastScanned: adScan.lastScanned,
+                      firstScanned: adScan.firstScanned
+                    });
                   }
-                } else {
-                  historicalStats.qrScansByAd.push({
-                    adId: adScan.adId,
-                    adTitle: adScan.adTitle,
-                    scanCount: adScan.scanCount || 0,
-                    lastScanned: adScan.lastScanned,
-                    firstScanned: adScan.firstScanned
-                  });
                 }
               });
             }

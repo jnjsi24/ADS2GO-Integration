@@ -118,13 +118,22 @@ router.get('/material/:materialId', async (req, res) => {
   }
 });
 
-// GET /analytics/device/:deviceId - Get analytics for specific device
+// GET /analytics/device/:deviceId - Get analytics for specific device (DEPRECATED - use UserAnalyticsService version)
 router.get('/device/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     
-    const analytics = await Analytics.getDeviceAnalytics(deviceId, startDate, endDate);
+    // userId is required to filter ads to only show user's created ads
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId query parameter is required to filter device analytics by user. This endpoint is deprecated - use the UserAnalyticsService version instead.'
+      });
+    }
+    
+    // Use the UserAnalyticsService version which has proper user filtering
+    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate, userId);
     
     res.json({
       success: true,
@@ -538,9 +547,17 @@ router.get('/user/:userId/total-display-time', async (req, res) => {
 router.get('/device/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     
-    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate);
+    // userId is required to filter ads to only show user's created ads
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId query parameter is required to filter device analytics by user'
+      });
+    }
+    
+    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate, userId);
     
     res.json({
       success: true,
