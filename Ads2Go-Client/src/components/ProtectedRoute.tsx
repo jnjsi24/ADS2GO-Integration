@@ -9,7 +9,7 @@ interface ProtectedRouteProps {
   allowedRoles?: ('USER' | 'ADMIN' | 'SUPERADMIN')[];
 }
 
-const PUBLIC_PATHS = ['/login', '/superadmin-login']; // Public pages
+const PUBLIC_PATHS = ['/login', '/sadmin-login']; // Public pages
 
 // Protected route for admin routes (uses only AdminAuthContext)
 const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -19,48 +19,32 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const location = useLocation();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
-  const { admin, isLoading, isInitialized } = useAdminAuth();
+  const { admin, isLoading, isInitialized, isLoggingOut } = useAdminAuth();
   
-  console.log('🔍 AdminProtectedRoute render:', { 
-    admin, 
-    adminType: typeof admin, 
-    adminKeys: admin ? Object.keys(admin) : 'null',
-    isLoading, 
-    isInitialized 
-  });
+  // AdminProtectedRoute render
 
   // If current path is public, no auth required
   const isPublicPath = PUBLIC_PATHS.includes(location.pathname);
   if (isPublicPath) requireAuth = false;
 
   useEffect(() => {
-    console.log('🔒 AdminProtectedRoute effect:', { 
-      isLoading, 
-      isInitialized, 
-      requireAuth, 
-      admin: admin,
-      adminType: typeof admin,
-      adminKeys: admin ? Object.keys(admin) : 'null',
-      adminUserId: admin?.userId,
-      adminRole: admin?.role,
-      allowedRoles 
-    });
+    // AdminProtectedRoute effect
     
-    if (!isLoading && isInitialized) {
+    if (!isLoading && isInitialized && !isLoggingOut) {
       if (!requireAuth) {
-        console.log('✅ No auth required');
+        // No auth required
         setIsAuthorized(true);
         return;
       }
 
       if (!admin) {
-        console.log('❌ No authenticated admin');
+        // No authenticated admin
         setIsAuthorized(false);
         return;
       }
 
       if (allowedRoles.length === 0) {
-        console.log('✅ No specific roles required');
+        // No specific roles required
         setIsAuthorized(true);
         return;
       }
@@ -71,8 +55,8 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [admin, isLoading, isInitialized, requireAuth, allowedRoles]);
 
-  if (isLoading || !isInitialized || isAuthorized === null) {
-    console.log('⏳ AdminProtectedRoute loading...');
+  if (isLoading || !isInitialized || isLoggingOut || isAuthorized === null) {
+    // AdminProtectedRoute loading
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -81,13 +65,19 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   if (requireAuth && !admin) {
-    console.log('🚫 AdminProtectedRoute: No auth, redirecting to admin-login');
-    return <Navigate to="/admin-login" state={{ from: location }} replace />;
+    // Determine redirect based on current route
+    const isSuperAdminRoute = location.pathname.startsWith('/sadmin');
+    const redirectPath = isSuperAdminRoute ? '/sadmin-login' : '/admin-login';
+    console.log('🔄 AdminProtectedRoute: No auth, redirecting to:', redirectPath);
+    return <Navigate to={redirectPath} state={{ from: location }} replace />;
   }
 
   if (requireAuth && admin && isAuthorized === false) {
-    console.log('🚫 AdminProtectedRoute: Unauthorized, redirecting to admin-login');
-    return <Navigate to="/admin-login" replace />;
+    // Determine redirect based on current route
+    const isSuperAdminRoute = location.pathname.startsWith('/sadmin');
+    const redirectPath = isSuperAdminRoute ? '/sadmin-login' : '/admin-login';
+    console.log('🚫 AdminProtectedRoute: Unauthorized, redirecting to:', redirectPath);
+    return <Navigate to={redirectPath} replace />;
   }
 
   if (!requireAuth && admin) {
@@ -96,7 +86,7 @@ const AdminProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={redirectPath} replace />;
   }
 
-  console.log('✅ AdminProtectedRoute: Rendering children');
+        // AdminProtectedRoute: Rendering children
   return children;
 };
 
@@ -125,7 +115,7 @@ const UserProtectedRoute: React.FC<ProtectedRouteProps> = ({
     
     if (!isLoading && isInitialized) {
       if (!requireAuth) {
-        console.log('✅ No auth required');
+        // No auth required
         setIsAuthorized(true);
         return;
       }
@@ -137,7 +127,7 @@ const UserProtectedRoute: React.FC<ProtectedRouteProps> = ({
       }
 
       if (allowedRoles.length === 0) {
-        console.log('✅ No specific roles required');
+        // No specific roles required
         setIsAuthorized(true);
         return;
       }
@@ -184,7 +174,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = (props) => {
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
                       location.pathname === '/admin-login' ||
-                      location.pathname === '/superadmin-login';
+                      location.pathname === '/sadmin-login';
   
   if (isAdminRoute) {
     return <AdminProtectedRoute {...props} />;

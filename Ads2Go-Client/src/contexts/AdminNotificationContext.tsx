@@ -50,9 +50,9 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const [enableNotificationBadge, setEnableNotificationBadge] = useState(true); // Default to true
   const { admin, isAuthenticated } = useAdminAuth();
 
-  // Fetch admin notification preferences
+  // Fetch admin notification preferences (skip for SuperAdmins)
   const { data: preferencesData } = useQuery(GET_ADMIN_NOTIFICATION_PREFERENCES, {
-    skip: !isAuthenticated || !admin,
+    skip: !isAuthenticated || !admin || admin.role === 'SUPERADMIN',
     onCompleted: (data) => {
       console.log('🔔 AdminNotificationContext: Preferences loaded:', data);
       console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(data, null, 2));

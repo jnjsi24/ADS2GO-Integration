@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Settings } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
@@ -39,8 +40,12 @@ const SadminPricing: React.FC = () => {
     isActive: true
   });
 
+  // Admin auth (to ensure only SUPERADMIN fires query)
+  const { admin } = useAdminAuth();
+
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_PRICING_CONFIGS, {
+    skip: !admin || admin.role !== 'SUPERADMIN',
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
   });

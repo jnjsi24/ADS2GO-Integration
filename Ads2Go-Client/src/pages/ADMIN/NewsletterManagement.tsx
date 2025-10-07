@@ -79,6 +79,9 @@ const NewsletterManagement: React.FC = () => {
   const fetchSubscribers = async () => {
     try {
       setLoading(true);
+      setError(''); // Clear previous errors
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const apiUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
       setError('');
       
       // Use the same fallback approach as other services
@@ -213,12 +216,8 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      // Use the same fallback approach as other services
-      const actualServerUrl = 'http://localhost:5000'; // Force localhost for now to fix connection issues
-      
-      console.log('📡 Unsubscribing from URL:', `${actualServerUrl}/api/newsletter/unsubscribe`);
-      
-      const response = await fetch(`${actualServerUrl}/api/newsletter/unsubscribe`, {
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const response = await fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

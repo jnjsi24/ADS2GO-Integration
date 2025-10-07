@@ -6,7 +6,7 @@ const SuperAdmin = require('../src/models/SuperAdmin'); // Adjust path if needed
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(async () => {
-    const email = 'ads2go.superadmin2@example.com'; // 👈 NEW email to avoid conflict
+    const email = 'superadmin.test@ads2go.com'; // 👈 NEW email to avoid conflict
 
     const existing = await SuperAdmin.findOne({ email });
     if (existing) {
@@ -14,7 +14,7 @@ mongoose.connect(process.env.MONGODB_URI)
       return mongoose.disconnect();
     }
 
-    const hashedPassword = await bcrypt.hash('Ads2gosuperadmin2_123', 10);
+    const hashedPassword = await bcrypt.hash('SuperAdmin123!', 10);
 
     await SuperAdmin.create({
       firstName: 'Ms',

@@ -83,7 +83,7 @@ const AdminAppContent: React.FC = () => {
       <Routes>
         {/* Public routes */}
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/sadmin-login" element={<SuperAdminLogin />} />
 
         {/* Protected Admin Routes */}
         <Route
@@ -424,7 +424,7 @@ const AppContent: React.FC = () => {
   
   const publicPages = [
     '/admin-login',
-    '/superadmin-login',
+    '/sadmin-login',
     '/login',
     '/register',
     '/forgot-password',
@@ -438,7 +438,7 @@ const AppContent: React.FC = () => {
     return (
       <Routes>
         <Route path="/admin-login" element={<AdminLogin />} />
-        <Route path="/superadmin-login" element={<SuperAdminLogin />} />
+        <Route path="/sadmin-login" element={<SuperAdminLogin />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPass />} />
@@ -453,7 +453,7 @@ const AppContent: React.FC = () => {
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
                       location.pathname === '/admin-login' ||
-                      location.pathname === '/superadmin-login';
+                      location.pathname === '/sadmin-login';
   
     if (isAdminRoute) {
     return <AdminAppContent />;
@@ -470,7 +470,7 @@ const App: React.FC = () => {
   const isAdminRoute = location.pathname.startsWith('/admin') || 
                       location.pathname.startsWith('/sadmin') ||
                       location.pathname === '/admin-login' ||
-                      location.pathname === '/superadmin-login';
+                      location.pathname === '/sadmin-login';
   
   // Check if we're on user-related routes
   const isUserRoute = location.pathname.startsWith('/dashboard') || 

@@ -1,26 +1,12 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Camera, Upload } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { BellIcon } from '@heroicons/react/24/outline';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { useMutation } from "@apollo/client";
 import { toast } from 'sonner';
 import { UPDATE_SUPER_ADMIN_DETAIL } from "../../graphql/superadmin";
-import { UPDATE_SUPERADMIN } from '../../graphql/superadmin/mutations/updateSuperAdmin';
-import { uploadAdminProfilePicture } from '../../utils/fileUpload';
-
-// Unified upload function for profile pictures using Firebase
-const uploadProfilePictureToFirebase = async (file: File): Promise<string> => {
-  try {
-    console.log('🔄 Starting Firebase upload for profile picture...');
-    const imageUrl = await uploadAdminProfilePicture(file);
-    console.log('✅ Firebase upload successful:', imageUrl);
-    return imageUrl;
-  } catch (error) {
-    console.error('❌ Firebase upload error:', error);
-    throw new Error('Failed to upload profile picture. Please try again.');
-  }
-};
+import { uploadSuperAdminProfilePicture } from "../../utils/fileUpload";
 
 // Define the structure for admin data from useAdminAuth
 interface AdminData {
@@ -58,12 +44,9 @@ interface FormData {
 const Account: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const navigate = useNavigate();
   const { admin, setAdmin } = useAdminAuth() as { admin: AdminData | null; setAdmin: (admin: AdminData | null) => void };
-  
-  // State for profile photo
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [newProfileImage, setNewProfileImage] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     firstName: "",
@@ -89,14 +72,34 @@ const Account: React.FC = () => {
     return initials.toUpperCase();
   };
 
+  // Helper to format contact number for display
+  const formatContactNumberForDisplay = (contactNumber?: string) => {
+    if (!contactNumber) return "+63 ";
+    
+    const cleanNumber = contactNumber.replace(/\D/g, ''); // Remove all non-digits
+    
+    if (cleanNumber.startsWith('639') && cleanNumber.length === 12) {
+      // Already in correct format: 639XXXXXXXXX
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 9XXXXXXXXX (10 digits)
+    } else if (cleanNumber.startsWith('09') && cleanNumber.length === 11) {
+      // Format: 09XXXXXXXXX
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 XXXXXXXXX
+    } else if (cleanNumber.startsWith('63') && cleanNumber.length === 12) {
+      // Format: 63XXXXXXXXXX (missing +)
+      return `+63 ${cleanNumber.slice(2)}`; // Display as +63 XXXXXXXXX
+    } else if (cleanNumber.length === 10) {
+      // Just the 10 digits
+      return `+63 ${cleanNumber}`;
+    } else {
+      // Fallback to original
+      return contactNumber.startsWith("+63 ") ? contactNumber : `+63 ${cleanNumber}`;
+    }
+  };
+
   // Populate form with user data from AuthContext
   useEffect(() => {
-    console.log('Admin object from AdminAuthContext:', admin);
     if (admin) {
-      console.log('Admin ID:', admin.userId);
-      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
-        ? admin.contactNumber
-        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+      const initialContactNumber = formatContactNumberForDisplay(admin.contactNumber);
 
       setFormData({
         firstName: admin.firstName || "",
@@ -116,20 +119,26 @@ const Account: React.FC = () => {
   }, [admin]);
 
   useEffect(() => {
-    console.log('Admin object updated:', admin);
-    if (admin) {
-      console.log('Admin ID in effect:', admin.userId);
-      console.log('Admin keys:', Object.keys(admin));
-    }
-  }, [admin]);
-
-  useEffect(() => {
-    console.log('Form validation errors:', errors);
-    console.log('Is form valid?', Object.keys(errors).length === 0);
+    // Form validation errors tracking
   }, [errors]);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
+    // Auto-fix phone number format if user enters 9-digit number starting with 7
+    if (name === 'contactNumber' && value) {
+      const cleanNumber = value.replace(/\D/g, '');
+      if (cleanNumber.length === 9 && cleanNumber.startsWith('7')) {
+        // Auto-add the leading 9 to make it 10 digits
+        const fixedNumber = `+63 9${cleanNumber}`;
+        setFormData(prev => ({
+          ...prev,
+          [name]: fixedNumber
+        }));
+        return;
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -137,62 +146,62 @@ const Account: React.FC = () => {
   };
 
   const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    console.log('📁 File selected:', {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    });
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file (JPEG, PNG, or GIF).');
-      return;
-    }
-
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB.');
-      return;
-    }
-    
-    try {
-      setIsUploadingPhoto(true);
-      toast.info('Uploading image...');
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
       
-      const imageUrl = await uploadProfilePictureToFirebase(file);
+      // Validate file type
+      const allowedExtensions = ["jpg", "jpeg", "png"];
+      const extension = file.name.split(".").pop()?.toLowerCase();
       
-      setNewProfileImage(imageUrl);
-      setFormData(prev => ({
-        ...prev,
-        profilePicture: imageUrl
-      }));
+      if (!extension || !allowedExtensions.includes(extension)) {
+        toast.error("Unsupported file type. Allowed types: JPG, JPEG, PNG");
+        return;
+      }
       
-      toast.success('Image uploaded successfully!');
-    } catch (error) {
-      console.error('❌ Upload error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to upload image. Please try again.');
-    } finally {
-      setIsUploadingPhoto(false);
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        toast.error("File size must be less than 10MB");
+        return;
+      }
+      
+      setIsUploadingImage(true);
+      
+      try {
+        const uploadedUrl = await uploadSuperAdminProfilePicture(file);
+        setFormData(prev => ({
+          ...prev,
+          profilePicture: uploadedUrl
+        }));
+        toast.success("Profile picture uploaded successfully!");
+      } catch (error) {
+        console.error('Error uploading profile picture:', error);
+        toast.error("Error uploading profile picture. Please try again.");
+      } finally {
+        setIsUploadingImage(false);
+      }
     }
   };
 
-  // Unified mutation hook for all profile updates
-  const [updateSuperAdmin] = useMutation(UPDATE_SUPERADMIN, {
+  // Add the mutation hook
+  const [updateSuperAdminDetails] = useMutation(UPDATE_SUPER_ADMIN_DETAIL, {
     onCompleted: (data) => {
+      // Profile update response received
+      // Profile picture in response
+      
       if (data.updateSuperAdmin.success) {
         // Update the admin in the auth context
         if (admin) {
-          setAdmin({
+          const updatedAdmin = {
             ...admin,
             ...data.updateSuperAdmin.superAdmin,
-          });
+          };
+          // Updated admin object
+          // Profile picture in updated admin
+          setAdmin(updatedAdmin);
         }
         toast.success("Profile updated successfully!");
         setIsEditing(false);
-        setNewProfileImage(null); // Clear new profile image after successful save
       } else {
         toast.error(data.updateSuperAdmin.message || "Failed to update profile");
       }
@@ -206,8 +215,8 @@ const Account: React.FC = () => {
   });
 
   const handleUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    console.log('Update button clicked');
+    e.preventDefault(); // Prevent default form submission
+    // Update button clicked
     
     if (!admin?.userId) {
       console.error('Admin ID is missing');
@@ -215,51 +224,55 @@ const Account: React.FC = () => {
       return;
     }
     
-    console.log('Validating form...');
     const isValid = validateForm();
-    console.log('Form validation result:', isValid);
     
-    if (!isValid) {
-      console.log('Form validation failed, not submitting');
-      return;
-    }
+    if (isValid) {
+      setIsSubmitting(true);
+      
+      try {
+        // Prepare the input object with only the fields that have values
+        const input: any = {};
+        
+        // Only include fields that have values
+        if (formData.firstName) input.firstName = formData.firstName;
+        if (formData.middleName) input.middleName = formData.middleName;
+        if (formData.lastName) input.lastName = formData.lastName;
+        if (formData.email) input.email = formData.email;
+        if (formData.contactNumber && formData.contactNumber !== "+63 ") {
+          input.contactNumber = formData.contactNumber;
+        }
+        if (formData.companyName) input.companyName = formData.companyName;
+        if (formData.companyAddress) input.companyAddress = formData.companyAddress;
+        if (formData.profilePicture) {
+          input.profilePicture = formData.profilePicture;
+        }
+        
+        const { data } = await updateSuperAdminDetails({
+          variables: {
+            superAdminId: admin.userId,
+            input
+          },
+        });
 
-    console.log('Form is valid, preparing to submit...');
-    setIsSubmitting(true);
-    
-    try {
-      // Prepare the input object with only the fields that have values
-      const input: any = {};
-      
-      // Only include fields that have values
-      if (formData.firstName) input.firstName = formData.firstName;
-      if (formData.middleName) input.middleName = formData.middleName;
-      if (formData.lastName) input.lastName = formData.lastName;
-      if (formData.email) input.email = formData.email;
-      if (formData.contactNumber && formData.contactNumber !== "+63 ") {
-        input.contactNumber = formData.contactNumber;
+        if (data?.updateSuperAdmin?.success) {
+          // Update the admin context with the new data
+          setAdmin({
+            ...admin,
+            ...data.updateSuperAdmin.superAdmin,
+          });
+          
+          toast.success("Profile updated successfully!");
+          setIsEditing(false);
+        } else {
+          console.error('Update failed:', data?.updateSuperAdmin?.message);
+          toast.error(data?.updateSuperAdmin?.message || "Failed to update profile");
+        }
+      } catch (error) {
+        console.error("Error in handleUpdate:", error);
+        toast.error("An error occurred while updating your profile");
+      } finally {
+        setIsSubmitting(false);
       }
-      if (formData.companyName) input.companyName = formData.companyName;
-      if (formData.companyAddress) input.companyAddress = formData.companyAddress;
-      
-      // Include profile picture if it was uploaded
-      if (newProfileImage) {
-        input.profilePicture = newProfileImage;
-      }
-      
-      console.log('Sending update request with:', { superAdminId: admin.userId, input });
-      
-      await updateSuperAdmin({
-        variables: {
-          superAdminId: admin.userId,
-          input
-        },
-      });
-
-      console.log('Update completed successfully');
-    } catch (error) {
-      console.error("Error in handleUpdate:", error);
-      toast.error("An error occurred while updating your profile");
     }
   };
 
@@ -276,9 +289,15 @@ const Account: React.FC = () => {
 
     // Phone number validation (only if provided and not just the default +63 )
     if (formData.contactNumber && formData.contactNumber !== "+63 " && formData.contactNumber.trim() !== '') {
-      const phoneRegex = /^\+63\s?\d{10}$/;
-      if (!phoneRegex.test(formData.contactNumber)) {
-        newErrors.contactNumber = "Please enter a valid Philippine mobile number. Format: +639XXXXXXXXX (10 digits starting with 9)";
+      // Clean the number and check if it's a valid Philippine mobile number
+      const cleanNumber = formData.contactNumber.replace(/\D/g, ''); // Remove all non-digits
+      
+      // Check if it's a valid Philippine mobile number format
+      // Should be exactly 10 digits starting with 9 (e.g., 9748717212)
+      if (cleanNumber.length !== 10) {
+        newErrors.contactNumber = "Philippine mobile numbers must be exactly 10 digits. Format: +639XXXXXXXXX (e.g., +639748717212)";
+      } else if (!cleanNumber.startsWith('9')) {
+        newErrors.contactNumber = "Philippine mobile numbers must start with 9. Format: +639XXXXXXXXX (e.g., +639748717212)";
       }
     }
 
@@ -289,9 +308,7 @@ const Account: React.FC = () => {
   const handleCancel = () => {
     // Reset form data to current admin data if available
     if (admin) {
-      const initialContactNumber = admin.contactNumber && admin.contactNumber.startsWith("+63 ")
-        ? admin.contactNumber
-        : (admin.contactNumber ? `+63 ${admin.contactNumber.replace(/\D/g, '').slice(0, 10)}` : "+63 ");
+      const initialContactNumber = formatContactNumberForDisplay(admin.contactNumber);
 
       setFormData({
         firstName: admin.firstName || "",
@@ -310,35 +327,6 @@ const Account: React.FC = () => {
     }
     setErrors({});
     setIsEditing(false);
-    setNewProfileImage(null);
-  };
-
-  // Handle profile photo remove
-  const handleProfilePhotoRemove = async () => {
-    if (!admin?.userId) {
-      toast.error('Admin ID is missing. Please try again.');
-      return;
-    }
-
-    try {
-      await updateSuperAdmin({
-        variables: {
-          superAdminId: admin.userId,
-          input: {
-            profilePicture: null
-          }
-        }
-      });
-      toast.success('Profile photo removed successfully!');
-      setNewProfileImage(null);
-      setFormData(prev => ({
-        ...prev,
-        profilePicture: `https://placehold.co/100x100/F3A26D/FFFFFF?text=${getInitials(admin?.firstName, admin?.lastName)}`
-      }));
-    } catch (err: any) {
-      console.error('❌ Profile photo remove error:', err);
-      toast.error(err.message || 'Failed to remove profile photo. Please try again.');
-    }
   };
 
   return (
@@ -351,9 +339,14 @@ const Account: React.FC = () => {
         <aside className="flex flex-col items-center justify-center p-8 bg-black/10 bg-opacity-70 lg:w-1/3">
           {/* Profile Picture */}
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-white text-3xl font-bold">
-            {(newProfileImage || formData.profilePicture) ? (
+            {isUploadingImage ? (
+              <div className="flex flex-col items-center justify-center w-full h-full bg-black/50">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-2"></div>
+                <span className="text-xs text-white">Uploading...</span>
+              </div>
+            ) : formData.profilePicture ? (
               <img
-                src={newProfileImage || formData.profilePicture}
+                src={formData.profilePicture}
                 alt="Profile"
                 className="object-cover w-full h-full"
                 onError={(e) => {
@@ -372,35 +365,18 @@ const Account: React.FC = () => {
             )}
   
             {/* Upload button */}
-            {isEditing && (
+            {isEditing && !isUploadingImage && (
               <label className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/50 opacity-80 cursor-pointer transition-all">
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
                   onChange={handleImageChange}
-                  disabled={isUploadingPhoto}
                 />
-                {isUploadingPhoto ? (
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                ) : (
-                  <Camera size={24} className="text-white" />
-                )}
+                <Pencil size={24} className="text-white" />
               </label>
             )}
           </div>
-
-          {/* Profile Photo Controls */}
-          {isEditing && (newProfileImage || formData.profilePicture) && (
-            <div className="flex space-x-2 mb-4">
-              <button
-                onClick={handleProfilePhotoRemove}
-                className="px-3 py-1 text-xs bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-              >
-                Remove Photo
-              </button>
-            </div>
-          )}
   
           <h2 className="text-xl font-semibold mb-1">
             {formData.firstName} {formData.lastName}

@@ -20,9 +20,7 @@ import API_CONFIG from '../config/api';
 
 // Move API_URL assignment inside the component to ensure it's available
 const getAPIUrl = () => {
-  console.log('🔍 API_CONFIG in photo-submission:', API_CONFIG);
-  const url = API_CONFIG?.API_URL || 'http://192.168.100.22:5000/graphql';
-  console.log('🔍 API_URL in photo-submission:', url);
+  const url = API_CONFIG?.API_URL || 'http://localhost:5000/graphql';
   return url;
 };
 

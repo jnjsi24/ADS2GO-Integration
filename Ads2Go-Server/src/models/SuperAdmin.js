@@ -49,17 +49,8 @@ const SuperAdminSchema = new mongoose.Schema({
     trim: true,
     match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid email']
   },
-  recoveryEmail: {
-    type: String,
-    required: false,
-    lowercase: true,
-    trim: true,
-    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please provide a valid recovery email'],
-    default: null
-  },
   profilePicture: {
     type: String,
-    required: false,
     default: null
   },
   password: {
@@ -143,32 +134,6 @@ const SuperAdminSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
-  notificationPreferences: {
-    enableDesktopNotifications: {
-      type: Boolean,
-      default: false
-    },
-    enableNotificationBadge: {
-      type: Boolean,
-      default: true
-    },
-    pushNotificationTimeout: {
-      type: String,
-      default: '10'
-    },
-    communicationEmails: {
-      type: Boolean,
-      default: false
-    },
-    announcementsEmails: {
-      type: Boolean,
-      default: true
-    },
-    disableNotificationSounds: {
-      type: Boolean,
-      default: true
-    }
-  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -186,8 +151,24 @@ const SuperAdminSchema = new mongoose.Schema({
   }
 });
 
-// Pre-save hook to update updatedAt
+// Pre-save hook to normalize contact number
 SuperAdminSchema.pre('save', function(next) {
+  if (this.contactNumber) {
+    // Remove all non-digit characters except +
+    let normalized = this.contactNumber.replace(/[^\d+]/g, '');
+    
+    // If it starts with 9 and has 10 digits, add 0 prefix
+    if (/^9\d{9}$/.test(normalized)) {
+      normalized = '0' + normalized;
+    }
+    // If it starts with 639 and has 12 digits, add + prefix
+    else if (/^639\d{9}$/.test(normalized)) {
+      normalized = '+' + normalized;
+    }
+    
+    this.contactNumber = normalized;
+  }
+  
   this.updatedAt = Date.now();
   next();
 });

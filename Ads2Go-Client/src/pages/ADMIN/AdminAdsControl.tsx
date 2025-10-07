@@ -85,7 +85,7 @@ const AdminAdsControl: React.FC = () => {
       // Fetch screens data using compliance endpoint for real-time status
       try {
         console.log('🔍 Fetching screens data via compliance API for real-time status...');
-        const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
         
         const response = await fetch(complianceUrl, {
@@ -202,7 +202,7 @@ const AdminAdsControl: React.FC = () => {
       
       // Fetch screens data using compliance endpoint for real-time status
       try {
-        const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+        const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
         const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
         
         const response = await fetch(complianceUrl, {

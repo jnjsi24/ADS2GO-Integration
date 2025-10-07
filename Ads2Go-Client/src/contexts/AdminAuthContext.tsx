@@ -38,7 +38,8 @@ interface AdminAuthContextType {
   adminEmail: string;
   setAdmin: (admin: Admin | null) => void;
   setAdminEmail: (email: string) => void;
-  login: (email: string, password: string) => Promise<Admin | null>;
+  loginAdmin: (email: string, password: string) => Promise<Admin | null>;
+  loginSuperAdmin: (email: string, password: string) => Promise<Admin | null>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -60,21 +61,15 @@ export const AdminAuthProvider: React.FC<{
   const [adminEmail, setAdminEmail] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Debug admin state changes
+  // Admin state tracking
   useEffect(() => {
-    console.log('🔍 AdminAuthContext: Admin state changed to:', admin);
-    console.log('🔍 AdminAuthContext: Admin state change time:', new Date().toISOString());
-    console.log('🔍 AdminAuthContext: Admin state change URL:', window.location.href);
+    // Admin state changed
   }, [admin]);
 
-  // Wrapper for setAdmin to add debugging
+  // Wrapper for setAdmin
   const setAdminWithDebug = useCallback((newAdmin: Admin | null) => {
-    console.log('🔧 AdminAuthContext: setAdmin called with:', newAdmin);
-    console.log('🔧 AdminAuthContext: Previous admin state was:', admin);
-    console.log('🔧 AdminAuthContext: Call stack:', new Error().stack);
-    console.log('🔧 AdminAuthContext: Current time:', new Date().toISOString());
-    console.log('🔧 AdminAuthContext: Current URL:', window.location.href);
     setAdmin(newAdmin);
   }, []); // Remove admin dependency to prevent recreation
   const [loginAdminMutation] = useMutation(LOGIN_ADMIN_MUTATION);
@@ -93,13 +88,10 @@ export const AdminAuthProvider: React.FC<{
     fetchSuperAdminDetailsRef.current = fetchSuperAdminDetails;
   }, [fetchAdminDetails, fetchSuperAdminDetails]);
 
-  const publicPages = ['/admin-login', '/superadmin-login'];
+  const publicPages = ['/admin-login', '/sadmin-login'];
 
   useEffect(() => {
-    console.log('🔄 AdminAuthContext: useEffect triggered, hasInitializedRef.current:', hasInitializedRef.current);
-    console.log('🔄 AdminAuthContext: Current admin state:', admin);
-    console.log('🔄 AdminAuthContext: Current loading state:', isLoading);
-    console.log('🔄 AdminAuthContext: Current initialized state:', isInitialized);
+    // useEffect triggered
     
     // Prevent multiple initializations
     if (hasInitializedRef.current) {
@@ -116,7 +108,7 @@ export const AdminAuthProvider: React.FC<{
     
     const initializeAuth = async () => {
       
-      console.log('🔄 AdminAuthContext: Starting initialization...');
+      // Starting initialization
       setIsLoading(true);
       setIsInitialized(false);
 
@@ -256,7 +248,7 @@ export const AdminAuthProvider: React.FC<{
     });
   }, []); // Empty dependency array to prevent infinite loops
 
-  const login = async (email: string, password: string): Promise<Admin | null> => {
+  const loginSuperAdmin = async (email: string, password: string): Promise<Admin | null> => {
     try {
       const deviceInfo = {
         deviceId: 'admin-web-client',
@@ -264,120 +256,141 @@ export const AdminAuthProvider: React.FC<{
         deviceName: navigator.userAgent,
       };
 
-      // Try admin login first
-      try {
-        const result = await loginAdminMutation({
-          variables: { email, password, deviceInfo },
-        });
+      // Only try superadmin login - reject regular admins
+      const result = await loginSuperAdminMutation({
+        variables: { email, password, deviceInfo },
+      });
 
-        // Check for GraphQL errors first
-        if (result.errors && result.errors.length > 0) {
-          const errorMessage = result.errors[0].message;
-          if (errorMessage.includes('Account is temporarily locked')) {
-            throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
-          }
-          throw new Error(errorMessage);
+      // Check for GraphQL errors first
+      if (result.errors && result.errors.length > 0) {
+        const errorMessage = result.errors[0].message;
+        if (errorMessage.includes('Account is temporarily locked')) {
+          throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
         }
-
-        if (result.data?.loginAdmin?.token && result.data?.loginAdmin?.admin) {
-          const { token, admin: adminRaw } = result.data.loginAdmin;
-          localStorage.setItem('adminToken', token);
-
-          const adminUser: Admin = {
-            userId: adminRaw.id,
-            email: adminRaw.email,
-            role: adminRaw.role,
-            isEmailVerified: adminRaw.isEmailVerified,
-            firstName: adminRaw.firstName,
-            middleName: adminRaw.middleName,
-            lastName: adminRaw.lastName,
-            companyName: adminRaw.companyName,
-            companyAddress: adminRaw.companyAddress,
-            contactNumber: adminRaw.contactNumber,
-            profilePicture: adminRaw.profilePicture,
-          };
-
-          console.log('✅ AdminAuthContext: Login successful, setting admin:', adminUser);
-          setAdminWithDebug(adminUser);
-          setAdminEmail(adminUser.email);
-          hasInitializedRef.current = true; // Mark as initialized to prevent re-running
-
-          // Reset Apollo Client to ensure new token is used
-          await apolloClient.resetStore();
-          console.log('✅ AdminAuthContext: Apollo Client reset complete');
-
-          // Wait a bit longer to ensure the token is properly set
-          setTimeout(() => {
-            console.log('🔍 AdminAuthContext: Navigating to /admin after login');
-            navigate('/admin');
-          }, 500);
-
-          return adminUser;
-        }
-      } catch (adminError) {
-        // Admin login failed, try superadmin login
-        try {
-          const result = await loginSuperAdminMutation({
-            variables: { email, password, deviceInfo },
-          });
-
-          // Check for GraphQL errors first
-          if (result.errors && result.errors.length > 0) {
-            const errorMessage = result.errors[0].message;
-            if (errorMessage.includes('Account is temporarily locked')) {
-              throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
-            }
-            throw new Error(errorMessage);
-          }
-
-          if (result.data?.loginSuperAdmin?.token && result.data?.loginSuperAdmin?.superAdmin) {
-            const { token, superAdmin: superAdminRaw } = result.data.loginSuperAdmin;
-            localStorage.setItem('adminToken', token);
-
-            const adminUser: Admin = {
-              userId: superAdminRaw.id,
-              email: superAdminRaw.email,
-              role: superAdminRaw.role,
-              isEmailVerified: superAdminRaw.isEmailVerified,
-              firstName: superAdminRaw.firstName,
-              middleName: superAdminRaw.middleName,
-              lastName: superAdminRaw.lastName,
-              companyName: superAdminRaw.companyName,
-              companyAddress: superAdminRaw.companyAddress,
-              contactNumber: superAdminRaw.contactNumber,
-              profilePicture: superAdminRaw.profilePicture,
-            };
-
-            console.log('✅ AdminAuthContext: Superadmin login successful, setting admin:', adminUser);
-            setAdminWithDebug(adminUser);
-            setAdminEmail(adminUser.email);
-            hasInitializedRef.current = true; // Mark as initialized to prevent re-running
-
-            // Reset Apollo Client to ensure new token is used
-            await apolloClient.resetStore();
-            console.log('✅ AdminAuthContext: Apollo Client reset complete');
-
-            // Wait a bit longer to ensure the token is properly set
-            setTimeout(() => {
-              console.log('🔍 AdminAuthContext: Navigating to /sadmin-dashboard after login');
-              navigate('/sadmin-dashboard');
-            }, 500);
-
-            return adminUser;
-          }
-        } catch (superAdminError) {
-          // Both admin and superadmin login failed
-          throw new Error('Invalid admin credentials');
-        }
+        throw new Error(errorMessage);
       }
 
-      throw new Error('Login failed');
+      if (result.data?.loginSuperAdmin?.token && result.data?.loginSuperAdmin?.superAdmin) {
+        const { token, superAdmin: superAdminRaw } = result.data.loginSuperAdmin;
+        localStorage.setItem('adminToken', token);
+
+        const adminUser: Admin = {
+          userId: superAdminRaw.id,
+          email: superAdminRaw.email,
+          role: superAdminRaw.role,
+          isEmailVerified: superAdminRaw.isEmailVerified,
+          firstName: superAdminRaw.firstName,
+          middleName: superAdminRaw.middleName,
+          lastName: superAdminRaw.lastName,
+          companyName: superAdminRaw.companyName,
+          companyAddress: superAdminRaw.companyAddress,
+          contactNumber: superAdminRaw.contactNumber,
+          profilePicture: superAdminRaw.profilePicture,
+        };
+
+        // Superadmin-only login successful
+        setAdminWithDebug(adminUser);
+        setAdminEmail(adminUser.email);
+        hasInitializedRef.current = true; // Mark as initialized to prevent re-running
+
+        // Reset Apollo Client to ensure new token is used
+        await apolloClient.resetStore();
+        // Apollo Client reset complete
+
+        // Wait a bit longer to ensure the token is properly set
+        setTimeout(() => {
+          // Navigating to /sadmin-dashboard after superadmin-only login
+          hasRedirectedRef.current = true; // Prevent initialization effect from overriding
+          navigate('/sadmin-dashboard');
+        }, 500);
+
+        return adminUser;
+      }
+
+      throw new Error('SuperAdmin login failed');
     } catch (error: any) {
       // Extract GraphQL or network error message for UI
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
-      const message = graphQLError || networkError || error?.message || 'Login failed';
-      console.error('Admin login error:', message);
+      const message = graphQLError || networkError || error?.message || 'SuperAdmin login failed';
+      console.log('SuperAdmin-only login attempt failed:', message);
+      
+      // Handle specific error cases
+      if (message.includes('Account is temporarily locked')) {
+        throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+      }
+      
+      // Throw so the component can display the specific backend error
+      throw new Error(message);
+    }
+  };
+
+  const loginAdmin = async (email: string, password: string): Promise<Admin | null> => {
+    try {
+      const deviceInfo = {
+        deviceId: 'admin-web-client',
+        deviceType: 'web',
+        deviceName: navigator.userAgent,
+      };
+
+      // Only try admin login - reject super admins
+      const result = await loginAdminMutation({
+        variables: { email, password, deviceInfo },
+      });
+
+      // Check for GraphQL errors first
+      if (result.errors && result.errors.length > 0) {
+        const errorMessage = result.errors[0].message;
+        if (errorMessage.includes('Account is temporarily locked')) {
+          throw new Error('Your account is temporarily locked because you entered wrong credentials many times. Please try again later.');
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (result.data?.loginAdmin?.token && result.data?.loginAdmin?.admin) {
+        const { token, admin: adminRaw } = result.data.loginAdmin;
+        localStorage.setItem('adminToken', token);
+
+        const adminUser: Admin = {
+          userId: adminRaw.id,
+          email: adminRaw.email,
+          role: adminRaw.role,
+          isEmailVerified: adminRaw.isEmailVerified,
+          firstName: adminRaw.firstName,
+          middleName: adminRaw.middleName,
+          lastName: adminRaw.lastName,
+          companyName: adminRaw.companyName,
+          companyAddress: adminRaw.companyAddress,
+          contactNumber: adminRaw.contactNumber,
+          profilePicture: adminRaw.profilePicture,
+        };
+
+        console.log('✅ AdminAuthContext: Admin-only login successful, setting admin:', adminUser);
+        setAdminWithDebug(adminUser);
+        setAdminEmail(adminUser.email);
+        hasInitializedRef.current = true; // Mark as initialized to prevent re-running
+
+        // Reset Apollo Client to ensure new token is used
+        await apolloClient.resetStore();
+        // Apollo Client reset complete
+
+        // Wait a bit longer to ensure the token is properly set
+        setTimeout(() => {
+          // Navigating to /admin after admin-only login
+          hasRedirectedRef.current = true; // Prevent initialization effect from overriding
+          navigate('/admin');
+        }, 500);
+
+        return adminUser;
+      }
+
+      throw new Error('Admin login failed');
+    } catch (error: any) {
+      // Extract GraphQL or network error message for UI
+      const graphQLError = error?.graphQLErrors?.[0]?.message;
+      const networkError = error?.networkError?.message;
+      const message = graphQLError || networkError || error?.message || 'Admin login failed';
+      console.log('Admin-only login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {
@@ -391,25 +404,45 @@ export const AdminAuthProvider: React.FC<{
 
   const logout = async (): Promise<void> => {
     try {
-      // First, clear admin state to prevent any new authenticated requests
+      // Set logout flag to prevent ProtectedRoute from redirecting
+      setIsLoggingOut(true);
+      
+      // Store the current admin role before clearing state
+      const currentAdminRole = admin?.role;
+      
+      // Navigate first based on the user's role
+      if (currentAdminRole === 'SUPERADMIN') {
+        navigate('/sadmin-login');
+      } else {
+        navigate('/admin-login');
+      }
+      
+      // Then clear admin state
       setAdminWithDebug(null);
       setAdminEmail('');
 
       // Clear localStorage
       localStorage.removeItem('adminToken');
 
-      // Reset Apollo store AFTER clearing tokens and state
-      await apolloClient.resetStore();
-      
-      // Navigate to admin login
-      navigate('/admin-login');
+      // Clear Apollo store AFTER clearing tokens and state (no refetch)
+      await apolloClient.clearStore();
     } catch (error) {
       console.error('Logout error:', error);
       // Even if there's an error, ensure we clear everything and navigate
+      const currentAdminRole = admin?.role;
+      
+      if (currentAdminRole === 'SUPERADMIN') {
+        navigate('/sadmin-login');
+      } else {
+        navigate('/admin-login');
+      }
+      
       setAdminWithDebug(null);
       setAdminEmail('');
       localStorage.removeItem('adminToken');
-      navigate('/admin-login');
+    } finally {
+      // Reset logout flag
+      setIsLoggingOut(false);
     }
   };
 
@@ -424,23 +457,20 @@ export const AdminAuthProvider: React.FC<{
 
   const contextValue = useMemo(
     () => {
-      console.log('🔄 AdminAuthContext: Creating context value with admin:', admin);
-      console.log('🔄 AdminAuthContext: Context dependencies changed:', {
-        adminChanged: !!admin,
-        adminEmailChanged: !!adminEmail,
-        isLoadingChanged: isLoading,
-        isInitializedChanged: isInitialized
-      });
+      // Creating context value with admin
+      // Context dependencies changed
       return {
         admin,
         adminEmail,
         setAdmin: setAdminWithDebug,
         setAdminEmail,
-        login,
+        loginAdmin,
+        loginSuperAdmin,
         logout,
         isAuthenticated: !!admin,
         isLoading,
         isInitialized,
+        isLoggingOut,
         navigate,
         debugToken,
       };
@@ -450,7 +480,9 @@ export const AdminAuthProvider: React.FC<{
       adminEmail,
       isLoading,
       isInitialized,
-      login,
+      isLoggingOut,
+      loginAdmin,
+      loginSuperAdmin,
       logout,
       navigate,
       debugToken,

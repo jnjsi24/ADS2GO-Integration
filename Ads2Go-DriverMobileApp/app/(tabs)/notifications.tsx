@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../../config/api';
+import API_CONFIG from '../../config/api';
 
 interface Notification {
   id: string;
@@ -28,8 +28,6 @@ interface Notification {
 const GET_DRIVER_NOTIFICATIONS = `
   query GetDriverNotifications($driverId: ID!) {
     getDriverNotifications(driverId: $driverId) {
-      success
-      message
       notifications {
         id
         title
@@ -99,7 +97,7 @@ export default function NotificationsScreen() {
 
       const result = await response.json();
 
-      if (result.data?.getDriverNotifications?.success) {
+      if (result.data?.getDriverNotifications) {
         const notificationData = result.data.getDriverNotifications;
         setNotifications(notificationData.notifications || []);
         setUnreadCount(notificationData.unreadCount || 0);

@@ -38,11 +38,11 @@ export const AdminNotificationSettingsProvider: React.FC<AdminNotificationSettin
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch notification preferences
+  // Fetch notification preferences (skip for SuperAdmins)
   const { loading: preferencesLoading, refetch: refetchPreferences } = useQuery(
     GET_ADMIN_NOTIFICATION_PREFERENCES,
     {
-      skip: !isAuthenticated || !admin,
+      skip: !isAuthenticated || !admin || admin.role === 'SUPERADMIN',
       onCompleted: (data) => {
         console.log('🔔 AdminNotificationSettings: Preferences loaded:', data);
         if (data?.getAdminNotificationPreferences) {

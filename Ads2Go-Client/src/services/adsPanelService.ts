@@ -1,8 +1,6 @@
 // AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
 // Force correct API base URL for REST endpoints (not GraphQL)
-const serverUrl = process.env.REACT_APP_API_URL;
-// Force localhost for now to fix connection issues
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
@@ -98,11 +96,26 @@ class AdsPanelServiceV4 {
     console.log('🌐 [makeRequest] endpoint:', endpoint);
     console.log('🌐 [makeRequest] final URL:', url);
     
+    // Get authentication token from localStorage
+    const adminToken = localStorage.getItem('adminToken');
+    const userToken = localStorage.getItem('userToken');
+    const token = adminToken || userToken;
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    
+    // Add authorization header if token exists
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('🔐 [makeRequest] Adding auth token:', token.substring(0, 20) + '...');
+    } else {
+      console.warn('⚠️ [makeRequest] No auth token found - request may fail with 401');
+    }
+    
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       // Add timeout to prevent hanging
       signal: AbortSignal.timeout(10000), // 10 second timeout
       ...options,

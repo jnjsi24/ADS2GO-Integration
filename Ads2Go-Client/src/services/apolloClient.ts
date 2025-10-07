@@ -58,13 +58,42 @@ const authLink = setContext((_, { headers }) => {
 const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path, extensions }) => {
-      // Don't log authentication errors during logout process
-      if (message === 'Not authenticated' && 
-          (operation.operationName === 'logout' || 
-           operation.operationName === 'getOwnUserDetails' ||
-           operation.operationName === 'getUserNotifications' ||
-           operation.operationName === 'getUserAnalytics')) {
-        console.log(`[GraphQL]: Expected auth error during ${operation.operationName} - user is logging out`);
+      // Soften logging for expected unauthenticated states (e.g., after logout)
+      if (message === 'Not authenticated') {
+        console.log(`[GraphQL]: Auth state missing during ${operation.operationName || 'unknown operation'} (likely after logout)`);
+        return;
+      }
+      // Soften login credential errors (common/expected during failed login attempts)
+      if (
+        (message === 'Invalid password' ||
+         message === 'Invalid credentials' ||
+         message?.includes('temporarily locked')) &&
+        (
+          operation.operationName === 'loginAdmin' ||
+          operation.operationName === 'LoginAdmin' ||
+          operation.operationName === 'loginSuperAdmin' ||
+          operation.operationName === 'LoginSuperAdmin' ||
+          operation.operationName === 'loginUser' ||
+          operation.operationName === 'LoginUser' ||
+          operation.operationName === 'login' ||
+          operation.operationName === 'Login'
+        )
+      ) {
+        console.log(`[GraphQL]: Expected login failure for ${operation.operationName}: ${message}`);
+        return;
+      }
+      // Soften logging for SUPERADMIN-only authorization guard
+      if (message === 'Unauthorized: Only SUPERADMIN can view pricing configurations') {
+        console.log('[GraphQL]: Skipping SUPERADMIN-only data for non-superadmin user');
+        return;
+      }
+      
+      // Don't log "Failed to fetch analytics data" as an error - it's expected for new users
+      if (message === 'Failed to fetch analytics data' && 
+          (operation.operationName === 'getUserAnalytics' || 
+           operation.operationName === 'GetUserAnalytics' ||
+           path?.includes('getUserAnalytics'))) {
+        console.log(`[GraphQL]: No analytics data found for user - this is normal for new users`);
         return;
       }
       

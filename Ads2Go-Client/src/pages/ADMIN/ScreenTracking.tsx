@@ -160,7 +160,7 @@ const ScreenTracking: React.FC = () => {
     try {
       console.log('🚀 Starting historical route fetch:', { deviceId, date });
       setLoadingHistorical(true);
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const url = `${baseUrl}/deviceTracking/route/${deviceId}?date=${date}`;
       console.log('📡 Fetching from URL:', url);
       

@@ -1,5 +1,5 @@
 // Simple script to verify Gmail App Password setup
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 const nodemailer = require('nodemailer');
 
 async function verifyGmailSetup() {

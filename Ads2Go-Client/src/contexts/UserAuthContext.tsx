@@ -306,7 +306,7 @@ export const UserAuthProvider: React.FC<{
       const graphQLError = error?.graphQLErrors?.[0]?.message;
       const networkError = error?.networkError?.message;
       const message = graphQLError || networkError || error?.message || 'Login failed';
-      console.error('User login error:', message);
+      console.log('User login attempt failed:', message);
       
       // Handle specific error cases
       if (message.includes('Account is temporarily locked')) {
@@ -409,8 +409,8 @@ export const UserAuthProvider: React.FC<{
         // Continue with logout even if mutation fails
       }
 
-      // Reset Apollo store AFTER clearing tokens and state
-      await apolloClient.resetStore();
+      // Clear Apollo store AFTER clearing tokens and state (no refetch)
+      await apolloClient.clearStore();
       
       // Navigate to login
       navigate('/login');

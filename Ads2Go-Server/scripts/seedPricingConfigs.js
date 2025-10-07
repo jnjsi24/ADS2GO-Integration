@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 
 // Import the PricingConfig model
 const PricingConfig = require('../src/models/PricingConfig');

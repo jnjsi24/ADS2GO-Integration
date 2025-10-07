@@ -16,9 +16,6 @@ if (!EXPO_PUBLIC_API_URL && (!serverIp || !serverPort)) {
 
 const serverUrl = serverIp && serverPort ? `http://192.168.100.2:8081` : null;
 
-console.log('🔍 EXPO_PUBLIC_API_URL:', EXPO_PUBLIC_API_URL);
-console.log('🔍 Server IP:', serverIp);
-console.log('🔍 Server Port:', serverPort);
 
 const API_CONFIG = {
   // Use environment variable with fallback to constructed URL
@@ -41,6 +38,5 @@ const API_CONFIG = {
   // BASE_URL: "http://10.0.2.2:5000"
 };
 
-console.log('🔍 Final API_CONFIG:', API_CONFIG);
 
 export default API_CONFIG;

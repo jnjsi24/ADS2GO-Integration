@@ -51,17 +51,13 @@ router.post('/location-update', async (req, res) => {
 
     // Track by material (car) instead of individual device
     console.log(`📍 Processing location update from Slot ${deviceSlot} for material ${materialId} (device: ${deviceId})`);
-    console.log(`🔍 Request body:`, JSON.stringify(req.body, null, 2));
 
     // Find or create car tracking record for today
     let carTracking = await DeviceTracking.findByMaterialId(materialId);
-    console.log(`🔍 Found existing car record by materialId: ${carTracking ? 'YES' : 'NO'}`);
     
     // If not found by materialId, try to find by deviceId (fallback for restart scenarios)
     if (!carTracking) {
-      console.log(`🔍 Trying to find car record by deviceId: ${deviceId}`);
       carTracking = await DeviceTracking.findByDeviceId(deviceId);
-      console.log(`🔍 Found existing car record by deviceId: ${carTracking ? 'YES' : 'NO'}`);
       
       if (carTracking) {
         console.log(`🔄 Found car record by deviceId, updating materialId to: ${materialId}`);
@@ -569,24 +565,16 @@ router.get('/route/:deviceId', async (req, res) => {
       };
     }
 
-    console.log(`🔍 [DEVICE_TRACKING_ROUTE] Searching for deviceId: ${deviceId}, date: ${date}`);
-    console.log(`🔍 [DEVICE_TRACKING_ROUTE] Query:`, JSON.stringify(query, null, 2));
 
     // Find historical records
     const historyRecords = await DeviceDataHistoryV2.find(query)
       .sort({ date: -1 })
       .limit(parseInt(limit));
 
-    console.log(`📊 [DEVICE_TRACKING_ROUTE] Found ${historyRecords.length} historical records`);
     
     if (historyRecords.length === 0) {
       // Debug: List all available records for this device
       const allRecords = await DeviceDataHistoryV2.find({ materialId: deviceId }).select('dailyData.date dailyData.totalDistanceTraveled dailyData.locationHistory').sort({ 'dailyData.date': -1 }).limit(10);
-      console.log(`🔍 [DEVICE_TRACKING_ROUTE] Available records for device ${deviceId}:`, allRecords.map(r => ({
-        date: r.date,
-        totalDistanceTraveled: r.totalDistanceTraveled,
-        locationHistoryLength: r.locationHistory ? r.locationHistory.length : 0
-      })));
       
       return res.status(404).json({
         success: false,

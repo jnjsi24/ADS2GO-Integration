@@ -70,9 +70,35 @@ const resolvers = {
       const normalizedEmail = email.toLowerCase().trim();
       if (await SuperAdmin.findOne({ email: normalizedEmail })) throw new Error('Email already exists');
 
-      let normalizedNumber = contactNumber.replace(/\s/g, '');
-      const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
-      if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      // Clean the number (remove spaces and non-digit characters except +)
+      let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+      
+      // Handle different input formats:
+      // 1. 09748717212 -> should be valid (10 digits starting with 09)
+      // 2. +639748717212 -> should be valid (10 digits after +63)
+      // 3. 639748717212 -> should be valid (10 digits after 63)
+      
+      let isValid = false;
+      
+      // Check if it's 10 digits starting with 09
+      if (/^09\d{8}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after +63
+      else if (/^\+639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after 63 (without +)
+      else if (/^639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      
+      if (!isValid) {
+        throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212 or +639748717212');
+      }
+      
+      // Normalize to +63 format for storage
+      let normalizedNumber = cleanNumber;
       if (!normalizedNumber.startsWith('+63')) {
         normalizedNumber = normalizedNumber.startsWith('0')
           ? '+63' + normalizedNumber.substring(1)
@@ -110,16 +136,7 @@ const resolvers = {
     loginSuperAdmin: async (_, { email, password, deviceInfo }) => {
       console.log(`SuperAdmin login from: ${deviceInfo.deviceType} - ${deviceInfo.deviceName}`);
 
-      const normalizedEmail = email.toLowerCase().trim();
-      
-      // Search for SuperAdmin by primary email or recovery email
-      const superAdmin = await SuperAdmin.findOne({
-        $or: [
-          { email: normalizedEmail },
-          { recoveryEmail: normalizedEmail }
-        ]
-      });
-      
+      const superAdmin = await SuperAdmin.findOne({ email: email.toLowerCase().trim() });
       if (!superAdmin || superAdmin.role !== 'SUPERADMIN')
         throw new Error('No superadmin found with this email');
 
@@ -158,7 +175,7 @@ const resolvers = {
     updateSuperAdmin: async (_, { superAdminId, input }, { superAdmin }) => {
       checkAuth(superAdmin);
 
-      // SuperAdmins can update their own account
+      // SuperAdmins can only update their own account or other SuperAdmins
       if (superAdmin.id !== superAdminId) {
         throw new Error('You can only update your own details');
       }
@@ -169,14 +186,45 @@ const resolvers = {
       const {
         firstName, middleName, lastName,
         companyName, companyAddress,
-        contactNumber, email, recoveryEmail, profilePicture, password, isActive, permissions
+        contactNumber, email, password, isActive, permissions, profilePicture
       } = input;
 
       // Validate contact number if provided
-      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
-      if (normalizedNumber) {
-        const phoneRegex = /^(09\d{9}|\+639\d{9})$/;
-        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      let normalizedNumber = null;
+      if (contactNumber) {
+        // Clean the number (remove spaces and non-digit characters except +)
+        let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+        
+        // Handle different input formats:
+        // 1. 09748717212 -> should be valid (10 digits starting with 09)
+        // 2. +639748717212 -> should be valid (10 digits after +63)
+        // 3. 639748717212 -> should be valid (10 digits after 63)
+        
+        let isValid = false;
+        
+        // Check if it's 10 digits starting with 09
+        if (/^09\d{8}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after +63
+        else if (/^\+639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after 63 (without +)
+        else if (/^639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits starting with 9 (client sends this format)
+        else if (/^9\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        
+        if (!isValid) {
+          throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212, +639748717212, or 9748717212');
+        }
+        
+        // Normalize to +63 format for storage
+        normalizedNumber = cleanNumber;
         if (!normalizedNumber.startsWith('+63')) {
           normalizedNumber = normalizedNumber.startsWith('0')
             ? '+63' + normalizedNumber.substring(1)
@@ -192,17 +240,6 @@ const resolvers = {
         superAdminToUpdate.email = email.toLowerCase();
       }
 
-      // Validate recovery email if provided
-      if (recoveryEmail !== undefined) {
-        if (recoveryEmail && !validator.isEmail(recoveryEmail)) {
-          throw new Error('Invalid recovery email address');
-        }
-        if (recoveryEmail && recoveryEmail === superAdminToUpdate.email) {
-          throw new Error('Recovery email cannot be the same as primary email');
-        }
-        superAdminToUpdate.recoveryEmail = recoveryEmail ? recoveryEmail.toLowerCase() : null;
-      }
-
       // Update fields
       if (firstName) superAdminToUpdate.firstName = firstName.trim();
       if (middleName !== undefined) superAdminToUpdate.middleName = middleName ? middleName.trim() : null;
@@ -210,7 +247,7 @@ const resolvers = {
       if (companyName) superAdminToUpdate.companyName = companyName.trim();
       if (companyAddress) superAdminToUpdate.companyAddress = companyAddress.trim();
       if (normalizedNumber) superAdminToUpdate.contactNumber = normalizedNumber;
-      if (profilePicture !== undefined) superAdminToUpdate.profilePicture = profilePicture;
+      if (profilePicture) superAdminToUpdate.profilePicture = profilePicture;
       if (isActive !== undefined) superAdminToUpdate.isActive = isActive;
 
       // Update permissions if provided
@@ -322,16 +359,7 @@ const resolvers = {
     },
 
     requestSuperAdminPasswordReset: async (_, { email }) => {
-      const normalizedEmail = email.toLowerCase().trim();
-      
-      // Search for SuperAdmin by primary email or recovery email
-      const superAdmin = await SuperAdmin.findOne({
-        $or: [
-          { email: normalizedEmail },
-          { recoveryEmail: normalizedEmail }
-        ]
-      });
-      
+      const superAdmin = await SuperAdmin.findOne({ email: email.toLowerCase().trim() });
       if (!superAdmin) throw new Error("No superadmin found with this email");
 
       const resetCode = EmailService.generateVerificationCode();
@@ -339,8 +367,7 @@ const resolvers = {
       superAdmin.emailVerificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
       await superAdmin.save();
-      // Send reset code to the email that was used for the request
-      await EmailService.sendVerificationEmail(normalizedEmail, resetCode);
+      await EmailService.sendVerificationEmail(superAdmin.email, resetCode);
 
       return true;
     },
@@ -366,41 +393,6 @@ const resolvers = {
       return true;
     },
 
-    updateSuperAdminNotificationPreferences: async (_, { input }, { superAdmin }) => {
-      checkAuth(superAdmin);
-      
-      const superAdminRecord = await SuperAdmin.findById(superAdmin.id);
-      if (!superAdminRecord) throw new Error('SuperAdmin not found');
-
-      // Update notification preferences
-      if (superAdminRecord.notificationPreferences) {
-        Object.keys(input).forEach(key => {
-          if (input[key] !== undefined) {
-            superAdminRecord.notificationPreferences[key] = input[key];
-          }
-        });
-      } else {
-        // Initialize notification preferences if they don't exist
-        superAdminRecord.notificationPreferences = {
-          enableDesktopNotifications: false,
-          enableNotificationBadge: true,
-          pushNotificationTimeout: '10',
-          communicationEmails: false,
-          announcementsEmails: true,
-          disableNotificationSounds: true,
-          ...input
-        };
-      }
-
-      await superAdminRecord.save();
-
-      return {
-        success: true,
-        message: 'Notification preferences updated successfully',
-        superAdmin: superAdminRecord
-      };
-    },
-
     // Admin management mutations (for SuperAdmins)
     createAdmin: async (_, { input }, { superAdmin }) => {
       checkAuth(superAdmin);
@@ -415,9 +407,35 @@ const resolvers = {
 
       if (await Admin.findOne({ email })) throw new Error('Email already exists');
 
-      let normalizedNumber = contactNumber.replace(/\s/g, '');
-      const phoneRegex = /^(\+63|0)?\d{10}$/;
-      if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
+      // Clean the number (remove spaces and non-digit characters except +)
+      let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+      
+      // Handle different input formats:
+      // 1. 09748717212 -> should be valid (10 digits starting with 09)
+      // 2. +639748717212 -> should be valid (10 digits after +63)
+      // 3. 639748717212 -> should be valid (10 digits after 63)
+      
+      let isValid = false;
+      
+      // Check if it's 10 digits starting with 09
+      if (/^09\d{8}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after +63
+      else if (/^\+639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      // Check if it's 10 digits after 63 (without +)
+      else if (/^639\d{9}$/.test(cleanNumber)) {
+        isValid = true;
+      }
+      
+      if (!isValid) {
+        throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212 or +639748717212');
+      }
+      
+      // Normalize to +63 format for storage
+      let normalizedNumber = cleanNumber;
       if (!normalizedNumber.startsWith('+63')) {
         normalizedNumber = normalizedNumber.startsWith('0')
           ? '+63' + normalizedNumber.substring(1)
@@ -465,14 +483,36 @@ const resolvers = {
       } = input;
 
       // Validate contact number if provided
-      let normalizedNumber = contactNumber ? contactNumber.replace(/\s/g, '') : null;
-      if (normalizedNumber) {
-        const phoneRegex = /^(\+63|0)?\d{10}$/;
-        if (!phoneRegex.test(normalizedNumber)) throw new Error('Invalid Philippine mobile number');
-        if (!normalizedNumber.startsWith('+63')) {
-          normalizedNumber = normalizedNumber.startsWith('0')
-            ? '+63' + normalizedNumber.substring(1)
-            : '+63' + normalizedNumber;
+      if (contactNumber) {
+        // Clean the number (remove spaces and non-digit characters except +)
+        let cleanNumber = contactNumber.replace(/[^\d+]/g, '');
+        
+        // Handle different input formats:
+        // 1. 09748717212 -> should be valid (10 digits starting with 09)
+        // 2. +639748717212 -> should be valid (10 digits after +63)
+        // 3. 639748717212 -> should be valid (10 digits after 63)
+        
+        let isValid = false;
+        
+        // Check if it's 10 digits starting with 09
+        if (/^09\d{8}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after +63
+        else if (/^\+639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits after 63 (without +)
+        else if (/^639\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        // Check if it's 10 digits starting with 9 (client sends this format)
+        else if (/^9\d{9}$/.test(cleanNumber)) {
+          isValid = true;
+        }
+        
+        if (!isValid) {
+          throw new Error('Invalid Philippine mobile number. Must be exactly 10 digits starting with 9. Formats: 09748717212, +639748717212, or 9748717212');
         }
       }
 

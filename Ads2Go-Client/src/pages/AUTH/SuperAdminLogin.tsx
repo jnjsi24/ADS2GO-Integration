@@ -5,7 +5,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 
 const SuperAdminLogin: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAdminAuth();
+  const { loginSuperAdmin } = useAdminAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,9 +36,9 @@ const SuperAdminLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      const result = await login(email, password);
+      const result = await loginSuperAdmin(email, password);
       if (result) {
-        console.log('SuperAdmin login successful, navigating...');
+        // SuperAdmin login successful, navigating
         // Navigation handled by AdminAuthContext
       }
     } catch (error: any) {

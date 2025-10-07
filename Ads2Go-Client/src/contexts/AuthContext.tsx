@@ -76,8 +76,8 @@ export const AuthProvider: React.FC<{
   const [fetchAdminDetails] = useLazyQuery(GET_OWN_ADMIN_DETAILS);
   const [fetchSuperAdminDetails] = useLazyQuery(GET_OWN_SUPERADMIN_DETAILS);
 
-  // ✅ Added /superadmin-login to publicPages
-  const publicPages = ['/login', '/register', '/forgot-password', '/superadmin-login'];
+  // ✅ Added /sadmin-login to publicPages
+  const publicPages = ['/login', '/register', '/forgot-password', '/sadmin-login'];
 
   const navigateToRegister = useCallback(() => {
     navigate('/register');
@@ -179,7 +179,7 @@ export const AuthProvider: React.FC<{
         setIsInitialized(true);
 
         if (!hasRedirectedRef.current) {
-          if (window.location.pathname === '/superadmin-login') {
+          if (window.location.pathname === '/sadmin-login') {
             return;
           }
 
@@ -425,7 +425,7 @@ export const AuthProvider: React.FC<{
 
       setUser(null);
       setUserEmail('');
-      await apolloClient.resetStore();
+      await apolloClient.clearStore();
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);

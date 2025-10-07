@@ -14,8 +14,6 @@ const typeDefs = gql`
     middleName: String
     lastName: String!
     email: String!
-    recoveryEmail: String
-    profilePicture: String
     companyName: String!
     companyAddress: String!
     contactNumber: String!
@@ -26,7 +24,8 @@ const typeDefs = gql`
     createdAt: String!
     updatedAt: String!
     permissions: SuperAdminPermissions!
-    notificationPreferences: SuperAdminNotificationPreferences!
+    profilePicture: String
+    notificationPreferences: SuperAdminNotificationPreferences
   }
 
   type SuperAdminPermissions {
@@ -101,9 +100,8 @@ const typeDefs = gql`
     companyAddress: String
     contactNumber: String
     email: String
-    recoveryEmail: String
-    profilePicture: String
     password: String
+    profilePicture: String
     isActive: Boolean
     permissions: UpdateSuperAdminPermissionsInput
   }
@@ -119,15 +117,6 @@ const typeDefs = gql`
     systemSettings: Boolean
     databaseManagement: Boolean
     auditLogs: Boolean
-  }
-
-  input UpdateSuperAdminNotificationPreferencesInput {
-    enableDesktopNotifications: Boolean
-    enableNotificationBadge: Boolean
-    pushNotificationTimeout: String
-    communicationEmails: Boolean
-    announcementsEmails: Boolean
-    disableNotificationSounds: Boolean
   }
 
   # Admin management inputs (for SuperAdmins)
@@ -207,9 +196,6 @@ const typeDefs = gql`
     changeSuperAdminPassword(currentPassword: String!, newPassword: String!): Boolean!
     requestSuperAdminPasswordReset(email: String!): Boolean!
     resetSuperAdminPassword(token: String!, newPassword: String!): Boolean!
-
-    # Notification preferences
-    updateSuperAdminNotificationPreferences(input: UpdateSuperAdminNotificationPreferencesInput!): SuperAdminResponse!
   }
 `;
 

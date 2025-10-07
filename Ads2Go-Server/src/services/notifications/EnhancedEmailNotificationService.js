@@ -197,8 +197,12 @@ class EnhancedEmailNotificationService {
    */
   static async getQueuedEmailStats(userId) {
     try {
+      const objectId = mongoose.Types.ObjectId.isValid(userId)
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+
       const stats = await EmailNotificationQueue.aggregate([
-        { $match: { userId: mongoose.Types.ObjectId(userId) } },
+        { $match: { userId: objectId } },
         {
           $group: {
             _id: '$status',
