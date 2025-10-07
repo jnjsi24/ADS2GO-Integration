@@ -248,6 +248,75 @@ router.post('/sync', async (req, res) => {
   }
 });
 
+// POST /analytics/user-sync - Manually trigger UserAnalytics sync job
+router.post('/user-sync', async (req, res) => {
+  try {
+    const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+    
+    console.log('🔄 Manual UserAnalytics sync triggered');
+    await userAnalyticsSyncJob.syncAllUsers();
+    
+    res.json({
+      success: true,
+      message: 'UserAnalytics sync completed successfully'
+    });
+  } catch (error) {
+    console.error('Error in manual UserAnalytics sync:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to sync UserAnalytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user-analytics/:userId - Check UserAnalytics data for debugging
+router.get('/user-analytics/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const UserAnalytics = require('../models/userAnalytics');
+    
+    const userAnalytics = await UserAnalytics.findOne({ userId });
+    
+    if (!userAnalytics) {
+      return res.status(404).json({
+        success: false,
+        message: 'UserAnalytics not found'
+      });
+    }
+    
+    // Return summary data for debugging
+    res.json({
+      success: true,
+      data: {
+        userId: userAnalytics.userId,
+        totalAdPlays: userAnalytics.totalAdPlays,
+        totalAdImpressions: userAnalytics.totalAdImpressions,
+        totalAdPlayTime: userAnalytics.totalAdPlayTime,
+        totalQRScans: userAnalytics.totalQRScans,
+        totalMaterials: userAnalytics.totalMaterials,
+        adsCount: userAnalytics.ads?.length || 0,
+        materialBreakdownCount: userAnalytics.materialBreakdown?.length || 0,
+        lastUpdated: userAnalytics.updatedAt,
+        // Show first few materials for debugging
+        sampleMaterials: userAnalytics.materialBreakdown?.slice(0, 3).map(m => ({
+          materialId: m.materialId,
+          totalAdPlays: m.totalAdPlays,
+          totalQRScans: m.totalQRScans,
+          lastActivity: m.lastActivity
+        })) || []
+      }
+    });
+  } catch (error) {
+    console.error('Error getting UserAnalytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get UserAnalytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // POST /analytics/update - Update analytics from Android player
 router.post('/update', async (req, res) => {
   try {

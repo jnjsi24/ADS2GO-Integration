@@ -2158,7 +2158,7 @@ class UserAnalyticsService {
   }
 
   // Get analytics data for a specific device
-  static async getDeviceAnalytics(deviceId, startDate = null, endDate = null) {
+  static async getDeviceAnalytics(deviceId, startDate = null, endDate = null, userId = null) {
     try {
       const DeviceTracking = require('../models/deviceTracking');
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
@@ -2196,7 +2196,7 @@ class UserAnalyticsService {
       });
 
       // Get ads associated with this device
-      const deviceAds = await Ad.find({
+      let adsQuery = {
         $or: [
           { materialId: material._id },
           { targetDevices: material._id }
@@ -2204,7 +2204,14 @@ class UserAnalyticsService {
         paymentStatus: 'PAID',
         adStatus: 'ACTIVE',
         status: { $in: ['RUNNING', 'APPROVED'] }
-      });
+      };
+
+      // Filter by userId if provided (for user-specific device analytics)
+      if (userId) {
+        adsQuery.userId = userId;
+      }
+
+      const deviceAds = await Ad.find(adsQuery);
 
       // Process current day data
       let currentDayStats = {
