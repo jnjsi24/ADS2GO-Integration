@@ -1208,44 +1208,168 @@ router.post('/updateDriverActivity', async (req, res) => {
 });
 
 // GET /adAnalytics/:deviceId - Get ad analytics for a specific device
-router.get('/adAnalytics/:deviceId', async (req, res) => {
+router.get('/adAnalytics/:deviceId', checkAdminMiddleware, async (req, res) => {
   try {
     const { deviceId } = req.params;
     const { date } = req.query;
 
-    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
-    if (!deviceTracking) {
+    console.log(`🔍 Getting device analytics for device ${deviceId} and user ${req.user.id}`);
+
+    // Get user analytics data
+    const UserAnalytics = require('../models/userAnalytics');
+    const userAnalytics = await UserAnalytics.findOne({ userId: req.user.id });
+    
+    if (!userAnalytics) {
       return res.status(404).json({
         success: false,
-        message: 'Device tracking record not found'
+        message: 'User analytics not found'
       });
     }
 
-    let adPerformance = deviceTracking.adPerformance || [];
-    let dailyStats = deviceTracking.screenMetrics.dailyAdStats || {};
+    // Check if user has any ads on this device
+    const userAdsOnDevice = [];
+    userAnalytics.ads.forEach(ad => {
+      const deviceMaterials = ad.materials.filter(material => material.materialId === deviceId);
+      if (deviceMaterials.length > 0) {
+        userAdsOnDevice.push({
+          adId: ad.adId,
+          adTitle: ad.adTitle,
+          materials: deviceMaterials
+        });
+      }
+    });
 
-    // Filter by date if provided
-    if (date) {
-      const targetDate = new Date(date);
-      // You can add date filtering logic here if needed
+    if (userAdsOnDevice.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No ads found for this user on this device'
+      });
     }
+
+    // Calculate material breakdown from user's actual ads only
+    let materialBreakdown = {
+      materialId: deviceId,
+      carGroupId: userAdsOnDevice[0].materials[0].carGroupId,
+      totalAdPlays: 0,
+      totalAdPlayTime: 0,
+      totalAdImpressions: 0,
+      totalQRScans: 0,
+      totalDays: 0,
+      lastActivity: null,
+      isOnline: false
+    };
+
+    // Calculate totals from user's actual ads only
+    const userAds = [];
+    const adPerformance = [];
+
+    userAdsOnDevice.forEach(adData => {
+      userAds.push({
+        adId: adData.adId,
+        adTitle: adData.adTitle
+      });
+
+      // Aggregate performance data for this ad on this device
+      let adTotalPlays = 0;
+      let adTotalImpressions = 0;
+      let adTotalPlayTime = 0;
+      let adTotalQRScans = 0;
+      let adCompletionRate = 0;
+      let lastPlayed = null;
+
+      adData.materials.forEach(material => {
+        adTotalPlays += material.adPlaybacks ? material.adPlaybacks.length : 0;
+        adTotalImpressions += material.totalAdImpressions || 0;
+        adTotalPlayTime += material.totalAdPlayTime || 0;
+        adTotalQRScans += material.totalQRScans || 0;
+        adCompletionRate += material.averageAdCompletionRate || 0;
+        
+        // Update material breakdown totals (user's ads only)
+        materialBreakdown.totalAdPlays += material.totalAdImpressions || 0; // Use impressions as play count
+        materialBreakdown.totalAdImpressions += material.totalAdImpressions || 0;
+        materialBreakdown.totalAdPlayTime += material.totalAdPlayTime || 0;
+        materialBreakdown.totalQRScans += material.totalQRScans || 0;
+        
+        // Update last activity
+        if (material.lastSeen && (!materialBreakdown.lastActivity || new Date(material.lastSeen) > new Date(materialBreakdown.lastActivity))) {
+          materialBreakdown.lastActivity = material.lastSeen;
+        }
+        
+        // Update online status
+        if (material.isOnline) {
+          materialBreakdown.isOnline = true;
+        }
+        
+        // Find latest playback
+        if (material.adPlaybacks && material.adPlaybacks.length > 0) {
+          const latestPlayback = material.adPlaybacks.reduce((latest, playback) => {
+            return (!latest || new Date(playback.startTime) > new Date(latest.startTime)) ? playback : latest;
+          });
+          if (!lastPlayed || new Date(latestPlayback.startTime) > new Date(lastPlayed)) {
+            lastPlayed = latestPlayback.startTime;
+          }
+        }
+      });
+
+      adPerformance.push({
+        adId: adData.adId.toString(),
+        adTitle: adData.adTitle,
+        playCount: adTotalPlays,
+        impressions: adTotalImpressions,
+        totalViewTime: adTotalPlayTime,
+        completionRate: adData.materials.length > 0 ? adCompletionRate / adData.materials.length : 0,
+        qrScans: adTotalQRScans,
+        lastPlayed: lastPlayed
+      });
+    });
+
+    // Sort ad performance by impressions (descending)
+    adPerformance.sort((a, b) => b.impressions - a.impressions);
+
+    // Get current ad (if any) - only from user's ads
+    let currentAd = null;
+    userAdsOnDevice.forEach(adData => {
+      adData.materials.forEach(material => {
+        if (material.currentAd && material.currentAd.adId) {
+          currentAd = {
+            adId: material.currentAd.adId,
+            adTitle: material.currentAd.adTitle,
+            slotNumber: material.currentAd.slotNumber,
+            startTime: material.currentAd.startTime
+          };
+        }
+      });
+    });
+
+    // Use calculated material breakdown totals (user's ads only)
+    const totals = {
+      totalAdsPlayed: materialBreakdown.totalAdPlays || 0,
+      totalAdImpressions: materialBreakdown.totalAdImpressions || 0,
+      totalAdPlayTime: materialBreakdown.totalAdPlayTime || 0,
+      totalQRScans: materialBreakdown.totalQRScans || 0
+    };
+
+    console.log(`📊 Found ${userAds.length} ads and ${adPerformance.length} performance entries for device ${deviceId}`);
 
     res.json({
       success: true,
       data: {
-        deviceId: deviceTracking.deviceId,
-        materialId: deviceTracking.materialId,
-        currentAd: deviceTracking.currentAd,
-        dailyStats: dailyStats,
+        deviceId: deviceId,
+        materialId: deviceId, // Using deviceId as materialId for consistency
+        currentAd: currentAd,
+        dailyStats: {}, // Can be populated from dailySessions if needed
         adPerformance: adPerformance,
-        totalAdsPlayed: deviceTracking.totalAdPlays,
-        totalAdImpressions: deviceTracking.totalAdImpressions,
-        totalAdPlayTime: deviceTracking.totalAdPlayTime
+        totalAdsPlayed: totals.totalAdsPlayed,
+        totalAdImpressions: totals.totalAdImpressions,
+        totalAdPlayTime: totals.totalAdPlayTime,
+        totalQRScans: totals.totalQRScans,
+        materialBreakdown: materialBreakdown,
+        userAds: userAds
       }
     });
 
   } catch (error) {
-    console.error('Error getting ad analytics:', error);
+    console.error('Error getting device analytics from UserAnalytics:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error'
@@ -1257,6 +1381,9 @@ router.get('/adAnalytics/:deviceId', async (req, res) => {
 router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
   try {
     const { date, materialId, userId } = req.query;
+    
+    // Use authenticated user's ID if no userId is provided in query
+    const effectiveUserId = userId || req.user.id;
 
     let query = { isActive: true };
     if (materialId) {
@@ -1279,15 +1406,16 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
       lastSeen: device.lastSeen
     }));
 
-    // Filter by user if userId is provided
-    if (userId) {
+    // Filter by user (always filter by authenticated user unless admin specifies different user)
+    if (effectiveUserId) {
+      console.log(`🔍 Filtering ad analytics for user: ${effectiveUserId}`);
       
       // Get all ads created by this user
       const Ad = require('../models/Ad');
-      const userAds = await Ad.find({ userId: userId });
+      const userAds = await Ad.find({ userId: effectiveUserId });
       const userAdIds = userAds.map(ad => ad._id.toString());
       
-      console.log(`📊 Found ${userAdIds.length} ads for user ${userId}:`, userAdIds);
+      console.log(`📊 Found ${userAdIds.length} ads for user ${effectiveUserId}:`, userAdIds);
       
       // Filter analytics to only include devices playing ads from this user
       analytics = analytics.filter(tablet => {

@@ -240,10 +240,11 @@ The detailed analytics system provides the following key metrics:
 ### 5. Get Device Analytics
 **Endpoint**: `GET /analytics/device/:deviceId`
 
-**Description**: Retrieves detailed analytics for a specific device/material.
+**Description**: Retrieves detailed analytics for a specific device/material, filtered to only show ads created by the specified user.
 
 **Parameters**:
 - `deviceId` (path): The device/material ID
+- `userId` (query, required): The user ID to filter ads (only shows ads created by this user)
 - `startDate` (query, optional): Start date for filtering (ISO string)
 - `endDate` (query, optional): End date for filtering (ISO string)
 
@@ -385,9 +386,9 @@ const getTotalAdPlays = async (userId, startDate, endDate) => {
 };
 
 // Get device analytics
-const getDeviceAnalytics = async (deviceId, startDate, endDate) => {
+const getDeviceAnalytics = async (deviceId, userId, startDate, endDate) => {
   try {
-    const response = await fetch(`/api/analytics/device/${deviceId}?startDate=${startDate}&endDate=${endDate}`);
+    const response = await fetch(`/api/analytics/device/${deviceId}?userId=${userId}&startDate=${startDate}&endDate=${endDate}`);
     const data = await response.json();
     return data.data;
   } catch (error) {
@@ -425,7 +426,7 @@ const materialsData = await UserAnalyticsService.getActiveTotalMaterials('user12
 const displayTimeData = await UserAnalyticsService.getTotalDisplayTime('user123', startDate, endDate);
 
 // Get device analytics
-const deviceData = await UserAnalyticsService.getDeviceAnalytics('device123', startDate, endDate);
+const deviceData = await UserAnalyticsService.getDeviceAnalytics('device123', startDate, endDate, 'user123');
 
 // Get comprehensive analytics
 const comprehensiveData = await UserAnalyticsService.getComprehensiveAnalytics('user123', startDate, endDate);
