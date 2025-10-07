@@ -40,12 +40,7 @@ const MonthlyPhotoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const DeviceComplianceSchema = new mongoose.Schema({
-  // 1. Device & Driver References
-  deviceId: { 
-    type: String, 
-    required: true,
-    index: true
-  },
+  // 1. Core References
   materialId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Material', 
@@ -57,52 +52,8 @@ const DeviceComplianceSchema = new mongoose.Schema({
     ref: 'Driver',
     index: true 
   },
-  deploymentId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'AdsDeployment',
-    index: true 
-  },
 
-  // 2. Location & Movement
-  location: {
-    type: {
-      type: String,
-      enum: ['Point'],
-      default: 'Point'
-    },
-    coordinates: {
-      type: [Number], // [longitude, latitude]
-      required: true,
-      index: '2dsphere'
-    }
-  },
-  address: { type: String, trim: true },
-  speed: { type: Number, min: 0 }, // km/h
-  heading: { type: Number, min: 0, max: 360 }, // degrees
-  accuracy: { type: Number, min: 0 }, // meters
-  altitude: { type: Number },
-  totalDistanceTraveled: { type: Number, min: 0 },
-  lastKnownLocationTime: { type: Date },
-
-  // 3. Device Status
-  deviceStatus: { 
-    type: String, 
-    enum: ['ONLINE', 'OFFLINE'], 
-    default: 'OFFLINE' 
-  },
-  lastHeartbeat: Date,
-  currentAdId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdsDeployment' },
-  adStartTime: Date,
-  adLoopCount: { type: Number, min: 0 },
-
-  // 4. Ad Performance Metrics
-  totalAdImpressions: { type: Number, min: 0 },
-  
-  // 5. Operational Status (Non-Analytics)
-  lastMaintenanceDate: Date,
-  errorLogs: [ErrorLogSchema],
-
-  // 6. Non-Digital Tracking Fields
+  // 2. Material Condition Tracking (for non-digital materials)
   materialCondition: { 
     type: String, 
     enum: ['GOOD', 'FADED', 'DAMAGED', 'REMOVED'],
@@ -111,7 +62,7 @@ const DeviceComplianceSchema = new mongoose.Schema({
   inspectionPhotos: [{ type: String, trim: true }],
   lastInspectionDate: Date,
   
-  // 7. Monthly Photo Tracking
+  // 3. Monthly Photo Compliance System
   monthlyPhotos: [MonthlyPhotoSchema],
   lastPhotoUpload: { type: Date },
   nextPhotoDue: { type: Date },
@@ -121,13 +72,11 @@ const DeviceComplianceSchema = new mongoose.Schema({
     default: 'COMPLIANT' 
   },
   
-  // 8. Additional Metadata
-  batteryLevel: { type: Number, min: 0, max: 100 }, // percentage
-  signalStrength: { type: Number, min: 0, max: 5 }, // 0-5 bars
-  isOnline: { type: Boolean, default: false },
-  lastSeen: { type: Date, default: Date.now },
+  // 4. Operational Management
+  lastMaintenanceDate: Date,
+  errorLogs: [ErrorLogSchema],
   
-  // 9. System Fields
+  // 5. System Fields
   isActive: { type: Boolean, default: true },
   metadata: { type: mongoose.Schema.Types.Mixed }
 }, { 
@@ -136,28 +85,15 @@ const DeviceComplianceSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Geospatial index for location-based queries
-DeviceComplianceSchema.index({ location: '2dsphere' });
-
-// Compound index for common queries
-DeviceComplianceSchema.index({ deviceId: 1, lastKnownLocationTime: -1 });
-DeviceComplianceSchema.index({ materialId: 1, lastKnownLocationTime: -1 });
-DeviceComplianceSchema.index({ driverId: 1, lastKnownLocationTime: -1 });
+// Compound indexes for common queries
+DeviceComplianceSchema.index({ materialId: 1, lastInspectionDate: -1 });
+DeviceComplianceSchema.index({ driverId: 1, lastInspectionDate: -1 });
 
 // Index for monthly photo tracking
 DeviceComplianceSchema.index({ 'monthlyPhotos.month': 1 });
 DeviceComplianceSchema.index({ photoComplianceStatus: 1 });
 DeviceComplianceSchema.index({ nextPhotoDue: 1 });
-
-// Virtual for getting latitude
-DeviceComplianceSchema.virtual('latitude').get(function() {
-  return this.location?.coordinates?.[1];
-});
-
-// Virtual for getting longitude
-DeviceComplianceSchema.virtual('longitude').get(function() {
-  return this.location?.coordinates?.[0];
-});
+DeviceComplianceSchema.index({ materialCondition: 1 });
 
 // Virtual for current month photo status
 DeviceComplianceSchema.virtual('currentMonthPhotoStatus').get(function() {
@@ -170,6 +106,13 @@ DeviceComplianceSchema.virtual('currentMonthPhotoStatus').get(function() {
 DeviceComplianceSchema.virtual('isPhotoOverdue').get(function() {
   if (!this.nextPhotoDue) return false;
   return new Date() > this.nextPhotoDue;
+});
+
+// Virtual for material condition status
+DeviceComplianceSchema.virtual('needsInspection').get(function() {
+  if (!this.lastInspectionDate) return true;
+  const daysSinceInspection = (new Date() - this.lastInspectionDate) / (1000 * 60 * 60 * 24);
+  return daysSinceInspection > 30; // Needs inspection if more than 30 days
 });
 
 // Methods for photo management
@@ -255,8 +198,19 @@ DeviceComplianceSchema.statics.findByMaterialId = function(materialId) {
   return this.find({ materialId });
 };
 
-DeviceComplianceSchema.statics.findByDeviceId = function(deviceId) {
-  return this.findOne({ deviceId });
+DeviceComplianceSchema.statics.findOverdueInspections = function() {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  return this.find({
+    $or: [
+      { lastInspectionDate: { $lt: thirtyDaysAgo } },
+      { lastInspectionDate: { $exists: false } }
+    ]
+  });
+};
+
+DeviceComplianceSchema.statics.findByCondition = function(condition) {
+  return this.find({ materialCondition: condition });
 };
 
 module.exports = mongoose.models.DeviceCompliance || mongoose.model('DeviceCompliance', DeviceComplianceSchema);

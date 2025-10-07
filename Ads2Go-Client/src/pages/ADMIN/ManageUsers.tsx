@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface User {
   id: string;
@@ -444,11 +445,7 @@ const handleCityFilterChange = (city: string) => {
 
   // Show loading state while authentication is being checked
   if (authLoading || !isInitialized) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   // Check if admin is authenticated
@@ -459,14 +456,6 @@ const handleCityFilterChange = (city: string) => {
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
           <p className="text-gray-600">You must be logged in to access this page.</p>
         </div>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
-        <div className="text-lg">Loading advertisers...</div>
       </div>
     );
   }
@@ -580,105 +569,115 @@ const handleCityFilterChange = (city: string) => {
       
 
         {/* User List */}
-        <div className="flex-1 flex flex-col">
-          <div className="rounded-xl mb-4 overflow-hidden flex-1">
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
-              <div className="flex items-center gap-2 ml-1 col-span-3">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  onChange={(e) => {}}
-                  onClick={handleSelectAll}
-                  checked={isAllSelected}
-                />
-                <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
-                <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-              </div>
-              <div className="col-span-3 ml-16">Email</div>
-              <div className="col-span-2">Company</div>
-              <div className="col-span-1 flex items-center gap-1 ml-7">
-                <span>Status</span>
-                <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
-              </div>
-              <div className="col-span-2 ml-20">Last Access</div>
-              <div className="col-span-1 text-center">Action</div>
-            </div>
-
-          {/* User Cards */}
-          {paginatedUsers.map((user) => (
-            <div
-              key={user.id}
-              className="bg-white mb-3 rounded-lg shadow-md"
-              onClick={() => handleViewDetails(user)}
-            >
-              <div
-                className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm transition-colors cursor-pointer rounded-lg group hover:bg-[#3674B5]"
-              >
-                <div className="col-span-3 gap-4 flex items-center">
+        {loading ? (
+          <AdminLoader />
+        ) : error ? (
+          <div className="text-center py-10 text-red-500">Error: {error}</div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="text-center py-10 text-gray-500">
+            {searchTerm ? 'No drivers match your search criteria' : 'No drivers found'}
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col">
+            <div className="rounded-xl mb-4 overflow-hidden flex-1">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+                <div className="flex items-center gap-2 ml-1 col-span-3">
                   <input
                     type="checkbox"
                     className="form-checkbox"
-                    checked={selectedUsers.includes(user.id)}
-                    onChange={() => {}}
-                    onClick={(e) => handleUserSelect(user.id, e)}
+                    onChange={(e) => {}}
+                    onClick={handleSelectAll}
+                    checked={isAllSelected}
                   />
-                  <div className="flex items-center">
-                    <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                      {getInitials(user.firstName, user.lastName)}
+                  <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
+                  <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                </div>
+                <div className="col-span-3 ml-16">Email</div>
+                <div className="col-span-2">Company</div>
+                <div className="col-span-1 flex items-center gap-1 ml-7">
+                  <span>Status</span>
+                  <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                </div>
+                <div className="col-span-2 ml-20">Last Access</div>
+                <div className="col-span-1 text-center">Action</div>
+              </div>
+
+            {/* User Cards */}
+            {paginatedUsers.map((user) => (
+              <div
+                key={user.id}
+                className="bg-white mb-3 rounded-lg shadow-md"
+                onClick={() => handleViewDetails(user)}
+              >
+                <div
+                  className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm transition-colors cursor-pointer rounded-lg group hover:bg-[#3674B5]"
+                >
+                  <div className="col-span-3 gap-4 flex items-center">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={selectedUsers.includes(user.id)}
+                      onChange={() => {}}
+                      onClick={(e) => handleUserSelect(user.id, e)}
+                    />
+                    <div className="flex items-center">
+                      <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
+                        {getInitials(user.firstName, user.lastName)}
+                      </div>
+                      <span className="truncate font-semibold group-hover:text-white">
+                        {user.firstName} {user.middleName} {user.lastName}
+                      </span>
                     </div>
-                    <span className="truncate font-semibold group-hover:text-white">
-                      {user.firstName} {user.middleName} {user.lastName}
+                  </div>
+
+                  <div className="col-span-3 truncate group-hover:text-white">{user.email}</div>
+                  <div className="col-span-2 truncate group-hover:text-white">{user.company}</div>
+
+                  <div className="col-span-1 ml-8">
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        user.status === 'active'
+                          ? 'bg-green-200 text-green-800'
+                          : 'bg-red-200 text-red-800'
+                      } `}
+                    >
+                      {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                     </span>
                   </div>
-                </div>
 
-                <div className="col-span-3 truncate group-hover:text-white">{user.email}</div>
-                <div className="col-span-2 truncate group-hover:text-white">{user.company}</div>
+                  <div className="col-span-2 truncate ml-10 text-center group-hover:text-white">
+                    {formatLastAccess(user.lastLogin)}
+                  </div>
 
-                <div className="col-span-1 ml-8">
-                  <span
-                    className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      user.status === 'active'
-                        ? 'bg-green-200 text-green-800'
-                        : 'bg-red-200 text-red-800'
-                    } `}
+                  <div
+                    className="col-span-1 flex items-center justify-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                  </span>
-                </div>
-
-                <div className="col-span-2 truncate ml-10 text-center group-hover:text-white">
-                  {formatLastAccess(user.lastLogin)}
-                </div>
-
-                <div
-                  className="col-span-1 flex items-center justify-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                    onClick={() => handleDelete(user.id)}
-                    title="Delete"
-                  >
-                    <Trash 
-                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                      size={16} />
-                    <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                      Delete
-                    </span>
-                  </button>
+                    <button
+                      className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                      onClick={() => handleDelete(user.id)}
+                      title="Delete"
+                    >
+                      <Trash 
+                        className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                        size={16} />
+                      <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                        Delete
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
+            ))}
+            {paginatedUsers.length === 0 && (
+              <div className="p-4 text-center text-gray-500">
+                {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
+              </div>
+            )}
             </div>
-          ))}
-          {paginatedUsers.length === 0 && (
-            <div className="p-4 text-center text-gray-500">
-              {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
-            </div>
-          )}
           </div>
-        </div>
+        )}
 
         {/* Details Modal */}
         {showDetailsModal && selectedUser && (

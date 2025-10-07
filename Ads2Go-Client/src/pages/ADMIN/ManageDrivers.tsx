@@ -5,6 +5,7 @@ import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageDrivers';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 
 // === Types ===
@@ -657,7 +658,7 @@ const ManageDrivers: React.FC = () => {
 
       {/* Table */}
       {loading ? (
-        <div className="text-center py-10 text-gray-500">Loading drivers...</div>
+        <AdminLoader />
       ) : error ? (
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredDrivers.length === 0 ? (

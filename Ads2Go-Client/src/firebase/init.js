@@ -50,7 +50,6 @@ let analytics;
 isSupported().then((analyticsSupported) => {
   if (analyticsSupported) {
     try {
-      // Initialize analytics with the correct measurement ID
       analytics = getAnalytics(app);
       console.log("📊 Firebase Analytics initialized");
     } catch (error) {

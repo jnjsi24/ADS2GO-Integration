@@ -135,19 +135,22 @@ const materialResolvers = {
     // Get materials assigned to a specific driver
     getDriverMaterials: async (_, { driverId }, { user, driver }) => {
       try {
-
         // Check if user is admin or if driver is requesting their own materials
         if (!user && !driver) {
           throw new Error('Unauthorized access');
         }
 
-        // If driver is requesting, verify they're requesting their own materials
+        // Always use the authenticated driver's ID when present
+        const effectiveDriverId = driver ? driver.driverId : driverId;
         if (driver && driver.driverId !== driverId) {
-          throw new Error('Drivers can only view their own materials');
+          console.warn('getDriverMaterials: driverId mismatch; using context driverId instead', {
+            requested: driverId,
+            contextDriverId: driver.driverId,
+          });
         }
 
         // Find materials assigned to the driver
-        const materials = await Material.find({ driverId }).sort({ createdAt: -1 });
+        const materials = await Material.find({ driverId: effectiveDriverId }).sort({ createdAt: -1 });
         
         // Get material tracking information for each material
         const materialsWithTracking = await Promise.all(
@@ -172,7 +175,7 @@ const materialResolvers = {
           })
         );
 
-        console.log(`✅ Found ${materialsWithTracking.length} materials for driver ${driverId}`);
+        console.log(`✅ Found ${materialsWithTracking.length} materials for driver ${effectiveDriverId}`);
         
         return {
           success: true,
@@ -409,7 +412,6 @@ const materialResolvers = {
 
       // Create DeviceCompliance record using GraphQL mutation approach
       try {
-        console.log(`🔍 Checking for existing DeviceCompliance for material: ${material.materialId} (ID: ${material.id})`);
         
         // Check if DeviceCompliance record already exists
         const existingDeviceCompliance = await DeviceCompliance.findOne({ materialId: material.id });
@@ -866,14 +868,9 @@ const materialResolvers = {
           deviceCompliance = new DeviceCompliance({
             materialId: material._id,
             driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
-            location: {
-              type: 'Point',
-              coordinates: [0, 0] // Default coordinates
-            },
-            address: 'Location not set',
             materialCondition: 'GOOD',
             monthlyPhotos: [],
-            photoComplianceStatus: 'PENDING'
+            photoComplianceStatus: 'COMPLIANT'
           });
         }
 
@@ -885,7 +882,23 @@ const materialResolvers = {
         return {
           success: true,
           message: 'Monthly photo uploaded successfully',
-          deviceCompliance: deviceCompliance
+          materialTracking: {
+            id: deviceCompliance._id.toString(),
+            materialId: deviceCompliance.materialId.toString(),
+            driverId: deviceCompliance.driverId?.toString(),
+            materialCondition: deviceCompliance.materialCondition,
+            monthlyPhotos: (deviceCompliance.monthlyPhotos || []).map(photo => ({
+              month: photo.month,
+              status: photo.status,
+              photoUrls: photo.photoUrls,
+              uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+              uploadedBy: photo.uploadedBy,
+              adminNotes: photo.adminNotes
+            })),
+            photoComplianceStatus: deviceCompliance.photoComplianceStatus,
+            lastPhotoUpload: deviceCompliance.lastPhotoUpload ? deviceCompliance.lastPhotoUpload.toISOString() : null,
+            nextPhotoDue: deviceCompliance.nextPhotoDue ? deviceCompliance.nextPhotoDue.toISOString() : null
+          }
         };
 
       } catch (error) {

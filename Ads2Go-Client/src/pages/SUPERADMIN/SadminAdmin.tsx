@@ -4,6 +4,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_ALL_ADMINS, Admin } from '../../graphql/superadmin/queries/sadminAdminQueries';
 import { CREATE_ADMIN, UPDATE_ADMIN, DELETE_ADMIN } from '../../graphql/superadmin/mutations/sadminAdminMutations';
 import { uploadAdminProfilePicture } from '../../utils/fileUpload';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // Import components from tabs/SadminAdmin
 import {
@@ -441,7 +442,7 @@ const handleUpdateAdminSubmit = async (e: React.FormEvent) => {
     resetNewAdminForm();
   };
 
-  if (loading) return <p className="ml-64 p-8">Loading admins...</p>;
+  if (loading) return <AdminLoader />;
   if (error) {
     console.log('GraphQL query error:', error);
     return <p className="ml-64 p-8 text-red-500">Error: {error.message || 'An error occurred'}</p>;

@@ -7,7 +7,14 @@ const getDriverFromToken = async (token) => {
   try {
     if (!token) return null;
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    // Debug: decode and verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      console.error('Driver Auth Error: jwt.verify failed:', err.message);
+      return null;
+    }
     if (!decoded.driverId) return null;
 
     // Try to find driver by driverId first (new format), then by _id (old format)
@@ -23,10 +30,21 @@ const getDriverFromToken = async (token) => {
     if (!driver) return null;
 
     // Check token version
-    if (driver.tokenVersion !== decoded.tokenVersion) return null;
+    if (driver.tokenVersion !== decoded.tokenVersion) {
+      console.error('Driver Auth Error: tokenVersion mismatch', {
+        driverId: driver.driverId,
+        driverTokenVersion: driver.tokenVersion,
+        tokenVersion: decoded.tokenVersion
+      });
+      return null;
+    }
 
     // Check account status
     if (driver.accountStatus !== 'ACTIVE') {
+      console.error('Driver Auth Error: account not ACTIVE', {
+        driverId: driver.driverId,
+        accountStatus: driver.accountStatus
+      });
       throw new Error('Driver account is not active');
     }
 
@@ -39,7 +57,11 @@ const getDriverFromToken = async (token) => {
 
 // ✅ Middleware for Apollo context
 const driverMiddleware = async ({ req }) => {
-  const token = req.headers.authorization?.replace('Bearer ', '') || '';
+  const authHeader = req.headers.authorization || req.headers.Authorization || '';
+  if (!authHeader) {
+    console.warn('Driver Auth: missing Authorization header');
+  }
+  const token = authHeader.replace('Bearer ', '');
   const driver = await getDriverFromToken(token);
   return { driver }; // can be null if not authenticated
 };

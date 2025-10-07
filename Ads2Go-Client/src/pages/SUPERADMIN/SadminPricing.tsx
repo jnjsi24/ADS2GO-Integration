@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Settings } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
@@ -15,7 +16,7 @@ import {
   PricingConfigUpdateInput
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
 import { motion, AnimatePresence } from "framer-motion";
-
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,8 +40,12 @@ const SadminPricing: React.FC = () => {
     isActive: true
   });
 
+  // Admin auth (to ensure only SUPERADMIN fires query)
+  const { admin } = useAdminAuth();
+
   // GraphQL Hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_PRICING_CONFIGS, {
+    skip: !admin || admin.role !== 'SUPERADMIN',
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network'
   });
@@ -247,14 +252,7 @@ const SadminPricing: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen ml-64 bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading pricing configurations...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (
@@ -264,7 +262,7 @@ const SadminPricing: React.FC = () => {
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Pricing Management</h1>
+              <h1 className="text-3xl font-bold text-gray-900 mt-4">Pricing Management</h1>
             </div>
           </div>
         </div>

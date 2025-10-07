@@ -81,6 +81,8 @@ const resolvers = {
         getUserAnalytics: async (_, { startDate, endDate, period }, { user }) => {
           checkAuth(user);
           try {
+            console.log('🔍 getUserAnalytics called for user:', user.id, 'with period:', period, 'startDate:', startDate, 'endDate:', endDate);
+            
             // Use the new UserAnalytics system
             const UserAnalyticsService = require('../services/userAnalyticsService');
             const analytics = await UserAnalyticsService.getUserAnalytics(
@@ -91,12 +93,15 @@ const resolvers = {
             );
             
             if (!analytics.success) {
+              console.error('❌ Analytics service returned failure:', analytics.message);
               throw new Error(analytics.message || 'Failed to fetch analytics data');
             }
             
+            console.log('✅ getUserAnalytics returning data for user:', user.id);
+            console.log('📊 Summary data being returned:', JSON.stringify(analytics.data.summary, null, 2));
             return analytics.data;
           } catch (error) {
-            console.error('Error fetching user analytics:', error);
+            console.error('❌ Error fetching user analytics:', error);
             throw new Error('Failed to fetch analytics data');
           }
         },
@@ -198,19 +203,7 @@ const resolvers = {
         } = input;
 
         // Check if user already exists
-        console.log('🔍 Checking for existing user with email:', email);
         const existingUser = await User.findOne({ email });
-        console.log('🔍 Database query result:', existingUser);
-        console.log('🔍 Existing user found:', existingUser ? 'YES' : 'NO');
-        if (existingUser) {
-          console.log('🔍 Existing user details:', {
-            id: existingUser.id,
-            email: existingUser.email,
-            firstName: existingUser.firstName,
-            lastName: existingUser.lastName
-          });
-        }
-        
         if (existingUser) {
           console.log('✅ User already exists, logging them in directly');
           // User already exists, generate new token and return user data

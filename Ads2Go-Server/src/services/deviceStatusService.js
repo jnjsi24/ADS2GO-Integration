@@ -54,14 +54,6 @@ class DeviceStatusService {
         const deviceId = url.searchParams.get('deviceId') || request.headers['device-id'];
         const materialId = url.searchParams.get('materialId') || request.headers['material-id'];
         
-        console.log('WebSocket upgrade request details:');
-        console.log('- Pathname:', pathname);
-        console.log('- Device ID from query:', url.searchParams.get('deviceId'));
-        console.log('- Material ID from query:', url.searchParams.get('materialId'));
-        console.log('- Device ID from headers:', request.headers['device-id']);
-        console.log('- Material ID from headers:', request.headers['material-id']);
-        console.log('- Final device ID:', deviceId);
-        console.log('- Final material ID:', materialId);
         
         if (!deviceId) {
           console.error('No device ID provided in WebSocket upgrade request');
@@ -103,15 +95,6 @@ class DeviceStatusService {
         const slotNumber = url.searchParams.get('slotNumber') || request.headers['slot-number'];
         const isAdmin = url.searchParams.get('admin') === 'true' || request.headers['admin'] === 'true';
         
-        console.log('WebSocket Playback Upgrade Request Details:');
-        console.log('- Pathname:', pathname);
-        console.log('- Device ID from Query:', url.searchParams.get('deviceId'));
-        console.log('- Material ID from Query:', url.searchParams.get('materialId'));
-        console.log('- Slot Number from Query:', url.searchParams.get('slotNumber'));
-        console.log('- Is Admin:', isAdmin);
-        console.log('- Final Device ID:', deviceId);
-        console.log('- Final Material ID:', materialId);
-        console.log('- Final Slot Number:', slotNumber);
         
         if (!deviceId && !isAdmin) {
           console.error('No device ID provided in WebSocket playback upgrade request');
@@ -228,8 +211,6 @@ class DeviceStatusService {
 
     ws.on('close', (code, reason) => {
       console.log(`🔌 [WebSocket] Device disconnected: ${deviceId} - Code: ${code}, Reason: ${reason}`);
-      console.log(`🔍 [WebSocket] Checking if device ${deviceId} is in activeConnections:`, this.activeConnections.has(deviceId));
-      console.log(`🔍 [WebSocket] Active connections count: ${this.activeConnections.size}`);
       
       // Always handle disconnect regardless of activeConnections check
       // The activeConnections check was preventing database updates
@@ -249,7 +230,6 @@ class DeviceStatusService {
       
       // Also update with the full device ID if they're different
       if (deviceId !== ws.materialId) {
-        console.log(`🔍 [DeviceStatusManager] Looking for full device ID for short ID: ${deviceId}, material: ${ws.materialId}`);
         this.findFullDeviceId(deviceId, ws.materialId).then(fullDeviceId => {
           if (fullDeviceId && fullDeviceId !== deviceId) {
             console.log(`🔄 [DeviceStatusManager] Also updating full device ID: ${fullDeviceId} as offline`);
@@ -439,7 +419,6 @@ class DeviceStatusService {
         return;
       }
 
-      console.log(`🔍 [updateCurrentAd] Looking for device ${deviceId} in DeviceTracking...`);
 
       // Handle different states appropriately
       let updateData = {};
@@ -505,7 +484,6 @@ class DeviceStatusService {
         console.log(`❌ No DeviceTracking document found for device ${deviceId}`);
         
         // Try alternative query by materialId
-        console.log(`🔍 Trying alternative query by materialId: ${materialId}`);
         const altResult = await DeviceTracking.findOneAndUpdate(
           { materialId },
           { $set: updateData },
@@ -580,7 +558,6 @@ class DeviceStatusService {
       console.log(`🔄 [updateDeviceStatus] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
       // Find existing record by materialId
-      console.log(`🔍 [updateDeviceStatus] Searching for device by materialId: ${materialId}`);
       let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
       
       if (!deviceTracking) {
@@ -629,10 +606,8 @@ class DeviceStatusService {
     try {
       const now = new Date();
       
-      console.log(`🔄 [updateDeviceStatusWithMaterialId] Updating device status: ${deviceId} -> ${status ? 'online' : 'offline'} (materialId: ${materialId})`);
       
       // Find existing record by materialId
-      console.log(`🔍 [updateDeviceStatusWithMaterialId] Searching for device by materialId: ${materialId}`);
       let deviceTracking = await DeviceTracking.findOne({ materialId: materialId });
       
       if (!deviceTracking) {
@@ -648,12 +623,7 @@ class DeviceStatusService {
         deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
         deviceTracking.lastSeen = now;
         await deviceTracking.save();
-        console.log(`✅ [updateDeviceStatusWithMaterialId] Updated slot for device ${deviceId} in material ${materialId}`);
-      } else {
-        console.log(`⚠️ [updateDeviceStatusWithMaterialId] Device ${deviceId} not found in slots for material ${materialId}`);
       }
-
-      console.log(`✅ [updateDeviceStatusWithMaterialId] Device ${deviceId} marked as ${status ? 'online' : 'offline'}`);
       
       // Update DeviceStatusManager with database status
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
@@ -675,24 +645,14 @@ class DeviceStatusService {
     let materialId = connection?.materialId;
     
     // Debug logging
-    console.log(`🔍 [handleDisconnect] Debug info:`);
-    console.log(`   Device ID: "${deviceId}"`);
-    console.log(`   Connection found: ${!!connection}`);
-    console.log(`   Material ID from connection: ${materialId || 'undefined'}`);
-    console.log(`   Active connections: ${this.activeConnections.size}`);
-    console.log(`   Active connection keys:`, Array.from(this.activeConnections.keys()));
     
     // If no materialId from connection, try to find it from database
     if (!materialId) {
-      console.log(`🔍 [handleDisconnect] No materialId from connection, searching database...`);
       try {
         const DeviceTracking = require('../models/deviceTracking');
         const device = await DeviceTracking.findOne({ 'slots.deviceId': deviceId });
         if (device) {
           materialId = device.materialId;
-          console.log(`✅ [handleDisconnect] Found materialId from database: ${materialId}`);
-        } else {
-          console.log(`❌ [handleDisconnect] No device found in database for deviceId: ${deviceId}`);
         }
       } catch (error) {
         console.error(`❌ [handleDisconnect] Error finding materialId from database:`, error);
@@ -810,7 +770,6 @@ class DeviceStatusService {
       // First try to find by materialId
       const screen = await DeviceTracking.findOne({ materialId });
       if (screen && screen.deviceId) {
-        console.log(`🔍 [DeviceStatusManager] Found full device ID: ${screen.deviceId} for material: ${materialId}`);
         return screen.deviceId;
       }
 
@@ -820,7 +779,6 @@ class DeviceStatusService {
       });
       
       if (screens.length > 0) {
-        console.log(`🔍 [DeviceStatusManager] Found full device ID: ${screens[0].deviceId} for short ID: ${shortDeviceId}`);
         return screens[0].deviceId;
       }
 

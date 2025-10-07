@@ -118,13 +118,22 @@ router.get('/material/:materialId', async (req, res) => {
   }
 });
 
-// GET /analytics/device/:deviceId - Get analytics for specific device
+// GET /analytics/device/:deviceId - Get analytics for specific device (DEPRECATED - use UserAnalyticsService version)
 router.get('/device/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     
-    const analytics = await Analytics.getDeviceAnalytics(deviceId, startDate, endDate);
+    // userId is required to filter ads to only show user's created ads
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId query parameter is required to filter device analytics by user. This endpoint is deprecated - use the UserAnalyticsService version instead.'
+      });
+    }
+    
+    // Use the UserAnalyticsService version which has proper user filtering
+    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate, userId);
     
     res.json({
       success: true,
@@ -243,6 +252,75 @@ router.post('/sync', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to sync analytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /analytics/user-sync - Manually trigger UserAnalytics sync job
+router.post('/user-sync', async (req, res) => {
+  try {
+    const userAnalyticsSyncJob = require('../jobs/userAnalyticsSyncJob');
+    
+    console.log('🔄 Manual UserAnalytics sync triggered');
+    await userAnalyticsSyncJob.syncAllUsers();
+    
+    res.json({
+      success: true,
+      message: 'UserAnalytics sync completed successfully'
+    });
+  } catch (error) {
+    console.error('Error in manual UserAnalytics sync:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to sync UserAnalytics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// GET /analytics/user-analytics/:userId - Check UserAnalytics data for debugging
+router.get('/user-analytics/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const UserAnalytics = require('../models/userAnalytics');
+    
+    const userAnalytics = await UserAnalytics.findOne({ userId });
+    
+    if (!userAnalytics) {
+      return res.status(404).json({
+        success: false,
+        message: 'UserAnalytics not found'
+      });
+    }
+    
+    // Return summary data for debugging
+    res.json({
+      success: true,
+      data: {
+        userId: userAnalytics.userId,
+        totalAdPlays: userAnalytics.totalAdPlays,
+        totalAdImpressions: userAnalytics.totalAdImpressions,
+        totalAdPlayTime: userAnalytics.totalAdPlayTime,
+        totalQRScans: userAnalytics.totalQRScans,
+        totalMaterials: userAnalytics.totalMaterials,
+        adsCount: userAnalytics.ads?.length || 0,
+        materialBreakdownCount: userAnalytics.materialBreakdown?.length || 0,
+        lastUpdated: userAnalytics.updatedAt,
+        // Show first few materials for debugging
+        sampleMaterials: userAnalytics.materialBreakdown?.slice(0, 3).map(m => ({
+          materialId: m.materialId,
+          totalAdPlays: m.totalAdPlays,
+          totalQRScans: m.totalQRScans,
+          lastActivity: m.lastActivity
+        })) || []
+      }
+    });
+  } catch (error) {
+    console.error('Error getting UserAnalytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get UserAnalytics',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
@@ -469,9 +547,17 @@ router.get('/user/:userId/total-display-time', async (req, res) => {
 router.get('/device/:deviceId', async (req, res) => {
   try {
     const { deviceId } = req.params;
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, userId } = req.query;
     
-    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate);
+    // userId is required to filter ads to only show user's created ads
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'userId query parameter is required to filter device analytics by user'
+      });
+    }
+    
+    const analytics = await UserAnalyticsService.getDeviceAnalytics(deviceId, startDate, endDate, userId);
     
     res.json({
       success: true,
@@ -530,6 +616,66 @@ router.post('/initialize-user/:userId', async (req, res) => {
       message: 'Failed to initialize user analytics',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
+  }
+});
+
+// POST /analytics/user/:userId/sync - Manual sync endpoint for testing
+router.post('/user/:userId/sync', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate } = req.body;
+    
+    console.log('🔄 Manual sync requested for user:', userId);
+    
+    const syncResult = await UserAnalyticsService.syncUserAnalyticsFromHistory(
+      userId, 
+      startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Default to 7 days ago
+      endDate || new Date()
+    );
+    
+    if (!syncResult.success) {
+      return res.status(400).json({ success: false, message: syncResult.message });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Analytics synced successfully',
+      data: syncResult.userAnalytics
+    });
+  } catch (error) {
+    console.error('Error syncing user analytics:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// GET /analytics/user/:userId/direct - Direct API endpoint bypassing GraphQL
+router.get('/user/:userId/direct', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { startDate, endDate, period } = req.query;
+    
+    console.log('🔍 Direct API call for user:', userId, 'period:', period);
+    
+    const analytics = await UserAnalyticsService.getUserAnalytics(
+      userId,
+      startDate,
+      endDate,
+      period
+    );
+    
+    if (!analytics.success) {
+      return res.status(400).json({ success: false, message: analytics.message });
+    }
+    
+    console.log('✅ Direct API returning data:', JSON.stringify(analytics.data.summary, null, 2));
+    
+    res.json({ 
+      success: true, 
+      data: analytics.data
+    });
+  } catch (error) {
+    console.error('Error in direct API:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

@@ -1,7 +1,7 @@
 // server/utils/emailService.js
 
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 
 class EmailService {
   static transporter = null;

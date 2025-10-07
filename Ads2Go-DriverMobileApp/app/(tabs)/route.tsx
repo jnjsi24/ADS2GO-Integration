@@ -92,7 +92,19 @@ const RouteTab: React.FC = () => {
         throw new Error(`Failed to fetch driver info: ${driverResponse.status}`);
       }
 
-      const driverData = await driverResponse.json();
+      let driverData: any;
+      try {
+        const ct = driverResponse.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          driverData = await driverResponse.json();
+        } else {
+          const text = await driverResponse.text();
+          console.warn('Unexpected content-type for driver info:', ct, text?.slice(0, 200));
+          throw new Error('Unexpected response format');
+        }
+      } catch (e) {
+        throw new Error('Failed to parse driver info response');
+      }
       if (!driverData.success) {
         throw new Error(driverData.message || 'Failed to fetch driver info');
       }
@@ -106,8 +118,8 @@ const RouteTab: React.FC = () => {
         deviceId
       });
 
-      // Fetch route data using driver-specific endpoint
-      await fetchDriverRouteData(driverId);
+      // Fetch route data using device-specific endpoint available on server
+      await fetchDriverRouteData(deviceId);
 
     } catch (err) {
       console.error('Error loading driver info:', err);
@@ -117,7 +129,7 @@ const RouteTab: React.FC = () => {
     }
   };
 
-  const fetchDriverRouteData = async (driverId: string) => {
+  const fetchDriverRouteData = async (deviceId: string) => {
     try {
       // Get auth token
       const token = await AsyncStorage.getItem('token');
@@ -125,13 +137,25 @@ const RouteTab: React.FC = () => {
         throw new Error('No auth token found');
       }
 
-      const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/driverRoute/${driverId}`, {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
-      const result = await response.json();
+      let result: any;
+      try {
+        const ct = response.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          result = await response.json();
+        } else {
+          const text = await response.text();
+          console.warn('Unexpected content-type for route data:', ct, text?.slice(0, 200));
+          throw new Error('Unexpected response format');
+        }
+      } catch (e) {
+        throw new Error('Failed to parse route data');
+      }
       
       if (result.success) {
         setRouteData(result.data);
@@ -301,7 +325,6 @@ const RouteTab: React.FC = () => {
 
       {/* Interactive Route Map */}
       <View style={styles.mapContainer}>
-        <Text style={styles.mapTitle}>Route Visualization</Text>
         <View style={styles.mapWrapper}>
           <RouteMapView 
             route={routeData?.route || []} 

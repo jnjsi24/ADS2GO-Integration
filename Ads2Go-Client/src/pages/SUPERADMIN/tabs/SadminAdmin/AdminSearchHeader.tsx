@@ -19,7 +19,7 @@ const AdminSearchHeader: React.FC<AdminSearchHeaderProps> = ({
   return (
     <div className="p-6 pb-0 flex justify-between items-end">
       <div>
-        <h1 className="text-4xl mt-8 font-semibold text-gray-800">Admins</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mt-4">Admins</h1>
         <p className="text-gray-600 mt-2">Manage your admin accounts</p>
       </div>
       <div className="flex items-center space-x-3">

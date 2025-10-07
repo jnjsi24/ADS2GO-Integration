@@ -26,6 +26,7 @@ import {
   GET_USER_COUNTS_BY_PLAN,
   SuperAdminNotification 
 } from '../../graphql/superadmin/queries/sadminNotificationQueries';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 const SadminNotifications: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'unread' | 'high'>('all');
@@ -249,13 +250,7 @@ const SadminNotifications: React.FC = () => {
   });
 
   if (notificationsLoading) {
-    return (
-      <div className="min-h-screen ml-64 bg-gray-100 pb-5">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

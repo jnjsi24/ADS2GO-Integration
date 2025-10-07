@@ -124,7 +124,7 @@ module.exports = gql`
     status: String
     assignedDate: String
     location: LocationInfo
-    deviceCompliance: DeviceComplianceInfo
+    materialTracking: DeviceComplianceInfo
   }
 
   type LocationInfo {

@@ -14,6 +14,7 @@ export default {
       supportsTablet: true
     },
     android: {
+      package: "com.cjeg10.androidPlayereExpo",
       adaptiveIcon: {
         foregroundImage: "./assets/images/adaptive-icon.png",
         backgroundColor: "#ffffff"
@@ -36,7 +37,14 @@ export default {
           backgroundColor: "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Allow $(PRODUCT_NAME) to access your camera to scan QR codes for tablet registration.",
+          microphonePermission: false
+        }
+      ]
     ],
     experiments: {
       typedRoutes: true

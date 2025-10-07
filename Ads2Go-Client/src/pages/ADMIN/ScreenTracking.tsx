@@ -5,6 +5,7 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import { LatLngTuple, Map, Icon } from 'leaflet';
 import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -160,7 +161,7 @@ const ScreenTracking: React.FC = () => {
     try {
       console.log('🚀 Starting historical route fetch:', { deviceId, date });
       setLoadingHistorical(true);
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://192.168.100.22:5000';
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
       const url = `${baseUrl}/deviceTracking/route/${deviceId}?date=${date}`;
       console.log('📡 Fetching from URL:', url);
       
@@ -518,14 +519,7 @@ const ScreenTracking: React.FC = () => {
   };
 
   if (loading || materialsLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

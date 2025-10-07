@@ -19,6 +19,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { AdminLoader } from "../../components/ProtectedRoute";
 import { 
   GET_ADMIN_NOTIFICATIONS, 
   MARK_NOTIFICATION_READ, 
@@ -241,14 +242,7 @@ const AdminNotifications: React.FC = () => {
   };
 
   if (notificationsLoading) {
-    return (
-      <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-600">Loading notifications...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

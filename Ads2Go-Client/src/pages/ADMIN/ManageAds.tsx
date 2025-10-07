@@ -36,6 +36,7 @@ import DeploymentTab from './tabs/manageAds/DeploymentTab';
 import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
 import DateFilter from '../../components/DateFilter';
 import CalendarWidget from '../../components/CalendarWidget';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
@@ -188,12 +189,7 @@ const ManageAds: React.FC = () => {
 
   // Show loading state while authentication is being checked
   if (isLoading || !isInitialized) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+    return <AdminLoader />;  }
 
   // Check if admin is authenticated
   if (!admin) {
@@ -444,16 +440,7 @@ const ManageAds: React.FC = () => {
 
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-        <div className="flex items-center justify-center h-64">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-lg text-gray-600">Loading advertisements...</span>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   if (error) {

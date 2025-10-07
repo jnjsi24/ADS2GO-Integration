@@ -176,6 +176,9 @@ class UserAnalyticsSyncJob {
         };
       }
 
+      // Get valid ad IDs for this user to filter playbacks
+      const validAdIds = userAds.map(ad => ad._id.toString());
+      
       // Process the data
       const processedData = {
         userId,
@@ -225,17 +228,41 @@ class UserAnalyticsSyncJob {
           materialData.dailyData.forEach(dailyData => {
             const dailyDate = new Date(dailyData.date);
             if (dailyDate >= new Date(startDate) && dailyDate <= new Date(endDate)) {
-              // Add to material totals
-              processedData.materials[materialId].totalAdPlays += dailyData.totalAdPlays || 0;
-              processedData.materials[materialId].totalAdPlayTime += dailyData.totalAdPlayTime || 0;
-              processedData.materials[materialId].totalAdImpressions += dailyData.totalAdImpressions || 0;
-              processedData.materials[materialId].totalQRScans += dailyData.totalQRScans || 0;
+              // Calculate user-specific totals from playbacks and QR scans
+              let userAdPlays = 0;
+              let userAdPlayTime = 0;
+              let userAdImpressions = 0;
+              let userQRScans = 0;
               
-              // Add to material breakdown
-              processedData.materialBreakdown[materialId].totalAdPlays += dailyData.totalAdPlays || 0;
-              processedData.materialBreakdown[materialId].totalAdPlayTime += dailyData.totalAdPlayTime || 0;
-              processedData.materialBreakdown[materialId].totalAdImpressions += dailyData.totalAdImpressions || 0;
-              processedData.materialBreakdown[materialId].totalQRScans += dailyData.totalQRScans || 0;
+              // Calculate totals from user-owned playbacks only
+              if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
+                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => 
+                  validAdIds.includes(playback.adId)
+                );
+                userAdPlays = userOwnedPlaybacks.length;
+                userAdPlayTime = userOwnedPlaybacks.reduce((sum, playback) => sum + (playback.viewTime || 0), 0);
+                userAdImpressions = userOwnedPlaybacks.reduce((sum, playback) => sum + (playback.impressions || 0), 0);
+              }
+              
+              // Calculate totals from user-owned QR scans only
+              if (dailyData.qrScans && dailyData.qrScans.length > 0) {
+                const userOwnedQrScans = dailyData.qrScans.filter(qrScan => 
+                  validAdIds.includes(qrScan.adId)
+                );
+                userQRScans = userOwnedQrScans.length;
+              }
+              
+              // Add to material totals (user's data only)
+              processedData.materials[materialId].totalAdPlays += userAdPlays;
+              processedData.materials[materialId].totalAdPlayTime += userAdPlayTime;
+              processedData.materials[materialId].totalAdImpressions += userAdImpressions;
+              processedData.materials[materialId].totalQRScans += userQRScans;
+              
+              // Add to material breakdown (user's data only)
+              processedData.materialBreakdown[materialId].totalAdPlays += userAdPlays;
+              processedData.materialBreakdown[materialId].totalAdPlayTime += userAdPlayTime;
+              processedData.materialBreakdown[materialId].totalAdImpressions += userAdImpressions;
+              processedData.materialBreakdown[materialId].totalQRScans += userQRScans;
               processedData.materialBreakdown[materialId].totalDays += 1;
               
               // Update last activity
@@ -243,42 +270,54 @@ class UserAnalyticsSyncJob {
                 processedData.materialBreakdown[materialId].lastActivity = dailyDate;
               }
               
-              // Add to overall totals
-              processedData.totalAdPlays += dailyData.totalAdPlays || 0;
-              processedData.totalAdPlayTime += dailyData.totalAdPlayTime || 0;
-              processedData.totalAdImpressions += dailyData.totalAdImpressions || 0;
-              processedData.totalQRScans += dailyData.totalQRScans || 0;
+              // Add to overall totals (user's data only)
+              processedData.totalAdPlays += userAdPlays;
+              processedData.totalAdPlayTime += userAdPlayTime;
+              processedData.totalAdImpressions += userAdImpressions;
+              processedData.totalQRScans += userQRScans;
               
-              // Collect ad playbacks
+              // Collect user-owned ad playbacks for detailed tracking
               if (dailyData.adPlaybacks && dailyData.adPlaybacks.length > 0) {
-                processedData.materials[materialId].adPlaybacks.push(...dailyData.adPlaybacks);
+                const userOwnedPlaybacks = dailyData.adPlaybacks.filter(playback => 
+                  validAdIds.includes(playback.adId)
+                );
                 
-                // Group by ad
-                dailyData.adPlaybacks.forEach(playback => {
-                  const adId = playback.adId;
-                  if (!processedData.ads[adId]) {
-                    processedData.ads[adId] = {
-                      adId,
-                      adTitle: playback.adTitle || 'Unknown',
-                      totalPlays: 0,
-                      totalViewTime: 0,
-                      totalImpressions: 0,
-                      materials: []
-                    };
-                  }
-                  processedData.ads[adId].totalPlays += 1;
-                  processedData.ads[adId].totalViewTime += playback.viewTime || 0;
-                  processedData.ads[adId].totalImpressions += playback.impressions || 0;
+                if (userOwnedPlaybacks.length > 0) {
+                  processedData.materials[materialId].adPlaybacks.push(...userOwnedPlaybacks);
                   
-                  if (!processedData.ads[adId].materials.includes(materialId)) {
-                    processedData.ads[adId].materials.push(materialId);
-                  }
-                });
+                  // Group by ad (only user's ads)
+                  userOwnedPlaybacks.forEach(playback => {
+                    const adId = playback.adId;
+                    if (!processedData.ads[adId]) {
+                      processedData.ads[adId] = {
+                        adId,
+                        adTitle: playback.adTitle || 'Unknown',
+                        totalPlays: 0,
+                        totalViewTime: 0,
+                        totalImpressions: 0,
+                        materials: []
+                      };
+                    }
+                    processedData.ads[adId].totalPlays += 1;
+                    processedData.ads[adId].totalViewTime += playback.viewTime || 0;
+                    processedData.ads[adId].totalImpressions += playback.impressions || 0;
+                    
+                    if (!processedData.ads[adId].materials.includes(materialId)) {
+                      processedData.ads[adId].materials.push(materialId);
+                    }
+                  });
+                }
               }
               
-              // Collect QR scans
+              // Collect user-owned QR scans for detailed tracking
               if (dailyData.qrScans && dailyData.qrScans.length > 0) {
-                processedData.materials[materialId].qrScans.push(...dailyData.qrScans);
+                const userOwnedQrScans = dailyData.qrScans.filter(qrScan => 
+                  validAdIds.includes(qrScan.adId)
+                );
+                
+                if (userOwnedQrScans.length > 0) {
+                  processedData.materials[materialId].qrScans.push(...userOwnedQrScans);
+                }
               }
               
               // Collect location history
@@ -293,11 +332,9 @@ class UserAnalyticsSyncJob {
         }
       });
 
-      // Filter out ads that are no longer valid (deleted or inactive)
-      const validAdIds = userAds.map(ad => ad._id.toString());
-      const filteredAds = Object.values(processedData.ads).filter(ad => validAdIds.includes(ad.adId));
+      // Convert ads object to array (already filtered by user ownership above)
+      const filteredAds = Object.values(processedData.ads);
       
-      // Convert ads object to array
       const adsArray = filteredAds.map(ad => ({
         ...ad,
         totalMaterials: ad.materials.length,

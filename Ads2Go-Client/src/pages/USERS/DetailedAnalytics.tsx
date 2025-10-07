@@ -38,10 +38,17 @@ const DetailedAnalytics: React.FC = () => {
 
   // Fetch analytics data
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
-    variables: { period: selectedPeriod },
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
+    variables: { 
+      period: selectedDevice === 'all' ? 'all' : selectedPeriod 
+    },
+    // pollInterval: 5000, // Temporarily disabled to prevent repeated errors
+    fetchPolicy: 'cache-and-network', // Always fetch fresh data from network
+    errorPolicy: 'all', // Allow partial data even with errors
     onError: (error) => {
-      console.error('Analytics fetch error:', error);
+      // Don't log "User analytics not found" as an error - it's expected for new users
+      if (error.message !== 'Failed to fetch analytics data') {
+        console.error('Unexpected analytics error:', error);
+      }
     }
   });
 
@@ -132,8 +139,49 @@ const DetailedAnalytics: React.FC = () => {
     fetchDeviceAnalytics(deviceId);
   };
 
+  // State for direct API data (bypassing GraphQL)
+  const [directAnalyticsData, setDirectAnalyticsData] = useState<any>(null);
+  const [directAnalyticsLoading, setDirectAnalyticsLoading] = useState(false);
+
+  // Fetch direct analytics data when "All Devices" is selected
+  const fetchDirectAnalytics = async () => {
+    if (selectedDevice !== 'all' || !user?.userId) return;
+    
+    try {
+      setDirectAnalyticsLoading(true);
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
+      const url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
+      
+      console.log('🔍 Fetching direct analytics from:', url);
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('✅ Direct analytics fetched successfully:', data.data.summary);
+        setDirectAnalyticsData(data.data);
+      } else {
+        console.error('❌ Failed to fetch direct analytics:', data.message);
+        setDirectAnalyticsData(null);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching direct analytics:', error);
+      setDirectAnalyticsData(null);
+    } finally {
+      setDirectAnalyticsLoading(false);
+    }
+  };
+
+  // Fetch direct analytics when "All Devices" is selected
+  useEffect(() => {
+    if (selectedDevice === 'all') {
+      fetchDirectAnalytics();
+    }
+  }, [selectedDevice, selectedPeriod, user?.userId]);
+
   // Get analytics summary data - Updated for UserAnalytics system
-  // Use device-specific data if a device is selected, otherwise use overall data
+  // Use device-specific data if a device is selected, otherwise use direct API data (bypassing GraphQL)
   const analyticsSummary = selectedDevice !== 'all' && deviceAnalytics ? {
     totalAdImpressions: deviceAnalytics.totals?.totalAdImpressions || 0,
     totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
@@ -145,7 +193,7 @@ const DetailedAnalytics: React.FC = () => {
     totalDevices: 1, // Single device
     totalQRScans: deviceAnalytics.totals?.totalQRScans || 0,
     qrScanConversionRate: deviceAnalytics.performance?.qrScanConversionRate || 0
-  } : (analyticsData?.getUserAnalytics?.summary || {
+  } : (directAnalyticsData?.summary || analyticsData?.getUserAnalytics?.summary || {
     totalAdImpressions: 0,
     totalAdsPlayed: 0,
     totalDisplayTime: 0,
@@ -161,6 +209,10 @@ const DetailedAnalytics: React.FC = () => {
   console.log('📊 Current analyticsSummary:', analyticsSummary);
   console.log('📱 Selected device:', selectedDevice);
   console.log('📊 Device analytics:', deviceAnalytics);
+  console.log('🔍 Raw analyticsData from GraphQL:', analyticsData);
+  console.log('🔍 getUserAnalytics summary:', analyticsData?.getUserAnalytics?.summary);
+  console.log('🔍 Direct analytics data:', directAnalyticsData);
+  console.log('🔍 Direct analytics summary:', directAnalyticsData?.summary);
 
   // Format display time
   const formatDisplayTime = (seconds: number) => {
@@ -391,8 +443,16 @@ const DetailedAnalytics: React.FC = () => {
   const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newPeriod = e.target.value as '1d' | '7d' | '30d';
     setSelectedPeriod(newPeriod);
-    refetchAnalytics({ period: newPeriod });
   };
+
+  // Refetch analytics when period or device selection changes
+  useEffect(() => {
+    const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
+    if (currentPeriod) {
+      console.log('🔄 Period changed to:', currentPeriod, '- Refetching analytics...');
+      refetchAnalytics({ period: currentPeriod });
+    }
+  }, [selectedPeriod, selectedDevice, refetchAnalytics]);
 
   const handleRefresh = () => {
     refetchAnalytics();
@@ -1094,8 +1154,8 @@ const DetailedAnalytics: React.FC = () => {
             <Download className="w-4 h-4" />
             Export
           </button>
-        </div>
       </div>
+    </div>
 
       {/* Device Information Banner */}
       {selectedDevice !== 'all' && deviceAnalytics && (
@@ -1122,6 +1182,28 @@ const DetailedAnalytics: React.FC = () => {
               <p className="text-xs text-blue-500">
                 {deviceAnalytics.dateRange?.totalDays || 0} days of data
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Analytics Data Message */}
+      {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                No Analytics Data Yet
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>You don't have any analytics data yet. This is normal for new users or users without deployed ads.</p>
+                <p className="mt-1">Once you create and deploy ads, your detailed analytics will appear here.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1208,12 +1290,14 @@ const DetailedAnalytics: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {(analyticsLoading || deviceLoading) && (
+      {(analyticsLoading || deviceLoading || directAnalyticsLoading) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg flex items-center space-x-3">
             <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
             <span className="text-gray-700">
-              {deviceLoading ? 'Loading device-specific analytics...' : 'Loading analytics data...'}
+              {deviceLoading ? 'Loading device-specific analytics...' : 
+               directAnalyticsLoading ? 'Loading direct analytics data...' : 
+               'Loading analytics data...'}
             </span>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { Bell, ArrowRight } from 'lucide-react';
 import { GET_OWN_SUPERADMIN_DETAILS } from '../../graphql/superadmin';
 import { GET_SUPERADMIN_NOTIFICATIONS, GET_SUPERADMIN_DASHBOARD_STATS } from '../../graphql/superadmin/queries/sadminNotificationQueries';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // GraphQL query to get superadmin details
 const GET_SUPERADMIN_DETAILS = GET_OWN_SUPERADMIN_DETAILS;
@@ -36,7 +37,7 @@ const Dashboard = () => {
   const { data: statsData, loading: statsLoading } = useQuery(GET_SUPERADMIN_DASHBOARD_STATS, {
     pollInterval: 5000, // Refresh every 5 seconds for faster updates
     onCompleted: (data) => {
-      console.log('🔔 Frontend: SuperAdmin dashboard stats received:', data);
+      // SuperAdmin dashboard stats received
     },
     onError: (error) => {
       console.error("Error fetching super admin dashboard stats:", error);
@@ -65,12 +66,7 @@ const Dashboard = () => {
     { label: 'Pending Review', value: Math.floor((stats?.totalAds || 0) * 0.18), color: 'bg-yellow-500' },
   ];
 
-  if (loading || statsLoading) return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-  );
-
+  if (loading || statsLoading) return <AdminLoader />;
   if (error) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
       <div className="text-red-500">Error loading superadmin details: {error.message}</div>

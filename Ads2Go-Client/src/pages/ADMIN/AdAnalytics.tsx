@@ -69,6 +69,9 @@ const AdAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
+  const [selectedDeviceData, setSelectedDeviceData] = useState<DeviceAnalytics | null>(null);
+  const [deviceLoading, setDeviceLoading] = useState(false);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
 
   const fetchAnalytics = async () => {
     try {
@@ -89,6 +92,76 @@ const AdAnalytics: React.FC = () => {
       console.error('Error fetching analytics:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDeviceAnalytics = async (deviceId: string) => {
+    try {
+      setDeviceLoading(true);
+      setDeviceError(null);
+      
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      
+      // Get auth token from localStorage (check multiple possible keys)
+      const token = localStorage.getItem('token') || 
+                   localStorage.getItem('adminToken') || 
+                   localStorage.getItem('userToken');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+      
+      const response = await fetch(`${baseUrl}/screenTracking/adAnalytics/${deviceId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Transform the device-specific data to match the DeviceAnalytics interface
+        const deviceData: DeviceAnalytics = {
+          deviceId: data.data.deviceId,
+          materialId: data.data.materialId,
+          screenType: 'HEADDRESS', // Default since we don't get this from device-specific endpoint
+          currentAd: data.data.currentAd ? {
+            adId: data.data.currentAd.adId,
+            adTitle: data.data.currentAd.adTitle,
+            adDuration: 30, // Default duration
+            startTime: data.data.currentAd.startTime,
+            impressions: 0,
+            totalViewTime: 0,
+            completionRate: 0
+          } : undefined,
+          dailyStats: data.data.dailyStats,
+          totalAdsPlayed: data.data.totalAdsPlayed,
+          displayHours: data.data.totalAdPlayTime / 3600, // Convert seconds to hours
+          adPerformance: data.data.adPerformance.map((ad: any) => ({
+            adId: ad.adId,
+            adTitle: ad.adTitle,
+            playCount: ad.playCount,
+            totalViewTime: ad.totalViewTime,
+            averageViewTime: ad.totalViewTime / (ad.playCount || 1),
+            completionRate: ad.completionRate,
+            firstPlayed: '', // Not available in device-specific data
+            lastPlayed: ad.lastPlayed,
+            impressions: ad.impressions
+          })),
+          lastAdPlayed: data.data.adPerformance?.[0]?.lastPlayed,
+          isOnline: data.data.materialBreakdown?.isOnline || false,
+          lastSeen: data.data.materialBreakdown?.lastActivity || new Date().toISOString()
+        };
+        
+        setSelectedDeviceData(deviceData);
+      } else {
+        setDeviceError(data.message || 'Failed to fetch device analytics');
+      }
+    } catch (err) {
+      setDeviceError('Network error: Unable to fetch device analytics');
+      console.error('Error fetching device analytics:', err);
+    } finally {
+      setDeviceLoading(false);
     }
   };
 
@@ -161,9 +234,11 @@ const AdAnalytics: React.FC = () => {
     );
   }
 
-  const selectedDeviceData = selectedDevice 
-    ? analytics.devices.find(d => d.deviceId === selectedDevice)
-    : null;
+  // Handle device selection
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDevice(deviceId);
+    fetchDeviceAnalytics(deviceId);
+  };
 
   return (
     <div className="space-y-6">
@@ -246,7 +321,7 @@ const AdAnalytics: React.FC = () => {
                 className={`p-4 border rounded-lg cursor-pointer transition-colors ${
                   selectedDevice === device.deviceId ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
                 }`}
-                onClick={() => setSelectedDevice(device.deviceId)}
+                onClick={() => handleDeviceSelect(device.deviceId)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
@@ -287,12 +362,37 @@ const AdAnalytics: React.FC = () => {
       </Card>
 
       {/* Selected Device Details */}
-      {selectedDeviceData && (
+      {selectedDevice && (
         <Card>
           <CardHeader>
-            <CardTitle>Device Details: {selectedDeviceData.deviceId}</CardTitle>
+            <CardTitle>Device Details: {selectedDevice}</CardTitle>
+            {deviceLoading && (
+              <div className="flex items-center text-sm text-gray-600">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                Loading device-specific analytics...
+              </div>
+            )}
+            {deviceError && (
+              <div className="text-sm text-red-600">
+                Error: {deviceError}
+              </div>
+            )}
           </CardHeader>
           <CardContent>
+            {deviceLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                Loading device analytics...
+              </div>
+            ) : deviceError ? (
+              <div className="text-center">
+                <p className="text-red-500 mb-4">{deviceError}</p>
+                <Button onClick={() => fetchDeviceAnalytics(selectedDevice)} variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retry
+                </Button>
+              </div>
+            ) : selectedDeviceData ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Current Ad */}
               {selectedDeviceData.currentAd && (
@@ -390,6 +490,11 @@ const AdAnalytics: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+            ) : (
+              <div className="text-center text-gray-500">
+                <p>No device data available</p>
               </div>
             )}
           </CardContent>

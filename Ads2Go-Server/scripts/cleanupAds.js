@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: '.env.development' });
 
 // Import cleanup utilities
 const { runCleanup } = require('../src/utils/cleanupUnpaidAds');

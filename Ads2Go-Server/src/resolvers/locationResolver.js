@@ -1,4 +1,5 @@
-const DeviceCompliance = require('../models/deviceCompliance');
+const DeviceTracking = require('../models/deviceTracking');
+const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const OSMService = require('../services/osmService');
 
 const locationResolvers = {
@@ -11,13 +12,13 @@ const locationResolvers = {
         const query = { materialId };
         
         if (startDate || endDate) {
-          query.timestamp = {};
-          if (startDate) query.timestamp.$gte = new Date(startDate);
-          if (endDate) query.timestamp.$lte = new Date(endDate);
+          query.date = {};
+          if (startDate) query.date.$gte = new Date(startDate);
+          if (endDate) query.date.$lte = new Date(endDate);
         }
 
-        const tracking = await DeviceCompliance.find(query)
-          .sort({ timestamp: 1 });
+        const tracking = await DeviceTracking.find(query)
+          .sort({ date: 1 });
           
         return tracking;
       } catch (error) {
@@ -31,8 +32,8 @@ const locationResolvers = {
      */
     getCurrentMaterialStatus: async (_, { materialId }) => {
       try {
-        const status = await DeviceCompliance.findOne({ materialId })
-          .sort({ timestamp: -1 })
+        const status = await DeviceTracking.findOne({ materialId })
+          .sort({ date: -1 })
           .limit(1);
           
         if (!status) {
@@ -56,17 +57,31 @@ const locationResolvers = {
         // Get address from coordinates
         const address = await OSMService.reverseGeocode(lat, lng);
         
-        // Create new tracking entry
-        const tracking = new DeviceCompliance({
-          materialId,
-          driverId,
-          location: {
+        // Find or create DeviceTracking record
+        let tracking = await DeviceTracking.findOne({ materialId });
+        
+        if (!tracking) {
+          // Create new tracking entry
+          tracking = new DeviceTracking({
+            materialId,
+            carGroupId: 'UNKNOWN', // This should be provided or looked up
+            screenType: 'HEADDRESS', // This should be determined based on material type
+            currentLocation: {
+              type: 'Point',
+              coordinates: [lng, lat]
+            },
+            address,
+            lastSeen: new Date()
+          });
+        } else {
+          // Update existing tracking
+          tracking.currentLocation = {
             type: 'Point',
             coordinates: [lng, lat]
-          },
-          address,
-          timestamp: new Date()
-        });
+          };
+          tracking.address = address;
+          tracking.lastSeen = new Date();
+        }
         
         await tracking.save();
         

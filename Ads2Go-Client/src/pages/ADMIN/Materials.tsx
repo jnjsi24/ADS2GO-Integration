@@ -23,6 +23,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 import { ToastContainer, useToast } from '../../components/ToastNotification';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Driver {
   driverId: string;
@@ -754,12 +755,11 @@ const Materials: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  if (loading) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">Loading materials...</div>;
   if (error) return <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center text-red-500">Error: {error.message}</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <div className="bg-gray-100 w-full min-h-screen">
+    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
+      <div className="bg-gray-100 w-full flex-1 flex flex-col">
         {/* Header with Filters */}
         <MaterialFilters
           searchTerm={searchTerm}
@@ -772,106 +772,116 @@ const Materials: React.FC = () => {
         />
 
         {/* Table */}
-        <div className="rounded-xl mb-5 overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
-            <div className="flex items-center gap-6 col-span-2">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                onChange={handleSelectAll}
-                checked={isAllSelected}
-              />
-              <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
-            </div>
-            <div className="col-span-2">ID</div>
-            <div className="col-span-2 pl-16">Status</div>
-            <div className="col-span-2 pl-12">Driver Name</div>
-            <div className="col-span-2 pl-24">Vehicle Plate</div>
-            <div className="col-span-1 ml-28">Action</div>
+        {loading ? (
+          <AdminLoader />
+        ) : error ? (
+          <div className="text-center py-10 text-red-500">Error: {error}</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-10 text-gray-500">
+            {searchTerm ? 'No drivers match your search criteria' : 'No drivers found'}
           </div>
-          
-          {/* Table Body */}
-          {filtered
-          .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-          .map((material) => {
-            const status = getStatus(material);
+        ) : (
+          <div className="flex-1 rounded-xl mb-5 overflow-hidden">
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
+              <div className="flex items-center gap-6 col-span-2">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  onChange={handleSelectAll}
+                  checked={isAllSelected}
+                />
+                <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
+              </div>
+              <div className="col-span-2">ID</div>
+              <div className="col-span-2 pl-16">Status</div>
+              <div className="col-span-2 pl-12">Driver Name</div>
+              <div className="col-span-2 pl-24">Vehicle Plate</div>
+              <div className="col-span-1 ml-28">Action</div>
+            </div>
             
-            return (
-              <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
-                <div
-                  className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
-                  onClick={() => handleRowClick(material)}
-                >
-                  <div className="col-span-2 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={selectedMaterials.includes(material.id)}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        handleMaterialSelect(material.id);
-                      }}
-                    />
-                    <span className="pl-5 truncate">{material.materialType}</span>
-                  </div>
+            {/* Table Body */}
+            {filtered
+            .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+            .map((material) => {
+              const status = getStatus(material);
+              
+              return (
+                <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
+                  <div
+                    className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                    onClick={() => handleRowClick(material)}
+                  >
+                    <div className="col-span-2 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={selectedMaterials.includes(material.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleMaterialSelect(material.id);
+                        }}
+                      />
+                      <span className="pl-5 truncate">{material.materialType}</span>
+                    </div>
 
-                  <div className="col-span-2 pl-1">{material.materialId}</div>
+                    <div className="col-span-2 pl-1">{material.materialId}</div>
 
-                  <div className="col-span-2 text-center">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        status === 'Used'
-                          ? 'bg-red-200 text-red-800'
-                          : 'bg-green-200 text-green-800'
-                      }`}
-                    >
-                      {status}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
-                  <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
-
-                  <div className="col-span-1 flex justify-center gap-1 ml-">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewDetails(material);
-                      }}
-                      className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
-                    >
-                      <Pencil 
-                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
-                          size={16} />
-                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                          Edit
-                        </span>
-                    </button> 
-
-                    <button
-                      onClick={(e) => {
-                      e.stopPropagation(); // ✅ stop row click
-                      handleDeleteMaterial(material.id); // ✅ delete action
-                    }}
-                      className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
-                    >
-                      <Trash 
-                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
-                        size={16} />
-                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                        Delete
+                    <div className="col-span-2 text-center">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          status === 'Used'
+                            ? 'bg-red-200 text-red-800'
+                            : 'bg-green-200 text-green-800'
+                        }`}
+                      >
+                        {status}
                       </span>
-                    </button>
+                    </div>
+
+                    <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
+                    <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+
+                    <div className="col-span-1 flex justify-center gap-1 ml-">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDetails(material);
+                        }}
+                        className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
+                      >
+                        <Pencil 
+                          className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                            size={16} />
+                          <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                            Edit
+                          </span>
+                      </button> 
+
+                      <button
+                        onClick={(e) => {
+                        e.stopPropagation(); // ✅ stop row click
+                        handleDeleteMaterial(material.id); // ✅ delete action
+                      }}
+                        className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
+                      >
+                        <Trash 
+                          className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                          size={16} />
+                          <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Delete
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="p-4 text-center text-gray-500">No materials found.</div>
-          )}
-        </div>
+              );
+            })}
+            {filtered.length === 0 && (
+              <div className="p-4 text-center text-gray-500">No materials found.</div>
+            )}
+          </div>
+        )}
 
         {/* Pagination */}
         <div className="mt-auto flex justify-center">

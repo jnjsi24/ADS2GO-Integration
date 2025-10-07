@@ -20,9 +20,7 @@ import API_CONFIG from '../config/api';
 
 // Move API_URL assignment inside the component to ensure it's available
 const getAPIUrl = () => {
-  console.log('🔍 API_CONFIG in photo-submission:', API_CONFIG);
-  const url = API_CONFIG?.API_URL || 'http://192.168.100.22:5000/graphql';
-  console.log('🔍 API_URL in photo-submission:', url);
+  const url = API_CONFIG?.API_URL || 'http://localhost:5000/graphql';
   return url;
 };
 
@@ -171,11 +169,13 @@ export default function PhotoSubmission() {
         // Check if any materials need photos (newly mounted or monthly due)
         const materialsNeedingPhotos = response.getDriverMaterials.materials.filter((material: Material) => {
           const mountedDate = new Date(material.mountedAt);
-          const daysSinceMounted = Math.floor((Date.now() - mountedDate.getTime()) / (1000 * 60 * 60 * 24));
-          const isNewlyMounted = daysSinceMounted <= 7;
+          const today = new Date();
+          
+          // Check if mounted today (same day)
+          const isNewlyMounted = mountedDate.toDateString() === today.toDateString();
           const isMonthlyDue = isPhotoDay && !hasCurrentMonthPhoto(material);
           
-          console.log(`📸 Material ${material.materialId}: mounted ${daysSinceMounted} days ago, isNewlyMounted: ${isNewlyMounted}, isMonthlyDue: ${isMonthlyDue}`);
+          console.log(`📸 Material ${material.materialId}: mounted today: ${isNewlyMounted}, isMonthlyDue: ${isMonthlyDue}`);
           
           return isNewlyMounted || isMonthlyDue;
         });
@@ -203,8 +203,8 @@ export default function PhotoSubmission() {
 
   const isNewlyMounted = (material: Material) => {
     const mountedDate = new Date(material.mountedAt);
-    const daysSinceMounted = Math.floor((Date.now() - mountedDate.getTime()) / (1000 * 60 * 60 * 24));
-    return daysSinceMounted <= 7;
+    const today = new Date();
+    return mountedDate.toDateString() === today.toDateString();
   };
 
   const needsPhoto = (material: Material) => {
@@ -326,7 +326,7 @@ export default function PhotoSubmission() {
           <Ionicons name="camera-outline" size={64} color="#CCCCCC" />
           <Text style={styles.notPhotoDayTitle}>No Photos Needed</Text>
           <Text style={styles.notPhotoDayText}>
-            Photo submissions are only available on the 1st of each month or for newly mounted materials (within 7 days).
+            Photo submissions are only available on the 1st of each month or for newly mounted materials (same day).
           </Text>
           <Text style={styles.nextPhotoDayText}>
             Next photo day: 1st of next month
