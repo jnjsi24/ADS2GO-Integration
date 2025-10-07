@@ -108,7 +108,7 @@ const DetailedAnalytics: React.FC = () => {
 
     try {
       setDeviceLoading(true);
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const url = `${baseUrl}/analytics/user/${user.userId}/device/${deviceId}`;
       console.log('🌐 Fetching from URL:', url);
       
@@ -149,7 +149,7 @@ const DetailedAnalytics: React.FC = () => {
     
     try {
       setDirectAnalyticsLoading(true);
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
       const url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
       

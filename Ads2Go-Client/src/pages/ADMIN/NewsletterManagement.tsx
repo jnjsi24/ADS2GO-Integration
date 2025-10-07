@@ -81,12 +81,11 @@ const NewsletterManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(''); // Clear previous errors
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-      const apiUrl = `${baseUrl}/api/newsletter/subscribers?t=${Date.now()}`;
-      setError('');
       
       // Use environment variable or fallback to localhost for development
-      const actualServerUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      // Strip /graphql if present since this is for REST API calls
+      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const actualServerUrl = baseUrl.replace('/graphql', '').replace(/\/$/, '');
       
       console.log('🔍 Newsletter API Configuration:', {
         envUrl: process.env.REACT_APP_API_URL,
@@ -216,7 +215,8 @@ const NewsletterManagement: React.FC = () => {
 
   const confirmUnsubscribe = async () => {
     try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      // Strip /graphql if present since this is for REST API calls
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/api/newsletter/unsubscribe`, {
         method: 'POST',
         headers: {

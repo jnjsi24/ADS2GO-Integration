@@ -161,7 +161,7 @@ const ScreenTracking: React.FC = () => {
     try {
       console.log('🚀 Starting historical route fetch:', { deviceId, date });
       setLoadingHistorical(true);
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
       const url = `${baseUrl}/deviceTracking/route/${deviceId}?date=${date}`;
       console.log('📡 Fetching from URL:', url);
       
@@ -263,7 +263,7 @@ const ScreenTracking: React.FC = () => {
   const fetchMaterials = async () => {
     try {
       setMaterialsLoading(true);
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const materialsUrl = `${baseUrl}/material`;
       console.log('Fetching materials from:', materialsUrl);
       
@@ -298,7 +298,7 @@ const ScreenTracking: React.FC = () => {
       setConnectionStatus('connecting');
       
       // Fetch compliance report (no auth required for this endpoint)
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
       console.log('Making request to:', apiUrl);
       
@@ -359,7 +359,7 @@ const ScreenTracking: React.FC = () => {
   // Fetch path data for selected tablet
   const fetchPathData = useCallback(async (deviceId: string) => {
     try {
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const pathApiUrl = `${baseUrl}/screenTracking/path/${deviceId}?date=${selectedDate}`;
       console.log('Making path request to:', pathApiUrl);
       

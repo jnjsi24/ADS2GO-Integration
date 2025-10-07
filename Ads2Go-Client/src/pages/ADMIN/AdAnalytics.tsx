@@ -78,7 +78,7 @@ const AdAnalytics: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const response = await fetch(`${baseUrl}/screenTracking/adAnalytics`);
       const data = await response.json();
       
@@ -100,7 +100,7 @@ const AdAnalytics: React.FC = () => {
       setDeviceLoading(true);
       setDeviceError(null);
       
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       
       // Get auth token from localStorage (check multiple possible keys)
       const token = localStorage.getItem('token') || 
