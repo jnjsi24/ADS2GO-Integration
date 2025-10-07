@@ -6,6 +6,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/queries/getUserNotificationPreferences';
 import { UPDATE_USER_NOTIFICATION_PREFERENCES } from '../../graphql/user/mutations/updateUserNotificationPreferences';
 import { GET_QUEUED_EMAIL_STATS } from '../../graphql/user/queries/getQueuedEmailStats';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // Toast notification type
 type Toast = {
@@ -205,18 +206,7 @@ const Settings: React.FC = () => {
 
   // Show loading state while fetching preferences
   if (notificationPreferencesLoading) {
-    return (
-      <div className="flex-1 pl-60 pr-1">
-        <div className="flex">
-          <div className="flex-1 bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F3A26D]"></div>
-              <span className="ml-3 text-gray-600">Loading settings...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

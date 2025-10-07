@@ -108,12 +108,12 @@ const SadminNavbar: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative text-gray-300">
+            <Link to="/sadmin-notifications" className="relative text-gray-300 hover:text-gray-500 transition-colors">
               <Bell size={18} />
               <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                 <span className="text-xs text-white font-bold">7</span>
               </div>
-            </div>
+            </Link>
           </div>
         </button>
 
@@ -168,14 +168,3 @@ const SadminNavbar: React.FC = () => {
 };
 
 export default SadminNavbar;
-
-
-//
-
-
-
-
-
-
-
-

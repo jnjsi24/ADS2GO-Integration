@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, RefreshCw, CircleOff } from 'lucide-react';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Subscriber {
   _id: string;
@@ -254,22 +255,7 @@ const NewsletterManagement: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-60 pr-5 p-10">
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-[#3674B5] mb-2">Newsletter Management</h1>
-            <p className="text-gray-600">Manage newsletter subscribers and send updates</p>
-          </div>
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="text-lg mb-2">Loading newsletter subscribers...</div>
-              <div className="text-sm text-gray-500">Please check the browser console for any errors</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   if (error) {

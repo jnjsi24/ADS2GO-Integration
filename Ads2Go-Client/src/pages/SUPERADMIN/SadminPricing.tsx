@@ -15,7 +15,7 @@ import {
   PricingConfigUpdateInput
 } from '../../graphql/superadmin/mutations/pricingConfigMutations';
 import { motion, AnimatePresence } from "framer-motion";
-
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 const SadminPricing: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -247,14 +247,7 @@ const SadminPricing: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen ml-64 bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading pricing configurations...</p>
-        </div>
-      </div>
-    );
+    return <AdminLoader />;
   }
 
   return (

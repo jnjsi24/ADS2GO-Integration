@@ -13,6 +13,7 @@ import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS  } from '../../graphql/admin
 import DeviceStatus from '../../components/DeviceStatus';
 import AirtimeAvailability from '../../components/AirtimeAvailability';
 import DynamicNotificationList from './tabs/dashboard/DynamicNotificationList';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 // GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
@@ -66,11 +67,7 @@ const Dashboard = () => {
     }
   });
 
-  if (loading || statsLoading || pendingAdsLoading) return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-    </div>
-  );
+  if (loading || statsLoading || pendingAdsLoading) return <AdminLoader />;
 
   if (error) return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">

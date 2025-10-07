@@ -291,51 +291,6 @@ const Advertisements: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPlan;
   });
 
-  if (loading)
-  return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-        style={{
-          backgroundImage: "url('/image/bg2.jpg')",
-        }}
-      ></div>
-
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
-
-      {/* Centered Content */}
-      <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
-        <h1 className="text-2xl text-gray-800 px-6 py-3">
-          Loading ads...
-        </h1>
-      </div>
-    </div>
-  );
-
-if (error)
-  return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-        style={{
-          backgroundImage: "url('/image/bg2.jpg')",
-        }}
-      ></div>
-
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
-
-      {/* Centered Content */}
-      <div className="relative min-h-screen flex items-center justify-center pl-64 pr-5">
-        <h1 className="text-2xl font-medium text-red-700 px-6 py-3">
-          Error loading ads: {error.message}
-        </h1>
-      </div>
-    </div>
-  );
   const currentAds = filteredAds.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredAds.length / itemsPerPage);
 

@@ -7,6 +7,7 @@ import {
   Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, AlertCircle, HelpCircle, ChevronDown, ChevronUp, CalendarPlus, CalendarArrowUp
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { AdminLoader } from "../../components/ProtectedRoute";
 
 type FAQCategory = 'ADVERTISERS' | 'DRIVERS' | 'EVERYONE';
 type FAQStatus = 'all' | 'active' | 'inactive';
@@ -387,17 +388,6 @@ const FAQManagement: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#3674B5] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading FAQs...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
@@ -510,11 +500,19 @@ const FAQManagement: React.FC = () => {
 
         {/* FAQs List */}
         <div className="bg-gray-100 rounded-lg shadow-sm">
-          {filteredFAQs.length === 0 ? (
+          {loading ? (
+            <AdminLoader />
+          ) : error ? (
+            <div className="text-center py-10 text-red-500">
+              Error: {error}
+            </div>
+          ) : filteredFAQs.length === 0 ? (
             <div className="text-center py-12">
               <HelpCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No FAQs found</p>
-              <p className="text-sm text-gray-400 mt-2">Create your first FAQ to get started</p>
+              <p className="text-sm text-gray-400 mt-2">
+                Create your first FAQ to get started
+              </p>
             </div>
           ) : (
             <div className="space-y-6">
