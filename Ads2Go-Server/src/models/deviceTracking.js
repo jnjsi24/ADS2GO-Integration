@@ -781,24 +781,68 @@ DeviceTrackingSchema.methods.saveWithRetry = function(maxRetries = 3) {
 
 // Instance methods
 DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', timestamp = null) {
+  // Validate GPS coordinates - reject invalid coordinates
+  if (!this.isValidGPSCoordinates(lat, lng)) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS coordinates [${lat}, ${lng}] - rejecting update`);
+    return Promise.resolve(this);
+  }
+  
+  // Filter out poor GPS accuracy (more than 100 meters)
+  if (accuracy > 100) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Poor GPS accuracy (${accuracy}m) - rejecting update`);
+    return Promise.resolve(this);
+  }
+  
   const newLocation = {
     type: 'Point',
     coordinates: [lng, lat],
     timestamp: timestamp || new Date(), // Use provided timestamp or current time
-    speed,
-    heading,
-    accuracy,
-    address
+    speed: Math.max(0, speed || 0), // Ensure non-negative speed
+    heading: Math.max(0, Math.min(360, heading || 0)), // Clamp heading to 0-360
+    accuracy: Math.max(0, accuracy || 0), // Ensure non-negative accuracy
+    address: address || ''
   };
   
+  // Calculate distance if we have a previous location
+  let distanceAdded = 0;
+  if (this.currentLocation && this.locationHistory.length > 0) {
+    const prevLocation = this.currentLocation;
+    
+    // Validate previous location coordinates
+    if (this.isValidGPSCoordinates(prevLocation.coordinates[1], prevLocation.coordinates[0])) {
+      const distance = this.calculateDistance(
+        prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
+        lat, lng
+      );
+      
+      // Only add distance if movement is significant (more than 10 meters)
+      // This filters out GPS noise when device is stationary
+      if (distance > 0.01) { // 0.01 km = 10 meters
+        distanceAdded = distance;
+        this.totalDistanceTraveled += distance;
+      } else {
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
+      }
+    } else {
+      console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
+    }
+  }
+  
   // Use findByIdAndUpdate to avoid version conflicts
+  const updateData = {
+    currentLocation: newLocation,
+    lastSeen: new Date()
+  };
+  
+  // Add distance if significant movement
+  if (distanceAdded > 0) {
+    updateData.totalDistanceTraveled = this.totalDistanceTraveled;
+  }
+  
   return this.constructor.findByIdAndUpdate(
     this._id,
     {
-      $set: {
-        currentLocation: newLocation,
-        lastSeen: new Date()
-      },
+      $set: updateData,
       $push: {
         locationHistory: {
           $each: [newLocation],
@@ -810,7 +854,58 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       new: true,
       runValidators: true
     }
-  );
+  ).then((updatedDoc) => {
+    if (distanceAdded > 0) {
+      console.log(`📍 [updateLocation] ${this.materialId}: +${distanceAdded.toFixed(3)}km (total: ${updatedDoc.totalDistanceTraveled.toFixed(3)}km)`);
+    }
+    return updatedDoc;
+  });
+};
+
+// Helper method to validate GPS coordinates
+DeviceTrackingSchema.methods.isValidGPSCoordinates = function(lat, lng) {
+  // Check if coordinates are valid numbers
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return false;
+  }
+  
+  // Check if coordinates are not NaN or Infinity
+  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
+    return false;
+  }
+  
+  // Check if coordinates are not [0,0] (GPS initialization issue)
+  if (lat === 0 && lng === 0) {
+    return false;
+  }
+  
+  // Check if coordinates are within valid GPS ranges
+  // Latitude: -90 to 90 degrees
+  // Longitude: -180 to 180 degrees
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return false;
+  }
+  
+  // Check if coordinates are reasonable for the Philippines region
+  // Philippines is roughly: 4.5°N to 21.1°N, 116.9°E to 126.6°E
+  if (lat < 4.5 || lat > 21.1 || lng < 116.9 || lng > 126.6) {
+    console.log(`📍 [GPS Validation] ${this.materialId}: Coordinates [${lat}, ${lng}] outside Philippines region`);
+    // Don't reject, just log - device might be traveling
+  }
+  
+  return true;
+};
+
+// Helper method to calculate distance between two points
+DeviceTrackingSchema.methods.calculateDistance = function(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 };
 
 DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {

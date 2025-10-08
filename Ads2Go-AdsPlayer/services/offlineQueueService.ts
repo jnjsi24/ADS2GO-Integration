@@ -355,6 +355,10 @@ class OfflineQueueService {
   private async sendQueuedLocationData(item: QueuedLocationData) {
     const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
     
+    // Get registration data to include deviceId and materialId
+    const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
+    const registration = await tabletRegistrationService.getRegistrationData();
+    
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/location-data`, {
         method: 'POST',
@@ -368,7 +372,10 @@ class OfflineQueueService {
           heading: item.heading,
           accuracy: item.accuracy,
           isOffline: item.isOffline,
-          queuedTimestamp: item.timestamp
+          queuedTimestamp: item.timestamp,
+          deviceId: registration?.deviceId,
+          materialId: registration?.materialId,
+          deviceSlot: registration?.slotNumber
         }),
       });
 
