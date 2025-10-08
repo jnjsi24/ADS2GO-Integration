@@ -25,8 +25,10 @@ export default {
       edgeToEdgeEnabled: true,
       permissions: [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ]
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      package: "com.ads2go.drivermobileapp"
     },
     web: {
       bundler: "metro",
@@ -42,6 +44,14 @@ export default {
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/images/icon.png",
+          color: "#ffffff",
+          sounds: []
         }
       ]
     ],
