@@ -91,9 +91,8 @@ class NotificationService {
       }
 
       // Get the push token
-      const token = await Notifications.getExpoPushTokenAsync({
-        projectId: 'ads2go-driver-mobile-app', // Replace with your actual project ID
-      });
+      // Let Expo auto-detect the project ID from app.config.js
+      const token = await Notifications.getExpoPushTokenAsync();
 
       this.expoPushToken = token.data;
       console.log('✅ Expo push token:', this.expoPushToken);

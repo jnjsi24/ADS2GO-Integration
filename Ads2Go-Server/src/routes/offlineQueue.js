@@ -38,7 +38,7 @@ router.post('/device-status', async (req, res) => {
 // Handle queued location data
 router.post('/location-data', async (req, res) => {
   try {
-    const { lat, lng, speed, heading, accuracy, isOffline, queuedTimestamp } = req.body;
+    const { lat, lng, speed, heading, accuracy, isOffline, queuedTimestamp, deviceId, materialId, deviceSlot } = req.body;
     
     console.log('📦 [OfflineQueue] Received queued location data:', {
       lat,
@@ -47,14 +47,125 @@ router.post('/location-data', async (req, res) => {
       heading,
       accuracy,
       isOffline,
-      queuedTimestamp
+      queuedTimestamp,
+      deviceId,
+      materialId,
+      deviceSlot
     });
     
-    // For now, just acknowledge receipt
-    // In a full implementation, you'd update the location in the database
+    // Process the location update through the device tracking system
+    const DeviceTracking = require('../models/deviceTracking');
+    
+    // Find the device by materialId or deviceId
+    let carTracking = null;
+    if (materialId) {
+      carTracking = await DeviceTracking.findByMaterialId(materialId);
+    } else if (deviceId) {
+      carTracking = await DeviceTracking.findByDeviceId(deviceId);
+    }
+    
+    if (!carTracking) {
+      console.log('⚠️ [OfflineQueue] No device found for location update');
+      return res.json({
+        success: false,
+        message: 'Device not found for location update'
+      });
+    }
+    
+    // Helper function to validate GPS coordinates
+    const isValidGPSCoordinates = (lat, lng) => {
+      // Check if coordinates are valid numbers
+      if (typeof lat !== 'number' || typeof lng !== 'number') {
+        return false;
+      }
+      
+      // Check if coordinates are not NaN or Infinity
+      if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
+        return false;
+      }
+      
+      // Check if coordinates are not [0,0] (GPS initialization issue)
+      if (lat === 0 && lng === 0) {
+        return false;
+      }
+      
+      // Check if coordinates are within valid GPS ranges
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return false;
+      }
+      
+      return true;
+    };
+
+    // Helper function to determine if location should be updated
+    const shouldUpdateLocation = async (materialTracking, lat, lng, accuracy, timestamp) => {
+      // Validate GPS coordinates first
+      if (!isValidGPSCoordinates(lat, lng)) {
+        return false;
+      }
+      
+      // Filter out poor GPS accuracy (more than 100 meters)
+      if (accuracy > 100) {
+        return false;
+      }
+      
+      // Always update if no current location
+      if (!materialTracking.currentLocation) {
+        return true;
+      }
+
+      // Update if this is a more accurate reading (lower accuracy number = better)
+      if (accuracy < (materialTracking.currentLocation.accuracy || 999)) {
+        return true;
+      }
+
+      // Update if this is a significantly newer timestamp
+      const currentTime = new Date(materialTracking.lastSeen);
+      const newTime = new Date(timestamp || new Date());
+      const timeDiff = (newTime - currentTime) / 1000; // seconds
+      
+      if (timeDiff > 30) { // Update if more than 30 seconds newer
+        return true;
+      }
+
+      // Update if location has moved significantly (more than 10 meters)
+      const currentLat = materialTracking.currentLocation.coordinates[1];
+      const currentLng = materialTracking.currentLocation.coordinates[0];
+      const distance = calculateDistance(currentLat, currentLng, lat, lng);
+      
+      if (distance > 10) { // 10 meters
+        return true;
+      }
+
+      return false;
+    };
+
+    // Helper function to calculate distance between two points
+    const calculateDistance = (lat1, lng1, lat2, lng2) => {
+      const R = 6371; // Earth's radius in kilometers
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLng/2) * Math.sin(dLng/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    const shouldUpdate = await shouldUpdateLocation(carTracking, lat, lng, accuracy, queuedTimestamp);
+    
+    if (shouldUpdate) {
+      // Use the updateLocation method which handles distance calculation and version conflicts
+      const updatedDevice = await carTracking.updateLocation(lat, lng, speed, heading, accuracy, '', queuedTimestamp);
+      
+      if (updatedDevice) {
+        console.log(`✅ [OfflineQueue] Updated location for ${updatedDevice.materialId}`);
+      }
+    }
+    
     res.json({
       success: true,
-      message: 'Queued location data received',
+      message: 'Queued location data processed',
       data: {
         lat,
         lng,
@@ -62,7 +173,8 @@ router.post('/location-data', async (req, res) => {
         heading,
         accuracy,
         isOffline,
-        queuedTimestamp
+        queuedTimestamp,
+        totalDistanceTraveled: carTracking.totalDistanceTraveled
       }
     });
   } catch (error) {

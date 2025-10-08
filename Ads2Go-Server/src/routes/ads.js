@@ -437,19 +437,20 @@ router.post('/qr-scan', async (req, res) => {
     try {
       const DeviceTracking = require('../models/deviceTracking');
       
-      // Find or create device tracking record for today
+      // Find existing device tracking record for this material
+      // Use the most recent record to prevent duplicates
       let deviceTracking = await DeviceTracking.findOne({
-        materialId: materialId,
-        date: new Date().toISOString().split('T')[0]
-      });
+        materialId: materialId
+      }).sort({ date: -1 }); // Get the most recent record
       
       if (!deviceTracking) {
-        // Create new device tracking record for today
+        // Create new device tracking record for October 9th, 2025 (same as existing records)
+        const today = new Date('2025-10-09T00:00:00.000+00:00');
         deviceTracking = new DeviceTracking({
           materialId: materialId,
           carGroupId: 'GRP-UNKNOWN', // Will be updated when device connects
           screenType: 'HEADDRESS',
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           slots: [],
           isOnline: false,
           totalAdPlays: 0,
@@ -469,7 +470,7 @@ router.post('/qr-scan', async (req, res) => {
             displayIssues: 0
           },
           currentSession: {
-            date: new Date(),
+            date: today,
             startTime: new Date(),
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,

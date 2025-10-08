@@ -341,15 +341,6 @@ const Dashboard: React.FC = () => {
             </View>
           </View>
 
-          {/* 🔔 Bell Icon */}
-          <TouchableOpacity onPress={() => navigation.navigate('Notifications')}>
-            <Ionicons
-              name="notifications-outline"
-              size={28}
-              color="#374151"
-              style={styles.bellIcon}
-            />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -652,9 +643,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 
-  bellIcon: {
-    marginLeft: 10,
-  },
 
   // Balance Container
   cardContainer: {

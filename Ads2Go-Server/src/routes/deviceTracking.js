@@ -3,8 +3,43 @@ const router = express.Router();
 const DeviceTracking = require('../models/deviceTracking');
 const cronJobs = require('../jobs/cronJobs');
 
+// Helper function to validate GPS coordinates
+function isValidGPSCoordinates(lat, lng) {
+  // Check if coordinates are valid numbers
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return false;
+  }
+  
+  // Check if coordinates are not NaN or Infinity
+  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
+    return false;
+  }
+  
+  // Check if coordinates are not [0,0] (GPS initialization issue)
+  if (lat === 0 && lng === 0) {
+    return false;
+  }
+  
+  // Check if coordinates are within valid GPS ranges
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return false;
+  }
+  
+  return true;
+}
+
 // Helper function to determine if location should be updated
 async function shouldUpdateLocation(materialTracking, lat, lng, accuracy, timestamp) {
+  // Validate GPS coordinates first
+  if (!isValidGPSCoordinates(lat, lng)) {
+    return false;
+  }
+  
+  // Filter out poor GPS accuracy (more than 100 meters)
+  if (accuracy > 100) {
+    return false;
+  }
+  
   // Always update if no current location
   if (!materialTracking.currentLocation) {
     return true;
@@ -118,16 +153,11 @@ router.post('/location-update', async (req, res) => {
     // Update location (only if this is a newer/better GPS reading)
     const shouldUpdate = await shouldUpdateLocation(carTracking, lat, lng, accuracy, timestamp);
     if (shouldUpdate) {
-      await carTracking.updateLocation(lat, lng, speed, heading, accuracy, '', timestamp);
-
-      // Update distance traveled
-      if (carTracking.currentLocation && carTracking.locationHistory.length > 1) {
-        const prevLocation = carTracking.locationHistory[carTracking.locationHistory.length - 2];
-        const distance = calculateDistance(
-          prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
-          lat, lng
-        );
-        carTracking.totalDistanceTraveled += distance;
+      // Use the updateLocation method which handles distance calculation and version conflicts
+      const updatedDevice = await carTracking.updateLocation(lat, lng, speed, heading, accuracy, '', timestamp);
+      
+      if (updatedDevice) {
+        console.log(`✅ [LocationUpdate] Updated location for ${updatedDevice.materialId}`);
       }
     }
 
@@ -185,8 +215,11 @@ router.post('/status-update', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today
@@ -275,8 +308,11 @@ router.post('/ad-playback', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today
@@ -396,8 +432,11 @@ router.post('/qr-scan', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today

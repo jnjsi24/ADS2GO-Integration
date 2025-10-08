@@ -215,6 +215,7 @@ async function startServer() {
         // Dynamic origins from environment
         ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
         ...(process.env.EXPO_URL ? [process.env.EXPO_URL] : []),
+        ...(process.env.LOCAL_NETWORK_IP ? [`http://${process.env.LOCAL_NETWORK_IP}:5000`] : []),
       ];
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
@@ -224,7 +225,10 @@ async function startServer() {
 
       const isRenderApp = /^https?:\/\/([a-z0-9-]+)\.onrender\.com$/i.test(origin);
 
-      if (allowedOrigins.has(origin) || isRailwayApp || isRenderApp) {
+      // Allow local network IPs for development (fallback if not in .env)
+      const isLocalNetwork = /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}):\d+$/i.test(origin);
+
+      if (allowedOrigins.has(origin) || isRailwayApp || isRenderApp || isLocalNetwork) {
         callback(null, true);
       } else {
         console.log(`🚫 CORS blocked origin: ${origin}`);
