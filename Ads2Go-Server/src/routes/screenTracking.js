@@ -703,13 +703,67 @@ router.get('/path/:deviceId', async (req, res) => {
 router.get('/compliance', async (req, res) => {
   try {
     const { date } = req.query;
-    const targetDate = date ? new Date(date) : new Date();
+    
+    // Validate date parameter
+    let targetDate;
+    if (date) {
+      targetDate = new Date(date);
+      // Check if the date is valid
+      if (isNaN(targetDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid date format. Please use YYYY-MM-DD format.'
+        });
+      }
+      
+      // Check if the date is not too far in the future (more than 1 year)
+      const now = new Date();
+      const oneYearFromNow = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+      if (targetDate > oneYearFromNow) {
+        return res.status(400).json({
+          success: false,
+          message: 'Date cannot be more than 1 year in the future.'
+        });
+      }
+      
+      // Check if the date is in the future (more than 1 day)
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      
+      if (targetDate > tomorrow) {
+        console.log(`⚠️ [Compliance] Future date requested: ${targetDate.toISOString()}, current date: ${now.toISOString()}`);
+        // For future dates, we'll return empty data instead of error
+        // This allows the frontend to handle future dates gracefully
+        return res.json({
+          success: true,
+          data: {
+            date: targetDate,
+            totalDevices: 0,
+            onlineDevices: 0,
+            compliantDevices: 0,
+            nonCompliantDevices: 0,
+            averageHours: 0,
+            averageDistance: 0,
+            screens: [],
+            materialScreens: [],
+            message: 'No data available for future dates'
+          }
+        });
+      }
+    } else {
+      targetDate = new Date();
+    }
 
     // First, get all registered devices from tablet system
     const Tablet = require('../models/Tablet');
     const registeredDevices = new Map();
     
+    console.log(`📊 [Compliance] Processing compliance report for date: ${targetDate.toISOString()}`);
+    
     const tablets = await Tablet.find({});
+    console.log(`📱 [Compliance] Found ${tablets.length} tablet records`);
+    
     tablets.forEach(tablet => {
       tablet.tablets.forEach(tabletDevice => {
         if (tabletDevice.deviceId) {
@@ -733,13 +787,26 @@ router.get('/compliance', async (req, res) => {
     const registeredDeviceIds = Array.from(registeredDevices.keys());
     const registeredMaterialIds = Array.from(new Set(Array.from(registeredDevices.values()).map(info => info.materialId)));
     
+    console.log(`🔍 [Compliance] Querying DeviceTracking for ${registeredDeviceIds.length} device IDs and ${registeredMaterialIds.length} material IDs`);
+    
     // Query by materialId (new system) and deviceId in slots
-    const allDevices = await DeviceTracking.find({ 
-      $or: [
-        { 'slots.deviceId': { $in: registeredDeviceIds } },
-        { materialId: { $in: registeredMaterialIds } }
-      ]
-    });
+    let allDevices;
+    try {
+      allDevices = await DeviceTracking.find({ 
+        $or: [
+          { 'slots.deviceId': { $in: registeredDeviceIds } },
+          { materialId: { $in: registeredMaterialIds } }
+        ]
+      });
+      console.log(`✅ [Compliance] Found ${allDevices.length} DeviceTracking records`);
+    } catch (dbError) {
+      console.error('❌ [Compliance] Database query error:', dbError);
+      return res.status(500).json({
+        success: false,
+        message: 'Database query failed',
+        error: process.env.NODE_ENV === 'development' ? dbError.message : 'Internal server error'
+      });
+    }
     
     allDevices.forEach((device, index) => {
       console.log(`  Device ${index + 1}: ${device.materialId} (${device.slots?.length || 0} slots)`);
@@ -810,8 +877,16 @@ router.get('/compliance', async (req, res) => {
             });
             
             // Update slot status - use tablet registration status as primary source
-            const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
-            const deviceStatusOnline = !!statusInfo.isOnline;
+            let statusInfo;
+            let deviceStatusOnline = false;
+            try {
+              statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
+              deviceStatusOnline = !!statusInfo.isOnline;
+            } catch (statusError) {
+              console.error(`❌ [Compliance] Error getting device status for ${slot.deviceId}:`, statusError);
+              // Continue with default offline status
+              deviceStatusOnline = false;
+            }
             
             // Check if tablet registration status is recent (within last 30 seconds)
             const now = new Date();
@@ -1051,6 +1126,8 @@ router.get('/compliance', async (req, res) => {
       });
     });
 
+    console.log(`📊 [Compliance] Generating report: ${individualScreens.length} screens, ${totalOnlineScreens} online, ${totalCompliantScreens} compliant`);
+
     const complianceReport = {
       date: targetDate,
       totalDevices: individualScreens.length,
@@ -1063,16 +1140,22 @@ router.get('/compliance', async (req, res) => {
       materialScreens: materialScreens // Material-level records for map display
     };
 
+    console.log(`✅ [Compliance] Report generated successfully for ${targetDate.toISOString()}`);
+
     res.json({
       success: true,
       data: complianceReport
     });
 
   } catch (error) {
-    console.error('Error getting compliance report:', error);
+    console.error('❌ [Compliance] Error getting compliance report:', error);
+    console.error('❌ [Compliance] Error stack:', error.stack);
+    
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      timestamp: new Date().toISOString()
     });
   }
 });
