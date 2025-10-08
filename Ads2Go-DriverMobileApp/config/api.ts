@@ -14,7 +14,7 @@ if (!EXPO_PUBLIC_API_URL && (!serverIp || !serverPort)) {
   throw new Error('Missing required environment variables for API configuration');
 }
 
-const serverUrl = serverIp && serverPort ? `http://192.168.100.2:8081` : null;
+const serverUrl = serverIp && serverPort ? `http://192.168.1.92:8081` : null;
 
 
 const API_CONFIG = {
