@@ -444,6 +444,7 @@ router.post('/qr-scan', async (req, res) => {
       });
       
       if (!deviceTracking) {
+        console.log(`📊 Creating new device tracking record for material ${materialId}`);
         // Create new device tracking record for today
         deviceTracking = new DeviceTracking({
           materialId: materialId,
@@ -490,6 +491,7 @@ router.post('/qr-scan', async (req, res) => {
       if (existingAdScan) {
         existingAdScan.scanCount += 1;
         existingAdScan.lastScanned = new Date();
+        console.log(`📊 Updated existing QR scan count for ad ${qrScanData.adId}: ${existingAdScan.scanCount}`);
       } else {
         deviceTracking.qrScansByAd.push({
           adId: qrScanData.adId,
@@ -498,15 +500,31 @@ router.post('/qr-scan', async (req, res) => {
           lastScanned: new Date(),
           firstScanned: new Date()
         });
+        console.log(`📊 Added new QR scan entry for ad ${qrScanData.adId}`);
       }
       
       await deviceTracking.save();
-      console.log('\u001b[32m✅ Updated deviceTracking with QR scan data\u001b[0m');
-      console.log(`   DeviceTracking QR Scans: \u001b[32m${deviceTracking.totalQRScans}\u001b[0m`);
+      console.log('\u001b[32m✅ Successfully saved QR scan to deviceTracking\u001b[0m');
+      console.log(`   Material ID: \u001b[32m${materialId}\u001b[0m`);
+      console.log(`   Total QR Scans: \u001b[32m${deviceTracking.totalQRScans}\u001b[0m`);
       console.log(`   QR Scans in Array: \u001b[32m${deviceTracking.qrScans.length}\u001b[0m`);
+      console.log(`   QR Scans by Ad: \u001b[32m${deviceTracking.qrScansByAd.length}\u001b[0m`);
       
     } catch (deviceTrackingError) {
-      console.log('\u001b[31m❌ Could not update deviceTracking with QR scan:\u001b[0m', deviceTrackingError.message);
+      console.log('\u001b[31m❌ Failed to save QR scan to deviceTracking:\u001b[0m');
+      console.log(`   Error: \u001b[31m${deviceTrackingError.message}\u001b[0m`);
+      console.log(`   Material ID: \u001b[31m${materialId}\u001b[0m`);
+      console.log(`   Ad ID: \u001b[31m${adId}\u001b[0m`);
+      
+      // Try to save to QRScanTracking collection as backup
+      try {
+        const QRScanTracking = require('../models/qrScanTracking');
+        const backupQRScan = new QRScanTracking(qrScanData);
+        await backupQRScan.save();
+        console.log('\u001b[33m⚠️ Saved QR scan to backup collection (QRScanTracking)\u001b[0m');
+      } catch (backupError) {
+        console.log('\u001b[31m❌ Failed to save to backup collection:\u001b[0m', backupError.message);
+      }
     }
 
     // ScreenTracking collection deprecated: skip screen-level QR scan updates
@@ -647,6 +665,11 @@ router.get('/qr-redirect', async (req, res) => {
     // Redirect to the advertiser's website
     const targetUrl = redirectUrl || website || 'https://ads2go.app';
     console.log(`🔗 Redirecting to: ${targetUrl}`);
+    
+    // If no specific advertiser website, show a message before redirecting
+    if (targetUrl === 'https://ads2go.app' && (!redirectUrl || !website)) {
+      console.log('ℹ️ No advertiser website provided, redirecting to Ads2Go platform');
+    }
     
     res.redirect(302, targetUrl);
     
