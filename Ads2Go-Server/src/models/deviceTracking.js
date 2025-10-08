@@ -442,7 +442,7 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
       
       // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -542,7 +542,7 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       
       // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -972,7 +972,7 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
       this.date = today; // Update the main date field
       
       this.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -1122,10 +1122,8 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   this.currentSession.complianceStatus = 
     this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
   
-  // Update total lifetime hours (only if this is more than what we had before)
-  if (totalHours > this.totalHoursOnline) {
-    this.totalHoursOnline = Math.round(totalHours * 100) / 100;
-  }
+  // Always update total lifetime hours for the current day (not cumulative)
+  this.totalHoursOnline = Math.round(totalHours * 100) / 100;
   
   // Update average daily hours
   this.averageDailyHours = this.totalHoursOnline;

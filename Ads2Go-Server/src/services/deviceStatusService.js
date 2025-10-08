@@ -572,8 +572,33 @@ class DeviceStatusService {
         slot.lastSeen = now;
         deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
         deviceTracking.lastSeen = now;
+        
+        // If device is coming online, ensure we have an active session
+        if (status && (!deviceTracking.currentSession || !deviceTracking.currentSession.isActive)) {
+          console.log(`🔄 [updateDeviceStatus] Device ${deviceId} coming online, ensuring active session`);
+          deviceTracking.currentSession = {
+            date: new Date(),
+            startTime: now,
+            endTime: null,
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            isActive: true,
+            targetHours: 8,
+            complianceStatus: 'PENDING',
+            locationHistory: []
+          };
+        }
+        
         await deviceTracking.save();
         console.log(`✅ [updateDeviceStatus] Updated slot for device ${deviceId} in material ${materialId}`);
+        
+        // Real-time hours calculation when device comes online
+        if (status) {
+          console.log(`🕐 [updateDeviceStatus] Calculating real-time hours for ${deviceId}`);
+          deviceTracking.calculateAndUpdateOnlineHours();
+          await deviceTracking.save();
+          console.log(`✅ [updateDeviceStatus] Real-time hours updated: ${deviceTracking.totalHoursOnline} hours`);
+        }
       } else {
         console.log(`⚠️ [updateDeviceStatus] Device ${deviceId} not found in slots for material ${materialId}`);
       }
@@ -622,6 +647,13 @@ class DeviceStatusService {
         slot.lastSeen = now;
         deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
         deviceTracking.lastSeen = now;
+        
+        // Real-time hours calculation when device goes offline
+        if (!status) {
+          console.log(`🕐 [updateDeviceStatusWithMaterialId] Calculating final hours for offline device ${deviceId}`);
+          deviceTracking.calculateAndUpdateOnlineHours();
+        }
+        
         await deviceTracking.save();
       }
       
