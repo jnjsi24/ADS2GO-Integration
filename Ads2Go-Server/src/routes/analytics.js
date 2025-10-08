@@ -648,6 +648,66 @@ router.post('/user/:userId/sync', async (req, res) => {
   }
 });
 
+// GET /analytics/cache/stats - Get cache statistics
+router.get('/cache/stats', async (req, res) => {
+  try {
+    const cacheStats = UserAnalyticsService.getCacheStats();
+    
+    res.json({
+      success: true,
+      data: cacheStats,
+      message: 'Cache statistics retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting cache stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get cache statistics',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /analytics/cache/clear/:userId - Clear cache for specific user
+router.post('/cache/clear/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    UserAnalyticsService.clearUserCache(userId);
+    
+    res.json({
+      success: true,
+      message: `Cache cleared for user ${userId}`
+    });
+  } catch (error) {
+    console.error('Error clearing user cache:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear user cache',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// POST /analytics/cache/clear-all - Clear all cache
+router.post('/cache/clear-all', async (req, res) => {
+  try {
+    UserAnalyticsService.clearAllCache();
+    
+    res.json({
+      success: true,
+      message: 'All cache cleared successfully'
+    });
+  } catch (error) {
+    console.error('Error clearing all cache:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear all cache',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 // GET /analytics/user/:userId/direct - Direct API endpoint bypassing GraphQL
 router.get('/user/:userId/direct', async (req, res) => {
   try {
@@ -710,12 +770,15 @@ router.get('/user/:userId/device/:deviceId', async (req, res) => {
 router.get('/user/:userId/devices', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { deviceIds, startDate, endDate } = req.query;
+    const { deviceIds, startDate, endDate, useAllDevices } = req.query;
     
     // Parse deviceIds if provided as comma-separated string
     const parsedDeviceIds = deviceIds ? deviceIds.split(',') : [];
     
-    const analytics = await UserAnalyticsService.getMultipleDevicesAnalytics(userId, parsedDeviceIds, startDate, endDate);
+    // Convert useAllDevices string to boolean
+    const shouldUseAllDevices = useAllDevices === 'true' || useAllDevices === '1';
+    
+    const analytics = await UserAnalyticsService.getMultipleDevicesAnalytics(userId, parsedDeviceIds, startDate, endDate, shouldUseAllDevices);
     
     res.json({
       success: true,

@@ -800,6 +800,12 @@ router.get('/compliance', async (req, res) => {
       // Process each slot in the car record
       if (device.slots && device.slots.length > 0) {
         device.slots.forEach(slot => {
+          // Skip slots without deviceId
+          if (!slot.deviceId) {
+            console.log(`⚠️ Skipping slot without deviceId in material ${materialId}`);
+            return;
+          }
+          
           // Find registration info for this slot
           const registrationInfo = registeredDevices.get(slot.deviceId);
           if (registrationInfo) {
@@ -881,6 +887,11 @@ router.get('/compliance', async (req, res) => {
     
     // Process each material group and create consolidated display
     materialGroups.forEach((group, materialId) => {
+      // Skip groups with no devices
+      if (!group.devices || group.devices.length === 0) {
+        console.log(`⚠️ Skipping material ${materialId} - no devices found`);
+        return;
+      }
       
       // Calculate totals
       const deviceHours = group.totalHoursOnline || 0;
@@ -998,6 +1009,12 @@ router.get('/compliance', async (req, res) => {
     // Create material-level records for map display (one per material)
     const materialScreens = [];
     materialGroups.forEach((group, materialId) => {
+      // Skip groups with no devices
+      if (!group.devices || group.devices.length === 0) {
+        console.log(`⚠️ Skipping material ${materialId} in materialScreens - no devices found`);
+        return;
+      }
+      
       // Use the group's location
       let displayLocation = group.currentLocation;
       let displayStatus = group.isOnline ? 'ACTIVE' : 'OFFLINE';

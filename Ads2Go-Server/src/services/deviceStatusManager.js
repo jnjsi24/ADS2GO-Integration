@@ -65,6 +65,16 @@ class DeviceStatusManager {
    * @returns {Object} Status object with isOnline, source, lastSeen, confidence
    */
   getDeviceStatus(deviceId) {
+    // Handle null or undefined deviceId
+    if (!deviceId) {
+      return {
+        isOnline: false,
+        source: 'invalid',
+        lastSeen: null,
+        confidence: 'low'
+      };
+    }
+    
     const cached = this.statusCache.get(deviceId);
     
     // Return cached status if recent (within cache timeout)
@@ -107,19 +117,25 @@ class DeviceStatusManager {
     // Priority 2: Recent database activity (30 seconds fallback)
     const dbStatus = this.databaseStatus.get(deviceId);
     if (dbStatus && dbStatus.isOnline) {
-      const timeSinceLastSeen = (now - dbStatus.lastSeen.getTime()) / 1000;
-      if (timeSinceLastSeen <= this.databaseFallbackTimeout) {
-        const status = { 
-          isOnline: true, 
-          source: 'database',
-          lastSeen: dbStatus.lastSeen,
-          confidence: 'medium'
-        };
-        this.statusCache.set(deviceId, { ...status, timestamp: now });
-        console.log(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (Database, medium confidence, ${timeSinceLastSeen.toFixed(1)}s ago)`);
-        return status;
+      // Ensure lastSeen is a valid Date
+      const lastSeenTime = dbStatus.lastSeen instanceof Date ? dbStatus.lastSeen.getTime() : new Date(dbStatus.lastSeen).getTime();
+      if (isNaN(lastSeenTime)) {
+        console.warn(`⚠️ [DeviceStatusManager] ${deviceId}: Invalid lastSeen timestamp`);
       } else {
-        console.log(`⏰ [DeviceStatusManager] ${deviceId}: Database status too old (${timeSinceLastSeen.toFixed(1)}s ago)`);
+        const timeSinceLastSeen = (now - lastSeenTime) / 1000;
+        if (timeSinceLastSeen <= this.databaseFallbackTimeout) {
+          const status = { 
+            isOnline: true, 
+            source: 'database',
+            lastSeen: dbStatus.lastSeen,
+            confidence: 'medium'
+          };
+          this.statusCache.set(deviceId, { ...status, timestamp: now });
+          console.log(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (Database, medium confidence, ${timeSinceLastSeen.toFixed(1)}s ago)`);
+          return status;
+        } else {
+          console.log(`⏰ [DeviceStatusManager] ${deviceId}: Database status too old (${timeSinceLastSeen.toFixed(1)}s ago)`);
+        }
       }
     }
 
