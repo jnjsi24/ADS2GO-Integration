@@ -185,8 +185,11 @@ router.post('/status-update', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today
@@ -275,8 +278,11 @@ router.post('/ad-playback', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today
@@ -396,8 +402,11 @@ router.post('/qr-scan', async (req, res) => {
     const materialId = tablet.materialId;
     const carGroupId = tablet.carGroupId;
 
-    // Find or create device tracking record using the new schema
-    let deviceTracking = await DeviceTracking.findByMaterialId(materialId);
+    // Find existing device tracking record for this material
+    // Use the most recent record to prevent duplicates
+    let deviceTracking = await DeviceTracking.findOne({
+      materialId: materialId
+    }).sort({ date: -1 }); // Get the most recent record
     
     if (!deviceTracking) {
       // Create new car record for today

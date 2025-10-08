@@ -376,17 +376,14 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  // Get today's date in local timezone (Philippines GMT+8)
+  // Get today's date as a Date object (start of day)
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const todayStr = `${year}-${month}-${day}`;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
     'slots.deviceId': deviceId, 
-    date: todayStr 
+    date: today 
   });
   
   if (car) {
@@ -410,12 +407,13 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
+      const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for device ${deviceId} to today: ${todayStr}`);
       console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
       console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
-      recentCar.date = todayStr;
+      recentCar.date = today;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -481,15 +479,12 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  // Get today's date in local timezone (Philippines GMT+8)
+  // Get today's date as a Date object (start of day)
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const todayStr = `${year}-${month}-${day}`;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
   // First try to find today's record for this material
-  let car = await this.findOne({ materialId, date: todayStr });
+  let car = await this.findOne({ materialId, date: today });
   
   if (car) {
     return car;
@@ -512,12 +507,13 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
+      const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for ${materialId} to today: ${todayStr}`);
       console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
       console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
-      recentCar.date = todayStr;
+      recentCar.date = today;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -973,7 +969,7 @@ DeviceTrackingSchema.methods.resetDailySession = function() {
     sessionDate.setHours(0, 0, 0, 0);
     if (sessionDate.getTime() !== today.getTime()) {
       // Reset for new day
-      this.date = todayStr; // Update the main date field
+      this.date = today; // Update the main date field
       
       this.currentSession = {
         date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
