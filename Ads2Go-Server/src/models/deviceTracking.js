@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const GPSValidation = require('../utils/gpsValidation');
 //for data history
 // Location Point Schema for real-time data
 const LocationPointSchema = new mongoose.Schema({
@@ -781,16 +782,28 @@ DeviceTrackingSchema.methods.saveWithRetry = function(maxRetries = 3) {
 
 // Instance methods
 DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', timestamp = null) {
-  // Validate GPS coordinates - reject invalid coordinates
-  if (!this.isValidGPSCoordinates(lat, lng)) {
-    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS coordinates [${lat}, ${lng}] - rejecting update`);
+  // Enhanced GPS validation using new validation utility
+  const coordValidation = GPSValidation.validateCoordinates(lat, lng);
+  if (!coordValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS coordinates [${lat}, ${lng}] - ${coordValidation.errors.join(', ')}`);
     return Promise.resolve(this);
   }
-  
-  // Filter out poor GPS accuracy (more than 100 meters)
-  if (accuracy > 100) {
-    console.log(`📍 [updateLocation] ${this.materialId}: Poor GPS accuracy (${accuracy}m) - rejecting update`);
+
+  const accuracyValidation = GPSValidation.validateAccuracy(accuracy);
+  if (!accuracyValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS accuracy (${accuracy}m) - ${accuracyValidation.message}`);
     return Promise.resolve(this);
+  }
+
+  const speedValidation = GPSValidation.validateSpeed(speed);
+  if (!speedValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid speed (${speed} km/h) - ${speedValidation.message}`);
+    return Promise.resolve(this);
+  }
+
+  // Log warnings if any
+  if (coordValidation.warnings.length > 0) {
+    console.log(`📍 [updateLocation] ${this.materialId}: GPS warnings - ${coordValidation.warnings.join(', ')}`);
   }
   
   const newLocation = {
@@ -808,9 +821,14 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
   if (this.currentLocation && this.locationHistory.length > 0) {
     const prevLocation = this.currentLocation;
     
-    // Validate previous location coordinates
-    if (this.isValidGPSCoordinates(prevLocation.coordinates[1], prevLocation.coordinates[0])) {
-      const distance = this.calculateDistance(
+    // Validate previous location coordinates using enhanced validation
+    const prevCoordValidation = GPSValidation.validateCoordinates(
+      prevLocation.coordinates[1], 
+      prevLocation.coordinates[0]
+    );
+    
+    if (prevCoordValidation.isValid) {
+      const distance = GPSValidation.calculateDistance(
         prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
         lat, lng
       );
@@ -820,6 +838,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       if (distance > 0.01) { // 0.01 km = 10 meters
         distanceAdded = distance;
         this.totalDistanceTraveled += distance;
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
       } else {
         console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
       }

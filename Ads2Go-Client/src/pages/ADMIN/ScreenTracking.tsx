@@ -10,6 +10,7 @@ import { AdminLoader } from "../../components/ProtectedRoute";
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
 import EnhancedRouteMap from '../../components/EnhancedRouteMap';
+import StravaStyleRouteMap from '../../components/StravaStyleRouteMap';
 import { 
   Clock, 
   Car, 
@@ -129,9 +130,7 @@ const ScreenTracking: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'live' | 'historical'>('live');
   const [historicalRouteData, setHistoricalRouteData] = useState<any>(null);
   const [loadingHistorical, setLoadingHistorical] = useState(false);
-  const [mapKey, setMapKey] = useState(0); // Force map re-render
   const [clearMap, setClearMap] = useState(false); // Flag to clear map
-  const [forceMapRemount, setForceMapRemount] = useState(0); // Force complete map remount
   const [showMap, setShowMap] = useState(true); // Control map visibility
   
   // Helper function to validate coordinates
@@ -213,7 +212,7 @@ const ScreenTracking: React.FC = () => {
     }
   }, [activeTab, selectedScreen, selectedDate]);
 
-  // Debug: Log when historicalRouteData changes and force map re-render
+  // Debug: Log when historicalRouteData changes
   useEffect(() => {
     if (historicalRouteData) {
       console.log('🔄 Historical route data updated:', {
@@ -230,32 +229,6 @@ const ScreenTracking: React.FC = () => {
           timestamp: historicalRouteData.route[historicalRouteData.route.length - 1].timestamp
         } : null
       });
-      
-      // Force map re-render by updating the key
-      setMapKey(prev => prev + 1);
-      console.log('🗺️ Map key updated to force re-render:', mapKey + 1);
-      
-      // Force complete map remount
-      setForceMapRemount(prev => prev + 1);
-      console.log('🔄 Forcing complete map remount:', forceMapRemount + 1);
-      
-      // Temporarily hide map, then show it again to force complete remount
-      setShowMap(false);
-      setTimeout(() => {
-        setShowMap(true);
-        setClearMap(false);
-        console.log('✅ Map cleared and remounted, ready for new data');
-      }, 200);
-      
-      // Clear any existing map layers if mapRef is available
-      if (mapRef.current) {
-        console.log('🗑️ Clearing existing map layers');
-        mapRef.current.eachLayer((layer) => {
-          if (layer instanceof L.Polyline || layer instanceof L.Marker) {
-            mapRef.current?.removeLayer(layer);
-          }
-        });
-      }
     }
   }, [historicalRouteData, selectedDate]);
 
@@ -795,20 +768,30 @@ const ScreenTracking: React.FC = () => {
                   </div>
                 )}
                 {showMap && (
-                  activeTab === 'historical' && selectedScreen && historicalRouteData ? (
-                    // Enhanced Strava-like route visualization for historical data
-                    <EnhancedRouteMap
-                      deviceId={selectedScreen.deviceId}
-                      showSpeedColors={showSpeedColors}
-                      showWaypoints={showWaypoints}
-                      showMetrics={showMetrics}
-                      onRouteLoad={(data) => {
-                        console.log('Enhanced route loaded:', data);
-                      }}
-                    />
+                  activeTab === 'historical' && selectedScreen ? (
+                    // Strava-style route visualization for historical data
+                    <>
+                      <StravaStyleRouteMap
+                        materialId={selectedScreen.materialId || 'DGL-HEADDRESS-CAR-002'}
+                        date={selectedDate}
+                        showSpeedColors={showSpeedColors}
+                        showWaypoints={showWaypoints}
+                        showMetrics={showMetrics}
+                        onRouteLoad={(data) => {
+                          console.log('Strava-style route loaded:', data);
+                          setHistoricalRouteData(data);
+                        }}
+                      />
+                      {/* Debug info */}
+                      <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs">
+                        <div>Selected Screen: {selectedScreen?.deviceId}</div>
+                        <div>Material ID: {selectedScreen?.materialId || 'N/A'}</div>
+                        <div>Date: {selectedDate}</div>
+                      </div>
+                    </>
                   ) : (
                     <MapView 
-                      key={`map-${forceMapRemount}-${selectedDate}-${mapKey}`}
+                      key={`map-${selectedDate}`}
                       center={mapCenter}
                       zoom={zoom}
                       onMapLoad={(map: Map) => {
@@ -957,7 +940,7 @@ const ScreenTracking: React.FC = () => {
                       })() && !clearMap && (
                         <>
                           <Polyline
-                            key={`historical-route-${selectedDate}-${historicalRouteData.route.length}-${mapKey}`}
+                            key={`historical-route-${selectedDate}`}
                             positions={historicalRouteData.route.map((point: any) => [point.lat, point.lng])}
                             color="red"
                             weight={4}
@@ -966,7 +949,7 @@ const ScreenTracking: React.FC = () => {
                           {/* Start marker */}
                           {historicalRouteData.route[0] && (
                             <Marker
-                              key={`start-marker-${selectedDate}-${historicalRouteData.route[0].lat}-${historicalRouteData.route[0].lng}-${mapKey}`}
+                              key={`start-marker-${selectedDate}`}
                               position={[historicalRouteData.route[0].lat, historicalRouteData.route[0].lng]}
                               icon={new Icon({
                                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
@@ -996,7 +979,7 @@ const ScreenTracking: React.FC = () => {
                           {/* End marker */}
                           {historicalRouteData.route.length > 1 && (
                             <Marker
-                              key={`end-marker-${selectedDate}-${historicalRouteData.route[historicalRouteData.route.length - 1].lat}-${historicalRouteData.route[historicalRouteData.route.length - 1].lng}-${mapKey}`}
+                              key={`end-marker-${selectedDate}`}
                               position={[
                                 historicalRouteData.route[historicalRouteData.route.length - 1].lat, 
                                 historicalRouteData.route[historicalRouteData.route.length - 1].lng

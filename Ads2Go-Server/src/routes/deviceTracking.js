@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const DeviceTracking = require('../models/deviceTracking');
+const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
 const cronJobs = require('../jobs/cronJobs');
+const GPSValidation = require('../utils/gpsValidation');
+const { validateGPSData, logGPSQuality, enforceQualityThresholds } = require('../middleware/gpsValidation');
 
 // Helper function to validate GPS coordinates
 function isValidGPSCoordinates(lat, lng) {
@@ -28,51 +31,52 @@ function isValidGPSCoordinates(lat, lng) {
   return true;
 }
 
-// Helper function to determine if location should be updated
+// Enhanced function to determine if location should be updated
 async function shouldUpdateLocation(materialTracking, lat, lng, accuracy, timestamp) {
-  // Validate GPS coordinates first
-  if (!isValidGPSCoordinates(lat, lng)) {
+  // Use enhanced GPS validation
+  const coordValidation = GPSValidation.validateCoordinates(lat, lng);
+  if (!coordValidation.isValid) {
+    console.log(`📍 [shouldUpdateLocation] Invalid coordinates: ${coordValidation.errors.join(', ')}`);
     return false;
   }
-  
-  // Filter out poor GPS accuracy (more than 100 meters)
-  if (accuracy > 100) {
+
+  const accuracyValidation = GPSValidation.validateAccuracy(accuracy);
+  if (!accuracyValidation.isValid) {
+    console.log(`📍 [shouldUpdateLocation] Invalid accuracy: ${accuracyValidation.message}`);
     return false;
   }
-  
+
   // Always update if no current location
   if (!materialTracking.currentLocation) {
     return true;
   }
 
-  // Update if this is a more accurate reading (lower accuracy number = better)
-  if (accuracy < (materialTracking.currentLocation.accuracy || 999)) {
-    return true;
+  // Create new location object for comparison
+  const newLocation = {
+    coordinates: [lng, lat],
+    accuracy: accuracy,
+    timestamp: timestamp || new Date()
+  };
+
+  // Use enhanced validation to determine if update should be accepted
+  const updateDecision = GPSValidation.shouldAcceptLocationUpdate(
+    materialTracking.currentLocation,
+    newLocation
+  );
+
+  if (updateDecision.accept) {
+    console.log(`📍 [shouldUpdateLocation] ${materialTracking.materialId}: ${updateDecision.reason}`);
   }
 
-  // Update if this is a significantly newer timestamp
-  const currentTime = new Date(materialTracking.lastSeen);
-  const newTime = new Date(timestamp || new Date());
-  const timeDiff = (newTime - currentTime) / 1000; // seconds
-  
-  if (timeDiff > 30) { // Update if more than 30 seconds newer
-    return true;
-  }
-
-  // Update if location has moved significantly (more than 10 meters)
-  const currentLat = materialTracking.currentLocation.coordinates[1];
-  const currentLng = materialTracking.currentLocation.coordinates[0];
-  const distance = calculateDistance(currentLat, currentLng, lat, lng);
-  
-  if (distance > 10) { // 10 meters
-    return true;
-  }
-
-  return false;
+  return updateDecision.accept;
 }
 
 // POST /deviceTracking/location-update - Update material/car location
-router.post('/location-update', async (req, res) => {
+router.post('/location-update', 
+  validateGPSData,
+  enforceQualityThresholds({ minAccuracy: 100, maxSpeed: 200 }),
+  logGPSQuality,
+  async (req, res) => {
   try {
     const { deviceId, materialId, deviceSlot, lat, lng, speed = 0, heading = 0, accuracy = 0, timestamp } = req.body;
 
