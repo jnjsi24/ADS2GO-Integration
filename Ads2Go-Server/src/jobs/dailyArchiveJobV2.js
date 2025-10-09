@@ -140,8 +140,8 @@ class DailyArchiveJobV2 {
         // Ad performance
         adPerformance: device.adPerformance || [],
         
-        // QR scan details
-        qrScans: device.qrScans || [],
+        // QR scan details (filter out invalid location data)
+        qrScans: this.cleanQRScanData(device.qrScans),
         qrScansByAd: device.qrScansByAd || [],
         
         // Ad playback details (keep last 800 entries)
@@ -250,6 +250,38 @@ class DailyArchiveJobV2 {
     }
   }
 
+  // Helper method to clean QR scan data
+  cleanQRScanData(qrScans) {
+    if (!qrScans || qrScans.length === 0) {
+      return [];
+    }
+    
+    let cleanedCount = 0;
+    const cleanedScans = qrScans.map(qrScan => {
+      // Clean up QR scan data to ensure valid coordinates
+      if (qrScan.location && qrScan.location.coordinates) {
+        // If coordinates is empty or invalid, remove the location field
+        if (!Array.isArray(qrScan.location.coordinates) || 
+            qrScan.location.coordinates.length !== 2 ||
+            typeof qrScan.location.coordinates[0] !== 'number' ||
+            typeof qrScan.location.coordinates[1] !== 'number' ||
+            isNaN(qrScan.location.coordinates[0]) ||
+            isNaN(qrScan.location.coordinates[1])) {
+          cleanedCount++;
+          const { location, ...qrScanWithoutLocation } = qrScan;
+          return qrScanWithoutLocation;
+        }
+      }
+      return qrScan;
+    });
+    
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned ${cleanedCount} QR scans with invalid coordinates`);
+    }
+    
+    return cleanedScans;
+  }
+
   // Helper methods (same as original)
   getFinalHoursOnline(device, deviceTimezone) {
     if (device.hoursTracking && device.hoursTracking.totalOnlineHours !== undefined) {
@@ -322,7 +354,10 @@ class DailyArchiveJobV2 {
     const merged = [...existing];
     const existingKeys = new Set(existing.map(item => `${item.adId}-${item.scanTimestamp?.getTime()}`));
     
-    newData.forEach(newItem => {
+    // Clean the new data before processing
+    const cleanedNewData = this.cleanQRScanData(newData);
+    
+    cleanedNewData.forEach(newItem => {
       const key = `${newItem.adId}-${newItem.scanTimestamp?.getTime()}`;
       if (!existingKeys.has(key)) {
         merged.push(newItem);
