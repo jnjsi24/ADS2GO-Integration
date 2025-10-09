@@ -42,6 +42,30 @@ router.post('/trigger-daily-archive', async (req, res) => {
   }
 });
 
+// Test endpoint to manually trigger cleanup of invalid coordinates
+router.post('/trigger-cleanup-invalid-coordinates', async (req, res) => {
+  try {
+    console.log('🧪 Manual trigger for cleanup of invalid coordinates');
+    const result = await cronJobs.triggerCleanupInvalidCoordinates();
+    res.json({
+      success: true,
+      message: 'Cleanup of invalid coordinates triggered successfully',
+      result: {
+        totalCleaned: result.totalCleaned,
+        documentsProcessed: result.documentsProcessed
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Manual cleanup of invalid coordinates failed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger cleanup of invalid coordinates',
+      error: error.message
+    });
+  }
+});
+
 // Get cron job status
 router.get('/status', (req, res) => {
   try {

@@ -351,9 +351,9 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
   }
 
   // Convert route points to polyline coordinates with safety checks
-  const polylineCoords = route
+  const polylineCoords: [number, number][] = route
     .filter((point: RoutePoint) => point && typeof point.lat === 'number' && typeof point.lng === 'number')
-    .map((point: RoutePoint) => [point.lat, point.lng]);
+    .map((point: RoutePoint) => [point.lat, point.lng] as [number, number]);
 
   // Safety check for valid coordinates
   if (polylineCoords.length === 0) {
