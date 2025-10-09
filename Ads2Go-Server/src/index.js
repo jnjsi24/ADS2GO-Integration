@@ -277,6 +277,7 @@ app.use('/offlineQueue', require('./routes/offlineQueue'));
 app.use('/cron-test', require('./routes/cronTest'));
 app.use('/updateTracking', require('./routes/updateTracking'));
 app.use('/api/deviceDataHistoryV2', require('./routes/deviceDataHistoryV2'));
+app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

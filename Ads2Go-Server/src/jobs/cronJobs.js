@@ -428,6 +428,20 @@ class CronJobs {
     }
   }
 
+  // Manual trigger for cleanup of invalid coordinates
+  async triggerCleanupInvalidCoordinates() {
+    console.log('🧹 Manual trigger for cleanup of invalid coordinates');
+    try {
+      const result = await dailyArchiveJobV2.cleanExistingArchivedData();
+      console.log('✅ Manual cleanup of invalid coordinates completed');
+      console.log(`📊 Results: ${result.totalCleaned} QR scans cleaned across ${result.documentsProcessed} documents`);
+      return result;
+    } catch (error) {
+      console.error('❌ Manual cleanup of invalid coordinates failed:', error);
+      throw error;
+    }
+  }
+
   // Get archive status
   async getArchiveStatus() {
     return await dailyArchiveJobV2.getArchiveStatus();

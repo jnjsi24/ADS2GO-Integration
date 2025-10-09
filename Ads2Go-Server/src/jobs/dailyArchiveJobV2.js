@@ -140,8 +140,8 @@ class DailyArchiveJobV2 {
         // Ad performance
         adPerformance: device.adPerformance || [],
         
-        // QR scan details
-        qrScans: device.qrScans || [],
+        // QR scan details (filter out invalid location data)
+        qrScans: this.cleanQRScanData(device.qrScans),
         qrScansByAd: device.qrScansByAd || [],
         
         // Ad playback details (keep last 800 entries)
@@ -185,12 +185,22 @@ class DailyArchiveJobV2 {
           
           // Merge arrays to avoid duplicates
           const existingDaily = existingDocument.dailyData[existingDailyIndex];
+          
+          // Clean existing QR scans data to remove any invalid coordinates
+          const cleanedExistingQrScans = this.cleanQRScanData(existingDaily.qrScans);
+          
+          // Also clean the new daily data QR scans before merging
+          const cleanedNewQrScans = this.cleanQRScanData(dailyData.qrScans);
+          
           dailyData.locationHistory = this.mergeLocationHistory(existingDaily.locationHistory, dailyData.locationHistory);
           dailyData.adPlaybacks = this.mergeAdPlaybacks(existingDaily.adPlaybacks, dailyData.adPlaybacks);
-          dailyData.qrScans = this.mergeQrScans(existingDaily.qrScans, dailyData.qrScans);
+          dailyData.qrScans = this.mergeQrScans(cleanedExistingQrScans, cleanedNewQrScans);
           dailyData.hourlyStats = this.mergeHourlyStats(existingDaily.hourlyStats, dailyData.hourlyStats);
           dailyData.adPerformance = this.mergeAdPerformance(existingDaily.adPerformance, dailyData.adPerformance);
           dailyData.qrScansByAd = this.mergeQrScansByAd(existingDaily.qrScansByAd, dailyData.qrScansByAd);
+          
+          // Final cleaning of the daily data before assignment
+          dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
           // Update the daily data
           existingDocument.dailyData[existingDailyIndex] = dailyData;
@@ -200,22 +210,100 @@ class DailyArchiveJobV2 {
           // Update lifetime totals
           existingDocument.updateLifetimeTotals();
           
-          await existingDocument.save();
-          console.log(`✅ Updated daily data for material ${device.materialId} on ${dateStr}`);
+          try {
+            await existingDocument.save();
+            console.log(`✅ Updated daily data for material ${device.materialId} on ${dateStr}`);
+          } catch (saveError) {
+            // If save fails due to validation errors, clean the existing data and retry
+            if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
+              console.log(`🧹 Validation error detected for ${device.materialId}, deep cleaning existing data...`);
+              
+              // Deep clean all QR scans in the existing document
+              this.deepCleanQRScanData(existingDocument);
+              
+              // Mark the document as modified to ensure Mongoose recognizes the changes
+              existingDocument.markModified('dailyData');
+              existingDocument.markModified('dailyData.qrScans');
+              
+              // Force validation to run again to ensure the data is clean
+              try {
+                await existingDocument.validate();
+                console.log(`✅ Document validation passed after deep cleaning for ${device.materialId}`);
+              } catch (validationError) {
+                console.error(`❌ Document validation failed after deep cleaning for ${device.materialId}:`, validationError.message);
+                // If validation still fails, try to remove the problematic QR scan entirely
+                this.removeProblematicQRScans(existingDocument);
+                existingDocument.markModified('dailyData');
+              }
+              
+              // Try to save again
+              try {
+                await existingDocument.save();
+                console.log(`✅ Updated daily data for material ${device.materialId} on ${dateStr} (after deep cleaning)`);
+              } catch (retryError) {
+                console.error(`❌ Failed to save ${device.materialId} even after deep cleaning:`, retryError.message);
+                throw retryError;
+              }
+            } else {
+              throw saveError;
+            }
+          }
         } else {
           // Add new daily data
           console.log(`➕ Adding new daily data for material ${device.materialId} on ${dateStr}`);
+          
+          // Final cleaning of the daily data before adding
+          dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
           
           existingDocument.addDailyData(dailyData);
           existingDocument.lastArchiveUpdate = new Date();
           existingDocument.totalUpdates += 1;
           
-          await existingDocument.save();
-          console.log(`✅ Added new daily data for material ${device.materialId} on ${dateStr}`);
+          try {
+            await existingDocument.save();
+            console.log(`✅ Added new daily data for material ${device.materialId} on ${dateStr}`);
+          } catch (saveError) {
+            // If save fails due to validation errors, clean the existing data and retry
+            if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
+              console.log(`🧹 Validation error detected for ${device.materialId}, deep cleaning existing data...`);
+              
+              // Deep clean all QR scans in the existing document
+              this.deepCleanQRScanData(existingDocument);
+              
+              // Mark the document as modified to ensure Mongoose recognizes the changes
+              existingDocument.markModified('dailyData');
+              existingDocument.markModified('dailyData.qrScans');
+              
+              // Force validation to run again to ensure the data is clean
+              try {
+                await existingDocument.validate();
+                console.log(`✅ Document validation passed after deep cleaning for ${device.materialId}`);
+              } catch (validationError) {
+                console.error(`❌ Document validation failed after deep cleaning for ${device.materialId}:`, validationError.message);
+                // If validation still fails, try to remove the problematic QR scan entirely
+                this.removeProblematicQRScans(existingDocument);
+                existingDocument.markModified('dailyData');
+              }
+              
+              // Try to save again
+              try {
+                await existingDocument.save();
+                console.log(`✅ Added new daily data for material ${device.materialId} on ${dateStr} (after deep cleaning)`);
+              } catch (retryError) {
+                console.error(`❌ Failed to save ${device.materialId} even after deep cleaning:`, retryError.message);
+                throw retryError;
+              }
+            } else {
+              throw saveError;
+            }
+          }
         }
       } else {
         // Create new document
         console.log(`🆕 Creating new document for material ${device.materialId}`);
+        
+        // Final cleaning of the daily data before creating new document
+        dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
         
         const newDocument = new DeviceDataHistoryV2({
           materialId: device.materialId,
@@ -240,14 +328,207 @@ class DailyArchiveJobV2 {
           totalUpdates: 1
         });
 
-        await newDocument.save();
-        console.log(`✅ Created new document for material ${device.materialId}`);
+        try {
+          await newDocument.save();
+          console.log(`✅ Created new document for material ${device.materialId}`);
+        } catch (saveError) {
+          // If save fails due to validation errors, clean the data and retry
+          if (saveError.name === 'ValidationError' && saveError.message.includes('coordinates')) {
+            console.log(`🧹 Validation error detected for ${device.materialId}, deep cleaning data...`);
+            
+            // Deep clean all QR scans in the new document
+            this.deepCleanQRScanData(newDocument);
+            
+            // Mark the document as modified to ensure Mongoose recognizes the changes
+            newDocument.markModified('dailyData');
+            newDocument.markModified('dailyData.qrScans');
+            
+            // Force validation to run again to ensure the data is clean
+            try {
+              await newDocument.validate();
+              console.log(`✅ Document validation passed after deep cleaning for ${device.materialId}`);
+            } catch (validationError) {
+              console.error(`❌ Document validation failed after deep cleaning for ${device.materialId}:`, validationError.message);
+              // If validation still fails, try to remove the problematic QR scan entirely
+              this.removeProblematicQRScans(newDocument);
+              newDocument.markModified('dailyData');
+            }
+            
+            // Try to save again
+            try {
+              await newDocument.save();
+              console.log(`✅ Created new document for material ${device.materialId} (after deep cleaning)`);
+            } catch (retryError) {
+              console.error(`❌ Failed to save ${device.materialId} even after deep cleaning:`, retryError.message);
+              throw retryError;
+            }
+          } else {
+            throw saveError;
+          }
+        }
       }
 
     } catch (error) {
       console.error(`❌ Failed to archive material data for ${device.materialId}:`, error);
       throw error;
     }
+  }
+
+  // Helper method to clean QR scan data
+  cleanQRScanData(qrScans) {
+    if (!qrScans || qrScans.length === 0) {
+      return [];
+    }
+    
+    let cleanedCount = 0;
+    const cleanedScans = qrScans.map((qrScan, index) => {
+      // Clean up QR scan data to ensure valid coordinates
+      if (qrScan.location) {
+        // Check if location has coordinates
+        if (qrScan.location.coordinates) {
+          // If coordinates is empty or invalid, remove the location field
+          if (!Array.isArray(qrScan.location.coordinates) || 
+              qrScan.location.coordinates.length === 0 ||
+              qrScan.location.coordinates.length !== 2 ||
+              typeof qrScan.location.coordinates[0] !== 'number' ||
+              typeof qrScan.location.coordinates[1] !== 'number' ||
+              isNaN(qrScan.location.coordinates[0]) ||
+              isNaN(qrScan.location.coordinates[1]) ||
+              !isFinite(qrScan.location.coordinates[0]) ||
+              !isFinite(qrScan.location.coordinates[1])) {
+            cleanedCount++;
+            console.log(`🧹 QR scan ${index}: Removing invalid coordinates:`, qrScan.location.coordinates);
+            const { location, ...qrScanWithoutLocation } = qrScan;
+            return qrScanWithoutLocation;
+          }
+        } else {
+          // If location exists but has no coordinates, remove the entire location field
+          cleanedCount++;
+          console.log(`🧹 QR scan ${index}: Removing location without coordinates`);
+          const { location, ...qrScanWithoutLocation } = qrScan;
+          return qrScanWithoutLocation;
+        }
+      }
+      return qrScan;
+    });
+    
+    if (cleanedCount > 0) {
+      console.log(`🧹 Cleaned ${cleanedCount} QR scans with invalid coordinates`);
+    }
+    
+    return cleanedScans;
+  }
+
+  // Helper method to deeply clean all QR scan data in a document
+  deepCleanQRScanData(document) {
+    if (!document || !document.dailyData) {
+      return document;
+    }
+    
+    let totalCleaned = 0;
+    
+    // Clean QR scans in each daily data entry
+    for (let i = 0; i < document.dailyData.length; i++) {
+      const dailyData = document.dailyData[i];
+      if (dailyData.qrScans && Array.isArray(dailyData.qrScans)) {
+        const originalCount = dailyData.qrScans.length;
+        let dailyCleaned = 0;
+        
+        // Clean each QR scan individually and modify in place
+        for (let j = dailyData.qrScans.length - 1; j >= 0; j--) {
+          const qrScan = dailyData.qrScans[j];
+          if (qrScan.location && qrScan.location.coordinates) {
+            // Check if coordinates are invalid (including empty arrays)
+            if (!Array.isArray(qrScan.location.coordinates) || 
+                qrScan.location.coordinates.length === 0 ||
+                qrScan.location.coordinates.length !== 2 ||
+                typeof qrScan.location.coordinates[0] !== 'number' ||
+                typeof qrScan.location.coordinates[1] !== 'number' ||
+                isNaN(qrScan.location.coordinates[0]) ||
+                isNaN(qrScan.location.coordinates[1]) ||
+                !isFinite(qrScan.location.coordinates[0]) ||
+                !isFinite(qrScan.location.coordinates[1])) {
+              
+              console.log(`🧹 QR scan ${j}: Removing invalid coordinates:`, qrScan.location.coordinates);
+              // Remove the location field entirely
+              delete qrScan.location;
+              dailyCleaned++;
+              totalCleaned++;
+            }
+          } else if (qrScan.location && !qrScan.location.coordinates) {
+            // If location exists but has no coordinates, remove the entire location field
+            console.log(`🧹 QR scan ${j}: Removing location without coordinates`);
+            delete qrScan.location;
+            dailyCleaned++;
+            totalCleaned++;
+          }
+        }
+        
+        if (dailyCleaned > 0) {
+          console.log(`🧹 Daily data ${i}: Cleaned ${dailyCleaned} QR scans`);
+        }
+      }
+    }
+    
+    if (totalCleaned > 0) {
+      console.log(`🧹 Deep cleaned ${totalCleaned} total QR scans across all daily data`);
+    }
+    
+    return document;
+  }
+
+  // Helper method to remove problematic QR scans that still cause validation errors
+  removeProblematicQRScans(document) {
+    if (!document || !document.dailyData) {
+      return document;
+    }
+    
+    let totalRemoved = 0;
+    
+    // Remove problematic QR scans in each daily data entry
+    for (let i = 0; i < document.dailyData.length; i++) {
+      const dailyData = document.dailyData[i];
+      if (dailyData.qrScans && Array.isArray(dailyData.qrScans)) {
+        const originalCount = dailyData.qrScans.length;
+        
+        // Filter out QR scans with invalid location data
+        dailyData.qrScans = dailyData.qrScans.filter((qrScan, index) => {
+          if (qrScan.location && qrScan.location.coordinates) {
+            // Check if coordinates are invalid
+            if (!Array.isArray(qrScan.location.coordinates) || 
+                qrScan.location.coordinates.length === 0 ||
+                qrScan.location.coordinates.length !== 2 ||
+                typeof qrScan.location.coordinates[0] !== 'number' ||
+                typeof qrScan.location.coordinates[1] !== 'number' ||
+                isNaN(qrScan.location.coordinates[0]) ||
+                isNaN(qrScan.location.coordinates[1]) ||
+                !isFinite(qrScan.location.coordinates[0]) ||
+                !isFinite(qrScan.location.coordinates[1])) {
+              
+              console.log(`🗑️ QR scan ${index}: Removing QR scan with invalid coordinates:`, qrScan.location.coordinates);
+              return false; // Remove this QR scan
+            }
+          } else if (qrScan.location && !qrScan.location.coordinates) {
+            // If location exists but has no coordinates, remove the QR scan
+            console.log(`🗑️ QR scan ${index}: Removing QR scan with location but no coordinates`);
+            return false; // Remove this QR scan
+          }
+          return true; // Keep this QR scan
+        });
+        
+        const removedCount = originalCount - dailyData.qrScans.length;
+        if (removedCount > 0) {
+          totalRemoved += removedCount;
+          console.log(`🗑️ Daily data ${i}: Removed ${removedCount} problematic QR scans`);
+        }
+      }
+    }
+    
+    if (totalRemoved > 0) {
+      console.log(`🗑️ Removed ${totalRemoved} total problematic QR scans across all daily data`);
+    }
+    
+    return document;
   }
 
   // Helper methods (same as original)
@@ -322,7 +603,10 @@ class DailyArchiveJobV2 {
     const merged = [...existing];
     const existingKeys = new Set(existing.map(item => `${item.adId}-${item.scanTimestamp?.getTime()}`));
     
-    newData.forEach(newItem => {
+    // Clean the new data before processing
+    const cleanedNewData = this.cleanQRScanData(newData);
+    
+    cleanedNewData.forEach(newItem => {
       const key = `${newItem.adId}-${newItem.scanTimestamp?.getTime()}`;
       if (!existingKeys.has(key)) {
         merged.push(newItem);
@@ -517,6 +801,52 @@ class DailyArchiveJobV2 {
       throw error;
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  // Method to clean existing archived data with invalid coordinates
+  async cleanExistingArchivedData() {
+    console.log('🧹 Starting cleanup of existing archived data with invalid coordinates...');
+    
+    try {
+      const documents = await DeviceDataHistoryV2.find({});
+      let totalCleaned = 0;
+      let documentsProcessed = 0;
+      
+      for (const doc of documents) {
+        let documentModified = false;
+        
+        // Clean each daily data entry
+        for (let i = 0; i < doc.dailyData.length; i++) {
+          const dailyData = doc.dailyData[i];
+          const originalQrScansCount = dailyData.qrScans ? dailyData.qrScans.length : 0;
+          
+          // Clean QR scans data
+          dailyData.qrScans = this.cleanQRScanData(dailyData.qrScans);
+          
+          const cleanedQrScansCount = dailyData.qrScans ? dailyData.qrScans.length : 0;
+          const cleanedCount = originalQrScansCount - cleanedQrScansCount;
+          
+          if (cleanedCount > 0) {
+            totalCleaned += cleanedCount;
+            documentModified = true;
+            console.log(`🧹 Material ${doc.materialId}, Date ${dailyData.date?.toISOString()?.split('T')[0]}: Cleaned ${cleanedCount} QR scans`);
+          }
+        }
+        
+        // Save if modified
+        if (documentModified) {
+          await doc.save();
+          documentsProcessed++;
+        }
+      }
+      
+      console.log(`✅ Cleanup completed: ${totalCleaned} QR scans cleaned across ${documentsProcessed} documents`);
+      return { totalCleaned, documentsProcessed };
+      
+    } catch (error) {
+      console.error('❌ Error cleaning existing archived data:', error);
+      throw error;
     }
   }
 
