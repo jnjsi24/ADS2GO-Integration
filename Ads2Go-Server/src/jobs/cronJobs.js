@@ -136,12 +136,11 @@ class CronJobs {
 
     this.jobs.set('hourlyCleanup', hourlyCleanupTask);
 
-    // Online hours update job - runs every 5 minutes (backup to high-precision service)
-    const onlineHoursTask = cron.schedule('*/5 * * * *', async () => {
-      console.log('⏰ Online hours update job triggered (every 5 minutes)');
+    // Online hours update job - runs every 10 seconds for real-time tracking
+    const onlineHoursTask = cron.schedule('*/10 * * * * *', async () => {
       try {
         await this.updateOnlineHours();
-        console.log('✅ Online hours update job completed successfully');
+        // Reduced logging frequency for performance
       } catch (error) {
         console.error('❌ Online hours update job failed:', error);
       }
@@ -393,15 +392,20 @@ class CronJobs {
       const DeviceTracking = require('../models/deviceTracking');
       const today = new Date().toISOString().split('T')[0];
 
-      console.log('🕐 [CRON] Updating online hours for all devices...');
-
       // Get all devices for today that are online
       const devices = await DeviceTracking.find({ 
         date: today,
         isOnline: true 
       });
 
-      console.log(`📊 Found ${devices.length} online devices to update`);
+      // Only log if there are devices to update (reduces noise)
+      if (devices.length > 0) {
+        // Only log every 2 minutes to reduce console spam
+        const now = new Date();
+        if (now.getSeconds() < 10) { // Only log when seconds < 10 (roughly every 2 minutes)
+          console.log(`🕐 [CRON] Updating online hours for ${devices.length} online devices`);
+        }
+      }
 
       for (const device of devices) {
         try {
@@ -409,13 +413,15 @@ class CronJobs {
           await device.calculateAndUpdateOnlineHours();
           await device.save();
           
-          console.log(`✅ Updated online hours for ${device.deviceId}: ${device.totalHoursOnline} hours`);
+          // Only log significant updates (every 30 minutes or more)
+          const hours = device.totalHoursOnline;
+          if (hours > 0 && Math.floor(hours * 2) % 2 === 0 && hours >= 0.5) { // Every 30 minutes
+            console.log(`✅ Updated online hours for ${device.materialId}: ${hours.toFixed(2)} hours`);
+          }
         } catch (deviceError) {
-          console.error(`❌ Error updating device ${device.deviceId}:`, deviceError.message);
+          console.error(`❌ Error updating device ${device.materialId}:`, deviceError.message);
         }
       }
-
-      console.log('✅ Online hours update completed');
 
     } catch (error) {
       console.error('❌ Error updating online hours:', error);

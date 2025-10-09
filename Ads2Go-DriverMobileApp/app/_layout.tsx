@@ -4,9 +4,11 @@ import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import FloatingNotificationIcon from '../components/FloatingNotificationIcon';
 // Import notification service with error handling
 let NotificationService: any = null;
 try {
@@ -19,6 +21,7 @@ import 'react-native-reanimated';
 function RootLayoutNav() {
   const { state, signOut } = useAuth();
   const router = useRouter();
+  const [notificationCount, setNotificationCount] = useState(0);
 
   // Check authentication state on app start
   useEffect(() => {
@@ -67,31 +70,39 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {/* Public routes */}
-        <Stack.Screen name="(auth)/login" />
-        <Stack.Screen name="(auth)/register" />
-        <Stack.Screen name="(auth)/emailVerification" options={{ title: 'Verify Email' }} />
-        <Stack.Screen name="(auth)/verificationProgress" options={{ title: 'Verification Status' }} />
-        <Stack.Screen 
-          name="(auth)/forgotPass" 
-          options={{ 
-            title: 'Reset Password',
-            headerShown: false 
-          }} 
-        />
+      <View style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false }}>
+          {/* Public routes */}
+          <Stack.Screen name="(auth)/login" />
+          <Stack.Screen name="(auth)/register" />
+          <Stack.Screen name="(auth)/emailVerification" options={{ title: 'Verify Email' }} />
+          <Stack.Screen name="(auth)/verificationProgress" options={{ title: 'Verification Status' }} />
+          <Stack.Screen 
+            name="(auth)/forgotPass" 
+            options={{ 
+              title: 'Reset Password',
+              headerShown: false 
+            }} 
+          />
 
-        {/* Protected routes */}
-        {state.token ? (
-          <>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="+not-found" />
-          </>
-        ) : (
-          <Stack.Screen name="(tabs)" redirect={true} />
+          {/* Protected routes */}
+          {state.token ? (
+            <>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="+not-found" />
+            </>
+          ) : (
+            <Stack.Screen name="(tabs)" redirect={true} />
+          )}
+        </Stack>
+        
+        {/* Floating Notification Icon - only show when authenticated */}
+        {state.token && (
+          <FloatingNotificationIcon notificationCount={notificationCount} />
         )}
-      </Stack>
-      <StatusBar style="dark" />
+        
+        <StatusBar style="dark" />
+      </View>
     </ThemeProvider>
   );
 }

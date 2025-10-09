@@ -1,20 +1,25 @@
 import { Tabs } from "expo-router";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function TabLayout() {
   return (
-    <Tabs>
-      <Tabs.Screen name="dashboard" options={{ title: "Analytics" }} />
+    <Tabs
+      screenOptions={{
+        tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarLabelStyle: styles.tabBarLabel,
+        tabBarIconStyle: styles.tabBarIcon,
+        tabBarActiveTintColor: '#3674B5',
+        tabBarInactiveTintColor: '#9CA3AF',
+      }}
+    >
       <Tabs.Screen 
-        name="index" 
+        name="dashboard" 
         options={{ 
-          title: "Materials",
+          title: "Dashboard",
           tabBarIcon: ({ color, size }) => (
-            <View style={{ position: 'relative' }}>
-              <Ionicons name="cube-outline" size={size} color={color} />
-              {/* Notification badge will be added dynamically based on photo needs */}
-            </View>
+            <Ionicons name="grid-outline" size={size} color={color} />
           )
         }} 
       />
@@ -27,7 +32,59 @@ export default function TabLayout() {
           )
         }} 
       />
-      <Tabs.Screen name="explore" options={{ title: "Explore" }} />
+      <Tabs.Screen 
+        name="profile" 
+        options={{ 
+          title: "Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-outline" size={size} color={color} />
+          )
+        }} 
+      />
+      <Tabs.Screen 
+        name="index" 
+        options={{ 
+          title: "Materials",
+          tabBarButton: () => null // Hide the tab button
+        }} 
+      />
+      <Tabs.Screen 
+        name="notifications" 
+        options={{ 
+          title: "Notifications",
+          tabBarButton: () => null // Hide the tab button
+        }} 
+      />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    height: 60,
+    paddingHorizontal: 40,
+    paddingTop: 8,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBarItem: {
+    flex: 0,
+    width: 90,
+    maxWidth: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBarLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  tabBarIcon: {
+    marginBottom: 0,
+  },
+});

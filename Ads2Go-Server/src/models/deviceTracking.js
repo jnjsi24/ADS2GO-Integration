@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const GPSValidation = require('../utils/gpsValidation');
 //for data history
 // Location Point Schema for real-time data
 const LocationPointSchema = new mongoose.Schema({
@@ -376,17 +377,14 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  const TimezoneUtils = require('../utils/timezoneUtils');
+  // Get today's date as a Date object (start of day)
   const now = new Date();
-  
-  // Get today's date in Philippines timezone
-  const todayInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
-  const todayStr = todayInPH.toISOString().split('T')[0];
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
     'slots.deviceId': deviceId, 
-    date: todayStr 
+    date: today 
   });
   
   if (car) {
@@ -400,9 +398,9 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
     // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
     
-    // Use TimezoneUtils for consistent timezone handling
-    const recentDateInPH = TimezoneUtils.getStartOfDayInTimezone(recentDate, 'Asia/Manila');
-    const todayDateInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
     
     // Compare just the date parts (year, month, day) in Philippines timezone
     const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
@@ -410,12 +408,13 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
+      const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for device ${deviceId} to today: ${todayStr}`);
       console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
       console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
-      recentCar.date = todayStr;
+      recentCar.date = today;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -444,7 +443,7 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
       
       // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -481,20 +480,17 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  const TimezoneUtils = require('../utils/timezoneUtils');
+  // Get today's date as a Date object (start of day)
   const now = new Date();
-  
-  // Get today's date in Philippines timezone
-  const todayInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
-  const todayStr = todayInPH.toISOString().split('T')[0];
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   
   // First try to find today's record for this material
-  let car = await this.findOne({ materialId, date: todayStr });
-
+  let car = await this.findOne({ materialId, date: today });
+  
   if (car) {
     return car;
   }
-
+  
   // If no record for today, find the most recent record for this material
   const recentCar = await this.findOne({ materialId }).sort({ date: -1 });
   
@@ -502,9 +498,9 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
     // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
     
-    // Use TimezoneUtils for consistent timezone handling
-    const recentDateInPH = TimezoneUtils.getStartOfDayInTimezone(recentDate, 'Asia/Manila');
-    const todayDateInPH = TimezoneUtils.getStartOfDayInTimezone(now, 'Asia/Manila');
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
     
     // Compare just the date parts (year, month, day) in Philippines timezone
     const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
@@ -512,12 +508,13 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
+      const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for ${materialId} to today: ${todayStr}`);
       console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
       console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
-      recentCar.date = todayStr;
+      recentCar.date = today;
       
       // Reset daily counters for new day
       recentCar.totalAdPlays = 0;
@@ -546,7 +543,7 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
       
       // Reset current session for new day
       recentCar.currentSession = {
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -785,24 +782,86 @@ DeviceTrackingSchema.methods.saveWithRetry = function(maxRetries = 3) {
 
 // Instance methods
 DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, heading = 0, accuracy = 0, address = '', timestamp = null) {
+  // Enhanced GPS validation using new validation utility
+  const coordValidation = GPSValidation.validateCoordinates(lat, lng);
+  if (!coordValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS coordinates [${lat}, ${lng}] - ${coordValidation.errors.join(', ')}`);
+    return Promise.resolve(this);
+  }
+
+  const accuracyValidation = GPSValidation.validateAccuracy(accuracy);
+  if (!accuracyValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid GPS accuracy (${accuracy}m) - ${accuracyValidation.message}`);
+    return Promise.resolve(this);
+  }
+
+  const speedValidation = GPSValidation.validateSpeed(speed);
+  if (!speedValidation.isValid) {
+    console.log(`📍 [updateLocation] ${this.materialId}: Invalid speed (${speed} km/h) - ${speedValidation.message}`);
+    return Promise.resolve(this);
+  }
+
+  // Log warnings if any
+  if (coordValidation.warnings.length > 0) {
+    console.log(`📍 [updateLocation] ${this.materialId}: GPS warnings - ${coordValidation.warnings.join(', ')}`);
+  }
+  
   const newLocation = {
     type: 'Point',
     coordinates: [lng, lat],
     timestamp: timestamp || new Date(), // Use provided timestamp or current time
-    speed,
-    heading,
-    accuracy,
-    address
+    speed: Math.max(0, speed || 0), // Ensure non-negative speed
+    heading: Math.max(0, Math.min(360, heading || 0)), // Clamp heading to 0-360
+    accuracy: Math.max(0, accuracy || 0), // Ensure non-negative accuracy
+    address: address || ''
   };
   
+  // Calculate distance if we have a previous location
+  let distanceAdded = 0;
+  if (this.currentLocation && this.locationHistory.length > 0) {
+    const prevLocation = this.currentLocation;
+    
+    // Validate previous location coordinates using enhanced validation
+    const prevCoordValidation = GPSValidation.validateCoordinates(
+      prevLocation.coordinates[1], 
+      prevLocation.coordinates[0]
+    );
+    
+    if (prevCoordValidation.isValid) {
+      const distance = GPSValidation.calculateDistance(
+        prevLocation.coordinates[1], prevLocation.coordinates[0], // lat, lng
+        lat, lng
+      );
+      
+      // Only add distance if movement is significant (more than 10 meters)
+      // This filters out GPS noise when device is stationary
+      if (distance > 0.01) { // 0.01 km = 10 meters
+        distanceAdded = distance;
+        this.totalDistanceTraveled += distance;
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement detected - ${(distance * 1000).toFixed(1)}m (total: ${this.totalDistanceTraveled.toFixed(3)}km)`);
+      } else {
+        console.log(`📍 [updateLocation] ${this.materialId}: Movement too small (${(distance * 1000).toFixed(1)}m) - ignoring GPS noise`);
+      }
+    } else {
+      console.log(`📍 [updateLocation] ${this.materialId}: Previous location invalid - skipping distance calculation`);
+    }
+  }
+  
   // Use findByIdAndUpdate to avoid version conflicts
+  const updateData = {
+    currentLocation: newLocation,
+    lastSeen: new Date()
+  };
+  
+  // Add distance if significant movement
+  if (distanceAdded > 0) {
+    updateData.totalDistanceTraveled = this.totalDistanceTraveled;
+  }
+  
   return this.constructor.findByIdAndUpdate(
     this._id,
     {
-      $set: {
-        currentLocation: newLocation,
-        lastSeen: new Date()
-      },
+      $set: updateData,
       $push: {
         locationHistory: {
           $each: [newLocation],
@@ -814,7 +873,58 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       new: true,
       runValidators: true
     }
-  );
+  ).then((updatedDoc) => {
+    if (distanceAdded > 0) {
+      console.log(`📍 [updateLocation] ${this.materialId}: +${distanceAdded.toFixed(3)}km (total: ${updatedDoc.totalDistanceTraveled.toFixed(3)}km)`);
+    }
+    return updatedDoc;
+  });
+};
+
+// Helper method to validate GPS coordinates
+DeviceTrackingSchema.methods.isValidGPSCoordinates = function(lat, lng) {
+  // Check if coordinates are valid numbers
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return false;
+  }
+  
+  // Check if coordinates are not NaN or Infinity
+  if (isNaN(lat) || isNaN(lng) || !isFinite(lat) || !isFinite(lng)) {
+    return false;
+  }
+  
+  // Check if coordinates are not [0,0] (GPS initialization issue)
+  if (lat === 0 && lng === 0) {
+    return false;
+  }
+  
+  // Check if coordinates are within valid GPS ranges
+  // Latitude: -90 to 90 degrees
+  // Longitude: -180 to 180 degrees
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return false;
+  }
+  
+  // Check if coordinates are reasonable for the Philippines region
+  // Philippines is roughly: 4.5°N to 21.1°N, 116.9°E to 126.6°E
+  if (lat < 4.5 || lat > 21.1 || lng < 116.9 || lng > 126.6) {
+    console.log(`📍 [GPS Validation] ${this.materialId}: Coordinates [${lat}, ${lng}] outside Philippines region`);
+    // Don't reject, just log - device might be traveling
+  }
+  
+  return true;
+};
+
+// Helper method to calculate distance between two points
+DeviceTrackingSchema.methods.calculateDistance = function(lat1, lng1, lat2, lng2) {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 };
 
 DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {
@@ -963,27 +1073,20 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
 
 // Method to reset daily session (from ScreenTracking)
 DeviceTrackingSchema.methods.resetDailySession = function() {
-  const TimezoneUtils = require('../utils/timezoneUtils');
-  const now = new Date();
-  
-  // Get device timezone from current location or default to Philippines
-  const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
-  
-  // Get start of today in device timezone
-  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
-  const todayStr = todayInDeviceTz.toISOString().split('T')[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   
   // Check if we need to reset (new day)
   const sessionDate = new Date(this.currentSession?.date);
   if (sessionDate) {
-    const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(sessionDate, deviceTimezone);
-    
-    if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
       // Reset for new day
-      this.date = todayStr; // Update the main date field
+      this.date = today; // Update the main date field
       
       this.currentSession = {
-        date: new Date(todayInDeviceTz.getFullYear(), todayInDeviceTz.getMonth(), todayInDeviceTz.getDate()),
+        date: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
         startTime: new Date(),
         endTime: null,
         totalHoursOnline: 0,
@@ -1133,10 +1236,8 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   this.currentSession.complianceStatus = 
     this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
   
-  // Update total lifetime hours (only if this is more than what we had before)
-  if (totalHours > this.totalHoursOnline) {
-    this.totalHoursOnline = Math.round(totalHours * 100) / 100;
-  }
+  // Always update total lifetime hours for the current day (not cumulative)
+  this.totalHoursOnline = Math.round(totalHours * 100) / 100;
   
   // Update average daily hours
   this.averageDailyHours = this.totalHoursOnline;
