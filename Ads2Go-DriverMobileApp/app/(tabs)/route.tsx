@@ -290,6 +290,85 @@ const RouteTab: React.FC = () => {
         )}
       </View>
 
+      {/* Ad Campaign Card */}
+      <View style={styles.adCard}>
+        {/* Header Section */}
+        <View style={styles.metricsHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.titleRow}>
+              <Text style={styles.adTitle}>Ad Campaign</Text>
+              <View style={styles.periodTag}>
+                <Text style={styles.periodText}>30 Days</Text>
+              </View>
+            </View>
+
+            <Text style={styles.companyInfo}>
+              Sample Company <Text style={styles.adId}>#AdID3264</Text>
+            </Text>
+
+          </View>
+        </View>
+
+        {/* QR and Distance Row */}
+        <View style={styles.qrDistanceRow}>
+          <Ionicons name="qr-code" size={22} color="#3b82f6" style={{ marginRight: 6 }} />
+          <Text style={styles.qrValue}>{routeData?.metrics?.pointCount || 0}</Text>
+          <Text style={styles.verticalDivider}>|</Text>
+          <Text style={styles.distanceValue}>
+            {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km Today
+          </Text>
+        </View>
+        
+        <View style={styles.divider} />
+
+        {/* Location Card: EDSA */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="location" size={16} color="#ffffff" />
+            </View>
+            <View style={styles.dashedLineFull} />
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>EDSA Street</Text>
+            <Text style={styles.locationSubText}>
+              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
+            </Text>
+          </View>
+        </View>
+
+        {/* Distance + Hours Pill */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.dashedLineFull} />
+          </View>
+          <View style={styles.textContainer}>
+            <View style={styles.locationPill}>
+              <Text style={styles.locationPillText}>
+                {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km - {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Kalayaan Section */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle2}>
+              <Ionicons name="locate" size={16} color="#ffffff" />
+            </View>
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>Kalayaan Street</Text>
+            <Text style={styles.locationSubText}>
+              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
+            </Text>
+          </View>
+        </View>
+      </View>
+
       {/* Route Metrics */}
       {routeData && routeData.metrics && (
         <View style={styles.metricsContainer}>
@@ -637,6 +716,149 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
+  },
+
+  // Ad Campaign Styles
+  adCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  metricsHeader: {
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'column',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  adTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  periodTag: {
+    backgroundColor: '#22c55e',
+    borderRadius: 9999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  periodText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  adId: {
+    color: '#22c55e',
+    fontWeight: '700',
+  },
+  companyInfo: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  qrDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginBottom: 12,
+  },
+  qrValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginRight: 8,
+  },
+  verticalDivider: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginHorizontal: 8,
+  },
+  distanceValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 10,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconLineContainer: {
+    alignItems: 'center',
+    width: 30,
+  },
+  dashedLineFull: {
+    width: 2,
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderLeftWidth: 2,
+    borderColor: '#9ca3af',
+    borderStyle: 'dashed',
+    marginVertical: 2,
+  },
+  textContainer: {
+    flex: 1,
+    paddingBottom: 8,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginLeft: 10,
+  },
+  locationSubText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+    marginLeft: 10,
+  },
+  locationPill: {
+    backgroundColor: '#e5e7eb',
+    borderRadius: 9999,
+    paddingVertical: 8,
+    paddingHorizontal: 40,
+    alignSelf: 'flex-start',
+    marginVertical: 6,
+  },
+  locationPillText: {
+    color: '#3b82f6',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  iconCircle2: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
   },
 });
 

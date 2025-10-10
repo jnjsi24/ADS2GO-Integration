@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../contexts/AuthContext';
 import API_CONFIG from '../../config/api';
 
 interface DriverProfile {
@@ -35,23 +36,28 @@ interface DriverProfile {
 
 const GET_DRIVER_PROFILE = `
   query GetDriverProfile($driverId: ID!) {
-    getDriverProfile(driverId: $driverId) {
-      driverId
-      firstName
-      lastName
-      email
-      phoneNumber
-      licenseNumber
-      vehiclePlateNumber
-      vehicleModel
-      vehicleType
-      isOnline
-      totalEarnings
-      totalDistance
-      totalHours
-      rating
-      joinDate
-      lastActive
+    getDriver(driverId: $driverId) {
+      success
+      message
+      driver {
+        driverId
+        firstName
+        lastName
+        email
+        contactNumber
+        licenseNumber
+        vehiclePlateNumber
+        vehicleModel
+        vehicleType
+        accountStatus
+        totalEarnings
+        currentBalance
+        dateJoined
+        lastLogin
+        profilePicture
+        isEmailVerified
+        preferredMaterialType
+      }
     }
   }
 `;
@@ -61,6 +67,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
+  const { signOut } = useAuth();
 
   useEffect(() => {
     loadProfile();
@@ -90,8 +97,26 @@ export default function ProfileScreen() {
 
       const result = await response.json();
 
-      if (result.data?.getDriverProfile) {
-        setProfile(result.data.getDriverProfile);
+      if (result.data?.getDriver?.success && result.data.getDriver.driver) {
+        const driverData = result.data.getDriver.driver;
+        setProfile({
+          driverId: driverData.driverId || 'Unknown',
+          firstName: driverData.firstName || 'Driver',
+          lastName: driverData.lastName || '',
+          email: driverData.email || 'No email',
+          phoneNumber: driverData.contactNumber || 'No phone',
+          licenseNumber: driverData.licenseNumber || 'No license',
+          vehiclePlateNumber: driverData.vehiclePlateNumber || 'Unknown',
+          vehicleModel: driverData.vehicleModel || 'Unknown',
+          vehicleType: driverData.vehicleType || 'Unknown',
+          isOnline: driverData.accountStatus === 'ACTIVE',
+          totalEarnings: driverData.totalEarnings || 0,
+          totalDistance: 0, // Not available in driver profile
+          totalHours: 0, // Not available in driver profile
+          rating: 0, // Not available in driver profile
+          joinDate: driverData.dateJoined || new Date().toISOString(),
+          lastActive: driverData.lastLogin || new Date().toISOString(),
+        });
       } else {
         // Fallback to stored driver info if API fails
         const driverInfo = await AsyncStorage.getItem('driverInfo');
@@ -102,18 +127,18 @@ export default function ProfileScreen() {
             firstName: driver.firstName || 'Driver',
             lastName: driver.lastName || '',
             email: driver.email || 'No email',
-            phoneNumber: driver.phoneNumber || 'No phone',
+            phoneNumber: driver.contactNumber || driver.phoneNumber || 'No phone',
             licenseNumber: driver.licenseNumber || 'No license',
             vehiclePlateNumber: driver.vehiclePlateNumber || 'Unknown',
             vehicleModel: driver.vehicleModel || 'Unknown',
             vehicleType: driver.vehicleType || 'Unknown',
-            isOnline: false,
-            totalEarnings: 0,
+            isOnline: driver.accountStatus === 'ACTIVE',
+            totalEarnings: driver.totalEarnings || 0,
             totalDistance: 0,
             totalHours: 0,
             rating: 0,
-            joinDate: new Date().toISOString(),
-            lastActive: new Date().toISOString(),
+            joinDate: driver.dateJoined || new Date().toISOString(),
+            lastActive: driver.lastLogin || new Date().toISOString(),
           });
         }
       }
@@ -141,10 +166,12 @@ export default function ProfileScreen() {
           text: 'Sign Out', 
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('token');
-            await AsyncStorage.removeItem('driverId');
-            await AsyncStorage.removeItem('driverInfo');
-            // Navigation will be handled by the auth context
+            try {
+              await signOut();
+            } catch (error) {
+              console.error('Error signing out:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
           }
         },
       ]
@@ -237,7 +264,7 @@ export default function ProfileScreen() {
         
         <TouchableOpacity 
           style={styles.materialsButton} 
-          onPress={() => router.push('/(tabs)/index')}
+          onPress={() => router.push('/materials')}
         >
           <View style={styles.materialsButtonContent}>
             <View style={styles.materialsIconContainer}>

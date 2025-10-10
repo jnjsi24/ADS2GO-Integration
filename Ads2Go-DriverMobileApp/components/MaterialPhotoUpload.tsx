@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { Camera, CameraType } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from './ThemedView';
@@ -36,21 +36,13 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
   onUploadSuccess,
   onUploadError,
 }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [cameraType, setCameraType] = useState(CameraType.back);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [cameraType, setCameraType] = useState<'back' | 'front'>('back');
   const [showCamera, setShowCamera] = useState(false);
   const [photos, setPhotos] = useState<PhotoFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [currentMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  const cameraRef = useRef<Camera>(null);
-
-  // Request camera permissions
-  React.useEffect(() => {
-    (async () => {
-      const { status } = await Camera.requestCameraPermissionsAsync();
-      setHasPermission(status === 'granted');
-    })();
-  }, []);
+  const cameraRef = useRef<CameraView>(null);
 
   // Request media library permissions
   React.useEffect(() => {
@@ -69,7 +61,6 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
       try {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.8,
-          base64: false,
         });
 
         const photoFile: PhotoFile = {
@@ -164,7 +155,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
     }
   };
 
-  if (hasPermission === null) {
+  if (!permission) {
     return (
       <ThemedView style={styles.container}>
         <ActivityIndicator size="large" color={Colors.light.tint} />
@@ -173,10 +164,10 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
     );
   }
 
-  if (hasPermission === false) {
+  if (!permission.granted) {
     return (
       <ThemedView style={styles.container}>
-        <Ionicons name="camera-off" size={64} color={Colors.light.text} />
+        <Ionicons name="camera-outline" size={64} color={Colors.light.text} />
         <ThemedText style={styles.permissionText}>
           No access to camera
         </ThemedText>
@@ -190,7 +181,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
   if (showCamera) {
     return (
       <View style={styles.cameraContainer}>
-        <Camera style={styles.camera} type={cameraType} ref={cameraRef}>
+        <CameraView style={styles.camera} facing={cameraType} ref={cameraRef}>
           <View style={styles.cameraControls}>
             <TouchableOpacity
               style={styles.cameraButton}
@@ -201,7 +192,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
             
             <TouchableOpacity
               style={styles.cameraButton}
-              onPress={() => setCameraType(cameraType === CameraType.back ? CameraType.front : CameraType.back)}
+              onPress={() => setCameraType(cameraType === 'back' ? 'front' : 'back')}
             >
               <Ionicons name="camera-reverse" size={30} color="white" />
             </TouchableOpacity>
@@ -212,7 +203,7 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
               <View style={styles.captureButtonInner} />
             </TouchableOpacity>
           </View>
-        </Camera>
+        </CameraView>
       </View>
     );
   }

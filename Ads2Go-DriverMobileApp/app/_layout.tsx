@@ -4,24 +4,19 @@ import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import FloatingNotificationIcon from '../components/FloatingNotificationIcon';
-// Import notification service with error handling
-let NotificationService: any = null;
-try {
-  NotificationService = require('../services/notificationService').default;
-} catch (error) {
-  console.log('⚠️ Notification service not available:', error instanceof Error ? error.message : 'Unknown error');
-}
+// Removed FloatingNotificationIcon - using dedicated notifications page instead
 import 'react-native-reanimated';
 
+// Removed notification service import to prevent Expo Go errors
+// Notifications are now handled only in the notifications page
+
 function RootLayoutNav() {
-  const { state, signOut } = useAuth();
+  const { state } = useAuth();
   const router = useRouter();
-  const [notificationCount, setNotificationCount] = useState(0);
 
   // Check authentication state on app start
   useEffect(() => {
@@ -36,37 +31,8 @@ function RootLayoutNav() {
     checkAuth();
   }, []);
 
-  // Initialize notifications when user is authenticated
-  useEffect(() => {
-    if (state.token && NotificationService) {
-      const initializeNotifications = async () => {
-        try {
-          const notificationService = NotificationService.getInstance();
-          
-          // Register for push notifications
-          await notificationService.registerForPushNotifications();
-          
-          // Set up notification listeners
-          const cleanup = notificationService.setupNotificationListeners();
-          
-          // Return cleanup function
-          return cleanup;
-        } catch (error) {
-          console.error('❌ Error initializing notifications:', error);
-        }
-      };
-
-      const cleanupPromise = initializeNotifications();
-      
-      return () => {
-        cleanupPromise.then(cleanup => {
-          if (cleanup) cleanup();
-        });
-      };
-    } else if (state.token && !NotificationService) {
-      console.log('⚠️ Notification service not available - skipping notification initialization');
-    }
-  }, [state.token]);
+  // Removed automatic notification initialization to prevent Expo Go errors
+  // Notifications will be initialized only when explicitly requested by the user
 
   return (
     <ThemeProvider value={DefaultTheme}>
@@ -89,6 +55,7 @@ function RootLayoutNav() {
           {state.token ? (
             <>
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="materials" options={{ title: 'Materials' }} />
               <Stack.Screen name="+not-found" />
             </>
           ) : (
@@ -96,10 +63,7 @@ function RootLayoutNav() {
           )}
         </Stack>
         
-        {/* Floating Notification Icon - only show when authenticated */}
-        {state.token && (
-          <FloatingNotificationIcon notificationCount={notificationCount} />
-        )}
+        {/* Removed floating notification bell - using dedicated notifications page instead */}
         
         <StatusBar style="dark" />
       </View>

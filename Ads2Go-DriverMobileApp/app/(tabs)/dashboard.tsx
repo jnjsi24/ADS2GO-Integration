@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +41,67 @@ interface DriverAnalytics {
     earnings: number;
     compliance: number;
   }>;
+  dailyData?: {
+    period: string;
+    dateRange: {
+      startDate: string;
+      endDate: string;
+    };
+    aggregatedMetrics: {
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+    };
+    dailyBreakdown: Array<{
+      date: string;
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+      isDisplaying: boolean;
+      maintenanceMode: boolean;
+      hourlyStats: any[];
+      adPerformance: any[];
+      qrScansByAd: any[];
+    }>;
+    totalDays: number;
+    message?: string;
+  } | null;
+  monthlyData?: {
+    period: string;
+    dateRange: {
+      startDate: string;
+      endDate: string;
+    };
+    aggregatedMetrics: {
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+    };
+    monthlyBreakdown: Array<{
+      month: string;
+      monthKey: string;
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+      totalDays: number;
+      averageSpeed: number;
+      compliance: number;
+    }>;
+    totalMonths: number;
+    message?: string;
+  } | null;
 }
 
 const Dashboard: React.FC = () => {
@@ -49,6 +110,9 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'monthly'>('daily');
   const [selectedMetric, setSelectedMetric] = useState<'distance' | 'hours' | 'speed' | 'qrImpressions'>('distance');
+  const [selectedDataPoint, setSelectedDataPoint] = useState<{value: number, label: string, index: number} | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
 
 
   useEffect(() => {
@@ -80,25 +144,58 @@ const Dashboard: React.FC = () => {
 
     loadData();
     
-    // Auto-refresh every 30 seconds for real-time updates (reduced frequency)
+    // Auto-refresh only for daily view (realtime data) every 60 seconds
     const refreshInterval = setInterval(async () => {
-      const driverInfo = await AsyncStorage.getItem('driverInfo');
-      if (driverInfo) {
-        const driver = JSON.parse(driverInfo);
-        const driverId = driver.driverId || driver.id;
-        if (driverId) {
-          // Silent refresh - no console logs
-          await fetchDriverAnalytics(driverId, true);
+      if (selectedPeriod === 'daily') {
+        const driverInfo = await AsyncStorage.getItem('driverInfo');
+        if (driverInfo) {
+          const driver = JSON.parse(driverInfo);
+          const driverId = driver.driverId || driver.id;
+          if (driverId) {
+            // Silent refresh - no console logs
+            await fetchDriverAnalytics(driverId, true);
+          }
         }
       }
-    }, 30000);
+    }, 60000); // Increased to 60 seconds
     
     return () => clearInterval(refreshInterval);
-  }, []); // Empty dependency array to prevent infinite loops
+  }, [selectedPeriod]); // Only re-create interval when period changes
+
+  // Refetch data when selectedPeriod changes
+  useEffect(() => {
+    if (user?.driverId || user?.id) {
+      const driverId = user.driverId || user.id;
+      fetchDriverAnalytics(driverId);
+    }
+    // Reset selected data point when period changes
+    setSelectedDataPoint(null);
+  }, [selectedPeriod]);
+
+  // Reset selected data point when metric changes
+  useEffect(() => {
+    setSelectedDataPoint(null);
+  }, [selectedMetric]);
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
     try {
-      if (!silent) {
+      // Set refreshing state for silent updates
+      if (silent) {
+        setRefreshing(true);
+      }
+
+      // Check cache first (5 minutes for daily, 15 minutes for monthly)
+      const cacheKey = `${driverId}-${selectedPeriod}`;
+      const cacheExpiry = selectedPeriod === 'daily' ? 5 * 60 * 1000 : 15 * 60 * 1000; // 5 or 15 minutes
+      const cachedData = dataCache[cacheKey];
+      
+      if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry && !silent) {
+        if (!silent) {
+          console.log('📦 Using cached data for', selectedPeriod);
+        }
+        setAnalytics(cachedData.data);
+        setLoading(false);
+        return;
       }
       
       // Get auth token
@@ -110,11 +207,25 @@ const Dashboard: React.FC = () => {
         console.log('✅ Auth token found');
       }
 
-      // Fetch real-time ScreenTracking data
-      const apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}`;
+      // Build API URL with period parameter
+      // Daily view: Use 'realtime' to get today's data from DeviceTracking (devicetrackings collection)
+      // Monthly view: Use 'daily' with last 30 days from DeviceDataHistoryV2
+      let apiUrl = '';
+      if (selectedPeriod === 'daily') {
+        apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=realtime`;
+      } else {
+        // Monthly view: Fetch last 30 days from DeviceDataHistoryV2
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        
+        apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+      }
+      
       if (!silent) {
         console.log('🌐 API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
         console.log('🌐 Fetching from URL:', apiUrl);
+        console.log('📊 Selected period:', selectedPeriod);
       }
       
       const dailyResponse = await fetch(apiUrl, {
@@ -156,12 +267,17 @@ const Dashboard: React.FC = () => {
           deviceId: data.deviceId || 'Unknown',
           screenType: data.screenType || 'Unknown',
           materialId: data.materialId || 'Unknown',
-          totalDistance: sanitizeNumeric(data.totalDistanceToday, 0),
-          totalHours: sanitizeNumeric(data.currentHours, 0),
+          // Daily view: Today's data from DeviceTracking (devicetrackings collection)
+          // Monthly view: Last 30 days aggregated from DeviceDataHistoryV2
+          totalDistance: data.dailyData?.aggregatedMetrics?.totalDistance || 
+                        sanitizeNumeric(data.totalDistanceToday, 0),
+          totalHours: data.dailyData?.aggregatedMetrics?.totalHours || 
+                     sanitizeNumeric(data.currentHours, 0),
           hoursRemaining: sanitizeNumeric(data.hoursRemaining, 0),
           averageSpeed: sanitizeNumeric(data.averageSpeed, 0),
           maxSpeed: sanitizeNumeric(data.maxSpeed, 0),
-          qrImpressions: sanitizeNumeric(data.qrImpressions || data.totalQrScans || 0, 0),
+          qrImpressions: data.dailyData?.aggregatedMetrics?.totalQRImpressions || 
+                        sanitizeNumeric(data.qrImpressions || data.totalQrScans || 0, 0),
           totalRoutes: 1, // Single route for current session
           isOnline: Boolean(data.isOnline),
           complianceRate: sanitizeNumeric(data.complianceRate, 0),
@@ -173,20 +289,54 @@ const Dashboard: React.FC = () => {
             maxSpeed: sanitizeNumeric(day.maxSpeed, 0),
             qrImpressions: sanitizeNumeric(day.qrImpressions || day.totalQrScans || 0, 0)
           })),
-          monthlyTrends: [] // Will be populated if needed
+          monthlyTrends: data.monthlyTrends || [], // Will be populated from monthly data
+          // Add daily data if available
+          dailyData: data.dailyData ? {
+            period: data.dailyData.period,
+            dateRange: data.dailyData.dateRange,
+            aggregatedMetrics: data.dailyData.aggregatedMetrics,
+            dailyBreakdown: data.dailyData.dailyBreakdown || [],
+            totalDays: data.dailyData.totalDays || 0,
+            message: data.dailyData.message
+          } : null,
+          // Add monthly data if available
+          monthlyData: data.monthlyData ? {
+            period: data.monthlyData.period,
+            dateRange: data.monthlyData.dateRange,
+            aggregatedMetrics: data.monthlyData.aggregatedMetrics,
+            monthlyBreakdown: data.monthlyData.monthlyBreakdown || [],
+            totalMonths: data.monthlyData.totalMonths || 0,
+            message: data.monthlyData.message
+          } : null
         };
         
         setAnalytics(transformedAnalytics);
+        
+        // Cache the data
+        const cacheKey = `${driverId}-${selectedPeriod}`;
+        setDataCache(prev => ({
+          ...prev,
+          [cacheKey]: {
+            data: transformedAnalytics,
+            timestamp: Date.now()
+          }
+        }));
       } else {
         throw new Error(screenTrackingData.message || 'Failed to fetch analytics');
       }
     } catch (error) {
       console.error('Error fetching driver analytics:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load analytics data. Please check your connection and try again.',
-        [{ text: 'OK' }]
-      );
+      if (!silent) {
+        Alert.alert(
+          'Error',
+          'Failed to load analytics data. Please check your connection and try again.',
+          [{ text: 'OK' }]
+        );
+      }
+    } finally {
+      if (silent) {
+        setRefreshing(false);
+      }
     }
   };
 
@@ -202,7 +352,8 @@ const Dashboard: React.FC = () => {
     if (!analytics) return null;
 
     if (selectedPeriod === 'daily') {
-      const data = analytics.dailyPerformance.slice(-7); // Last 7 days
+      // For daily view, show last 7 days trend from DeviceTracking's dailyPerformance
+      const data = analytics.dailyPerformance.slice(-7);
       
       // Ensure we have at least some data points
       if (data.length === 0) {
@@ -230,8 +381,8 @@ const Dashboard: React.FC = () => {
             switch (selectedMetric) {
               case 'distance': value = d.totalDistance; break;
               case 'hours': value = d.totalHours; break;
-              case 'speed': value = d.averageSpeed; break;
-              case 'qrImpressions': value = d.qrImpressions; break;
+              case 'speed': value = d.averageSpeed || 0; break;
+              case 'qrImpressions': value = d.qrImpressions || 0; break;
               default: value = d.totalDistance; break;
             }
             return sanitizeChartValue(value);
@@ -241,7 +392,8 @@ const Dashboard: React.FC = () => {
         }]
       };
     } else {
-      const data = analytics.monthlyTrends;
+      // Monthly view: Show last 30 days from DeviceDataHistoryV2
+      const data = analytics.dailyData?.dailyBreakdown || [];
       
       // Ensure we have at least some data points
       if (data.length === 0) {
@@ -255,23 +407,32 @@ const Dashboard: React.FC = () => {
         };
       }
 
+      // Take all days (up to 30) and format labels
       return {
-        labels: data.map(m => {
+        labels: data.map(d => {
           try {
-            return new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short' });
+            const date = new Date(d.date);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
           } catch {
-            return 'Invalid Month';
+            return 'Invalid Date';
           }
         }),
         datasets: [{
-          data: data.map(m => {
+          data: data.map(d => {
             let value = 0;
             switch (selectedMetric) {
-              case 'distance': value = m.distance; break;
-              case 'hours': value = m.hours; break;
-              case 'speed': value = m.compliance; break; // Using compliance as proxy for speed in monthly
-              case 'qrImpressions': value = 0; break; // QR impressions not available in monthly trends yet
-              default: value = m.distance; break;
+              case 'distance': value = d.totalDistance || 0; break;
+              case 'hours': value = d.totalHours || 0; break;
+              case 'speed': 
+                // Calculate speed from distance and hours
+                if (d.totalHours && d.totalHours > 0) {
+                  value = (d.totalDistance || 0) / d.totalHours;
+                } else {
+                  value = 0;
+                }
+                break;
+              case 'qrImpressions': value = d.totalQRImpressions || 0; break;
+              default: value = d.totalDistance || 0; break;
             }
             return sanitizeChartValue(value);
           }),
@@ -292,12 +453,100 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleDataPointClick = (data: any) => {
+    // Extract value and index from the clicked data point
+    const { value, index, dataset } = data;
+    const chartData = getChartData();
+    
+    if (chartData && chartData.labels && chartData.labels[index]) {
+      setSelectedDataPoint({
+        value: value,
+        label: chartData.labels[index],
+        index: index
+      });
+    }
+  };
+
+  const getCurrentMetricValue = () => {
+    if (!analytics) return 0;
+
+    // If a data point is selected, return its value
+    if (selectedDataPoint) {
+      return selectedDataPoint.value;
+    }
+
+    let value = 0;
+    
+    if (selectedPeriod === 'daily') {
+      // Use today's real-time data from DeviceTracking (devicetrackings)
+      switch (selectedMetric) {
+        case 'distance': value = analytics.totalDistance || 0; break;
+        case 'hours': value = analytics.totalHours || 0; break;
+        case 'speed': value = analytics.averageSpeed || 0; break;
+        case 'qrImpressions': value = analytics.qrImpressions || 0; break;
+        default: value = analytics.totalDistance || 0; break;
+      }
+    } else {
+      // Use last 30 days aggregated data from DeviceDataHistoryV2
+      const dailyData = analytics.dailyData?.aggregatedMetrics;
+      switch (selectedMetric) {
+        case 'distance': value = dailyData?.totalDistance || 0; break;
+        case 'hours': value = dailyData?.totalHours || 0; break;
+        case 'speed': 
+          // Calculate average speed from total distance and hours
+          if (dailyData?.totalHours && dailyData?.totalHours > 0) {
+            value = (dailyData?.totalDistance || 0) / dailyData.totalHours;
+          } else {
+            value = 0;
+          }
+          break;
+        case 'qrImpressions': value = dailyData?.totalQRImpressions || 0; break;
+        default: value = dailyData?.totalDistance || 0; break;
+      }
+    }
+    
+    return sanitizeChartValue(value);
+  };
+
+  const getMetricShortLabel = () => {
+    switch (selectedMetric) {
+      case 'distance': return 'Distance';
+      case 'hours': return 'Hours';
+      case 'speed': return 'Average Speed';
+      case 'qrImpressions': return 'QR Impressions';
+      default: return 'Distance';
+    }
+  };
+
+  const getMetricUnit = () => {
+    switch (selectedMetric) {
+      case 'distance': return 'km';
+      case 'hours': return 'hrs';
+      case 'speed': return 'km/h';
+      case 'qrImpressions': return '';
+      default: return 'km';
+    }
+  };
+
+  // Memoize chart data to avoid recalculating on every render
+  // Must be called before any early returns (Rules of Hooks)
+  const chartData = useMemo(() => {
+    if (!analytics) return null;
+    return getChartData();
+  }, [analytics, selectedPeriod, selectedMetric]);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3674B5" />
-        <Text style={styles.loadingText}>Loading analytics...</Text>
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color="#3674B5" />
+          <Text style={styles.loadingText}>Loading analytics...</Text>
+          <View style={styles.loadingDotsContainer}>
+            <View style={[styles.loadingDot, styles.loadingDot1]} />
+            <View style={[styles.loadingDot, styles.loadingDot2]} />
+            <View style={[styles.loadingDot, styles.loadingDot3]} />
+          </View>
+        </View>
       </View>
     );
   }
@@ -311,12 +560,21 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  const chartData = getChartData();
-
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <View style={styles.mainContainer}>
+      {/* Loading Overlay for Refreshing */}
+      {refreshing && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingOverlayContent}>
+            <ActivityIndicator size="large" color="#3674B5" />
+            <Text style={styles.loadingOverlayText}>Updating data...</Text>
+          </View>
+        </View>
+      )}
+      
+      <ScrollView style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
         <View style={styles.headerContent}>
           {/* Profile Image */}
           <View style={styles.profileContainer}>
@@ -355,133 +613,7 @@ const Dashboard: React.FC = () => {
       </View>
 
 
-      {/* Vehicle */}
-      <View style={styles.infoCard}>
-        {/* --- Top Row: Icon + Route + Vehicle Plate --- */}
-        <View style={styles.vehicleTopRow}>
-          <View style={styles.vehicleLeft}>
-            <Ionicons name="car" size={26} color="#3674B5" style={{ marginRight: 8 }} />
-            <Text style={styles.routeText}>
-              {analytics.totalRoutes} Route{analytics.totalRoutes > 1 ? 's' : ''}
-            </Text>
-          </View>
 
-          <View style={styles.vehicleRight}>
-            <Text style={styles.vehiclePlate}>{analytics.vehiclePlateNumber}</Text>
-          </View>
-        </View>
-
-        {/* --- Second Line: Vehicle Model --- */}
-        <Text style={styles.vehicleModel}>{analytics.vehicleModel}</Text>
-
-        {/* --- Divider --- */}
-        <View style={styles.divider} />
-
-        {/* --- Device Info Section --- */}
-        <View style={styles.deviceInfoSection}>
-          <View style={styles.deviceInfoRow}>
-            <View style={styles.deviceInfoItem}>
-              <Ionicons name="tablet-portrait" size={20} color="#3674B5" />
-              <Text style={styles.deviceInfoValue}>{analytics.deviceId}</Text>
-            </View>
-
-            <View style={styles.deviceInfoItem}>
-              <Ionicons name="tv" size={20} color="#3674B5" />
-              <Text style={styles.deviceInfoValue}>{analytics.screenType}</Text>
-            </View>
-
-            <View style={styles.deviceInfoItem}>
-              <Ionicons name="cube" size={20} color="#3674B5" />
-              <Text
-                style={styles.deviceInfoValue}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {analytics.materialId}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* --- Ad Campaign Card --- */}
-      <View style={styles.adCard}>
-        {/* Header Section */}
-        <View style={styles.metricsHeader}>
-          <View style={styles.headerLeft}>
-            <View style={styles.titleRow}>
-              <Text style={styles.adTitle}>Ad Campaign</Text>
-              <View style={styles.periodTag}>
-                <Text style={styles.periodText}>30 Days</Text>
-              </View>
-            </View>
-
-            <Text style={styles.companyInfo}>
-              Sample Company <Text style={styles.adId}>#AdID3264</Text>
-            </Text>
-
-          </View>
-        </View>
-
-        {/* QR and Distance Row */}
-        <View style={styles.qrDistanceRow}>
-          <Ionicons name="qr-code" size={22} color="#3674B5" style={{ marginRight: 6 }} />
-          <Text style={styles.qrValue}>{analytics.qrImpressions}</Text>
-          <Text style={styles.verticalDivider}>|</Text>
-          <Text style={styles.distanceValue}>
-            {analytics.totalDistance.toFixed(2)} km Today
-          </Text>
-        </View>
-        
-        <View style={styles.divider} />
-
-        {/* Location Card: EDSA */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="location" size={16} color="#ffffff" />
-            </View>
-            <View style={styles.dashedLineFull} />
-          </View>
-
-          <View style={styles.textContainer}>
-            <Text style={styles.locationName}>EDSA Street</Text>
-            <Text style={styles.locationSubText}>
-              {analytics.hoursRemaining.toFixed(1)} hours remaining • 11:59 PM
-            </Text>
-          </View>
-        </View>
-
-        {/* Distance + Hours Pill */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.dashedLineFull} />
-          </View>
-          <View style={styles.textContainer}>
-            <View style={styles.locationPill}>
-              <Text style={styles.locationPillText}>
-                {analytics.totalDistance.toFixed(2)} km - {analytics.totalHours.toFixed(1)} hours
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Kalayaan Section */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.iconCircle2}>
-              <Ionicons name="locate" size={16} color="#ffffff" />
-            </View>
-          </View>
-
-          <View style={styles.textContainer}>
-            <Text style={styles.locationName}>Kalayaan Street</Text>
-            <Text style={styles.locationSubText}>
-              {analytics.hoursRemaining.toFixed(1)} hours remaining • 11:59 PM
-            </Text>
-          </View>
-        </View>
-      </View>
 
       {/* Chart Controls */}
       <View style={styles.chartControls}>
@@ -540,11 +672,39 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
+      {/* Numerical Value Display */}
+      <View style={styles.metricValueContainer}>
+        <View style={styles.metricValueCard}>
+          <Text style={styles.metricValueLabel}>{getMetricShortLabel()}</Text>
+          <View style={styles.metricValueRow}>
+            <Text style={styles.metricValueNumber}>
+              {getCurrentMetricValue().toFixed(selectedMetric === 'distance' || selectedMetric === 'speed' ? 1 : 0)}
+            </Text>
+            {getMetricUnit() && (
+              <Text style={styles.metricValueUnit}> {getMetricUnit()}</Text>
+            )}
+          </View>
+          <Text style={styles.metricValuePeriod}>
+            {selectedDataPoint 
+              ? `${selectedDataPoint.label}` 
+              : selectedPeriod === 'daily' ? 'Today' : 'Last 30 Days Total'}
+          </Text>
+          {selectedDataPoint && selectedPeriod === 'monthly' && (
+            <TouchableOpacity 
+              onPress={() => setSelectedDataPoint(null)}
+              style={styles.resetButton}
+            >
+              <Text style={styles.resetButtonText}>View Total</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       {/* Chart */}
       {chartData && chartData.datasets && chartData.datasets.length > 0 && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>
-            {selectedPeriod === 'daily' ? 'Daily' : 'Monthly'} {getMetricLabel()}
+            {selectedPeriod === 'daily' ? 'Last 7 Days' : 'Last 30 Days'} {getMetricLabel()}
           </Text>
           <LineChart
             data={chartData}
@@ -568,18 +728,24 @@ const Dashboard: React.FC = () => {
             }}
             bezier
             style={styles.chart}
+            onDataPointClick={handleDataPointClick}
           />
         </View>
       )}
 
 
-      {/* Bottom Spacing */}
-      <View style={styles.bottomSpacing} />
-    </ScrollView>
+        {/* Bottom Spacing */}
+        <View style={styles.bottomSpacing} />
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
@@ -590,10 +756,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8fafc',
   },
+  loadingContent: {
+    alignItems: 'center',
+  },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6b7280',
+    fontWeight: '600',
+    color: '#3674B5',
+  },
+  loadingDotsContainer: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  loadingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3674B5',
+  },
+  loadingDot1: {
+    opacity: 0.3,
+  },
+  loadingDot2: {
+    opacity: 0.6,
+  },
+  loadingDot3: {
+    opacity: 1,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingOverlayContent: {
+    backgroundColor: '#ffffff',
+    padding: 30,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingOverlayText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3674B5',
   },
   errorContainer: {
     flex: 1,
@@ -779,37 +997,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#e5e7eb',
     marginVertical: 10,
   },
-
-  deviceInfoSection: {
-    marginTop: 1,
-  },
-  
-  deviceInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start', 
-    alignItems: 'center',
-    gap: 12, 
-  },
-  
-  deviceInfoItem: {
-    flexDirection: 'row', 
-    alignItems: 'center',
-  },
-  
-  deviceInfoHeader: {
-    marginRight: 10, 
-  },
-  
-  deviceInfoValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-    maxWidth: 110,
-    marginLeft: 6, 
-  },
-  
-  
-
 
   // Metrics Container Styles
   adCard: {
@@ -1035,6 +1222,53 @@ const styles = StyleSheet.create({
   metricButtonTextActive: {
     color: '#ffffff',
   },
+  // Numerical Value Display
+  metricValueContainer: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  metricValueCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3674B5',
+  },
+  metricValueLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  metricValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  metricValueNumber: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: '#3674B5',
+  },
+  metricValueUnit: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginLeft: 4,
+  },
+  metricValuePeriod: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9ca3af',
+  },
   chartContainer: {
     marginHorizontal: 20,
     backgroundColor: '#ffffff',
@@ -1057,6 +1291,19 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 16,
+  },
+  resetButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#3674B5',
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  resetButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   bottomSpacing: {
     height: 20,

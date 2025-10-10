@@ -233,7 +233,7 @@ const EmailVerification = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Verify Your Email</Text>
           <Text style={styles.subtitle}>
-            We've sent a code to <Text style={styles.email}>{email}</Text>
+            We&apos;ve sent a code to <Text style={styles.email}>{email}</Text>
           </Text>
           <Text style={styles.description}>
             Enter the code below to verify your email address and complete your registration.
