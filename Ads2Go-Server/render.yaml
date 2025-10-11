@@ -11,6 +11,8 @@ services:
         value: production
       - key: PORT
         value: 5000
+      - key: CLIENT_URL
+        value: https://ads2go-client-dxo4.onrender.com
     disk:
       name: server-disk
       mountPath: /data

@@ -205,6 +205,7 @@ async function startServer() {
         'https://ads2go-6ead4.web.app',
         'https://ads2go-6ead4.firebaseapp.com',
         'https://ads2go-client.onrender.com',
+        'https://ads2go-client-dxo4.onrender.com', // New client URL
         // Additional development origins
         'http://localhost:3001',
         'http://localhost:5000',
@@ -220,15 +221,16 @@ async function startServer() {
 
       const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
 
-      const isRailwayApp = /^https?:\/\/([a-z0-9-]+)\.up\.railway\.app$/i.test(origin) ||
-                           /^https?:\/\/([a-z0-9-]+)\.railway\.app$/i.test(origin);
+      const isRailwayApp = /^https?:\/\/([a-z0-9\-]+)\.up\.railway\.app$/i.test(origin) ||
+                           /^https?:\/\/([a-z0-9\-]+)\.railway\.app$/i.test(origin);
 
-      const isRenderApp = /^https?:\/\/([a-z0-9-]+)\.onrender\.com$/i.test(origin);
+      const isRenderApp = /^https?:\/\/([a-z0-9\-]+)\.onrender\.com$/i.test(origin);
 
       // Allow local network IPs for development (fallback if not in .env)
       const isLocalNetwork = /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}):\d+$/i.test(origin);
 
       if (allowedOrigins.has(origin) || isRailwayApp || isRenderApp || isLocalNetwork) {
+        console.log(`✅ CORS allowed origin: ${origin} (isRenderApp: ${isRenderApp}, isRailwayApp: ${isRailwayApp}, isLocalNetwork: ${isLocalNetwork}, inAllowedList: ${allowedOrigins.has(origin)})`);
         callback(null, true);
       } else {
         console.log(`🚫 CORS blocked origin: ${origin}`);
