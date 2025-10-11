@@ -58,6 +58,7 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
   materialName
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const { data, loading, error } = useQuery<{ getMaterialUsageHistory: MaterialUsageHistoryResponse }>(
     GET_MATERIAL_USAGE_HISTORY,
@@ -67,6 +68,15 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
       fetchPolicy: 'cache-and-network'
     }
   );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -107,21 +117,12 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
   };
 
   const getStatusBadge = (entry: UsageHistoryEntry) => {
-    if (entry.isActive) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          <CheckCircle className="w-3 h-3 mr-1" />
-          Active
-        </span>
-      );
-    } else {
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-          <Clock className="w-3 h-3 mr-1" />
-          Completed
-        </span>
-      );
-    }
+    return (
+      <span className={`inline-flex items-center ${isMobile ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-0.5 text-xs'} rounded-full font-medium bg-green-100 text-green-800`}>
+        <CheckCircle className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'} mr-1`} />
+        {entry.isActive ? 'Active' : 'Completed'}
+      </span>
+    );
   };
 
   const getReasonBadge = (reason: string, type: 'assignment' | 'unassignment') => {
@@ -137,7 +138,7 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
     };
 
     return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors[reason as keyof typeof colors] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`inline-flex items-center ${isMobile ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs'} rounded-full font-medium ${colors[reason as keyof typeof colors] || 'bg-gray-100 text-gray-800'}`}>
         {reason.replace(/_/g, ' ').toLowerCase()}
       </span>
     );
@@ -147,27 +148,26 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-hidden"
-      style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+      className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50"
       onClick={handleClose}
     >
       <div
-        className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
-          isModalOpen ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed ${isMobile ? 'inset-x-4 top-16 bottom-6 w-auto max-h-[80vh]' : 'top-0 bottom-0 w-full max-w-xl'} bg-white shadow-xl rounded-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
+          isModalOpen ? (isMobile ? 'scale-100 opacity-100' : 'translate-x-0 opacity-100') : (isMobile ? 'scale-95 opacity-0' : 'translate-x-full opacity-0')
+        } ${isMobile ? 'overflow-y-auto' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex justify-between items-center mb-6 pb-4 p-6">
+        <div className={`flex justify-between items-center mb-6 pb-4 ${isMobile ? 'p-4' : 'p-6'}`}>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <User className="w-5 h-5 text-blue-600" />
+              <User className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-blue-600`} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">
+              <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>
                 Driver Usage History
               </h2>
-              <p className="text-sm text-gray-500">
+              <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500`}>
                 {materialName}
               </p>
             </div>
@@ -176,25 +176,25 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
             onClick={handleClose}
             className="text-gray-500 hover:text-gray-700"
           >
-            <X size={20} />
+            <X size={isMobile ? 18 : 20} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex-grow overflow-y-auto px-6 pb-6">
+        <div className={`flex-grow ${isMobile ? 'px-4 pb-4' : 'px-6 pb-6'} overflow-y-auto`}>
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <span className="ml-2 text-gray-600">Loading usage history...</span>
+              <div className={`animate-spin rounded-full ${isMobile ? 'h-6 w-6' : 'h-8 w-8'} border-b-2 border-blue-500`}></div>
+              <span className={`${isMobile ? 'text-sm' : 'text-base'} ml-2 text-gray-600`}>Loading usage history...</span>
             </div>
           )}
 
           {error && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-2" />
-                <p className="text-red-600">Error loading usage history</p>
-                <p className="text-sm text-gray-500 mt-1">{error.message}</p>
+                <AlertCircle className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'} text-red-500 mx-auto mb-2`} />
+                <p className={`${isMobile ? 'text-sm' : 'text-base'} text-red-600`}>Error loading usage history</p>
+                <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-1`}>{error.message}</p>
               </div>
             </div>
           )}
@@ -204,9 +204,9 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
               {data.getMaterialUsageHistory.usageHistory.length === 0 ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="text-center">
-                    <User className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-600">No usage history found</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <User className={`${isMobile ? 'w-10 h-10' : 'w-12 h-12'} text-gray-400 mx-auto mb-2`} />
+                    <p className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-600`}>No usage history found</p>
+                    <p className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-500 mt-1`}>
                       This material has never been assigned to any driver
                     </p>
                   </div>
@@ -218,102 +218,123 @@ const MaterialUsageHistoryModal: React.FC<MaterialUsageHistoryModalProps> = ({
                       {/* Entry Header */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-semibold text-blue-600">
-                              {index + 1}
-                            </span>
-                          </div>
+                          {/* Only show index number if not on mobile */}
+                          {!isMobile && (
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-semibold text-blue-600">
+                                {index + 1}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Driver Name and ID */}
                           <div>
-                            <h3 className="font-semibold text-gray-900">
+                            <h3
+                              className={`${
+                                isMobile ? 'text-sm' : 'text-base'
+                              } font-semibold text-gray-900`}
+                            >
                               {entry.driverInfo.fullName}
                             </h3>
-                            <p className="text-sm text-gray-500">
+                            <p
+                              className={`${
+                                isMobile ? 'text-xs' : 'text-sm'
+                              } text-gray-500`}
+                            >
                               {entry.driverInfo.driverId}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+
+                        {/* Right side badges */}
+                        <div
+                          className={`flex items-center gap-2 ${
+                            isMobile ? 'flex-row flex-wrap justify-end' : ''
+                          }`}
+                        >
                           {getStatusBadge(entry)}
                           {getReasonBadge(entry.assignmentReason, 'assignment')}
                         </div>
                       </div>
 
                       {/* Driver Info */}
-                      <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div className={`${isMobile ? 'grid-cols-[1fr,1fr]' : 'grid-cols-2'} grid gap-4 mb-3`}>
                         <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-wide">Contact</p>
-                          <p className="text-sm font-medium text-gray-900">{entry.driverInfo.contactNumber}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Contact</p>
+                          <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{entry.driverInfo.contactNumber}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-wide">Vehicle</p>
-                          <p className="text-sm font-medium text-gray-900">{entry.driverInfo.vehiclePlateNumber}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Vehicle</p>
+                          <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{entry.driverInfo.vehiclePlateNumber}</p>
                         </div>
                       </div>
 
                       {/* Assignment Info */}
-                      <div className="grid grid-cols-2 gap-4 mb-3">
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-wide">Assigned</p>
-                          <p className="text-sm font-medium text-gray-900">{formatDate(entry.assignedAt)}</p>
+                      <div className={`${isMobile ? 'grid-cols-[1fr,1fr]' : 'grid-cols-2'} grid gap-4 mb-3`}>
+                        <div className="space-y-2">
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Assigned</p>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{formatDate(entry.assignedAt)}</p>
+                          </div>
                           {entry.assignedByAdmin && (
-                            <div className="mt-1">
-                              <p className="text-xs text-blue-600 font-medium">
+                            <div>
+                              <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-blue-600 font-medium`}>
                                 Assigned by: {entry.assignedByAdmin.adminName}
                               </p>
                             </div>
                           )}
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Mounted</p>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{formatDate(entry.mountedAt)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 uppercase tracking-wide">Unassigned</p>
-                          <p className="text-sm font-medium text-gray-900">{formatDate(entry.unassignedAt)}</p>
-                          {entry.unassignmentReason && getReasonBadge(entry.unassignmentReason, 'unassignment')}
+                        <div className="space-y-2">
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Unassigned</p>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{formatDate(entry.unassignedAt)}</p>
+                          </div>
+                          {entry.unassignmentReason && (
+                            <div className="mt-1">
+                              {getReasonBadge(entry.unassignmentReason, 'unassignment')}
+                            </div>
+                          )}
                           {entry.unassignedByAdmin && (
                             <div className="mt-1">
-                              <p className="text-xs text-red-600 font-medium">
+                              <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-red-600 font-medium`}>
                                 Unassigned by: {entry.unassignedByAdmin.adminName}
                               </p>
                             </div>
                           )}
+                          <div>
+                            <p className={`${isMobile ? 'text-xs' : 'text-xs'} text-gray-500 uppercase tracking-wide`}>Dismounted</p>
+                            <p className={`${isMobile ? 'text-sm' : 'text-sm'} font-medium text-gray-900`}>{formatDate(entry.dismountedAt)}</p>
+                          </div>
                         </div>
                       </div>
 
                       {/* Usage Duration */}
                       {entry.usageDuration && (
                         <div className="mb-3">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Usage Duration</p>
-                          <p className="text-sm text-gray-900">
+                          <p className={`${isMobile ? 'text-xs' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide`}>Usage Duration</p>
+                          <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-gray-900`}>
                             {entry.usageDuration} day{entry.usageDuration !== 1 ? 's' : ''}
                           </p>
-                        </div>
-                      )}
-
-                      {/* Mount/Dismount Dates */}
-                      {(entry.mountedAt || entry.dismountedAt) && (
-                        <div className="grid grid-cols-2 gap-4 mb-3">
-                          <div>
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mounted</p>
-                            <p className="text-sm text-gray-900">{formatDate(entry.mountedAt)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Dismounted</p>
-                            <p className="text-sm text-gray-900">{formatDate(entry.dismountedAt)}</p>
-                          </div>
                         </div>
                       )}
 
                       {/* Notes */}
                       {entry.notes && (
                         <div className="mt-3 pt-3 border-t border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Notes</p>
-                          <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded">{entry.notes}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide mb-1`}>Notes</p>
+                          <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-gray-700 bg-gray-50 p-2 rounded`}>{entry.notes}</p>
                         </div>
                       )}
 
                       {/* Custom Dismount Reason */}
                       {entry.customDismountReason && (
                         <div className="mt-3 pt-3 border-t border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Dismount Reason</p>
-                          <p className="text-sm text-gray-700 bg-orange-50 p-2 rounded border-l-4 border-orange-200">{entry.customDismountReason}</p>
+                          <p className={`${isMobile ? 'text-xs' : 'text-xs'} font-medium text-gray-500 uppercase tracking-wide mb-1`}>Dismount Reason</p>
+                          <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-gray-700 bg-orange-50 p-2 rounded border-l-4 border-orange-200`}>{entry.customDismountReason}</p>
                         </div>
                       )}
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -12,24 +12,32 @@ import LegalModal from '../../components/modals/LegalModal';
 import BlogModal from '../../components/modals/BlogModal';
 import StatusModal from '../../components/modals/StatusModal';
 
+import LogoLoop from "../../components/LogoLoop";
+import ScrollingTestimonials from '../../components/ScrollingTestimonials';
+import HamburgerMenuOverlay from '../../components/HamburgerMenuOverlay';
+
 // Import newsletter service
 import { NewsletterService } from '../../services/newsletterService';
-
 
 export default function Home() {
   const navigate = useNavigate();
 
-  // State for the hero slideshow
-  const [currentSlide, setCurrentSlide] = useState(0);
-
   // State for the popup in the footer
   const [showPopup, setShowPopup] = useState(false);
-
 
   // State for newsletter subscription
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
+
+  // State for contact form
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    message: '',
+  });
+  const [contactStatus, setContactStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [contactMessage, setContactMessage] = useState('');
 
   // State for modal popups
   const [modalStates, setModalStates] = useState({
@@ -43,32 +51,14 @@ export default function Home() {
     status: false
   });
 
-  // Slides data for the hero section
-  const slides = [
-    {
-      title: "Capture Attention Where It Counts — On the Move",
-      description: "Boost your brand with mobile advertising solutions that drive visibility, engagement, and growth — anytime, anywhere.",
-      buttonText: "+ Register Ad Campaign",
-      buttonLink: "/login",
-      videoSrc: "/image/home.mp4",
-    },
-    {
-      title: "Drive Your Brand Forward with Mobile Advertising",
-      description: "Reach your audience on the go with our innovative mobile ad solutions, designed to maximize impact and engagement.",
-      buttonText: "Learn More",
-      buttonLink: "/login",
-      videoSrc: "/image/home2.mp4", 
-    },
+  const techLogos = [
+    { src: "/image/Ads2GoLogoText.png", alt: "Vue.js" },
+    { src: "/image/orange-logo.png", alt: "AWS" },
+    { src: "/image/f.png", alt: "f"},
+    { src: "/image/black-logo.png", alt: "Tailwind CSS" },
+    { src: "/image/g.png", alt: "G"},
+    { src: "/image/blue-logo.png", alt: "MongoDB" },
   ];
-
-  // Automatic slideshow effect for the hero section
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev === 0 ? 1 : 0));
-    }, 6000); // Slide changes every 6 seconds
-
-    return () => clearInterval(interval); // Cleanup interval on component unmount
-  }, []);
 
   // Vehicle data
   const vehicles = [
@@ -101,6 +91,40 @@ export default function Home() {
   const [current, setCurrent] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // References for sections to observe
+  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
+
+  // Add this near the other state declarations
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Hamburger menu items
+  const menuItems = [
+    {
+      label: 'Home',
+      onClick: () => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' }),
+    },
+    {
+      label: 'About Us',
+      onClick: () => document.getElementById('about-us')?.scrollIntoView({ behavior: 'smooth' }),
+    },
+    {
+      label: 'Services',
+      onClick: () => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' }),
+    },
+    {
+      label: 'Contact Us',
+      onClick: () => document.getElementById('contact-us')?.scrollIntoView({ behavior: 'smooth' }),
+    },
+  ];
+
   useEffect(() => {
     if (isTransitioning) {
       const timer = setTimeout(() => {
@@ -109,6 +133,32 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [current, isTransitioning]);
+
+  // IntersectionObserver for scroll animations
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('section-visible');
+          } else {
+            entry.target.classList.remove('section-visible');
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    sectionRefs.current.forEach((section) => {
+      if (section) observer.observe(section);
+    });
+
+    return () => {
+      sectionRefs.current.forEach((section) => {
+        if (section) observer.unobserve(section);
+      });
+    };
+  }, []);
 
   const nextSlide = () => {
     if (!isTransitioning) {
@@ -135,7 +185,6 @@ export default function Home() {
     return items;
   };
 
-
   // Handle newsletter subscription
   const handleNewsletterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -161,9 +210,9 @@ export default function Home() {
       if (result.success) {
         setNewsletterStatus('success');
         setNewsletterMessage(result.message);
-        setNewsletterEmail(''); // Clear the input
+        setNewsletterEmail('');
         setShowPopup(true);
-        setTimeout(() => setShowPopup(false), 5000); // Hide popup after 5 seconds
+        setTimeout(() => setShowPopup(false), 5000);
       } else {
         setNewsletterStatus('error');
         setNewsletterMessage(result.message);
@@ -174,13 +223,52 @@ export default function Home() {
     }
   };
 
-  // Handle email form submission for the popup (legacy - keeping for compatibility)
+  // Handle contact form submission
+  const handleContactSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const { name, email, message } = contactForm;
+
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setContactStatus('error');
+      setContactMessage('Please fill out all fields');
+      return;
+    }
+
+    if (!NewsletterService.validateEmail(email)) {
+      setContactStatus('error');
+      setContactMessage('Please enter a valid email address');
+      return;
+    }
+
+    setContactStatus('loading');
+    setContactMessage('');
+
+    try {
+      const result = await NewsletterService.sendContactMessage({ name, email, message });
+      
+      if (result.success) {
+        setContactStatus('success');
+        setContactMessage('Your message has been sent successfully!');
+        setContactForm({ name: '', email: '', message: '' });
+        setShowPopup(true);
+        setTimeout(() => setShowPopup(false), 5000);
+      } else {
+        setContactStatus('error');
+        setContactMessage(result.message || 'Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      setContactStatus('error');
+      setContactMessage('Failed to send message. Please try again later.');
+    }
+  };
+
+  // Handle email form submission for the popup (legacy)
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setShowPopup(true);
-    setTimeout(() => setShowPopup(false), 3000); // Hide popup after 3 seconds
+    setTimeout(() => setShowPopup(false), 3000);
   };
-
 
   // Modal handlers
   const openModal = (modalName: keyof typeof modalStates) => {
@@ -193,346 +281,420 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative">
-  {/* Hero Section - Slideshow */}
-  <section className="relative py-20 px-2 pr-44 text-black min-h-[90vh] flex items-center overflow-hidden">
-    <video
-      autoPlay
-      muted
-      loop
-      className="absolute top-0 left-0 w-full h-full object-cover z-0"
-      src={slides[currentSlide].videoSrc}
-    >
-      Your browser does not support the video tag.
-    </video>
-    <div className="container mx-auto max-w-screen-xl relative z-10">
-      {slides.map((slide, index) => (
-        <div
-          key={index}
-          className={`absolute inset-0 transition-opacity duration-1000 ${
-            currentSlide === index ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <div className="max-w-4xl text-left">
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-4 animate-fadeDown">
-              {slide.title}
+      {/* Inline CSS for scroll animations */}
+      <style>
+        {`
+          .section-hidden {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+          }
+          .section-visible {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          .section-delay-1 { transition-delay: 0.2s; }
+          .section-delay-2 { transition-delay: 0.4s; }
+          .section-delay-3 { transition-delay: 0.4s; }
+          .section-delay-4 { transition-delay: 0.4s; }
+          .section-delay-5 { transition-delay: 0.4s; }
+          .section-delay-6 { transition-delay: 0.4s; }
+        `}
+      </style>
+
+      {/* Header Section */}
+      <header className="fixed top-0 left-0 w-full backdrop-blur-md bg-white/10 border-b border-white/20 text-white shadow-lg z-[1002]">
+        <div className="container mx-auto max-w-screen-xl px-4 py-4 flex items-center justify-between relative">
+          <img src="/image/Ads2GoLogoText.png" alt="Ads2Go" className="h-8 sm:h-10 w-auto z-[1003]" />
+
+          {/* Hamburger Menu for Mobile */}
+          {isMobile && (
+            <HamburgerMenuOverlay
+              items={menuItems}
+              buttonTop="32px"
+              buttonLeft="calc(100% - 48px)"
+              buttonSize="md"
+              buttonColor="#ffffff"
+              overlayBackground="rgba(255, 255, 255, 0.95)"
+              textColor="#000000"
+              fontSize="md"
+              fontFamily="Inter, sans-serif"
+              fontWeight="semibold"
+              animationDuration={0.8}
+              staggerDelay={0.1}
+              menuAlignment="left"
+              keepOpenOnItemClick={false}
+              ariaLabel="Main navigation menu"
+              zIndex={1000}
+              enableBlur={true}
+            />
+          )}
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex space-x-6 md:space-x-8 z-[1003]">
+            <button
+              onClick={() => document.getElementById('home')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+            >
+              Home
+            </button>
+            <button
+              onClick={() => document.getElementById('about-us')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+            >
+              About Us
+            </button>
+            <button
+              onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+            >
+              Services
+            </button>
+            <button
+              onClick={() => document.getElementById('contact-us')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-base md:text-lg text-black/90 hover:text-[#F59E0B] transition-colors duration-300"
+            >
+              Contact Us
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      <section
+        id="home"
+        ref={(el) => (sectionRefs.current[0] = el)}
+        className="section-hidden section-delay-1 relative pt-16 sm:pt-20 pb-12 sm:pb-20 px-4 text-white min-h-[70vh] sm:min-h-[90vh] flex items-center overflow-hidden"
+      >
+        <img
+          src="/image/landing.jpg"
+          alt="Hero background"
+          className="absolute top-0 left-0 w-full h-full object-cover z-0"
+        />
+        <div className="absolute inset-0 bg-black/40 z-0"></div>
+        
+        <div className="container mx-auto max-w-screen-xl relative z-10">
+          <div className="max-w-full sm:max-w-4xl text-left px-4 sm:pl-8 md:pl-24">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 animate-fadeDown">
+              Capture Attention Where It Counts — On the Move
             </h1>
-            <p className="text-xl md:text-2xl mb-8 animate-fadeDown delay-100">
-              {slide.description}
+            <p className="text-sm sm:text-base md:text-lg mb-6 sm:mb-8 animate-fadeDown delay-100">
+              Boost your brand with mobile advertising that turns every ride into a powerful marketing opportunity. 
+              Reach your audience wherever they go, ensuring your message travels farther than ever before. 
+              Drive visibility, engagement, and measurable growth — anytime, anywhere.
             </p>
             <div className="flex flex-wrap gap-4">
-              <Link to={slide.buttonLink}>
-                <button className="px-6 py-3 text-sm font-semibold bg-[#F59E0B] text-white border rounded-[8px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300">
-                  {slide.buttonText}
+              <Link to="/login">
+                <button className="px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold bg-[#3674B5] text-white hover:bg-[#1B5087] hover:scale-105 transition-all duration-300">
+                  + Register Ad Campaign
                 </button>
               </Link>
-            </div>
-            {/* Circle Indicators */}
-            <div className="absolute bottom-90 left-1/2 transform -translate-x-1/2 flex gap-2 z-20">
-              {slides.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentSlide(index)}
-                  className={`w-3 h-3 rounded-full ${currentSlide === index ? 'bg-white' : 'bg-gray-400'} hover:bg-white transition-colors duration-300`}
-                ></button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </section>
-
-      {/* Why Ads2Go? Section */}
-      <section className="py-16 px-4 bg-white">
-        <div className="container mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-12 animate-fadeDown">Why Ads2Go?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">💰</div>
-              <h3 className="text-xl font-semibold mb-3">Cost-effective vs. billboards</h3>
-              <p className="text-[#475569]">Get more exposure for less cost compared to traditional billboard advertising</p>
-            </div>
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">📍</div>
-              <h3 className="text-xl font-semibold mb-3">Targeted routes (GPS tracking)</h3>
-              <p className="text-[#475569]">Reach your specific audience with precise GPS tracking and route optimization</p>
-            </div>
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">⚡</div>
-              <h3 className="text-xl font-semibold mb-3">Flexible pricing plans</h3>
-              <p className="text-[#475569]">Choose from various vehicle types and pricing options that fit your budget</p>
-            </div>
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">🚀</div>
-              <h3 className="text-xl font-semibold mb-3">Boosts brand awareness fast</h3>
-              <p className="text-[#475569]">See immediate results with mobile advertising that reaches thousands daily</p>
-            </div>
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">💵</div>
-              <h3 className="text-xl font-semibold mb-3">Extra income for drivers</h3>
-              <p className="text-[#475569]">Drivers earn passive income by displaying ads on their vehicles</p>
-            </div>
-            <div className="p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-              <div className="text-4xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold mb-3">Real-time analytics</h3>
-              <p className="text-[#475569]">Track performance with detailed reports and route heatmaps</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-16 px-4 bg-gray-50 flex items-center justify-center">
-  <div className="container mx-auto max-w-screen-xl text-center">
-    <h2 className="text-3xl font-bold mb-8 animate-fadeDown">Easily manage your ads in just a few simple steps</h2>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4">
-          <img
-            className="w-full h-auto rounded-lg"
-            src="/image/register-ad-realistic.jpg"
-            alt="Person registering ad campaign on laptop with vehicle options visible in background"
-          />
+      <section
+        id="about-us"
+        ref={(el) => (sectionRefs.current[1] = el)}
+        className="section-hidden section-delay-2 py-12 sm:py-16 px-4 bg-white"
+      >
+        <div className="container mx-auto max-w-screen-xl">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4 animate-fadeDown text-gray-900 text-left">
+            Why Ads2Go?
+          </h2>
+          <h3 className="text-xl sm:text-2xl text-black mb-8 sm:mb-12 max-w-2xl text-left">
+            Perfect for your business
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 max-w-7xl mx-auto">
+            {[
+              {
+                title: "Cost-effective vs. billboards",
+                desc: "Get more exposure for less cost compared to traditional billboard advertising",
+                img: "/image/i1.gif",
+              },
+              {
+                title: "Targeted routes (GPS tracking)",
+                desc: "Reach your specific audience with precise GPS tracking and route optimization",
+                img: "/image/i2.gif",
+              },
+              {
+                title: "Boosts brand awareness fast",
+                desc: "See immediate results with mobile advertising that reaches thousands daily",
+                img: "/image/i3.gif",
+              },
+              {
+                title: "Extra income for drivers",
+                desc: "Drivers earn passive income by displaying ads on their vehicles",
+                img: "/image/i4.gif",
+              },
+              {
+                title: "Real-time analytics",
+                desc: "Track performance with detailed reports and route heatmaps",
+                img: "/image/i5.gif",
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="p-4 sm:p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 bg-gradient-to-br from-gray-50 to-white relative flex flex-col items-center text-center"
+              >
+                <div className="absolute top-4 left-4 w-12 sm:w-16 h-12 sm:h-16">
+                  <img
+                    src={card.img}
+                    alt={card.title}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="pt-12 sm:pt-16 pb-6 flex-1 flex flex-col items-center mt-5 justify-center">
+                  <h3 className="text-base sm:text-lg font-semibold mb-2 text-left text-gray-900">{card.title}</h3>
+                  <p className="text-[#475569] text-sm sm:text-base leading-relaxed text-left">{card.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <h3 className="text-xl font-semibold mb-2">Register Your Ad</h3>
-        <p className="text-gray-600 mt-8">Submit your ad content, choose your preferred vehicle type (motorcycle, car, jeepney, bus), and select your campaign duration.</p>
-      </div>
-      <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4">
-          <img
-            className="w-full h-auto rounded-lg"
-            src="/image/launch-campaign-realistic.jpg"
-            alt="Laptop showing campaign dashboard with Launch Campaign button and vehicles with ads in background"
-          />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">Launch Your Campaign</h3>
-        <p className="text-gray-600 mt-8">Once approved, your ad goes live on vehicle LCDs or vinyl wraps, reaching thousands daily.</p>
-      </div>
-      <div className="p-6 rounded-lg shadow-md hover:scale-105 transition-all duration-300">
-        <div className="w-full max-w-xs mx-auto mb-4">
-          <img
-            className="w-full h-auto rounded-lg"
-            src="/image/track-performance-realistic.jpg"
-            alt="Laptop showing live campaign monitoring dashboard with analytics and driver locations on map"
-          />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">Track & Monitor Performance</h3>
-        <p className="text-gray-600 mt-8">Use the dashboard to track your ad in real-time, view routes, impressions, and get performance reports.</p>
-      </div>
-    </div>    
-  </div>
-</section>
+      </section>
 
-      {/* Vehicle Plans Section */}
-      <section className="py-16 px-4 bg-[#0EA5E9] text-white">
-        <div className="container mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12 animate-fadeDown">Pick the perfect ride and plan for your ad</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
-              <h3 className="text-3xl font-bold mb-2">Motorcycle Plan</h3>
-              <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱100,000/month</p>
-              <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
-                  Get Started
-                </button>
-              </Link>
-              <div className="mt-3 space-y-4">
-                <p className="text-md">Available in LCD Monitor or Vinyl Sticker</p>
-                <p className="text-md">Highly visible in dense traffic and urban areas</p>
-                <p className="text-md">Ideal for short-range but high-frequency exposure</p>
-                <p className="text-md">Perfect for local businesses, food outlets, and event promotions</p>
-                <p className="text-md">GPS tracking included</p>
-                <p className="text-md">Targeted routes available upon request</p>
-              </div>
+      <section
+        ref={(el) => (sectionRefs.current[2] = el)}
+        className="section-hidden section-delay-3 bg-gray-50 py-8 sm:py-12"
+      >
+        <h2 className="text-2xl sm:text-3xl font-bold pt-6 sm:pt-10 text-center">Our Advertisers Partner</h2>
+        <div className="max-w-6xl mx-auto px-4">
+          <LogoLoop
+            logos={techLogos}
+            speed={40}
+            gap={60}
+            pauseOnHover={true}
+            fadeOut={true}
+            fadeOutColor="#f9fafb"
+          />
+        </div>
+      </section>
+
+      <section
+        ref={(el) => (sectionRefs.current[3] = el)}
+        className="section-hidden section-delay-4 py-12 sm:py-20 px-4 bg-white"
+      >
+        <div className="container mx-auto max-w-screen-xl">
+          <div className="flex flex-col md:flex-row-reverse gap-6 sm:gap-8">
+            <div className="md:w-1/2">
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-semibold mb-4 sm:mb-6">About Us</h3>
+              <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
+                At Ads2Go, we revolutionize advertising by bringing brands to the streets. Our mission is to create dynamic, 
+                mobile advertising solutions that connect businesses with their audiences in innovative ways. Using cutting-edge 
+                technology like GPS tracking and LCD displays, we ensure your message reaches the right people at the right time.
+              </p>
+              <p className="text-sm sm:text-md text-[#475569]">
+                Founded in the Philippines, we empower drivers to earn extra income while helping businesses amplify their reach. 
+                Join us in transforming the way advertising moves.
+              </p>
             </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
-              <h3 className="text-3xl font-bold mb-2">Car Plan</h3>
-              <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱150,000/month</p>
-              <Link to="/login">
-                <button className="mt-5 mb-4 px-4 py-2 text-sm space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
-                  Get Started
-                </button>
-              </Link>
-              <div className="mt-3 space-y-4">
-                <p className="text-md">Equipped with Rear or Side LCD Display / Full-body Vinyl wrap optional</p>
-                <p className="text-md">Ideal for city and suburban routes</p>
-                <p className="text-md">Balanced exposure and mobility</p>
-                <p className="text-md">Suitable for mid-size campaigns or service promotions</p>
-                <p className="text-md">Includes scheduling, tracking, and reporting dashboard</p>
-                <p className="text-md">Optional: Custom campaign times (rush hour only, etc.)</p>
-              </div>
-            </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
-              <h3 className="text-3xl font-bold mb-2">Bus Plan</h3>
-              <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱300,000/month</p>
-              <Link to="/login">
-                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
-                  Get Started
-                </button>
-              </Link>
-              <div className="mt-3 space-y-4">
-                <p className="text-md">Available in large LCD Monitor or Full-body Vinyl wrap</p>
-                <p className="text-md">High visibility due to size and wide routes</p>
-                <p className="text-md">Covers main roads, terminals, and high-traffic locations</p>
-                <p className="text-md">Excellent for corporate, real estate, or product launches</p>
-                <p className="text-md">Long display time per location due to frequent stops</p>
-                <p className="text-md">Includes full analytics and route heatmaps</p>
-              </div>
-            </div>
-            <div className="bg-gray-50 text-black p-6 rounded-lg shadow-md text-center h-[500px] hover:scale-105 transition-all duration-300">
-              <h3 className="text-3xl font-bold mb-2">Jeepney Plan</h3>
-              <p className="text-sm mb-2 text-gray-600 font-bold">Starting at ₱180,000/month</p>
-              <Link to="/login">
-                <button className="mt-5 mb-4 px-4 text-sm py-2 space-y-2 bg-[#F59E0B] text-black rounded hover:bg-[#D97706] transition hover:scale-105 transition-all duration-300">
-                  Get Started
-                </button>
-              </Link>
-              <div className="mt-3 space-y-4">
-                <p className="text-md">Available in roof-mounted LCD or rear/side vinyl</p>
-                <p className="text-md">Covers key community and commuter-heavy routes</p>
-                <p className="text-md">Great for mass-market brands and political ads</p>
-                <p className="text-md">Includes flexible route assignment (within city zones)</p>
-                <p className="text-md">Budget-friendly option for high-volume local engagement</p>
-              </div>
+            <div className="md:w-1/2">
+              <img
+                src="/image/about.jpg"
+                alt="About Ads2Go"
+                className="w-full h-64 sm:h-80 object-cover shadow-md"
+              />
             </div>
           </div>
         </div>
       </section>
 
-      {/* For Drivers Section */}
-      <section className="py-20 px-4 bg-gradient-to-br from-[#F8FAFC] to-[#E2E8F0] relative overflow-hidden">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-10 left-10 w-32 h-32 bg-[#0EA5E9] rounded-full"></div>
-          <div className="absolute top-32 right-20 w-24 h-24 bg-[#F59E0B] rounded-full"></div>
-          <div className="absolute bottom-20 left-1/4 w-16 h-16 bg-[#10B981] rounded-full"></div>
-          <div className="absolute bottom-32 right-1/3 w-20 h-20 bg-[#0C4A6E] rounded-full"></div>
-        </div>
-        
-        <div className="container mx-auto text-center relative z-10">
-          <div className="max-w-4xl mx-auto">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-[#F59E0B] rounded-full mb-6 animate-bounce">
-              <span className="text-3xl">🚗</span>
-            </div>
-            <h2 className="text-5xl font-bold mb-6 animate-fadeDown bg-gradient-to-r from-[#0C4A6E] to-[#0EA5E9] bg-clip-text text-transparent">
-              Earn While You Drive
-            </h2>
-            <p className="text-xl text-[#475569] mb-10 animate-fadeDown delay-100 leading-relaxed">
-              Install LCD or vinyl wraps on your vehicle and get paid monthly. 
-              <br className="hidden md:block" />
-              Turn your daily commute into a money-making opportunity.
-            </p>
-            
-            {/* Benefits Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                <div className="text-3xl mb-3">💰</div>
-                <h3 className="font-semibold text-[#0C4A6E] mb-2">Passive Income</h3>
-                <p className="text-sm text-[#475569]">Earn money while doing your regular driving routes</p>
+      <section
+        id="services"
+        ref={(el) => (sectionRefs.current[4] = el)}
+        className="section-hidden section-delay-5 py-12 sm:py-16 px-4 bg-white flex items-center justify-center"
+      >
+        <div className="container mx-auto max-w-screen-xl text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-8 sm:mb-12">
+            Launch Ads in 3 Steps
+          </h2>
+          <div className="flex flex-col sm:flex-row justify-center items-start gap-6 sm:gap-10">
+            {[
+              {
+                img: "/image/L1.jpg",
+                title: "Register Your Ad",
+                desc: "Submit your ad content, choose your preferred vehicle type (motorcycle, car, jeepney, bus), and select your campaign duration.",
+              },
+              {
+                img: "/image/L2.jpg",
+                title: "Launch Your Campaign",
+                desc: "Once approved, your ad goes live on vehicle LCDs or vinyl wraps, reaching thousands daily.",
+              },
+              {
+                img: "/image/L3.jpg",
+                title: "Track & Monitor Performance",
+                desc: "Use the dashboard to track your ad in real-time, view routes, impressions, and get performance.",
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                className="relative w-full sm:w-80 max-w-full h-96 transition-transform duration-500 hover:scale-[1.03] flex-shrink-0"
+              >
+                <img
+                  className="absolute top-0 left-0 w-full h-56 sm:h-64 object-cover shadow-md z-0"
+                  src={card.img}
+                  alt={card.title}
+                />
+                <div
+                  className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-white/90 shadow-xl z-10 mx-2 sm:mx-3 transform -translate-y-4 text-left"
+                  style={{ height: '170px' }}
+                >
+                  <h3 className="text-lg sm:text-xl font-bold mb-2 sm:mb-3">{card.title}</h3>
+                  <p className="text-gray-600 text-sm sm:text-base">{card.desc}</p>
+                </div>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                <div className="text-3xl mb-3">📱</div>
-                <h3 className="font-semibold text-[#0C4A6E] mb-2">Easy Setup</h3>
-                <p className="text-sm text-[#475569]">Quick installation with professional support</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105">
-                <div className="text-3xl mb-3">📊</div>
-                <h3 className="font-semibold text-[#0C4A6E] mb-2">Track Earnings</h3>
-                <p className="text-sm text-[#475569]">Monitor your income through our dashboard</p>
-    </div>
-  </div>
-
-            <Link to="/login">
-              <button className="px-10 py-5 text-lg font-semibold bg-[#F59E0B] text-black border rounded-[12px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl">
-                Register as Driver
-        </button>
-            </Link>
-          </div>
-        </div>
-</section>
-
-      {/* Call to Action */}
-      <section className="py-20 px-4 bg-gradient-to-r from-[#0C4A6E] to-[#0EA5E9] text-white relative overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 left-0 w-full h-full">
-            <div className="absolute top-20 left-20 w-40 h-40 border-2 border-white rounded-full"></div>
-            <div className="absolute top-40 right-32 w-24 h-24 border-2 border-white rounded-full"></div>
-            <div className="absolute bottom-20 left-1/3 w-32 h-32 border-2 border-white rounded-full"></div>
-            <div className="absolute bottom-40 right-20 w-16 h-16 border-2 border-white rounded-full"></div>
-          </div>
-        </div>
-        
-        <div className="container mx-auto text-center relative z-10">
-          <div className="max-w-4xl mx-auto">
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-white bg-opacity-20 rounded-full mb-8 animate-pulse">
-              <span className="text-4xl">🚀</span>
-            </div>
-            <h2 className="text-6xl font-bold mb-6 animate-fadeDown">
-              Your ads deserve wheels.
-            </h2>
-            <p className="text-3xl text-white text-opacity-90 mb-10 animate-fadeDown delay-100 font-light">
-              Let's drive it forward.
-            </p>
-            
-            {/* Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-10">
-              <div className="text-center">
-                <div className="text-4xl font-bold text-[#F59E0B] mb-2">1000+</div>
-                <div className="text-white text-opacity-80">Active Vehicles</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl font-bold text-[#F59E0B] mb-2">50K+</div>
-                <div className="text-white text-opacity-80">Daily Impressions</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl font-bold text-[#F59E0B] mb-2">95%</div>
-                <div className="text-white text-opacity-80">Client Satisfaction</div>
-              </div>
-            </div>
-            
-            <Link to="/login">
-              <button className="px-12 py-6 text-xl font-semibold bg-[#F59E0B] text-black border rounded-[12px] hover:bg-[#D97706] hover:scale-105 transition-all duration-300 shadow-2xl hover:shadow-3xl">
-                Register your ads
-              </button>
-            </Link>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#0C4A6E] text-white py-8 px-4">
-        <div className="container mx-auto text-left">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <section
+        ref={(el) => (sectionRefs.current[5] = el)}
+        className="section-hidden section-delay-6"
+      >
+        <ScrollingTestimonials />
+      </section>
+
+      <section
+        id="contact-us"
+        ref={(el) => (sectionRefs.current[6] = el)}
+        className="section-hidden section-delay-6 py-12 sm:py-20 px-4 bg-white"
+      >
+        <div className="container mx-auto max-w-screen-xl">
+          <div className="flex flex-col md:flex-row gap-6 sm:gap-8">
+            <div className="md:w-1/2">
+              <h3 className="text-xl sm:text-2xl font-semibold mb-4 text-[#0C4A6E]">Get in Touch</h3>
+              <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
+                Have questions about our mobile advertising solutions or want to join as a driver? 
+                Reach out to our team, and we’ll get back to you as soon as possible. 
+                Your feedback and inquiries are important to us!
+              </p>
+              <p className="text-sm sm:text-md text-[#475569]">
+                Email: <a href="mailto:support@ads2go.com" className="hover:text-[#F59E0B] transition-colors duration-300">support@ads2go.com</a><br />
+                Phone: <a href="tel:+1234567890" className="hover:text-[#F59E0B] transition-colors duration-300">+1 (234) 567-890</a>
+              </p>
+            </div>
+            <div className="md:w-1/2">
+              <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-left text-gray-900">Contact Us</h2>
+              <form onSubmit={handleNewsletterSubmit} className="bg-white p-4 sm:p-6 shadow-md">
+                <div className="mb-4">
+                  <label htmlFor="contact-name" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                    Name
+                  </label>
+                  <input
+                    id="contact-name"
+                    type="text"
+                    value={contactForm.name}
+                    onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
+                    placeholder="Your name"
+                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                      contactStatus === 'error' && !contactForm.name.trim() ? 'border-2 border-red-500' : ''
+                    }`}
+                    style={{
+                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
+                      WebkitTextFillColor: '#000000'
+                    }}
+                    disabled={contactStatus === 'loading'}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="contact-email" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                    Email
+                  </label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    value={contactForm.email}
+                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    placeholder="Your email address"
+                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                      contactStatus === 'error' && !contactForm.email.trim() ? 'border-2 border-red-500' : ''
+                    }`}
+                    style={{
+                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
+                      WebkitTextFillColor: '#000000'
+                    }}
+                    disabled={contactStatus === 'loading'}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label htmlFor="contact-message" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                    Message
+                  </label>
+                  <textarea
+                    id="contact-message"
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                    placeholder="Your message"
+                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none h-24 sm:h-32 resize-y ${
+                      contactStatus === 'error' && !contactForm.message.trim() ? 'border-2 border-red-500' : ''
+                    }`}
+                    style={{
+                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
+                      WebkitTextFillColor: '#000000'
+                    }}
+                    disabled={contactStatus === 'loading'}
+                  />
+                </div>
+                <div className="relative">
+                  <button
+                    type="submit"
+                    disabled={contactStatus === 'loading'}
+                    className="px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold bg-[#3674B5] text-white hover:bg-[#1B5087] hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {contactStatus === 'loading' ? 'Sending...' : 'Send Message'}
+                  </button>
+                </div>
+                {contactMessage && (
+                  <div className={`mt-4 text-sm ${
+                    contactStatus === 'success' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {contactMessage}
+                  </div>
+                )}
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="relative bg-gradient-to-br from-[#1B5087] to-[#3674B5] overflow-hidden text-white py-8 px-4">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-0"></div>
+        <div className="relative z-10 container mx-auto max-w-screen-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
             <div>
-              <h3 className="pl-9 text-lg font-semibold mb-2">Ads2Go</h3>
-              <p className="pl-9 text-sm mb-2">Copyright © 2025 Ads2Go. All rights reserved.</p>
-              <div className="flex space-x-4 pl-9">
-                <a href="#" className="hover:text-teal-400"><span className="sr-only">Instagram</span>📸</a>
-                <a href="#" className="hover:text-teal-400"><span className="sr-only">Twitter</span>🐦</a>
-                <a href="#" className="hover:text-teal-400"><span className="sr-only">YouTube</span>🎥</a>
-              </div>
+              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Ads2Go</h3>
+              <p className="pl-4 sm:pl-9 text-sm mb-2">Copyright © 2025 Ads2Go. All rights reserved.</p>
             </div>
             <div>
-              <h3 className="pl-9 text-lg font-semibold mb-2">Company</h3>
-              <ul className="pl-9 space-y-2">
-                <li><button onClick={() => openModal('aboutUs')} className="hover:text-teal-400 text-left">About Us</button></li>
-                <li><button onClick={() => openModal('blog')} className="hover:text-teal-400 text-left">Blog</button></li>
-                <li><button onClick={() => openModal('contactUs')} className="hover:text-teal-400 text-left">Contact Us</button></li>
-                <li><button onClick={() => openModal('pricing')} className="hover:text-teal-400 text-left">Pricing</button></li>
+              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Company</h3>
+              <ul className="pl-4 sm:pl-9 space-y-2">
+                <li>
+                  <button onClick={() => openModal('aboutUs')} className="hover:text-teal-400 text-left">
+                    About Us
+                  </button>
+                </li>
+                <li>
+                  <button onClick={() => openModal('blog')} className="hover:text-teal-400 text-left">
+                    Blog
+                  </button>
+                </li>
               </ul>
             </div>
             <div>
-              <h3 className="pl-9 text-lg font-semibold mb-2">Support</h3>
-              <ul className="pl-9 space-y-2">
+              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Support</h3>
+              <ul className="pl-4 sm:pl-9 space-y-2">
                 <li><Link to="/help" className="hover:text-teal-400">Help Center</Link></li>
-                <li><button onClick={() => openModal('termsOfService')} className="hover:text-teal-400 text-left">Terms of Service</button></li>
-                <li><button onClick={() => openModal('legal')} className="hover:text-teal-400 text-left">Legal</button></li>
-                <li><button onClick={() => openModal('privacyPolicy')} className="hover:text-teal-400 text-left">Privacy Policy</button></li>
-                <li><button onClick={() => openModal('status')} className="hover:text-teal-400 text-left">Status</button></li>
+                <li>
+                  <button onClick={() => openModal('contactUs')} className="hover:text-teal-400 text-left">
+                    Contact Us
+                  </button>
+                </li>
               </ul>
             </div>
             <div>
-              <h3 className="pl-9 text-lg font-semibold mb-2">Stay up to date</h3>
+              <h3 className="text-lg font-semibold mb-2">Stay up to date</h3>
               <form onSubmit={handleNewsletterSubmit} className="mt-2">
                 <div className="relative">
                   <input
@@ -540,12 +702,12 @@ export default function Home() {
                     placeholder="Your email address"
                     value={newsletterEmail}
                     onChange={(e) => setNewsletterEmail(e.target.value)}
-                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none autofill:bg-[#F1F5F9] autofill:text-black autofill:shadow-[inset_0_0_0px_1000px_#F1F5F9] ${
+                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none ${
                       newsletterStatus === 'error' ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
-                      WebkitTextFillColor: '#000000'
+                      WebkitTextFillColor: '#000000',
                     }}
                     disabled={newsletterStatus === 'loading'}
                   />
@@ -558,9 +720,11 @@ export default function Home() {
                   </button>
                 </div>
                 {newsletterMessage && (
-                  <div className={`mt-2 text-sm pl-4 ${
-                    newsletterStatus === 'success' ? 'text-green-400' : 'text-red-400'
-                  }`}>
+                  <div
+                    className={`mt-2 text-sm pl-4 ${
+                      newsletterStatus === 'success' ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
                     {newsletterMessage}
                   </div>
                 )}
@@ -568,9 +732,14 @@ export default function Home() {
             </div>
           </div>
         </div>
+
         {showPopup && (
-          <div className="fixed bottom-4 right-4 bg-[#DCFCE7] text-black p-3 rounded shadow-lg z-50">
-            {newsletterStatus === 'success' ? 'Successfully subscribed! Check your email for confirmation.' : 'Request sent. Please check your email after a while'}
+          <div className="fixed bottom-4 right-4 bg-[#DCFCE7] text-black p-3 rounded shadow-lg z-50 max-w-[90%] sm:max-w-md">
+            {newsletterStatus === 'success'
+              ? 'Successfully subscribed! Check your email for confirmation.'
+              : contactStatus === 'success'
+              ? 'Message sent successfully!'
+              : 'Request sent. Please check your email after a while'}
           </div>
         )}
       </footer>

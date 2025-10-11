@@ -66,6 +66,17 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showVehicleDropdown, setShowVehicleDropdown] = useState(false);
   const [showMaterialDropdown, setShowMaterialDropdown] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Handle window resizing
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Get available material types based on vehicle and category
   const getAvailableMaterialTypes = (vehicleType: string, category: string) => {
@@ -124,24 +135,30 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+      <div className={`bg-white rounded-md ${isMobile ? 'p-4 w-full max-w-[90vw] max-h-[70vh] overflow-y-auto' : 'p-6 w-full max-w-md'} mx-4`}>
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-800">Create New Material</h2>
+          <h2 className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>Create New Material</h2>
+          <button
+            onClick={handleClose}
+            className="p-1 rounded-full hover:bg-gray-200"
+          >
+            <X size={isMobile ? 18 : 20} />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <label className="block text-sm font-bold text-gray-700 mb-1">
-              Category 
+            <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+              Category
             </label>
             <button
               type="button"
               onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-              className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              className={`flex items-center justify-between w-full ${isMobile ? 'text-xs py-2 px-2' : 'text-sm py-3 pl-3 pr-4'} text-black rounded-md shadow-md focus:outline-none bg-white gap-2`}
             >
               {categoryOptions.find(opt => opt.value === createForm.category)?.label}
               <ChevronDown
-                size={16}
+                size={isMobile ? 14 : 16}
                 className={`transform transition-transform duration-200 ${
                   showCategoryDropdown ? 'rotate-180' : 'rotate-0'
                 }`}
@@ -154,7 +171,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                 >
                   {categoryOptions.map(opt => (
                     <button
@@ -164,7 +181,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                         setCreateForm({...createForm, category: opt.value as 'DIGITAL' | 'NON_DIGITAL'});
                         setShowCategoryDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      className={`block w-full text-left px-4 py-2 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-700 hover:bg-gray-100 transition-colors duration-150`}
                     >
                       {opt.label}
                     </button>
@@ -175,17 +192,17 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
           </div>
 
           <div className="relative">
-            <label className="block text-sm font-bold text-gray-700 mb-1">
-              Vehicle Type 
+            <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+              Vehicle Type
             </label>
             <button
               type="button"
               onClick={() => setShowVehicleDropdown(!showVehicleDropdown)}
-              className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              className={`flex items-center justify-between w-full ${isMobile ? 'text-xs py-2 px-2' : 'text-sm py-3 pl-3 pr-4'} text-black rounded-md shadow-md focus:outline-none bg-white gap-2`}
             >
               {vehicleOptions.find(opt => opt.value === createForm.vehicleType)?.label}
               <ChevronDown
-                size={16}
+                size={isMobile ? 14 : 16}
                 className={`transform transition-transform duration-200 ${
                   showVehicleDropdown ? 'rotate-180' : 'rotate-0'
                 }`}
@@ -198,7 +215,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                 >
                   {vehicleOptions.map(opt => (
                     <button
@@ -208,7 +225,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                         setCreateForm({...createForm, vehicleType: opt.value as any});
                         setShowVehicleDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      className={`block w-full text-left px-4 py-2 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-700 hover:bg-gray-100 transition-colors duration-150`}
                     >
                       {opt.label}
                     </button>
@@ -219,17 +236,17 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
           </div>
 
           <div className="relative">
-            <label className="block text-sm font-bold text-gray-700 mb-1">
+            <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
               Material Type
             </label>
             <button
               type="button"
               onClick={() => setShowMaterialDropdown(!showMaterialDropdown)}
-              className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              className={`flex items-center justify-between w-full ${isMobile ? 'text-xs py-2 px-2' : 'text-sm py-3 pl-3 pr-4'} text-black rounded-md shadow-md focus:outline-none bg-white gap-2`}
             >
               {materialOptions.find(opt => opt.value === createForm.materialType)?.label}
               <ChevronDown
-                size={16}
+                size={isMobile ? 14 : 16}
                 className={`transform transition-transform duration-200 ${
                   showMaterialDropdown ? 'rotate-180' : 'rotate-0'
                 }`}
@@ -242,7 +259,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                 >
                   {materialOptions.map(opt => (
                     <button
@@ -252,7 +269,7 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
                         setCreateForm({...createForm, materialType: opt.value as any});
                         setShowMaterialDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      className={`block w-full text-left px-4 py-2 ${isMobile ? 'text-xs' : 'text-sm'} text-gray-700 hover:bg-gray-100 transition-colors duration-150`}
                     >
                       {opt.label}
                     </button>
@@ -263,40 +280,40 @@ const CreateMaterialModal: React.FC<CreateMaterialModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">
+            <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
               Description
             </label>
             <textarea
               value={createForm.description}
               onChange={(e) => setCreateForm({...createForm, description: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-200 shadow-md rounded-lg focus:outline-none"
+              className={`w-full ${isMobile ? 'px-2 py-1 text-sm h-20' : 'px-3 py-2 text-sm'} border border-gray-200 shadow-md rounded-md focus:outline-none`}
               placeholder="Enter description"
-              rows={3}
+              rows={isMobile ? 2 : 3}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">
+            <label className={`block text-sm font-bold text-gray-700 mb-1 ${isMobile ? 'text-xs' : 'text-sm'}`}>
               Requirements
             </label>
             <textarea
               value={createForm.requirements}
               onChange={(e) => setCreateForm({...createForm, requirements: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-200 shadow-md rounded-lg focus:outline-none"
+              className={`w-full ${isMobile ? 'px-2 py-1 text-sm h-20' : 'px-3 py-2 text-sm'} border border-gray-200 shadow-md rounded-md focus:outline-none`}
               placeholder="Enter material requirements"
-              rows={3}
+              rows={isMobile ? 2 : 3}
             />
           </div>
-          <div className="flex justify-between gap-3 pt-5">
+          <div className={`flex gap-3 pt-5 ${isMobile ? 'justify-between w-full' : 'justify-between'}`}>
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              className={`px-4 py-2 text-gray-700 rounded-md border hover:bg-gray-50 hover:text-gray-900 transition-colors ${isMobile ? 'w-20 text-xs' : 'w-24 text-sm'}`}
             >
               Cancel
             </button>
             <button
               disabled={creating}
-              className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+              className={`px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors disabled:bg-gray-400 ${isMobile ? 'w-40 text-xs' : 'w-36 text-sm'}`}
             >
               {creating ? 'Creating...' : 'Create Material'}
             </button>
