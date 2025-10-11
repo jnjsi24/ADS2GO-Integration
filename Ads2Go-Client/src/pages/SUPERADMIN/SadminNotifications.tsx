@@ -506,7 +506,20 @@ const SadminNotifications: React.FC = () => {
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
                             <div className="flex items-center space-x-1">
                               <Clock className="w-4 h-4" />
-                              <span>{formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}</span>
+                              <span>
+                                {(() => {
+                                  try {
+                                    const date = new Date(notification.createdAt);
+                                    if (isNaN(date.getTime())) {
+                                      return 'Unknown time';
+                                    }
+                                    return formatDistanceToNow(date, { addSuffix: true });
+                                  } catch (error) {
+                                    console.error('Error formatting date:', error, notification.createdAt);
+                                    return 'Unknown time';
+                                  }
+                                })()}
+                              </span>
                             </div>
                             <span className="capitalize">{notification.category.replace(/_/g, ' ')}</span>
                           </div>
