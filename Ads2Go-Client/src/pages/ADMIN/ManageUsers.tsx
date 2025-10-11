@@ -9,6 +9,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { ToastContainer } from '../../components/ToastNotification';
 
 interface User {
   id: string;
@@ -141,6 +142,26 @@ const ManageUsers: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+  
   // Responsive state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -260,14 +281,29 @@ const ManageUsers: React.FC = () => {
           setUsers(prev => prev.filter((user) => user.id !== userToDelete));
           if (selectedUser?.id === userToDelete) setSelectedUser(null);
           setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
-          alert('Advertiser deleted successfully');
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Advertiser deleted successfully',
+            duration: 5000
+          });
         } else {
-          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+          addToast({
+            type: 'error',
+            title: 'Error!',
+            message: 'Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'),
+            duration: 5000
+          });
         }
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (err: any) {
-        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Error deleting advertiser: ' + (err.message || 'Unknown error'),
+          duration: 5000
+        });
         console.error('Error deleting advertiser:', err);
         setShowDeleteModal(false);
         setUserToDelete(null);
@@ -932,6 +968,9 @@ const ManageUsers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
