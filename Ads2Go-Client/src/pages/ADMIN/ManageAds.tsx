@@ -628,9 +628,9 @@ const ManageAds: React.FC = () => {
           {/* Bottom row: Refresh button */}
           <button
             onClick={() => window.location.reload()}
-            className="px-3 py-2 text-sm bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600 flex items-center gap-2"
+            className="px-4 py-3 shadow-md text-sm font-semibold bg-white text-[#1B5087] rounded-md hover:bg-blue-600 flex items-center gap-2"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-5 h-5 " />
             Refresh
           </button>
         </div>
