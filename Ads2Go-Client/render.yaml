@@ -19,15 +19,15 @@ services:
         value: --max-old-space-size=4096
       # API Configuration
       - key: REACT_APP_API_URL
-        value: https://ads2go-server.onrender.com/graphql
+        value: https://ads2go-server-392g.onrender.com/graphql
       - key: REACT_APP_GRAPHQL_URL
-        value: https://ads2go-server.onrender.com/graphql
+        value: https://ads2go-server-392g.onrender.com/graphql
       - key: REACT_APP_SERVER_URL
-        value: https://ads2go-server.onrender.com
+        value: https://ads2go-server-392g.onrender.com
       - key: REACT_APP_CLIENT_URL
         value: https://ads2go-client-dxo4.onrender.com
       - key: REACT_APP_WS_URL
-        value: wss://ads2go-server.onrender.com
+        value: wss://ads2go-server-392g.onrender.com
       # Firebase Configuration
       - key: REACT_APP_FIREBASE_API_KEY
         value: AIzaSyBcJD2Ttm5ykalj-PK8T4ttgodGqVNc-Do
