@@ -42,7 +42,7 @@ services:
       - key: REACT_APP_FIREBASE_APP_ID
         value: 1:380830146533:web:b2892064cdffg9ba9f590c
       - key: REACT_APP_FIREBASE_MEASUREMENT_ID
-        value: G-3ZDZWP955
+        value: G-3ZD4ZWP955
       # Google OAuth Configuration
       - key: REACT_APP_GOOGLE_CLIENT_ID
         value: 380830146533-v0437o3dvc85i347bapggih30hvnjm1i.apps.googleusercontent.com
