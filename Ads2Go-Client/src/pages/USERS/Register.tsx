@@ -380,15 +380,22 @@ const Register: React.FC = () => {
     >
       <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
-      <div className="relative z-10 p-8 sm:p-10 
+      <div className="relative z-10 p-8 sm:p-10 mb-5 mt-5
                 rounded-xl shadow-2xl w-full max-w-xl
                 bg-transparent backdrop-blur-lg border border-white/30">
-        <h1 className="text-5xl font-bold text-center mb-6 text-white">
+        {/* Ads2Go Logo */}
+        <div className="flex justify-center mb-6">
+          <img 
+            src="/image/Ads2GoLogoText.png" 
+            alt="Ads2Go Logo" 
+            className="h-24 w-auto object-contain"
+          />
+        </div>
+        
+        {/* Login Title */}
+        <h1 className="text-3xl font-bold text-center mb-6 text-white">
           Sign up
         </h1>
-        <p className="text-sm text-center text-white mb-6">
-          Create your account to get started
-        </p>
 
         {registrationError && (
           <div className="bg-red-50/80 backdrop-blur-sm border-l-4 border-red-500 p-4 mb-4 rounded">
@@ -414,28 +421,6 @@ const Register: React.FC = () => {
           </div>
         )}
 
-        {/* Progress Indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center space-x-2">
-            {[1, 2, 3].map((stepNumber) => (
-              <React.Fragment key={stepNumber}>
-                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${
-                  step >= stepNumber 
-                    ? 'bg-blue-500 border-blue-500 text-white' 
-                    : 'border-white text-white'
-                }`}>
-                  {stepNumber}
-                </div>
-                {stepNumber < 3 && (
-                  <div className={`w-8 h-1 ${
-                    step > stepNumber ? 'bg-blue-500' : 'bg-white/50'
-                  }`}></div>
-                )}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-        
         <form onSubmit={step === 3 ? handleSubmit : (e) => e.preventDefault()} noValidate>
           {step === 1 && (
             <div className="space-y-6">
@@ -507,7 +492,6 @@ const Register: React.FC = () => {
                 required
                 error={errors.companyAddress}
               />
-
               <LocationAutocomplete
                 label="House Address"
                 value={formData.houseAddress}
@@ -521,7 +505,7 @@ const Register: React.FC = () => {
                 <button
                   type="button"
                   onClick={handlePrevious}
-                  className="flex-1 py-3 px-4 border border-white rounded-lg text-white font-semibold hover:bg-white/10 transition-colors"
+                  className="flex-1 py-3 px-4 rounded-lg text-white font-semibold bg-white/10 hover:bg-white/20 transition-colors"
                 >
                   Back
                 </button>
@@ -647,13 +631,12 @@ const Register: React.FC = () => {
           )}
         </form>
 
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-gray-300"></div>
-          <span className="mx-4 text-white text-sm">
+        <div className="my-6 flex justify-center">
+          <span className="text-white text-sm text-center">
             or continue with
           </span>
-          <div className="flex-grow border-t border-gray-300"></div>
         </div>
+
 
         <div className="flex justify-center space-x-4">
           <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">

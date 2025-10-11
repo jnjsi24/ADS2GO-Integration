@@ -386,17 +386,16 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onBlur={handleInputBlur}
             onClick={handleInputClick}
             placeholder=""
-            className={`peer w-full px-3 py-4 pr-20 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-transparent text-white placeholder-transparent transition ${
+            className={`peer w-full px-3 py-4 pr-20 border rounded-md shadow-sm focus:outline-none bg-transparent text-white placeholder-transparent transition ${
               error ? 'border-red-300' : 'border-gray-300'
             }`}
           />
           <label
             className={`absolute left-3 text-white bg-transparent transition-all duration-200 ${
-              (getLocationDisplay() || value) ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-3 peer-placeholder-shown:text-base'
-            } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+              (getLocationDisplay() || value) ? '-top-4 bg-black/20 text-sm p-1 font-bold' : 'peer-placeholder-shown:top-3 peer-placeholder-shown:text-base'
+            } peer-focus:-top-4 peer-focus:text-sm peer-focus:font-bold peer-focus:p-1 peer-focus:bg-black/30 peer-focus:backdrop-blur-lg`}
           >
             {label}
-            {required && <span className="text-red-500 ml-1">*</span>}
           </label>
           
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-1">
@@ -473,9 +472,6 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                     </>
                   )}
                 </div>
-                <span className="text-xs text-gray-400">
-                  Press ← to go back
-                </span>
               </div>
             </div>
           )}

@@ -222,7 +222,7 @@ const Login: React.FC = () => {
         className="absolute inset-0 w-full h-full object-cover z-0"
         style={{
           minWidth: '100%',
-          minHeight: '100%',
+          minHeight: '127%',
           width: 'auto',
           height: 'auto',
           position: 'absolute',
@@ -259,12 +259,12 @@ const Login: React.FC = () => {
           <img 
             src="/image/Ads2GoLogoText.png" 
             alt="Ads2Go Logo" 
-            className="h-24 w-auto object-contain"
+            className="h-12 w-auto object-contain"
           />
         </div>
         
         {/* Login Title */}
-        <h1 className="text-3xl font-bold text-center mb-6 text-white">
+        <h1 className="text-5xl font-bold text-center mb-6 text-white">
           Login
         </h1>
         
@@ -282,9 +282,9 @@ const Login: React.FC = () => {
             />
             <label
               htmlFor="email"
-              className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${email
-                ? '-top-2 text-sm text-black/70 font-bold' // 👈 If input has value, stay floated
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+              className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${email
+                ? '-top-2 text-sm text-white/70 font-bold'  
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
             >
               Enter your email 
             </label>
@@ -308,9 +308,9 @@ const Login: React.FC = () => {
 
               <label
                 htmlFor="password"
-                className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${password
-                  ? '-top-2 text-sm text-black/70 font-bold' // 👈 If input has value, stay floated
-                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${password
+                  ? '-top-2 text-sm text-white/70 font-bold'  
+                  : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-white'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-white/70 peer-focus:font-bold`}
               >
                 Enter your password
               </label>
@@ -389,13 +389,12 @@ const Login: React.FC = () => {
           </button>
         </form>
 
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-gray-300"></div>
-          <span className="mx-4 text-white text-sm">
+        <div className="my-6 flex justify-center">
+          <span className="text-white text-sm text-center">
             or continue with
           </span>
-          <div className="flex-grow border-t border-gray-300"></div>
         </div>
+
 
 
         <div className="flex justify-center space-x-4">
@@ -417,7 +416,7 @@ const Login: React.FC = () => {
 
         <div className="text-center mt-6 text-sm">
           <span className="text-white/70">Don't have an account?</span>
-          <Link to="/register" className="text-white/90 ml-1 underline hover:font-semibold">
+          <Link to="/register" className="text-blue-300 ml-1 underline hover:font-semibold">
             Create an account
           </Link>
         </div>

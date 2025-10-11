@@ -1,81 +1,193 @@
 import React, { useState, useEffect } from 'react';
+import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Mail, CalendarClock, CalendarCheck, ChevronDown, Edit, AlertCircle, CheckCircle, Clock, XCircle, FileText } from 'lucide-react';
+import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
-type ReportStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'all';
-type ReportType = 'BUG' | 'PAYMENT' | 'ACCOUNT' | 'CONTENT_VIOLATION' | 'FEATURE_REQUEST' | 'OTHER' | 'all';
+interface User {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
-interface UserReport {
+interface Report {
   id: string;
   title: string;
   description: string;
-  reportType: ReportType;
-  status: ReportStatus;
+  reportType: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  user: User;
   attachments: string[];
   adminNotes?: string;
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
 }
 
-interface ReportFilters {
-  reportType?: ReportType;
-  status?: ReportStatus;
-  startDate?: string;
-  endDate?: string;
-}
+type ReportStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
 
 const Reports: React.FC = () => {
-  const [filters, setFilters] = useState<ReportFilters>({});
+  const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
+  const [isMobile, setIsMobile] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  const [selectedReport, setSelectedReport] = useState<UserReport | null>(null);
-  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
-  const [updateData, setUpdateData] = useState({ status: '', adminNotes: '' });
-  const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState('All Types');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [expandedRow, setExpandedRow] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [showModalStatusDropdown, setShowModalStatusDropdown] = useState(false);
-  
+  const [updateData, setUpdateData] = useState({
+    status: 'PENDING' as ReportStatus,
+    adminNotes: ''
+  });
+
+  const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
+  const typeFilterOptions = ['All Types', 'BUG', 'FEATURE_REQUEST', 'COMPLAINT', 'OTHER'];
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const itemsPerPage = 10;
 
-  const { data, loading, error, refetch } = useQuery(GET_ALL_USER_REPORTS, {
-    variables: { filters, limit: 50, offset: 0 },
+  // Fetch reports using useQuery hook
+  const { data, loading, error } = useQuery(GET_ALL_USER_REPORTS, {
+    fetchPolicy: 'network-only',
   });
 
-  const [updateUserReportAdmin] = useMutation(UPDATE_USER_REPORT_ADMIN);
+  // Update report mutation
+  const [updateReport] = useMutation(UPDATE_USER_REPORT_ADMIN);
 
-  const reports: UserReport[] = data?.getAllUserReports?.reports || [];
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
 
-  const filteredReports = reports.filter((report) => {
-    const matchSearch = searchTerm
-      ? report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.user.email.toLowerCase().includes(searchTerm.toLowerCase())
-      : true;
-    return matchSearch;
-  });
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
-  // Pagination calculations
+  // Filter reports based on search term, status, and type
+  const filteredReports = data?.getAllUserReports?.reports?.filter((report: Report) => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = 
+      report.title.toLowerCase().includes(searchLower) ||
+      report.user.firstName.toLowerCase().includes(searchLower) ||
+      report.user.lastName.toLowerCase().includes(searchLower) ||
+      report.user.email.toLowerCase().includes(searchLower);
+    
+    const matchesStatus = selectedStatusFilter === 'All Status' || 
+      report.status === selectedStatusFilter.toUpperCase().replace(' ', '_');
+    
+    const matchesType = selectedTypeFilter === 'All Types' || 
+      report.reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
+    
+    return matchesSearch && matchesStatus && matchesType;
+  }) || [];
+
+  // Pagination logic
   const totalPages = Math.ceil(filteredReports.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedReports = filteredReports.slice(startIndex, endIndex);
 
-  // Pagination handlers
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatusFilter, selectedTypeFilter]);
+
+  const handleStatusFilterChange = (status: string) => {
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
+
+  const handleTypeFilterChange = (type: string) => {
+    setSelectedTypeFilter(type);
+    setShowTypeDropdown(false);
+  };
+
+  const handleRowClick = (report: Report) => {
+    setSelectedReport(report);
+    setExpandedRow(true);
+  };
+
+  const handleCloseDetailsModal = () => {
+    setExpandedRow(false);
+    setSelectedReport(null);
+  };
+
+  const handleSelectReport = (id: string) => {
+    setSelectedReports(prev =>
+      prev.includes(id)
+        ? prev.filter(reportId => reportId !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedReports.length === filteredReports.length) {
+      setSelectedReports([]);
+    } else {
+      setSelectedReports(filteredReports.map((report: Report) => report.id));
+    }
+  };
+
+  const handleUpdateReport = (report: Report) => {
+    setSelectedReport(report);
+    setUpdateData({
+      status: report.status,
+      adminNotes: report.adminNotes || ''
+    });
+    setIsUpdateModalOpen(true);
+  };
+
+  const handleUpdateSubmit = async () => {
+    if (!selectedReport) return;
+
+    try {
+      await updateReport({
+        variables: {
+          id: selectedReport.id,
+          status: updateData.status,
+          adminNotes: updateData.adminNotes
+        },
+        refetchQueries: [{ query: GET_ALL_USER_REPORTS }],
+      });
+      setIsUpdateModalOpen(false);
+      setSelectedReport(null);
+    } catch (error) {
+      console.error('Error updating report:', error);
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status: ReportStatus) => {
+    try {
+      await Promise.all(
+        selectedReports.map(id =>
+          updateReport({
+            variables: {
+              id,
+              status
+            }
+          })
+        )
+      );
+      setSelectedReports([]);
+      // Refetch data to update UI
+      // You might want to use Apollo Client's cache update instead
+    } catch (error) {
+      console.error('Error bulk updating reports:', error);
+    }
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -92,252 +204,138 @@ const Reports: React.FC = () => {
     }
   };
 
-  // Reset to first page when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, filters]);
-
-  const handleRowClick = (id: string) => {
-    setExpandedRow(expandedRow === id ? null : id);
-  };
-
-  const handleUpdateReport = (report: UserReport) => {
-    setSelectedReport(report);
-    setUpdateData({ status: report.status, adminNotes: report.adminNotes || '' });
-    setIsUpdateModalOpen(true);
-  };
-
-  const handleUpdateSubmit = async () => {
-    if (!selectedReport) return;
-    try {
-      await updateUserReportAdmin({
-        variables: {
-          id: selectedReport.id,
-          input: { status: updateData.status || undefined, adminNotes: updateData.adminNotes || undefined },
-        },
-      });
-      setIsUpdateModalOpen(false);
-      setSelectedReport(null);
-      refetch();
-    } catch (error) {
-      console.error('Error updating report:', error);
-    }
-  };
-
-  const handleSelectReport = (reportId: string) => {
-    setSelectedReports((prev) =>
-      prev.includes(reportId) ? prev.filter((id) => id !== reportId) : [...prev, reportId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedReports.length === data?.getAllUserReports?.reports?.length) {
-      setSelectedReports([]);
-    } else {
-      setSelectedReports(data?.getAllUserReports?.reports?.map((r: UserReport) => r.id) || []);
-    }
-  };
-
-  const handleBulkStatusUpdate = async (status: string) => {
-    if (selectedReports.length === 0) return;
-    try {
-      await Promise.all(
-        selectedReports.map((reportId) =>
-          updateUserReportAdmin({ variables: { id: reportId, input: { status } } })
-        )
-      );
-      setSelectedReports([]);
-      refetch();
-    } catch (error) {
-      console.error('Error updating reports:', error);
-    }
-  };
-
-  const getStatusIcon = (status: ReportStatus) => {
+  // Helper functions
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'PENDING':
-        return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'IN_PROGRESS':
-        return <AlertCircle className="w-4 h-4 text-blue-600" />;
-      case 'RESOLVED':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'CLOSED':
-        return <XCircle className="w-4 h-4 text-gray-600" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-600" />;
+      case 'PENDING': return 'bg-yellow-100 text-yellow-800';
+      case 'IN_PROGRESS': return 'bg-blue-100 text-blue-800';
+      case 'RESOLVED': return 'bg-green-100 text-green-800';
+      case 'CLOSED': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusColor = (status: ReportStatus) => {
-    switch (status) {
-      case 'PENDING':
-        return 'bg-yellow-200 text-yellow-800';
-      case 'IN_PROGRESS':
-        return 'bg-blue-200 text-blue-800';
-      case 'RESOLVED':
-        return 'bg-green-200 text-green-800';
-      case 'CLOSED':
-        return 'bg-gray-200 text-gray-800';
-      default:
-        return 'bg-gray-200 text-gray-800';
-    }
+  const getStatusIcon = (status: string) => {
+    // You can add icons here based on status
+    return null;
   };
 
   const formatDate = (dateString: string) => {
-    try {
-      if (!dateString) return 'No Date';
-      let date: Date;
-      if (dateString instanceof Date) {
-        date = dateString;
-      } else if (typeof dateString === 'string') {
-        date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-          const timestamp = parseInt(dateString);
-          if (!isNaN(timestamp)) date = new Date(timestamp);
-        }
-      } else {
-        return 'Invalid Format';
-      }
-      if (isNaN(date.getTime())) {
-        console.error('Invalid date string:', dateString);
-        return 'Invalid Date';
-      }
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch (error) {
-      console.error('Date formatting error:', error, 'Input:', dateString);
-      return 'Invalid Date';
-    }
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
-  const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
-  const typeFilterOptions = ['All Types', 'Bug', 'Payment', 'Account', 'Content Violation', 'Feature Request', 'Other'];
+  // Show loading state while authentication is being checked
+  if (authLoading || !isInitialized) {
+    return <AdminLoader />;
+  }
 
-  const handleStatusFilterChange = (status: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      status: status === 'All Status' ? undefined : status.toUpperCase().replace(' ', '_') as ReportStatus,
-    }));
-    setShowStatusDropdown(false);
-  };
-
-  const handleTypeFilterChange = (type: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      reportType: type === 'All Types' ? undefined : type.toUpperCase().replace(' ', '_') as ReportType,
-    }));
-    setShowTypeDropdown(false);
-    setShowModalStatusDropdown(false);
-  };
-
-  const selectedStatusFilter = filters.status
-    ? filters.status.charAt(0) + filters.status.slice(1).toLowerCase().replace('_', ' ')
-    : 'All Status';
-  const selectedTypeFilter = filters.reportType
-    ? filters.reportType.charAt(0) + filters.reportType.slice(1).toLowerCase().replace('_', ' ')
-    : 'All Types';
-
-  if (error) {
+  // Check if admin is authenticated
+  if (!admin) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex justify-center items-center">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-600">Error loading reports: {error.message}</p>
-          <button
-            onClick={() => refetch()}
-            className="mt-4 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA]"
-          >
-            Retry
-          </button>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
+          <p className="text-gray-600">You must be logged in to access this page.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Reports Management</h1>
+    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-52'}`}>
+  
+      {/* Mobile Header */}
+      {isMobile && (
+        <div className="flex items-center mb-4">
+          <h1 className="text-xl pt-7 font-bold text-gray-800">Reports Management</h1>
+        </div>
+      )}
+
+      {/* Header with Title and Filters */}
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+        {!isMobile && (
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Reports Management</h1>
+        )}
         <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-lg pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
               placeholder="Search by title, user name, or email"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <div className="relative w-32">
-              <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                {selectedStatusFilter}
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
-                />
-              </button>
-              <AnimatePresence>
-                {showStatusDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {statusFilterOptions.map((status) => (
-                      <button
-                        key={status}
-                        onClick={() => handleStatusFilterChange(status)}
-                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {status}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-            <div className="relative w-40">
-              <button
-                onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-              >
-                {selectedTypeFilter}
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform duration-200 ${showTypeDropdown ? 'rotate-180' : 'rotate-0'}`}
-                />
-              </button>
-              <AnimatePresence>
-                {showTypeDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                  >
-                    {typeFilterOptions.map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => handleTypeFilterChange(type)}
-                        className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="flex gap-2">
+              <div className="relative w-full sm:w-32">
+                <button
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{selectedStatusFilter}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showStatusDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {statusFilterOptions.map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => handleStatusFilterChange(status)}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              <div className="relative w-full sm:w-40">
+                <button
+                  onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{selectedTypeFilter}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showTypeDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showTypeDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {typeFilterOptions.map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => handleTypeFilterChange(type)}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
@@ -346,12 +344,12 @@ const Reports: React.FC = () => {
       {/* Bulk Actions Bar */}
       {selectedReports.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <span className="text-sm font-medium text-blue-800">
                 {selectedReports.length} report{selectedReports.length > 1 ? 's' : ''} selected
               </span>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => handleBulkStatusUpdate('IN_PROGRESS')}
                   className="px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded hover:bg-yellow-200"
@@ -374,7 +372,7 @@ const Reports: React.FC = () => {
             </div>
             <button
               onClick={() => setSelectedReports([])}
-              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium self-start sm:self-auto"
             >
               Clear Selection
             </button>
@@ -386,18 +384,18 @@ const Reports: React.FC = () => {
       {loading ? (
         <AdminLoader />
       ) : error ? (
-        <div className="text-center py-10 text-red-500">Error: {error}</div>
+        <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredReports.length === 0 ? (
         <div className="text-center py-10 text-gray-500">
           {searchTerm ? 'No reports match your search criteria' : 'No reports found'}
         </div>
       ) : (
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
+        <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
           <div className="col-span-3 flex items-center gap-2">
             <input
               type="checkbox"
               className="form-checkbox"
-              checked={selectedReports.length === data?.getAllUserReports?.reports?.length && data?.getAllUserReports?.reports?.length > 0}
+              checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
               onChange={handleSelectAll}
             />
             <span className="cursor-pointer truncate font-semibold" onClick={handleSelectAll}>
@@ -425,218 +423,276 @@ const Reports: React.FC = () => {
         {filteredReports.length === 0 ? (
           <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
         ) : (
-          paginatedReports.map((report) => (
-          <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
-            <div
-              className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
-              onClick={() => handleRowClick(report.id)}
-            >
-              <div className="col-span-3 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  checked={selectedReports.includes(report.id)}
-                  onChange={() => handleSelectReport(report.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <span className="truncate font-semibold" title={report.title}>
-                  {report.title}
-                </span>
+          paginatedReports.map((report: Report) => (
+            <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">
+              {/* Mobile Card View */}
+              <div className="md:hidden p-4">
+                <div className="flex items-start gap-2">
+                  {/* Checkbox */}
+                  <div className="flex-shrink-0 order-[-1]">
+                    <input type="checkbox" className="w-3 h-3" />
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span
+                        className="font-semibold text-gray-800 truncate overflow-hidden whitespace-nowrap"
+                        title={report.title}
+                      >
+                        {report.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span>{formatDate(report.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* User */}
+                    <div>
+                      <div className="font-medium">User:</div>
+                      <div>{report.user.firstName} {report.user.lastName}</div>
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                      <div className="font-medium">Category:</div>
+                      <div>{report.reportType.replace('_', ' ')}</div>
+                    </div>
+                  </div>
+
+                  {/* Status and Button */}
+                  <div className="flex justify-end gap-2 items-center">
+                    {getStatusIcon(report.status)}
+                    <span
+                      className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                        report.status
+                      )}`}
+                    >
+                      {report.status.replace('_', ' ')}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleUpdateReport(report);
+                      }}
+                      title="Update Report"
+                      className="flex items-center shadow-md text-gray-700 px-1 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                    >
+                      <Edit size={14} />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="col-span-2 truncate" title={`${report.user.firstName} ${report.user.lastName}`}>
-                {report.user.firstName} {report.user.lastName}
-              </div>
-              <div className="col-span-2 truncate">{report.reportType.replace('_', ' ')}</div>
-              <div className="col-span-2 flex items-center gap-1">
-                {getStatusIcon(report.status)}
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(report.status)}`}>
-                  {report.status.replace('_', ' ')}
-                </span>
-              </div>
-              <div className="col-span-2 truncate">{formatDate(report.createdAt)}</div>
-              <div className="col-span-1 flex items-center justify-center gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUpdateReport(report);
-                  }}
-                  className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
-                  title="Update Report"
-                >
-                  <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                  <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                    Update
+
+              {/* Desktop Table Row */}
+              <div
+                className="hidden md:grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm hover:bg-gray-100 transition-colors cursor-pointer rounded-lg"
+                onClick={() => handleRowClick(report)}
+              >
+                <div className="col-span-3 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={selectedReports.includes(report.id)}
+                    onChange={() => handleSelectReport(report.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="truncate font-semibold" title={report.title}>
+                    {report.title}
                   </span>
-                </button>
+                </div>
+                <div className="col-span-2 truncate" title={`${report.user.firstName} ${report.user.lastName}`}>
+                  {report.user.firstName} {report.user.lastName}
+                </div>
+                <div className="col-span-2 truncate">{report.reportType.replace('_', ' ')}</div>
+                <div className="col-span-2 flex items-center gap-1">
+                  {getStatusIcon(report.status)}
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(report.status)}`}>
+                    {report.status.replace('_', ' ')}
+                  </span>
+                </div>
+                <div className="col-span-2 truncate">{formatDate(report.createdAt)}</div>
+                <div className="col-span-1 flex items-center justify-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpdateReport(report);
+                    }}
+                    className="group flex items-center text-gray-700 overflow-hidden h-6 w-7 hover:w-20 transition-[width] duration-300"
+                    title="Update Report"
+                  >
+                    <Edit className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                    <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                      Update
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
-            {expandedRow === report.id && (
-            <div className="bg-white rounded-b-lg px-6 py-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                {/* Column 1 */}
-                <div className="space-y-4">
-                  <div>
-                    <strong>Description:</strong>
-                    <p className="mt-1 text-gray-700">{report.description}</p>
-                  </div>
-                  {report.adminNotes && (
-                    <div>
-                      <strong>Admin Notes:</strong>
-                      <p className="mt-1 text-gray-700 bg-white p-2 rounded-md border">
-                        {report.adminNotes}
-                      </p>
-                    </div>
-                  )}
+          ))
+        )}
+      </div>
+
+      {/* Details Modal */}
+      {expandedRow && selectedReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={handleCloseDetailsModal}>
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Report Details</h2>
+            </div>
+            <div className="p-6 space-y-6">
+              <div>
+                <strong className="text-sm font-bold text-gray-700">Description:</strong>
+                <p className="mt-1 text-gray-700">{selectedReport.description}</p>
+              </div>
+              {selectedReport.adminNotes && (
+                <div>
+                  <strong className="text-sm font-medium text-gray-700">Admin Notes:</strong>
+                  <p className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none">
+                    {selectedReport.adminNotes}
+                  </p>
                 </div>
-                <div className="space-y-4">
-                  {/* User Email */}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-600">User Email</span>
-                    </div>
-                    <p className="mt-1 font-semibold text-black">{report.user.email}</p>
-                  </div>
-
-                  {/* Last Updated */}
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CalendarClock className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm font-medium text-gray-600">Last Updated</span>
-                    </div>
-                    <p className="mt-1 font-semibold text-black">
-                      {formatDate(report.updatedAt)}
-                    </p>
-                  </div>
-
-                  {/* Resolved At */}
-                  {report.resolvedAt && (
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <CalendarCheck className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-medium text-gray-600">Resolved At</span>
-                      </div>
-                      <p className="mt-1 font-semibold text-black">
-                        {formatDate(report.resolvedAt)}
-                      </p>
-                    </div>
-                  )}
+              )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-gray-600" />
+                  <strong className="text-sm font-medium text-gray-700">User Email</strong>
                 </div>
-                {/* Column 3 */}
-                {report.attachments.length > 0 && (
-                  <div>
-                    <strong>Attachments:</strong>
-                    <div className="mt-2 space-y-3">
-                      {report.attachments.map((attachment, index) => {
-                        const isImage =
-                          attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
-                          attachment.includes("data:image/") ||
-                          (attachment.includes("firebasestorage.googleapis.com") &&
-                            (attachment.includes("image") ||
-                              attachment.match(/\.(jpg|jpeg|png|gif|webp)/i)));
-                        const isPdf =
-                          attachment.match(/\.pdf$/i) ||
-                          attachment.includes("application/pdf");
+                <p className="mt-1 font-semibold text-black">{selectedReport.user.email}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-yellow-500" />
+                  <strong className="text-sm font-medium text-gray-700">Last Updated</strong>
+                </div>
+                <p className="mt-1 font-semibold text-black">{formatDate(selectedReport.updatedAt)}</p>
+              </div>
+              {selectedReport.resolvedAt && (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CalendarCheck className="w-4 h-4 text-green-500" />
+                    <strong className="text-sm font-medium text-gray-700">Resolved At</strong>
+                  </div>
+                  <p className="mt-1 font-semibold text-black">{formatDate(selectedReport.resolvedAt)}</p>
+                </div>
+              )}
+              {selectedReport.attachments.length > 0 && (
+                <div>
+                  <strong className="text-sm font-bold text-gray-700">Attachments:</strong>
+                  <div className="mt-2 space-y-3">
+                    {selectedReport.attachments.map((attachment, index) => {
+                      const isImage =
+                        attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
+                        attachment.includes("data:image/") ||
+                        (attachment.includes("firebasestorage.googleapis.com") &&
+                          (attachment.includes("image") ||
+                            attachment.match(/\.(jpg|jpeg|png|gif|webp)/i)));
+                      const isPdf =
+                        attachment.match(/\.pdf$/i) ||
+                        attachment.includes("application/pdf");
 
-                        const getFileType = (url: string) => {
-                          if (isImage) return "image";
-                          if (isPdf) return "pdf";
-                          if (url.includes("data:text/")) return "text";
-                          return "file";
-                        };
+                      const getFileType = (url: string) => {
+                        if (isImage) return "image";
+                        if (isPdf) return "pdf";
+                        if (url.includes("data:text/")) return "text";
+                        return "file";
+                      };
 
-                        const fileType = getFileType(attachment);
-                        const fileName = `Attachment ${index + 1}`;
+                      const fileType = getFileType(attachment);
+                      const fileName = `Attachment ${index + 1}`;
 
-                        return (
-                          <div
-                            key={index}
-                            className="border border-gray-200 rounded-md p-3 bg-white"
-                          >
-                            {fileType === "image" ? (
-                              <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <FileText className="w-4 h-4 text-green-600" />
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {fileName}
-                                  </span>
-                                  <a
-                                    href={attachment}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 text-xs underline ml-auto"
-                                  >
-                                    Open in new tab
-                                  </a>
-                                </div>
-                                <div className="max-w-lg">
-                                  <img
-                                    src={attachment}
-                                    alt={fileName}
-                                    className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                                    onClick={() => window.open(attachment, "_blank")}
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none";
-                                      e.currentTarget.nextElementSibling?.classList.remove(
-                                        "hidden"
-                                      );
-                                    }}
-                                  />
-                                  <div className="hidden">
-                                    <a
-                                      href={attachment}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:text-blue-800 text-sm underline"
-                                    >
-                                      {fileName} (Image)
-                                    </a>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-3">
-                                <div className="flex-shrink-0">
-                                  {fileType === "pdf" ? (
-                                    <FileText className="w-5 h-5 text-red-600" />
-                                  ) : fileType === "text" ? (
-                                    <FileText className="w-5 h-5 text-blue-600" />
-                                  ) : (
-                                    <FileText className="w-5 h-5 text-gray-600" />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-gray-700">
-                                    {fileName}
-                                  </p>
-                                  <p className="text-xs text-gray-500 capitalize">
-                                    {fileType} file
-                                  </p>
-                                </div>
+                      return (
+                        <div
+                          key={index}
+                          className="border border-gray-200 rounded-md p-3 bg-white"
+                        >
+                          {fileType === "image" ? (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <FileText className="w-4 h-4 text-green-600" />
+                                <span className="text-sm font-medium text-gray-700">
+                                  {fileName}
+                                </span>
                                 <a
                                   href={attachment}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800 text-sm underline"
+                                  className="text-blue-600 hover:text-blue-800 text-xs underline ml-auto"
                                 >
-                                  Open
+                                  Open in new tab
                                 </a>
                               </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                              <div className="max-w-lg">
+                                <img
+                                  src={attachment}
+                                  alt={fileName}
+                                  className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                                  onClick={() => window.open(attachment, "_blank")}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    e.currentTarget.nextElementSibling?.classList.remove(
+                                      "hidden"
+                                    );
+                                  }}
+                                />
+                                <div className="hidden">
+                                  <a
+                                    href={attachment}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 text-sm underline"
+                                  >
+                                    {fileName} (Image)
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              <div className="flex-shrink-0">
+                                {fileType === "pdf" ? (
+                                  <FileText className="w-5 h-5 text-red-600" />
+                                ) : fileType === "text" ? (
+                                  <FileText className="w-5 h-5 text-blue-600" />
+                                ) : (
+                                  <FileText className="w-5 h-5 text-gray-600" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-700">
+                                  {fileName}
+                                </p>
+                                <p className="text-xs text-gray-500 capitalize">
+                                  {fileType} file
+                                </p>
+                              </div>
+                              <a
+                                href={attachment}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-sm underline"
+                              >
+                                Open
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          )}
-
           </div>
-        ))
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Pagination */}
       <div className="mt-auto flex justify-center py-4">
@@ -657,7 +713,7 @@ const Reports: React.FC = () => {
           <div className="flex space-x-1">
             {(() => {
               const pages = [];
-              const maxVisiblePages = 3; // show 3 numbers before ellipsis
+              const maxVisiblePages = 3;
               let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
               let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -681,7 +737,6 @@ const Reports: React.FC = () => {
                 );
               }
 
-              // Add ellipsis if not at the last page
               if (endPage < totalPages) {
                 pages.push(
                   <span key="ellipsis" className="px-2 text-gray-500">
@@ -728,7 +783,6 @@ const Reports: React.FC = () => {
                 <button
                   onClick={() => setShowModalStatusDropdown(!showModalStatusDropdown)}
                   className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-3 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-                  {/* Display human-readable status */}
                   {updateData.status
                     .replace('_', ' ')
                     .toLowerCase()
@@ -754,7 +808,6 @@ const Reports: React.FC = () => {
                         <button
                           key={status}
                           onClick={() => {
-                            // Convert human-readable back to API format
                             const apiStatus = status.toUpperCase().replace(' ', '_') as ReportStatus;
                             setUpdateData((prev) => ({ ...prev, status: apiStatus }));
                             setShowModalStatusDropdown(false);
@@ -768,7 +821,6 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
-
 
               {/* Admin Notes */}
               <div>
@@ -800,7 +852,6 @@ const Reports: React.FC = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

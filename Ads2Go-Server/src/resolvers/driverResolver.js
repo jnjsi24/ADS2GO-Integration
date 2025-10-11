@@ -715,6 +715,17 @@ createDriver: async (_, { input }) => {
       // Don't fail the approval if notification fails
     }
 
+    // Send notification to Super Admin
+    try {
+      const NotificationService = require('../services/notifications/NotificationService');
+      console.log('🔔 DriverResolver: Sending driver approval notification to Super Admin');
+      await NotificationService.sendDriverApprovalBySuperAdmin(driver.driverId, user.id);
+      console.log('✅ DriverResolver: Super Admin notification sent successfully');
+    } catch (notificationError) {
+      console.error('❌ DriverResolver: Error sending Super Admin notification:', notificationError);
+      // Don't fail the approval if notification fails
+    }
+
     return { 
       success: true, 
       message: 'Driver approved and material assigned successfully',
@@ -770,6 +781,17 @@ createDriver: async (_, { input }) => {
           console.log('✅ Driver rejection notification sent successfully');
         } catch (notificationError) {
           console.error('❌ Error sending driver rejection notification:', notificationError);
+          // Don't fail the rejection if notification fails
+        }
+
+        // Send notification to Super Admin
+        try {
+          const NotificationService = require('../services/notifications/NotificationService');
+          console.log('🔔 DriverResolver: Sending driver rejection notification to Super Admin');
+          await NotificationService.sendDriverRejectionBySuperAdmin(driver.driverId, user.id, reason);
+          console.log('✅ DriverResolver: Super Admin notification sent successfully');
+        } catch (notificationError) {
+          console.error('❌ DriverResolver: Error sending Super Admin notification:', notificationError);
           // Don't fail the rejection if notification fails
         }
 

@@ -276,7 +276,7 @@ const adResolvers = {
             ad.rejectTime = null;
             ad.reasonForReject = null;
             
-            // Send approval notification
+            // Send approval notification to user
             try {
               console.log('🔔 AdResolver: Sending approval notification for ad:', ad._id);
               await NotificationService.sendAdApprovalNotification(ad._id);
@@ -287,16 +287,36 @@ const adResolvers = {
               console.error('❌ AdResolver: Stack trace:', notificationError.stack);
               // Don't fail the ad update if notification fails
             }
+
+            // Send notification to Super Admin
+            try {
+              console.log('🔔 AdResolver: Sending ad approval notification to Super Admin');
+              await NotificationService.sendAdApprovalBySuperAdmin(ad._id, user.id);
+              console.log('✅ AdResolver: Super Admin notification sent successfully');
+            } catch (notificationError) {
+              console.error('❌ AdResolver: Error sending Super Admin notification:', notificationError);
+              // Don't fail the ad update if notification fails
+            }
           } else if (input.status === "REJECTED") {
             ad.rejectTime = new Date();
             ad.approveTime = null;
             ad.reasonForReject = input.reasonForReject || "No reason provided";
             
-            // Send rejection notification
+            // Send rejection notification to user
             try {
               await NotificationService.sendAdRejectionNotification(ad._id, ad.reasonForReject);
             } catch (notificationError) {
               console.error('Error sending rejection notification:', notificationError);
+              // Don't fail the ad update if notification fails
+            }
+
+            // Send notification to Super Admin
+            try {
+              console.log('🔔 AdResolver: Sending ad rejection notification to Super Admin');
+              await NotificationService.sendAdRejectionBySuperAdmin(ad._id, user.id, ad.reasonForReject);
+              console.log('✅ AdResolver: Super Admin notification sent successfully');
+            } catch (notificationError) {
+              console.error('❌ AdResolver: Error sending Super Admin notification:', notificationError);
               // Don't fail the ad update if notification fails
             }
           } else {
