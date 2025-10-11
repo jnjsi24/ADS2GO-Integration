@@ -23,6 +23,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
+import { ToastContainer } from '../../components/ToastNotification';
 
 import {
   GET_ALL_ADS,
@@ -249,17 +250,17 @@ const ManageAds: React.FC = () => {
       });
       addToast({
         type: 'success',
-        title: 'Ad Approved',
-        message: `Ad ${adId} approved successfully!`,
-        duration: 4000
+        title: 'Success!',
+        message: 'Advertisement has been accepted successfully',
+        duration: 5000
       });
     } catch (error) {
       console.error('Error approving ad:', error);
       addToast({
         type: 'error',
-        title: 'Approval Failed',
-        message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        duration: 6000
+        title: 'Error!',
+        message: 'Something went wrong.',
+        duration: 5000
       });
     } finally {
       // Remove from processing set
@@ -307,9 +308,9 @@ const ManageAds: React.FC = () => {
       });
       addToast({
         type: 'success',
-        title: 'Ad Rejected',
-        message: `Ad ${adToReject} rejected successfully!`,
-        duration: 4000
+        title: 'Success!',
+        message: 'Advertisement has been rejected successfully',
+        duration: 5000
       });
       setShowRejectModal(false);
       setRejectReason('');
@@ -318,9 +319,9 @@ const ManageAds: React.FC = () => {
       console.error('Error rejecting ad:', error);
       addToast({
         type: 'error',
-        title: 'Rejection Failed',
-        message: `Failed to reject ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        duration: 6000
+        title: 'Error!',
+        message: 'Something went wrong.',
+        duration: 5000
       });
     } finally {
       // Remove from processing set
@@ -628,9 +629,9 @@ const ManageAds: React.FC = () => {
           {/* Bottom row: Refresh button */}
           <button
             onClick={() => window.location.reload()}
-            className="px-3 py-2 text-sm bg-blue-500 text-white rounded-md shadow-md hover:bg-blue-600 flex items-center gap-2"
+            className="px-4 py-3 shadow-md text-sm font-semibold bg-white text-[#1B5087] rounded-md hover:bg-blue-600 flex items-center gap-2"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-5 h-5 " />
             Refresh
           </button>
         </div>
@@ -1033,6 +1034,9 @@ const ManageAds: React.FC = () => {
         onApplyFilter={handleApplyDateFilter}
         onDeleteFilter={handleDeleteDateFilter}
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

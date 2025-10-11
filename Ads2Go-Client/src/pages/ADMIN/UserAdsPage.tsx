@@ -12,6 +12,7 @@ import {
   Info,
   DollarSign,
 } from "lucide-react";
+import { AdminLoader } from "../../components/ProtectedRoute";
 import { motion, AnimatePresence } from "framer-motion";
 import { GET_ADS_BY_USER, GET_ALL_ADS,
   UPDATE_AD,
@@ -19,6 +20,7 @@ import { GET_ADS_BY_USER, GET_ALL_ADS,
   type Ad,
   type User } from "../../graphql/admin/ads";
 import { GET_ALL_USERS } from "../../graphql/admin/queries/manageUsers";
+import { ToastContainer } from "../../components/ToastNotification";
 
 interface QueryResult {
   getAdsByUser: Ad[];
@@ -39,8 +41,7 @@ const UserAdsPage: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adToDelete, setAdToDelete] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
-
-  
+  const [isMobile, setIsMobile] = useState<boolean>(window.innerWidth < 768);
 
   const [toasts, setToasts] = useState<Array<{
       id: string;
@@ -157,6 +158,13 @@ const UserAdsPage: React.FC = () => {
     }
   }, [data, searchTerm, selectedStatusFilter]);
 
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+
   const handleStatusFilterChange = (status: string) => {
     setSelectedStatusFilter(status);
     setShowStatusDropdown(false);
@@ -181,17 +189,17 @@ const UserAdsPage: React.FC = () => {
       });
       addToast({
         type: 'success',
-        title: 'Ad Approved',
-        message: `Ad ${adId} approved successfully!`,
-        duration: 4000
+        title: 'Success!',
+        message: 'Advertisement has been accepted successfully',
+        duration: 5000
       });
     } catch (error) {
       console.error('Error approving ad:', error);
       addToast({
         type: 'error',
-        title: 'Approval Failed',
-        message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        duration: 6000
+        title: 'Error!',
+        message: 'Something went wrong.',
+        duration: 5000
       });
     }
   };
@@ -211,9 +219,7 @@ const UserAdsPage: React.FC = () => {
       <div className="p-10 text-center text-gray-700">No user ID provided.</div>
     );
   if (loading)
-    return (
-      <div className="p-10 text-center text-gray-500">Loading ads...</div>
-    );
+    return <AdminLoader />;
   if (error)
     return (
       <div className="p-10 text-center text-red-500">
@@ -221,77 +227,108 @@ const UserAdsPage: React.FC = () => {
       </div>
     );
 
-  return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center mb-3">
-          <Link
-            to="/admin/users"
-            className="flex items-center text-gray-600 hover:text-gray-800"
-          >
-            <ChevronLeft size={24} />
-            <span className="ml-2 font-semibold">Back to Advertisers</span>
-          </Link>
+  return (<div
+    className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
+      isMobile ? "px-10 pl-28" : "md:pl-64 md:pr-5"
+    }`}
+  >
+
+    {/* Header */}
+    <div className="flex items-center pt-7 sm:pt-3 mb-3">
+      <Link
+        to="/admin/users"
+        className="flex items-center text-gray-600 hover:text-gray-800 text-xs sm:text-sm"
+      >
+        <ChevronLeft size={20} />
+        <span className="ml-2 font-semibold">Back to Advertisers</span>
+      </Link>
+    </div>
+
+
+    {/* Mobile Header */}
+    {isMobile && (
+      <div className="flex items-center mb-4">
+        <h1 className="text-xl font-bold text-gray-800">
+          Advertisements of <span className="font-bold">{userName}</span>
+        </h1>
+      </div>
+    )}
+
+    {/* Header with Title + Filters */}
+    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+      {!isMobile && (
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+          Advertisements of <span className="font-bold">{userName}</span>
+        </h1>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+        {/* Search Input */}
+        <div className="w-full lg:w-80">
+          <input
+            type="text"
+            className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
+            placeholder="Search by title..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h1 className="text-xl text-gray-800">
-            Advertisements of <span className="font-bold">{userName}</span>
-          </h1>
-
-          {/* Search + Filter */}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="text-xs text-black rounded-lg pl-4 py-2 w-64 shadow-md focus:outline-none bg-white"
-              placeholder="Search by title..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+        {/* Status Filter */}
+        <div
+          className={`relative flex-1 sm:flex-none ${
+            isMobile ? 'w-28 self-end' : 'sm:w-32'
+          }`}
+        >
+          <button
+            onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+            className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+          >
+            <span className="truncate">
+              {selectedStatusFilter === "All"
+                ? "All Status"
+                : capitalize(selectedStatusFilter)}
+            </span>
+            <ChevronDown
+              size={16}
+              className={`transform transition-transform duration-200 ${
+                showStatusDropdown ? "rotate-180" : ""
+              }`}
             />
-            <div className="relative w-32">
-              <button
-                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg px-4 py-2 shadow-md bg-white"
+          </button>
+
+          <AnimatePresence>
+            {showStatusDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className={`absolute z-10 top-full mt-2 ${
+                  isMobile ? 'right-0 w-24' : 'left-0 w-full'
+                } rounded-lg shadow-lg bg-white overflow-hidden`}
               >
-                {selectedStatusFilter === "All"
-                  ? "All Status"
-                  : capitalize(selectedStatusFilter)}
-                <ChevronDown
-                  size={16}
-                  className={`transition-transform ${
-                    showStatusDropdown ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              <AnimatePresence>
-                {showStatusDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute z-10 mt-2 w-full rounded-lg shadow-lg bg-white"
+                {statusFilterOptions.map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => {
+                      setSelectedStatusFilter(status);
+                      setShowStatusDropdown(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
                   >
-                    {statusFilterOptions.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => handleStatusFilterChange(s)}
-                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100"
-                      >
-                        {s === "All" ? "All Status" : capitalize(s)}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
+                    {status === "All" ? "All Status" : capitalize(status)}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
+    </div>
 
       {/* Table Header */}
-      <div className="grid grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] text-gray-700 text-sm font-semibold px-6 mb-4">
+      <div className="hidden md:grid grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] text-gray-700 text-sm font-semibold px-6 pt-4 mb-4">
         <div>Image</div>
         <div>Title</div>
         <div>Price</div>
@@ -300,7 +337,7 @@ const UserAdsPage: React.FC = () => {
         <div className="text-center">Actions</div>
       </div>
 
-      {/* Ads List with gaps */}
+      {/* Ads List */}
       <div className="space-y-4">
         {filteredAds.length === 0 ? (
           <div className="p-6 text-center text-gray-500 bg-white rounded-xl shadow-md">
@@ -309,44 +346,131 @@ const UserAdsPage: React.FC = () => {
         ) : (
           filteredAds.map((ad) => (
             <React.Fragment key={ad.id}>
-              {/* Main Row */}
+              {/* Row Container */}
               <div
-                className={`grid grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] items-center bg-white rounded-xl shadow-md px-6 py-4 transition-shadow duration-200 ${
+                className={`grid md:grid-cols-[7rem,1.3fr,0.8fr,1fr,1fr,10rem] bg-white rounded-xl shadow-md px-4 md:px-6 py-4 items-center transition-shadow duration-200 ${
                   expandedAdId === ad.id ? "shadow-lg" : "hover:shadow-lg"
                 } cursor-pointer`}
                 onClick={() => handleRowClick(ad.id)}
               >
-                {/* Image */}
-                <div className="w-16 h-16 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
-                  {ad.mediaFile ? (
-                    ad.adFormat === "IMAGE" ? (
-                      <img
-                        src={ad.mediaFile}
-                        alt={ad.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <video controls className="w-full h-full object-cover">
-                        <source src={ad.mediaFile} />
-                      </video>
-                    )
-                  ) : (
-                    <span className="text-gray-400 text-xs text-center">
-                      No Media
+                {/* Mobile Layout (Stacked Info) */}
+                <div className="md:hidden flex flex-col text-sm text-gray-800">
+                  {/* Top Row: Image + Info */}
+                  <div className="flex items-start gap-4">
+                    {/* Image */}
+                    <div className="w-24 h-24 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0">
+                      {ad.mediaFile ? (
+                        ad.adFormat === "IMAGE" ? (
+                          <img
+                            src={ad.mediaFile}
+                            alt={ad.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <video controls className="w-full h-full object-cover">
+                            <source src={ad.mediaFile} />
+                          </video>
+                        )
+                      ) : (
+                        <span className="text-gray-400 text-xs text-center">No Media</span>
+                      )}
+                    </div>
+
+                    {/* Title, Price, Date */}
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-semibold text-gray-900 leading-tight truncate">
+                          {ad.title}
+                        </h3>
+                        <p className="text-gray-600 text-sm">${ad.price.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">
+                          {new Date(ad.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Status + Buttons */}
+                  <div className="flex justify-end items-center mt-3 gap-2">
+                    {/* Status */}
+                    <span
+                      className={`px-3 py-1 text-xs font-medium rounded-full ${
+                        ad.status === "APPROVED" || ad.status === "RUNNING"
+                          ? "bg-green-200 text-green-800"
+                          : ad.status === "PENDING"
+                          ? "bg-yellow-200 text-yellow-800"
+                          : "bg-red-200 text-red-800"
+                      }`}
+                    >
+                      {capitalize(ad.status)}
                     </span>
-                  )}
+
+                    {/* Actions */}
+                    <div
+                      className="flex items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {ad.status === "PENDING" && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleApprove(ad.id);
+                            }}
+                            className="bg-green-200 text-green-700 text-xs rounded-md px-2 py-1 hover:bg-green-300"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReject(ad.id);
+                            }}
+                            className="bg-red-200 text-red-700 text-xs rounded-md px-2 py-1 hover:bg-red-300"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDelete(ad.id)}
+                        className="flex items-center text-red-700 px-3 py-1 rounded border border-red-200 hover:bg-red-50"
+                        >
+                        <Trash size={14} className="mr-1" />
+                        <span className="text-xs">Delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Title */}
-                <div className="font-medium text-gray-800 truncate">
+
+                {/* Desktop Columns */}
+                <div className="hidden md:flex items-center">
+                  <div className="w-16 h-16 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                    {ad.mediaFile ? (
+                      ad.adFormat === "IMAGE" ? (
+                        <img
+                          src={ad.mediaFile}
+                          alt={ad.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <video controls className="w-full h-full object-cover">
+                          <source src={ad.mediaFile} />
+                        </video>
+                      )
+                    ) : (
+                      <span className="text-gray-400 text-xs text-center">
+                        No Media
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="hidden md:block font-medium text-gray-800 truncate">
                   {ad.title}
                 </div>
-
-                {/* Price */}
-                <div>${ad.price.toFixed(2)}</div>
-
-                {/* Status */}
-                <div>
+                <div className="hidden md:block">${ad.price.toFixed(2)}</div>
+                <div className="hidden md:block">
                   <span
                     className={`px-3 py-1 text-xs font-medium rounded-full ${
                       ad.status === "APPROVED" || ad.status === "RUNNING"
@@ -359,20 +483,21 @@ const UserAdsPage: React.FC = () => {
                     {capitalize(ad.status)}
                   </span>
                 </div>
-
-                {/* Date Created */}
-                <div>{new Date(ad.createdAt).toLocaleDateString()}</div>
-                
-                {/* Actions */}
+                <div className="hidden md:block">
+                  {new Date(ad.createdAt).toLocaleDateString()}
+                </div>
                 <div
-                  className="flex items-center justify-center gap-1 w-[10rem]"
+                  className="hidden md:flex items-center justify-center gap-1 w-[10rem]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   {ad.status === "PENDING" && (
                     <>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleApprove(ad.id); }}
-                        className="group flex items-center bg-green-200 hover:bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleApprove(ad.id);
+                        }}
+                        className="group flex items-center bg-green-200 text-green-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-20 transition-[width] duration-300"
                       >
                         <Check className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                         <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
@@ -380,8 +505,11 @@ const UserAdsPage: React.FC = () => {
                         </span>
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); handleReject(ad.id); }}
-                        className="group flex items-center bg-red-200 hover:bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReject(ad.id);
+                        }}
+                        className="group flex items-center bg-red-200 text-red-700 rounded-md overflow-hidden shadow-md h-6 w-7 hover:w-16 transition-[width] duration-300"
                       >
                         <X className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
                         <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 text-xs whitespace-nowrap transition-all duration-300">
@@ -394,26 +522,26 @@ const UserAdsPage: React.FC = () => {
                     onClick={() => handleDelete(ad.id)}
                     className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                   >
-                    <Trash 
-                    className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                    size={16} />
+                    <Trash
+                      className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                      size={16}
+                    />
                     <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                    Delete
-                  </span>
+                      Delete
+                    </span>
                   </button>
                 </div>
               </div>
 
-              {/* Expanded Details Card */}
-              <AnimatePresence>
-                {expandedAdId === ad.id && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="overflow-hidden"
-                  >
+              {/* Expanded Card (unchanged) */}
+              {expandedAdId === ad.id && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
                     <div className="bg-gray-50 rounded-xl shadow-inner p-6 mt-[-1rem] mx-4 border border-t-0 border-gray-200">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* Column 1 */}
@@ -534,11 +662,13 @@ const UserAdsPage: React.FC = () => {
                     </div>
                   </motion.div>
                 )}
-              </AnimatePresence>
             </React.Fragment>
           ))
         )}
       </div>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

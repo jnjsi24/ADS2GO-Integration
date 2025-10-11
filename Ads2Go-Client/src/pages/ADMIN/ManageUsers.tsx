@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Mail, ChevronDown, Phone, MapPin, X, Eye, Trash, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USERS } from '../../graphql/admin/queries/manageUsers';
@@ -9,6 +9,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { ToastContainer } from '../../components/ToastNotification';
 
 interface User {
   id: string;
@@ -38,40 +39,30 @@ const parseDate = (dateString: any): Date | null => {
   if (!dateString) return null;
   
   try {
-    // Handle various date formats
     let date: Date;
     
-    // If it's already a number (timestamp)
     if (typeof dateString === 'number') {
       date = new Date(dateString);
     }
-    // If it's a string
     else if (typeof dateString === 'string') {
-      // Handle ISO string format
       if (dateString.includes('T') || dateString.includes('Z')) {
         date = new Date(dateString);
       }
-      // Handle timestamp as string
       else if (/^\d+$/.test(dateString)) {
         const timestamp = parseInt(dateString);
-        // If timestamp is in seconds, convert to milliseconds
         date = new Date(timestamp < 10000000000 ? timestamp * 1000 : timestamp);
       }
-      // Handle other string formats
       else {
         date = new Date(dateString);
       }
     }
-    // If it's already a Date object
     else if (dateString instanceof Date) {
       date = dateString;
     }
-    // Default fallback
     else {
       date = new Date(dateString);
     }
     
-    // Check if the date is valid
     if (isNaN(date.getTime())) {
       console.warn('Invalid date received:', dateString);
       return null;
@@ -111,15 +102,12 @@ const formatLastAccess = (date: Date | null): string => {
     const now = new Date();
     const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
     
-    // If within 24 hours, show "Today"
     if (diffInHours < 24) {
       return 'Today';
     }
-    // If within a week, show day name
     else if (diffInHours < 168) {
       return date.toLocaleDateString('en-US', { weekday: 'short' });
     }
-    // Otherwise show date
     else {
       return date.toLocaleDateString('en-US', { 
         month: 'short', 
@@ -146,18 +134,50 @@ const ManageUsers: React.FC = () => {
   const [selectedCityFilter, setSelectedCityFilter] = useState('All Cities');
 
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false); // New state for animation
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [adsCounts, setAdsCounts] = useState<Record<string, number>>({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+  
+  // Responsive state
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(6); // Show 10 advertisers per page
+  const [itemsPerPage, setItemsPerPage] = useState(9);
+
+  // Dynamic padding based on sidebar state
+  const contentPadding = sidebarCollapsed ? "pl-28" : "pl-64";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -167,18 +187,33 @@ const ManageUsers: React.FC = () => {
   // Delete user mutation
   const [deleteUser] = useMutation(DELETE_USER);
 
+  // Check screen size and setup responsive behavior
+  useEffect(() => {
+    const checkScreenSize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      // On mobile, we want less padding and collapsed sidebar by default
+      if (mobile) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
   // Transform users data when it changes
   useEffect(() => {
     if (usersData?.getAllUsers) {
       const userData = usersData.getAllUsers;
       
-      // Transform the data to match the User interface
       const transformedUsers: User[] = userData.map((user: any) => {
-        // Extract city from address (last part after comma)
         const addressParts = user.companyAddress?.split(',') || [];
         const city = addressParts.length > 1 ? addressParts[addressParts.length - 1].trim() : 'Unknown';
         
-        // Parse dates safely
         const lastLogin = parseDate(user.lastLogin);
         const createdAt = parseDate(user.createdAt) || new Date();
         const updatedAt = parseDate(user.updatedAt) || new Date();
@@ -243,20 +278,32 @@ const ManageUsers: React.FC = () => {
         });
         
         if (result.data?.deleteUser?.success) {
-          // Remove the user from the local state
           setUsers(prev => prev.filter((user) => user.id !== userToDelete));
           if (selectedUser?.id === userToDelete) setSelectedUser(null);
-
-          // Remove from selected users if it was selected
           setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
-          alert('Advertiser deleted successfully');
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Advertiser deleted successfully',
+            duration: 5000
+          });
         } else {
-          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+          addToast({
+            type: 'error',
+            title: 'Error!',
+            message: 'Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'),
+            duration: 5000
+          });
         }
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (err: any) {
-        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Error deleting advertiser: ' + (err.message || 'Unknown error'),
+          duration: 5000
+        });
         console.error('Error deleting advertiser:', err);
         setShowDeleteModal(false);
         setUserToDelete(null);
@@ -270,15 +317,14 @@ const ManageUsers: React.FC = () => {
   };
 
   const handleStatusFilterChange = (status: string) => {
-  setSelectedStatusFilter(status);
-  setShowStatusDropdown(false);
-};
+    setSelectedStatusFilter(status);
+    setShowStatusDropdown(false);
+  };
 
-const handleCityFilterChange = (city: string) => {
-  setSelectedCityFilter(city);
-  setShowCityDropdown(false);
-};
-
+  const handleCityFilterChange = (city: string) => {
+    setSelectedCityFilter(city);
+    setShowCityDropdown(false);
+  };
 
   // Filter users based on search term, status, and city
   const filteredUsers = users.filter((user) => {
@@ -311,7 +357,6 @@ const handleCityFilterChange = (city: string) => {
   const handleViewDetails = (user: User) => {
     setSelectedUser(user);
     setShowDetailsModal(true);
-    // Trigger animation after the modal is rendered
     setTimeout(() => {
       setIsModalOpen(true);
     }, 10);
@@ -323,7 +368,7 @@ const handleCityFilterChange = (city: string) => {
     setTimeout(() => {
       setShowDetailsModal(false);
       setSelectedUser(null);
-    }, 300); // Duration matches the transition duration
+    }, 300);
   };
 
   // Handle individual user selection
@@ -360,10 +405,8 @@ const handleCityFilterChange = (city: string) => {
     const allCurrentPageSelected = currentPageUserIds.every(id => selectedUsers.includes(id));
     
     if (allCurrentPageSelected) {
-      // Deselect all users on current page
       setSelectedUsers(prev => prev.filter(id => !currentPageUserIds.includes(id)));
     } else {
-      // Select all users on current page
       setSelectedUsers(prev => {
         const newSelection = [...prev];
         currentPageUserIds.forEach(id => {
@@ -378,71 +421,6 @@ const handleCityFilterChange = (city: string) => {
 
   const isAllSelected = paginatedUsers.length > 0 && paginatedUsers.every(user => selectedUsers.includes(user.id));
 
-  // Export to Excel function
-  const exportToExcel = () => {
-    try {
-      // Get the users to export (selected users or all users if none selected)
-      const usersToExport = selectedUsers.length > 0 
-        ? users.filter(user => selectedUsers.includes(user.id))
-        : filteredUsers;
-
-      // Prepare data for Excel
-      const excelData = usersToExport.map(user => ({
-        'First Name': user.firstName,
-        'Middle Name': user.middleName,
-        'Last Name': user.lastName,
-        'Email': user.email,
-        'Company': user.company,
-        'Contact': user.contact,
-        'Address': user.address,
-        'City': user.city,
-        'Status': user.status.charAt(0).toUpperCase() + user.status.slice(1),
-        'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
-        'Last Login': user.lastLogin ? formatLastAccess(user.lastLogin) : 'Never',
-        'Created At': user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '',
-        'Role': user.role
-      }));
-
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(excelData);
-
-      // Set column widths
-      const colWidths = [
-        { wch: 15 }, // First Name
-        { wch: 15 }, // Middle Name
-        { wch: 15 }, // Last Name
-        { wch: 25 }, // Email
-        { wch: 20 }, // Company
-        { wch: 15 }, // Contact
-        { wch: 30 }, // Address
-        { wch: 15 }, // City
-        { wch: 10 }, // Status
-        { wch: 12 }, // Email Verified
-        { wch: 15 }, // Last Login
-        { wch: 12 }, // Created At
-        { wch: 10 }  // Role
-      ];
-      ws['!cols'] = colWidths;
-
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, 'Advertisers');
-
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().split('T')[0];
-      const filename = `advertisers_export_${timestamp}.xlsx`;
-
-      // Save file
-      XLSX.writeFile(wb, filename);
-
-      // Show success message
-      alert(`Successfully exported ${usersToExport.length} advertiser(s) to ${filename}`);
-    } catch (error) {
-      console.error('Error exporting to Excel:', error);
-      alert('Error exporting to Excel. Please try again.');
-    }
-  };
-
   // Show loading state while authentication is being checked
   if (authLoading || !isInitialized) {
     return <AdminLoader />;
@@ -451,7 +429,7 @@ const handleCityFilterChange = (city: string) => {
   // Check if admin is authenticated
   if (!admin) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
+      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
           <p className="text-gray-600">You must be logged in to access this page.</p>
@@ -462,373 +440,476 @@ const handleCityFilterChange = (city: string) => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex justify-center items-center">
-        <div className="text-red-500 text-lg">{error}</div>
-        <div className="mt-2 text-sm text-gray-600">
-          Please check:
-          <ul className="list-disc list-inside mt-1">
-            <li>GraphQL server is running on port 5000</li>
-            <li>You have admin privileges</li>
-            <li>Authentication token is valid</li>
-          </ul>
+      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
+        <div className="text-center">
+          <div className="text-red-500 text-lg mb-4">{error}</div>
+          <div className="text-sm text-gray-600 mb-4">
+            Please check:
+            <ul className="list-disc list-inside mt-1">
+              <li>GraphQL server is running on port 5000</li>
+              <li>You have admin privileges</li>
+              <li>Authentication token is valid</li>
+            </ul>
+          </div>
+          <button 
+            className="px-4 py-2 bg-blue-500 text-white rounded"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
         </div>
-        <button 
-          className="ml-4 px-4 py-2 bg-blue-500 text-white rounded mt-4"
-          onClick={() => window.location.reload()}
-        >
-          Retry
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
-      {/* Header with Title and Filters */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Advertisers Management</h1>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-            placeholder="Search advertisers by name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {/* STATUS Filter */}
-          <div className="relative w-32">
-            <button
-              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-              {selectedStatusFilter}
-              <ChevronDown
-                size={16}
-                className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
-              />
-            </button>
-
-            <AnimatePresence>
-              {showStatusDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
-                >
-                  {statusFilterOptions.map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => handleStatusFilterChange(status)}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                    >
-                      {status}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+      <div
+      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
+        isMobile ? 'px-10 pl-28' : 'ml-52'
+      }`}
+    >
+    
+        {/* Mobile Header */}
+        {isMobile && (
+          <div className="flex items-center mb-4">
+            <h1 className="text-xl pt-7 font-bold text-gray-800">Advertisers Management</h1>
           </div>
+        )}
 
-          {/* CITY Filter */}
-          <div className="relative w-32">
-            <button
-              onClick={() => setShowCityDropdown(!showCityDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2">
-              {selectedCityFilter}
-              <ChevronDown
-                size={16}
-                className={`transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
-              />
-            </button>
+        {/* Header with Title and Filters */}
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+          {!isMobile && (
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
+          )}
+        
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+          {/* Search Input */}
+          <div className="w-full lg:w-80">
+            <input
+              type="text"
+              className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
+              placeholder="Search advertisers by name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            {/* STATUS Filter */}
+            <div className="relative flex-1 sm:flex-none sm:w-32">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{selectedStatusFilter}</span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
 
-            <AnimatePresence>
-              {showCityDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
-                >
-                  {cityFilterOptions.map((city) => (
-                    <button
-                      key={city}
-                      onClick={() => handleCityFilterChange(city)}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-                    >
-                      {city}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => handleStatusFilterChange(status)}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {status}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* CITY Filter */}
+            <div className="relative flex-1 sm:flex-none sm:w-32">
+              <button
+                onClick={() => setShowCityDropdown(!showCityDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{selectedCityFilter}</span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showCityDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showCityDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                  >
+                    {cityFilterOptions.map((city) => (
+                      <button
+                        key={city}
+                        onClick={() => handleCityFilterChange(city)}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
-      
 
-        {/* User List */}
-        {loading ? (
-          <AdminLoader />
-        ) : error ? (
-          <div className="text-center py-10 text-red-500">Error: {error}</div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-10 text-gray-500">
-            {searchTerm ? 'No drivers match your search criteria' : 'No drivers found'}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col">
-            <div className="rounded-xl mb-4 overflow-hidden flex-1">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-gray-600">
-                <div className="flex items-center gap-2 ml-1 col-span-3">
+      {/* User List */}
+      {loading ? (
+        <AdminLoader />
+      ) : error ? (
+        <div className="text-center py-10 text-red-500">Error: {error}</div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="text-center py-10 text-gray-500">
+          {searchTerm ? 'No advertisers match your search criteria' : 'No advertisers found'}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col">
+          <div className="rounded-xl mb-4 overflow-hidden flex-1">
+            {/* Table Header - Hidden on mobile */}
+            {!isMobile && (
+              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-black">
+                <div className="flex items-center gap-2 col-span-3">
                   <input
                     type="checkbox"
                     className="form-checkbox"
-                    onChange={(e) => {}}
+                    onChange={() => {}}
                     onClick={handleSelectAll}
                     checked={isAllSelected}
                   />
-                  <span className="cursor-pointer ml-2" onClick={handleSelectAll}>Name</span>
-                  <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
+                  <span className="cursor-pointer" onClick={handleSelectAll}>Name</span>
                 </div>
-                <div className="col-span-3 ml-16">Email</div>
+                <div className="col-span-3">Email</div>
                 <div className="col-span-2">Company</div>
-                <div className="col-span-1 flex items-center gap-1 ml-7">
+                <div className="col-span-1 flex items-center gap-1">
                   <span>Status</span>
-                  <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" /></svg>
                 </div>
-                <div className="col-span-2 ml-20">Last Access</div>
+                <div className="col-span-2 pl-16">Last Access</div>
                 <div className="col-span-1 text-center">Action</div>
               </div>
+            )}
 
             {/* User Cards */}
             {paginatedUsers.map((user) => (
               <div
                 key={user.id}
-                className="bg-white mb-3 rounded-lg shadow-md"
+                className="bg-white mb-3 rounded-lg shadow-md hover:bg-gray-50 transition-colors"
                 onClick={() => handleViewDetails(user)}
               >
-                <div
-                  className="grid grid-cols-12 gap-4 items-center px-5 py-4 text-sm transition-colors cursor-pointer rounded-lg group hover:bg-[#3674B5]"
-                >
-                  <div className="col-span-3 gap-4 flex items-center">
-                    <input
-                      type="checkbox"
-                      className="form-checkbox"
-                      checked={selectedUsers.includes(user.id)}
-                      onChange={() => {}}
-                      onClick={(e) => handleUserSelect(user.id, e)}
-                    />
-                    <div className="flex items-center">
-                      <div className="flex items-center justify-center w-8 h-8 mr-2 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                        {getInitials(user.firstName, user.lastName)}
+                {isMobile ? (
+                  // Mobile Card Layout
+                  <div className="p-4 cursor-pointer">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="form-checkbox"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => {}}
+                          onClick={(e) => handleUserSelect(user.id, e)}
+                        />
+                        <div className="flex items-center justify-center w-10 h-10 text-sm font-semibold text-white rounded-full bg-[#FF9D3D]">
+                          {getInitials(user.firstName, user.lastName)}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-gray-800">
+                            {user.firstName} {user.lastName}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate max-w-[150px]">
+                            {user.email}
+                          </div>
+                        </div>
                       </div>
-                      <span className="truncate font-semibold group-hover:text-white">
-                        {user.firstName} {user.middleName} {user.lastName}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-sm text-black mb-3">
+                      <div>
+                        <div className="font-medium">Company</div>
+                        <div className="truncate">{user.company}</div>
+                      </div>
+                      <div>
+                        <div className="font-medium">Last Access</div>
+                        <div>{formatLastAccess(user.lastLogin)}</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end gap-2">
+                    <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          user.status === 'active'
+                            ? 'bg-green-200 text-green-800'
+                            : 'bg-red-200 text-red-800'
+                        }`}
+                      >
+                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </span>
+                      <button
+                        className="flex items-center text-red-700 px-1 py-1 rounded shadow-md hover:bg-red-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(user.id);
+                        }}
+                      >
+                        <Trash size={14} />
+                      </button>
                     </div>
                   </div>
+                ) : (
+                  // Desktop Card Layout
+                  <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg">
+                    <div className="col-span-3 gap-3 flex items-center">
+                      <input
+                        type="checkbox"
+                        className="form-checkbox"
+                        checked={selectedUsers.includes(user.id)}
+                        onChange={() => {}}
+                        onClick={(e) => handleUserSelect(user.id, e)}
+                      />
+                      <div className="flex items-center">
+                        <div className="flex items-center justify-center w-8 h-8 mr-3 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
+                          {getInitials(user.firstName, user.lastName)}
+                        </div>
+                        <span className="truncate font-semibold">
+                          {user.firstName} {user.middleName} {user.lastName}
+                        </span>
+                      </div>
+                    </div>
 
-                  <div className="col-span-3 truncate group-hover:text-white">{user.email}</div>
-                  <div className="col-span-2 truncate group-hover:text-white">{user.company}</div>
+                    <div className="col-span-3 truncate">{user.email}</div>
+                    <div className="col-span-2 truncate">{user.company}</div>
 
-                  <div className="col-span-1 ml-8">
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        user.status === 'active'
-                          ? 'bg-green-200 text-green-800'
-                          : 'bg-red-200 text-red-800'
-                      } `}
-                    >
-                      {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                    </span>
-                  </div>
-
-                  <div className="col-span-2 truncate ml-10 text-center group-hover:text-white">
-                    {formatLastAccess(user.lastLogin)}
-                  </div>
-
-                  <div
-                    className="col-span-1 flex items-center justify-center gap-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                      onClick={() => handleDelete(user.id)}
-                      title="Delete"
-                    >
-                      <Trash 
-                        className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                        size={16} />
-                      <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                        Delete
+                    <div className="col-span-1">
+                      <span
+                        className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          user.status === 'active'
+                            ? 'bg-green-200 text-green-800'
+                            : 'bg-red-200 text-red-800'
+                        }`}
+                      >
+                        {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
                       </span>
-                    </button>
+                    </div>
+
+                    <div className="col-span-2 truncate text-center">
+                      {formatLastAccess(user.lastLogin)}
+                    </div>
+
+                    <div
+                      className="col-span-1 flex items-center justify-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        onClick={() => handleDelete(user.id)}
+                        title="Delete"
+                      >
+                        <Trash 
+                          className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Delete
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ))}
-            {paginatedUsers.length === 0 && (
-              <div className="p-4 text-center text-gray-500">
-                {users.length === 0 ? 'No advertisers found' : 'No advertisers match your search criteria'}
-              </div>
-            )}
-            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Details Modal */}
-        {showDetailsModal && selectedUser && (
+      {/* Details Modal - Responsive */}
+      {showDetailsModal && selectedUser && (
+        <div
+          className="fixed inset-0 z-50 overflow-hidden bg-black bg-opacity-50"
+          onClick={handleCloseModal}
+        >
           <div
-            className="fixed inset-0 z-50 overflow-hidden"
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-            onClick={handleCloseModal} // This closes the modal on outside click
+            className={`fixed ${
+              isMobile
+                ? 'inset-x-4 top-16 bottom-6 w-auto max-h-[80vh] rounded-md' // mobile/tablet layout
+                : 'top-2 bottom-2 right-2 w-full max-w-xl rounded-lg'        // desktop layout
+            } bg-white shadow-xl transform transition-all duration-300 ease-in-out ${
+              isModalOpen
+                ? isMobile
+                  ? 'scale-100 opacity-100'
+                  : 'translate-x-0 opacity-100'
+                : isMobile
+                  ? 'scale-95 opacity-0'
+                  : 'translate-x-full opacity-0'
+            }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
-              className={`fixed top-2 bottom-2 right-2 max-w-xl w-full bg-white shadow-xl rounded-lg transform transition-transform duration-300 ease-in-out ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}
-              onClick={(e) => e.stopPropagation()} // This stops the click from bubbling up and closing the modal
+              className={`h-full ${
+                isMobile ? 'p-4' : 'p-6'
+              } overflow-y-auto`}
             >
-              
-              {/* Modal Content */}
-              <div className="h-full p-6 overflow-y-auto">
-                {/* User Info Section */}
-                <div className="flex items-center mb-6">
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl font-bold text-white bg-[#FF9D3D] mr-4 shadow-md">
-                    {getInitials(selectedUser.firstName, selectedUser.lastName)}
-                  </div>
-                  <div>
-                    <div className="flex items-center flex-wrap gap-2">
-                      <h2 className="text-2xl font-bold text-gray-800">
-                        {selectedUser.firstName} {selectedUser.lastName}
-                      </h2>
-                      <span className={`px-2 py-1 text-xs ml-3 font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
-                        {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
+              {/* Close Button for Mobile */}
+              {isMobile && (
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-gray-800">User Details</h2>
+                  <button
+                    onClick={handleCloseModal}
+                    className="p-1 rounded-full hover:bg-gray-200"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              )}
+
+              {/* User Info Section */}
+              <div className="flex items-center mb-6">
+                <div className={`${isMobile ? 'w-12 h-12 text-xl' : 'w-16 h-16 text-2xl'} rounded-full flex items-center justify-center font-bold text-white bg-[#FF9D3D] mr-4 shadow-md`}>
+                  {getInitials(selectedUser.firstName, selectedUser.lastName)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-800 truncate`}>
+                      {selectedUser.firstName} {selectedUser.lastName}
+                    </h2>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${selectedUser.status === 'active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                      {selectedUser.status === 'active' ? 'Active' : 'Inactive'}
+                    </span>
+                    {!isMobile && (
+                      <span className="text-xs bg-gray-200 rounded-full px-2 py-1 text-gray-500">
+                        Last Access: {formatLastAccess(selectedUser.lastLogin)}
                       </span>
-                      <span className="text-xs bg-gray-200 rounded-full px-2 py-1 text-gray-500">Last Access: {formatLastAccess(selectedUser.lastLogin)}</span>
-                    </div>
-                    <p className="text-sm text-gray-500">{selectedUser.company}</p>
-                  </div>
-                </div>
-
-                {/* Counts Section (Ads/Drivers) */}
-                <div className="mb-6">
-                  <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
-                    <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
-                      <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
-                      <p className="text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
-                    </div>
-                  </Link>
-                </div>
-
-                {/* Account Details - Now a table */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-3">Account Details:</h3>
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr>
-                        {/* Left side */}
-                        <td className="w-1/2 align-top pr-4">
-                          <table className="w-full border-separate border-spacing-y-3">
-                            <tbody>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">ID:</td>
-                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.id}</td>
-                              </tr>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">City:</td>
-                                <td className="text-gray-600 text-right py-1 border-b border-gray-300">{selectedUser.city}</td>
-                              </tr>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2">
-                                  <span className="break-words">Email<br/>Verified:</span>
-                                </td>
-                                <td className="text-black text-right py-1">
-                                  {selectedUser.isEmailVerified ? "✔" : "✘"}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </td>
-
-                        {/* Right side */}
-                        <td className="w-1/2 align-top pl-4">
-                          <table className="w-full border-separate border-spacing-y-3">
-                            <tbody>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Last Login:</td>
-                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
-                                  {formatDate(selectedUser.lastLogin)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2 border-b border-gray-300">Created At:</td>
-                                <td className="text-gray-600 py-1 border-b border-gray-300 text-right">
-                                  {formatDate(selectedUser.createdAt)}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td className="font-bold text-gray-700 py-1 pr-2">Updated At:</td>
-                                <td className="text-gray-600 py-1 text-right">
-                                  {formatDate(selectedUser.updatedAt)}
-                                </td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* User Details */}
-                <div className="mb-6">
-                  <h3 className="text-lg font-bold mb-3">User Details:</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 text-sm">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Mail size={16} />
-                      <span>{selectedUser.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Phone size={16} />
-                      <span>{selectedUser.contact}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <MapPin size={16} />
-                      <p>{selectedUser.address}</p>
-                    </div>
-                    {selectedUser.houseAddress && (
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <MapPin size={16} />
-                        <p>House: {selectedUser.houseAddress}</p>
-                      </div>
                     )}
                   </div>
+                  <p className="text-sm text-gray-500 truncate">{selectedUser.company}</p>
+                  {isMobile && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Last Access: {formatLastAccess(selectedUser.lastLogin)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Counts Section */}
+              <div className="mb-6">
+                <Link to={`/admin/ads-by-user/${selectedUser.id}`}>
+                  <div className="bg-gray-100 p-4 rounded-lg text-center transition-colors hover:bg-gray-200 cursor-pointer">
+                    <p className="text-sm font-semibold text-gray-600">Advertisement Count:</p>
+                    <p className="text-2xl md:text-3xl font-bold text-gray-800">{selectedUser.ads.length}</p>
+                  </div>
+                </Link>
+              </div>
+
+              {/* Account Details */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-3">Account Details:</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-3">
+                    <div className="flex justify-between sm:border-b border-gray-300 pb-2">
+                      <span className="text-gray-600">ID:</span>
+                      <span className="font-semibold text-gray-700 text-right truncate">{selectedUser.id}</span>
+                    </div>
+                    <div className="flex justify-between sm:border-b border-gray-300 pb-2">
+                      <span className="text-gray-600">City:</span>
+                      <span className="font-semibold text-gray-700">{selectedUser.city}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Email Verified:</span>
+                      <span className="font-semibold text-gray-700">
+                        {selectedUser.isEmailVerified ? "✔" : "✘"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between sm:border-b border-gray-300 pb-2">
+                      <span className="text-gray-600">Last Login:</span>
+                      <span className="font-semibold text-gray-700 text-right">
+                        {isMobile
+                          ? formatLastAccess(selectedUser.lastLogin)
+                          : formatDate(selectedUser.lastLogin)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between sm:border-b border-gray-300 pb-2">
+                      <span className="text-gray-600">Created At:</span>
+                      <span className="font-semibold text-gray-700 text-right">
+                        {isMobile
+                          ? new Date(selectedUser.createdAt).toLocaleDateString()
+                          : formatDate(selectedUser.createdAt)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Updated At:</span>
+                      <span className="font-semibold text-gray-700 text-right">
+                        {isMobile
+                          ? new Date(selectedUser.updatedAt).toLocaleDateString()
+                          : formatDate(selectedUser.updatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+              {/* User Details */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold mb-3">User Details:</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Mail size={16} />
+                    <span className="break-all font-semibold text-gray-700">{selectedUser.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Phone size={16} />
+                    <span className="font-semibold text-gray-700">{selectedUser.contact}</span>
+                  </div>
+                  <div className="flex items-start gap-2 text-gray-600">
+                    <MapPin size={16} className="mt-0.5 flex-shrink-0" />
+                    <p className="break-words font-semibold text-gray-700">{selectedUser.address}</p>
+                  </div>
+                  {selectedUser.houseAddress && (
+                    <div className="flex items-start gap-2 text-gray-600">
+                      <MapPin size={16} className="mt-0.5 flex-shrink-0" />
+                      <p className="break-words font-semibold text-gray-700">House: {selectedUser.houseAddress}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Pagination */}
+      {/* Pagination */}
+      {filteredUsers.length > 0 && (
         <div className="mt-auto flex justify-center py-4">
-          <div className="flex items-center space-x-2">
-            {/* Previous button */}
+          <div className="flex items-center space-x-1 sm:space-x-2">
             <button
               onClick={handlePreviousPage}
               disabled={currentPage === 1}
-              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
-              Previous
+              <span className="hidden sm:inline">Previous</span>
             </button>
 
-            {/* Page numbers */}
             <div className="flex space-x-1">
               {(() => {
                 const pages = [];
-                const maxVisiblePages = 3; // show 3 numbers before ellipsis
+                const maxVisiblePages = isMobile ? 1 : 3;
                 let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
                 let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -841,7 +922,7 @@ const handleCityFilterChange = (city: string) => {
                     <button
                       key={i}
                       onClick={() => handlePageChange(i)}
-                      className={`px-3 py-1 text-sm rounded ${
+                      className={`px-2 sm:px-3 py-1 text-sm rounded ${
                         currentPage === i
                           ? "border border-gray-300 text-black" 
                           : "text-gray-700 hover:border border-gray-300"
@@ -852,8 +933,7 @@ const handleCityFilterChange = (city: string) => {
                   );
                 }
 
-                // Add ellipsis if not at the last page
-                if (endPage < totalPages) {
+                if (endPage < totalPages && !isMobile) {
                   pages.push(
                     <span key="ellipsis" className="px-2 text-gray-500">
                       …
@@ -865,17 +945,17 @@ const handleCityFilterChange = (city: string) => {
               })()}
             </div>
 
-            {/* Next button */}
             <button
               onClick={handleNextPage}
               disabled={currentPage === totalPages}
-              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next
+              <span className="hidden sm:inline">Next</span>
               <ChevronRight className="w-4 h-4 ml-1" />
             </button>
           </div>
         </div>
+      )}
       
       {/* Confirmation Modal */}
       <ConfirmationModal
@@ -888,6 +968,9 @@ const handleCityFilterChange = (city: string) => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

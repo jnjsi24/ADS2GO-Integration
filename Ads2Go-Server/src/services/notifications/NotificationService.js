@@ -132,6 +132,39 @@ class NotificationService {
     return await SuperAdminNotificationService.sendDatabaseIssueNotification(issue, details);
   }
 
+  // Admin action notifications to superadmin
+  static async sendAdApprovalBySuperAdmin(adId, adminId) {
+    return await SuperAdminNotificationService.sendAdApprovalBySuperAdmin(adId, adminId);
+  }
+
+  static async sendAdRejectionBySuperAdmin(adId, adminId, reason) {
+    return await SuperAdminNotificationService.sendAdRejectionBySuperAdmin(adId, adminId, reason);
+  }
+
+  static async sendDriverApprovalBySuperAdmin(driverId, adminId) {
+    return await SuperAdminNotificationService.sendDriverApprovalBySuperAdmin(driverId, adminId);
+  }
+
+  static async sendDriverRejectionBySuperAdmin(driverId, adminId, reason) {
+    return await SuperAdminNotificationService.sendDriverRejectionBySuperAdmin(driverId, adminId, reason);
+  }
+
+  static async sendMaterialApprovalBySuperAdmin(materialId, adminId) {
+    return await SuperAdminNotificationService.sendMaterialApprovalBySuperAdmin(materialId, adminId);
+  }
+
+  static async sendMaterialRejectionBySuperAdmin(materialId, adminId, reason) {
+    return await SuperAdminNotificationService.sendMaterialRejectionBySuperAdmin(materialId, adminId, reason);
+  }
+
+  static async sendUserApprovalBySuperAdmin(userId, adminId) {
+    return await SuperAdminNotificationService.sendUserApprovalBySuperAdmin(userId, adminId);
+  }
+
+  static async sendUserRejectionBySuperAdmin(userId, adminId, reason) {
+    return await SuperAdminNotificationService.sendUserRejectionBySuperAdmin(userId, adminId, reason);
+  }
+
   // ==================== EMAIL NOTIFICATIONS ====================
 
   static async sendAdApprovalEmail(email, firstName, adTitle, adId) {

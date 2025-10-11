@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -7,18 +7,16 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { useQuery } from '@apollo/client';
-import { GET_OWN_ADMIN_DETAILS } from '../../graphql/admin';
-import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS  } from '../../graphql/admin/queries';
-import DeviceStatus from '../../components/DeviceStatus';
-import AirtimeAvailability from '../../components/AirtimeAvailability';
-import DynamicNotificationList from './tabs/dashboard/DynamicNotificationList';
+import { useQuery } from "@apollo/client";
+import { GET_OWN_ADMIN_DETAILS } from "../../graphql/admin";
+import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS } from "../../graphql/admin/queries";
+import DeviceStatus from "../../components/DeviceStatus";
+import AirtimeAvailability from "../../components/AirtimeAvailability";
+import DynamicNotificationList from "./tabs/dashboard/DynamicNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
 
-// GraphQL query to get admin details
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
 
-// Dummy data for the Ad Impressions & QR Scans chart
 const adPerformanceData = [
   { month: "Jan", impressions: 7000, qrScans: 4000 },
   { month: "Feb", impressions: 8000, qrScans: 5000 },
@@ -31,122 +29,88 @@ const adPerformanceData = [
 
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("Admin");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Fetch admin details from the backend
+  // Auto detect sidebar collapse based on window width
+  useEffect(() => {
+    const handleResize = () => setSidebarCollapsed(window.innerWidth < 1024);
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
     onCompleted: (data) => {
-      if (data && data.getOwnAdminDetails) {
+      if (data?.getOwnAdminDetails) {
         const admin = data.getOwnAdminDetails;
         setAdminName(`${admin.firstName} ${admin.lastName}`);
       }
     },
-    onError: (error) => {
-      console.error("Error fetching admin details:", error);
-    }
+    onError: (error) => console.error("Error fetching admin details:", error),
   });
 
-  // Fetch admin dashboard stats
   const { data: statsData, loading: statsLoading } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
-    pollInterval: 5000, // Refresh every 5 seconds for faster updates
-    onCompleted: (data) => {
-      console.log('🔔 Frontend: Dashboard stats received:', data);
-    },
-    onError: (error) => {
-      console.error("Error fetching admin dashboard stats:", error);
-    }
+    pollInterval: 5000,
+    onError: (error) => console.error("Error fetching admin dashboard stats:", error),
   });
 
-  // Fetch pending ads to pass pendingAdsCount to DynamicNotificationList
   const { data: pendingAdsData, loading: pendingAdsLoading } = useQuery(GET_PENDING_ADS, {
     pollInterval: 30000,
-    onCompleted: (data) => {
-      console.log('🔔 Frontend: Pending ads data received:', data);
-    },
-    onError: (error) => {
-      console.error("Error fetching pending ads:", error);
-    }
+    onError: (error) => console.error("Error fetching pending ads:", error),
   });
 
   if (loading || statsLoading || pendingAdsLoading) return <AdminLoader />;
 
-  if (error) return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
-      <div className="text-red-500">Error loading admin details: {error.message}</div>
-    </div>
-  );
+  if (error)
+    return (
+      <div className="p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+        <div className="text-red-500">Error loading admin details: {error.message}</div>
+      </div>
+    );
 
   const stats = statsData?.getAdminDashboardStats;
   const pendingAdsCount = pendingAdsData?.getPendingAds?.length || 0;
 
+  // Adjust padding depending on sidebar width
+  const contentPadding = sidebarCollapsed ? "pl-28" : "pl-64";
+
   return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
+    <div
+      className={`p-6 ${contentPadding} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}
+    >
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800">
+          <h2 className="text-2xl pt-3 font-semibold text-gray-800">
             Welcome back, {adminName}!
           </h2>
           <p className="text-sm text-gray-500">
             It is the best time to manage your finances
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Calendar icon and 'This month' button */}
-          <div className="flex items-center bg-white border border-gray-200 rounded-lg px-4 py-2 shadow-sm text-gray-700 text-sm cursor-pointer">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5 mr-2 text-gray-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            This month
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4 ml-2 text-gray-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </div>
-        </div>
       </div>
 
-      {/* Two-Column Layout for Driver Cards and Airtime Availability */}
+      {/* Stats & Notifications */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-        {/* Driver Cards (Left Column) */}
-        <div className="lg:col-span-4 space-y-6">
+        {/* Left column */}
+        <div className="lg:col-span-4 space-y-6 ">
           {[
             {
               label: "Total Drivers",
               value: stats?.totalDrivers || 0,
               change: `${stats?.newDriversToday || 0} new today`,
-              up: true
+              up: true,
             },
             {
               label: "Pending Drivers",
               value: stats?.pendingDrivers || 0,
               change: "Awaiting review",
-              up: false
+              up: false,
             },
           ].map((stat, i) => (
             <div
               key={i}
-              className="bg-white p-5 rounded-2xl shadow-sm flex flex-col justify-between"
+              className="bg-white p-5 rounded-md shadow-md flex flex-col justify-between transition-all duration-200 hover:shadow-md"
             >
               <div className="flex justify-between items-center mb-2">
                 <p className="text-sm text-gray-500">{stat.label}</p>
@@ -158,38 +122,51 @@ const Dashboard = () => {
                   stroke="currentColor"
                   strokeWidth={2}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 5l7 7-7 7"
-                  />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-              <p className="text-2xl font-bold text-gray-800 mb-1">
-                {stat.value}
-              </p>
+              <p className="text-2xl font-bold text-gray-800 mb-1">{stat.value}</p>
               <p
-                className={`text-sm font-medium ${stat.up ? "text-green-600" : "text-red-600"}`}
+                className={`text-sm font-medium ${
+                  stat.up ? "text-green-600" : "text-red-600"
+                }`}
               >
                 {stat.up ? "▲" : "▼"} {stat.change}
               </p>
             </div>
           ))}
+
           {/* Dynamic Notification List */}
           <div>
             <DynamicNotificationList pendingAdsCount={pendingAdsCount} />
           </div>
         </div>
 
-        {/* Airtime Availability (Right Column) */}
+        {/* Right column */}
         <div className="lg:col-span-8">
           <AirtimeAvailability />
         </div>
       </div>
 
-      {/* Device Status */}
-      <div className="bg-white p-6 rounded-lg shadow">
+      {/* Device Status Section */}
+      <div className="bg-white p-6 rounded-md shadow">
         <DeviceStatus />
+      </div>
+
+      {/* Chart Section (Optional example) */}
+      <div className="bg-white p-6 mt-8 rounded-md shadow">
+        <h3 className="text-lg font-semibold mb-4">Ad Impressions & QR Scans</h3>
+        <div className="w-full h-64">
+          <ResponsiveContainer>
+            <BarChart data={adPerformanceData}>
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="impressions" fill="#3674B5" />
+              <Bar dataKey="qrScans" fill="#FF9D3D" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

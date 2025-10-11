@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, RefreshCw, CircleOff } from 'lucide-react';
+import { ChevronDown, RefreshCw, CircleOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Subscriber {
@@ -15,7 +14,6 @@ interface Subscriber {
 }
 
 const NewsletterManagement: React.FC = () => {
-  const { admin } = useAdminAuth();
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [filteredSubscribers, setFilteredSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +30,7 @@ const NewsletterManagement: React.FC = () => {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<string>('All Subscribers');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,6 +72,18 @@ const NewsletterManagement: React.FC = () => {
     setCurrentPage(1);
   }, [searchTerm, selectedFilter]);
 
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      setItemsPerPage(mobile ? 5 : 9);
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize();
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     fetchSubscribers();
   }, []);
@@ -102,8 +113,7 @@ const NewsletterManagement: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        signal: AbortSignal.timeout(10000)
       });
       
       console.log('📊 Response status:', response.status);
@@ -145,7 +155,6 @@ const NewsletterManagement: React.FC = () => {
     } catch (err) {
       console.error('❌ Fetch error:', err);
       
-      // Provide more specific error messages
       let errorMessage = 'Network error';
       if (err instanceof Error) {
         if (err.name === 'TimeoutError') {
@@ -223,8 +232,7 @@ const NewsletterManagement: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email: emailToUnsubscribe }),
-        // Add timeout to prevent hanging
-        signal: AbortSignal.timeout(10000) // 10 second timeout
+        signal: AbortSignal.timeout(10000)
       });
 
       const data = await response.json();
@@ -321,123 +329,169 @@ const NewsletterManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10 flex flex-col">
-      {/* Header with Title and Filters */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Newsletter Management</h1>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
-            placeholder="Search Subscribers"
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-          />
-          <div className="relative w-48">
-            <button
-              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
-            >
-              {selectedFilter}
-              <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
-            </button>
-            <AnimatePresence>
-              {showFilterDropdown && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+    <div
+  className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
+    isMobile ? 'px-10 pl-28' : 'ml-52'
+  }`}
+>
+  <div className="max-w-7xl mx-auto w-full">
+    {/* Mobile Header */}
+    {isMobile && (
+      <div className="flex items-center mb-4">
+        <h1 className="text-xl pt-7 font-bold text-gray-800">
+          Newsletter Management
+        </h1>
+      </div>
+    )}
+
+    {/* Header with Title and Filters */}
+    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+      {!isMobile && (
+        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+          Newsletter Management
+        </h1>
+      )}
+            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-2'}`}>
+              <input
+                type="text"
+                className={`text-xs text-black rounded-lg pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
+                placeholder="Search Subscribers"
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+              />
+              <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
                 >
-                  {filterOptions.map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => handleFilterChange(filter)}
-                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                  {selectedFilter}
+                  <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                </button>
+                <AnimatePresence>
+                  {showFilterDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
                     >
-                      {filter}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      {filterOptions.map((filter) => (
+                        <button
+                          key={filter}
+                          onClick={() => handleFilterChange(filter)}
+                          className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {filter}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Action Buttons */}
-      <div className="flex justify-end space-x-4 mb-6">
-        <button
-          onClick={fetchSubscribers}
-          className="flex items-center gap-2 bg-[#3674B5] text-white px-4 py-2 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh List
-        </button>
-        <button
-          onClick={() =>
-            window.open(
-              "mailto:" +
-                filteredSubscribers
-                  .filter((s) => s.isActive)
-                  .map((s) => s.email)
-                  .join(",")
-            )
-          }
-          className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors duration-200"
-          disabled={stats.active === 0}
-        >
-          Email All Active Subscribers
-        </button>
-      </div>
+          {/* Action Buttons */}
+          <div
+            className={`flex mb-6 ${
+              isMobile
+                ? 'flex-row justify-between gap-2' // one row on mobile
+                : 'justify-end space-x-2'
+            }`}
+          >
+            {/* Refresh Button */}
+            <button
+              onClick={fetchSubscribers}
+              className={`flex items-center justify-center gap-2 bg-[#3674B5] text-xs text-white px-3 py-3 rounded-md hover:bg-[#2c5a8a] transition-colors duration-200 ${
+                isMobile ? 'text-xs flex-[0.2]' : ''
+              }`}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
 
-        <div className="grid md:grid-cols-5 gap-4 mb-8">
-          <div className="bg-blue-50 rounded-lg p-6">
-            <div className="flex items-center">
-              <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-              <div className="ml-4">
-                <div className="text-sm text-gray-600">Total Subscribers</div>
-                <div className="text-xs text-gray-500">All time</div>
+            {/* Email All Active Subscribers Button */}
+            <button
+              onClick={() =>
+                window.open(
+                  'mailto:' +
+                    filteredSubscribers
+                      .filter((s) => s.isActive)
+                      .map((s) => s.email)
+                      .join(',')
+                )
+              }
+              className={`flex items-center justify-center gap-2 bg-green-600 text-xs text-white px-3 py-3 rounded-md hover:bg-green-700 transition-colors duration-200 ${
+                isMobile ? 'text-xs flex-[0.8]' : ''
+              }`}
+              disabled={stats.active === 0}
+            >
+              Email All Active Subscribers
+            </button>
+          </div>
+
+
+          {!isMobile && (
+            <div className="grid md:grid-cols-5 gap-4 mb-8">
+              {/* Total Subscribers */}
+              <div className="bg-blue-50 shadow-md rounded-lg p-6">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
+                  <div className="ml-4">
+                    <div className="text-sm text-gray-600">Total</div>
+                    <div className="text-xs text-gray-500">All time</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Subscribers */}
+              <div className="bg-green-50 shadow-md rounded-lg p-6">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-green-600">{stats.active}</div>
+                  <div className="ml-4">
+                    <div className="text-sm text-gray-600">Active</div>
+                    <div className="text-xs text-gray-500">Currently subscribed</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* User Subscribers */}
+              <div className="bg-purple-50 shadow-md rounded-lg p-6">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
+                  <div className="ml-4">
+                    <div className="text-sm text-gray-600">Users</div>
+                    <div className="text-xs text-gray-500">Website users</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Non-User Subscribers */}
+              <div className="bg-orange-50 shadow-md rounded-lg p-6">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
+                  <div className="ml-4">
+                    <div className="text-sm text-gray-600">Non-Users</div>
+                    <div className="text-xs text-gray-500">Landing page only</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inactive Subscribers */}
+              <div className="bg-red-50 shadow-md rounded-lg p-6">
+                <div className="flex items-center">
+                  <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
+                  <div className="ml-4">
+                    <div className="text-sm text-gray-600">Unsubscribed</div>
+                    <div className="text-xs text-gray-500">No longer active</div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="bg-green-50 rounded-lg p-6">
-            <div className="flex items-center">
-              <div className="text-3xl font-bold text-green-600">{stats.active}</div>
-              <div className="ml-4">
-                <div className="text-sm text-gray-600">Active Subscribers</div>
-                <div className="text-xs text-gray-500">Currently subscribed</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-purple-50 rounded-lg p-6">
-            <div className="flex items-center">
-              <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
-              <div className="ml-4">
-                <div className="text-sm text-gray-600">User Subscribers</div>
-                <div className="text-xs text-gray-500">Website users</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-orange-50 rounded-lg p-6">
-            <div className="flex items-center">
-              <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
-              <div className="ml-4">
-                <div className="text-sm text-gray-600">Non-User Subscribers</div>
-                <div className="text-xs text-gray-500">Landing page only</div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-red-50 rounded-lg p-6">
-            <div className="flex items-center">
-              <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
-              <div className="ml-4">
-                <div className="text-sm text-gray-600">Unsubscribed</div>
-                <div className="text-xs text-gray-500">No longer active</div>
-              </div>
-            </div>
-          </div>
+          )}
+
+
         </div>
 
         <div className="rounded-lg overflow-hidden">
@@ -448,93 +502,158 @@ const NewsletterManagement: React.FC = () => {
           )}
 
           <div className="rounded-md mb-4 overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-12 gap-1 px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100">
-              <div className="col-span-3">Email</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2">Source</div>
-              <div className="col-span-2">Subscribed</div>
-              <div className="col-span-1">Emails Sent</div>
-              <div className="col-span-2 text-center">Actions</div>
-            </div>
+            {/* Header - Hidden on mobile */}
+            {!isMobile && (
+              <div className="grid grid-cols-12 gap-1 px-4 py-2 text-sm font-semibold text-gray-600 bg-gray-100">
+                <div className="col-span-3">Email</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2">Source</div>
+                <div className="col-span-2">Subscribed</div>
+                <div className="col-span-1">Emails Sent</div>
+                <div className="col-span-2 text-center">Actions</div>
+              </div>
+            )}
 
             {/* Rows */}
             <div className="flex-1">
               {paginatedSubscribers.map((subscriber) => (
-              <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
-                <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
-                  {/* Email */}
-                  <div className="col-span-3 truncate font-medium text-gray-900">
-                    {subscriber.email}
-                  </div>
+                <div key={subscriber._id} className="bg-white mb-3 rounded-lg shadow-md">
+                  {isMobile ? (
+                    <div className="p-4">
+                      {/* Email + Subscribed date */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <div className="font-semibold text-gray-800 text-sm">
+                              {subscriber.email}
+                            </div>
+                            {/* ✅ Removed "Subscribed:" text */}
+                            <div className="text-xs text-gray-500 truncate max-w-[150px]">
+                              {formatDate(subscriber.subscribedAt)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Status */}
-                  <div className="col-span-2">
-                    <span
-                      className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        subscriber.isActive
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {subscriber.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </div>
+                      {/* Status + Source Badges */}
+                      <div className="grid grid-cols-2 gap-2 text-sm text-black mb-3">
+                        <div>
+                          <div className="font-medium text-xs">Status</div>
+                          <span
+                            className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                              subscriber.isActive
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {subscriber.isActive ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="font-medium text-xs">Source</div>
+                          <span
+                            className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${
+                              subscriber.source === "registration" ||
+                              subscriber.source === "existing_user_migration"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-orange-100 text-orange-800"
+                            }`}
+                          >
+                            {subscriber.source === "registration"
+                              ? "USER REGISTRATION"
+                              : subscriber.source === "existing_user_migration"
+                              ? "EXISTING USER"
+                              : subscriber.source === "landing_page"
+                              ? "LANDING PAGE"
+                              : subscriber.source === "contact_form"
+                              ? "CONTACT FORM"
+                              : subscriber.source === "manual"
+                              ? "MANUAL"
+                              : subscriber.source.replace("_", " ").toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
 
-                  {/* Source */}
-                  <div className="col-span-2">
-                    <span
-                      className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        subscriber.source === "registration" ||
-                        subscriber.source === "existing_user_migration"
-                          ? "bg-purple-100 text-purple-800"
-                          : "bg-orange-100 text-orange-800"
-                      }`}
-                    >
-                      {subscriber.source === "registration"
-                        ? "USER REGISTRATION"
-                        : subscriber.source === "existing_user_migration"
-                        ? "EXISTING USER"
-                        : subscriber.source === "landing_page"
-                        ? "LANDING PAGE"
-                        : subscriber.source === "contact_form"
-                        ? "CONTACT FORM"
-                        : subscriber.source === "manual"
-                        ? "MANUAL"
-                        : subscriber.source.replace("_", " ").toUpperCase()}
-                    </span>
-                  </div>
-
-                  {/* Subscribed Date */}
-                  <div className="col-span-2 text-gray-500">
-                    {formatDate(subscriber.subscribedAt)}
-                  </div>
-
-                  {/* Email Count */}
-                  <div className="col-span-1 text-gray-500 text-center">
-                    {subscriber.emailCount}
-                  </div>
-
-                  {/* Actions */}
-                  <div
-                    className="col-span-2 flex justify-center gap-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {subscriber.isActive && (
-                      <button
-                      onClick={() => handleUnsubscribe(subscriber.email)}
-                      className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-28 transition-[width] duration-300"
-                    >
-                      <CircleOff className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
-                      <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
-                        Unsubscribe
-                      </span>
-                    </button>                    
-                    )}
-                  </div>
+                      {/* ✅ Emails Sent (left) + Unsubscribe (right) */}
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="text-xs text-gray-700">
+                          Emails Sent: <span className="font-semibold">{subscriber.emailCount}</span>
+                        </div>
+                        {subscriber.isActive && (
+                          <button
+                            onClick={() => handleUnsubscribe(subscriber.email)}
+                            className="flex items-center text-red-700 px-3 py-1 rounded border border-red-200 hover:bg-red-50 text-xs"
+                          >
+                            <CircleOff size={14} className="mr-1" />
+                            <span>Unsubscribe</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-12 items-center px-5 py-6 text-sm hover:bg-gray-100 transition-colors">
+                      <div className="col-span-3 truncate font-medium text-gray-900">
+                        {subscriber.email}
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            subscriber.isActive
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                            }`}
+                        >
+                          {subscriber.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            subscriber.source === "registration" ||
+                            subscriber.source === "existing_user_migration"
+                              ? "bg-purple-100 text-purple-800"
+                              : "bg-orange-100 text-orange-800"
+                            }`}
+                        >
+                          {subscriber.source === "registration"
+                            ? "USER REGISTRATION"
+                            : subscriber.source === "existing_user_migration"
+                            ? "EXISTING USER"
+                            : subscriber.source === "landing_page"
+                            ? "LANDING PAGE"
+                            : subscriber.source === "contact_form"
+                            ? "CONTACT FORM"
+                            : subscriber.source === "manual"
+                            ? "MANUAL"
+                            : subscriber.source.replace("_", " ").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-gray-500">
+                        {formatDate(subscriber.subscribedAt)}
+                      </div>
+                      <div className="col-span-1 text-gray-500 text-center">
+                        {subscriber.emailCount}
+                      </div>
+                      <div
+                        className="col-span-2 flex justify-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {subscriber.isActive && (
+                          <button
+                            onClick={() => handleUnsubscribe(subscriber.email)}
+                            className="group flex items-center text-red-700 rounded-md overflow-hidden h-6 w-7 hover:w-28 transition-[width] duration-300"
+                          >
+                            <CircleOff className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                            <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                              Unsubscribe
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
 
               {filteredSubscribers.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
@@ -542,107 +661,99 @@ const NewsletterManagement: React.FC = () => {
                 </div>
               )}
             </div>
-        </div>
-
-        {/* Pagination */}
-        <div className="mt-auto flex justify-center py-4">
-          <div className="flex items-center space-x-2">
-            {/* Previous button */}
-            <button
-              onClick={handlePreviousPage}
-              disabled={currentPage === 1}
-              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Previous
-            </button>
-
-            {/* Page numbers */}
-            <div className="flex space-x-1">
-              {(() => {
-                const pages = [];
-                const maxVisiblePages = 3; // show 3 numbers before ellipsis
-                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-                if (endPage - startPage + 1 < maxVisiblePages) {
-                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                }
-
-                for (let i = startPage; i <= endPage; i++) {
-                  pages.push(
-                    <button
-                      key={i}
-                      onClick={() => handlePageChange(i)}
-                      className={`px-3 py-1 text-sm rounded ${
-                        currentPage === i
-                          ? "border border-gray-300 text-black" 
-                          : "text-gray-700 hover:border border-gray-300"
-                      }`}
-                    >
-                      {i}
-                    </button>
-                  );
-                }
-
-                // Add ellipsis if not at the last page
-                if (endPage < totalPages) {
-                  pages.push(
-                    <span key="ellipsis" className="px-2 text-gray-500">
-                      …
-                    </span>
-                  );
-                }
-
-                return pages;
-              })()}
-            </div>
-
-            {/* Next button */}
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages}
-              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-              <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </div>
-      </div>
 
-      {showUnsubscribeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-96">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to unsubscribe <strong>{emailToUnsubscribe}</strong> from the newsletter?
-              </p>
-              <div className="flex space-x-4">
-                <button
-                  onClick={confirmUnsubscribe}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
-                >
-                  Yes, Unsubscribe
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUnsubscribeModal(false);
-                    setEmailToUnsubscribe('');
-                  }}
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors duration-200"
-                >
-                  Cancel
-                </button>
+          {/* Pagination */}
+          <div className="mt-auto flex justify-center py-4">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <button
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Previous</span>
+              </button>
+
+              <div className="flex space-x-1">
+                {(() => {
+                  const pages = [];
+                  const maxVisiblePages = isMobile ? 1 : 3;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                  if (endPage - startPage + 1 < maxVisiblePages) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                  }
+
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        className={`px-2 sm:px-3 py-1 text-sm rounded ${
+                          currentPage === i
+                            ? "border border-gray-300 text-black"
+                            : "text-gray-700 hover:border border-gray-300"
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+
+                  if (endPage < totalPages && !isMobile) {
+                    pages.push(
+                      <span key="ellipsis" className="px-2 text-gray-500">
+                        …
+                      </span>
+                    );
+                  }
+
+                  return pages;
+                })()}
+              </div>
+
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+          </div>
+
+          {showUnsubscribeModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className={`bg-white rounded-lg ${isMobile ? 'p-4 w-full max-w-[90vw]' : 'p-6 w-96'}`}>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Confirm Unsubscribe</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to unsubscribe <strong>{emailToUnsubscribe}</strong> from the newsletter?
+                </p>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={confirmUnsubscribe}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors duration-200"
+                  >
+                    Yes, Unsubscribe
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowUnsubscribeModal(false);
+                      setEmailToUnsubscribe('');
+                    }}
+                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors duration-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
   );
 };
 

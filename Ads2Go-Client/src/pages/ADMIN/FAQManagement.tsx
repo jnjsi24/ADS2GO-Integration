@@ -407,15 +407,13 @@ const FAQManagement: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-8xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <HelpCircle className="w-8 h-8 text-[#3674B5]" />
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">FAQ Management</h1>
-                <p className="text-gray-600">Manage frequently asked questions for users</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -635,11 +633,11 @@ const FAQManagement: React.FC = () => {
                         </div>
 
                         {expandedFAQ === faq.id && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="mt-4 pt-4">
                             <div className="prose max-w-none">
                               <p className="text-gray-700 whitespace-pre-wrap">{faq.answer}</p>
                             </div>
-                            <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="mt-4 pt-4">
                             <div className="flex items-center justify-end gap-4 text-sm text-gray-500">
                               {/* Created */}
                               <span className="flex items-center gap-1">
@@ -673,31 +671,31 @@ const FAQManagement: React.FC = () => {
         {/* Create FAQ Modal */}
         {isCreateModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-4">Create New FAQ</h2>
               <form onSubmit={handleCreateFAQ} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Question </label>
+                  <label className="block text-sm font-bold text-black/80 mb-2">Question </label>
                   <input
                     type="text"
                     value={createFormData.question}
                     onChange={(e) => setCreateFormData({ ...createFormData, question: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Answer</label>
+                  <label className="block text-sm font-bold text-black/80 mb-2">Answer</label>
                   <textarea
                     value={createFormData.answer}
                     onChange={(e) => setCreateFormData({ ...createFormData, answer: e.target.value })}
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full px-3 py-2 bg-white h-20 shadow-md border border-gray-100 rounded-lg focus:outline-none"
                     required
                   />
                 </div>
                 <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                  <label className="block text-sm font-bold text-black/80 mb-2">Category</label>
                   <button
                     type="button"
                     onClick={() => setShowCreateCategoryDropdown(!showCreateCategoryDropdown)}
@@ -780,7 +778,7 @@ const FAQManagement: React.FC = () => {
                     type="text"
                     value={editFormData.question}
                     onChange={(e) => setEditFormData({ ...editFormData, question: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none"
                     required
                   />
                 </div>
@@ -790,7 +788,7 @@ const FAQManagement: React.FC = () => {
                     value={editFormData.answer}
                     onChange={(e) => setEditFormData({ ...editFormData, answer: e.target.value })}
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
+                    className="w-full px-3 py-2 bg-white shadow-md border border-gray-100 rounded-lg focus:outline-none"
                     required
                   />
                 </div>

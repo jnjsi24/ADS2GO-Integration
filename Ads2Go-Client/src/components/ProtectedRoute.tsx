@@ -16,7 +16,7 @@ const PUBLIC_PATHS = ['/login', '/admin-login', '/sadmin-login']; // Public page
 const Loader = () => {
   return (
     <StyledWrapper>
-      {/* Background with blur & overlay */}
+      {/* Background with blur & overlay (original) */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
         style={{
@@ -25,13 +25,14 @@ const Loader = () => {
       ></div>
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
-      {/* Loader animation */}
+      {/* GIF Loader animation (transparent background) */}
       <div className="relative z-10 flex items-center justify-center min-h-screen">
-        <div className="banter-loader">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="banter-loader__box" />
-          ))}
-        </div>
+        <img
+          src="/image/Video-Ads2Go-Wave-unscreen.gif"
+          alt="Loading..."
+          className="w-48 h-48 object-contain"
+          style={{ maxWidth: '320px', maxHeight: '320px' }}
+        />
       </div>
     </StyledWrapper>
   );
@@ -626,16 +627,17 @@ const UserProtectedRoute: React.FC<ProtectedRouteProps> = ({
 const AdminLoader = () => {
   return (
     <StyledWrapper>
-      {/* Plain white background */}
+      {/* Plain white background (original admin loader) */}
       <div className="absolute inset-0 bg-none"></div>
 
-      {/* Loader animation */}
+      {/* GIF Loader animation (transparent background) */}
       <div className="relative z-10 flex items-center justify-center min-h-screen">
-        <div className="banter-loader">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="banter-loader__box" />
-          ))}
-        </div>
+        <img
+          src="/image/Video-Ads2Go-Wave-unscreen.gif"
+          alt="Loading..."
+          className="w-48 h-48 object-contain"
+          style={{ maxWidth: '320px', maxHeight: '320px' }}
+        />
       </div>
     </StyledWrapper>
   );

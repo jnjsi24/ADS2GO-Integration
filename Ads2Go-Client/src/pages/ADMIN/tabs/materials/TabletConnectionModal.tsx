@@ -293,17 +293,6 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Instructions */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
-                <div className="text-sm text-yellow-700 space-y-1">
-                  <p>1. Scan the QR code or copy the manual code</p>
-                  <p>2. Open the AndroidPlayer app on your tablet</p>
-                  <p>3. Enter the connection details</p>
-                  <p>4. The tablet will connect to the system</p>
-                </div>
-              </div>
             </div>
 
             {/* Right Column */}
@@ -361,6 +350,17 @@ const TabletConnectionModal: React.FC<TabletConnectionModalProps> = ({
                     )}
                   </code>
                 </div>
+
+                {/* Instructions */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h3 className="font-semibold text-yellow-800 mb-2">Instructions</h3>
+                <div className="text-sm text-yellow-700 space-y-1">
+                  <p>1. Scan the QR code or copy the manual code</p>
+                  <p>2. Open the AndroidPlayer app on your tablet</p>
+                  <p>3. Enter the connection details</p>
+                  <p>4. The tablet will connect to the system</p>
+                </div>
+              </div>  
               </div>
             </div>
           </div>
