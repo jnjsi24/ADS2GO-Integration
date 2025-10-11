@@ -395,17 +395,23 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
   const recentCar = await this.findOne({ 'slots.deviceId': deviceId }).sort({ date: -1 });
   
   if (recentCar) {
-    // Check if the recent record is from a different day
+    // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
-    const recentDateOnly = new Date(recentDate.getFullYear(), recentDate.getMonth(), recentDate.getDate());
-    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    
+    // Compare just the date parts (year, month, day) in Philippines timezone
+    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
+    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
       const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for device ${deviceId} to today: ${todayStr}`);
-      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]}`);
-      console.log(`   Today's date: ${todayStr}`);
+      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
       recentCar.date = today;
@@ -480,25 +486,32 @@ DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
   
   // First try to find today's record for this material
   let car = await this.findOne({ materialId, date: today });
+  
   if (car) {
     return car;
   }
-
+  
   // If no record for today, find the most recent record for this material
   const recentCar = await this.findOne({ materialId }).sort({ date: -1 });
   
   if (recentCar) {
-    // Check if the recent record is from a different day
+    // Check if the recent record is from a different day using timezone-aware comparison
     const recentDate = new Date(recentCar.date);
-    const recentDateOnly = new Date(recentDate.getFullYear(), recentDate.getMonth(), recentDate.getDate());
-    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    // Convert both dates to Philippines timezone (GMT+8) for comparison
+    const recentDateInPH = new Date(recentDate.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    const todayDateInPH = new Date(now.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours
+    
+    // Compare just the date parts (year, month, day) in Philippines timezone
+    const recentDateOnly = new Date(recentDateInPH.getFullYear(), recentDateInPH.getMonth(), recentDateInPH.getDate());
+    const todayDateOnly = new Date(todayDateInPH.getFullYear(), todayDateInPH.getMonth(), todayDateInPH.getDate());
     
     if (recentDateOnly.getTime() !== todayDateOnly.getTime()) {
       // Different day - update the existing record to today's date and reset daily data
       const todayStr = today.toISOString().split('T')[0];
       console.log(`🔄 Auto-detecting new day: Updating existing DeviceTracking record for ${materialId} to today: ${todayStr}`);
-      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]}`);
-      console.log(`   Today's date: ${todayStr}`);
+      console.log(`   Previous record date: ${recentDate.toISOString().split('T')[0]} (${recentDateInPH.toISOString().split('T')[0]} PH time)`);
+      console.log(`   Today's date: ${todayStr} (${todayDateInPH.toISOString().split('T')[0]} PH time)`);
       
       // Update the existing record to today's date and reset daily data
       recentCar.date = today;
@@ -1060,22 +1073,15 @@ DeviceTrackingSchema.methods.setOnlineStatus = function(isOnline) {
 
 // Method to reset daily session (from ScreenTracking)
 DeviceTrackingSchema.methods.resetDailySession = function() {
-  const TimezoneUtils = require('../utils/timezoneUtils');
-  const now = new Date();
-  
-  // Get device timezone from current location or default to Philippines
-  const deviceTimezone = TimezoneUtils.getDeviceTimezone(this.currentLocation);
-  
-  // Get start of today in device timezone
-  const todayInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(now, deviceTimezone);
-  const todayStr = todayInDeviceTz.toISOString().split('T')[0];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0];
   
   // Check if we need to reset (new day)
   const sessionDate = new Date(this.currentSession?.date);
   if (sessionDate) {
-    const sessionDateInDeviceTz = TimezoneUtils.getStartOfDayInTimezone(sessionDate, deviceTimezone);
-    
-    if (sessionDateInDeviceTz.getTime() !== todayInDeviceTz.getTime()) {
+    sessionDate.setHours(0, 0, 0, 0);
+    if (sessionDate.getTime() !== today.getTime()) {
       // Reset for new day
       this.date = today; // Update the main date field
       

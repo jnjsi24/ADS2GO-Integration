@@ -197,7 +197,7 @@ const ForgotPasswordScreen = () => {
           <>
             <Text style={styles.heading}>Forgot password?</Text>
             <Text style={styles.subheading}>
-              Don't worry! It happens. Please enter the email associated with your account.
+              Don&apos;t worry! It happens. Please enter the email associated with your account.
             </Text>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email address</Text>
@@ -228,7 +228,7 @@ const ForgotPasswordScreen = () => {
           <>
             <Text style={styles.heading}>Please check your email</Text>
             <Text style={styles.subheading}>
-              We've sent a code to <Text style={styles.subheadingBold}>{email}</Text>
+              We&apos;ve sent a code to <Text style={styles.subheadingBold}>{email}</Text>
             </Text>
             <View style={styles.codeContainer}>
               {Array.from({ length: 6 }).map((_, index) => (

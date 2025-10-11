@@ -11,6 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
+// Use safe notification service that works in Expo Go
+import SafeNotificationService from '../../services/safeNotificationService';
 
 interface Notification {
   id: string;
@@ -229,6 +231,20 @@ export default function NotificationsScreen() {
     loadNotifications();
   };
 
+  const testLocalNotification = async () => {
+    try {
+      const notificationService = SafeNotificationService.getInstance();
+      await notificationService.showLocalNotification(
+        'Test Notification',
+        'This is a test local notification from the notifications page!',
+        { category: 'TEST', priority: 'LOW' }
+      );
+    } catch (error) {
+      console.error('Error showing test notification:', error);
+      Alert.alert('Error', 'Failed to show test notification');
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -259,8 +275,11 @@ export default function NotificationsScreen() {
             <Ionicons name="notifications-outline" size={64} color="#CCCCCC" />
             <Text style={styles.emptyStateTitle}>No notifications</Text>
             <Text style={styles.emptyStateText}>
-              You'll see notifications about material assignments, status updates, and more here.
+              You&apos;ll see notifications about material assignments, status updates, and more here.
             </Text>
+            <TouchableOpacity style={styles.testButton} onPress={testLocalNotification}>
+              <Text style={styles.testButtonText}>Test Local Notification</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           notifications.map((notification) => (
@@ -370,6 +389,20 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: 20,
+  },
+  testButton: {
+    backgroundColor: '#3674B5',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   notificationCard: {
     backgroundColor: '#FFFFFF',
