@@ -360,16 +360,31 @@ const ManageDrivers: React.FC = () => {
       try {
         const result = await deleteDriver({ variables: { driverId: driverToDelete } });
         if (result.data?.deleteDriver?.success) {
-          alert(result.data.deleteDriver.message);
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Driver has been deleted successfully.',
+            duration: 4000
+          });
           refetch();
         } else {
-          alert(result.data?.deleteDriver?.message || 'Failed to delete driver');
+          addToast({
+            type: 'error',
+            title: 'Deletion Failed',
+            message: result.data?.deleteDriver?.message || 'Failed to delete driver',
+            duration: 6000
+          });
         }
         setShowDeleteModal(false);
         setDriverToDelete(null);
       } catch (error: any) {
         console.error('Error deleting driver:', error);
-        alert(error.message || 'Failed to delete driver');
+        addToast({
+          type: 'error',
+          title: 'Deletion Failed',
+          message: error.message || 'Failed to delete driver',
+          duration: 6000
+        });
         setShowDeleteModal(false);
         setDriverToDelete(null);
       }
