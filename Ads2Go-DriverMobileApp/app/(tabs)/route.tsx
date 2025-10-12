@@ -89,7 +89,16 @@ const RouteTab: React.FC = () => {
       });
 
       if (!driverResponse.ok) {
-        throw new Error(`Failed to fetch driver info: ${driverResponse.status}`);
+        // If driver endpoint fails, show the page with no device info
+        console.warn('Driver endpoint failed:', driverResponse.status);
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
 
       let driverData: any;
@@ -100,17 +109,44 @@ const RouteTab: React.FC = () => {
         } else {
           const text = await driverResponse.text();
           console.warn('Unexpected content-type for driver info:', ct, text?.slice(0, 200));
-          throw new Error('Unexpected response format');
+          // Show page with no device info
+          setDriverInfo({
+            driverId,
+            materialId: 'Not Assigned',
+            deviceId: 'No Device'
+          });
+          setRouteData(null);
+          setLoading(false);
+          return;
         }
       } catch (e) {
-        throw new Error('Failed to parse driver info response');
+        console.warn('Failed to parse driver info response:', e);
+        // Show page with no device info
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
+      
       if (!driverData.success) {
-        throw new Error(driverData.message || 'Failed to fetch driver info');
+        console.warn('Driver data fetch unsuccessful:', driverData.message);
+        // Show page with no device info
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
 
-      const materialId = driverData.data.materialId;
-      const deviceId = driverData.data.deviceId;
+      const materialId = driverData.data.materialId || 'Not Assigned';
+      const deviceId = driverData.data.deviceId || 'No Device';
 
       setDriverInfo({
         driverId,
@@ -118,12 +154,23 @@ const RouteTab: React.FC = () => {
         deviceId
       });
 
-      // Fetch route data using device-specific endpoint available on server
-      await fetchDriverRouteData(deviceId);
+      // Only fetch route data if we have a valid deviceId
+      if (deviceId && deviceId !== 'Unknown' && deviceId !== 'No Device') {
+        await fetchDriverRouteData(deviceId);
+      } else {
+        // No valid device, but show the page anyway
+        setRouteData(null);
+      }
 
     } catch (err) {
       console.error('Error loading driver info:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      // Don't set error state - show the page with limited info
+      setDriverInfo({
+        driverId: 'Unknown',
+        materialId: 'Not Assigned',
+        deviceId: 'No Device'
+      });
+      setRouteData(null);
     } finally {
       setLoading(false);
     }
@@ -134,7 +181,9 @@ const RouteTab: React.FC = () => {
       // Get auth token
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        throw new Error('No auth token found');
+        console.warn('No auth token found for route data fetch');
+        setRouteData(null);
+        return;
       }
 
       const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}`, {
@@ -143,6 +192,13 @@ const RouteTab: React.FC = () => {
           'Content-Type': 'application/json',
         },
       });
+      
+      if (!response.ok) {
+        console.warn('Route endpoint failed:', response.status);
+        setRouteData(null);
+        return;
+      }
+      
       let result: any;
       try {
         const ct = response.headers.get('content-type') || '';
@@ -151,20 +207,25 @@ const RouteTab: React.FC = () => {
         } else {
           const text = await response.text();
           console.warn('Unexpected content-type for route data:', ct, text?.slice(0, 200));
-          throw new Error('Unexpected response format');
+          setRouteData(null);
+          return;
         }
       } catch (e) {
-        throw new Error('Failed to parse route data');
+        console.warn('Failed to parse route data:', e);
+        setRouteData(null);
+        return;
       }
       
       if (result.success) {
         setRouteData(result.data);
       } else {
-        throw new Error(result.message || 'Failed to fetch route data');
+        console.warn('Route data fetch unsuccessful:', result.message);
+        setRouteData(null);
       }
     } catch (err) {
       console.error('Error fetching route data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch route data');
+      // Don't set error state - just leave route data as null
+      setRouteData(null);
     }
   };
 
@@ -282,12 +343,97 @@ const RouteTab: React.FC = () => {
         ) : (
           <View style={styles.noDataContainer}>
             <Ionicons name="location-outline" size={32} color="#9ca3af" />
-            <Text style={styles.noDataText}>No route data available</Text>
+            <Text style={styles.noDataText}>
+              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown' 
+                ? 'No device registered yet' 
+                : 'No route data available'}
+            </Text>
             <Text style={styles.noDataSubtext}>
-              Route data will appear when GPS tracking is active
+              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown'
+                ? 'Please contact admin to register your device and start tracking'
+                : 'Route data will appear when GPS tracking is active'}
             </Text>
           </View>
         )}
+      </View>
+
+      {/* Ad Campaign Card */}
+      <View style={styles.adCard}>
+        {/* Header Section */}
+        <View style={styles.metricsHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.titleRow}>
+              <Text style={styles.adTitle}>Ad Campaign</Text>
+              <View style={styles.periodTag}>
+                <Text style={styles.periodText}>30 Days</Text>
+              </View>
+            </View>
+
+            <Text style={styles.companyInfo}>
+              Sample Company <Text style={styles.adId}>#AdID3264</Text>
+            </Text>
+
+          </View>
+        </View>
+
+        {/* QR and Distance Row */}
+        <View style={styles.qrDistanceRow}>
+          <Ionicons name="qr-code" size={22} color="#3b82f6" style={{ marginRight: 6 }} />
+          <Text style={styles.qrValue}>{routeData?.metrics?.pointCount || 0}</Text>
+          <Text style={styles.verticalDivider}>|</Text>
+          <Text style={styles.distanceValue}>
+            {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km Today
+          </Text>
+        </View>
+        
+        <View style={styles.divider} />
+
+        {/* Location Card: EDSA */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="location" size={16} color="#ffffff" />
+            </View>
+            <View style={styles.dashedLineFull} />
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>EDSA Street</Text>
+            <Text style={styles.locationSubText}>
+              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
+            </Text>
+          </View>
+        </View>
+
+        {/* Distance + Hours Pill */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.dashedLineFull} />
+          </View>
+          <View style={styles.textContainer}>
+            <View style={styles.locationPill}>
+              <Text style={styles.locationPillText}>
+                {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km - {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Kalayaan Section */}
+        <View style={styles.routeRow}>
+          <View style={styles.iconLineContainer}>
+            <View style={styles.iconCircle2}>
+              <Ionicons name="locate" size={16} color="#ffffff" />
+            </View>
+          </View>
+
+          <View style={styles.textContainer}>
+            <Text style={styles.locationName}>Kalayaan Street</Text>
+            <Text style={styles.locationSubText}>
+              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* Route Metrics */}
@@ -637,6 +783,149 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
+  },
+
+  // Ad Campaign Styles
+  adCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  metricsHeader: {
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'column',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  adTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  periodTag: {
+    backgroundColor: '#22c55e',
+    borderRadius: 9999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  periodText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  adId: {
+    color: '#22c55e',
+    fontWeight: '700',
+  },
+  companyInfo: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  qrDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginBottom: 12,
+  },
+  qrValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginRight: 8,
+  },
+  verticalDivider: {
+    fontSize: 16,
+    color: '#9ca3af',
+    marginHorizontal: 8,
+  },
+  distanceValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 10,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconLineContainer: {
+    alignItems: 'center',
+    width: 30,
+  },
+  dashedLineFull: {
+    width: 2,
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderLeftWidth: 2,
+    borderColor: '#9ca3af',
+    borderStyle: 'dashed',
+    marginVertical: 2,
+  },
+  textContainer: {
+    flex: 1,
+    paddingBottom: 8,
+  },
+  locationName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginLeft: 10,
+  },
+  locationSubText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+    marginLeft: 10,
+  },
+  locationPill: {
+    backgroundColor: '#e5e7eb',
+    borderRadius: 9999,
+    paddingVertical: 8,
+    paddingHorizontal: 40,
+    alignSelf: 'flex-start',
+    marginVertical: 6,
+  },
+  locationPillText: {
+    color: '#3b82f6',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  iconCircle2: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#d1d5db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
   },
 });
 

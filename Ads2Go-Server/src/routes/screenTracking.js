@@ -2076,6 +2076,7 @@ router.get('/debug/device/:deviceId', async (req, res) => {
 router.get('/driver/:driverId', checkDriver, async (req, res) => {
   try {
     const { driverId } = req.params;
+    const { period = 'realtime', startDate, endDate } = req.query;
     
     // Validate driver access
     if (req.driver.driverId !== driverId) {
@@ -2110,42 +2111,275 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
     // Get driver details
     const driver = await Driver.findOne({ driverId: driverId });
     
+    // Base response data
+    const baseData = {
+      driverId: driverId,
+      vehiclePlateNumber: driver?.vehiclePlateNumber || 'Unknown',
+      vehicleType: driver?.vehicleType || 'Unknown',
+      materialId: material.materialId,
+      materialType: material.materialType,
+      isOnline: deviceTracking.isOnline,
+      lastSeen: deviceTracking.lastSeen,
+      currentLocation: deviceTracking.currentLocation,
+      
+      // Real-time data from DeviceTracking
+      currentHours: deviceTracking.currentHoursToday || 0,
+      hoursRemaining: deviceTracking.hoursRemaining || 0,
+      totalDistanceToday: deviceTracking.currentSession?.totalDistanceTraveled || 0,
+      averageSpeed: deviceTracking.currentSession?.averageSpeed || 0,
+      maxSpeed: deviceTracking.currentSession?.maxSpeed || 0,
+      
+      // Compliance
+      complianceRate: deviceTracking.complianceRate || 0,
+      
+      // Daily performance
+      dailyPerformance: deviceTracking.dailyPerformance || [],
+      
+      // Device info - get from slot
+      deviceId: deviceTracking.slots?.[0]?.deviceId || 'Unknown',
+      screenType: deviceTracking.screenType,
+      displayStatus: deviceTracking.isOnline ? 'ONLINE' : 'OFFLINE',
+      
+      // Alerts
+      totalAlerts: deviceTracking.alerts?.length || 0,
+      recentAlerts: deviceTracking.alerts?.slice(-5) || []
+    };
+
+    // If period is 'daily' or 'monthly', fetch historical data from DeviceDataHistoryV2
+    if (period === 'daily' || period === 'monthly') {
+      try {
+        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+        
+        // Set default date range based on period
+        let defaultStartDate, defaultEndDate;
+        if (period === 'daily') {
+          // Last 30 days for daily view
+          defaultStartDate = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+          defaultEndDate = endDate || new Date();
+        } else if (period === 'monthly') {
+          // Last 12 months for monthly view
+          defaultStartDate = startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+          defaultEndDate = endDate || new Date();
+        }
+        
+        // Find historical data for this material
+        const historicalData = await DeviceDataHistoryV2.findOne({ 
+          materialId: material.materialId 
+        });
+        
+        if (historicalData && historicalData.dailyData) {
+          // Filter daily data by date range
+          const filteredDailyData = historicalData.dailyData.filter(day => {
+            const dayDate = new Date(day.date);
+            return dayDate >= new Date(defaultStartDate) && dayDate <= new Date(defaultEndDate);
+          }).sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date descending
+          
+          if (period === 'daily') {
+            // Calculate aggregated daily metrics
+            const dailyMetrics = filteredDailyData.reduce((acc, day) => {
+              acc.totalDistance += day.totalDistanceTraveled || 0;
+              acc.totalHours += day.totalHoursOnline || 0;
+              acc.totalQRImpressions += day.totalQRScans || 0;
+              acc.totalAdImpressions += day.totalAdImpressions || 0;
+              acc.totalAdPlayTime += day.totalAdPlayTime || 0;
+              acc.totalAdPlays += day.totalAdPlays || 0;
+              return acc;
+            }, {
+              totalDistance: 0,
+              totalHours: 0,
+              totalQRImpressions: 0,
+              totalAdImpressions: 0,
+              totalAdPlayTime: 0,
+              totalAdPlays: 0
+            });
+            
+            // Add daily data to response
+            baseData.dailyData = {
+              period: 'daily',
+              dateRange: {
+                startDate: defaultStartDate,
+                endDate: defaultEndDate
+              },
+              aggregatedMetrics: dailyMetrics,
+              dailyBreakdown: filteredDailyData.map(day => ({
+                date: day.date,
+                totalDistance: day.totalDistanceTraveled || 0,
+                totalHours: day.totalHoursOnline || 0,
+                totalQRImpressions: day.totalQRScans || 0,
+                totalAdImpressions: day.totalAdImpressions || 0,
+                totalAdPlayTime: day.totalAdPlayTime || 0,
+                totalAdPlays: day.totalAdPlays || 0,
+                isDisplaying: day.isDisplaying !== false,
+                maintenanceMode: day.maintenanceMode || false,
+                hourlyStats: day.hourlyStats || [],
+                adPerformance: day.adPerformance || [],
+                qrScansByAd: day.qrScansByAd || []
+              })),
+              totalDays: filteredDailyData.length
+            };
+            
+            // Update current metrics with daily aggregated data
+            baseData.totalDistanceToday = dailyMetrics.totalDistance;
+            baseData.currentHours = dailyMetrics.totalHours;
+            baseData.qrImpressions = dailyMetrics.totalQRImpressions;
+            baseData.totalAdImpressions = dailyMetrics.totalAdImpressions;
+            baseData.totalAdPlayTime = dailyMetrics.totalAdPlayTime;
+            baseData.totalAdPlays = dailyMetrics.totalAdPlays;
+            
+          } else if (period === 'monthly') {
+            // Group daily data by month and calculate monthly metrics
+            const monthlyData = {};
+            
+            filteredDailyData.forEach(day => {
+              const dayDate = new Date(day.date);
+              const monthKey = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}`;
+              const monthName = dayDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+              
+              if (!monthlyData[monthKey]) {
+                monthlyData[monthKey] = {
+                  month: monthName,
+                  monthKey: monthKey,
+                  totalDistance: 0,
+                  totalHours: 0,
+                  totalQRImpressions: 0,
+                  totalAdImpressions: 0,
+                  totalAdPlayTime: 0,
+                  totalAdPlays: 0,
+                  totalDays: 0,
+                  averageSpeed: 0,
+                  compliance: 0
+                };
+              }
+              
+              monthlyData[monthKey].totalDistance += day.totalDistanceTraveled || 0;
+              monthlyData[monthKey].totalHours += day.totalHoursOnline || 0;
+              monthlyData[monthKey].totalQRImpressions += day.totalQRScans || 0;
+              monthlyData[monthKey].totalAdImpressions += day.totalAdImpressions || 0;
+              monthlyData[monthKey].totalAdPlayTime += day.totalAdPlayTime || 0;
+              monthlyData[monthKey].totalAdPlays += day.totalAdPlays || 0;
+              monthlyData[monthKey].totalDays += 1;
+            });
+            
+            // Convert to array and sort by month
+            const monthlyBreakdown = Object.values(monthlyData)
+              .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+            
+            // Calculate total aggregated metrics
+            const monthlyMetrics = monthlyBreakdown.reduce((acc, month) => {
+              acc.totalDistance += month.totalDistance;
+              acc.totalHours += month.totalHours;
+              acc.totalQRImpressions += month.totalQRImpressions;
+              acc.totalAdImpressions += month.totalAdImpressions;
+              acc.totalAdPlayTime += month.totalAdPlayTime;
+              acc.totalAdPlays += month.totalAdPlays;
+              return acc;
+            }, {
+              totalDistance: 0,
+              totalHours: 0,
+              totalQRImpressions: 0,
+              totalAdImpressions: 0,
+              totalAdPlayTime: 0,
+              totalAdPlays: 0
+            });
+            
+            // Add monthly data to response
+            baseData.monthlyData = {
+              period: 'monthly',
+              dateRange: {
+                startDate: defaultStartDate,
+                endDate: defaultEndDate
+              },
+              aggregatedMetrics: monthlyMetrics,
+              monthlyBreakdown: monthlyBreakdown,
+              totalMonths: monthlyBreakdown.length
+            };
+            
+            // Update current metrics with monthly aggregated data
+            baseData.totalDistanceToday = monthlyMetrics.totalDistance;
+            baseData.currentHours = monthlyMetrics.totalHours;
+            baseData.qrImpressions = monthlyMetrics.totalQRImpressions;
+            baseData.totalAdImpressions = monthlyMetrics.totalAdImpressions;
+            baseData.totalAdPlayTime = monthlyMetrics.totalAdPlayTime;
+            baseData.totalAdPlays = monthlyMetrics.totalAdPlays;
+            
+            // Update monthlyTrends for backward compatibility
+            baseData.monthlyTrends = monthlyBreakdown.map(month => ({
+              month: month.month,
+              distance: month.totalDistance,
+              hours: month.totalHours,
+              averageSpeed: month.totalHours > 0 ? month.totalDistance / month.totalHours : 0,
+              maxSpeed: 0, // Not available in historical data
+              qrImpressions: month.totalQRImpressions,
+              earnings: 0, // Not calculated in this context
+              compliance: month.totalDays > 0 ? (month.totalHours / (month.totalDays * 8)) * 100 : 0 // 8 hours target per day
+            }));
+          }
+        } else {
+          // No historical data found, use current data
+          if (period === 'daily') {
+            baseData.dailyData = {
+              period: 'daily',
+              dateRange: {
+                startDate: defaultStartDate,
+                endDate: defaultEndDate
+              },
+              aggregatedMetrics: {
+                totalDistance: baseData.totalDistanceToday,
+                totalHours: baseData.currentHours,
+                totalQRImpressions: 0,
+                totalAdImpressions: 0,
+                totalAdPlayTime: 0,
+                totalAdPlays: 0
+              },
+              dailyBreakdown: [],
+              totalDays: 0,
+              message: 'No historical data available for the specified period'
+            };
+          } else if (period === 'monthly') {
+            baseData.monthlyData = {
+              period: 'monthly',
+              dateRange: {
+                startDate: defaultStartDate,
+                endDate: defaultEndDate
+              },
+              aggregatedMetrics: {
+                totalDistance: baseData.totalDistanceToday,
+                totalHours: baseData.currentHours,
+                totalQRImpressions: 0,
+                totalAdImpressions: 0,
+                totalAdPlayTime: 0,
+                totalAdPlays: 0
+              },
+              monthlyBreakdown: [],
+              totalMonths: 0,
+              message: 'No historical data available for the specified period'
+            };
+            baseData.monthlyTrends = [];
+          }
+        }
+      } catch (historicalError) {
+        console.error('Error fetching historical data:', historicalError);
+        // Continue with real-time data if historical fetch fails
+        if (period === 'daily') {
+          baseData.dailyData = {
+            period: 'daily',
+            error: 'Failed to fetch historical data',
+            fallbackToRealtime: true
+          };
+        } else if (period === 'monthly') {
+          baseData.monthlyData = {
+            period: 'monthly',
+            error: 'Failed to fetch historical data',
+            fallbackToRealtime: true
+          };
+        }
+      }
+    }
+    
     // Format the response to match mobile app expectations
     const response = {
       success: true,
-      data: {
-        driverId: driverId,
-        vehiclePlateNumber: driver?.vehiclePlateNumber || 'Unknown',
-        vehicleType: driver?.vehicleType || 'Unknown',
-        materialId: material.materialId,
-        materialType: material.materialType,
-        isOnline: deviceTracking.isOnline,
-        lastSeen: deviceTracking.lastSeen,
-        currentLocation: deviceTracking.currentLocation,
-        
-        // Real-time data from DeviceTracking
-        currentHours: deviceTracking.currentHoursToday || 0,
-        hoursRemaining: deviceTracking.hoursRemaining || 0,
-        totalDistanceToday: deviceTracking.currentSession?.totalDistanceTraveled || 0,
-        averageSpeed: deviceTracking.currentSession?.averageSpeed || 0,
-        maxSpeed: deviceTracking.currentSession?.maxSpeed || 0,
-        
-        // Compliance
-        complianceRate: deviceTracking.complianceRate || 0,
-        
-        
-        // Daily performance
-        dailyPerformance: deviceTracking.dailyPerformance || [],
-        
-        // Device info - get from slot
-        deviceId: deviceTracking.slots?.[0]?.deviceId || 'Unknown',
-        screenType: deviceTracking.screenType,
-        displayStatus: deviceTracking.isOnline ? 'ONLINE' : 'OFFLINE',
-        
-        // Alerts
-        totalAlerts: deviceTracking.alerts?.length || 0,
-        recentAlerts: deviceTracking.alerts?.slice(-5) || []
-      }
+      data: baseData
     };
     
     res.json(response);

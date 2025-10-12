@@ -585,7 +585,7 @@ const RegisterForm = () => {
       case 0:
         return (
           <View style={styles.stepContent}>
-            <Text style={styles.stepDescription}>Let's start with your basic information</Text>
+            <Text style={styles.stepDescription}>Let&apos;s start with your basic information</Text>
             
             {renderInput('First Name', firstName, setFirstName, { required: true, placeholder: 'Enter First Name' })}
             {renderInput('Middle Name', middleName, setMiddleName, { placeholder: 'Optional' })}
