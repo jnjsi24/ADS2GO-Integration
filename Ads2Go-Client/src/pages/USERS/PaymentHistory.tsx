@@ -225,7 +225,7 @@ const PaymentHistory: React.FC = () => {
       <div
         className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
         style={{
-          backgroundImage: "url('/image/bg3.jpg')",
+          backgroundImage: "url('/image/bg2.jpg')",
         }}
       ></div>
 

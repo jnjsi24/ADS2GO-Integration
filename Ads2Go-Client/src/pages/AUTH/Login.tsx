@@ -372,7 +372,7 @@ const Login: React.FC = () => {
           <button
             type="submit"
             disabled={isLoggingIn}
-            className={`w-full py-2 px-4 rounded-md shadow-sm transition-colors ${
+            className={`w-full py-2 px-4 shadow-sm transition-colors ${
               isLoggingIn
                 ? 'bg-blue-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700'
@@ -380,7 +380,7 @@ const Login: React.FC = () => {
           >
             {isLoggingIn ? (
               <div className="flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                <div className="w-4 h-4 border-2 border-white rounded-full border-t-transparent animate-spin mr-2"></div>
                 Logging in...
               </div>
             ) : (

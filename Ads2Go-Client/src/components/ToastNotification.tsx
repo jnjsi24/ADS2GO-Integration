@@ -100,7 +100,7 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 300, scale: 0.9 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className={`relative bg-white rounded-lg shadow-md border-l-4 ${styles.leftBorderColor} p-4 w-80 mb-3`}
+      className={`relative bg-white shadow-md border-l-4 ${styles.leftBorderColor} p-4 w-80 mb-3`}
     >
       {/* Close Button */}
       <button
@@ -129,7 +129,7 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
       </div>
 
       {/* Enhanced Progress Bar Timer */}
-      <div className="absolute bottom-0 left-0 right-0 h-2 bg-gray-200 rounded-b-lg overflow-hidden">
+      <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200 overflow-hidden">
         <div 
           className={`h-full ${styles.bottomBorderColor.replace('border-b-', 'bg-')} transition-all duration-75 ease-linear`}
           style={{ width: `${progress}%` }}
