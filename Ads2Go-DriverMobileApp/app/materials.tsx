@@ -155,7 +155,17 @@ export default function MaterialsScreen() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Handle 404 gracefully - device may have been unregistered
+        if (response.status === 404) {
+          console.log('ℹ️ No device tracking found - device may not be registered yet or was unregistered');
+          setAnalytics(null);
+          return;
+        }
+        
+        // For other errors, log but don't crash
+        console.warn(`⚠️ Analytics endpoint returned status: ${response.status}`);
+        setAnalytics(null);
+        return;
       }
 
       const result = await response.json();
@@ -163,10 +173,12 @@ export default function MaterialsScreen() {
       if (result.success && result.data) {
         setAnalytics(result.data);
       } else {
-        console.error('Analytics fetch failed:', result.message);
+        console.log('ℹ️ Analytics fetch unsuccessful:', result.message);
+        setAnalytics(null);
       }
     } catch (error) {
-      console.error('Error fetching driver analytics:', error);
+      console.log('ℹ️ Could not fetch driver analytics - this is normal if device is not registered');
+      setAnalytics(null);
     }
   };
 
@@ -280,6 +292,21 @@ export default function MaterialsScreen() {
       {/* Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Device Information Card */}
+        {!analytics && (
+          <View style={styles.noDeviceCard}>
+            <View style={styles.noDeviceIconContainer}>
+              <Ionicons name="information-circle-outline" size={48} color="#6b7280" />
+            </View>
+            <Text style={styles.noDeviceTitle}>No Device Registered</Text>
+            <Text style={styles.noDeviceMessage}>
+              Your device is not currently registered or has been unregistered by an administrator.
+            </Text>
+            <Text style={styles.noDeviceHint}>
+              Please contact support if you need assistance with device registration.
+            </Text>
+          </View>
+        )}
+
         {analytics && (
           <View style={styles.deviceCard}>
             <View style={styles.cardHeader}>
@@ -558,6 +585,44 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
+  },
+  noDeviceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  noDeviceIconContainer: {
+    marginBottom: 16,
+  },
+  noDeviceTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noDeviceMessage: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  noDeviceHint: {
+    fontSize: 13,
+    color: '#9ca3af',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   cardHeader: {
     flexDirection: 'row',

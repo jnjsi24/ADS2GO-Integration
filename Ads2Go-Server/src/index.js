@@ -34,6 +34,7 @@ const adsDeploymentTypeDefs = require('./schema/adsDeploymentSchema');
 // const screenTrackingTypeDefs = require('./schema/screenTrackingSchema'); // deprecated
 const notificationTypeDefs = require('./schema/notificationSchema');
 const userReportTypeDefs = require('./schema/userReportSchema');
+const driverReportTypeDefs = require('./schema/driverReportSchema');
 const faqTypeDefs = require('./schema/faqSchema');
 const companyAdTypeDefs = require('./schema/companyAdSchema');
 
@@ -54,6 +55,7 @@ const adsDeploymentResolvers = require('./resolvers/adsDeploymentResolver');
 // const screenTrackingResolvers = require('./resolvers/screenTrackingResolver'); // deprecated
 const notificationResolvers = require('./resolvers/notificationResolver');
 const userReportResolvers = require('./resolvers/userReportResolver');
+const driverReportResolvers = require('./resolvers/driverReportResolver');
 const faqResolvers = require('./resolvers/faqResolver');
 const companyAdResolvers = require('./resolvers/companyAdResolver');
 
@@ -135,6 +137,7 @@ const server = new ApolloServer({
       // screenTrackingTypeDefs, // deprecated
       notificationTypeDefs,
       userReportTypeDefs,
+      driverReportTypeDefs,
       faqTypeDefs,
       companyAdTypeDefs,
     ];
@@ -166,6 +169,7 @@ const server = new ApolloServer({
     // screenTrackingResolvers, // deprecated
     notificationResolvers,
     userReportResolvers,
+    driverReportResolvers,
     faqResolvers,
     companyAdResolvers,
   ];
