@@ -1398,20 +1398,6 @@ const DetailedAnalytics: React.FC = () => {
         </div>
       )}
 
-      {/* Loading State */}
-      {(analyticsLoading || deviceLoading || directAnalyticsLoading) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg flex items-center space-x-3">
-            <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
-            <span className="text-gray-700">
-              {deviceLoading ? 'Loading device-specific analytics...' : 
-               directAnalyticsLoading ? 'Loading direct analytics data...' : 
-               'Loading analytics data...'}
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Error State */}
       {analyticsError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">

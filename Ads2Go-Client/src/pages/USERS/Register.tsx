@@ -381,7 +381,7 @@ const Register: React.FC = () => {
       <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
       <div className="relative z-10 p-8 sm:p-10 mb-5 mt-5
-                rounded-xl shadow-2xl w-full max-w-xl
+                rounded-md shadow-2xl w-full max-w-xl
                 bg-transparent backdrop-blur-lg border border-white/30">
         {/* Ads2Go Logo */}
         <div className="flex justify-center mb-6">
@@ -461,7 +461,7 @@ const Register: React.FC = () => {
                 type="button"
                 onClick={handleNext}
                 disabled={!isCurrentStepValid()}
-                className={`w-full py-3 px-4 rounded-lg transition-colors mt-6 ${
+                className={`w-full py-3 px-4 transition-colors mt-6 ${
                   isCurrentStepValid()
                     ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
                     : 'bg-blue-400 cursor-not-allowed'
@@ -501,11 +501,11 @@ const Register: React.FC = () => {
                 error={errors.houseAddress}
               />
 
-              <div className="flex gap-4 mt-6">
+              <div className="flex justify-between gap-4 mt-6">
                 <button
                   type="button"
                   onClick={handlePrevious}
-                  className="flex-1 py-3 px-4 rounded-lg text-white font-semibold bg-white/10 hover:bg-white/20 transition-colors"
+                  className="w-40 text-white font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
                 >
                   Back
                 </button>
@@ -513,7 +513,7 @@ const Register: React.FC = () => {
                   type="button"
                   onClick={handleNext}
                   disabled={!isCurrentStepValid()}
-                  className={`flex-1 py-3 px-4 rounded-lg text-white font-semibold transition-colors ${
+                  className={`flex-1 py-3 px-4 text-white font-semibold transition-colors ${
                     isCurrentStepValid()
                       ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
                       : 'bg-blue-400 cursor-not-allowed'
@@ -576,7 +576,7 @@ const Register: React.FC = () => {
                   onClick={() => setChecked((prev) => !prev)}
                 >
                   <div
-                    className="relative w-5 h-5 border-2 border-gray-400 rounded-md flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
+                    className="relative w-5 h-5 border-2 border-gray-400 flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
                   >
                     <AnimatePresence>
                       {checked && (
@@ -602,7 +602,7 @@ const Register: React.FC = () => {
                   type="button"
                   onClick={handlePrevious}
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 px-4 border border-white rounded-lg text-white font-semibold transition-colors ${
+                  className={`flex-1 py-3 px-4 border border-white text-white font-semibold transition-colors ${
                     isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
                   }`}
                 >
@@ -611,7 +611,7 @@ const Register: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting || !checked}
-                  className={`flex-1 py-3 px-4 rounded-lg transition-colors ${
+                  className={`flex-1 py-3 px-4 transition-colors ${
                     isSubmitting || !checked
                       ? 'bg-blue-400 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
@@ -619,7 +619,7 @@ const Register: React.FC = () => {
                 >
                   {isSubmitting ? (
                     <div className="flex items-center justify-center">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin mr-2"></div>
                       Registering...
                     </div>
                   ) : (
@@ -639,7 +639,7 @@ const Register: React.FC = () => {
 
 
         <div className="flex justify-center space-x-4">
-          <button type="button" className="p-2 border border-gray-300 rounded-full hover:bg-gray-100/20 transition-colors">
+          <button type="button" className="p-2 border border-white/50 rounded-full hover:bg-gray-100/20 transition-colors">
             <img src="/image/g.png" alt="Google logo" className="h-6 w-6" />
           </button>
         </div>
