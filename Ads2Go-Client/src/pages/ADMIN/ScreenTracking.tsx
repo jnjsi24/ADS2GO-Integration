@@ -887,11 +887,9 @@ const ScreenTracking: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {/* Progress */}
+                                  {/* Today's Progress */}
                                   <div>
-                                    <h4 className="font-medium text-gray-900 text-sm">
-                                      {activeTab === 'historical' ? `Progress (${selectedDate})` : "Today's Progress"}
-                                    </h4>
+                                    <h4 className="font-medium text-gray-900 text-sm">Today's Progress</h4>
                                     <div className="mt-1 space-y-1">
                                       <div className="flex justify-between">
                                         <span className="text-xs text-gray-600">Hours Online:</span>
@@ -1164,7 +1162,7 @@ const ScreenTracking: React.FC = () => {
                        
                        <div className="space-y-1 text-sm text-gray-600">
                          <div className="flex justify-between">
-                           <span>{activeTab === 'historical' ? 'Hours Online:' : 'Hours Today:'}</span>
+                           <span>Hours Today:</span>
                            <span className="font-medium">{formatTime(screen.currentHours)}</span>
                          </div>
                          <div className="flex justify-between">
@@ -1222,9 +1220,7 @@ const ScreenTracking: React.FC = () => {
                      </div>
 
                      <div>
-                       <h4 className="font-medium text-gray-900">
-                         {activeTab === 'historical' ? `Progress (${selectedDate})` : "Today's Progress"}
-                       </h4>
+                       <h4 className="font-medium text-gray-900">Today's Progress</h4>
                        <div className="mt-2 space-y-2">
                          <div className="flex justify-between">
                            <span className="text-sm text-gray-600">Hours Online:</span>

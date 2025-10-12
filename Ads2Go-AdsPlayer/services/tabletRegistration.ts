@@ -704,7 +704,7 @@ export class TabletRegistrationService {
 
       this.isTracking = true;
 
-      // Start periodic location updates (every 3 seconds for smoother routes)
+      // Start periodic location updates (every 7 seconds)
       this.locationUpdateInterval = setInterval(async () => {
         try {
           // Skip location updates if simulating offline
@@ -715,8 +715,8 @@ export class TabletRegistrationService {
 
           const location = await Location.getCurrentPositionAsync({
             accuracy: Location.Accuracy.High,
-            timeInterval: 3000,
-            distanceInterval: 3, // Update every 3 meters
+            timeInterval: 7000,
+            distanceInterval: 5, // Update every 5 meters
           });
 
           const { latitude, longitude, speed, heading, accuracy } = location.coords;
@@ -735,7 +735,7 @@ export class TabletRegistrationService {
         } catch (error) {
           console.error('Error updating location:', error);
         }
-      }, 3000); // Update every 3 seconds for smoother route tracking
+      }, 7000); // Update every 7 seconds
 
       console.log('Location tracking started');
     } catch (error) {
@@ -820,10 +820,12 @@ export class TabletRegistrationService {
           // Check time restrictions
           if (zone.timeRestrictions) {
             if (currentHour >= zone.timeRestrictions.start && currentHour <= zone.timeRestrictions.end) {
+              console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name} - School hours)`);
               return zone.speedLimit;
             }
           }
           
+          console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name})`);
           return zone.speedLimit;
         }
       }

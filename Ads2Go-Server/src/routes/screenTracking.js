@@ -745,42 +745,6 @@ router.get('/compliance', async (req, res) => {
       console.log(`  Device ${index + 1}: ${device.materialId} (${device.slots?.length || 0} slots)`);
     });
     
-    // Check if we need to fetch historical data
-    const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-    const historicalDataMap = new Map(); // materialId -> historical data for the date
-    const isHistoricalDate = date && new Date(date).toDateString() !== new Date().toDateString();
-    
-    if (isHistoricalDate) {
-      console.log(`📅 Fetching historical data for date: ${targetDate.toDateString()}`);
-      
-      // Normalize the target date to start of day
-      const targetDateStart = new Date(targetDate);
-      targetDateStart.setHours(0, 0, 0, 0);
-      const targetDateEnd = new Date(targetDate);
-      targetDateEnd.setHours(23, 59, 59, 999);
-      
-      // Fetch historical data for all materials
-      for (const materialId of registeredMaterialIds) {
-        const historyRecord = await DeviceDataHistoryV2.findOne({ materialId });
-        
-        if (historyRecord && historyRecord.dailyData) {
-          // Find the specific day's data
-          const dayData = historyRecord.dailyData.find(d => {
-            const dayDate = new Date(d.date);
-            dayDate.setHours(0, 0, 0, 0);
-            return dayDate.getTime() === targetDateStart.getTime();
-          });
-          
-          if (dayData) {
-            console.log(`  ✅ Found historical data for ${materialId}: ${dayData.totalHoursOnline}h, ${dayData.totalDistanceTraveled}km`);
-            historicalDataMap.set(materialId, dayData);
-          } else {
-            console.log(`  ⚠️ No historical data found for ${materialId} on ${targetDate.toDateString()}`);
-          }
-        }
-      }
-    }
-    
     // Initialize screens array to collect individual device records
     const individualScreens = [];
     const seenDisplayIds = new Set(); // Track unique display IDs to prevent duplicates
@@ -852,26 +816,17 @@ router.get('/compliance', async (req, res) => {
             });
             
             // Update slot status - use tablet registration status as primary source
-            let isDeviceOnline = false;
+            const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
+            const deviceStatusOnline = !!statusInfo.isOnline;
             
-            if (isHistoricalDate) {
-              // For historical dates, mark as offline since they can't be "online" in real-time
-              // But they had activity if there's historical data for this material
-              isDeviceOnline = !!historicalDataMap.get(materialId);
-            } else {
-              // For current date, use real-time status
-              const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
-              const deviceStatusOnline = !!statusInfo.isOnline;
-              
-              // Check if tablet registration status is recent (within last 30 seconds)
-              const now = new Date();
-              const lastSeen = new Date(slot.lastSeen);
-              const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
-              const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
-              
-              // Use tablet registration status if recent, otherwise use device status
-              isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
-            }
+            // Check if tablet registration status is recent (within last 30 seconds)
+            const now = new Date();
+            const lastSeen = new Date(slot.lastSeen);
+            const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
+            const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
+            
+            // Use tablet registration status if recent, otherwise use device status
+            const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
             
             // Update slot status based on the actual slot number
             const slotNumber = slot.slotNumber;
@@ -893,65 +848,31 @@ router.get('/compliance', async (req, res) => {
       }
       
       // Sum up all metrics from the car record
-      // Use historical data if available, otherwise use current data
-      const historicalData = historicalDataMap.get(materialId);
-      if (historicalData) {
-        // Use historical data for this specific date
-        group.totalAdPlays += historicalData.totalAdPlays || 0;
-        group.totalQRScans += historicalData.totalQRScans || 0;
-        group.totalDistanceTraveled += historicalData.totalDistanceTraveled || 0;
-        group.totalHoursOnline += historicalData.totalHoursOnline || 0;
-        group.totalAdImpressions += historicalData.totalAdImpressions || 0;
-        group.totalAdPlayTime += historicalData.totalAdPlayTime || 0;
-      } else {
-        // Use current device data
-        group.totalAdPlays += device.totalAdPlays || 0;
-        group.totalQRScans += device.totalQRScans || 0;
-        group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
-        group.totalHoursOnline += device.totalHoursOnline || 0;
-        group.totalAdImpressions += device.totalAdImpressions || 0;
-        group.totalAdPlayTime += device.totalAdPlayTime || 0;
-      }
+      group.totalAdPlays += device.totalAdPlays || 0;
+      group.totalQRScans += device.totalQRScans || 0;
+      group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
+      group.totalHoursOnline += device.totalHoursOnline || 0;
+      group.totalAdImpressions += device.totalAdImpressions || 0;
+      group.totalAdPlayTime += device.totalAdPlayTime || 0;
       
       // Use the most recent lastSeen
-      if (historicalData && historicalData.networkStatus && historicalData.networkStatus.lastSeen) {
-        // Use historical last seen if available
-        if (!group.lastSeen || historicalData.networkStatus.lastSeen > group.lastSeen) {
-          group.lastSeen = historicalData.networkStatus.lastSeen;
-        }
-      } else if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
+      if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
         group.lastSeen = device.lastSeen;
       }
       
       // Use the most recent location
-      if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
-        // Use last location from historical data
-        const lastHistoricalLocation = historicalData.locationHistory[historicalData.locationHistory.length - 1];
-        if (lastHistoricalLocation) {
-          group.currentLocation = lastHistoricalLocation;
-        }
-      } else if (device.currentLocation && (!group.currentLocation || 
+      if (device.currentLocation && (!group.currentLocation || 
           (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
         group.currentLocation = device.currentLocation;
       }
       
       // Merge arrays
-      if (historicalData) {
-        // Use historical data arrays
-        if (historicalData.adPlaybacks) group.adPlaybacks.push(...historicalData.adPlaybacks);
-        if (historicalData.qrScans) group.qrScans.push(...historicalData.qrScans);
-        if (historicalData.locationHistory) group.locationHistory.push(...historicalData.locationHistory);
-        if (historicalData.hourlyStats) group.hourlyStats.push(...historicalData.hourlyStats);
-        if (historicalData.adPerformance) group.adPerformance.push(...historicalData.adPerformance);
-      } else {
-        // Use current device data arrays
-        if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
-        if (device.qrScans) group.qrScans.push(...device.qrScans);
-        if (device.locationHistory) group.locationHistory.push(...device.locationHistory);
-        if (device.hourlyStats) group.hourlyStats.push(...device.hourlyStats);
-        if (device.adPerformance) group.adPerformance.push(...device.adPerformance);
-        if (device.alerts) group.alerts.push(...device.alerts);
-      }
+      if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
+      if (device.qrScans) group.qrScans.push(...device.qrScans);
+      if (device.locationHistory) group.locationHistory.push(...device.locationHistory);
+      if (device.hourlyStats) group.hourlyStats.push(...device.hourlyStats);
+      if (device.adPerformance) group.adPerformance.push(...device.adPerformance);
+      if (device.alerts) group.alerts.push(...device.alerts);
       
       // Use the most recent screen metrics
       if (device.screenMetrics && Object.keys(device.screenMetrics).length > 0) {
@@ -959,12 +880,7 @@ router.get('/compliance', async (req, res) => {
       }
       
       // If any device is online, mark the group as online
-      // For historical dates, use historical data status instead of current online status
-      if (historicalData && historicalData.networkStatus) {
-        if (historicalData.networkStatus.isOnline) {
-          group.isOnline = true;
-        }
-      } else if (device.isOnline) {
+      if (device.isOnline) {
         group.isOnline = true;
       }
     });
