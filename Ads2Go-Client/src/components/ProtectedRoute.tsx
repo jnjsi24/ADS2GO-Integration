@@ -21,17 +21,18 @@ const Loader = () => {
         className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
         style={{
           backgroundImage: "url('/image/bg2.jpg')",
+          pointerEvents: 'none'
         }}
       ></div>
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl" style={{ pointerEvents: 'none' }}></div>
 
       {/* GIF Loader animation (transparent background) */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen">
+      <div className="relative z-10 flex items-center justify-center min-h-screen" style={{ pointerEvents: 'none' }}>
         <img
           src="/image/Video-Ads2Go-Wave-unscreen.gif"
           alt="Loading..."
           className="w-48 h-48 object-contain"
-          style={{ maxWidth: '320px', maxHeight: '320px' }}
+          style={{ maxWidth: '320px', maxHeight: '320px', pointerEvents: 'none' }}
         />
       </div>
     </StyledWrapper>
@@ -43,6 +44,7 @@ const StyledWrapper = styled.div`
   inset: 0;
   overflow: hidden;
   z-index: 50;
+  pointer-events: none;
 
   .banter-loader {
     position: absolute;
@@ -628,15 +630,15 @@ const AdminLoader = () => {
   return (
     <StyledWrapper>
       {/* Plain white background (original admin loader) */}
-      <div className="absolute inset-0 bg-none"></div>
+      <div className="absolute inset-0 bg-none" style={{ pointerEvents: 'none' }}></div>
 
       {/* GIF Loader animation (transparent background) */}
-      <div className="relative z-10 flex items-center justify-center min-h-screen">
+      <div className="relative z-10 flex items-center justify-center min-h-screen" style={{ pointerEvents: 'none' }}>
         <img
           src="/image/Video-Ads2Go-Wave-unscreen.gif"
           alt="Loading..."
           className="w-48 h-48 object-contain"
-          style={{ maxWidth: '320px', maxHeight: '320px' }}
+          style={{ maxWidth: '320px', maxHeight: '320px', pointerEvents: 'none' }}
         />
       </div>
     </StyledWrapper>

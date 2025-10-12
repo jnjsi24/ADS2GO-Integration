@@ -720,7 +720,7 @@ const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
 
                 {/* Uploaded File Display - Inside Upload Box */}
                 {formData.mediaFile && !mediaFileError && (
-                  <div className="flex items-center justify-between mt-4 p-2 bg-green-50 rounded-md border border-green-200 max-w-md mx-auto">
+                  <div className="flex items-center justify-between mt-4 p-2 rounded-md max-w-md mx-auto">
                     <p className="text-sm text-green-600 truncate flex-1">
                       Selected: {formData.mediaFile.name}
                     </p>
