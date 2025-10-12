@@ -64,6 +64,21 @@ const AdminAdsControl: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
+  // Responsive state
+  const [isMobile, setIsMobile] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setSidebarCollapsed(width >= 768 && width < 1024);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // REST API service for all API operations (using compliance endpoint for real-time data)
   const apiService = adsPanelService;
 
@@ -515,9 +530,11 @@ const AdminAdsControl: React.FC = () => {
     return <AdminLoader />;
   }
 
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
+
   if (error) {
     return (
-      <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen flex items-center justify-center">
+      <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen flex items-center justify-center transition-all duration-300`}>
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
           <p className="text-red-600 mb-4">{error}</p>
@@ -533,7 +550,7 @@ const AdminAdsControl: React.FC = () => {
   }
 
   return (
-    <div className="pt-10 pb-10 pl-72 p-8 bg-[#f9f9fc] min-h-screen">
+    <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen transition-all duration-300`}>
       {/* Header */}
       <div className="mb-8">
         <div className="flex justify-between items-center">

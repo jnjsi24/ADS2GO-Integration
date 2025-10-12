@@ -147,11 +147,14 @@ const Materials: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      setItemsPerPage(window.innerWidth < 768 ? 5 : 9);
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setSidebarCollapsed(width >= 768 && width < 1024);
+      setItemsPerPage(width < 768 ? 5 : 9);
     };
     window.addEventListener('resize', handleResize);
     handleResize();
@@ -744,10 +747,12 @@ const Materials: React.FC = () => {
     return parts.map(p => p[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  if (error) return <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : 'ml-64 pr-5 p-10'} flex items-center justify-center text-red-500`}>Error: {error.message}</div>;
+  const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'ml-60';
+
+  if (error) return <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex items-center justify-center text-red-500 transition-all duration-300`}>Error: {error.message}</div>;
 
   return (
-    <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-10 pl-28' : 'ml-52 pr-5 p-10'} flex flex-col`}>
+    <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}>
       <div className="flex-1 flex flex-col">
         <MaterialFilters
           searchTerm={searchTerm}

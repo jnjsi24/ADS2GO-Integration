@@ -143,10 +143,15 @@ const ManageUsers: React.FC = () => {
   
   // Responsive state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setSidebarCollapsed(width >= 768 && width < 1024);
+    };
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -155,8 +160,8 @@ const ManageUsers: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
-  // Dynamic padding based on sidebar state
-  const contentPadding = sidebarCollapsed ? "pl-28" : "pl-64";
+  // Dynamic margin based on sidebar state and screen size
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -393,7 +398,7 @@ const ManageUsers: React.FC = () => {
   // Check if admin is authenticated
   if (!admin) {
     return (
-      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
+      <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex justify-center items-center transition-all duration-300`}>
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
           <p className="text-gray-600">You must be logged in to access this page.</p>
@@ -404,7 +409,7 @@ const ManageUsers: React.FC = () => {
 
   if (error) {
     return (
-      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
+      <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex justify-center items-center transition-all duration-300`}>
         <div className="text-center">
           <div className="text-red-500 text-lg mb-4">{error}</div>
           <div className="text-sm text-gray-600 mb-4">
@@ -428,9 +433,7 @@ const ManageUsers: React.FC = () => {
 
   return (
       <div
-      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-        isMobile ? 'px-10 pl-28' : 'ml-52'
-      }`}
+      className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}
     >
     
         {/* Mobile Header */}
