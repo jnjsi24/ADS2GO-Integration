@@ -1,7 +1,7 @@
 import { useState, useEffect,  MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
-import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CREATE_FLEXIBLE_AD } from '../../graphql/mutations/flexibleAdMutations';
 import { 
@@ -38,6 +38,7 @@ const CreateAdvertisement: React.FC = () => {
   const [pricingCalculation, setPricingCalculation] = useState<FlexiblePricingCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [showVehicleTypeDropdown, setShowVehicleTypeDropdown] = useState(false);
   const [showMaterialTypeDropdown, setShowMaterialTypeDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
@@ -430,7 +431,7 @@ const CreateAdvertisement: React.FC = () => {
   };
 
   // Update the handleFileInputChange function to be more strict
-const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0] || null;
   
   // Clear previous errors
@@ -449,7 +450,40 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isSupportedVideo = supportedVideoTypes.includes(file.type);
     
     if ((isImage && isSupportedImage) || (isVideo && isSupportedVideo)) {
-      handleInputChange('mediaFile', file);
+      // Start upload with progress
+      setIsUploading(true);
+      setUploadProgress(0);
+      
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+      
+      try {
+        // Store the file for later use
+        handleInputChange('mediaFile', file);
+        
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+        
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadProgress(0);
+        }, 500);
+      } catch (error) {
+        clearInterval(progressInterval);
+        setIsUploading(false);
+        setUploadProgress(0);
+        setMediaFileError('Failed to process file. Please try again.');
+        e.target.value = '';
+        handleInputChange('mediaFile', null);
+      }
     } else {
       setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, MOV');
       // Clear the file input
@@ -462,7 +496,7 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 };
 
 // Also update the handleDrop function to be more specific
-const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
   e.preventDefault();
   setIsDragging(false);
   const file = e.dataTransfer.files[0];
@@ -479,7 +513,39 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     const isSupportedVideo = supportedVideoTypes.includes(file.type);
     
     if (isSupportedImage || isSupportedVideo) {
-      handleInputChange('mediaFile', file);
+      // Start upload with progress
+      setIsUploading(true);
+      setUploadProgress(0);
+      
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+      
+      try {
+        // Store the file for later use
+        handleInputChange('mediaFile', file);
+        
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+        
+        setTimeout(() => {
+          setIsUploading(false);
+          setUploadProgress(0);
+        }, 500);
+      } catch (error) {
+        clearInterval(progressInterval);
+        setIsUploading(false);
+        setUploadProgress(0);
+        setMediaFileError('Failed to process file. Please try again.');
+        handleInputChange('mediaFile', null);
+      }
     } else {
       setMediaFileError('Invalid file type. Supported: JPEG, PNG, GIF, WebP, MP4, MPEG, OGG, WebM, ');
       handleInputChange('mediaFile', null);
@@ -581,70 +647,99 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 mediaFileError ? 'text-red-400' : 'text-black/60'
               }`}
             />
-            <p className="text-black/80 mb-4">Drag your file image/video here</p>
 
-            {/* Divider with 'or' */}
-            <div className="flex items-center justify-center mb-4 w-full">
-              <div
-                className={`grow max-w-40 h-px ${
-                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-                }`}
-              ></div>
-              <span
-                className={`mx-3 text-sm ${
-                  mediaFileError ? 'text-red-400' : 'text-black/80'
-                }`}
-              >
-                or
-              </span>
-              <div
-                className={`grow max-w-40 h-px ${
-                  mediaFileError ? 'bg-red-300' : 'bg-gray-300'
-                }`}
-              ></div>
-            </div>
+            {isUploading ? (
+              <div className="w-full space-y-2">
+                <p className="text-black/80">Uploading... {uploadProgress}%</p>
+                <div className="w-full bg-gray-200 rounded-full h-2.5 max-w-md mx-auto">
+                  <div 
+                    className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-black/80 mb-4">Drag your file image/video here</p>
 
-            {/* Centered Upload Button */}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setMediaFileError('');
-                  document.getElementById('media-upload')?.click();
-                }}
-                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  const button = e.currentTarget;
-                  const rect = button.getBoundingClientRect();
-                  const x = e.clientX - rect.left;
-                  const y = e.clientY - rect.top;
-                  button.style.setProperty('--x', `${x}px`);
-                  button.style.setProperty('--y', `${y}px`);
-                }}
-                className={`relative p-3 rounded-md font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
-                  ${
-                    mediaFileError
-                      ? 'bg-red-500 hover:bg-red-600'
-                      : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5]'
-                  }`}
-              >
-                {/* Shiny Hover Effect */}
-                <span
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  style={{
-                    background:
-                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
-                  }}
-                />
-                <span className="relative z-10">Click to upload file</span>
-              </button>
-            </div>
+                {/* Divider with 'or' */}
+                <div className="flex items-center justify-center mb-4 w-full">
+                  <div
+                    className={`grow max-w-40 h-px ${
+                      mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                    }`}
+                  ></div>
+                  <span
+                    className={`mx-3 text-sm ${
+                      mediaFileError ? 'text-red-400' : 'text-black/80'
+                    }`}
+                  >
+                    or
+                  </span>
+                  <div
+                    className={`grow max-w-40 h-px ${
+                      mediaFileError ? 'bg-red-300' : 'bg-gray-300'
+                    }`}
+                  ></div>
+                </div>
 
-            {/* File feedback */}
-            <p
-              className={`text-sm mt-2 ${
-                mediaFileError ? 'text-red-500' : 'text-gray-500'
-              }`}
-            ></p>
+                {/* Centered Upload Button */}
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMediaFileError('');
+                      document.getElementById('media-upload')?.click();
+                    }}
+                    onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                      const button = e.currentTarget;
+                      const rect = button.getBoundingClientRect();
+                      const x = e.clientX - rect.left;
+                      const y = e.clientY - rect.top;
+                      button.style.setProperty('--x', `${x}px`);
+                      button.style.setProperty('--y', `${y}px`);
+                    }}
+                    className={`relative p-3 rounded-md font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
+                      ${
+                        mediaFileError
+                          ? 'bg-red-500 hover:bg-red-600'
+                          : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5]'
+                      }`}
+                  >
+                    {/* Shiny Hover Effect */}
+                    <span
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{
+                        background:
+                          'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                      }}
+                    />
+                    <span className="relative z-10">Click to upload file</span>
+                  </button>
+                </div>
+
+                {/* Uploaded File Display - Inside Upload Box */}
+                {formData.mediaFile && !mediaFileError && (
+                  <div className="flex items-center justify-between mt-4 p-2 bg-green-50 rounded-md border border-green-200 max-w-md mx-auto">
+                    <p className="text-sm text-green-600 truncate flex-1">
+                      Selected: {formData.mediaFile.name}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => ({ ...prev, mediaFile: null }));
+                        const fileInput = document.getElementById('media-upload') as HTMLInputElement;
+                        if (fileInput) fileInput.value = '';
+                      }}
+                      className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-full transition-colors"
+                      title="Remove file"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
 
             <input
               type="file"
@@ -654,12 +749,6 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               id="media-upload"
               required
             />
-
-            {formData.mediaFile && !mediaFileError && (
-              <p className="text-sm text-green-600 mt-2">
-                Selected: {formData.mediaFile.name}
-              </p>
-            )}
           </div>
 
           {(errors.mediaFile || mediaFileError) && (
