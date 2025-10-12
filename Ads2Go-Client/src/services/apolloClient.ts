@@ -26,7 +26,9 @@ console.log('🔧 Apollo Client Configuration:', {
   reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
 });
 
-const graphqlUri = actualServerUrl.endsWith('/graphql') ? actualServerUrl : actualServerUrl + '/graphql';
+// Remove trailing slash from actualServerUrl to prevent double slashes
+const cleanServerUrl = actualServerUrl.replace(/\/$/, '');
+const graphqlUri = cleanServerUrl.endsWith('/graphql') ? cleanServerUrl : cleanServerUrl + '/graphql';
 
 const httpLink = createHttpLink({
   uri: graphqlUri,

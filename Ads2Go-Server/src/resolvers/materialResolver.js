@@ -135,9 +135,23 @@ const materialResolvers = {
     // Get materials assigned to a specific driver
     getDriverMaterials: async (_, { driverId }, { user, driver }) => {
       try {
+        // Debug logging
+        console.log('🔍 getDriverMaterials called:', {
+          requestedDriverId: driverId,
+          hasUser: !!user,
+          hasDriver: !!driver,
+          driverIdFromContext: driver?.driverId,
+          userRole: user?.role
+        });
+
         // Check if user is admin or if driver is requesting their own materials
         if (!user && !driver) {
-          throw new Error('Unauthorized access');
+          console.error('❌ Unauthorized: No user or driver in context');
+          return {
+            success: false,
+            message: 'Unauthorized: Authentication required',
+            materials: []
+          };
         }
 
         // Always use the authenticated driver's ID when present
@@ -156,8 +170,29 @@ const materialResolvers = {
         const materialsWithTracking = await Promise.all(
           materials.map(async (material) => {
             const tracking = await DeviceCompliance.findOne({ materialId: material.id });
+            const materialObj = material.toObject();
+            
+            // Helper to format date to ISO string
+            const formatDateField = (dateValue) => {
+              if (!dateValue) return null;
+              if (dateValue instanceof Date) return dateValue.toISOString();
+              if (typeof dateValue === 'string') return dateValue;
+              return null;
+            };
+
             return {
-              ...material.toObject(),
+              id: materialObj._id.toString(),
+              materialId: materialObj.materialId,
+              materialType: materialObj.materialType,
+              materialName: `${materialObj.materialType} - ${materialObj.materialId}`,
+              description: materialObj.description || '',
+              status: materialObj.dismountedAt ? 'DISMOUNTED' : 'MOUNTED',
+              assignedDate: formatDateField(materialObj.mountedAt) || formatDateField(materialObj.createdAt) || new Date().toISOString(),
+              mountedAt: formatDateField(materialObj.mountedAt),
+              location: materialObj.driver ? {
+                address: '',
+                coordinates: []
+              } : null,
               materialTracking: tracking ? {
                 photoComplianceStatus: tracking.photoComplianceStatus,
                 nextPhotoDue: tracking.nextPhotoDue,
