@@ -378,9 +378,9 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  // Get today's date as a Date object (start of day)
+  // Get today's date as UTC midnight (consistent with rest of system)
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
@@ -481,9 +481,9 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  // Get today's date as a Date object (start of day)
+  // Get today's date as UTC midnight (consistent with rest of system)
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
   
   // First try to find today's record for this material
   let car = await this.findOne({ materialId, date: today });
