@@ -262,6 +262,11 @@ async function startServer() {
   // Serve public files statically
   app.use(express.static(path.join(__dirname, '..', 'public')));
   
+  // Health check endpoint for Render
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  
   // Regular file upload route (must come before GraphQL middleware)
   app.use('/upload', uploadRoute);
   
