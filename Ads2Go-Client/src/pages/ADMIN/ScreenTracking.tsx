@@ -27,7 +27,7 @@ import {
 interface ScreenStatus {
   deviceId: string;
   displayId?: string; // Unique display identifier (e.g., "DGL-HEADDRESS-CAR-001-SLOT-1")
-  materialId: string;
+  materialId: string | string[]; // Can be array or single value for backward compatibility
   screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
   carGroupId?: string;
   slotNumber?: number;
@@ -401,7 +401,14 @@ const ScreenTracking: React.FC = () => {
       console.log('Showing all screens:', screens.length);
       filtered = screens;
     } else {
-      filtered = screens.filter((screen: ScreenStatus) => screen.materialId === selectedMaterial);
+      // materialId is now an array, so we need to check if it includes the selected material
+      filtered = screens.filter((screen: ScreenStatus) => {
+        // Handle both array and single value for backward compatibility
+        if (Array.isArray(screen.materialId)) {
+          return screen.materialId.includes(selectedMaterial);
+        }
+        return screen.materialId === selectedMaterial;
+      });
       console.log(`Filtering for material ${selectedMaterial}:`, filtered.length, 'screens found');
     }
     
