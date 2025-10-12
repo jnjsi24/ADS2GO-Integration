@@ -383,6 +383,141 @@ const calculateDataQuality = (locationHistory) => {
   };
 };
 
+/**
+ * Smooth GPS data using moving average filter
+ * This reduces GPS noise and creates smoother route lines
+ */
+const smoothGPSData = (locationHistory, options = {}) => {
+  const {
+    windowSize = 5,           // Number of points to average (must be odd)
+    smoothSpeed = true,       // Whether to smooth speed values
+    smoothHeading = true,     // Whether to smooth heading values
+    preserveTimestamps = true // Keep original timestamps
+  } = options;
+
+  if (!locationHistory || locationHistory.length < 3) {
+    return locationHistory; // Not enough points to smooth
+  }
+
+  // Ensure window size is odd
+  const window = windowSize % 2 === 0 ? windowSize + 1 : windowSize;
+  const halfWindow = Math.floor(window / 2);
+
+  console.log(`🎨 [GPS Smoother] Smoothing ${locationHistory.length} points with window size ${window}`);
+
+  const smoothedData = [];
+
+  for (let i = 0; i < locationHistory.length; i++) {
+    const point = locationHistory[i];
+    
+    // For points near the edges, use smaller window
+    const start = Math.max(0, i - halfWindow);
+    const end = Math.min(locationHistory.length - 1, i + halfWindow);
+    const pointsToAverage = locationHistory.slice(start, end + 1);
+    
+    // Calculate weighted moving average for coordinates
+    // Points closer to center get higher weight
+    let sumLat = 0;
+    let sumLng = 0;
+    let sumSpeed = 0;
+    let sumHeading = 0;
+    let totalWeight = 0;
+    
+    pointsToAverage.forEach((p, idx) => {
+      // Gaussian-like weight: higher in center, lower at edges
+      const distance = Math.abs(idx - (pointsToAverage.length - 1) / 2);
+      const weight = Math.exp(-distance * distance / (halfWindow * halfWindow));
+      
+      sumLat += p.coordinates[1] * weight;
+      sumLng += p.coordinates[0] * weight;
+      sumSpeed += (p.speed || 0) * weight;
+      sumHeading += (p.heading || 0) * weight;
+      totalWeight += weight;
+    });
+    
+    const avgLat = sumLat / totalWeight;
+    const avgLng = sumLng / totalWeight;
+    const avgSpeed = smoothSpeed ? sumSpeed / totalWeight : point.speed;
+    const avgHeading = smoothHeading ? sumHeading / totalWeight : point.heading;
+    
+    // Create smoothed point
+    smoothedData.push({
+      type: point.type || 'Point',
+      coordinates: [avgLng, avgLat],
+      accuracy: point.accuracy,
+      altitude: point.altitude,
+      speed: avgSpeed,
+      heading: avgHeading,
+      timestamp: point.timestamp,
+      address: point.address || ''
+    });
+  }
+
+  console.log(`✅ [GPS Smoother] Smoothing complete - ${smoothedData.length} points processed`);
+  
+  return smoothedData;
+};
+
+/**
+ * Apply Kalman-like filter for more advanced smoothing
+ * This is particularly good for removing GPS jitter while maintaining route shape
+ */
+const kalmanFilterGPS = (locationHistory, options = {}) => {
+  const {
+    processNoise = 0.001,     // How much we expect the position to change
+    measurementNoise = 0.01,  // GPS measurement uncertainty
+    estimationError = 1       // Initial estimation error
+  } = options;
+
+  if (!locationHistory || locationHistory.length < 2) {
+    return locationHistory;
+  }
+
+  console.log(`🔬 [Kalman Filter] Filtering ${locationHistory.length} points`);
+
+  const filteredData = [];
+  
+  // Initialize state for latitude and longitude
+  let latEstimate = locationHistory[0].coordinates[1];
+  let lngEstimate = locationHistory[0].coordinates[0];
+  let latError = estimationError;
+  let lngError = estimationError;
+  
+  for (let i = 0; i < locationHistory.length; i++) {
+    const point = locationHistory[i];
+    const measuredLat = point.coordinates[1];
+    const measuredLng = point.coordinates[0];
+    
+    // Kalman gain calculation
+    const latKalmanGain = latError / (latError + measurementNoise);
+    const lngKalmanGain = lngError / (lngError + measurementNoise);
+    
+    // Update estimate
+    latEstimate = latEstimate + latKalmanGain * (measuredLat - latEstimate);
+    lngEstimate = lngEstimate + lngKalmanGain * (measuredLng - lngEstimate);
+    
+    // Update error
+    latError = (1 - latKalmanGain) * latError + processNoise;
+    lngError = (1 - lngKalmanGain) * lngError + processNoise;
+    
+    // Create filtered point
+    filteredData.push({
+      type: point.type || 'Point',
+      coordinates: [lngEstimate, latEstimate],
+      accuracy: point.accuracy,
+      altitude: point.altitude,
+      speed: point.speed,
+      heading: point.heading,
+      timestamp: point.timestamp,
+      address: point.address || ''
+    });
+  }
+
+  console.log(`✅ [Kalman Filter] Filtering complete - ${filteredData.length} points processed`);
+  
+  return filteredData;
+};
+
 // ============================================================================
 // EXPORTS
 // ============================================================================
@@ -400,5 +535,9 @@ module.exports = {
   validateAccuracyAdvanced,
   detectGPSDrift,
   cleanGPSData,
-  calculateDataQuality
+  calculateDataQuality,
+  
+  // GPS smoothing and filtering
+  smoothGPSData,
+  kalmanFilterGPS
 };

@@ -119,7 +119,7 @@ export default function HomeScreen() {
         try {
           await tabletRegistrationService.startLocationTracking();
           setIsTracking(true);
-          setTrackingStatus('Active - Sending data every 7 seconds');
+          setTrackingStatus('Active - Sending data every 3 seconds');
           console.log('Continuous location tracking started successfully');
         } catch (error) {
           console.error('Error starting continuous tracking:', error);

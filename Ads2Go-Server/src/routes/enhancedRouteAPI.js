@@ -94,15 +94,18 @@ router.get('/route/:materialId', async (req, res) => {
     // Process filtered daily data
     filteredDailyData.forEach(dailyRecord => {
       if (dailyRecord.locationHistory && dailyRecord.locationHistory.length > 0) {
-        // Use advanced GPS cleaning for better accuracy
+        // Clean GPS data (remove invalid points, drift, etc.)
+        // NO SMOOTHING - use raw GPS to stay accurate to roads
         const cleanedPoints = GPSValidation.cleanGPSData(dailyRecord.locationHistory, {
           strictMode: false,
-          maxAccuracy: 100, // Allow up to 100m accuracy
+          maxAccuracy: 30,  // Very strict - only high quality GPS points
           minAccuracy: 1,
           requirePhilippinesBounds: true,
           removeDrift: true,
           maxSpeed: 200
         });
+
+        console.log(`📍 [Enhanced Route API] Cleaned GPS data: ${dailyRecord.locationHistory.length} -> ${cleanedPoints.length} points`);
 
         allLocationPoints = allLocationPoints.concat(cleanedPoints);
         totalDistance += dailyRecord.totalDistanceTraveled || 0;

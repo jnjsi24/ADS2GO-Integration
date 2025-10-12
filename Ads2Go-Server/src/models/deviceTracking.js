@@ -866,7 +866,7 @@ DeviceTrackingSchema.methods.updateLocation = function(lat, lng, speed = 0, head
       $push: {
         locationHistory: {
           $each: [newLocation],
-          $slice: -4114 // Keep only last 4114 entries (8 hours at 7s intervals)
+          $slice: -9600 // Keep only last 9600 entries (8 hours at 3s intervals)
         }
       }
     },
