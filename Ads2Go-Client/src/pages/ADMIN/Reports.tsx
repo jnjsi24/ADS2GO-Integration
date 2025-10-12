@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText } from 'lucide-react';
+import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
+import { GET_ALL_DRIVER_REPORTS } from '../../graphql/admin/queries/driverReports';
+import { UPDATE_DRIVER_REPORT_ADMIN } from '../../graphql/admin/mutations/driverReports';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
@@ -14,13 +16,24 @@ interface User {
   email: string;
 }
 
+interface Driver {
+  driverId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  contactNumber: string;
+  vehiclePlateNumber: string;
+}
+
 interface Report {
   id: string;
   title: string;
   description: string;
   reportType: string;
   status: 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
-  user: User;
+  user?: User;
+  driver?: Driver;
+  driverId?: string;
   attachments: string[];
   adminNotes?: string;
   createdAt: string;
@@ -29,10 +42,12 @@ interface Report {
 }
 
 type ReportStatus = 'PENDING' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+type ReportSource = 'users' | 'drivers';
 
 const Reports: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
   const [isMobile, setIsMobile] = useState(false);
+  const [reportSource, setReportSource] = useState<ReportSource>('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('All Types');
@@ -49,19 +64,35 @@ const Reports: React.FC = () => {
   });
 
   const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
-  const typeFilterOptions = ['All Types', 'BUG', 'FEATURE_REQUEST', 'COMPLAINT', 'OTHER'];
+  const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
+  const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'OTHER'];
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Fetch reports using useQuery hook
-  const { data, loading, error } = useQuery(GET_ALL_USER_REPORTS, {
+  // Fetch user reports
+  const { data: userData, loading: userLoading, error: userError } = useQuery(GET_ALL_USER_REPORTS, {
     fetchPolicy: 'network-only',
+    skip: reportSource !== 'users',
   });
 
-  // Update report mutation
-  const [updateReport] = useMutation(UPDATE_USER_REPORT_ADMIN);
+  // Fetch driver reports
+  const { data: driverData, loading: driverLoading, error: driverError } = useQuery(GET_ALL_DRIVER_REPORTS, {
+    fetchPolicy: 'network-only',
+    skip: reportSource !== 'drivers',
+  });
+
+  // Update mutations
+  const [updateUserReport] = useMutation(UPDATE_USER_REPORT_ADMIN);
+  const [updateDriverReport] = useMutation(UPDATE_DRIVER_REPORT_ADMIN);
+
+  // Select appropriate data based on report source
+  const data = reportSource === 'users' ? userData : driverData;
+  const loading = reportSource === 'users' ? userLoading : driverLoading;
+  const error = reportSource === 'users' ? userError : driverError;
+  const updateReport = reportSource === 'users' ? updateUserReport : updateDriverReport;
+  const typeFilterOptions = reportSource === 'users' ? userTypeFilterOptions : driverTypeFilterOptions;
 
   // Detect mobile screen size
   useEffect(() => {
@@ -76,13 +107,28 @@ const Reports: React.FC = () => {
   }, []);
 
   // Filter reports based on search term, status, and type
-  const filteredReports = data?.getAllUserReports?.reports?.filter((report: Report) => {
+  const reports = reportSource === 'users' 
+    ? data?.getAllUserReports?.reports 
+    : data?.getAllDriverReports?.reports;
+
+  const filteredReports = reports?.filter((report: Report) => {
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = 
-      report.title.toLowerCase().includes(searchLower) ||
-      report.user.firstName.toLowerCase().includes(searchLower) ||
-      report.user.lastName.toLowerCase().includes(searchLower) ||
-      report.user.email.toLowerCase().includes(searchLower);
+    
+    let matchesSearch = report.title.toLowerCase().includes(searchLower);
+    
+    if (reportSource === 'users' && report.user) {
+      matchesSearch = matchesSearch ||
+        report.user.firstName.toLowerCase().includes(searchLower) ||
+        report.user.lastName.toLowerCase().includes(searchLower) ||
+        report.user.email.toLowerCase().includes(searchLower);
+    } else if (reportSource === 'drivers' && report.driver) {
+      matchesSearch = matchesSearch ||
+        report.driver.firstName.toLowerCase().includes(searchLower) ||
+        report.driver.lastName.toLowerCase().includes(searchLower) ||
+        report.driver.email.toLowerCase().includes(searchLower) ||
+        report.driver.driverId.toLowerCase().includes(searchLower) ||
+        (report.driver.vehiclePlateNumber && report.driver.vehiclePlateNumber.toLowerCase().includes(searchLower));
+    }
     
     const matchesStatus = selectedStatusFilter === 'All Status' || 
       report.status === selectedStatusFilter.toUpperCase().replace(' ', '_');
@@ -255,17 +301,57 @@ const Reports: React.FC = () => {
         </div>
       )}
 
-      {/* Header with Title and Filters */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+      {/* Header with Title */}
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
         {!isMobile && (
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Reports Management</h1>
         )}
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-md w-fit">
+          <button
+            onClick={() => {
+              setReportSource('users');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+              reportSource === 'users'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Users size={18} />
+            <span className="font-medium">User Reports</span>
+          </button>
+          <button
+            onClick={() => {
+              setReportSource('drivers');
+              setCurrentPage(1);
+              setSelectedTypeFilter('All Types');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
+              reportSource === 'drivers'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Car size={18} />
+            <span className="font-medium">Driver Reports</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-6">
         <div className="flex flex-col items-end gap-3">
           <div className="flex flex-col sm:flex-row gap-2 w-full">
             <input
               type="text"
               className="text-xs text-black rounded-lg pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
-              placeholder="Search by title, user name, or email"
+              placeholder={reportSource === 'users' ? "Search by title, user name, or email" : "Search by title, driver name, ID, or vehicle"}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -405,7 +491,7 @@ const Reports: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
             </svg>
           </div>
-          <div className="col-span-2 flex items-center">User</div>
+          <div className="col-span-2 flex items-center">{reportSource === 'users' ? 'User' : 'Driver'}</div>
           <div className="col-span-2 flex items-center">Category</div>
           <div className="col-span-2 flex items-center gap-1">
             <span>Status</span>
@@ -452,10 +538,21 @@ const Reports: React.FC = () => {
                 
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="grid grid-cols-2 gap-2">
-                    {/* User */}
+                    {/* User or Driver */}
                     <div>
-                      <div className="font-medium">User:</div>
-                      <div>{report.user.firstName} {report.user.lastName}</div>
+                      <div className="font-medium">{reportSource === 'users' ? 'User:' : 'Driver:'}</div>
+                      <div>
+                        {reportSource === 'users' && report.user
+                          ? `${report.user.firstName} ${report.user.lastName}`
+                          : reportSource === 'drivers' && report.driver
+                          ? `${report.driver.firstName} ${report.driver.lastName}`
+                          : 'N/A'}
+                      </div>
+                      {reportSource === 'drivers' && report.driver && report.driver.vehiclePlateNumber && (
+                        <div className="text-xs text-gray-500">
+                          Vehicle: {report.driver.vehiclePlateNumber}
+                        </div>
+                      )}
                     </div>
 
                     {/* Category */}
@@ -506,8 +603,18 @@ const Reports: React.FC = () => {
                     {report.title}
                   </span>
                 </div>
-                <div className="col-span-2 truncate" title={`${report.user.firstName} ${report.user.lastName}`}>
-                  {report.user.firstName} {report.user.lastName}
+                <div className="col-span-2 truncate" title={
+                  reportSource === 'users' && report.user
+                    ? `${report.user.firstName} ${report.user.lastName}`
+                    : reportSource === 'drivers' && report.driver
+                    ? `${report.driver.firstName} ${report.driver.lastName}`
+                    : 'N/A'
+                }>
+                  {reportSource === 'users' && report.user
+                    ? `${report.user.firstName} ${report.user.lastName}`
+                    : reportSource === 'drivers' && report.driver
+                    ? `${report.driver.firstName} ${report.driver.lastName}`
+                    : 'N/A'}
                 </div>
                 <div className="col-span-2 truncate">{report.reportType.replace('_', ' ')}</div>
                 <div className="col-span-2 flex items-center gap-1">

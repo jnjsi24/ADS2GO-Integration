@@ -2127,8 +2127,8 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
       // Daily performance
       dailyPerformance: deviceTracking.dailyPerformance || [],
       
-      // Device info - get from slot
-      deviceId: deviceTracking.slots?.[0]?.deviceId || 'Unknown',
+      // Device info - get from slot, or use materialId as fallback
+      deviceId: deviceTracking.slots?.[0]?.deviceId || deviceTracking.deviceId || material.materialId,
       screenType: deviceTracking.screenType,
       displayStatus: deviceTracking.isOnline ? 'ONLINE' : 'OFFLINE',
       
