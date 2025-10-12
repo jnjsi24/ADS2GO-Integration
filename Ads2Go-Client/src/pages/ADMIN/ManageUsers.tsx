@@ -9,6 +9,7 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { ToastContainer } from '../../components/ToastNotification';
 
 interface User {
   id: string;
@@ -141,12 +142,37 @@ const ManageUsers: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
+  // Toast notification functions
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+  
   // Responsive state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setSidebarCollapsed(width >= 768 && width < 1024);
+    };
+    handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -155,8 +181,8 @@ const ManageUsers: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
-  // Dynamic padding based on sidebar state
-  const contentPadding = sidebarCollapsed ? "pl-28" : "pl-64";
+  // Dynamic margin based on sidebar state and screen size
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -260,14 +286,29 @@ const ManageUsers: React.FC = () => {
           setUsers(prev => prev.filter((user) => user.id !== userToDelete));
           if (selectedUser?.id === userToDelete) setSelectedUser(null);
           setSelectedUsers(prev => prev.filter(userId => userId !== userToDelete));
-          alert('Advertiser deleted successfully');
+          addToast({
+            type: 'success',
+            title: 'Success!',
+            message: 'Advertiser deleted successfully',
+            duration: 5000
+          });
         } else {
-          alert('Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'));
+          addToast({
+            type: 'error',
+            title: 'Error!',
+            message: 'Failed to delete advertiser: ' + (result.data?.deleteUser?.message || 'Unknown error'),
+            duration: 5000
+          });
         }
         setShowDeleteModal(false);
         setUserToDelete(null);
       } catch (err: any) {
-        alert('Error deleting advertiser: ' + (err.message || 'Unknown error'));
+        addToast({
+          type: 'error',
+          title: 'Error!',
+          message: 'Error deleting advertiser: ' + (err.message || 'Unknown error'),
+          duration: 5000
+        });
         console.error('Error deleting advertiser:', err);
         setShowDeleteModal(false);
         setUserToDelete(null);
@@ -393,7 +434,7 @@ const ManageUsers: React.FC = () => {
   // Check if admin is authenticated
   if (!admin) {
     return (
-      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
+      <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex justify-center items-center transition-all duration-300`}>
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">Access Denied</h2>
           <p className="text-gray-600">You must be logged in to access this page.</p>
@@ -404,7 +445,7 @@ const ManageUsers: React.FC = () => {
 
   if (error) {
     return (
-      <div className={`min-h-screen bg-gray-100 ${isMobile ? 'px-4' : contentPadding} p-4 flex justify-center items-center`}>
+      <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex justify-center items-center transition-all duration-300`}>
         <div className="text-center">
           <div className="text-red-500 text-lg mb-4">{error}</div>
           <div className="text-sm text-gray-600 mb-4">
@@ -428,9 +469,7 @@ const ManageUsers: React.FC = () => {
 
   return (
       <div
-      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-        isMobile ? 'px-10 pl-28' : 'ml-52'
-      }`}
+      className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}
     >
     
         {/* Mobile Header */}
@@ -932,6 +971,9 @@ const ManageUsers: React.FC = () => {
         cancelText="Cancel"
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

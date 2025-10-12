@@ -4,6 +4,7 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
 import API_CONFIG from '../../config/api';
 import { RootStackParamList } from '../../types/navigation';
 
@@ -13,6 +14,7 @@ type NavigationProps = NativeStackNavigationProp<RootStackParamList>;
 const VerificationProgress = () => {
   const route = useRoute<VerificationProgressRouteProp>();
   const navigation = useNavigation<NavigationProps>();
+  const { signOut } = useAuth();
   
   // Get params from route
   console.log('Route params:', route.params);
@@ -138,21 +140,10 @@ const VerificationProgress = () => {
 
   const handleLogout = async () => {
     try {
-      // Clear any stored user data
-      await AsyncStorage.multiRemove(['user', 'token', 'driverId']);
-      
-      // Navigate back to login screen
-      navigation.reset({
-        index: 0,
-        routes: [{ name: '(auth)/login' as never }],
-      });
+      await signOut();
     } catch (error: unknown) {
       console.error('Error during logout:', error);
-      // Still navigate to login even if clearing storage fails
-      navigation.reset({
-        index: 0,
-        routes: [{ name: '(auth)/login' as never }],
-      });
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
     }
   };
 

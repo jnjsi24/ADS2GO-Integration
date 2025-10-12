@@ -202,8 +202,8 @@ export default function Login() {
             params: navParams as Record<string, string>,
           });
         } else {
-          // Navigate to main app if no verification needed
-          router.replace("/(tabs)");
+          // Navigate to dashboard if no verification needed
+          router.replace("/(tabs)/dashboard");
         }
       } else {
         // Show error message if login failed

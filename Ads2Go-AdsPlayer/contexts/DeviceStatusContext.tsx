@@ -120,7 +120,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } catch (error) {
         console.error('Error syncing material ID:', error);
       }
-    }, 2000); // Check every 2 seconds
+    }, 60000); // Check every 60 seconds (reduced from 2 seconds)
     
     return () => clearInterval(syncInterval);
   }, [materialId]);

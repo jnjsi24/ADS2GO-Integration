@@ -373,7 +373,7 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/40 z-0"></div>
         
         <div className="container mx-auto max-w-screen-xl relative z-10">
-          <div className="max-w-full sm:max-w-4xl text-left px-4 sm:pl-8 md:pl-24">
+          <div className="max-w-full sm:max-w-4xl text-left px-4 sm:pl-8 md:pl-5">
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 animate-fadeDown">
               Capture Attention Where It Counts — On the Move
             </h1>

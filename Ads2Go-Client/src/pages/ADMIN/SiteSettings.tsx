@@ -2,12 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAdminNotificationSettings } from '../../contexts/AdminNotificationSettingsContext';
 import { ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-
-type Toast = {
-  id: number;
-  message: string;
-  type: 'error' | 'success';
-};
+import { ToastContainer } from '../../components/ToastNotification';
 
 const SiteSettings: React.FC = () => {
   const {
@@ -16,7 +11,15 @@ const SiteSettings: React.FC = () => {
     isLoading: notificationLoading,
   } = useAdminNotificationSettings();
 
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Toast notification state
+  const [toasts, setToasts] = useState<Array<{
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+    duration?: number;
+  }>>([]);
+
   const [showTimeoutDropdown, setShowTimeoutDropdown] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -34,26 +37,35 @@ const SiteSettings: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const addToast = (message: string, type: 'error' | 'success' = 'error') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 5000);
+  const addToast = (toast: Omit<typeof toasts[0], 'id'>) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    const newToast = { ...toast, id };
+    setToasts(prev => [...prev, newToast]);
+    setTimeout(() => removeToast(id), toast.duration || 5000);
   };
 
-  const removeToast = (id: number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
   const handleNotificationToggle = async (field: keyof typeof notificationSettings) => {
     const newValue = !notificationSettings[field];
     try {
       await updateNotificationSetting(field, newValue);
-      addToast('Notification preference updated successfully', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Settings updated successfully.',
+        duration: 4000
+      });
     } catch (error) {
-      console.error('Error updating notification preference:', error);
-      addToast('Failed to update notification preference', 'error');
+      console.error('Error updating settings:', error);
+      addToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update settings.',
+        duration: 5000
+      });
     }
   };
 
@@ -63,10 +75,20 @@ const SiteSettings: React.FC = () => {
   ) => {
     try {
       await updateNotificationSetting(field, value);
-      addToast('Notification preference updated successfully', 'success');
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Settings updated successfully.',
+        duration: 4000
+      });
     } catch (error) {
-      console.error('Error updating notification preference:', error);
-      addToast('Failed to update notification preference', 'error');
+      console.error('Error updating settings:', error);
+      addToast({
+        type: 'error',
+        title: 'Update Failed',
+        message: 'Failed to update settings.',
+        duration: 5000
+      });
     }
     setShowTimeoutDropdown(false);
   };
@@ -246,42 +268,7 @@ const SiteSettings: React.FC = () => {
       </div>
 
       {/* Toast Notifications */}
-      <div className="fixed bottom-4 right-4 space-y-2 z-50">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`text-white px-4 py-2 rounded-md shadow-lg flex items-center justify-between max-w-xs animate-slideIn ${
-              toast.type === 'error' ? 'bg-red-400' : 'bg-green-400'
-            }`}
-          >
-            <span>{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="ml-4 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              transform: translateX(100%);
-              opacity: 0;
-            }
-            to {
-              transform: translateX(0);
-              opacity: 1;
-            }
-          }
-          .animate-slideIn {
-            animation: slideIn 0.3s ease-out;
-          }
-        `}
-      </style>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

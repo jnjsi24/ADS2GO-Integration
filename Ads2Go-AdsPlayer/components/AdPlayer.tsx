@@ -608,7 +608,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   }, [currentAd?.adId, currentAdIndex, isOffline, trackedAds]);
 
   // Handle QR code interaction (for debugging - simulates when someone scans the QR code)
-  const handleQRInteraction = () => {
+  const handleQRInteraction = async () => {
     if (currentAd) {
       console.log(`🔍 DEBUG: Simulating QR code scan for ad: ${currentAd.adTitle}`);
       console.log(`🔍 Ad ID: ${currentAd.adId}`);
@@ -616,6 +616,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log(`🔍 Slot Number: ${slotNumber}`);
       console.log(`🔍 Website: ${(currentAd as any).website}`);
       console.log(`🔍 QR URL: ${generateQRData()}`);
+      
+      // Test QR scan tracking
+      await trackQRDisplay();
       
       // Note: QR scan tracking is now handled by the tracking page, not the Android app
       console.log('🔍 QR scan will be tracked when user visits the tracking URL');
@@ -667,23 +670,30 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Calculate the correct slot number for this ad
       const adSlotNumber = currentAdIndex === -1 ? 1 : currentAdIndex + 1;
       
+      // Use the tracking server to track QR scans
+      const advertiserWebsite = (currentAd as any).website;
+      const fallbackUrl = 'https://ads2go.app';
+      
+      // Use advertiser website if available, otherwise use fallback
+      const redirectUrl = advertiserWebsite || fallbackUrl;
+      
       console.log('🔍 Generating QR data for ad:', {
         adId: currentAd.adId,
         adTitle: currentAd.adTitle,
-        website: (currentAd as any).website,
-        hasWebsite: !!(currentAd as any).website,
+        website: advertiserWebsite,
+        hasWebsite: !!advertiserWebsite,
+        redirectUrl: redirectUrl,
         adSlotNumber: adSlotNumber,
         currentAdIndex: currentAdIndex
       });
       
-      // Use the tracking server to track QR scans
       const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
         ad_id: currentAd.adId,
         ad_title: currentAd.adTitle || `Ad ${currentAd.adId}`,
         material_id: materialId,
         slot_number: adSlotNumber.toString(),
-        website: (currentAd as any).website || 'https://ads2go.app',
-        redirect_url: (currentAd as any).website || 'https://ads2go.app',
+        website: advertiserWebsite || 'Ads2Go Platform',
+        redirect_url: redirectUrl,
         scan_time: Date.now().toString()
       }).toString();
       

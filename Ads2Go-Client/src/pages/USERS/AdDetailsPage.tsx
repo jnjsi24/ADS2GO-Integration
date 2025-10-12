@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { ChevronLeft, QrCode, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, QrCode, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 import { DELETE_AD } from '../../graphql/user';
@@ -135,6 +135,7 @@ const AdDetailsPage: React.FC = () => {
   const [showAdDropdown, setShowAdDropdown] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [showRejectionToast, setShowRejectionToast] = useState(true);
   
   // Fetch all ads and filter by ID
   const { loading, error, data } = useQuery(GET_MY_ADS, {
@@ -169,6 +170,12 @@ const AdDetailsPage: React.FC = () => {
 
   // Find the specific ad by ID
   const ad = data?.getMyAds?.find((ad: Ad) => ad.id === id);
+
+  const closeRejectionToast = () => {
+    setShowRejectionToast(false);
+  };
+
+  const shouldShowRejectionToast = ad?.status === 'REJECTED' && ad?.reasonForReject && showRejectionToast;
   
   // Function to fetch device ID from material ID
   const fetchDeviceId = async (materialId: string) => {
@@ -362,6 +369,42 @@ const AdDetailsPage: React.FC = () => {
     {/* Overlay (adds soft tint and readability over the image) */}
     <div className="absolute inset-0 bg-white/30 backdrop-blur-lg"></div>
 
+    <AnimatePresence>
+        {shouldShowRejectionToast && (
+          <motion.div
+            initial={{ opacity: 0, x: 300, scale: 0.8 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 300, scale: 0.8 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            className="fixed top-6 right-6 z-50 max-w-sm"
+          >
+            <div className="bg-white/70 shadow-lg p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <XCircle size={20} className="text-red-500 mt-0.5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-black mb-1">
+                      Advertisement Rejected
+                    </h4>
+                    <p className="text-sm text-black">
+                      {ad.reasonForReject}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeRejectionToast}
+                  className="flex-shrink-0 ml-4 text-black/60 hover:text-red-600 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     {/* Content Layer */}
     <div className="relative z-10 min-h-screen rounded-xl p-5">
       <button
@@ -374,7 +417,7 @@ const AdDetailsPage: React.FC = () => {
       {/* Top Row: Media (Left) + Info (Right) */}
       <div className="grid grid-cols-2 gap-8">
         {/* Left: Media */}
-        <div className="rounded-xl overflow-hidden bg-gray-200 flex items-center justify-center h-96">
+        <div className="overflow-hidden bg-white/60 flex items-center justify-center h-96">
           {ad.mediaFile ? (
             ad.adFormat === 'IMAGE' ? (
               <img
@@ -400,7 +443,7 @@ const AdDetailsPage: React.FC = () => {
         {/* Right: Status, Title, Description, Price, Properties */}
         <div className="flex flex-col space-y-4">
           <span
-              className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-full px-3 py-1 ${
+              className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
 
               ad.status === 'PENDING'
                 ? 'bg-yellow-100 text-yellow-800'
@@ -414,13 +457,6 @@ const AdDetailsPage: React.FC = () => {
             {ad.status}
           </span>
 
-          {ad.status === 'REJECTED' && ad.reasonForReject && (
-            <span className="text-red-600 text-sm flex items-center">
-              <XCircle size={16} className="mr-1" />
-              {ad.reasonForReject}
-            </span>
-          )}
-
           <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
           <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
           <p className="text-black/70">{ad.description}</p>
@@ -431,43 +467,43 @@ const AdDetailsPage: React.FC = () => {
       <div className="grid grid-cols-2 gap-8 pt-10">
         {/* Left: Tabs + Delete */}
         <div className="space-y-4">
-    <div className="flex items-center justify-between mb-4 ">
-      {/* Tabs */}
-      <div className="flex space-x-4 relative">
-        {['Details', 'AdActivity'].map((tab) => (
-          <div key={tab} className="relative">
-            <button
-              onClick={() =>
-                setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
-              }
-              className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
-                activeTab === tab ? 'text-black/80' : 'text-black/60 hover:text-black/90'
-              }`}
-            >
-              {tab === 'AdActivity' ? 'Ad Activity' : tab}
+          <div className="flex items-center justify-between mb-4 ">
+            {/* Tabs */}
+            <div className="flex space-x-4 relative">
+              {['Details', 'AdActivity'].map((tab) => (
+                <div key={tab} className="relative">
+                  <button
+                    onClick={() =>
+                      setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
+                    }
+                    className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                      activeTab === tab ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+                    }`}
+                  >
+                    {tab === 'AdActivity' ? 'Ad Activity' : tab}
 
-              {/* Hover underline with framer-motion */}
-              <motion.div
-                className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: activeTab === tab ? '100%' : 0 }}
-                whileHover={{ width: '100%' }}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              />
+                    {/* Hover underline with framer-motion */}
+                    <motion.div
+                      className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: activeTab === tab ? '100%' : 0 }}
+                      whileHover={{ width: '100%' }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Delete Button */}
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              disabled={deleteLoading || ad?.status !== 'PENDING'}
+              className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
+            >
+              {deleteLoading ? 'Deleting...' : 'Delete Ad'}
             </button>
           </div>
-        ))}
-      </div>
-
-      {/* Delete Button */}
-      <button
-        onClick={() => setShowDeleteModal(true)}
-        disabled={deleteLoading || ad?.status !== 'PENDING'}
-        className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-700 disabled:cursor-not-allowed"
-      >
-        {deleteLoading ? 'Deleting...' : 'Delete Ad'}
-      </button>
-    </div>
 
           {/* Tab Content */}
           {activeTab === 'Details' && (
@@ -508,7 +544,7 @@ const AdDetailsPage: React.FC = () => {
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {/* Replace sampleNotifications with sampleQrImpressions */}
               {sampleQrImpressions.map((impression) => (
-                <div key={impression.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 rounded-lg shadow-md">
+                <div key={impression.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 hadow-md">
                   {/* You can use an icon to represent a QR code, e.g., QrCode from lucide-react */}
                   <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
