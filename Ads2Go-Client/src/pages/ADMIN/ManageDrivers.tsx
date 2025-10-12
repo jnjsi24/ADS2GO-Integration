@@ -6,6 +6,7 @@ import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admi
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { ToastContainer } from '../../components/ToastNotification';
 
 // === Types ===
 interface Driver {
@@ -165,7 +166,6 @@ const ManageDrivers: React.FC = () => {
   const [selectedDriverDetails, setSelectedDriverDetails] = useState<Driver | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [showRejectionNotification, setShowRejectionNotification] = useState(true);
   const [driverToReject, setDriverToReject] = useState<string | null>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
@@ -253,7 +253,7 @@ const ManageDrivers: React.FC = () => {
       const result = await approveDriver({ variables: { driverId, materialTypeOverride: null } });
       if (result.data?.approveDriver?.success) {
         addToast({
-          type: 'success', title: 'Driver Approved', message: result.data.approveDriver.message, duration: 4000
+          type: 'success', title: 'Success!', message: 'Driver has been accepted successfully.', duration: 4000
         });
         refetch();
       } else {
@@ -276,7 +276,7 @@ const ManageDrivers: React.FC = () => {
       const result = await approveDriver({ variables: { driverId: selectedDriverDetails.driverId, materialTypeOverride: override } });
       if (result.data?.approveDriver?.success) {
         addToast({
-          type: 'success', title: 'Driver Approved', message: result.data.approveDriver.message, duration: 4000
+          type: 'success', title: 'Success!', message: 'Driver has been accepted successfully.', duration: 4000
         });
         setShowMaterialModal(false);
         setShowDetailsModal(false);
@@ -302,29 +302,51 @@ const ManageDrivers: React.FC = () => {
 
   const submitReject = async () => {
     if (!driverToReject || !rejectReason.trim()) {
-      alert('Please provide a reason for rejection');
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for rejection',
+        duration: 4000
+      });
       return;
     }
     try {
       const result = await rejectDriver({ variables: { driverId: driverToReject, reason: rejectReason.trim() } });
       if (result.data?.rejectDriver?.success) {
-        alert(result.data.rejectDriver.message);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: 'Driver has been rejected.',
+          duration: 4000
+        });
         refetch();
         setShowRejectModal(false);
         setRejectReason('');
         setDriverToReject(null);
       } else {
-        alert(result.data?.rejectDriver?.message || 'Failed to reject driver');
+        addToast({
+          type: 'error',
+          title: 'Rejection Failed',
+          message: result.data?.rejectDriver?.message || 'Failed to reject driver',
+          duration: 6000
+        });
       }
     } catch (error: any) {
       console.error('Error rejecting driver:', error);
+      let errorMessage = 'Failed to reject driver';
       if (error.graphQLErrors && error.graphQLErrors.length > 0) {
-        alert(`GraphQL Error: ${error.graphQLErrors[0].message}`);
+        errorMessage = error.graphQLErrors[0].message;
       } else if (error.networkError) {
-        alert(`Network Error: ${error.networkError.message}`);
-      } else {
-        alert(error.message || 'Failed to reject driver');
+        errorMessage = `Network Error: ${error.networkError.message}`;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
+      addToast({
+        type: 'error',
+        title: 'Rejection Failed',
+        message: errorMessage,
+        duration: 6000
+      });
     }
   };
 
@@ -989,17 +1011,6 @@ const ManageDrivers: React.FC = () => {
                 })()}
               </div>
             </div>
-            {selectedDriverDetails.accountStatus === 'REJECTED' && showRejectionNotification && (
-              <div className="fixed bottom-2 right-2 bg-red-600 text-white text-xs p-3 rounded-md shadow-lg max-w-sm z-50 flex justify-between items-start">
-                <div>
-                  <div className="font-bold mb-1">Driver account has been rejected.</div>
-                  <p className="text-lg">Reason: {selectedDriverDetails.rejectedReason || 'No reason provided.'}</p>
-                </div>
-                <button onClick={() => setShowRejectionNotification(false)} className="text-white hover:text-gray-200 pl-5">
-                  ✕
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1082,50 +1093,6 @@ const ManageDrivers: React.FC = () => {
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
 
-      {/* Toast Notifications */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <AnimatePresence>
-          {toasts.map(toast => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, scale: 0.3 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-              className={`max-w-md w-full mx-4 bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden ${
-                toast.type === 'success' ? 'border-l-4 border-green-400' :
-                toast.type === 'error' ? 'border-l-4 border-red-400' :
-                toast.type === 'warning' ? 'border-l-4 border-yellow-400' :
-                'border-l-4 border-blue-400'
-              }`}
-            >
-              <div className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    {toast.type === 'success' && <CheckCircle className="h-8 w-8 text-green-400" />}
-                    {toast.type === 'error' && <XCircle className="h-8 w-8 text-red-400" />}
-                    {toast.type === 'warning' && <AlertCircle className="h-8 w-8 text-yellow-400" />}
-                    {toast.type === 'info' && <AlertCircle className="h-8 w-8 text-blue-400" />}
-                  </div>
-                  <div className="ml-4 flex-1">
-                    <p className="text-lg font-medium text-gray-900">{toast.title}</p>
-                    <p className="mt-1 text-sm text-gray-500">{toast.message}</p>
-                  </div>
-                  <div className="ml-4 flex-shrink-0">
-                    <button
-                      className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      onClick={() => removeToast(toast.id)}
-                    >
-                      <span className="sr-only">Close</span>
-                      <X className="h-6 w-6" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1161,6 +1128,9 @@ const ManageDrivers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };
