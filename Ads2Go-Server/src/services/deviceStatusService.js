@@ -568,8 +568,30 @@ class DeviceStatusService {
       // Ensure date field is always UTC midnight (no timezone confusion)
       const today = new Date();
       const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
-      if (!deviceTracking.date || new Date(deviceTracking.date).toDateString() !== todayUTC.toDateString()) {
-        console.log(`📅 [updateDeviceStatus] Setting date to UTC midnight: ${todayUTC.toISOString()}`);
+      
+      // Compare dates properly in UTC timezone to avoid timezone conversion issues
+      const deviceDateUTC = deviceTracking.date ? new Date(deviceTracking.date) : null;
+      let needsDateUpdate = false;
+      
+      if (!deviceDateUTC) {
+        needsDateUpdate = true;
+      } else {
+        // Compare year, month, and date in UTC timezone (not local)
+        const deviceYear = deviceDateUTC.getUTCFullYear();
+        const deviceMonth = deviceDateUTC.getUTCMonth();
+        const deviceDay = deviceDateUTC.getUTCDate();
+        
+        const todayYear = todayUTC.getUTCFullYear();
+        const todayMonth = todayUTC.getUTCMonth();
+        const todayDay = todayUTC.getUTCDate();
+        
+        if (deviceYear !== todayYear || deviceMonth !== todayMonth || deviceDay !== todayDay) {
+          needsDateUpdate = true;
+        }
+      }
+      
+      if (needsDateUpdate) {
+        console.log(`📅 [updateDeviceStatus] Updating date from ${deviceDateUTC ? deviceDateUTC.toISOString() : 'null'} to UTC midnight: ${todayUTC.toISOString()}`);
         deviceTracking.date = todayUTC;
       }
       
@@ -588,18 +610,44 @@ class DeviceStatusService {
           const today = new Date();
           const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
           
+          // Check if there's an existing session for today
+          const existingSession = deviceTracking.currentSession;
+          let preservedHours = 0;
+          let preservedDistance = 0;
+          let preservedLocationHistory = [];
+          
+          if (existingSession && existingSession.date) {
+            const sessionDate = new Date(existingSession.date);
+            sessionDate.setHours(0, 0, 0, 0);
+            const todayLocal = new Date(today);
+            todayLocal.setHours(0, 0, 0, 0);
+            
+            // If the session is from today, preserve the hours and distance
+            if (sessionDate.getTime() === todayLocal.getTime()) {
+              preservedHours = existingSession.totalHoursOnline || 0;
+              preservedDistance = existingSession.totalDistanceTraveled || 0;
+              preservedLocationHistory = existingSession.locationHistory || [];
+              console.log(`♻️ [updateDeviceStatus] Preserving ${preservedHours.toFixed(2)} hours from existing session for ${deviceId}`);
+            }
+          }
+          
           deviceTracking.currentSession = {
             date: todayUTC,  // UTC midnight for current date
-            startTime: now,
+            startTime: existingSession?.startTime || now,  // Preserve original start time if available
             endTime: null,
-            totalHoursOnline: 0,
-            totalDistanceTraveled: 0,
+            totalHoursOnline: preservedHours,  // Preserve hours from same-day session
+            totalDistanceTraveled: preservedDistance,  // Preserve distance from same-day session
             isActive: true,
             targetHours: 8,
-            complianceStatus: 'PENDING',
-            locationHistory: [],
+            complianceStatus: preservedHours >= 8 ? 'COMPLIANT' : 'PENDING',
+            locationHistory: preservedLocationHistory,  // Preserve location history
             lastOnlineUpdate: now  // Track when device came online
           };
+          
+          // Also preserve totalHoursOnline at device level
+          if (preservedHours > 0) {
+            deviceTracking.totalHoursOnline = preservedHours;
+          }
         } else if (status && deviceTracking.currentSession && deviceTracking.currentSession.isActive) {
           // Device was already online - just update the last online update time
           deviceTracking.currentSession.lastOnlineUpdate = now;
