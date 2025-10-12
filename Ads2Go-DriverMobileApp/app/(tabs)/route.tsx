@@ -89,7 +89,16 @@ const RouteTab: React.FC = () => {
       });
 
       if (!driverResponse.ok) {
-        throw new Error(`Failed to fetch driver info: ${driverResponse.status}`);
+        // If driver endpoint fails, show the page with no device info
+        console.warn('Driver endpoint failed:', driverResponse.status);
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
 
       let driverData: any;
@@ -100,17 +109,44 @@ const RouteTab: React.FC = () => {
         } else {
           const text = await driverResponse.text();
           console.warn('Unexpected content-type for driver info:', ct, text?.slice(0, 200));
-          throw new Error('Unexpected response format');
+          // Show page with no device info
+          setDriverInfo({
+            driverId,
+            materialId: 'Not Assigned',
+            deviceId: 'No Device'
+          });
+          setRouteData(null);
+          setLoading(false);
+          return;
         }
       } catch (e) {
-        throw new Error('Failed to parse driver info response');
+        console.warn('Failed to parse driver info response:', e);
+        // Show page with no device info
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
+      
       if (!driverData.success) {
-        throw new Error(driverData.message || 'Failed to fetch driver info');
+        console.warn('Driver data fetch unsuccessful:', driverData.message);
+        // Show page with no device info
+        setDriverInfo({
+          driverId,
+          materialId: 'Not Assigned',
+          deviceId: 'No Device'
+        });
+        setRouteData(null);
+        setLoading(false);
+        return;
       }
 
-      const materialId = driverData.data.materialId;
-      const deviceId = driverData.data.deviceId;
+      const materialId = driverData.data.materialId || 'Not Assigned';
+      const deviceId = driverData.data.deviceId || 'No Device';
 
       setDriverInfo({
         driverId,
@@ -118,12 +154,23 @@ const RouteTab: React.FC = () => {
         deviceId
       });
 
-      // Fetch route data using device-specific endpoint available on server
-      await fetchDriverRouteData(deviceId);
+      // Only fetch route data if we have a valid deviceId
+      if (deviceId && deviceId !== 'Unknown' && deviceId !== 'No Device') {
+        await fetchDriverRouteData(deviceId);
+      } else {
+        // No valid device, but show the page anyway
+        setRouteData(null);
+      }
 
     } catch (err) {
       console.error('Error loading driver info:', err);
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      // Don't set error state - show the page with limited info
+      setDriverInfo({
+        driverId: 'Unknown',
+        materialId: 'Not Assigned',
+        deviceId: 'No Device'
+      });
+      setRouteData(null);
     } finally {
       setLoading(false);
     }
@@ -134,7 +181,9 @@ const RouteTab: React.FC = () => {
       // Get auth token
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        throw new Error('No auth token found');
+        console.warn('No auth token found for route data fetch');
+        setRouteData(null);
+        return;
       }
 
       const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}`, {
@@ -143,6 +192,13 @@ const RouteTab: React.FC = () => {
           'Content-Type': 'application/json',
         },
       });
+      
+      if (!response.ok) {
+        console.warn('Route endpoint failed:', response.status);
+        setRouteData(null);
+        return;
+      }
+      
       let result: any;
       try {
         const ct = response.headers.get('content-type') || '';
@@ -151,20 +207,25 @@ const RouteTab: React.FC = () => {
         } else {
           const text = await response.text();
           console.warn('Unexpected content-type for route data:', ct, text?.slice(0, 200));
-          throw new Error('Unexpected response format');
+          setRouteData(null);
+          return;
         }
       } catch (e) {
-        throw new Error('Failed to parse route data');
+        console.warn('Failed to parse route data:', e);
+        setRouteData(null);
+        return;
       }
       
       if (result.success) {
         setRouteData(result.data);
       } else {
-        throw new Error(result.message || 'Failed to fetch route data');
+        console.warn('Route data fetch unsuccessful:', result.message);
+        setRouteData(null);
       }
     } catch (err) {
       console.error('Error fetching route data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch route data');
+      // Don't set error state - just leave route data as null
+      setRouteData(null);
     }
   };
 
@@ -282,9 +343,15 @@ const RouteTab: React.FC = () => {
         ) : (
           <View style={styles.noDataContainer}>
             <Ionicons name="location-outline" size={32} color="#9ca3af" />
-            <Text style={styles.noDataText}>No route data available</Text>
+            <Text style={styles.noDataText}>
+              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown' 
+                ? 'No device registered yet' 
+                : 'No route data available'}
+            </Text>
             <Text style={styles.noDataSubtext}>
-              Route data will appear when GPS tracking is active
+              {driverInfo?.deviceId === 'No Device' || driverInfo?.deviceId === 'Unknown'
+                ? 'Please contact admin to register your device and start tracking'
+                : 'Route data will appear when GPS tracking is active'}
             </Text>
           </View>
         )}

@@ -581,22 +581,11 @@ const Dashboard: React.FC = () => {
             <Ionicons name="person-circle" size={60} color="#3674B5" />
           </View>
 
-          {/* Text and Status */}
+          {/* Text */}
           <View style={styles.textContainer}>
             <Text style={styles.headerSubtitle}>
               Welcome back, {user?.firstName || 'Driver'}
             </Text>
-            <View style={styles.statusContainer}>
-              <View
-                style={[
-                  styles.statusDot,
-                  { backgroundColor: analytics.isOnline ? '#22c55e' : '#ef4444' },
-                ]}
-              />
-              <Text style={styles.statusText}>
-                {analytics.isOnline ? 'ONLINE' : 'OFFLINE'}
-              </Text>
-            </View>
           </View>
 
         </View>
@@ -659,14 +648,6 @@ const Dashboard: React.FC = () => {
           >
             <Text style={[styles.metricButtonText, selectedMetric === 'speed' && styles.metricButtonTextActive]}>
               Speed
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.metricButton, selectedMetric === 'qrImpressions' && styles.metricButtonActive]}
-            onPress={() => setSelectedMetric('qrImpressions')}
-          >
-            <Text style={[styles.metricButtonText, selectedMetric === 'qrImpressions' && styles.metricButtonTextActive]}>
-              QR Impressions
             </Text>
           </TouchableOpacity>
         </View>
@@ -1200,23 +1181,24 @@ const styles = StyleSheet.create({
   },
   metricSelector: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   metricButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 8,
-    marginBottom: 8,
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#f3f4f6',
-    borderRadius: 20,
-    gap: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metricButtonActive: {
     backgroundColor: '#3674B5',
   },
   metricButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#6b7280',
   },
   metricButtonTextActive: {
