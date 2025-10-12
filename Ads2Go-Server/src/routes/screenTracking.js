@@ -185,17 +185,29 @@ router.get('/route/:deviceId', async (req, res) => {
       });
     }
 
-    // Find device tracking record
-    const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    console.log(`🔍 [ROUTE API] Searching for route data - identifier: ${deviceId}, date: ${date}`);
+
+    // Try to find device tracking record by deviceId first
+    let deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+    
+    // If not found by deviceId, try by materialId
+    if (!deviceTracking) {
+      console.log(`⚠️ [ROUTE API] No device found by deviceId ${deviceId}, trying materialId...`);
+      deviceTracking = await DeviceTracking.findOne({ materialId: deviceId });
+    }
     
     if (!deviceTracking) {
+      console.log(`❌ [ROUTE API] No device tracking record found for ${deviceId}`);
       return res.status(404).json({
         success: false,
         message: 'Device tracking record not found'
       });
     }
 
+    console.log(`✅ [ROUTE API] Found device tracking - materialId: ${deviceTracking.materialId}, deviceId: ${deviceTracking.deviceId}`);
+
     let locationHistory = [];
+    let historicalData = null;
     
     // If date is provided, look in historical data first
     if (date) {
@@ -209,44 +221,45 @@ router.get('/route/:deviceId', async (req, res) => {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
       
-      // First try with the exact deviceId
-      let historicalData = await DeviceDataHistoryV2.findOne({
-        deviceId: deviceId,
-        date: {
-          $gte: targetDate,
-          $lt: nextDay
-        }
+      console.log(`🔍 [ROUTE] Searching for historical data - deviceId: ${deviceId}, materialId: ${deviceTracking.materialId}, date: ${date}`);
+      
+      // DeviceDataHistoryV2 uses materialId, not deviceId!
+      // And the date is stored in dailyData array
+      const deviceDataHistory = await DeviceDataHistoryV2.findOne({
+        materialId: deviceTracking.materialId
       });
       
-      if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
-        console.log(`✅ [ROUTE] Found historical data with exact deviceId ${deviceId}: ${historicalData.locationHistory.length} points`);
-        locationHistory = historicalData.locationHistory;
-      } else {
-        console.log(`❌ [ROUTE] No historical data found for exact deviceId ${deviceId} on date ${date}`);
+      if (deviceDataHistory && deviceDataHistory.dailyData && deviceDataHistory.dailyData.length > 0) {
+        console.log(`✅ [ROUTE] Found DeviceDataHistoryV2 record for materialId ${deviceTracking.materialId}`);
+        console.log(`📅 [ROUTE] Daily data entries: ${deviceDataHistory.dailyData.length}`);
         
-        // Try to find by materialId if deviceId is actually a materialId
-        historicalData = await DeviceDataHistoryV2.findOne({
-          deviceId: deviceId, // This might actually be a materialId
-          date: {
-            $gte: targetDate,
-            $lt: nextDay
-          }
+        // Find the specific day's data
+        const dayData = deviceDataHistory.dailyData.find(day => {
+          const dayDate = new Date(day.date);
+          dayDate.setHours(0, 0, 0, 0);
+          return dayDate.getTime() === targetDate.getTime();
         });
         
-        if (historicalData && historicalData.locationHistory && historicalData.locationHistory.length > 0) {
-          console.log(`✅ [ROUTE] Found historical data with materialId ${deviceId}: ${historicalData.locationHistory.length} points`);
-          locationHistory = historicalData.locationHistory;
+        if (dayData && dayData.locationHistory && dayData.locationHistory.length > 0) {
+          console.log(`✅ [ROUTE] Found location history for ${date}: ${dayData.locationHistory.length} points`);
+          locationHistory = dayData.locationHistory;
+          historicalData = dayData; // Store for metrics
         } else {
-          console.log(`❌ [ROUTE] No historical data found for materialId ${deviceId} on date ${date}`);
-          
-          // Debug: List all available deviceIds for this date
-          const allHistoricalData = await DeviceDataHistoryV2.find({
-            date: {
-              $gte: targetDate,
-              $lt: nextDay
-            }
-          }).select('deviceId materialId date locationHistory');
+          console.log(`❌ [ROUTE] No location history found for ${date}`);
+          // Debug: Show available dates
+          if (deviceDataHistory.dailyData.length > 0) {
+            const availableDates = deviceDataHistory.dailyData
+              .map(d => d.date ? new Date(d.date).toISOString().split('T')[0] : 'null')
+              .slice(0, 10);
+            console.log(`📅 [ROUTE] Available dates (last 10): ${availableDates.join(', ')}`);
+          }
         }
+      } else {
+        console.log(`❌ [ROUTE] No DeviceDataHistoryV2 record found for materialId ${deviceTracking.materialId}`);
+        
+        // Debug: Check what materialIds exist
+        const allMaterials = await DeviceDataHistoryV2.find({}).select('materialId').limit(10);
+        console.log(`📦 [ROUTE] Available materialIds in DB (first 10): ${allMaterials.map(m => m.materialId).join(', ')}`);
       }
     }
     
@@ -303,7 +316,8 @@ router.get('/route/:deviceId', async (req, res) => {
         totalDistance,
         totalAdPlays,
         totalQRScans,
-        totalHoursOnline
+        totalHoursOnline,
+        locationPoints: locationHistory.length
       });
     }
     
@@ -336,36 +350,14 @@ router.get('/route/:deviceId', async (req, res) => {
 
     // Get additional metrics from historical data if available
     let additionalMetrics = {};
-    if (date) {
-      try {
-        const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-        const targetDate = new Date(date);
-        targetDate.setHours(0, 0, 0, 0);
-        const nextDay = new Date(targetDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        
-        const historicalData = await DeviceDataHistoryV2.findOne({
-          deviceId: deviceId,
-          date: {
-            $gte: targetDate,
-            $lt: nextDay
-          }
-        });
-        
-        if (historicalData) {
-          additionalMetrics = {
-            totalAdPlays: historicalData.totalAdPlays || 0,
-            totalQRScans: historicalData.totalQRScans || 0,
-            totalHoursOnline: historicalData.totalHoursOnline || 0,
-            totalAdImpressions: historicalData.dailySummary?.totalAdImpressions || 0,
-            totalAdPlayTime: historicalData.dailySummary?.totalAdPlayTime || 0,
-            complianceRate: historicalData.dailySummary?.complianceRate || 0,
-            uptimePercentage: historicalData.dailySummary?.uptimePercentage || 0
-          };
-        }
-      } catch (error) {
-        console.error('Error fetching additional metrics:', error);
-      }
+    if (date && historicalData) {
+      additionalMetrics = {
+        totalAdPlays: historicalData.totalAdPlays || 0,
+        totalQRScans: historicalData.totalQRScans || 0,
+        totalHoursOnline: historicalData.totalHoursOnline || 0,
+        totalAdImpressions: historicalData.totalAdImpressions || 0,
+        totalAdPlayTime: historicalData.totalAdPlayTime || 0
+      };
     }
 
     res.json({
