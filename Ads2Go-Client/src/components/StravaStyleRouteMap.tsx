@@ -207,6 +207,9 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
   useEffect(() => {
     setIsClient(true);
   }, []);
+  
+  // Validate materialId
+  const isValidMaterialId = materialId && materialId !== 'all' && typeof materialId === 'string';
 
   // Reset fetching state when materialId or date changes
   useEffect(() => {
@@ -215,7 +218,10 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
 
   // Fetch route data
   useEffect(() => {
-    if (!materialId || !isClient) return;
+    if (!isValidMaterialId || !isClient) {
+      console.log('🚫 [StravaStyleRouteMap] Skipping fetch - invalid conditions:', { isValidMaterialId, isClient });
+      return;
+    }
 
     // Prevent multiple simultaneous requests
     if (fetchingRef.current) {
@@ -265,7 +271,7 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
     };
 
     fetchRouteData();
-  }, [materialId, date, isClient, showSpeedColors, showMetrics]);
+  }, [materialId, date, isClient, isValidMaterialId, showSpeedColors, showMetrics]);
 
   // Format duration for display
   const formatDuration = (seconds: number): string => {
@@ -286,6 +292,19 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString();
   };
+
+  // Early returns after all hooks
+  if (!isValidMaterialId) {
+    console.warn('⚠️ [StravaStyleRouteMap] Invalid materialId:', materialId);
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
+        <div className="text-center text-gray-600">
+          <p className="font-semibold">Invalid Material ID</p>
+          <p className="text-sm">Please select a valid material to view the route</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isClient) {
     return <div className="flex items-center justify-center h-full">Loading map...</div>;
@@ -368,13 +387,16 @@ const StravaStyleRouteMap: React.FC<StravaStyleRouteMapProps> = ({
   }
 
   return (
-    <div style={style} className={className}>
+    <div style={style} className={className} key={`wrapper-${materialId}-${date}`}>
       <MapContainer
         center={bounds?.center || [14.5995, 120.9842]}
         zoom={13}
         style={{ height: '100%', width: '100%' }}
         className="rounded-lg"
         key={`map-${materialId}-${date}`} // Force re-render when props change
+        whenReady={() => {
+          console.log('🗺️ [StravaStyleRouteMap] Map ready for', materialId);
+        }}
       >
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
