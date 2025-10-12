@@ -321,18 +321,19 @@ DeviceTrackingSchema.virtual('currentHoursToday').get(function() {
     // Device is online - calculate hours since last update
     const lastUpdate = this.currentSession.lastOnlineUpdate || startTime;
     const hoursSinceLastUpdate = TimezoneUtils.calculateHoursInTimezone(lastUpdate, now, deviceTimezone);
-    totalHours += hoursSinceLastUpdate;
     
-    // Update the last online update time
-    this.currentSession.lastOnlineUpdate = now;
+    // Only add reasonable increments (less than 1 hour to prevent bugs)
+    if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
+      totalHours += hoursSinceLastUpdate;
+    }
   }
   // If offline, return the last recorded hours (don't reset)
   
   // Cap at 8 hours max per day
   totalHours = Math.min(8, Math.max(0, totalHours));
   
-  // Update the session with current total
-  this.currentSession.totalHoursOnline = totalHours;
+  // NOTE: Virtual getters should NOT modify the document!
+  // Modifications should only happen in methods like calculateAndUpdateOnlineHours()
   
   return Math.round(totalHours * 100) / 100; // Round to 2 decimal places
 });
@@ -377,9 +378,9 @@ DeviceTrackingSchema.index({ 'slots.deviceId': 1 });
 
 // Static methods
 DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
-  // Get today's date as a Date object (start of day)
+  // Get today's date as UTC midnight (consistent with rest of system)
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
   
   // Find car record that contains this device in slots for today
   let car = await this.findOne({ 
@@ -480,9 +481,9 @@ DeviceTrackingSchema.statics.findByDeviceId = async function(deviceId) {
 };
 
 DeviceTrackingSchema.statics.findByMaterialId = async function(materialId) {
-  // Get today's date as a Date object (start of day)
+  // Get today's date as UTC midnight (consistent with rest of system)
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0));
   
   // First try to find today's record for this material
   let car = await this.findOne({ materialId, date: today });
@@ -1224,20 +1225,27 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
     return this;
   }
   
-  // Calculate hours since session start
-  const startTime = new Date(this.currentSession.startTime);
-  const hoursDiff = (now - startTime) / (1000 * 60 * 60); // Convert to hours
-  const totalHours = Math.min(8, Math.max(0, hoursDiff)); // Cap at 8 hours max
+  // Use incremental tracking: only count time since last update
+  const lastUpdate = this.currentSession.lastOnlineUpdate || this.currentSession.startTime;
+  const hoursSinceLastUpdate = (now - new Date(lastUpdate)) / (1000 * 60 * 60);
   
-  // Update current session hours
-  this.currentSession.totalHoursOnline = Math.round(totalHours * 100) / 100;
+  // Only add hours if this is a reasonable increment (less than 1 hour to prevent bugs)
+  if (hoursSinceLastUpdate > 0 && hoursSinceLastUpdate < 1) {
+    this.currentSession.totalHoursOnline = (this.currentSession.totalHoursOnline || 0) + hoursSinceLastUpdate;
+  }
+  
+  // Update last online update time
+  this.currentSession.lastOnlineUpdate = now;
+  
+  // Cap at 8 hours max per day
+  this.currentSession.totalHoursOnline = Math.min(8, Math.max(0, this.currentSession.totalHoursOnline));
   
   // Update compliance status
   this.currentSession.complianceStatus = 
     this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
   
   // Always update total lifetime hours for the current day (not cumulative)
-  this.totalHoursOnline = Math.round(totalHours * 100) / 100;
+  this.totalHoursOnline = Math.round(this.currentSession.totalHoursOnline * 100) / 100;
   
   // Update average daily hours
   this.averageDailyHours = this.totalHoursOnline;

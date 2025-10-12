@@ -73,7 +73,7 @@ const viewAllTextVariants = {
 function NotificationList() {
   return (
     <motion.div
-      className="bg-white/30 dark:bg-neutral-900/80 backdrop-blur-md p-3 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-white/20"
+      className="bg-white/70 dark:bg-neutral-900/80 backdrop-blur-md p-3 shadow-lg hover:shadow-xl transition-shadow duration-300 border border-white/20"
       initial="collapsed"
       whileHover="expanded"
     >
@@ -371,7 +371,7 @@ const Dashboard = () => {
         }}
       ></div>
       {/* Overlay */}
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+      <div className="absolute inset-0 bg-white/50 backdrop-blur-lg"></div>
       {/* Content */}
       <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
         {/* Header Section */}
@@ -428,7 +428,7 @@ const Dashboard = () => {
               <div className="relative w-32" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setShowAnalyticsPeriodDropdown(!showAnalyticsPeriodDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/80 gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {analyticsPeriod === '1d' ? 'Daily' : analyticsPeriod === '7d' ? 'Weekly' : 'Monthly'}
                   <ChevronDown
@@ -443,7 +443,7 @@ const Dashboard = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white/80 overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {analyticsPeriodOptions.map((period) => (
                         <button
@@ -553,8 +553,8 @@ const Dashboard = () => {
           {/* Column 2: QR Impressions */}
           <div
             className="relative p-4 shadow-xl cursor-pointer
-                      bg-white/30 backdrop-blur-md border border-white/20
-                      hover:bg-white/40 transition-all duration-300
+                      bg-white backdrop-blur-md border border-white/20
+                      hover:bg-white transition-all duration-300
                       flex flex-col"
             onClick={() => (window.location.href = '/detailed-analytics')}
           >
@@ -563,7 +563,7 @@ const Dashboard = () => {
               <div className="relative w-24" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setShowQrPeriodDropdown(!showQrPeriodDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {qrSelectedPeriod}
                   <ChevronDown
@@ -657,7 +657,7 @@ const Dashboard = () => {
           {/* Column 3: Average Mileage and Notification List */}
           <div className="flex flex-col space-y-3">
             {/* Average Mileage */}
-            <div className="min-h-[268px] bg-white/30 backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
+            <div className="min-h-[268px] bg-white backdrop-blur-md p-4 shadow-lg cursor-pointer hover:shadow-xl transition-shadow border border-white/20 flex flex-col">
               {/* Header */}
               <div className="flex justify-between items-center mb-4">
                 <span className="text-gray-800 text-lg font-semibold">Average Mileage</span>
@@ -725,20 +725,20 @@ const Dashboard = () => {
                 <div className="absolute bottom-40 left-1/5 w-6 h-6 bg-purple-500 opacity-30"></div>
                 <div className="absolute top-1/4 right-1/5 w-4 h-4 bg-indigo-500 opacity-35"></div>
               </div>
-              <div className="absolute top-4 left-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
+              <div className="absolute top-4 left-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
                 Downtown Area
               </div>
-              <div className="absolute top-4 right-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
+              <div className="absolute top-4 right-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
                 Mall District
               </div>
-              <div className="absolute bottom-4 left-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
+              <div className="absolute bottom-4 left-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
                 Residential Zone
               </div>
-              <div className="absolute bottom-4 right-4 bg-white/80 px-2 py-1 text-xs font-medium text-gray-700">
+              <div className="absolute bottom-4 right-4 bg-white px-2 py-1 text-xs font-medium text-gray-700">
                 Highway Access
               </div>
             </div>
-            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 px-4 py-2 shadow-sm">
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white px-4 py-2 shadow-sm">
               <div className="flex items-center space-x-4 text-xs">
                 <div className="flex items-center space-x-1">
                   <div className="w-3 h-3 bg-red-500"></div>

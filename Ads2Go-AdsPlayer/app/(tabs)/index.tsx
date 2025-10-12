@@ -80,23 +80,36 @@ export default function HomeScreen() {
   const initializeApp = async () => {
     try {
       // Get location
+      let currentLocation = null;
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
         let loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc);
+        currentLocation = loc; // Store in local variable for immediate use
+        setLocation(loc); // Also update state for UI
         await AsyncStorage.setItem("lastLocation", JSON.stringify(loc));
+        console.log('📍 GPS Location obtained:', {
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+          accuracy: loc.coords.accuracy
+        });
+      } else {
+        console.warn('⚠️ Location permission not granted');
       }
 
       // Get registration data
       const registration = await tabletRegistrationService.getRegistrationData();
       setRegistrationData(registration);
 
-      // Update online status
+      // Update online status with fresh location data
       if (registration) {
-        const online = await tabletRegistrationService.updateTabletStatus(true, {
-          lat: location?.coords.latitude || 0,
-          lng: location?.coords.longitude || 0
-        });
+        const locationData = {
+          lat: currentLocation?.coords.latitude || 0,
+          lng: currentLocation?.coords.longitude || 0
+        };
+        
+        console.log('📍 Updating tablet status with location:', locationData);
+        
+        const online = await tabletRegistrationService.updateTabletStatus(true, locationData);
         // Online status is now handled by DeviceStatusContext
         
         // Start continuous location tracking

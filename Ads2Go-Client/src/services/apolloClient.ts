@@ -17,7 +17,10 @@ console.log('🔍 Environment Debug:', {
 });
 
 // Use environment variable or fallback to localhost for development
-const actualServerUrl = serverUrl || 'http://localhost:5000';
+let actualServerUrl = serverUrl || 'http://localhost:5000';
+
+// Remove trailing slash to prevent double slashes in the URL
+actualServerUrl = actualServerUrl.replace(/\/$/, '');
 
 console.log('🔧 Apollo Client Configuration:', {
   envUrl: serverUrl,

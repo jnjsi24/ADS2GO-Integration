@@ -565,6 +565,36 @@ class DeviceStatusService {
         return;
       }
       
+      // Ensure date field is always UTC midnight (no timezone confusion)
+      const today = new Date();
+      const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+      
+      // Compare dates properly in UTC timezone to avoid timezone conversion issues
+      const deviceDateUTC = deviceTracking.date ? new Date(deviceTracking.date) : null;
+      let needsDateUpdate = false;
+      
+      if (!deviceDateUTC) {
+        needsDateUpdate = true;
+      } else {
+        // Compare year, month, and date in UTC timezone (not local)
+        const deviceYear = deviceDateUTC.getUTCFullYear();
+        const deviceMonth = deviceDateUTC.getUTCMonth();
+        const deviceDay = deviceDateUTC.getUTCDate();
+        
+        const todayYear = todayUTC.getUTCFullYear();
+        const todayMonth = todayUTC.getUTCMonth();
+        const todayDay = todayUTC.getUTCDate();
+        
+        if (deviceYear !== todayYear || deviceMonth !== todayMonth || deviceDay !== todayDay) {
+          needsDateUpdate = true;
+        }
+      }
+      
+      if (needsDateUpdate) {
+        console.log(`📅 [updateDeviceStatus] Updating date from ${deviceDateUTC ? deviceDateUTC.toISOString() : 'null'} to UTC midnight: ${todayUTC.toISOString()}`);
+        deviceTracking.date = todayUTC;
+      }
+      
       // Update the specific slot for this device
       const slot = deviceTracking.slots.find(s => s.deviceId === deviceId);
       if (slot) {
@@ -576,17 +606,51 @@ class DeviceStatusService {
         // If device is coming online, ensure we have an active session
         if (status && (!deviceTracking.currentSession || !deviceTracking.currentSession.isActive)) {
           console.log(`🔄 [updateDeviceStatus] Device ${deviceId} coming online, ensuring active session`);
+          // Use UTC midnight for date field (no timezone offset confusion)
+          const today = new Date();
+          const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0));
+          
+          // Check if there's an existing session for today
+          const existingSession = deviceTracking.currentSession;
+          let preservedHours = 0;
+          let preservedDistance = 0;
+          let preservedLocationHistory = [];
+          
+          if (existingSession && existingSession.date) {
+            const sessionDate = new Date(existingSession.date);
+            sessionDate.setHours(0, 0, 0, 0);
+            const todayLocal = new Date(today);
+            todayLocal.setHours(0, 0, 0, 0);
+            
+            // If the session is from today, preserve the hours and distance
+            if (sessionDate.getTime() === todayLocal.getTime()) {
+              preservedHours = existingSession.totalHoursOnline || 0;
+              preservedDistance = existingSession.totalDistanceTraveled || 0;
+              preservedLocationHistory = existingSession.locationHistory || [];
+              console.log(`♻️ [updateDeviceStatus] Preserving ${preservedHours.toFixed(2)} hours from existing session for ${deviceId}`);
+            }
+          }
+          
           deviceTracking.currentSession = {
-            date: new Date(),
-            startTime: now,
+            date: todayUTC,  // UTC midnight for current date
+            startTime: existingSession?.startTime || now,  // Preserve original start time if available
             endTime: null,
-            totalHoursOnline: 0,
-            totalDistanceTraveled: 0,
+            totalHoursOnline: preservedHours,  // Preserve hours from same-day session
+            totalDistanceTraveled: preservedDistance,  // Preserve distance from same-day session
             isActive: true,
             targetHours: 8,
-            complianceStatus: 'PENDING',
-            locationHistory: []
+            complianceStatus: preservedHours >= 8 ? 'COMPLIANT' : 'PENDING',
+            locationHistory: preservedLocationHistory,  // Preserve location history
+            lastOnlineUpdate: now  // Track when device came online
           };
+          
+          // Also preserve totalHoursOnline at device level
+          if (preservedHours > 0) {
+            deviceTracking.totalHoursOnline = preservedHours;
+          }
+        } else if (status && deviceTracking.currentSession && deviceTracking.currentSession.isActive) {
+          // Device was already online - just update the last online update time
+          deviceTracking.currentSession.lastOnlineUpdate = now;
         }
         
         await deviceTracking.save();
@@ -648,10 +712,13 @@ class DeviceStatusService {
         deviceTracking.isOnline = deviceTracking.slots.some(s => s.isOnline);
         deviceTracking.lastSeen = now;
         
-        // Real-time hours calculation when device goes offline
+        // When device goes offline, end the session
         if (!status) {
-          console.log(`🕐 [updateDeviceStatusWithMaterialId] Calculating final hours for offline device ${deviceId}`);
-          deviceTracking.calculateAndUpdateOnlineHours();
+          console.log(`📴 [updateDeviceStatusWithMaterialId] Device ${deviceId} going offline - ending session`);
+          if (deviceTracking.currentSession && deviceTracking.currentSession.isActive) {
+            deviceTracking.currentSession.isActive = false;
+            deviceTracking.currentSession.endTime = new Date();
+          }
         }
         
         await deviceTracking.save();

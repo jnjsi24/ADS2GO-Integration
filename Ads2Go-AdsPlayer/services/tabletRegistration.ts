@@ -142,6 +142,7 @@ export class TabletRegistrationService {
   private isTracking = false;
   private isSimulatingOffline = false;
   private appStateListener: any = null;
+  private isReregistering = false; // Prevent concurrent re-registration attempts
   
   // Speed violation tracking
   private currentSpeedLimit: number = 50; // Default urban speed limit
@@ -334,11 +335,15 @@ export class TabletRegistrationService {
 
   async getRegistrationData(): Promise<TabletRegistration | null> {
     try {
+      // Return cached registration if available (avoids AsyncStorage reads every 7 seconds)
+      if (this.registration) {
+        return this.registration;
+      }
+
       // Check if we have a "cleared" flag FIRST to prevent fallback after unregistration
       const wasCleared = await AsyncStorage.getItem('registration_cleared');
-      console.log('🔍 Checking registration cleared flag in getRegistrationData:', wasCleared);
       if (wasCleared) {
-        console.log('Registration was explicitly cleared, NOT returning any registration data');
+        console.log('🔍 Registration was explicitly cleared, returning null');
         return null;
       }
 
@@ -348,12 +353,13 @@ export class TabletRegistrationService {
       const registrationData = await AsyncStorage.getItem('tabletRegistration');
       if (registrationData) {
         this.registration = JSON.parse(registrationData);
+        console.log('📝 Loaded registration data from storage (cached for future use)');
         return this.registration;
       }
       
       // If no registration data found, DO NOT try to create from environment variables
       // This prevents auto-registration after explicit unregistration
-      console.log('No registration data found and no cleared flag set');
+      console.log('ℹ️ No registration data found');
       return null;
     } catch (error) {
       console.error('Error getting registration data:', error);
@@ -418,7 +424,12 @@ export class TabletRegistrationService {
   async updateTabletStatus(isOnline: boolean, gps?: { lat: number; lng: number }): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.log('Device not registered - skipping status update');
+        // Silently skip - this is normal during app startup
+        return false;
+      }
+
+      // If re-registration is in progress, skip this update
+      if (this.isReregistering) {
         return false;
       }
 
@@ -428,10 +439,16 @@ export class TabletRegistrationService {
         console.log('Device ID synced, retrying status update...');
       }
 
+      // Skip GPS data if coordinates are [0,0] (GPS still initializing)
+      const validGps = gps && !(gps.lat === 0 && gps.lng === 0) ? gps : undefined;
+      if (gps && !validGps) {
+        console.log('⏳ Skipping GPS data in status update - coordinates are [0,0]');
+      }
+
       const requestBody = {
         deviceId: this.registration.deviceId,
         isOnline,
-        gps,
+        gps: validGps,
         lastReportedAt: new Date().toISOString()
       };
 
@@ -450,33 +467,50 @@ export class TabletRegistrationService {
       if (result.success) {
         console.log('Tablet status updated successfully');
         
-        // If GPS data is provided, also update location tracking
-        if (gps) {
-          await this.updateLocationTracking(gps.lat, gps.lng);
+        // If valid GPS data is provided, also update location tracking
+        if (validGps) {
+          await this.updateLocationTracking(validGps.lat, validGps.lng);
         }
         
         return true;
       } else {
-        console.error('Failed to update tablet status:', result.message);
-        
-        // If tablet not found, try to re-register
+        // Handle "Tablet not found" error (expected when device is unregistered)
         if (result.message === 'Tablet not found') {
-          console.log('Tablet not found, attempting to re-register...');
-          const reRegisterResult = await this.registerTablet({
-            materialId: this.registration.materialId,
-            slotNumber: this.registration.slotNumber,
-            carGroupId: this.registration.carGroupId
-          });
+          // Check if re-registration is already in progress
+          if (this.isReregistering) {
+            console.log('⏳ Re-registration already in progress, skipping duplicate attempt');
+            return false;
+          }
           
-          if (reRegisterResult.success) {
-            console.log('Tablet re-registered successfully, retrying status update...');
-            // Retry the status update
-            return await this.updateTabletStatus(isOnline, gps);
-          } else {
-            console.error('Failed to re-register tablet:', reRegisterResult.message);
+          console.log('ℹ️ Device not found in database - will re-register');
+          this.isReregistering = true;
+          
+          try {
+            const reRegisterResult = await this.registerTablet({
+              materialId: this.registration.materialId,
+              slotNumber: this.registration.slotNumber,
+              carGroupId: this.registration.carGroupId
+            });
+            
+            if (reRegisterResult.success) {
+              console.log('✅ Device re-registered successfully');
+              this.isReregistering = false;
+              // Retry the status update with valid GPS data
+              return await this.updateTabletStatus(isOnline, validGps);
+            } else {
+              console.log('⚠️ Re-registration failed:', reRegisterResult.message);
+              this.isReregistering = false;
+              return false;
+            }
+          } catch (error) {
+            this.isReregistering = false;
+            console.log('⚠️ Re-registration error:', error);
+            return false;
           }
         }
         
+        // For other errors, log as error
+        console.error('Failed to update tablet status:', result.message);
         return false;
       }
     } catch (error) {
@@ -489,6 +523,12 @@ export class TabletRegistrationService {
     try {
       if (!this.registration) {
         console.log('Device not registered - skipping location tracking');
+        return false;
+      }
+
+      // Skip if GPS is still initializing (coordinates are [0,0])
+      if (lat === 0 && lng === 0) {
+        console.log('⏳ GPS still initializing - skipping location update (coordinates are [0,0])');
         return false;
       }
 
@@ -537,7 +577,7 @@ export class TabletRegistrationService {
 
       console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
 
-      // Send to new device tracking endpoint (daily staging system)
+      // Send to device tracking endpoint (unified location tracking)
       try {
         const deviceTrackingResponse = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
           method: 'POST',
@@ -557,48 +597,25 @@ export class TabletRegistrationService {
           }),
         });
 
-        if (deviceTrackingResponse.ok) {
-          console.log('✅ Location updated in device tracking');
+        if (!deviceTrackingResponse.ok) {
+          const errorText = await deviceTrackingResponse.text();
+          console.error('❌ Failed to update location in device tracking');
+          console.error('Status:', deviceTrackingResponse.status);
+          console.error('Response:', errorText);
+          return false;
+        }
+
+        const result = await deviceTrackingResponse.json();
+        
+        if (result.success) {
+          console.log('✅ Location tracking updated successfully');
+          return true;
         } else {
-          console.log('❌ Failed to update location in device tracking');
+          console.error('❌ Location tracking failed:', result.message);
+          return false;
         }
       } catch (error) {
         console.error('❌ Error sending to device tracking:', error);
-      }
-
-      // Also send to existing screen tracking for backward compatibility
-      const response = await fetch(`${API_BASE_URL}/screenTracking/updateLocation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(locationUpdate),
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('HTTP Error:', response.status, errorText);
-        return false;
-      }
-
-      const result = await response.json();
-      console.log('Response result:', result);
-
-      if (result.success) {
-        console.log('Location tracking updated successfully');
-        return true;
-      } else {
-        console.error('Failed to update location tracking:', result.message);
-        
-        // If ScreenTracking record not found, try to create it
-        if (result.message && result.message.includes('Screen tracking record not found')) {
-          console.log('ScreenTracking record not found, attempting to create one...');
-          return await this.createScreenTrackingRecord();
-        }
-        
         return false;
       }
     } catch (error) {
@@ -704,8 +721,8 @@ export class TabletRegistrationService {
 
           const { latitude, longitude, speed, heading, accuracy } = location.coords;
 
-          // Update both tablet status and location tracking
-          await this.updateTabletStatus(true, { lat: latitude, lng: longitude });
+          // Only use updateLocationTracking (includes all GPS data: speed, heading, accuracy)
+          // Don't call updateTabletStatus here to avoid duplicate location sends
           await this.updateLocationTracking(
             latitude, 
             longitude, 

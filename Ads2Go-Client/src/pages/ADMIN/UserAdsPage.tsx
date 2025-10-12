@@ -20,6 +20,7 @@ import { GET_ADS_BY_USER, GET_ALL_ADS,
   type Ad,
   type User } from "../../graphql/admin/ads";
 import { GET_ALL_USERS } from "../../graphql/admin/queries/manageUsers";
+import { ToastContainer } from "../../components/ToastNotification";
 
 interface QueryResult {
   getAdsByUser: Ad[];
@@ -188,17 +189,17 @@ const UserAdsPage: React.FC = () => {
       });
       addToast({
         type: 'success',
-        title: 'Ad Approved',
-        message: `Ad ${adId} approved successfully!`,
-        duration: 4000
+        title: 'Success!',
+        message: 'Advertisement has been accepted successfully',
+        duration: 5000
       });
     } catch (error) {
       console.error('Error approving ad:', error);
       addToast({
         type: 'error',
-        title: 'Approval Failed',
-        message: `Failed to approve ad: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        duration: 6000
+        title: 'Error!',
+        message: 'Something went wrong.',
+        duration: 5000
       });
     }
   };
@@ -665,6 +666,9 @@ const UserAdsPage: React.FC = () => {
           ))
         )}
       </div>
+
+      {/* Toast Notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

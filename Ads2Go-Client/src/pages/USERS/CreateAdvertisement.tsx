@@ -620,7 +620,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   button.style.setProperty('--x', `${x}px`);
                   button.style.setProperty('--y', `${y}px`);
                 }}
-                className={`relative p-3 rounded-md font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
+                className={`relative p-3 font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
                   ${
                     mediaFileError
                       ? 'bg-red-500 hover:bg-red-600'
@@ -789,37 +789,6 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               )}
             </div>
           </div>
-          {formData.materialType && formData.vehicleType && (
-            <div className="bg-yellow-50 rounded-xl p-4">
-              <h3 className="font-medium text-black/80 mb-4">Selected Configuration</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-yellow-700">
-                <div className="space-y-2">
-                  <p><strong>Vehicle:</strong> {formData.vehicleType}</p>
-                  <p><strong>Material:</strong> {formData.materialType}</p>
-                  <p><strong>Category:</strong> {formData.category}</p>
-                </div>
-                <div className="space-y-2">
-                  <p>
-                    <strong>Available Devices:</strong>{" "}
-                    {pricingCalculation?.availableDevices ||
-                      (isCalculating ? "⏳ Calculating..." : "⏳ Loading...")}
-                  </p>
-                  {pricingCalculation && (
-                    <>
-                      <p className="text-xs text-yellow-600">
-                        <strong>With Driver:</strong> {pricingCalculation.devicesWithDriver} |{" "}
-                        <strong>Mounted:</strong> {pricingCalculation.devicesMounted}
-                      </p>
-                      <p className="text-xs text-yellow-600">
-                        <strong>Available:</strong> {pricingCalculation.availableDevices} devices ready for ads
-                      </p>
-                    </>
-                  )}
-                  <p><strong>Ad Length Options:</strong> 20s, 40s, or 60s</p>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -836,7 +805,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowDurationDropdown(!showDurationDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2 cursor-pointer"
+            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.durationDays
               ? `${
@@ -863,7 +832,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute z-10 top-24 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                className="absolute z-10 top-20 w-full shadow-lg bg-white overflow-hidden"
               >
                 <button
                   key="select-duration"
@@ -913,7 +882,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-5 shadow-md focus:outline-none bg-white gap-2 cursor-pointer"
+            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.adLengthSeconds
               ? `${formData.adLengthSeconds} seconds`
@@ -932,7 +901,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute z-10 top-24 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                className="absolute z-10 top-20 w-full shadow-lg bg-white overflow-hidden"
               >
                 <button
                   key="select-ad-length"
@@ -976,28 +945,28 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         {/* Number of Devices and Campaign Start Date side by side */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">
-            Number of Devices
-          </label>
-          <input
-            type="number"
-            min="1"
-            max={getMaxDevices()}
-            value={formData.numberOfDevices}
-            onChange={(e) => {
-              const value = parseInt(e.target.value);
-              handleInputChange('numberOfDevices', isNaN(value) ? 1 : value);
-            }}
-            className="w-full p-3 border-b border-gray-300 bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition"
-            required
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            Maximum: {getMaxDevices()} devices
-          </p>
-          {errors.numberOfDevices && (
-            <p className="text-sm text-red-600 mt-1">{errors.numberOfDevices}</p>
-          )}
-        </div>
+        <label className="block text-sm font-bold text-gray-700 mb-2">
+          Number of Devices
+        </label>
+        <input
+          type="number"
+          min="1"
+          max={getMaxDevices()}
+          value={formData.numberOfDevices}
+          onChange={(e) => {
+            const value = parseInt(e.target.value);
+            handleInputChange('numberOfDevices', isNaN(value) ? 1 : value);
+          }}
+          className="w-full p-3 border-b border-black/40 focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition bg-transparent [&::-webkit-outer-spin-button]:bg-transparent [&::-webkit-outer-spin-button]:text-black [&::-webkit-inner-spin-button]:bg-transparent [&::-webkit-inner-spin-button]:text-black [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+          required
+        />
+        <p className="text-sm text-gray-500 mt-1">
+          Maximum: {getMaxDevices()} devices
+        </p>
+        {errors.numberOfDevices && (
+          <p className="text-sm text-red-600 mt-1">{errors.numberOfDevices}</p>
+        )}
+      </div>
         <div>
           <label className="block text-sm font-bold text-gray-700 mb-2">
             Campaign Start Date
@@ -1006,7 +975,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             <button
               type="button"
               onClick={toggleCalendar}
-              className="w-full p-3 shadow-md rounded-md focus:outline-none focus:ring-0 focus:border-gray-400 bg-white border border-gray-300 text-left flex items-center justify-between"
+              className="w-full p-3 pl-1 focus:outline-none focus:ring-0 border-b border-black/40 text-left flex items-center justify-between"
             >
               <span className={selectedDate ? 'text-gray-900' : 'text-gray-500'}>
                 {selectedDate 
@@ -1019,7 +988,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   : 'Select a date'
                 }
               </span>
-              <Calendar className="w-4 h-4 text-gray-400" />
+              <Calendar className="w-4 h-4 text-black/70" />
             </button>
             
             {/* Calendar Dropdown */}
@@ -1077,33 +1046,33 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
   );
 
   const renderStep3 = () => (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-3xl mx-auto">
       <h2 className="text-xl font-semibold mb-10 text-center">Pricing & Summary</h2>
       <div className="mt-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-6 items-start">
           {/* LEFT COLUMN - Media preview + filename */}
           <div className="flex flex-col">
-            {/* Media Preview - Matches right column height */}
-            <div className="w-full bg-gray-100 border rounded-lg overflow-hidden flex items-center justify-center min-h-40">
+            {/* Media Preview */}
+            <div className="w-full overflow-hidden flex items-center justify-center min-h-40">
               {formData.mediaFile ? (
                 formData.mediaFile.type.startsWith("image/") ? (
-                  <img 
-                    src={URL.createObjectURL(formData.mediaFile)} 
-                    alt="Media Preview" 
-                    className="object-contain w-full h-full max-h-64" 
+                  <img
+                    src={URL.createObjectURL(formData.mediaFile)}
+                    alt="Media Preview"
+                    className="object-contain w-full h-full max-h-64"
                   />
                 ) : (
-                  <video 
-                    src={URL.createObjectURL(formData.mediaFile)} 
-                    controls 
-                    className="object-contain w-full h-full max-h-64" 
+                  <video
+                    src={URL.createObjectURL(formData.mediaFile)}
+                    controls
+                    className="object-contain w-full h-full max-h-64"
                   />
                 )
               ) : (
                 <span className="text-gray-400 text-sm">No Media Selected</span>
               )}
             </div>
-            
+
             {/* File Name */}
             <span className="mt-3 text-sm font-medium text-gray-700 text-center">
               {formData.mediaFile?.name || "Not selected"}
@@ -1111,33 +1080,31 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
 
           {/* RIGHT COLUMN - Campaign Details */}
-          <div className="space-y-4 text-sm">
-            <div className="flex justify-between">
-              <span className="font-bold text-2xl">
-                {formData.title || "Not specified"}
-              </span>
-            </div>
-            
-            {/* Description with fixed height and scroll */}
-            <div className="flex justify-between">
-              <div className="max-h-32 overflow-y-auto w-full">
+          <div className="flex flex-col justify-between h-full text-sm">
+            {/* Top Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between">
+                <span className="font-bold text-2xl">
+                  {formData.title || "Not specified"}
+                </span>
+              </div>
+
+              {/* Description */}
+              <div className="max-h-32 overflow-y-auto">
                 <span className="text-gray-600">
                   {formData.description || "Not specified"}
                 </span>
               </div>
             </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="flex items-center text-black">
-                <ClockFading className="w-4 h-4 mr-1 text-blue-500" />
-                <span className="">{formData.durationDays} days</span>
+
+            {/* Bottom Section - Duration + Start Date */}
+            <div className="flex justify-between items-center mt-4 pt-2">
+              <span className="text-black">
+                <span>Duration:</span> <span className="font-semibold">{formData.durationDays ? `${formData.durationDays} days` : "Not specified"}</span>
               </span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="flex items-center text-black">
-                <CalendarPlus className="w-4 h-4 mr-1 text-green-500" />
-                {formData.startDate || "Not specified"}
+
+              <span className="text-black pr-7">
+                <span>Start Date:</span> <span className="font-semibold">{formData.startDate || "Not specified"}</span>
               </span>
             </div>
           </div>
@@ -1149,7 +1116,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <p className="text-gray-600">Calculating pricing...</p>
         </div>
       ) : pricingCalculation ? (
-        <div className="bg-gray-50 rounded-xl p-6 mb-6 mt-6">
+        <div className="p-6 mb-6 mt-6">
           <h3 className="text-xl font-semibold text-center text-gray-900 mb-4">Pricing Breakdown</h3>
           <div className="space-y-3">
             <div className="flex justify-between">
@@ -1192,10 +1159,10 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <span className="text-gray-600">Daily revenue:</span>
               <span className="font-medium">{formatCurrency(pricingCalculation.dailyRevenue)}</span>
             </div>
-            <div className="border-t pt-3">
-              <div className="flex justify-between font-bold">
+            <div className="border-t border-black/40 pt-3">
+              <div className="flex justify-between font-semibold">
                 <span>Total Price:</span>
-                <span className="text-xl text-blue-600">{formatCurrency(pricingCalculation.totalPrice)}</span>
+                <span className="text-xl text-[#3674B5]">{formatCurrency(pricingCalculation.totalPrice)}</span>
               </div>
             </div>
           </div>
@@ -1220,7 +1187,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div
       className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
       style={{
-        backgroundImage: "url('/image/bg3.jpg')",
+        backgroundImage: "url('/image/bg2.jpg')",
       }}
     ></div>
 
@@ -1256,10 +1223,10 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   <div
                     className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                       isActive
-                        ? "border-blue-500 bg-blue-500 text-white"
+                        ? "border-[#3674B5] bg-[#3674B5] text-white"
                         : isCompleted
                         ? "border-green-500 bg-green-500 text-white"
-                        : "border-gray-300 bg-white text-gray-400"
+                        : "border-black/70 text-black/70"
                     }`}
                   >
                     {isCompleted ? (
@@ -1272,7 +1239,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     <p
                       className={`text-sm font-medium ${
                         isActive
-                          ? "text-blue-600"
+                          ? "text-[#3674B5]"
                           : isCompleted
                           ? "text-green-600"
                           : "text-gray-500"
@@ -1306,32 +1273,60 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               disabled={currentStep === 1}
               className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ChevronLeft className="w-5 h-5" />
               Previous
             </button>
             {currentStep < 3 ? (
               <button
                 type="button"
                 onClick={handleNextStep}
-                className="flex items-center gap-2 mr-7 px-6 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-lg transition-colors"
+                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  const button = e.currentTarget;
+                  const rect = button.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const y = e.clientY - rect.top;
+                  button.style.setProperty('--x', `${x}px`);
+                  button.style.setProperty('--y', `${y}px`);
+                }}
+                className="relative flex items-center gap-2 mr-7 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
               >
-                Next
-                <ChevronRight className="w-5 h-5" />
+                {/* Shiny Hover Effect */}
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  style={{
+                    background:
+                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                  }}
+                />
+                <span className="relative z-10">Next</span>
+                <ChevronRight className="w-5 h-5 relative z-10" />
               </button>
             ) : (
               <div className="flex flex-col items-end space-y-2">
-                {isCalculating && (
-                  <p className="text-sm text-blue-600">Calculating pricing...</p>
-                )}
-                {!pricingCalculation && !isCalculating && (
-                  <p className="text-sm text-red-600">Pricing calculation failed. Please try again.</p>
-                )}
+                
                 <button
                   type="submit"
                   disabled={isSubmissionInProgress}
-                  className="px-8 py-3 bg-[#3674B5] hover:bg-[#1B5087] text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    const button = e.currentTarget;
+                    const rect = button.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    button.style.setProperty('--x', `${x}px`);
+                    button.style.setProperty('--y', `${y}px`);
+                  }}
+                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
-                  {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
+                  {/* Shiny Hover Effect */}
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 disabled:opacity-0"
+                    style={{
+                      background:
+                        'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                    }}
+                  />
+                  <span className="relative z-10">
+                    {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
+                  </span>
                 </button>
               </div>
             )}

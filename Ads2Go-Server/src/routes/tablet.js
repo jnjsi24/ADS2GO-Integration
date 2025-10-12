@@ -194,8 +194,8 @@ router.post('/registerTablet', async (req, res) => {
       }
       
       if (!existingDeviceTracking) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const { getUTCMidnight } = require('../utils/dateUtils');
+        const today = getUTCMidnight();
         
         const deviceTracking = new DeviceTracking({
           materialId,
@@ -214,6 +214,7 @@ router.post('/registerTablet', async (req, res) => {
           currentSession: {
             date: today,
             startTime: new Date(),
+            lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             targetHours: 8,
@@ -238,12 +239,60 @@ router.post('/registerTablet', async (req, res) => {
           // Don't fail the registration if mountedAt setting fails
         }
       } else {
+        // Check if this is a new day
+        const { getUTCMidnight } = require('../utils/dateUtils');
+        const today = getUTCMidnight();
+        const sessionDate = getUTCMidnight(new Date(existingDeviceTracking.currentSession?.date || 0));
+        const isNewDay = sessionDate.getTime() !== today.getTime();
+        
+        if (isNewDay) {
+          // NEW DAY: Reset session and start fresh
+          console.log(`📅 New day detected - resetting session for ${materialId}`);
+          existingDeviceTracking.currentSession = {
+            date: today,
+            startTime: new Date(),
+            lastOnlineUpdate: new Date(),
+            totalHoursOnline: 0,
+            totalDistanceTraveled: 0,
+            targetHours: 8,
+            complianceStatus: 'PENDING',
+            isActive: true
+          };
+        } else if (!existingDeviceTracking.currentSession || !existingDeviceTracking.currentSession.isActive) {
+          // SAME DAY, SESSION ENDED: Reactivate session, keep accumulated hours
+          console.log(`🔄 Reactivating session for ${materialId} - preserving ${existingDeviceTracking.currentSession?.totalHoursOnline || 0} hours`);
+          if (!existingDeviceTracking.currentSession) {
+            existingDeviceTracking.currentSession = {
+              date: today,
+              startTime: new Date(),
+              lastOnlineUpdate: new Date(),
+              totalHoursOnline: 0,
+              totalDistanceTraveled: 0,
+              targetHours: 8,
+              complianceStatus: 'PENDING',
+              isActive: true
+            };
+          } else {
+            // Reactivate existing session (keeps totalHoursOnline)
+            existingDeviceTracking.currentSession.isActive = true;
+            existingDeviceTracking.currentSession.lastOnlineUpdate = new Date();
+          }
+        } else {
+          // Session is already active - just update lastOnlineUpdate
+          existingDeviceTracking.currentSession.lastOnlineUpdate = new Date();
+        }
+        
         // Update existing car record with new slot
         await existingDeviceTracking.updateSlot(parseInt(slotNumber), {
           deviceId,
           isOnline: true,
           deviceInfo: {}
         });
+        
+        existingDeviceTracking.isOnline = true;
+        existingDeviceTracking.lastSeen = new Date();
+        await existingDeviceTracking.save();
+        
         console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
         
         // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
