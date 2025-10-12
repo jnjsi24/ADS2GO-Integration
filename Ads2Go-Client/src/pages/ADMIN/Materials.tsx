@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Trash, ChevronLeft, ChevronRight, Pencil, Menu } from 'lucide-react';
+import { Trash, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 import { 
   GET_ALL_MATERIALS, 
   GET_TABLETS_BY_MATERIAL, 
@@ -23,7 +23,6 @@ import ConfirmationModal from '../../components/ConfirmationModal';
 import DriverAssignmentModal from './tabs/materials/DriverAssignmentModal';
 import MaterialFilters from './tabs/materials/MaterialFilters';
 import { ToastContainer, useToast } from '../../components/ToastNotification';
-import { AdminLoader } from "../../components/ProtectedRoute";
 
 interface Driver {
   driverId: string;
@@ -61,6 +60,7 @@ interface Material {
   dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Material condition and inspection fields
   materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
   inspectionPhotos?: InspectionPhoto[];
   photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
@@ -120,6 +120,7 @@ interface TabletConnectionStatus {
   carGroupId: string;
 }
 
+
 const Materials: React.FC = () => {
   const { toasts, addToast, removeToast } = useToast();
   const [selectedType, setSelectedType] = useState<'All' | 'POSTER' | 'LCD' | 'STICKER' | 'HEADDRESS' | 'BANNER'>('All');
@@ -129,10 +130,16 @@ const Materials: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedMaterialDetails, setSelectedMaterialDetails] = useState<Material | null>(null);
+
+  // State for date editing
   const [editingDates, setEditingDates] = useState<{[key: string]: {mountedAt: string, dismountedAt: string}}>({});
   const [savingDates, setSavingDates] = useState<{[key: string]: boolean}>({});
+  
+  // State for manual assignment
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedMaterialForAssign, setSelectedMaterialForAssign] = useState<Material | null>(null);
+
+  // State for Tablet interface and connection details
   const [showTabletInterface, setShowTabletInterface] = useState(false);
   const [selectedTabletMaterialId, setSelectedTabletMaterialId] = useState<string | null>(null);
   const [selectedTabletSlotNumber, setSelectedTabletSlotNumber] = useState<number | null>(null);
@@ -161,8 +168,10 @@ const Materials: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Custom refresh function for connection status
   const handleRefetchConnectionStatus = async () => {
-    if (refreshingConnectionStatus) return;
+    if (refreshingConnectionStatus) return; // Prevent multiple simultaneous refreshes
+    
     setRefreshingConnectionStatus(true);
     try {
       await refetchConnectionStatus();
@@ -173,6 +182,7 @@ const Materials: React.FC = () => {
     }
   };
 
+  // GraphQL hooks
   const { data, loading, error, refetch } = useQuery(GET_ALL_MATERIALS, {
     context: {
       headers: {
@@ -207,11 +217,22 @@ const Materials: React.FC = () => {
       }
     },
     onCompleted: () => {
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Material added successfully.',
+        duration: 4000
+      });
       setShowCreateModal(false);
       refetch();
     },
     onError: (error) => {
-      alert(`Error creating material: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error creating material: ${error.message}`,
+        duration: 5000
+      });
     }
   });
 
@@ -222,16 +243,28 @@ const Materials: React.FC = () => {
       }
     },
     onCompleted: () => {
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Material deleted successfully.',
+        duration: 4000
+      });
       refetch();
     },
     onError: (error) => {
-      alert(`Error deleting material: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error deleting material: ${error.message}`,
+        duration: 5000
+      });
     }
   });
 
+  // Tablet query hook
   const { data: tabletData, loading: tabletLoading, error: tabletError, refetch: refetchTabletData } = useQuery(GET_TABLETS_BY_MATERIAL, {
     variables: { materialId: selectedTabletMaterialId || '' },
-    pollInterval: 5000,
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -248,12 +281,13 @@ const Materials: React.FC = () => {
     }
   });
 
+  // Tablet connection status query hook
   const { data: connectionStatusData, loading: connectionStatusLoading, error: connectionStatusError, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
     variables: { 
       materialId: selectedTabletMaterialId || '', 
       slotNumber: selectedTabletSlotNumber || 1 
     },
-    pollInterval: 5000,
+    pollInterval: 5000, // Refresh every 5 seconds for faster updates
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -270,30 +304,39 @@ const Materials: React.FC = () => {
     }
   });
 
+  // Get connection status for both slots of a material
   const getSlotConnectionStatus = (materialId: string, slotNumber: number) => {
+    // This is a simplified approach - in a real implementation, you might want to cache this data
+    // For now, we'll use the existing tablet data to determine connection status
     const tabletData = data?.getAllMaterials?.find((m: any) => m.id === materialId);
     if (!tabletData) return null;
+    
+    // This would need to be enhanced with actual connection status data
     return null;
   };
 
+
+
+  // Function to copy connection details to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
-      const notification = document.createElement('div');
-      notification.textContent = 'Connection details copied to clipboard!';
-      notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-[70] transition-opacity duration-300';
-      document.body.appendChild(notification);
-      
-      setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => {
-          document.body.removeChild(notification);
-        }, 300);
-      }, 2000);
+      addToast({
+        type: 'success',
+        title: 'Copied!',
+        message: 'Connection details copied to clipboard.',
+        duration: 3000
+      });
     }).catch(() => {
-      alert('Failed to copy to clipboard. Please try again.');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Failed to copy to clipboard. Please try again.',
+        duration: 4000
+      });
     });
   };
 
+  // Function to show connection details modal
   const showConnectionDetails = (materialId: string, slotNumber: number) => {
     console.log('Opening connection details for:', { materialId, slotNumber });
     setSelectedTabletMaterialId(materialId);
@@ -301,9 +344,15 @@ const Materials: React.FC = () => {
     setShowTabletInterface(true);
   };
 
+  // Function to create tablet configuration
   const handleCreateTabletConfiguration = async () => {
     if (!selectedTabletMaterialId) {
-      alert('Missing material ID');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Missing material ID',
+        duration: 4000
+      });
       return;
     }
 
@@ -313,6 +362,7 @@ const Materials: React.FC = () => {
 
     setCreatingTabletConfig(true);
     try {
+      // Generate a car group ID based on the material ID
       const carGroupId = `GRP-${selectedTabletMaterialId.replace(/[^A-Z0-9]/g, '')}-${Date.now().toString(16).toUpperCase()}`;
       
       await createTabletConfiguration({
@@ -328,12 +378,19 @@ const Materials: React.FC = () => {
     }
   };
 
+  // Function to unregister tablet
   const handleUnregisterTablet = async () => {
     if (!selectedTabletMaterialId || !selectedTabletSlotNumber || !tabletData?.getTabletsByMaterial?.[0]?.carGroupId) {
-      alert('Missing required information for unregistration');
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: 'Missing required information for unregistration',
+        duration: 4000
+      });
       return;
     }
 
+    // Use window.confirm instead of confirm to avoid ESLint error
     if (!window.confirm('Are you sure you want to unregister this tablet? This will disconnect the device from the system.')) {
       return;
     }
@@ -361,10 +418,21 @@ const Materials: React.FC = () => {
       }
     },
     onCompleted: () => {
+      addToast({
+        type: 'success',
+        title: 'Success!',
+        message: 'Material updated successfully.',
+        duration: 4000
+      });
       refetch();
     },
     onError: (error) => {
-      alert(`Error updating material: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error updating material: ${error.message}`,
+        duration: 5000
+      });
     }
   });
 
@@ -376,16 +444,31 @@ const Materials: React.FC = () => {
     },
     onCompleted: (data) => {
       if (data.assignMaterialToDriver.success) {
-        alert(data.assignMaterialToDriver.message);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: data.assignMaterialToDriver.message || 'Material assigned successfully.',
+          duration: 4000
+        });
         setShowAssignModal(false);
         setSelectedMaterialForAssign(null);
         refetch();
       } else {
-        alert(`Assignment failed: ${data.assignMaterialToDriver.message}`);
+        addToast({
+          type: 'error',
+          title: 'Assignment Failed',
+          message: data.assignMaterialToDriver.message,
+          duration: 5000
+        });
       }
     },
     onError: (error) => {
-      alert(`Error assigning material: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error assigning material: ${error.message}`,
+        duration: 5000
+      });
     }
   });
 
@@ -397,17 +480,32 @@ const Materials: React.FC = () => {
     },
     onCompleted: (data) => {
       if (data.unassignMaterialFromDriver.success) {
-        alert(data.unassignMaterialFromDriver.message);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: data.unassignMaterialFromDriver.message || 'Material unassigned successfully.',
+          duration: 4000
+        });
         setShowRemoveModal(false);
         setMaterialToRemove(null);
         setDismountReason('');
         refetch();
       } else {
-        alert(`Unassignment failed: ${data.unassignMaterialFromDriver.message}`);
+        addToast({
+          type: 'error',
+          title: 'Unassignment Failed',
+          message: data.unassignMaterialFromDriver.message,
+          duration: 5000
+        });
       }
     },
     onError: (error) => {
-      alert(`Error unassigning material: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error unassigning material: ${error.message}`,
+        duration: 5000
+      });
     }
   });
 
@@ -419,15 +517,30 @@ const Materials: React.FC = () => {
     },
     onCompleted: (data) => {
       if (data.unregisterTablet.success) {
-        alert(data.unregisterTablet.message);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: data.unregisterTablet.message || 'Tablet unregistered successfully.',
+          duration: 4000
+        });
         refetchConnectionStatus();
       } else {
-        alert(`Unregistration failed: ${data.unregisterTablet.message}`);
+        addToast({
+          type: 'error',
+          title: 'Unregistration Failed',
+          message: data.unregisterTablet.message,
+          duration: 5000
+        });
       }
       setUnregistering(false);
     },
     onError: (error) => {
-      alert(`Error unregistering tablet: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error unregistering tablet: ${error.message}`,
+        duration: 5000
+      });
       setUnregistering(false);
     }
   });
@@ -440,17 +553,34 @@ const Materials: React.FC = () => {
     },
     onCompleted: (data) => {
       if (data.createTabletConfiguration.success) {
-        alert(data.createTabletConfiguration.message);
+        addToast({
+          type: 'success',
+          title: 'Success!',
+          message: data.createTabletConfiguration.message || 'Tablet configuration created successfully.',
+          duration: 4000
+        });
+        // Refetch tablet data
         if (selectedTabletMaterialId) {
+          // Refetch the tablet data
           refetch();
         }
       } else {
-        alert(`Failed to create tablet configuration: ${data.createTabletConfiguration.message}`);
+        addToast({
+          type: 'error',
+          title: 'Creation Failed',
+          message: data.createTabletConfiguration.message,
+          duration: 5000
+        });
       }
       setCreatingTabletConfig(false);
     },
     onError: (error) => {
-      alert(`Error creating tablet configuration: ${error.message}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error creating tablet configuration: ${error.message}`,
+        duration: 5000
+      });
       setCreatingTabletConfig(false);
     }
   });
@@ -458,6 +588,7 @@ const Materials: React.FC = () => {
   const materials: Material[] = data?.getAllMaterials || [];
   const drivers: DriverWithVehicleType[] = driversData?.getAllDrivers || [];
 
+  // Debug logging
   useEffect(() => {
     if (materials.length > 0) {
       console.log('First material data:', materials[0]);
@@ -465,10 +596,13 @@ const Materials: React.FC = () => {
     }
   }, [materials]);
 
+
+  // Helper function to determine status
   const getStatus = (material: Material): 'Used' | 'Available' => {
     return material.driverId ? 'Used' : 'Available';
   };
 
+  // Filter materials
   const filtered = materials.filter((material) => {
     const typeMatch = selectedType === 'All' || material.materialType === selectedType;
     const searchMatch =
@@ -485,8 +619,7 @@ const Materials: React.FC = () => {
     return typeMatch && searchMatch && statusMatch;
   });
 
-  const handleMaterialSelect = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleMaterialSelect = (id: string) => {
     setSelectedMaterials(prevSelected =>
       prevSelected.includes(id)
         ? prevSelected.filter(materialId => materialId !== id)
@@ -494,23 +627,11 @@ const Materials: React.FC = () => {
     );
   };
 
-  const handleSelectAll = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const currentPageMaterialIds = paginatedMaterials.map(material => material.id);
-    const allCurrentPageSelected = currentPageMaterialIds.every(id => selectedMaterials.includes(id));
-    
-    if (allCurrentPageSelected) {
-      setSelectedMaterials(prev => prev.filter(id => !currentPageMaterialIds.includes(id)));
+  const handleSelectAll = () => {
+    if (selectedMaterials.length === filtered.length) {
+      setSelectedMaterials([]);
     } else {
-      setSelectedMaterials(prev => {
-        const newSelection = [...prev];
-        currentPageMaterialIds.forEach(id => {
-          if (!newSelection.includes(id)) {
-            newSelection.push(id);
-          }
-        });
-        return newSelection;
-      });
+      setSelectedMaterials(filtered.map(material => material.id));
     }
   };
 
@@ -589,7 +710,12 @@ const Materials: React.FC = () => {
         setDismountReason('');
       }
     } else if (!dismountReason.trim()) {
-      alert('Please provide a reason for removing the material from the driver.');
+      addToast({
+        type: 'warning',
+        title: 'Missing Information',
+        message: 'Please provide a reason for removing the material from the driver.',
+        duration: 4000
+      });
     }
   };
 
@@ -600,10 +726,6 @@ const Materials: React.FC = () => {
   };
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedMaterials = filtered.slice(startIndex, endIndex);
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -640,6 +762,7 @@ const Materials: React.FC = () => {
     });
   };
 
+  // Date editing functions
   const startEditingDates = (materialId: string, material: Material) => {
     setEditingDates(prev => ({
       ...prev,
@@ -667,10 +790,12 @@ const Materials: React.FC = () => {
     try {
       const input: any = {};
       
+      // Always send mountedAt if it's in the edit data (even if empty to clear it)
       if (editData.mountedAt !== undefined) {
         input.mountedAt = editData.mountedAt ? new Date(editData.mountedAt).toISOString() : null;
       }
       
+      // Always send dismountedAt if it's in the edit data (even if empty to clear it)
       if (editData.dismountedAt !== undefined) {
         input.dismountedAt = editData.dismountedAt ? new Date(editData.dismountedAt).toISOString() : null;
       }
@@ -682,10 +807,16 @@ const Materials: React.FC = () => {
         }
       });
 
+      // Clear editing state
       cancelEditingDates(materialId);
     } catch (error) {
       console.error('Error updating dates:', error);
-      alert(`Error updating dates: ${error}`);
+      addToast({
+        type: 'error',
+        title: 'Error!',
+        message: `Error updating dates: ${error}`,
+        duration: 5000
+      });
     } finally {
       setSavingDates(prev => ({ ...prev, [materialId]: false }));
     }
@@ -701,13 +832,14 @@ const Materials: React.FC = () => {
     }));
   };
 
-  const isAllSelected = paginatedMaterials.length > 0 && paginatedMaterials.every(material => selectedMaterials.includes(material.id));
+  const isAllSelected = selectedMaterials.length === filtered.length && filtered.length > 0;
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'N/A';
     
     try {
       const date = new Date(dateString);
+      // Check if date is valid
       if (isNaN(date.getTime())) return 'N/A';
       
       return date.toLocaleDateString('en-US', {
@@ -729,6 +861,7 @@ const Materials: React.FC = () => {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return '';
       
+      // Format as datetime-local input format (YYYY-MM-DDTHH:mm)
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
@@ -741,10 +874,9 @@ const Materials: React.FC = () => {
       return '';
     }
   };
-
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    return parts.map(p => p[0]).join('').toUpperCase().slice(0, 2);
+  const handleRowClick = (material: Material) => {
+    handleViewDetails(material);
+    setShowDetailsModal(true);
   };
 
   const contentMargin = isMobile ? 'ml-0 pt-16' : sidebarCollapsed ? 'ml-16' : 'ml-60';
@@ -754,6 +886,7 @@ const Materials: React.FC = () => {
   return (
     <div className={`min-h-screen bg-gray-100 p-6 ${contentMargin} flex flex-col transition-all duration-300`}>
       <div className="flex-1 flex flex-col">
+        {/* Header with Filters */}
         <MaterialFilters
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -763,350 +896,298 @@ const Materials: React.FC = () => {
           onStatusChange={setStatusFilter}
           onCreateClick={() => setShowCreateModal(true)}
         />
-        {loading ? (
-          <AdminLoader />
-        ) : error ? (
-          <div className="text-center py-10 text-red-500">Error: {error}</div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-10 text-gray-500">
-            {searchTerm ? 'No materials match your search criteria' : 'No materials found'}
-          </div>
-        ) : (
-          <div className="flex-1 rounded-xl mb-4 overflow-hidden">
-            {!isMobile && (
-              <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-2 text-sm font-semibold text-black">
-                <div className="flex items-center gap-2 col-span-3">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox"
-                    onChange={() => {}}
-                    onClick={handleSelectAll}
-                    checked={isAllSelected}
-                  />
-                  <span className="cursor-pointer" onClick={handleSelectAll}>Type</span>
-                </div>
-                <div className="col-span-3">ID</div>
-                <div className="col-span-2">Status</div>
-                <div className="col-span-2">Driver Name</div>
-                <div className="col-span-1">Vehicle Plate</div>
-                <div className="col-span-1 text-center">Action</div>
-              </div>
-            )}
 
-            {paginatedMaterials.map((material) => {
-              const status = getStatus(material);
-              return (
+        {/* Table */}
+        <div className="rounded-xl mb-5 overflow-hidden">
+          {/* Table Header */}
+          <div className="grid grid-cols-12 gap-4 px-5 py-3 text-sm font-semibold text-gray-500">
+            <div className="flex items-center gap-6 col-span-2">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                onChange={handleSelectAll}
+                checked={isAllSelected}
+              />
+              <span className="mr-40 cursor-pointer" onClick={handleSelectAll}>Type</span>
+            </div>
+            <div className="col-span-2">ID</div>
+            <div className="col-span-2 pl-16">Status</div>
+            <div className="col-span-2 pl-12">Driver Name</div>
+            <div className="col-span-2 pl-24">Vehicle Plate</div>
+            <div className="col-span-1 ml-28">Action</div>
+          </div>
+          
+          {/* Table Body */}
+          {filtered
+          .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+          .map((material) => {
+            const status = getStatus(material);
+            
+            return (
+              <div key={material.id} className="bg-white mb-3 rounded-lg shadow-md">
                 <div
-                  key={material.id}
-                  className="bg-white mb-3 rounded-lg shadow-md hover:bg-gray-50 transition-colors"
-                  onClick={() => handleViewDetails(material)}
+                  className="grid grid-cols-12 items-center px-5 py-5 text-sm hover:bg-gray-100 transition-colors cursor-pointer"
+                  onClick={() => handleRowClick(material)}
                 >
-                  {isMobile ? (
-                    <div className="p-4 cursor-pointer">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            className="form-checkbox"
-                            checked={selectedMaterials.includes(material.id)}
-                            onChange={() => {}}
-                            onClick={(e) => handleMaterialSelect(material.id, e)}
-                          />
-                          <div className="flex items-center justify-center w-10 h-10 text-sm font-semibold text-white rounded-full bg-[#FF9D3D]">
-                            {getInitials(material.materialType)}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-800">{material.materialType}</div>
-                            <div className="text-xs text-gray-500 truncate max-w-[150px]">{material.materialId}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm text-black mb-3">
-                        <div>
-                          <div className="font-medium">Driver</div>
-                          <div className="truncate">{material.driver?.fullName || 'N/A'}</div>
-                        </div>
-                        <div>
-                          <div className="font-medium">Vehicle Plate</div>
-                          <div>{material.driver?.vehiclePlateNumber || 'N/A'}</div>
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            status === 'Used'
-                              ? 'bg-red-200 text-red-800'
-                              : 'bg-green-200 text-green-800'
-                          }`}
-                        >
-                          {status}
+                  <div className="col-span-2 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox"
+                      checked={selectedMaterials.includes(material.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleMaterialSelect(material.id);
+                      }}
+                    />
+                    <span className="pl-5 truncate">{material.materialType}</span>
+                  </div>
+
+                  <div className="col-span-2 pl-1">{material.materialId}</div>
+
+                  <div className="col-span-2 text-center">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        status === 'Used'
+                          ? 'bg-red-200 text-red-800'
+                          : 'bg-green-200 text-green-800'
+                      }`}
+                    >
+                      {status}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 ml-14">{material.driver?.fullName || 'N/A'}</div>
+                  <div className="col-span-3 ml-28 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
+
+                  <div className="col-span-1 flex justify-center gap-1 ml-">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewDetails(material);
+                      }}
+                      className="group flex items-center text-gray-700 overflow-hidden h-8 w-5 hover:w-14 transition-[width] duration-300"
+                    >
+                      <Pencil 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                          size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Edit
                         </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewDetails(material);
-                          }}
-                          className="flex items-center shadow-md text-gray-700 px-1 py-1 rounded hover:bg-gray-50"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMaterial(material.id);
-                          }}
-                          className="flex items-center shadow-md text-red-700 px-1 py-1 rounded hover:bg-red-50"
-                        >
-                          <Trash size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-12 gap-4 items-center px-4 py-3 text-sm transition-colors cursor-pointer rounded-lg">
-                      <div className="col-span-3 flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox"
-                          checked={selectedMaterials.includes(material.id)}
-                          onChange={() => {}}
-                          onClick={(e) => handleMaterialSelect(material.id, e)}
-                        />
-                        <div className="flex items-center">
-                          <div className="flex items-center justify-center w-8 h-8 mr-3 text-xs font-semibold text-white rounded-full bg-[#FF9D3D]">
-                            {getInitials(material.materialType)}
-                          </div>
-                          <span className="truncate font-semibold">{material.materialType}</span>
-                        </div>
-                      </div>
-                      <div className="col-span-3 truncate">{material.materialId}</div>
-                      <div className="col-span-2">
-                        <span
-                          className={`px-2 py-1 text-xs font-medium rounded-full ${
-                            status === 'Used'
-                              ? 'bg-red-200 text-red-800'
-                              : 'bg-green-200 text-green-800'
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </div>
-                      <div className="col-span-2 truncate">{material.driver?.fullName || 'N/A'}</div>
-                      <div className="col-span-1 truncate">{material.driver?.vehiclePlateNumber || 'N/A'}</div>
-                      <div className="col-span-1 flex items-center justify-center gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewDetails(material);
-                          }}
-                          className="group flex items-center text-gray-700 overflow-hidden h-8 w-7 hover:w-14 transition-[width] duration-300"
-                        >
-                          <Pencil
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                            size={16}
-                          />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Edit
-                          </span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteMaterial(material.id);
-                          }}
-                          className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-16 transition-[width] duration-300"
-                        >
-                          <Trash
-                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                            size={16}
-                          />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                            Delete
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {filtered.length === 0 && (
-              <div className="p-4 text-center text-gray-500">No materials found.</div>
-            )}
-          </div>
-        )}
+                    </button> 
 
-        {filtered.length > 0 && (
-          <div className="mt-auto flex justify-center py-4">
-            <div className="flex items-center space-x-1 sm:space-x-2">
-              <button
-                onClick={handlePreviousPage}
-                disabled={currentPage === 1}
-                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                <span className="hidden sm:inline">Previous</span>
-              </button>
-              <div className="flex space-x-1">
-                {(() => {
-                  const pages = [];
-                  const maxVisiblePages = isMobile ? 1 : 3;
-                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-                  if (endPage - startPage + 1 < maxVisiblePages) {
-                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                  }
-
-                  for (let i = startPage; i <= endPage; i++) {
-                    pages.push(
-                      <button
-                        key={i}
-                        onClick={() => handlePageChange(i)}
-                        className={`px-2 sm:px-3 py-1 text-sm rounded ${
-                          currentPage === i
-                            ? "border border-gray-300 text-black"
-                            : "text-gray-700 hover:border border-gray-300"
-                        }`}
-                      >
-                        {i}
-                      </button>
-                    );
-                  }
-
-                  if (endPage < totalPages && !isMobile) {
-                    pages.push(
-                      <span key="ellipsis" className="px-2 text-gray-500">
-                        …
+                    <button
+                      onClick={(e) => {
+                      e.stopPropagation(); // ✅ stop row click
+                      handleDeleteMaterial(material.id); // ✅ delete action
+                    }}
+                      className="group flex items-center text-red-700 overflow-hidden h-8 w-5 hover:w-16 transition-[width] duration-300"
+                    >
+                      <Trash 
+                        className="flex-shrink-0 mx-auto mr-1 transition-all duration-300"
+                        size={16} />
+                        <span className="opacity-0 group-hover:opacity-100 text-sm group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                        Delete
                       </span>
-                    );
-                  }
-
-                  return pages;
-                })()}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-                className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="p-4 text-center text-gray-500">No materials found.</div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        <div className="mt-auto flex justify-center">
+          <div className="flex items-center space-x-2">
+            {/* Previous button */}
+            <button
+              onClick={handlePreviousPage}
+              disabled={currentPage === 1}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="hidden sm:inline">Next</span>
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </button>
-            </div>
-          </div>
-        )}
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Previous
+            </button>
 
-        <CreateMaterialModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSubmit={handleCreateSubmit}
-          creating={creating}
-          onValidationError={handleValidationError}
-        />
-        <DriverAssignmentModal
-          isOpen={showAssignModal}
-          onClose={() => setShowAssignModal(false)}
-          material={selectedMaterialForAssign}
-          drivers={drivers}
-          materials={materials}
-          onAssign={handleAssignSubmit}
-          assigning={assigning}
-        />
-        <TabletConnectionModal
-          isOpen={showTabletInterface}
-          onClose={() => {
-            setShowTabletInterface(false);
-            setSelectedTabletMaterialId(null);
-            setSelectedTabletSlotNumber(null);
-          }}
-          materialId={selectedTabletMaterialId}
-          slotNumber={selectedTabletSlotNumber}
-          tabletData={tabletData}
-          connectionStatusData={connectionStatusData}
-          tabletLoading={tabletLoading}
-          tabletError={tabletError}
-          connectionStatusLoading={connectionStatusLoading}
-          connectionStatusError={connectionStatusError}
-          unregistering={unregistering}
-          refreshingConnectionStatus={refreshingConnectionStatus}
-          creatingTabletConfig={creatingTabletConfig}
-          onRefetchTabletData={refetchTabletData}
-          onRefetchConnectionStatus={handleRefetchConnectionStatus}
-          onCreateTabletConfiguration={handleCreateTabletConfiguration}
-          onUnregisterTablet={handleUnregisterTablet}
-          onCopyToClipboard={copyToClipboard}
-        />
-        <MaterialDetailsModal
-          isOpen={showDetailsModal}
-          onClose={handleCloseModal}
-          material={selectedMaterialDetails}
-          onRemoveFromDriver={handleRemoveFromDriver}
-          onAssignDriver={(material) => {
-            setSelectedMaterialForAssign(material);
-            setShowAssignModal(true);
-          }}
-          onShowConnectionDetails={showConnectionDetails}
-          editingDates={editingDates}
-          savingDates={savingDates}
-          onStartEditingDates={startEditingDates}
-          onCancelEditingDates={cancelEditingDates}
-          onSaveDateChanges={saveDateChanges}
-          onUpdateEditingDate={updateEditingDate}
-        />
-        <ConfirmationModal
-          isOpen={showDeleteModal}
-          onClose={cancelDelete}
-          onConfirm={confirmDelete}
-          title="Delete Material"
-          message="Are you sure you want to delete this material? This action cannot be undone."
-          confirmText="Delete"
-          cancelText="Cancel"
-          confirmButtonClass="bg-red-600 hover:bg-red-700"
-        />
-        {showRemoveModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Remove Material from Driver
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to remove this material from the driver? Please provide a reason for this action.
-              </p>
-              <div className="mb-4">
-                <label htmlFor="dismountReason" className="block text-sm font-medium text-gray-700 mb-2">
-                  Reason for Removal *
-                </label>
-                <textarea
-                  id="dismountReason"
-                  value={dismountReason}
-                  onChange={(e) => setDismountReason(e.target.value)}
-                  placeholder="Please provide a reason for removing this material from the driver..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={cancelRemove}
-                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
-                  disabled={unassigning}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={confirmRemove}
-                  disabled={!dismountReason.trim() || unassigning}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  {unassigning ? 'Removing...' : 'Remove'}
-                </button>
-              </div>
+            {/* Page numbers */}
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = 3;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => handlePageChange(i)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === i
+                          ? "border border-gray-300 text-black"
+                          : "text-gray-700 hover:border border-gray-300"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+
+                if (endPage < totalPages) {
+                  pages.push(
+                    <span key="ellipsis" className="px-2 text-gray-500">
+                      …
+                    </span>
+                  );
+                }
+
+                return pages;
+              })()}
             </div>
+
+            {/* Next button */}
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+              Next
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
           </div>
-        )}
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
+        </div>
       </div>
+
+      {/* Create Material Modal */}
+      <CreateMaterialModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateSubmit}
+        creating={creating}
+        onValidationError={handleValidationError}
+      />
+      
+
+      {/* Assign Driver Modal */}
+      <DriverAssignmentModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        material={selectedMaterialForAssign}
+        drivers={drivers}
+        materials={materials}
+        onAssign={handleAssignSubmit}
+        assigning={assigning}
+      />
+      {/* Connection Details Modal */}
+      <TabletConnectionModal
+        isOpen={showTabletInterface}
+        onClose={() => {
+          setShowTabletInterface(false);
+          setSelectedTabletMaterialId(null);
+          setSelectedTabletSlotNumber(null);
+        }}
+        materialId={selectedTabletMaterialId}
+        slotNumber={selectedTabletSlotNumber}
+        tabletData={tabletData}
+        connectionStatusData={connectionStatusData}
+        tabletLoading={tabletLoading}
+        tabletError={tabletError}
+        connectionStatusLoading={connectionStatusLoading}
+        connectionStatusError={connectionStatusError}
+        unregistering={unregistering}
+        refreshingConnectionStatus={refreshingConnectionStatus}
+        creatingTabletConfig={creatingTabletConfig}
+        onRefetchTabletData={refetchTabletData}
+        onRefetchConnectionStatus={handleRefetchConnectionStatus}
+        onCreateTabletConfiguration={handleCreateTabletConfiguration}
+        onUnregisterTablet={handleUnregisterTablet}
+        onCopyToClipboard={copyToClipboard}
+      />
+
+    {/* Material Details Modal */}  
+    <MaterialDetailsModal
+      isOpen={showDetailsModal}
+      onClose={handleCloseModal}
+      material={selectedMaterialDetails}
+      onRemoveFromDriver={handleRemoveFromDriver}
+      onAssignDriver={(material) => {
+        setSelectedMaterialForAssign(material);
+        setShowAssignModal(true);
+      }}
+      onShowConnectionDetails={showConnectionDetails}
+      editingDates={editingDates}
+      savingDates={savingDates}
+      onStartEditingDates={startEditingDates}
+      onCancelEditingDates={cancelEditingDates}
+      onSaveDateChanges={saveDateChanges}
+      onUpdateEditingDate={updateEditingDate}
+    />
+    
+    {/* Delete Confirmation Modal */}
+    <ConfirmationModal
+      isOpen={showDeleteModal}
+      onClose={cancelDelete}
+      onConfirm={confirmDelete}
+      title="Delete Material"
+      message="Are you sure you want to delete this material? This action cannot be undone."
+      confirmText="Delete"
+      cancelText="Cancel"
+      confirmButtonClass="bg-red-600 hover:bg-red-700"
+    />
+    
+    {/* Remove from Driver Confirmation Modal */}
+    {showRemoveModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Remove Material from Driver
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Are you sure you want to remove this material from the driver? Please provide a reason for this action.
+          </p>
+          <div className="mb-4">
+            <label htmlFor="dismountReason" className="block text-sm font-medium text-gray-700 mb-2">
+              Reason for Removal *
+            </label>
+            <textarea
+              id="dismountReason"
+              value={dismountReason}
+              onChange={(e) => setDismountReason(e.target.value)}
+              placeholder="Please provide a reason for removing this material from the driver..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+              required
+            />
+          </div>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={cancelRemove}
+              className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+              disabled={unassigning}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmRemove}
+              disabled={!dismountReason.trim() || unassigning}
+              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {unassigning ? 'Removing...' : 'Remove'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Toast Notifications */}
+    <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 };

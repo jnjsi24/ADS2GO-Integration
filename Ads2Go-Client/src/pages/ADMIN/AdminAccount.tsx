@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Pencil, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Toast notification type
@@ -204,20 +204,6 @@ const AccountSettings: React.FC = () => {
           </div>
           <h2 className="text-xl font-semibold mb-1">{formData.firstName} {formData.middleName} {formData.lastName}</h2>
           <p className="text-sm text-black/80 mb-6">{formData.email}</p>
-
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-6 py-2 text-sm font-medium bg-[#FF9B45] text-white/80 rounded-md hover:scale-105 transition-all flex items-center gap-2"
-            >
-              <Pencil size={16} /> Edit
-            </button>
-          ) : (
-            <div className="flex gap-4">
-              <button onClick={handleCancel} className="text-red-400 font-bold py-2 px-6 rounded-md">Cancel</button>
-              <button onClick={handleUpdate} className="px-6 py-2 text-sm font-medium bg-[#FF9B45] text-white/80 rounded-md hover:scale-105">Save</button>
-            </div>
-          )}
         </aside>
 
         {/* Right */}

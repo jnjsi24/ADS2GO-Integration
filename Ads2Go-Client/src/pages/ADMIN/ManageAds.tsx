@@ -59,7 +59,6 @@ const ManageAds: React.FC = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [adToReject, setAdToReject] = useState<string | null>(null);
-  const [showRejectionNotification, setShowRejectionNotification] = useState(true);
 
   // Loading states for approve/reject buttons
   const [processingAds, setProcessingAds] = useState<Set<string>>(new Set());
@@ -141,9 +140,6 @@ const ManageAds: React.FC = () => {
   setTimeout(() => {
     setIsAdModalOpen(true);
   }, 10);
-  if (ad.status === 'REJECTED') {
-    setShowRejectionNotification(true);
-  }
 };
 
 
@@ -306,12 +302,6 @@ const ManageAds: React.FC = () => {
           }
         }
       });
-      addToast({
-        type: 'success',
-        title: 'Success!',
-        message: 'Advertisement has been rejected successfully',
-        duration: 5000
-      });
       setShowRejectModal(false);
       setRejectReason('');
       setAdToReject(null);
@@ -463,50 +453,6 @@ const ManageAds: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
-      {/* Toast Notifications */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <AnimatePresence>
-          {toasts.map((toast) => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, scale: 0.3 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.5, transition: { duration: 0.2 } }}
-              className={`max-w-md w-full mx-4 bg-white shadow-xl rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden ${
-                toast.type === 'success' ? 'border-l-4 border-green-400' :
-                toast.type === 'error' ? 'border-l-4 border-red-400' :
-                toast.type === 'warning' ? 'border-l-4 border-yellow-400' :
-                'border-l-4 border-blue-400'
-              }`}
-            >
-              <div className="p-6">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    {toast.type === 'success' && <CheckCircle className="h-8 w-8 text-green-400" />}
-                    {toast.type === 'error' && <XCircle className="h-8 w-8 text-red-400" />}
-                    {toast.type === 'warning' && <AlertCircle className="h-8 w-8 text-yellow-400" />}
-                    {toast.type === 'info' && <AlertCircle className="h-8 w-8 text-blue-400" />}
-                  </div>
-                  <div className="ml-4 flex-1">
-                    <p className="text-lg font-medium text-gray-900">{toast.title}</p>
-                    <p className="mt-1 text-sm text-gray-500">{toast.message}</p>
-                  </div>
-                  <div className="ml-4 flex-shrink-0">
-                    <button
-                      className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                      onClick={() => removeToast(toast.id)}
-                    >
-                      <span className="sr-only">Close</span>
-                      <X className="h-6 w-6" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>
@@ -934,21 +880,6 @@ const ManageAds: React.FC = () => {
                 </div>
               </div>
             </div>
-            {/* Rejection Notification */}
-            {selectedAd.status === 'REJECTED' && showRejectionNotification && (
-              <div className="fixed bottom-2 right-2 bg-red-600 text-white text-xs p-3 rounded-md shadow-lg max-w-sm z-50 flex justify-between items-start">
-                <div>
-                  <div className="font-bold mb-1">Advertisemnet has been rejected.</div>
-                  <p className="text-lg">Reason: {selectedAd.reasonForReject || 'No reason provided.'}</p>
-                </div>
-                <button
-                  onClick={() => setShowRejectionNotification(false)} // closes the notification
-                  className="text-white hover:text-gray-200 pl-5"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
