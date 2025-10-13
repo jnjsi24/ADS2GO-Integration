@@ -59,7 +59,7 @@ const ForgotPass: React.FC = () => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-lg" />
 
       {/* Centered Form */}
-      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-xl shadow-2xl">
+      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-md shadow-2xl">
         <h2 className="text-3xl font-bold text-center text-white mb-4">
           {step === "request" ? "Forgot Password" : "Reset Password"}
         </h2>
@@ -102,7 +102,7 @@ const ForgotPass: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold transition"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 font-semibold transition"
               disabled={requesting}
             >
               {requesting ? "Sending..." : "Send Reset Token"}
@@ -170,7 +170,7 @@ const ForgotPass: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold transition"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 font-semibold transition"
               disabled={resetting}
             >
               {resetting ? "Resetting..." : "Reset Password"}

@@ -7,16 +7,15 @@ import API_CONFIG from '../config/api';
 let Notifications: any = null;
 let isNotificationsAvailable = false;
 
-try {
-  // Try to import notifications
-  Notifications = require('expo-notifications');
+// Function to safely initialize notifications
+const initializeNotifications = () => {
+  if (isNotificationsAvailable) return; // Already initialized
   
-  // Check if we're in Expo Go (which has limited notification support)
-  const isExpoGo = __DEV__ && !Device.isDevice;
-  
-  if (!isExpoGo) {
+  try {
+    // Try to import notifications
+    Notifications = require('expo-notifications');
     isNotificationsAvailable = true;
-    
+
     // Configure notification behavior only if available
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -27,13 +26,14 @@ try {
         shouldShowList: true,
       }),
     });
-  } else {
-    console.log('⚠️ Running in Expo Go - notifications will be limited');
+    
+    console.log('✅ expo-notifications initialized successfully');
+  } catch (error) {
+    console.log('⚠️ expo-notifications not available in this environment:', error instanceof Error ? error.message : 'Unknown error');
+    isNotificationsAvailable = false;
+    Notifications = null;
   }
-} catch (error) {
-  console.log('⚠️ expo-notifications not available:', error instanceof Error ? error.message : 'Unknown error');
-  isNotificationsAvailable = false;
-}
+};
 
 export interface NotificationData {
   materialId?: string;
@@ -61,103 +61,50 @@ class NotificationService {
   }
 
   /**
-   * Register for push notifications and get Expo push token
+   * Initialize local notifications (works in Expo Go)
    */
-  async registerForPushNotifications(): Promise<string | null> {
+  async initializeLocalNotifications(): Promise<boolean> {
     try {
+      // Try to initialize notifications if not already done
+      initializeNotifications();
+      
       if (!isNotificationsAvailable || !Notifications) {
         console.log('⚠️ Notifications not available in this environment');
-        return null;
+        return false;
       }
 
-      if (!Device.isDevice) {
-        console.log('❌ Must use physical device for push notifications');
-        return null;
-      }
-
-      // Check existing permissions
+      // Request permissions for local notifications
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
 
-      // Request permissions if not granted
       if (existingStatus !== 'granted') {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
 
       if (finalStatus !== 'granted') {
-        console.log('❌ Failed to get push token for push notification!');
-        return null;
+        console.log('❌ Failed to get notification permissions!');
+        return false;
       }
 
-      // Get the push token
-      // Let Expo auto-detect the project ID from app.config.js
-      const token = await Notifications.getExpoPushTokenAsync();
-
-      this.expoPushToken = token.data;
-      console.log('✅ Expo push token:', this.expoPushToken);
-
-      // Store token in AsyncStorage
-      if (this.expoPushToken) {
-        await AsyncStorage.setItem('expoPushToken', this.expoPushToken);
-      }
-
-      // Send token to server
-      if (this.expoPushToken) {
-        await this.sendTokenToServer(this.expoPushToken);
-      }
-
-      return this.expoPushToken;
+      console.log('✅ Local notifications initialized successfully');
+      return true;
     } catch (error) {
-      console.error('❌ Error registering for push notifications:', error);
-      return null;
+      console.error('❌ Error initializing local notifications:', error);
+      return false;
     }
   }
 
   /**
-   * Send push token to server for driver
+   * Register for local notifications (Expo Go compatible)
    */
-  private async sendTokenToServer(token: string): Promise<void> {
+  async registerForLocalNotifications(): Promise<boolean> {
     try {
-      const authToken = await AsyncStorage.getItem('token');
-      const driverId = await AsyncStorage.getItem('driverId');
-
-      if (!authToken || !driverId) {
-        console.log('❌ Missing auth token or driver ID for token registration');
-        return;
-      }
-
-      const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          query: `
-            mutation UpdateDriverPushToken($driverId: ID!, $pushToken: String!) {
-              updateDriverPushToken(driverId: $driverId, pushToken: $pushToken) {
-                success
-                message
-              }
-            }
-          `,
-          variables: {
-            driverId,
-            pushToken: token,
-          },
-        }),
-      });
-
-      const result = await response.json();
-      
-      if (result.data?.updateDriverPushToken?.success) {
-        console.log('✅ Push token sent to server successfully');
-      } else {
-        console.log('❌ Failed to send push token to server:', result.errors);
-      }
+      console.log('🔔 Registering for local notifications (Expo Go compatible)');
+      return await this.initializeLocalNotifications();
     } catch (error) {
-      console.error('❌ Error sending push token to server:', error);
+      console.error('❌ Error registering for local notifications:', error);
+      return false;
     }
   }
 
@@ -165,6 +112,9 @@ class NotificationService {
    * Set up notification listeners
    */
   setupNotificationListeners(): () => void {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
     if (!isNotificationsAvailable || !Notifications) {
       console.log('⚠️ Notifications not available - returning empty cleanup function');
       return () => {}; // Return empty cleanup function
@@ -316,9 +266,39 @@ class NotificationService {
   }
 
   /**
-   * Schedule a local notification (for testing)
+   * Show immediate local notification
    */
-  async scheduleLocalNotification(title: string, body: string, data?: NotificationData): Promise<void> {
+  async showLocalNotification(title: string, body: string, data?: NotificationData): Promise<void> {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
+    if (!isNotificationsAvailable || !Notifications) {
+      console.log('⚠️ Notifications not available - cannot show local notification');
+      return;
+    }
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+          sound: true,
+        },
+        trigger: null, // Show immediately
+      });
+    } catch (error) {
+      console.error('❌ Error showing local notification:', error);
+    }
+  }
+
+  /**
+   * Schedule a local notification for later
+   */
+  async scheduleLocalNotification(title: string, body: string, delaySeconds: number, data?: NotificationData): Promise<void> {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
     if (!isNotificationsAvailable || !Notifications) {
       console.log('⚠️ Notifications not available - cannot schedule local notification');
       return;
@@ -332,7 +312,7 @@ class NotificationService {
           data,
           sound: true,
         },
-        trigger: { seconds: 2 },
+        trigger: { seconds: delaySeconds },
       });
     } catch (error) {
       console.error('❌ Error scheduling local notification:', error);
@@ -340,9 +320,56 @@ class NotificationService {
   }
 
   /**
+   * Show notification for material assignment
+   */
+  async showMaterialAssignmentNotification(materialName: string, materialId: string): Promise<void> {
+    await this.showLocalNotification(
+      '🚚 New Material Assigned!',
+      `You have been assigned to material: ${materialName}`,
+      {
+        category: 'MATERIAL_ASSIGNMENT',
+        materialId,
+        materialName,
+        priority: 'HIGH'
+      }
+    );
+  }
+
+  /**
+   * Show notification for driver status change
+   */
+  async showDriverStatusNotification(message: string): Promise<void> {
+    await this.showLocalNotification(
+      '📋 Status Update',
+      message,
+      {
+        category: 'DRIVER_STATUS_CHANGE',
+        priority: 'MEDIUM'
+      }
+    );
+  }
+
+  /**
+   * Show notification for route update
+   */
+  async showRouteUpdateNotification(message: string): Promise<void> {
+    await this.showLocalNotification(
+      '🗺️ Route Updated',
+      message,
+      {
+        category: 'ROUTE_UPDATE',
+        priority: 'MEDIUM'
+      }
+    );
+  }
+
+  /**
    * Clear all notifications
    */
   async clearAllNotifications(): Promise<void> {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
     if (!isNotificationsAvailable || !Notifications) {
       console.log('⚠️ Notifications not available - cannot clear notifications');
       return;
@@ -359,6 +386,9 @@ class NotificationService {
    * Get notification permissions status
    */
   async getPermissionsStatus(): Promise<any> {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
     if (!isNotificationsAvailable || !Notifications) {
       console.log('⚠️ Notifications not available - returning default permissions status');
       return { status: 'undetermined' };
@@ -376,6 +406,9 @@ class NotificationService {
    * Request notification permissions
    */
   async requestPermissions(): Promise<any> {
+    // Try to initialize notifications if not already done
+    initializeNotifications();
+    
     if (!isNotificationsAvailable || !Notifications) {
       console.log('⚠️ Notifications not available - returning default permissions status');
       return { status: 'undetermined' };

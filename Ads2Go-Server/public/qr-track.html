@@ -157,9 +157,19 @@
             
             // Wait a moment for tracking to complete
             setTimeout(() => {
-                if (redirectUrl) {
-                    console.log('🔗 Redirecting to:', redirectUrl);
+                if (redirectUrl && redirectUrl !== 'https://ads2go.app') {
+                    console.log('🔗 Redirecting to advertiser website:', redirectUrl);
                     window.location.href = redirectUrl;
+                } else if (redirectUrl === 'https://ads2go.app') {
+                    console.log('ℹ️ No advertiser website provided, showing Ads2Go platform');
+                    document.querySelector('.message').textContent = 'Thank you for scanning! This ad doesn\'t have a specific website.';
+                    document.querySelector('.redirect-info').textContent = 'You\'re being redirected to the Ads2Go platform.';
+                    document.querySelector('.spinner').style.display = 'none';
+                    
+                    // Still redirect to Ads2Go after showing message
+                    setTimeout(() => {
+                        window.location.href = redirectUrl;
+                    }, 2000);
                 } else {
                     console.log('❌ No redirect URL provided');
                     document.querySelector('.message').textContent = 'No redirect URL provided.';

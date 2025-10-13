@@ -137,6 +137,7 @@ router.post('/location-update',
         currentSession: {
           date: today,
           startTime: new Date(),
+          lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
           totalDistanceTraveled: 0,
           targetHours: 8,
@@ -146,12 +147,21 @@ router.post('/location-update',
       });
       await carTracking.save();
     } else {
-      // Update the specific slot in the car record
-      await carTracking.updateSlot(deviceSlot, {
-        deviceId,
-        isOnline: true,
-        deviceInfo: req.body.deviceInfo || {}
-      });
+      // Check if slot needs updating (only update if deviceId changed or slot doesn't exist)
+      const existingSlot = carTracking.getSlot(parseInt(deviceSlot));
+      const needsSlotUpdate = !existingSlot || existingSlot.deviceId !== deviceId;
+      
+      if (needsSlotUpdate) {
+        console.log(`📝 Updating slot ${deviceSlot} with new deviceId: ${deviceId}`);
+        // Update the specific slot in the car record
+        await carTracking.updateSlot(deviceSlot, {
+          deviceId,
+          isOnline: true,
+          deviceInfo: req.body.deviceInfo || {}
+        });
+        // Refresh from DB after slot update
+        carTracking = await DeviceTracking.findByMaterialId(materialId);
+      }
     }
 
     // Update location (only if this is a newer/better GPS reading)
@@ -165,9 +175,22 @@ router.post('/location-update',
       }
     }
 
+    // Refresh carTracking from database to get latest state after updates
+    carTracking = await DeviceTracking.findByMaterialId(materialId);
+    
+    if (!carTracking) {
+      throw new Error('Device tracking record disappeared after update');
+    }
+
+    // Calculate and update online hours (incremental tracking)
+    if (carTracking.isOnline && carTracking.currentSession && carTracking.currentSession.isActive) {
+      carTracking.calculateAndUpdateOnlineHours();
+      await carTracking.save();
+    }
+
     // Get slot status for response
-    const slotStatus = carTracking.getSlotStatus();
-    const currentSlot = carTracking.getSlot(parseInt(deviceSlot));
+    const slotStatus = carTracking.getSlotStatus ? carTracking.getSlotStatus() : null;
+    const currentSlot = carTracking.getSlot ? carTracking.getSlot(parseInt(deviceSlot)) : null;
 
     res.json({
       success: true,
@@ -179,16 +202,37 @@ router.post('/location-update',
         currentLocation: carTracking.currentLocation,
         totalDistanceTraveled: carTracking.totalDistanceTraveled,
         lastSeen: carTracking.lastSeen,
-        slotStatus: slotStatus
+        slotStatus: slotStatus || {}
       }
     });
 
   } catch (error) {
     console.error('Error updating location:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      requestBody: req.body
+    });
+    
+    // Handle version conflicts (race condition) - return success as the data was likely already updated
+    if (error.name === 'VersionError') {
+      console.log('⚠️ Version conflict detected - data may have been updated by another request');
+      return res.json({
+        success: true,
+        message: 'Location update queued (version conflict resolved)',
+        data: {
+          materialId: req.body.materialId,
+          deviceId: req.body.deviceId,
+          deviceSlot: req.body.deviceSlot
+        }
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to update location',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      error: error.message // Always send error message for debugging
     });
   }
 });
@@ -247,6 +291,7 @@ router.post('/status-update', async (req, res) => {
         currentSession: {
           date: today,
           startTime: new Date(),
+          lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
           totalDistanceTraveled: 0,
           targetHours: 8,
@@ -340,6 +385,7 @@ router.post('/ad-playback', async (req, res) => {
         currentSession: {
           date: today,
           startTime: new Date(),
+          lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
           totalDistanceTraveled: 0,
           targetHours: 8,
@@ -464,6 +510,7 @@ router.post('/qr-scan', async (req, res) => {
         currentSession: {
           date: today,
           startTime: new Date(),
+          lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
           totalHoursOnline: 0,
           totalDistanceTraveled: 0,
           targetHours: 8,

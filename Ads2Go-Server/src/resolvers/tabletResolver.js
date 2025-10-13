@@ -229,6 +229,7 @@ module.exports = {
               currentSession: {
                 date: today,
                 startTime: new Date(),
+                lastOnlineUpdate: new Date(),  // Initialize to prevent incorrect calculations
                 totalHoursOnline: 0,
                 totalDistanceTraveled: 0,
                 targetHours: 8,
@@ -239,6 +240,50 @@ module.exports = {
             await deviceTracking.save();
             console.log(`✅ Created deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
           } else {
+            // Check if this is a new day
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const sessionDate = new Date(existingDeviceTracking.currentSession?.date || 0);
+            sessionDate.setHours(0, 0, 0, 0);
+            const isNewDay = sessionDate.getTime() !== today.getTime();
+            
+            if (isNewDay) {
+              // NEW DAY: Reset session and start fresh
+              console.log(`📅 New day detected - resetting session for ${materialId}`);
+              existingDeviceTracking.currentSession = {
+                date: today,
+                startTime: new Date(),
+                lastOnlineUpdate: new Date(),
+                totalHoursOnline: 0,
+                totalDistanceTraveled: 0,
+                targetHours: 8,
+                complianceStatus: 'PENDING',
+                isActive: true
+              };
+            } else if (!existingDeviceTracking.currentSession || !existingDeviceTracking.currentSession.isActive) {
+              // SAME DAY, SESSION ENDED: Reactivate session, keep accumulated hours
+              console.log(`🔄 Reactivating session for ${materialId} - preserving ${existingDeviceTracking.currentSession?.totalHoursOnline || 0} hours`);
+              if (!existingDeviceTracking.currentSession) {
+                existingDeviceTracking.currentSession = {
+                  date: today,
+                  startTime: new Date(),
+                  lastOnlineUpdate: new Date(),
+                  totalHoursOnline: 0,
+                  totalDistanceTraveled: 0,
+                  targetHours: 8,
+                  complianceStatus: 'PENDING',
+                  isActive: true
+                };
+              } else {
+                // Reactivate existing session (keeps totalHoursOnline)
+                existingDeviceTracking.currentSession.isActive = true;
+                existingDeviceTracking.currentSession.lastOnlineUpdate = new Date();
+              }
+            } else {
+              // Session is already active - just update lastOnlineUpdate
+              existingDeviceTracking.currentSession.lastOnlineUpdate = new Date();
+            }
+            
             // Check if slot already exists with null deviceId (previously unregistered)
             const existingSlot = existingDeviceTracking.slots.find(s => s.slotNumber === parseInt(slotNumber));
             
@@ -255,7 +300,9 @@ module.exports = {
                     [`slots.${slotIndex}.deviceId`]: deviceId,
                     [`slots.${slotIndex}.isOnline`]: true,
                     [`slots.${slotIndex}.lastSeen`]: new Date(),
-                    [`slots.${slotIndex}.deviceInfo`]: {}
+                    [`slots.${slotIndex}.deviceInfo`]: {},
+                    isOnline: true,
+                    lastSeen: new Date()
                   }
                 }
               );
@@ -267,8 +314,12 @@ module.exports = {
                 isOnline: true,
                 deviceInfo: {}
               });
+              existingDeviceTracking.isOnline = true;
+              existingDeviceTracking.lastSeen = new Date();
               console.log(`✅ Updated deviceTracking record for material: ${materialId} with slot ${slotNumber}`);
             }
+            
+            await existingDeviceTracking.save();
           }
         } catch (deviceTrackingError) {
           console.error('Error creating deviceTracking record:', deviceTrackingError);
@@ -481,6 +532,22 @@ module.exports = {
                   }
                 }
               );
+              
+              // Refresh the document to get updated slots
+              const updatedTracking = await DeviceTracking.findById(deviceTracking._id);
+              
+              // Update root-level isOnline based on all slots
+              const anySlotOnline = updatedTracking.slots.some(s => s.isOnline);
+              if (!anySlotOnline) {
+                updatedTracking.isOnline = false;
+                // End the current session when device goes completely offline
+                if (updatedTracking.currentSession && updatedTracking.currentSession.isActive) {
+                  updatedTracking.currentSession.isActive = false;
+                  updatedTracking.currentSession.endTime = new Date();
+                }
+                await updatedTracking.save();
+                console.log(`📴 All slots offline - device marked as offline, session ended`);
+              }
               
               console.log(`✅ DeviceTracking updated - deviceId set to null for slot ${slotNumber}`);
             }

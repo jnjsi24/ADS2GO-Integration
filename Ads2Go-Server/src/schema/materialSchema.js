@@ -123,6 +123,7 @@ module.exports = gql`
     description: String
     status: String
     assignedDate: String
+    mountedAt: String
     location: LocationInfo
     materialTracking: DeviceComplianceInfo
   }

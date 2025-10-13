@@ -386,7 +386,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onBlur={handleInputBlur}
             onClick={handleInputClick}
             placeholder=""
-            className={`peer w-full px-3 py-4 pr-20 border rounded-md shadow-sm focus:outline-none bg-transparent text-white placeholder-transparent transition ${
+            className={`peer w-full px-3 py-4 pr-20 border shadow-sm focus:outline-none bg-transparent text-white placeholder-transparent transition ${
               error ? 'border-red-300' : 'border-gray-300'
             }`}
           />

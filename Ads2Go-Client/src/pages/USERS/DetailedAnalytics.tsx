@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   AreaChart,
   Area,
@@ -40,13 +40,19 @@ const DetailedAnalytics: React.FC = () => {
   const [directAnalyticsData, setDirectAnalyticsData] = useState<any>(null);
   const [directAnalyticsLoading, setDirectAnalyticsLoading] = useState(false);
 
-  // Fetch analytics data
+  // Refs for debouncing
+  const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const deviceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const directFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Fetch analytics data with optimized cache policy
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
     variables: { 
       period: selectedDevice === 'all' ? 'all' : selectedPeriod 
     },
     // pollInterval: 5000, // Temporarily disabled to prevent repeated errors
-    fetchPolicy: 'cache-and-network', // Always fetch fresh data from network
+    fetchPolicy: 'cache-first', // Use cache first for better performance
+    nextFetchPolicy: 'cache-and-network', // Then update from network
     errorPolicy: 'all', // Allow partial data even with errors
     onError: (error) => {
       // Don't log "User analytics not found" as an error - it's expected for new users
@@ -66,8 +72,8 @@ const DetailedAnalytics: React.FC = () => {
     }
   }, [user]);
 
-  // Fetch available devices from analytics data
-  useEffect(() => {
+  // Memoized device extraction from analytics data
+  const extractedDevices = useMemo(() => {
     // First try to get devices from direct API data (for "All Devices" view)
     if (directAnalyticsData?.deviceStats && directAnalyticsData.deviceStats.length > 0) {
       const devices = directAnalyticsData.deviceStats.map((device: any, index: number) => ({
@@ -75,8 +81,8 @@ const DetailedAnalytics: React.FC = () => {
         name: device.materialId || `Device ${index + 1}`,
         materialId: device.materialId || `device-${index}`
       }));
-      setAvailableDevices(devices);
       console.log('📱 Devices loaded from direct API data:', devices);
+      return devices;
     }
     // Then try GraphQL data as fallback
     else if (analyticsData?.getUserAnalytics?.deviceStats && analyticsData.getUserAnalytics.deviceStats.length > 0) {
@@ -85,8 +91,8 @@ const DetailedAnalytics: React.FC = () => {
         name: device.materialId || `Device ${index + 1}`,
         materialId: device.materialId || `device-${index}`
       }));
-      setAvailableDevices(devices);
       console.log('📱 Devices loaded from GraphQL data:', devices);
+      return devices;
     } else {
       // Try to get devices from adPerformance materials as fallback
       if (analyticsData?.getUserAnalytics?.adPerformance) {
@@ -107,47 +113,65 @@ const DetailedAnalytics: React.FC = () => {
             name: materialId,
             materialId: materialId
           }));
-          setAvailableDevices(devices);
           console.log('📱 Devices loaded from adPerformance materials:', devices);
+          return devices;
         }
       }
     }
+    return [];
   }, [analyticsData, directAnalyticsData]);
 
-  // Fetch device-specific analytics
-  const fetchDeviceAnalytics = async (deviceId: string) => {
+  // Update available devices when extraction changes
+  useEffect(() => {
+    if (extractedDevices.length > 0) {
+      setAvailableDevices(extractedDevices);
+    }
+  }, [extractedDevices]);
+
+  // Fetch device-specific analytics with debouncing and useCallback
+  const fetchDeviceAnalytics = useCallback(async (deviceId: string) => {
     console.log('🔍 fetchDeviceAnalytics called with deviceId:', deviceId);
+    
+    // Clear any pending fetch
+    if (deviceFetchTimeoutRef.current) {
+      clearTimeout(deviceFetchTimeoutRef.current);
+    }
+    
     if (deviceId === 'all' || !user?.userId) {
       console.log('❌ Skipping fetch - deviceId is "all" or no user ID');
       setDeviceAnalytics(null);
+      setDeviceLoading(false);
       return;
     }
 
-    try {
-      setDeviceLoading(true);
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const url = `${baseUrl}/analytics/user/${user.userId}/device/${deviceId}`;
-      console.log('🌐 Fetching from URL:', url);
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      console.log('📊 API Response:', data);
-      
-      if (data.success) {
-        console.log('✅ Device analytics fetched successfully:', data.data.deviceAnalytics);
-        setDeviceAnalytics(data.data.deviceAnalytics);
-      } else {
-        console.error('❌ Failed to fetch device analytics:', data.message);
+    // Debounce the fetch
+    deviceFetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setDeviceLoading(true);
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+        const url = `${baseUrl}/analytics/user/${user.userId}/device/${deviceId}`;
+        console.log('🌐 Fetching from URL:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log('📊 API Response:', data);
+        
+        if (data.success) {
+          console.log('✅ Device analytics fetched successfully:', data.data.deviceAnalytics);
+          setDeviceAnalytics(data.data.deviceAnalytics);
+        } else {
+          console.error('❌ Failed to fetch device analytics:', data.message);
+          setDeviceAnalytics(null);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching device analytics:', error);
         setDeviceAnalytics(null);
+      } finally {
+        setDeviceLoading(false);
       }
-    } catch (error) {
-      console.error('❌ Error fetching device analytics:', error);
-      setDeviceAnalytics(null);
-    } finally {
-      setDeviceLoading(false);
-    }
-  };
+    }, 300); // 300ms debounce
+  }, [user?.userId]);
 
   // Handle device selection change
   const handleDeviceChange = (deviceId: string) => {
@@ -156,85 +180,114 @@ const DetailedAnalytics: React.FC = () => {
     fetchDeviceAnalytics(deviceId);
   };
 
-  // Fetch direct analytics data when "All Devices" is selected
-  const fetchDirectAnalytics = async () => {
+  // Fetch direct analytics data when "All Devices" is selected with debouncing and useCallback
+  const fetchDirectAnalytics = useCallback(async () => {
     if (selectedDevice !== 'all' || !user?.userId) return;
     
-    try {
-      setDirectAnalyticsLoading(true);
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
-      const url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
-      
-      console.log('🔍 Fetching direct analytics from:', url);
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (data.success) {
-        console.log('✅ Direct analytics fetched successfully:', data.data.summary);
-        setDirectAnalyticsData(data.data);
-      } else {
-        console.error('❌ Failed to fetch direct analytics:', data.message);
-        setDirectAnalyticsData(null);
-      }
-    } catch (error) {
-      console.error('❌ Error fetching direct analytics:', error);
-      setDirectAnalyticsData(null);
-    } finally {
-      setDirectAnalyticsLoading(false);
+    // Clear any pending fetch
+    if (directFetchTimeoutRef.current) {
+      clearTimeout(directFetchTimeoutRef.current);
     }
-  };
+    
+    // Debounce the fetch
+    directFetchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setDirectAnalyticsLoading(true);
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+        const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
+        const url = `${baseUrl}/analytics/user/${user.userId}/direct?period=${currentPeriod}`;
+        
+        console.log('🔍 Fetching direct analytics from:', url);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (data.success) {
+          console.log('✅ Direct analytics fetched successfully:', data.data.summary);
+          setDirectAnalyticsData(data.data);
+        } else {
+          console.error('❌ Failed to fetch direct analytics:', data.message);
+          setDirectAnalyticsData(null);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching direct analytics:', error);
+        setDirectAnalyticsData(null);
+      } finally {
+        setDirectAnalyticsLoading(false);
+      }
+    }, 300); // 300ms debounce
+  }, [selectedDevice, selectedPeriod, user?.userId]);
 
   // Fetch direct analytics when "All Devices" is selected
   useEffect(() => {
     if (selectedDevice === 'all') {
       fetchDirectAnalytics();
     }
-  }, [selectedDevice, selectedPeriod, user?.userId]);
+  }, [selectedDevice, fetchDirectAnalytics]);
 
-  // Get analytics summary data - Updated for UserAnalytics system
+  // Cleanup all pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
+      if (deviceFetchTimeoutRef.current) {
+        clearTimeout(deviceFetchTimeoutRef.current);
+      }
+      if (directFetchTimeoutRef.current) {
+        clearTimeout(directFetchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Get analytics summary data - Updated for UserAnalytics system with memoization
   // For "All Devices": Use ONLY direct API data from UserAnalytics collection
   // For individual device: Use device-specific analytics data
-  const analyticsSummary = selectedDevice === 'all' ? (
-    // For "All Devices" - use ONLY UserAnalytics data from direct API call
-    directAnalyticsData?.summary || {
-      totalAdImpressions: 0,
-      totalAdsPlayed: 0,
-      totalDisplayTime: 0,
-      averageCompletionRate: 0,
-      totalAds: 0,
-      activeAds: 0,
-      totalMaterials: 0,
-      totalDevices: 0,
-      totalQRScans: 0,
-      qrScanConversionRate: 0
+  const analyticsSummary = useMemo(() => {
+    if (selectedDevice === 'all') {
+      // For "All Devices" - use ONLY UserAnalytics data from direct API call
+      return directAnalyticsData?.summary || {
+        totalAdImpressions: 0,
+        totalAdsPlayed: 0,
+        totalDisplayTime: 0,
+        averageCompletionRate: 0,
+        totalAds: 0,
+        activeAds: 0,
+        totalMaterials: 0,
+        totalDevices: 0,
+        totalQRScans: 0,
+        qrScanConversionRate: 0
+      };
+    } else if (selectedDevice !== 'all' && deviceAnalytics) {
+      // For individual device - use device-specific data
+      return {
+        totalAdImpressions: deviceAnalytics.totals?.totalAdImpressions || 0,
+        totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
+        totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
+        averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
+        totalAds: deviceAnalytics.adPerformance?.length || 0,
+        activeAds: deviceAnalytics.adPerformance?.length || 0,
+        totalMaterials: 1, // Single device
+        totalDevices: 1, // Single device
+        totalQRScans: deviceAnalytics.totals?.totalQRScans || 0,
+        qrScanConversionRate: deviceAnalytics.performance?.qrScanConversionRate || 0
+      };
+    } else {
+      // Fallback for loading states
+      return {
+        totalAdImpressions: 0,
+        totalAdsPlayed: 0,
+        totalDisplayTime: 0,
+        averageCompletionRate: 0,
+        totalAds: 0,
+        activeAds: 0,
+        totalMaterials: 0,
+        totalDevices: 0,
+        totalQRScans: 0,
+        qrScanConversionRate: 0
+      };
     }
-  ) : selectedDevice !== 'all' && deviceAnalytics ? {
-    // For individual device - use device-specific data
-    totalAdImpressions: deviceAnalytics.totals?.totalAdImpressions || 0,
-    totalAdsPlayed: deviceAnalytics.totals?.totalAdPlays || 0,
-    totalDisplayTime: deviceAnalytics.totals?.totalAdPlayTime || 0,
-    averageCompletionRate: deviceAnalytics.averages?.averageCompletionRate || 0,
-    totalAds: deviceAnalytics.adPerformance?.length || 0,
-    activeAds: deviceAnalytics.adPerformance?.length || 0,
-    totalMaterials: 1, // Single device
-    totalDevices: 1, // Single device
-    totalQRScans: deviceAnalytics.totals?.totalQRScans || 0,
-    qrScanConversionRate: deviceAnalytics.performance?.qrScanConversionRate || 0
-  } : {
-    // Fallback for loading states
-    totalAdImpressions: 0,
-    totalAdsPlayed: 0,
-    totalDisplayTime: 0,
-    averageCompletionRate: 0,
-    totalAds: 0,
-    activeAds: 0,
-    totalMaterials: 0,
-    totalDevices: 0,
-    totalQRScans: 0,
-    qrScanConversionRate: 0
-  };
+  }, [selectedDevice, directAnalyticsData, deviceAnalytics]);
 
   console.log('📊 Current analyticsSummary:', analyticsSummary);
   console.log('📱 Selected device:', selectedDevice);
@@ -253,12 +306,12 @@ const DetailedAnalytics: React.FC = () => {
     console.log('🔍 Metrics from: DeviceDataHistoryV2.dailyData aggregation for selected device');
   }
 
-  // Format display time
-  const formatDisplayTime = (seconds: number) => {
+  // Format display time with useCallback
+  const formatDisplayTime = useCallback((seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     return `${hours}h ${minutes}m`;
-  };
+  }, []);
 
   // Mock data for demonstration (replace with real data)
   const devicePerformanceData = [
@@ -479,51 +532,124 @@ const DetailedAnalytics: React.FC = () => {
 
   const colors = ['#1b5087', '#3674B5', '#E78B48', '#FFAB5B', '#D4C9BE', '#EFEEEA'];
 
-  const handlePeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handlePeriodChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     const newPeriod = e.target.value as '1d' | '7d' | '30d';
     setSelectedPeriod(newPeriod);
-  };
+  }, []);
 
-  // Refetch analytics when period or device selection changes
+  // Refetch analytics when period or device selection changes with debouncing
   useEffect(() => {
+    // Clear any pending refetch
+    if (refetchTimeoutRef.current) {
+      clearTimeout(refetchTimeoutRef.current);
+    }
+
     const currentPeriod = selectedDevice === 'all' ? 'all' : selectedPeriod;
     if (currentPeriod) {
-      console.log('🔄 Period changed to:', currentPeriod, '- Refetching analytics...');
-      refetchAnalytics({ period: currentPeriod });
+      console.log('🔄 Period changed to:', currentPeriod, '- Scheduling refetch...');
+      
+      // Debounce the refetch
+      refetchTimeoutRef.current = setTimeout(() => {
+        console.log('🔄 Executing refetch for period:', currentPeriod);
+        refetchAnalytics({ period: currentPeriod });
+      }, 500); // 500ms debounce for refetch
     }
+
+    // Cleanup on unmount
+    return () => {
+      if (refetchTimeoutRef.current) {
+        clearTimeout(refetchTimeoutRef.current);
+      }
+    };
   }, [selectedPeriod, selectedDevice, refetchAnalytics]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     refetchAnalytics();
-  };
+  }, [refetchAnalytics]);
 
-  const exportData = () => {
+  const exportData = useCallback(() => {
     // Implement data export functionality
     console.log('Exporting analytics data...');
-  };
+  }, []);
+
+  // Memoized chart data transformations for performance
+  const performanceChartData = useMemo(() => {
+    if (selectedDevice === 'all') {
+      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
+      return [];
+    } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
+      return deviceAnalytics.dailyBreakdown.map((day: any) => ({
+        date: day.date,
+        impressions: day.totalAdImpressions,
+        adsPlayed: day.totalAdPlays,
+        qrScans: day.totalQRScans,
+        completionRate: day.adCompletionRate,
+        revenue: 0 // Device-specific data doesn't include revenue
+      }));
+    } else {
+      return analyticsData?.getUserAnalytics?.dailyStats || weeklyData;
+    }
+  }, [selectedDevice, deviceAnalytics, analyticsData]);
+
+  const qrScansChartData = useMemo(() => {
+    if (selectedDevice === 'all') {
+      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
+      return [];
+    } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
+      return deviceAnalytics.dailyBreakdown.map((day: any) => ({
+        date: day.date,
+        qrScans: day.totalQRScans
+      }));
+    } else {
+      return analyticsData?.getUserAnalytics?.dailyStats || [];
+    }
+  }, [selectedDevice, deviceAnalytics, analyticsData]);
+
+  const qrPerformanceByAd = useMemo(() => {
+    if (selectedDevice === 'all') {
+      // For "All Devices" - use only UserAnalytics data from direct API
+      return directAnalyticsData?.adPerformance?.slice(0, 5) || [];
+    } else if (selectedDevice !== 'all' && deviceAnalytics?.qrScanBreakdown) {
+      return deviceAnalytics.qrScanBreakdown.slice(0, 5);
+    } else {
+      return analyticsData?.getUserAnalytics?.adPerformance?.slice(0, 5) || [];
+    }
+  }, [selectedDevice, directAnalyticsData, deviceAnalytics, analyticsData]);
+
+  const adPerformanceChartData = useMemo(() => {
+    if (selectedDevice === 'all') {
+      // For "All Devices" - use only UserAnalytics data from direct API
+      return (directAnalyticsData?.adPerformance || []).map((ad: any) => ({
+        adTitle: ad.adTitle,
+        totalAdImpressions: ad.totalAdImpressions,
+        totalAdPlayTime: ad.totalAdPlayTime,
+        totalQRScans: ad.totalQRScans
+      }));
+    } else if (selectedDevice !== 'all' && deviceAnalytics?.adPerformance) {
+      return deviceAnalytics.adPerformance.map((ad: any) => ({
+        adTitle: ad.adTitle,
+        totalAdImpressions: ad.totalImpressions,
+        totalAdPlayTime: ad.totalViewTime,
+        totalQRScans: deviceAnalytics.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0
+      }));
+    } else {
+      return analyticsData?.getUserAnalytics?.adPerformance || [];
+    }
+  }, [selectedDevice, directAnalyticsData, deviceAnalytics, analyticsData]);
+
+  const topPerformingAds = useMemo(() => {
+    if (selectedDevice === 'all') {
+      return (directAnalyticsData?.adPerformance || analyticsData?.getUserAnalytics?.adPerformance || []).slice(0, 5);
+    } else if (deviceAnalytics?.adPerformance) {
+      return deviceAnalytics.adPerformance.slice(0, 5);
+    }
+    return [];
+  }, [selectedDevice, directAnalyticsData, analyticsData, deviceAnalytics]);
 
   const renderOverviewSection = () => (
     <div className="space-y-6">
       {/* Key Metrics Overview - Updated for UserAnalytics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Impressions</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                Real-time data
-              </p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <Eye className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -632,19 +758,7 @@ const DetailedAnalytics: React.FC = () => {
           </select>
         </div>
         <ResponsiveContainer width="100%" height={400}>
-          <ComposedChart data={selectedDevice === 'all' ? 
-            // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-            [] : 
-            selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown ? 
-            deviceAnalytics.dailyBreakdown.map((day: any) => ({
-              date: day.date,
-              impressions: day.totalAdImpressions,
-              adsPlayed: day.totalAdPlays,
-              qrScans: day.totalQRScans,
-              completionRate: day.adCompletionRate,
-              revenue: 0 // Device-specific data doesn't include revenue
-            })) : 
-            (analyticsData?.getUserAnalytics?.dailyStats || weeklyData)}>
+          <ComposedChart data={performanceChartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="date" 
@@ -757,7 +871,7 @@ const DetailedAnalytics: React.FC = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">QR Scans Analysis - Real Data from UserAnalytics</h3>
         
         {/* QR Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -780,32 +894,13 @@ const DetailedAnalytics: React.FC = () => {
               <div className="text-green-500">🎯</div>
             </div>
           </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600">Total Impressions</p>
-                <p className="text-2xl font-bold text-purple-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-purple-500">👁️</div>
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h4 className="text-md font-medium text-gray-700 mb-3">QR Scans Over Time</h4>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={selectedDevice === 'all' ? 
-                // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-                [] : 
-                selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown ? 
-                deviceAnalytics.dailyBreakdown.map((day: any) => ({
-                  date: day.date,
-                  qrScans: day.totalQRScans
-                })) : 
-                (analyticsData?.getUserAnalytics?.dailyStats || [])}>
+              <LineChart data={qrScansChartData}>
                 <XAxis 
                   dataKey="date" 
                   tick={{ fontSize: 12 }}
@@ -830,13 +925,7 @@ const DetailedAnalytics: React.FC = () => {
           <div>
             <h4 className="text-md font-medium text-gray-700 mb-3">QR Performance by Ad</h4>
             <div className="space-y-4">
-              {(selectedDevice === 'all' ? 
-                // For "All Devices" - use only UserAnalytics data from direct API
-                directAnalyticsData?.adPerformance?.slice(0, 5) :
-                selectedDevice !== 'all' && deviceAnalytics?.qrScanBreakdown ? 
-                deviceAnalytics.qrScanBreakdown.slice(0, 5) : 
-                analyticsData?.getUserAnalytics?.adPerformance?.slice(0, 5)
-              )?.map((ad: any, index: number) => (
+              {qrPerformanceByAd.map((ad: any, index: number) => (
                 <div key={ad.adId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div 
@@ -874,7 +963,7 @@ const DetailedAnalytics: React.FC = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Activity Overview - Real Data from UserAnalytics</h3>
         
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -895,17 +984,6 @@ const DetailedAnalytics: React.FC = () => {
                 </p>
               </div>
               <div className="text-blue-500">💻</div>
-            </div>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600">Total Impressions</p>
-                <p className="text-2xl font-bold text-purple-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-purple-500">👁️</div>
             </div>
           </div>
           <div className="bg-orange-50 p-4 rounded-lg">
@@ -1036,7 +1114,7 @@ const DetailedAnalytics: React.FC = () => {
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Ads Analytics - Real Data from UserAnalytics</h3>
         
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-blue-50 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -1057,17 +1135,6 @@ const DetailedAnalytics: React.FC = () => {
                 </p>
               </div>
               <div className="text-green-500">▶️</div>
-            </div>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600">Total Impressions</p>
-                <p className="text-2xl font-bold text-purple-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalAdImpressions.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-purple-500">👁️</div>
             </div>
           </div>
           <div className="bg-orange-50 p-4 rounded-lg">
@@ -1162,22 +1229,7 @@ const DetailedAnalytics: React.FC = () => {
         <div className="mt-8">
           <h4 className="text-md font-medium text-gray-700 mb-4">Ad Performance Comparison</h4>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={selectedDevice === 'all' ? 
-              // For "All Devices" - use only UserAnalytics data from direct API
-              (directAnalyticsData?.adPerformance || []).map((ad: any) => ({
-                adTitle: ad.adTitle,
-                totalAdImpressions: ad.totalAdImpressions,
-                totalAdPlayTime: ad.totalAdPlayTime,
-                totalQRScans: ad.totalQRScans
-              })) :
-              selectedDevice !== 'all' && deviceAnalytics?.adPerformance ? 
-              deviceAnalytics.adPerformance.map((ad: any) => ({
-                adTitle: ad.adTitle,
-                totalAdImpressions: ad.totalImpressions,
-                totalAdPlayTime: ad.totalViewTime,
-                totalQRScans: deviceAnalytics.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0
-              })) : 
-              (analyticsData?.getUserAnalytics?.adPerformance || [])}>
+            <BarChart data={adPerformanceChartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="adTitle" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={100} />
               <YAxis tick={{ fontSize: 12 }} />
@@ -1353,19 +1405,13 @@ const DetailedAnalytics: React.FC = () => {
       {selectedView === 'ads' && renderDetailedAdsSection()}
 
       {/* Top Performing Ads - Updated for UserAnalytics */}
-      {((selectedDevice === 'all' && directAnalyticsData?.adPerformance) || 
-        (selectedDevice !== 'all' && deviceAnalytics?.adPerformance) || 
-        (selectedDevice === 'all' && analyticsData?.getUserAnalytics?.adPerformance)) && 
-        ((selectedDevice === 'all' ? (directAnalyticsData?.adPerformance || analyticsData?.getUserAnalytics?.adPerformance) : deviceAnalytics.adPerformance).length > 0) && (
+      {topPerformingAds.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mt-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
             Top Performing Ads {selectedDevice !== 'all' ? `on ${deviceAnalytics?.deviceInfo?.deviceName || 'Selected Device'}` : ''}
           </h3>
           <div className="space-y-4">
-            {(selectedDevice === 'all' ? 
-              (directAnalyticsData?.adPerformance || analyticsData?.getUserAnalytics?.adPerformance || []) :
-              deviceAnalytics.adPerformance)
-              .slice(0, 5).map((ad: any, index: number) => (
+            {topPerformingAds.map((ad: any, index: number) => (
               <div key={ad.adId} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-[#1b5087] text-white rounded-full flex items-center justify-center text-sm font-bold">
@@ -1375,8 +1421,8 @@ const DetailedAnalytics: React.FC = () => {
                     <p className="font-medium text-gray-800">{ad.adTitle}</p>
                     <p className="text-sm text-gray-500">
                       {selectedDevice !== 'all' ? 
-                        `${ad.totalImpressions.toLocaleString()} impressions • ${deviceAnalytics?.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0} QR scans • 1 material` :
-                        `${ad.totalAdImpressions.toLocaleString()} impressions • ${ad.totalQRScans} QR scans • ${ad.totalMaterials} materials`
+                        `${deviceAnalytics?.qrScanBreakdown?.find((qr: any) => qr.adId === ad.adId)?.totalScans || 0} QR scans • 1 material` :
+                        `${ad.totalQRScans} QR scans • ${ad.totalMaterials} materials`
                       }
                     </p>
                   </div>
@@ -1394,20 +1440,6 @@ const DetailedAnalytics: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {(analyticsLoading || deviceLoading || directAnalyticsLoading) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg flex items-center space-x-3">
-            <RefreshCw className="w-5 h-5 animate-spin text-blue-600" />
-            <span className="text-gray-700">
-              {deviceLoading ? 'Loading device-specific analytics...' : 
-               directAnalyticsLoading ? 'Loading direct analytics data...' : 
-               'Loading analytics data...'}
-            </span>
           </div>
         </div>
       )}

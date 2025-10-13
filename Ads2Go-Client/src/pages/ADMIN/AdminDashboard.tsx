@@ -30,10 +30,15 @@ const adPerformanceData = [
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("Admin");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Auto detect sidebar collapse based on window width
   useEffect(() => {
-    const handleResize = () => setSidebarCollapsed(window.innerWidth < 1024);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setSidebarCollapsed(width >= 768 && width < 1024);
+    };
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -71,12 +76,12 @@ const Dashboard = () => {
   const stats = statsData?.getAdminDashboardStats;
   const pendingAdsCount = pendingAdsData?.getPendingAds?.length || 0;
 
-  // Adjust padding depending on sidebar width
-  const contentPadding = sidebarCollapsed ? "pl-28" : "pl-64";
+  // Adjust margin/padding depending on sidebar width and screen size
+  const contentMargin = isMobile ? "ml-0" : sidebarCollapsed ? "ml-16" : "ml-60";
 
   return (
     <div
-      className={`p-6 ${contentPadding} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}
+      className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}
     >
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
