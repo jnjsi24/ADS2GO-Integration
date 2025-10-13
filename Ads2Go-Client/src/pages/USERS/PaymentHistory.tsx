@@ -27,6 +27,7 @@ interface PaymentItem {
   adLengthSeconds: number;
   totalPrice: string;
   receiptId?: string;
+  adStatus?: string; // Ad approval status (PENDING, APPROVED, etc.)
 }
 
 const GET_USER_ADS_WITH_PAYMENTS = gql`
@@ -41,6 +42,7 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
         adLengthSeconds
         totalPrice
         durationDays
+        status
         createdAt
         planId {
           title
@@ -133,6 +135,7 @@ const PaymentHistory: React.FC = () => {
           adLengthSeconds: ad.adLengthSeconds || 0,
           totalPrice,
           receiptId: payment?.receiptId || "",
+          adStatus: ad.status || "PENDING", // Include ad approval status
         };
       });
       setPayments(mappedPayments);

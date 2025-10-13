@@ -18,6 +18,7 @@ interface PaymentProps {
     adFormat?: string;
     adLengthSeconds: number;
     status: Status;
+    adStatus?: string; // Ad approval status
   };
   paymentType: string;
   onClose: () => void;
@@ -110,6 +111,13 @@ const Payment: React.FC<PaymentProps> = ({
 
   const handlePayNow = async () => {
   if (isProcessing || loading) return;
+  
+  // Check if ad is approved
+  if (paymentItem.adStatus !== 'APPROVED') {
+    showError("⚠️ Ad must be approved first before you can make a payment.");
+    return;
+  }
+  
   if (!selectedMethod) {
     showError("Please select a payment method");
     return;
@@ -221,8 +229,8 @@ const Payment: React.FC<PaymentProps> = ({
     }
   } catch (err: any) {
     const msg = err.message || "Unknown error";
-    if (msg.includes("Ad is not approved")) {
-      showError("⚠️ This ad is not yet approved.");
+    if (msg.includes("Ad must be approved first") || msg.includes("Ad is not approved")) {
+      showError("⚠️ Ad must be approved first before you can make a payment.");
     } else if (msg.includes("A payment already exists")) {
       showError("⚠️ A payment already exists for this ad.");
     } else if (msg.includes("You are not authorized")) {
@@ -478,6 +486,15 @@ const Payment: React.FC<PaymentProps> = ({
                     {paymentItem.adLengthSeconds} seconds
                   </td>
                 </tr>
+                {/* Receipt ID - Only show when payment is PAID */}
+                {!isPending && paymentItem.receiptId && (
+                  <tr>
+                    <td className="py-2 px-4 text-gray-600">Receipt ID</td>
+                    <td className="py-2 px-4 text-gray-800 font-medium">
+                      {paymentItem.receiptId}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
             {isPending && (
@@ -488,6 +505,17 @@ const Payment: React.FC<PaymentProps> = ({
                 </span>
               </div>
             )}
+            
+            {/* Approval Status Warning */}
+            {paymentItem.adStatus !== 'APPROVED' && isPending && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800 flex items-center gap-2">
+                  <span className="text-yellow-500">⚠️</span>
+                  <span><strong>Ad pending approval:</strong> Your ad must be approved by an admin before payment can be processed.</span>
+                </p>
+              </div>
+            )}
+            
             {/* Pay Now Button (Only show for Pending status and non-CASH) */}
             {isPending && selectedMethod !== "CASH" && (
               <div className="flex justify-end">
