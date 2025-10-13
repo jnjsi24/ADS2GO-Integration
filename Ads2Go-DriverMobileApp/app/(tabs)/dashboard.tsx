@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
 import { LinearGradient } from 'react-native-svg';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -108,8 +109,9 @@ const Dashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'monthly'>('daily');
-  const [selectedMetric, setSelectedMetric] = useState<'distance' | 'hours' | 'speed' | 'qrImpressions'>('distance');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<'distance' | 'hours' | 'qrImpressions'>('distance');
   const [selectedDataPoint, setSelectedDataPoint] = useState<{value: number, label: string, index: number} | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
@@ -144,9 +146,10 @@ const Dashboard: React.FC = () => {
 
     loadData();
     
-    // Auto-refresh only for daily view (realtime data) every 60 seconds
+    // Auto-refresh only for current date (realtime data) every 60 seconds
     const refreshInterval = setInterval(async () => {
-      if (selectedPeriod === 'daily') {
+      const isToday = isSelectedDateToday();
+      if (isToday) {
         const driverInfo = await AsyncStorage.getItem('driverInfo');
         if (driverInfo) {
           const driver = JSON.parse(driverInfo);
@@ -160,22 +163,32 @@ const Dashboard: React.FC = () => {
     }, 60000); // Increased to 60 seconds
     
     return () => clearInterval(refreshInterval);
-  }, [selectedPeriod]); // Only re-create interval when period changes
+  }, [selectedDate]); // Only re-create interval when date changes
 
-  // Refetch data when selectedPeriod changes
+  // Refetch data when selectedDate changes
   useEffect(() => {
     if (user?.driverId || user?.id) {
       const driverId = user.driverId || user.id;
       fetchDriverAnalytics(driverId);
     }
-    // Reset selected data point when period changes
+    // Reset selected data point when date changes
     setSelectedDataPoint(null);
-  }, [selectedPeriod]);
+  }, [selectedDate]);
 
   // Reset selected data point when metric changes
   useEffect(() => {
     setSelectedDataPoint(null);
   }, [selectedMetric]);
+
+  // Helper function to check if selected date is today
+  const isSelectedDateToday = () => {
+    const today = new Date();
+    return (
+      selectedDate.getDate() === today.getDate() &&
+      selectedDate.getMonth() === today.getMonth() &&
+      selectedDate.getFullYear() === today.getFullYear()
+    );
+  };
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
     try {
@@ -184,14 +197,16 @@ const Dashboard: React.FC = () => {
         setRefreshing(true);
       }
 
-      // Check cache first (5 minutes for daily, 15 minutes for monthly)
-      const cacheKey = `${driverId}-${selectedPeriod}`;
-      const cacheExpiry = selectedPeriod === 'daily' ? 5 * 60 * 1000 : 15 * 60 * 1000; // 5 or 15 minutes
+      // Check cache first (5 minutes for today, 15 minutes for past dates)
+      const dateKey = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const cacheKey = `${driverId}-${dateKey}`;
+      const isToday = isSelectedDateToday();
+      const cacheExpiry = isToday ? 5 * 60 * 1000 : 15 * 60 * 1000; // 5 or 15 minutes
       const cachedData = dataCache[cacheKey];
       
       if (cachedData && (Date.now() - cachedData.timestamp) < cacheExpiry && !silent) {
         if (!silent) {
-          console.log('📦 Using cached data for', selectedPeriod);
+          console.log('📦 Using cached data for', dateKey);
         }
         setAnalytics(cachedData.data);
         setLoading(false);
@@ -207,25 +222,28 @@ const Dashboard: React.FC = () => {
         console.log('✅ Auth token found');
       }
 
-      // Build API URL with period parameter
-      // Daily view: Use 'realtime' to get today's data from DeviceTracking (devicetrackings collection)
-      // Monthly view: Use 'daily' with last 30 days from DeviceDataHistoryV2
+      // Build API URL based on selected date
+      // If today: Use 'realtime' to get today's data from DeviceTracking (devicetrackings collection)
+      // If past date: Use 'daily' with specific date from DeviceDataHistoryV2
       let apiUrl = '';
-      if (selectedPeriod === 'daily') {
+      if (isToday) {
         apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=realtime`;
       } else {
-        // Monthly view: Fetch last 30 days from DeviceDataHistoryV2
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - 30);
+        // Past date: Fetch specific date from DeviceDataHistoryV2
+        const startOfDay = new Date(selectedDate);
+        startOfDay.setHours(0, 0, 0, 0);
         
-        apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`;
+        const endOfDay = new Date(selectedDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        apiUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${startOfDay.toISOString()}&endDate=${endOfDay.toISOString()}`;
       }
       
       if (!silent) {
         console.log('🌐 API_CONFIG.BASE_URL:', API_CONFIG.BASE_URL);
         console.log('🌐 Fetching from URL:', apiUrl);
-        console.log('📊 Selected period:', selectedPeriod);
+        console.log('📊 Selected date:', dateKey);
+        console.log('📊 Is today:', isToday);
       }
       
       const dailyResponse = await fetch(apiUrl, {
@@ -326,7 +344,8 @@ const Dashboard: React.FC = () => {
         setAnalytics(transformedAnalytics);
         
         // Cache the data
-        const cacheKey = `${driverId}-${selectedPeriod}`;
+        const dateKey = selectedDate.toISOString().split('T')[0];
+        const cacheKey = `${driverId}-${dateKey}`;
         setDataCache(prev => ({
           ...prev,
           [cacheKey]: {
@@ -359,8 +378,10 @@ const Dashboard: React.FC = () => {
   const getChartData = () => {
     if (!analytics) return null;
 
-    if (selectedPeriod === 'daily') {
-      // For daily view, show last 7 days trend from DeviceTracking's dailyPerformance
+    const isToday = isSelectedDateToday();
+
+    if (isToday) {
+      // For today, show last 7 days trend from DeviceTracking's dailyPerformance
       const data = analytics.dailyPerformance.slice(-7);
       
       // Ensure we have at least some data points
@@ -389,7 +410,6 @@ const Dashboard: React.FC = () => {
             switch (selectedMetric) {
               case 'distance': value = d.totalDistance; break;
               case 'hours': value = d.totalHours; break;
-              case 'speed': value = d.averageSpeed || 0; break;
               case 'qrImpressions': value = d.qrImpressions || 0; break;
               default: value = d.totalDistance; break;
             }
@@ -400,7 +420,7 @@ const Dashboard: React.FC = () => {
         }]
       };
     } else {
-      // Monthly view: Show last 30 days from DeviceDataHistoryV2
+      // Past date: Show data for selected date from DeviceDataHistoryV2
       const data = analytics.dailyData?.dailyBreakdown || [];
       
       // Ensure we have at least some data points
@@ -415,7 +435,7 @@ const Dashboard: React.FC = () => {
         };
       }
 
-      // Take all days (up to 30) and format labels
+      // Take the selected date data and format labels
       return {
         labels: data.map(d => {
           try {
@@ -431,14 +451,6 @@ const Dashboard: React.FC = () => {
             switch (selectedMetric) {
               case 'distance': value = d.totalDistance || 0; break;
               case 'hours': value = d.totalHours || 0; break;
-              case 'speed': 
-                // Calculate speed from distance and hours
-                if (d.totalHours && d.totalHours > 0) {
-                  value = (d.totalDistance || 0) / d.totalHours;
-                } else {
-                  value = 0;
-                }
-                break;
               case 'qrImpressions': value = d.totalQRImpressions || 0; break;
               default: value = d.totalDistance || 0; break;
             }
@@ -455,8 +467,7 @@ const Dashboard: React.FC = () => {
     switch (selectedMetric) {
       case 'distance': return 'Distance (km)';
       case 'hours': return 'Hours';
-      case 'speed': return 'Speed (km/h)';
-      case 'qrImpressions': return 'QR Impressions';
+      case 'qrImpressions': return 'QR Scans';
       default: return 'Distance (km)';
     }
   };
@@ -484,30 +495,22 @@ const Dashboard: React.FC = () => {
     }
 
     let value = 0;
+    const isToday = isSelectedDateToday();
     
-    if (selectedPeriod === 'daily') {
+    if (isToday) {
       // Use today's real-time data from DeviceTracking (devicetrackings)
       switch (selectedMetric) {
         case 'distance': value = analytics.totalDistance || 0; break;
         case 'hours': value = analytics.totalHours || 0; break;
-        case 'speed': value = analytics.averageSpeed || 0; break;
         case 'qrImpressions': value = analytics.qrImpressions || 0; break;
         default: value = analytics.totalDistance || 0; break;
       }
     } else {
-      // Use last 30 days aggregated data from DeviceDataHistoryV2
+      // Use selected date aggregated data from DeviceDataHistoryV2
       const dailyData = analytics.dailyData?.aggregatedMetrics;
       switch (selectedMetric) {
         case 'distance': value = dailyData?.totalDistance || 0; break;
         case 'hours': value = dailyData?.totalHours || 0; break;
-        case 'speed': 
-          // Calculate average speed from total distance and hours
-          if (dailyData?.totalHours && dailyData?.totalHours > 0) {
-            value = (dailyData?.totalDistance || 0) / dailyData.totalHours;
-          } else {
-            value = 0;
-          }
-          break;
         case 'qrImpressions': value = dailyData?.totalQRImpressions || 0; break;
         default: value = dailyData?.totalDistance || 0; break;
       }
@@ -520,8 +523,7 @@ const Dashboard: React.FC = () => {
     switch (selectedMetric) {
       case 'distance': return 'Distance';
       case 'hours': return 'Hours';
-      case 'speed': return 'Average Speed';
-      case 'qrImpressions': return 'QR Impressions';
+      case 'qrImpressions': return 'QR Scans';
       default: return 'Distance';
     }
   };
@@ -530,8 +532,7 @@ const Dashboard: React.FC = () => {
     switch (selectedMetric) {
       case 'distance': return 'km';
       case 'hours': return 'hrs';
-      case 'speed': return 'km/h';
-      case 'qrImpressions': return '';
+      case 'qrImpressions': return 'scans';
       default: return 'km';
     }
   };
@@ -541,7 +542,7 @@ const Dashboard: React.FC = () => {
   const chartData = useMemo(() => {
     if (!analytics) return null;
     return getChartData();
-  }, [analytics, selectedPeriod, selectedMetric]);
+  }, [analytics, selectedDate, selectedMetric]);
 
   if (loading) {
     return (
@@ -624,24 +625,42 @@ const Dashboard: React.FC = () => {
 
       {/* Chart Controls */}
       <View style={styles.chartControls}>
-        <View style={styles.periodSelector}>
+        <View style={styles.datePickerContainer}>
           <TouchableOpacity
-            style={[styles.periodButton, selectedPeriod === 'daily' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('daily')}
+            style={styles.datePickerButton}
+            onPress={() => setShowDatePicker(true)}
           >
-            <Text style={[styles.periodButtonText, selectedPeriod === 'daily' && styles.periodButtonTextActive]}>
-              Daily
+            <Ionicons name="calendar-outline" size={20} color="#3674B5" style={styles.dateIcon} />
+            <Text style={styles.datePickerText}>
+              {selectedDate.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+              })}
             </Text>
+            <Ionicons name="chevron-down-outline" size={20} color="#6b7280" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.periodButton, selectedPeriod === 'monthly' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('monthly')}
-          >
-            <Text style={[styles.periodButtonText, selectedPeriod === 'monthly' && styles.periodButtonTextActive]}>
-              Monthly
-            </Text>
-          </TouchableOpacity>
+          {isSelectedDateToday() && (
+            <View style={styles.todayBadge}>
+              <Text style={styles.todayBadgeText}>Today</Text>
+            </View>
+          )}
         </View>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={(event: any, date?: Date) => {
+              setShowDatePicker(Platform.OS === 'ios');
+              if (date) {
+                setSelectedDate(date);
+              }
+            }}
+            maximumDate={new Date()}
+          />
+        )}
 
         <View style={styles.metricSelector}>
           <TouchableOpacity
@@ -661,11 +680,11 @@ const Dashboard: React.FC = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.metricButton, selectedMetric === 'speed' && styles.metricButtonActive]}
-            onPress={() => setSelectedMetric('speed')}
+            style={[styles.metricButton, selectedMetric === 'qrImpressions' && styles.metricButtonActive]}
+            onPress={() => setSelectedMetric('qrImpressions')}
           >
-            <Text style={[styles.metricButtonText, selectedMetric === 'speed' && styles.metricButtonTextActive]}>
-              Speed
+            <Text style={[styles.metricButtonText, selectedMetric === 'qrImpressions' && styles.metricButtonTextActive]}>
+              QR Scans
             </Text>
           </TouchableOpacity>
         </View>
@@ -677,7 +696,7 @@ const Dashboard: React.FC = () => {
           <Text style={styles.metricValueLabel}>{getMetricShortLabel()}</Text>
           <View style={styles.metricValueRow}>
             <Text style={styles.metricValueNumber}>
-              {getCurrentMetricValue().toFixed(selectedMetric === 'distance' || selectedMetric === 'speed' ? 1 : 0)}
+              {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
             </Text>
             {getMetricUnit() && (
               <Text style={styles.metricValueUnit}> {getMetricUnit()}</Text>
@@ -686,9 +705,13 @@ const Dashboard: React.FC = () => {
           <Text style={styles.metricValuePeriod}>
             {selectedDataPoint 
               ? `${selectedDataPoint.label}` 
-              : selectedPeriod === 'daily' ? 'Today' : 'Last 30 Days Total'}
+              : selectedDate.toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                })}
           </Text>
-          {selectedDataPoint && selectedPeriod === 'monthly' && (
+          {selectedDataPoint && !isSelectedDateToday() && (
             <TouchableOpacity 
               onPress={() => setSelectedDataPoint(null)}
               style={styles.resetButton}
@@ -703,7 +726,11 @@ const Dashboard: React.FC = () => {
       {chartData && chartData.datasets && chartData.datasets.length > 0 && (
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>
-            {selectedPeriod === 'daily' ? 'Last 7 Days' : 'Last 30 Days'} {getMetricLabel()}
+            {isSelectedDateToday() ? 'Last 7 Days' : selectedDate.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
+            })} {getMetricLabel()}
           </Text>
           <LineChart
             data={chartData}
@@ -1213,34 +1240,49 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 20,
   },
-  periodSelector: {
+  datePickerContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    padding: 4,
-    marginBottom: 12,
-  },
-  periodButton: {
-    flex: 1,
-    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 6,
+    marginBottom: 12,
+    gap: 8,
   },
-  periodButtonActive: {
+  datePickerButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  periodButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6b7280',
+  datePickerText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginLeft: 8,
   },
-  periodButtonTextActive: {
-    color: '#3674B5',
+  dateIcon: {
+    marginRight: 4,
+  },
+  todayBadge: {
+    backgroundColor: '#3674B5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  todayBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   metricSelector: {
     flexDirection: 'row',
