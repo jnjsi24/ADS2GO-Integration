@@ -116,8 +116,8 @@ class AdsPanelServiceV4 {
     
     const response = await fetch(url, {
       headers,
-      // Add timeout to prevent hanging
-      signal: AbortSignal.timeout(10000), // 10 second timeout
+      // Add timeout to prevent hanging - increased to 30 seconds
+      signal: AbortSignal.timeout(30000), // 30 second timeout
       ...options,
     });
 

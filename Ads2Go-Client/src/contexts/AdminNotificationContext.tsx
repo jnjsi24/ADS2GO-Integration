@@ -74,7 +74,11 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     fetchPolicy: 'cache-and-network',
     skip: !isAuthenticated || !admin,
     pollInterval: 30000, // Refresh every 30 seconds
-    onCompleted: (data) => {
+  });
+
+  // Handle notifications data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (data) {
       console.log('🔔 AdminNotificationContext: Query completed with data:', data);
       console.log('🔔 AdminNotificationContext: Raw notifications data:', JSON.stringify(data, null, 2));
       if (data?.getAdminNotifications) {
@@ -88,51 +92,71 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
         setNotifications([]);
       }
       setIsLoading(false);
-    },
-    onError: (error) => {
-      console.error('❌ AdminNotificationContext: Error fetching notifications:', error);
-      setError(error.message);
+    }
+  }, [data]);
+
+  // Handle notifications errors with useEffect instead of onError
+  useEffect(() => {
+    if (queryError) {
+      console.error('❌ AdminNotificationContext: Error fetching notifications:', queryError);
+      setError(queryError.message);
       setIsLoading(false);
     }
-  });
+  }, [queryError]);
 
   // Fetch pending ads
-  const { data: pendingAdsData, loading: pendingAdsLoading } = useQuery(GET_PENDING_ADS, {
+  const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
     skip: !isAuthenticated || !admin,
     pollInterval: 30000,
-    onCompleted: (data) => {
-      console.log('🔔 AdminNotificationContext: Pending ads data:', data);
-      if (data?.getPendingAds) {
-        setPendingAds(data.getPendingAds);
-        console.log('🔔 AdminNotificationContext: Set pending ads:', data.getPendingAds);
+  });
+
+  // Handle pending ads data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (pendingAdsData) {
+      console.log('🔔 AdminNotificationContext: Pending ads data:', pendingAdsData);
+      if (pendingAdsData?.getPendingAds) {
+        setPendingAds(pendingAdsData.getPendingAds);
+        console.log('🔔 AdminNotificationContext: Set pending ads:', pendingAdsData.getPendingAds);
       } else {
         setPendingAds([]);
       }
-    },
-    onError: (error) => {
-      console.error('❌ AdminNotificationContext: Error fetching pending ads:', error);
+    }
+  }, [pendingAdsData]);
+
+  // Handle pending ads errors with useEffect instead of onError
+  useEffect(() => {
+    if (pendingAdsError) {
+      console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
       setPendingAds([]);
     }
-  });
+  }, [pendingAdsError]);
 
   // Fetch pending materials
-  const { data: pendingMaterialsData, loading: pendingMaterialsLoading } = useQuery(GET_PENDING_MATERIALS, {
+  const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError } = useQuery(GET_PENDING_MATERIALS, {
     skip: !isAuthenticated || !admin,
     pollInterval: 30000,
-    onCompleted: (data) => {
-      console.log('🔔 AdminNotificationContext: Pending materials data:', data);
-      if (data?.getPendingMaterials) {
-        setPendingMaterials(data.getPendingMaterials);
-        console.log('🔔 AdminNotificationContext: Set pending materials:', data.getPendingMaterials);
+  });
+
+  // Handle pending materials data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (pendingMaterialsData) {
+      console.log('🔔 AdminNotificationContext: Pending materials data:', pendingMaterialsData);
+      if (pendingMaterialsData?.getPendingMaterials) {
+        setPendingMaterials(pendingMaterialsData.getPendingMaterials);
+        console.log('🔔 AdminNotificationContext: Set pending materials:', pendingMaterialsData.getPendingMaterials);
       } else {
         setPendingMaterials([]);
       }
-    },
-    onError: (error) => {
-      console.error('❌ AdminNotificationContext: Error fetching pending materials:', error);
+    }
+  }, [pendingMaterialsData]);
+
+  // Handle pending materials errors with useEffect instead of onError
+  useEffect(() => {
+    if (pendingMaterialsError) {
+      console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
       setPendingMaterials([]);
     }
-  });
+  }, [pendingMaterialsError]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
   const displayBadgeCount = enableNotificationBadge ? unreadCount : 0;

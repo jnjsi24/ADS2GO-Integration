@@ -191,6 +191,10 @@ const AdminAdsControl: React.FC = () => {
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data:', otherError);
+        // Handle timeout errors specifically
+        if (otherError instanceof Error && otherError.name === 'TimeoutError') {
+          console.warn('⚠️ Request timed out - this is usually due to slow server response');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -292,6 +296,10 @@ const AdminAdsControl: React.FC = () => {
         setAdAnalytics(analyticsData);
       } catch (otherError) {
         console.error('❌ Error fetching additional data during auto-refresh:', otherError);
+        // Handle timeout errors specifically
+        if (otherError instanceof Error && otherError.name === 'TimeoutError') {
+          console.warn('⚠️ Auto-refresh request timed out - this is usually due to slow server response');
+        }
       }
       
       setLastRefresh(new Date());
