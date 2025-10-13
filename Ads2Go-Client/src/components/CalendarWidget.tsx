@@ -116,11 +116,11 @@ const CalendarWidget: React.FC<CalendarWidgetProps> = ({
                 ${isDisabled
                   ? 'text-gray-300 cursor-not-allowed'
                   : isSelected 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    ? 'bg-[#3674B5] text-white hover:bg-blue-700' 
                     : isCurrentMonthDay 
                       ? isToday
                         ? 'bg-blue-50 text-blue-600 font-semibold hover:bg-blue-100'
-                        : 'text-gray-900 hover:bg-gray-100'
+                        : 'text-gray-900 hover:bg-[#3674B5]/20 hover:border border-[#3674B5]/20'
                       : 'text-gray-400 hover:bg-gray-50'
                 }
               `}

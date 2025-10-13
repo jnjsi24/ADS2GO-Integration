@@ -388,12 +388,12 @@ const Register: React.FC = () => {
           <img 
             src="/image/Ads2GoLogoText.png" 
             alt="Ads2Go Logo" 
-            className="h-24 w-auto object-contain"
+            className="h-12 w-auto object-contain"
           />
         </div>
         
         {/* Login Title */}
-        <h1 className="text-3xl font-bold text-center mb-6 text-white">
+        <h1 className="text-5xl font-bold text-center mb-6 text-white">
           Sign up
         </h1>
 

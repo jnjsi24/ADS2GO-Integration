@@ -91,7 +91,7 @@ const AdminSidebar: React.FC = () => {
       {isMobile && (
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg text-[#3674B5] hover:bg-gray-100 transition-colors"
+          className="fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg text-black hover:bg-gray-100 transition-colors"
           aria-label="Toggle menu"
         >
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -143,7 +143,7 @@ const AdminSidebar: React.FC = () => {
               key={item.path}
               to={item.path}
               onClick={() => isMobile && setIsMobileMenuOpen(false)}
-              className={`flex items-center gap-3 rounded-md text-sm hover:bg-[#3674B5] hover:text-white transition-colors ${
+              className={`flex items-center gap-3 rounded-md text-sm pt-2 hover:bg-[#3674B5] hover:text-white transition-colors ${
                 isCollapsed && !isHovered ? 'px-2 py-3 justify-center' : 'px-4 py-3'
               } ${
                 location.pathname === item.path ? 'bg-[#3674B5] text-white font-semibold' : ''
