@@ -575,8 +575,16 @@ const DetailedAnalytics: React.FC = () => {
   // Memoized chart data transformations for performance
   const performanceChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        impressions: day.impressions || 0,
+        adsPlayed: day.adsPlayed || 0,
+        qrScans: day.qrScans || 0,
+        completionRate: day.completionRate || 0,
+        revenue: 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -589,12 +597,16 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return analyticsData?.getUserAnalytics?.dailyStats || weeklyData;
     }
-  }, [selectedDevice, deviceAnalytics, analyticsData]);
+  }, [selectedDevice, deviceAnalytics, analyticsData, weeklyData]);
 
   const qrScansChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        qrScans: day.qrScans || 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -741,122 +753,103 @@ const DetailedAnalytics: React.FC = () => {
         </div>
       </div>
 
-      {/* Performance Over Time */}
+      {/* Performance Trend */}
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Performance Over Time</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800">Performance Trend</h3>
+            <p className="text-sm text-gray-500 mt-1">Overall metrics over selected period</p>
+          </div>
           <select
-            className="text-sm text-gray-600 bg-white rounded-lg px-3 py-1 border border-gray-200 focus:outline-none"
+            className="text-sm text-gray-600 bg-white rounded-lg px-4 py-2 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1b5087] focus:border-transparent"
             value={selectedMetric}
             onChange={(e) => setSelectedMetric(e.target.value as 'impressions' | 'plays' | 'completion' | 'qr' | 'revenue')}
           >
-            <option value="impressions">Impressions</option>
             <option value="plays">Plays</option>
-            <option value="completion">Completion Rate</option>
             <option value="qr">QR Scans</option>
-            <option value="revenue">Revenue</option>
+            <option value="completion">Completion Rate</option>
           </select>
         </div>
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={350}>
           <ComposedChart data={performanceChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <defs>
+              <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#1b5087" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#1b5087" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis 
               dataKey="date" 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: '#666' }}
               tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12, fill: '#666' }} />
             <Tooltip 
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
               labelFormatter={(value) => new Date(value).toLocaleDateString()}
               formatter={(value, name) => [
-                name === 'impressions' ? value.toLocaleString() : 
                 name === 'adsPlayed' ? value.toLocaleString() : 
                 name === 'qrScans' ? value.toLocaleString() :
-                name === 'revenue' ? `$${value}` :
                 `${value}%`,
-                name === 'impressions' ? 'Impressions' :
                 name === 'adsPlayed' ? 'Plays' : 
-                name === 'qrScans' ? 'QR Scans' :
-                name === 'revenue' ? 'Revenue' : 'Completion Rate'
+                name === 'qrScans' ? 'QR Scans' : 'Completion Rate'
               ]}
             />
-            <Bar dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} fill="#1b5087" />
-            <Line type="monotone" dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} stroke="#3674B5" strokeWidth={2} />
+            <Area 
+              type="monotone" 
+              dataKey={selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : 'completionRate'} 
+              fill="url(#colorMetric)" 
+              stroke="#1b5087" 
+              strokeWidth={3}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
   );
 
-  const renderImpressionsSection = () => (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Impressions Analysis</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Hourly Impressions (Today)</h4>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={hourlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="impressions" stroke="#1b5087" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Location Distribution</h4>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={locationData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  dataKey="impressions"
-                  label={({ name, percentage }) => `${name}: ${percentage}%`}
-                >
-                  {locationData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => [value.toLocaleString(), 'Impressions']} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   const renderDisplayTimeSection = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Time Analysis</h3>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800">Display Time Analysis</h3>
+          <p className="text-sm text-gray-500 mt-1">Time spent displaying ads across all devices</p>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Daily Display Time</h4>
+          <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#1b5087]" />
+              Daily Display Time
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']} />
-                <Bar dataKey="completion" fill="#1b5087" name="Display Time (hours)" />
+                <Tooltip 
+                  formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#1b5087" radius={[8, 8, 0, 0]} name="Display Time (hours)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Device Performance</h4>
+          <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-lg border border-green-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+              Device Completion Rate
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={devicePerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="completion" fill="#3674B5" name="Completion Rate %" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#10b981" radius={[8, 8, 0, 0]} name="Completion Rate %" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -868,7 +861,10 @@ const DetailedAnalytics: React.FC = () => {
   const renderQRSection = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">QR Scans Analysis - Real Data from UserAnalytics</h3>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800">QR Scans Analysis</h3>
+          <p className="text-sm text-gray-500 mt-1">Track QR code engagement and conversion rates</p>
+        </div>
         
         {/* QR Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -960,7 +956,10 @@ const DetailedAnalytics: React.FC = () => {
   const renderTabletActivitySection = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Activity Overview - Real Data from UserAnalytics</h3>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800">Device Activity Overview</h3>
+          <p className="text-sm text-gray-500 mt-1">Monitor all connected devices and their performance</p>
+        </div>
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1111,7 +1110,10 @@ const DetailedAnalytics: React.FC = () => {
   const renderDetailedAdsSection = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Ads Analytics - Real Data from UserAnalytics</h3>
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800">Ads Performance Analytics</h3>
+          <p className="text-sm text-gray-500 mt-1">Detailed metrics for each advertisement campaign</p>
+        </div>
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1368,28 +1370,29 @@ const DetailedAnalytics: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6 overflow-hidden">
+        <div className="flex border-b border-gray-200 overflow-x-auto scrollbar-hide">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'performance', label: 'Performance', icon: TrendingUp },
-            { id: 'impressions', label: 'Impressions', icon: Eye },
             { id: 'display', label: 'Display Time', icon: Clock },
-            { id: 'qr', label: 'QR Impressions', icon: Target },
-            { id: 'tablets', label: 'Tablet Activity', icon: Users },
-            { id: 'ads', label: 'Detailed Ads', icon: BarChart3 }
+            { id: 'qr', label: 'QR Scans', icon: Target },
+            { id: 'tablets', label: 'Devices', icon: Monitor },
+            { id: 'ads', label: 'Ads Performance', icon: TrendingUp }
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setSelectedView(id as any)}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center gap-2 px-8 py-4 text-sm font-semibold transition-all duration-200 whitespace-nowrap relative group ${
                 selectedView === id
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'text-[#1b5087] bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-5 h-5 transition-transform duration-200 ${selectedView === id ? 'scale-110' : 'group-hover:scale-105'}`} />
               {label}
+              {selectedView === id && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#1b5087]"></div>
+              )}
             </button>
           ))}
         </div>
@@ -1397,8 +1400,6 @@ const DetailedAnalytics: React.FC = () => {
 
       {/* Content based on selected view */}
       {selectedView === 'overview' && renderOverviewSection()}
-      {selectedView === 'performance' && renderOverviewSection()}
-      {selectedView === 'impressions' && renderImpressionsSection()}
       {selectedView === 'display' && renderDisplayTimeSection()}
       {selectedView === 'qr' && renderQRSection()}
       {selectedView === 'tablets' && renderTabletActivitySection()}
