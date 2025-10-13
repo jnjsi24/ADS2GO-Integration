@@ -80,7 +80,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     pollInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Handle notifications data loading with useEffect instead of onCompleted
+  // Handle notifications data changes
   useEffect(() => {
     if (data) {
       console.log('🔔 AdminNotificationContext: Query completed with data:', data);
@@ -99,7 +99,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     }
   }, [data]);
 
-  // Handle notifications errors with useEffect instead of onError
+  // Handle notifications errors
   useEffect(() => {
     if (queryError) {
       console.error('❌ AdminNotificationContext: Error fetching notifications:', queryError);
@@ -114,7 +114,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     pollInterval: 30000,
   });
 
-  // Handle pending ads data loading with useEffect instead of onCompleted
+  // Handle pending ads data changes
   useEffect(() => {
     if (pendingAdsData) {
       console.log('🔔 AdminNotificationContext: Pending ads data:', pendingAdsData);
@@ -127,7 +127,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     }
   }, [pendingAdsData]);
 
-  // Handle pending ads errors with useEffect instead of onError
+  // Handle pending ads errors
   useEffect(() => {
     if (pendingAdsError) {
       console.error('❌ AdminNotificationContext: Error fetching pending ads:', pendingAdsError);
@@ -141,7 +141,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     pollInterval: 30000,
   });
 
-  // Handle pending materials data loading with useEffect instead of onCompleted
+  // Handle pending materials data changes
   useEffect(() => {
     if (pendingMaterialsData) {
       console.log('🔔 AdminNotificationContext: Pending materials data:', pendingMaterialsData);
@@ -154,7 +154,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     }
   }, [pendingMaterialsData]);
 
-  // Handle pending materials errors with useEffect instead of onError
+  // Handle pending materials errors
   useEffect(() => {
     if (pendingMaterialsError) {
       console.error('❌ AdminNotificationContext: Error fetching pending materials:', pendingMaterialsError);
