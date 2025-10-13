@@ -167,9 +167,8 @@ export const HamburgerMenuOverlay: React.FC<HamburgerMenuOverlayProps> = ({
             left: ${buttonLeft};
             top: ${buttonTop};
             transform: translate(-50%, -50%);
-            border-radius: 12px;
+            border-radius: 1px;
             z-index: ${zIndex + 1};
-            background: ${buttonColor};
             border: none;
             cursor: pointer;
             transition: all 0.3s ease;
@@ -240,9 +239,9 @@ export const HamburgerMenuOverlay: React.FC<HamburgerMenuOverlayProps> = ({
           }
 
           /* Mobile responsiveness */
-          @media (max-width: 768px) {
+          @media (max-width: 300px) {
             .hamburger-button-${zIndex} {
-              left: calc(100% - 24px);
+              left: calc(100% - 40px);
               top: 24px;
             }
 
@@ -324,7 +323,7 @@ export const HamburgerMenuOverlay: React.FC<HamburgerMenuOverlayProps> = ({
             <Menu
               className={`absolute transition-all duration-300 ${isOpen ? 'opacity-0 rotate-45 scale-0' : 'opacity-100 rotate-0 scale-100'}`}
               size={buttonSize === 'sm' ? 16 : buttonSize === 'md' ? 20 : 24}
-              color={textColor}
+              color={buttonColor}
             />
             <X
               className={`absolute transition-all duration-300 ${isOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-45 scale-0'}`}
