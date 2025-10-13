@@ -264,7 +264,11 @@ const paymentResolvers = {
 
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
-      if (ad.status !== 'APPROVED') throw new Error('Ad is not approved');
+      
+      // Check if ad is approved - ALL ads must be approved before payment
+      if (ad.status !== 'APPROVED') {
+        throw new Error('Ad must be approved first before you can make a payment');
+      }
 
       const existingPayment = await Payment.findOne({ adsId });
       if (existingPayment) throw new Error('A payment already exists for this ad.');
@@ -330,18 +334,19 @@ const paymentResolvers = {
       session.startTransaction();
 
       try {
-        console.log('Creating payment with data:', {
+        console.log('💳 Creating payment with data:', {
           userId: user.id,
           adsId: adsId,
           planID: ad.planId,
           paymentType: paymentType,
           amount: ad.totalPrice,
-          receiptId: receiptId
+          receiptId: receiptId,
+          paymentStatus: 'PAID'
         });
 
         // Save the payment
         await newPayment.save({ session });
-        console.log('Payment saved successfully');
+        console.log('✅ Payment saved successfully to database with ID:', newPayment._id);
 
         // Update the ad status to RUNNING and mark as PAID
         ad.status = 'RUNNING';
