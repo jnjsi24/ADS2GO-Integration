@@ -453,7 +453,7 @@ const Advertisements: React.FC = () => {
               currentAds.map((ad) => (
                 <div
                   key={ad.id}
-                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/80 h-[395px] hover:scale-105 transition-transform duration-300"
+                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:scale-105 transition-transform duration-300"
                 >
                   <div className="w-full h-44 flex-shrink-0 relative">
                     {ad.mediaFile ? (
