@@ -807,9 +807,12 @@ router.get('/compliance', async (req, res) => {
               carRecord: device
             });
             
-            // Update slot status - use tablet registration status as primary source
-            const statusInfo = deviceStatusService.getDeviceStatus(slot.deviceId);
-            const deviceStatusOnline = !!statusInfo.isOnline;
+            // Update slot status - use activeConnections directly for real-time status
+            const connection = deviceStatusService.activeConnections.get(slot.deviceId);
+            const deviceStatusOnline = !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
+            
+            // Debug logging
+            console.log(`🔍 [compliance] Slot ${slot.deviceId}: connection=`, !!connection, 'readyState=', connection?.readyState, 'deviceStatusOnline=', deviceStatusOnline);
             
             // Check if tablet registration status is recent (within last 30 seconds)
             const now = new Date();
@@ -871,8 +874,18 @@ router.get('/compliance', async (req, res) => {
         group.screenMetrics = { ...group.screenMetrics, ...device.screenMetrics };
       }
       
-      // If any device is online, mark the group as online
-      if (device.isOnline) {
+      // If any device is online, mark the group as online (use real-time status)
+      if (device.slots && device.slots.length > 0) {
+        const hasOnlineSlot = device.slots.some(slot => {
+          if (!slot.deviceId) return false;
+          const connection = deviceStatusService.activeConnections.get(slot.deviceId);
+          return !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
+        });
+        if (hasOnlineSlot) {
+          group.isOnline = true;
+        }
+      } else if (device.isOnline) {
+        // Fallback for old schema
         group.isOnline = true;
       }
     });
@@ -1009,8 +1022,9 @@ router.get('/compliance', async (req, res) => {
       
       // Use the group's location
       let displayLocation = group.currentLocation;
-      let displayStatus = group.isOnline ? 'ACTIVE' : 'OFFLINE';
-      let hasOnlineDevice = group.isOnline;
+      // Use real-time slot status to determine if any device is online
+      let hasOnlineDevice = group.slotStatus.slot1.online || group.slotStatus.slot2.online;
+      let displayStatus = hasOnlineDevice ? 'ACTIVE' : 'OFFLINE';
       
       // Convert coordinates format from [lng, lat] to {lat, lng} for frontend compatibility
       let frontendLocation = null;
@@ -1401,19 +1415,32 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
 
     const allDevices = await DeviceTracking.find(query);
     
-    let analytics = allDevices.map(device => ({
-      deviceId: device.deviceId,
-      materialId: device.materialId,
-      screenType: device.screenType,
-      currentAd: device.currentAd,
-      dailyStats: device.dailySummary || {},
-      totalAdsPlayed: device.totalAdPlays,
-      totalAdImpressions: device.totalAdImpressions,
-      totalAdPlayTime: device.totalAdPlayTime,
-      adPerformance: device.adPerformance || [],
-      isOnline: device.isOnline,
-      lastSeen: device.lastSeen
-    }));
+    // Get real-time device status service
+    const deviceStatusService = require('../services/deviceStatusService');
+    
+    let analytics = allDevices.map(device => {
+      // Use activeConnections directly for real-time status (more reliable)
+      const connection = deviceStatusService.activeConnections.get(device.deviceId);
+      const isOnline = !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
+      const lastSeen = connection?.lastSeen || device.lastSeen;
+      
+      // Debug logging
+      console.log(`🔍 [adAnalytics] Device ${device.deviceId}: connection=`, !!connection, 'readyState=', connection?.readyState, 'isOnline=', isOnline);
+      
+      return {
+        deviceId: device.deviceId,
+        materialId: device.materialId,
+        screenType: device.screenType,
+        currentAd: device.currentAd,
+        dailyStats: device.dailySummary || {},
+        totalAdsPlayed: device.totalAdPlays,
+        totalAdImpressions: device.totalAdImpressions,
+        totalAdPlayTime: device.totalAdPlayTime,
+        adPerformance: device.adPerformance || [],
+        isOnline: isOnline, // Use real-time status
+        lastSeen: lastSeen // Use real-time lastSeen
+      };
+    });
 
     // Filter by user (always filter by authenticated user unless admin specifies different user)
     if (effectiveUserId) {

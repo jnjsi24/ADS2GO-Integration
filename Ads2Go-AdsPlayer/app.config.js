@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
 // Load environment variables with fallbacks
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
 const SYNC_INTERVAL = process.env.EXPO_PUBLIC_SYNC_INTERVAL || '30000';
 const DEFAULT_AD_DURATION = process.env.EXPO_PUBLIC_DEFAULT_AD_DURATION || '15000';
 

@@ -417,33 +417,42 @@ router.post('/ad-playback', async (req, res) => {
     const userId = ad.userId.toString();
 
     // Track ad playback using the new schema
-    const slot = deviceTracking.getSlot(parseInt(deviceSlot));
-    if (slot) {
-      // Add ad playback to the slot
-      const adPlayback = {
-        adId,
-        userId,
-        adTitle,
-        materialId: materialId,
-        slotNumber: parseInt(deviceSlot),
-        adDuration: parseInt(adDuration),
-        startTime: new Date(),
-        endTime: null,
-        viewTime: Math.round(parseInt(viewTime) * 100) / 100,
-        completionRate: Math.round((parseInt(viewTime) / parseInt(adDuration)) * 10000) / 100,
-        impressions: 1
-      };
-      
-      deviceTracking.adPlaybacks.push(adPlayback);
-      deviceTracking.totalAdPlays += 1;
-      deviceTracking.totalAdPlayTime += parseInt(viewTime);
-      deviceTracking.totalAdImpressions += 1;
-      
-      // Clean up old ad playbacks (keep only last 800)
-      deviceTracking.cleanupAdPlaybacks();
-      
-      await deviceTracking.save();
+    let slot = deviceTracking.getSlot(parseInt(deviceSlot));
+    
+    // Ensure the slot exists, create it if it doesn't
+    if (!slot) {
+      console.log(`⚠️ Slot ${deviceSlot} not found, creating it for device ${deviceId}`);
+      await deviceTracking.updateSlot(parseInt(deviceSlot), {
+        deviceId,
+        isOnline: true,
+        deviceInfo: {}
+      });
     }
+    
+    // Add ad playback to the tracking record
+    const adPlayback = {
+      adId,
+      userId,
+      adTitle,
+      materialId: materialId,
+      slotNumber: parseInt(deviceSlot),
+      adDuration: parseInt(adDuration),
+      startTime: new Date(),
+      endTime: null,
+      viewTime: Math.round(parseInt(viewTime) * 100) / 100,
+      completionRate: Math.round((parseInt(viewTime) / parseInt(adDuration)) * 10000) / 100,
+      impressions: 1
+    };
+    
+    deviceTracking.adPlaybacks.push(adPlayback);
+    deviceTracking.totalAdPlays += 1;
+    deviceTracking.totalAdPlayTime += parseInt(viewTime);
+    deviceTracking.totalAdImpressions += 1;
+    
+    // Clean up old ad playbacks (keep only last 800)
+    deviceTracking.cleanupAdPlaybacks();
+    
+    await deviceTracking.save();
 
     res.json({
       success: true,
@@ -459,6 +468,7 @@ router.post('/ad-playback', async (req, res) => {
 
   } catch (error) {
     console.error('Error tracking ad playback:', error);
+    console.error('Request data:', { deviceId: req.body.deviceId, deviceSlot: req.body.deviceSlot, adId: req.body.adId, adTitle: req.body.adTitle, adDuration: req.body.adDuration, viewTime: req.body.viewTime });
     res.status(500).json({
       success: false,
       message: 'Failed to track ad playback',

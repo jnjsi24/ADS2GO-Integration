@@ -27,6 +27,8 @@ import {
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
 import { adsPanelService } from '../../services/adsPanelService';
 import playbackWebSocketService from '../../services/playbackWebSocketService';
+import { useApolloClient } from '@apollo/client';
+import { createGraphQLService } from '../../services/graphQLService';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
@@ -40,6 +42,10 @@ import { AdminLoader } from "../../components/ProtectedRoute";
 const AdminAdsControl: React.FC = () => {
   // Cache busting - force component reload
   console.log('🔄 AdminAdsControl NEW VERSION loaded - Cache busted at:', new Date().toISOString());
+  
+  // Initialize GraphQL service
+  const apolloClient = useApolloClient();
+  const graphQLService = createGraphQLService(apolloClient);
   
   const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -56,6 +62,8 @@ const AdminAdsControl: React.FC = () => {
   }, [loading]);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(true); // Default to true since ads play automatically
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state
   const [showScreenDetails, setShowScreenDetails] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
@@ -376,6 +384,92 @@ const AdminAdsControl: React.FC = () => {
     };
   }, [fetchData, autoRefreshData]);
 
+  // Toggle play/pause handler
+  const handleTogglePlayPause = async () => {
+    try {
+      const action = isCurrentlyPlaying ? 'pause' : 'play';
+      setActionLoading(action);
+      
+      let result;
+      if (isCurrentlyPlaying) {
+        result = await graphQLService.pauseAllScreens();
+      } else {
+        result = await graphQLService.playAllScreens();
+      }
+      
+      if (result.success) {
+        // Toggle the state
+        setIsCurrentlyPlaying(!isCurrentlyPlaying);
+        console.log(`✅ ${action} all screens successful:`, result.message);
+      } else {
+        console.error(`❌ ${action} all screens failed:`, result.message);
+        setError(`Failed to ${action} all screens: ${result.message}`);
+      }
+    } catch (error) {
+      console.error(`Error ${isCurrentlyPlaying ? 'pausing' : 'playing'} all screens:`, error);
+      setError(`Failed to ${isCurrentlyPlaying ? 'pause' : 'play'} all screens`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Toggle lock/unlock handler
+  const handleToggleLock = async () => {
+    try {
+      const action = isLocked ? 'unlock' : 'lock';
+      setActionLoading(action);
+      
+      let result;
+      if (isLocked) {
+        result = await graphQLService.unlockAllScreens();
+      } else {
+        result = await graphQLService.lockdownAllScreens();
+      }
+      
+      if (result.success) {
+        // Toggle the state
+        setIsLocked(!isLocked);
+        console.log(`✅ ${action} all screens successful:`, result.message);
+      } else {
+        console.error(`❌ ${action} all screens failed:`, result.message);
+        setError(`Failed to ${action} all screens: ${result.message}`);
+      }
+    } catch (error) {
+      console.error(`Error ${isLocked ? 'unlocking' : 'locking'} all screens:`, error);
+      setError(`Failed to ${isLocked ? 'unlock' : 'lock'} all screens`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Listen for WebSocket messages to detect play/pause state changes
+  useEffect(() => {
+    const handleWebSocketMessage = (event: MessageEvent) => {
+      try {
+        const message = JSON.parse(event.data);
+        
+        // Listen for pause/resume messages from ad players
+        if (message.type === 'pauseAll' || message.type === 'resumeAll') {
+          console.log(`🔄 [AdminAdsControl] Received ${message.type} message, updating state`);
+          setIsCurrentlyPlaying(message.type === 'resumeAll');
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    // Add WebSocket listener if available
+    if (playbackWebSocketService && playbackWebSocketService.ws) {
+      playbackWebSocketService.ws.addEventListener('message', handleWebSocketMessage);
+      
+      return () => {
+        if (playbackWebSocketService.ws) {
+          playbackWebSocketService.ws.removeEventListener('message', handleWebSocketMessage);
+        }
+      };
+    }
+  }, []);
+
   // Action handlers
   const handleBulkAction = async (action: string) => {
     try {
@@ -653,28 +747,28 @@ const AdminAdsControl: React.FC = () => {
             <span className="text-sm font-medium text-blue-600">Sync All</span>
           </button>
           <button 
-            onClick={() => handleBulkAction('play')}
-            disabled={actionLoading === 'play'}
-            className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+            onClick={handleTogglePlayPause}
+            disabled={actionLoading === 'play' || actionLoading === 'pause'}
+            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+              isCurrentlyPlaying 
+                ? 'bg-yellow-50 hover:bg-yellow-100' 
+                : 'bg-green-50 hover:bg-green-100'
+            }`}
           >
-            {actionLoading === 'play' ? <Loader2 className="w-6 h-6 text-green-600 mb-2 animate-spin" /> : <Play className="w-6 h-6 text-green-600 mb-2" />}
-            <span className="text-sm font-medium text-green-600">Play All</span>
-          </button>
-          <button 
-            onClick={() => handleBulkAction('pause')}
-            disabled={actionLoading === 'pause'}
-            className="flex flex-col items-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {actionLoading === 'pause' ? <Loader2 className="w-6 h-6 text-yellow-600 mb-2 animate-spin" /> : <Pause className="w-6 h-6 text-yellow-600 mb-2" />}
-            <span className="text-sm font-medium text-yellow-600">Pause All</span>
-          </button>
-          <button 
-            onClick={() => handleBulkAction('stop')}
-            disabled={actionLoading === 'stop'}
-            className="flex flex-col items-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {actionLoading === 'stop' ? <Loader2 className="w-6 h-6 text-red-600 mb-2 animate-spin" /> : <Square className="w-6 h-6 text-red-600 mb-2" />}
-            <span className="text-sm font-medium text-red-600">Stop All</span>
+            {actionLoading === 'play' || actionLoading === 'pause' ? (
+              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
+                isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+              }`} />
+            ) : isCurrentlyPlaying ? (
+              <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+            ) : (
+              <Play className="w-6 h-6 text-green-600 mb-2" />
+            )}
+            <span className={`text-sm font-medium ${
+              isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+            }`}>
+              {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+            </span>
           </button>
           <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
             <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
@@ -684,13 +778,29 @@ const AdminAdsControl: React.FC = () => {
             <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
             <span className="text-sm font-medium text-orange-600">Emergency</span>
           </button>
-          <button className="flex flex-col items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-            <Lock className="w-6 h-6 text-gray-600 mb-2" />
-            <span className="text-sm font-medium text-gray-600">Lockdown</span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-            <Unlock className="w-6 h-6 text-green-600 mb-2" />
-            <span className="text-sm font-medium text-green-600">Unlock</span>
+          <button 
+            onClick={handleToggleLock}
+            disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
+            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+              isLocked 
+                ? 'bg-green-50 hover:bg-green-100' 
+                : 'bg-gray-50 hover:bg-gray-100'
+            }`}
+          >
+            {actionLoading === 'lock' || actionLoading === 'unlock' ? (
+              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
+                isLocked ? 'text-green-600' : 'text-gray-600'
+              }`} />
+            ) : isLocked ? (
+              <Unlock className="w-6 h-6 text-green-600 mb-2" />
+            ) : (
+              <Lock className="w-6 h-6 text-gray-600 mb-2" />
+            )}
+            <span className={`text-sm font-medium ${
+              isLocked ? 'text-green-600' : 'text-gray-600'
+            }`}>
+              {isLocked ? 'Unlock All' : 'Lock All'}
+            </span>
           </button>
         </div>
       </div>

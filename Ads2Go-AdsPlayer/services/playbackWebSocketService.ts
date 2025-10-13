@@ -43,6 +43,10 @@ class PlaybackWebSocketService {
   private playbackUpdateInterval: NodeJS.Timeout | null = null;
   private currentPlaybackData: Partial<PlaybackUpdate> | null = null;
   private onSlotSync: ((message: any) => void) | null = null;
+  private onPauseAll: ((message: any) => void) | null = null;
+  private onResumeAll: ((message: any) => void) | null = null;
+  private onLockdown: ((message: any) => void) | null = null;
+  private onUnlock: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
 
@@ -113,7 +117,7 @@ class PlaybackWebSocketService {
 
     try {
       // Use dynamic URL with environment support
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}&slotNumber=${this.slotNumber}`;
@@ -152,6 +156,18 @@ class PlaybackWebSocketService {
           } else if (message.type === 'stateResponse') {
             console.log('🔄 [WebSocket] Received state response:', message);
             this.handleStateResponse(message);
+          } else if (message.type === 'pauseAll') {
+            console.log('⏸️ [WebSocket] Received pause all command:', message);
+            this.handlePauseAll(message);
+          } else if (message.type === 'resumeAll') {
+            console.log('▶️ [WebSocket] Received resume all command:', message);
+            this.handleResumeAll(message);
+          } else if (message.type === 'lockdown') {
+            console.log('🔒 [WebSocket] Received lockdown command:', message);
+            this.handleLockdown(message);
+          } else if (message.type === 'unlock') {
+            console.log('🔓 [WebSocket] Received unlock command:', message);
+            this.handleUnlock(message);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -407,6 +423,62 @@ class PlaybackWebSocketService {
     }
   }
 
+  // Handle pause all command from server
+  private handlePauseAll(message: any) {
+    try {
+      console.log('⏸️ [WebSocket] Handling pause all command:', message);
+      
+      // Emit pause event to the AdPlayer component
+      if (this.onPauseAll) {
+        this.onPauseAll(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling pause all command:', error);
+    }
+  }
+
+  // Handle resume all command from server
+  private handleResumeAll(message: any) {
+    try {
+      console.log('▶️ [WebSocket] Handling resume all command:', message);
+      
+      // Emit resume event to the AdPlayer component
+      if (this.onResumeAll) {
+        this.onResumeAll(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling resume all command:', error);
+    }
+  }
+
+  // Handle lockdown command from server
+  private handleLockdown(message: any) {
+    try {
+      console.log('🔒 [WebSocket] Handling lockdown command:', message);
+      
+      // Emit lockdown event to the AdPlayer component
+      if (this.onLockdown) {
+        this.onLockdown(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling lockdown command:', error);
+    }
+  }
+
+  // Handle unlock command from server
+  private handleUnlock(message: any) {
+    try {
+      console.log('🔓 [WebSocket] Handling unlock command:', message);
+      
+      // Emit unlock event to the AdPlayer component
+      if (this.onUnlock) {
+        this.onUnlock(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling unlock command:', error);
+    }
+  }
+
   // Request synchronization with other slots
   requestSync() {
     if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
@@ -468,6 +540,24 @@ class PlaybackWebSocketService {
   // Set callback for slot sync handling
   setSlotSyncCallback(callback: (message: any) => void) {
     this.onSlotSync = callback;
+  }
+
+  // Set callback for pause all handling
+  setPauseAllCallback(callback: (message: any) => void) {
+    this.onPauseAll = callback;
+  }
+
+  // Set callback for resume all handling
+  setResumeAllCallback(callback: (message: any) => void) {
+    this.onResumeAll = callback;
+  }
+
+  setLockdownCallback(callback: (message: any) => void) {
+    this.onLockdown = callback;
+  }
+
+  setUnlockCallback(callback: (message: any) => void) {
+    this.onUnlock = callback;
   }
 
   isWebSocketConnected(): boolean {
