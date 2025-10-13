@@ -46,7 +46,7 @@ export const AdminNotificationSettingsProvider: React.FC<AdminNotificationSettin
     }
   );
 
-  // Handle preferences data loading with useEffect instead of onCompleted
+  // Handle preferences data changes
   useEffect(() => {
     if (preferencesData) {
       console.log('🔔 AdminNotificationSettings: Preferences loaded:', preferencesData);
@@ -64,7 +64,7 @@ export const AdminNotificationSettingsProvider: React.FC<AdminNotificationSettin
     }
   }, [preferencesData]);
 
-  // Handle preferences errors with useEffect instead of onError
+  // Handle preferences errors
   useEffect(() => {
     if (preferencesError) {
       console.error('❌ AdminNotificationSettings: Error fetching preferences:', preferencesError);

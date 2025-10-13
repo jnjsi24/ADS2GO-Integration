@@ -192,20 +192,6 @@ const Materials: React.FC = () => {
     errorPolicy: 'all',
   });
 
-  // Handle data loading with useEffect instead of onCompleted
-  useEffect(() => {
-    if (data) {
-      console.log('Materials data loaded:', data);
-    }
-  }, [data]);
-
-  // Handle errors with useEffect instead of onError
-  useEffect(() => {
-    if (error) {
-      console.error('Error loading materials:', error);
-    }
-  }, [error]);
-
   const { data: driversData, loading: driversLoading, error: driversError } = useQuery(GET_DRIVERS_FOR_MATERIALS, {
     context: {
       headers: {
@@ -215,7 +201,21 @@ const Materials: React.FC = () => {
     errorPolicy: 'all',
   });
 
-  // Handle drivers errors with useEffect instead of onError
+  // Handle materials data
+  useEffect(() => {
+    if (data) {
+      console.log('Materials data loaded:', data);
+    }
+  }, [data]);
+
+  // Handle materials errors
+  useEffect(() => {
+    if (error) {
+      console.error('Error loading materials:', error);
+    }
+  }, [error]);
+
+  // Handle drivers errors
   useEffect(() => {
     if (driversError) {
       console.error('Error loading drivers:', driversError);
@@ -287,14 +287,14 @@ const Materials: React.FC = () => {
     fetchPolicy: 'cache-and-network',
   });
 
-  // Handle tablet data loading with useEffect instead of onCompleted
+  // Handle tablet data
   useEffect(() => {
     if (tabletData) {
       console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data: tabletData });
     }
   }, [tabletData, selectedTabletMaterialId]);
 
-  // Handle tablet errors with useEffect instead of onError
+  // Handle tablet errors
   useEffect(() => {
     if (tabletError) {
       console.error('Error loading tablets:', tabletError);
@@ -318,14 +318,14 @@ const Materials: React.FC = () => {
     fetchPolicy: 'cache-and-network',
   });
 
-  // Handle connection status data loading with useEffect instead of onCompleted
+  // Handle connection status data
   useEffect(() => {
     if (connectionStatusData) {
       console.log('Connection status query completed:', { materialId: selectedTabletMaterialId, slotNumber: selectedTabletSlotNumber, data: connectionStatusData });
     }
   }, [connectionStatusData, selectedTabletMaterialId, selectedTabletSlotNumber]);
 
-  // Handle connection status errors with useEffect instead of onError
+  // Handle connection status errors
   useEffect(() => {
     if (connectionStatusError) {
       console.error('Error loading tablet connection status:', connectionStatusError);
