@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -52,60 +52,33 @@ const AdminNotifications: React.FC = () => {
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
     pollInterval: 30000, // Refresh every 30 seconds
-    onError: (error) => {
-      console.error('Error fetching notifications:', error);
-    }
   });
+
+  // Handle query errors
+  useEffect(() => {
+    if (notificationsError) {
+      console.error('Error fetching notifications:', notificationsError);
+    }
+  }, [notificationsError]);
 
   // Mark notification as read
-  const [markAsRead] = useMutation(MARK_NOTIFICATION_READ, {
-    onCompleted: () => {
-      refetchNotifications();
-    },
-    onError: (error) => {
-      console.error('Error marking notification as read:', error);
-    }
-  });
+  const [markAsRead] = useMutation(MARK_NOTIFICATION_READ);
 
   // Delete notification
-  const [deleteNotification] = useMutation(DELETE_NOTIFICATION, {
-    onCompleted: () => {
-      refetchNotifications();
-      setShowDeleteModal(false);
-      setNotificationToDelete(null);
-    },
-    onError: (error) => {
-      console.error('Error deleting notification:', error);
-    }
-  });
+  const [deleteNotification] = useMutation(DELETE_NOTIFICATION);
 
   // Mark all notifications as read
-  const [markAllAsRead] = useMutation(MARK_ALL_NOTIFICATIONS_READ, {
-    onCompleted: () => {
-      refetchNotifications();
-    },
-    onError: (error) => {
-      console.error('Error marking all notifications as read:', error);
-    }
-  });
+  const [markAllAsRead] = useMutation(MARK_ALL_NOTIFICATIONS_READ);
 
   // Delete all notifications
-  const [deleteAllNotifications] = useMutation(DELETE_ALL_ADMIN_NOTIFICATIONS, {
-    onCompleted: () => {
-      refetchNotifications();
-      setSelectedNotifications(new Set());
-      setIsSelectMode(false);
-    },
-    onError: (error) => {
-      console.error('Error deleting all notifications:', error);
-    }
-  });
+  const [deleteAllNotifications] = useMutation(DELETE_ALL_ADMIN_NOTIFICATIONS);
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
       await markAsRead({ variables: { notificationId } });
+      await refetchNotifications();
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -114,6 +87,9 @@ const AdminNotifications: React.FC = () => {
   const handleDeleteNotification = async (notificationId: string) => {
     try {
       await deleteNotification({ variables: { notificationId } });
+      await refetchNotifications();
+      setShowDeleteModal(false);
+      setNotificationToDelete(null);
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
@@ -122,6 +98,7 @@ const AdminNotifications: React.FC = () => {
   const handleMarkAllAsRead = async () => {
     try {
       await markAllAsRead();
+      await refetchNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
@@ -131,6 +108,9 @@ const AdminNotifications: React.FC = () => {
     if (window.confirm('Are you sure you want to delete all notifications?')) {
       try {
         await deleteAllNotifications();
+        await refetchNotifications();
+        setSelectedNotifications(new Set());
+        setIsSelectMode(false);
       } catch (error) {
         console.error('Error deleting all notifications:', error);
       }

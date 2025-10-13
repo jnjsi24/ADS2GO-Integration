@@ -403,8 +403,21 @@ router.post('/ad-playback', async (req, res) => {
       });
     }
 
+    // Get userId from Ad collection
+    const Ad = require('../models/Ad');
+    const ad = await Ad.findById(adId).select('userId');
+    
+    if (!ad) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ad not found'
+      });
+    }
+    
+    const userId = ad.userId.toString();
+
     // Track ad playback using the new schema
-    const slot = deviceTracking.getSlot(parseInt(deviceSlot));
+    let slot = deviceTracking.getSlot(parseInt(deviceSlot));
     
     // Ensure the slot exists, create it if it doesn't
     if (!slot) {
@@ -419,6 +432,7 @@ router.post('/ad-playback', async (req, res) => {
     // Add ad playback to the tracking record
     const adPlayback = {
       adId,
+      userId,
       adTitle,
       materialId: materialId,
       slotNumber: parseInt(deviceSlot),

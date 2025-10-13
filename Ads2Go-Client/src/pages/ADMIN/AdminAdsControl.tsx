@@ -109,7 +109,7 @@ const AdminAdsControl: React.FC = () => {
       // Fetch screens data using compliance endpoint for real-time status
       try {
         console.log('🔍 Fetching screens data via compliance API for real-time status...');
-        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
         const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
         
         const response = await fetch(complianceUrl, {
@@ -230,7 +230,7 @@ const AdminAdsControl: React.FC = () => {
       
       // Fetch screens data using compliance endpoint for real-time status
       try {
-        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
+        const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
         const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
         
         const response = await fetch(complianceUrl, {
@@ -346,9 +346,17 @@ const AdminAdsControl: React.FC = () => {
               timestamp: update.timestamp
             });
             
-            const updatedScreen = {
+            const updatedScreen: ScreenData = {
               ...screen,
               screenMetrics: {
+                isDisplaying: screen.screenMetrics?.isDisplaying ?? true,
+                brightness: screen.screenMetrics?.brightness ?? 100,
+                volume: screen.screenMetrics?.volume ?? 100,
+                adPlayCount: screen.screenMetrics?.adPlayCount ?? 0,
+                maintenanceMode: screen.screenMetrics?.maintenanceMode ?? false,
+                displayHours: screen.screenMetrics?.displayHours ?? 0,
+                adPerformance: screen.screenMetrics?.adPerformance ?? [],
+                lastAdPlayed: screen.screenMetrics?.lastAdPlayed ?? '',
                 ...screen.screenMetrics,
                 currentAd: {
                   adId: update.adId,
@@ -468,31 +476,31 @@ const AdminAdsControl: React.FC = () => {
       setActionLoading(action);
       let result;
       
-      // Use GraphQL mutations for bulk actions
+      // Use API service for bulk actions
       switch (action) {
         case 'sync':
-          result = await graphQLService.syncAllScreens();
+          result = await apiService.syncAllScreens();
           break;
         case 'play':
-          result = await graphQLService.playAllScreens();
+          result = await apiService.playAllScreens();
           break;
         case 'pause':
-          result = await graphQLService.pauseAllScreens();
+          result = await apiService.pauseAllScreens();
           break;
         case 'stop':
-          result = await graphQLService.stopAllScreens();
+          result = await apiService.stopAllScreens();
           break;
         case 'restart':
-          result = await graphQLService.restartAllScreens();
+          result = await apiService.restartAllScreens();
           break;
         case 'emergency':
-          result = await graphQLService.emergencyStopAll();
+          result = await apiService.emergencyStopAll();
           break;
         case 'lockdown':
-          result = await graphQLService.lockdownAllScreens();
+          result = await apiService.lockdownAllScreens();
           break;
         case 'unlock':
-          result = await graphQLService.unlockAllScreens();
+          result = await apiService.unlockAllScreens();
           break;
         default:
           throw new Error('Unknown action');
@@ -516,22 +524,22 @@ const AdminAdsControl: React.FC = () => {
       
       switch (action) {
         case 'metrics':
-          result = await graphQLService.updateScreenMetrics(deviceId, value);
+          result = await apiService.updateScreenMetrics(deviceId, value);
           break;
         case 'start-session':
-          result = await graphQLService.startScreenSession(deviceId);
+          result = await apiService.startScreenSession(deviceId);
           break;
         case 'end-session':
-          result = await graphQLService.endScreenSession(deviceId);
+          result = await apiService.endScreenSession(deviceId);
           break;
         case 'track-ad':
-          result = await graphQLService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
+          result = await apiService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
           break;
         case 'end-ad':
-          result = await graphQLService.endAdPlayback(deviceId);
+          result = await apiService.endAdPlayback(deviceId);
           break;
         case 'driver-activity':
-          result = await graphQLService.updateDriverActivity(deviceId, value);
+          result = await apiService.updateDriverActivity(deviceId, value);
           break;
         default:
           throw new Error('Unknown action');

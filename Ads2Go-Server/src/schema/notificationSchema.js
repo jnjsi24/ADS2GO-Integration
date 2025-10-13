@@ -81,7 +81,7 @@ const notificationTypeDefs = gql`
     status: String!
     createdAt: String!
     user: User
-    materialId: ID
+    materialId: [ID]
     planId: ID
   }
 

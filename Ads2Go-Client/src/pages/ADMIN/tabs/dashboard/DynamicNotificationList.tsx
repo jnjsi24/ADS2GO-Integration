@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, ArrowUpRight, RefreshCw, CheckSquare, Square, AlertTriangle, DollarSign, Users, FileText } from 'lucide-react';
 import { motion, type Transition } from 'framer-motion';
 import { useQuery, useMutation } from '@apollo/client';
@@ -62,12 +62,16 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
   const [isSelectMode, setIsSelectMode] = useState(false);
 
   // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
     pollInterval: 30000,
-    onError: (error) => {
-      console.error('Error fetching notifications:', error);
-    }
   });
+
+  // Handle query errors
+  useEffect(() => {
+    if (notificationsError) {
+      console.error('Error fetching notifications:', notificationsError);
+    }
+  }, [notificationsError]);
 
   // Mark notification as read
   const [markAsRead] = useMutation(MARK_NOTIFICATION_READ, {

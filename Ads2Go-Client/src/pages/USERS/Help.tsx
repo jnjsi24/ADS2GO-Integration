@@ -221,7 +221,7 @@ const Help: React.FC = () => {
         .faq-closed { max-height: 0; }
       `}</style>
   
-      <main className="mx-auto p-6 space-y-12 max-w-7xl" aria-live="polite">
+      <main className="mx-auto p-6 space-y-10 max-w-7xl" aria-live="polite">
         {/* Hero Section */}
         <section className="relative overflow-hidden">
           <div className="relative px-8 py-16">
@@ -276,6 +276,16 @@ const Help: React.FC = () => {
             </div>
           </div>
         </section>
+        
+        {/* User Reports Section */}
+        {showUserReports && (
+          <section className="bg-white/80 shadow-md p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">Your Support Tickets</h2>
+            </div>
+            <UserReportsList />
+          </section>
+        )}
 
         {/* Support Options */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -321,19 +331,6 @@ const Help: React.FC = () => {
             </div>
           </div>
         </section>
-
-        {/* User Reports Section */}
-        {showUserReports && (
-          <section className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <List className="w-6 h-6 text-[#3674B5]" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800">Your Support Tickets</h2>
-            </div>
-            <UserReportsList />
-          </section>
-        )}
 
         {/* FAQ Section */}
         <section className="pt-10">

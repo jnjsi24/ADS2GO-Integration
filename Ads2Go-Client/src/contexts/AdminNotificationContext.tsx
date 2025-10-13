@@ -51,23 +51,27 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const { admin, isAuthenticated } = useAdminAuth();
 
   // Fetch admin notification preferences (skip for SuperAdmins)
-  const { data: preferencesData } = useQuery(GET_ADMIN_NOTIFICATION_PREFERENCES, {
+  const { data: preferencesData, error: preferencesError } = useQuery(GET_ADMIN_NOTIFICATION_PREFERENCES, {
     skip: !isAuthenticated || !admin || admin.role === 'SUPERADMIN',
-    onCompleted: (data) => {
-      console.log('🔔 AdminNotificationContext: Preferences loaded:', data);
-      console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(data, null, 2));
-      if (data?.getAdminNotificationPreferences) {
-        console.log('🔔 AdminNotificationContext: Setting enableNotificationBadge to:', data.getAdminNotificationPreferences.enableNotificationBadge);
-        setEnableNotificationBadge(data.getAdminNotificationPreferences.enableNotificationBadge);
-      } else {
-        console.log('🔔 AdminNotificationContext: No preferences data found, keeping default:', enableNotificationBadge);
-      }
-    },
-    onError: (error) => {
-      console.error('❌ AdminNotificationContext: Error fetching preferences:', error);
+  });
+
+  // Handle preferences data changes
+  useEffect(() => {
+    if (preferencesData?.getAdminNotificationPreferences) {
+      console.log('🔔 AdminNotificationContext: Preferences loaded:', preferencesData);
+      console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(preferencesData, null, 2));
+      console.log('🔔 AdminNotificationContext: Setting enableNotificationBadge to:', preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
+      setEnableNotificationBadge(preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
+    }
+  }, [preferencesData]);
+
+  // Handle preferences errors
+  useEffect(() => {
+    if (preferencesError) {
+      console.error('❌ AdminNotificationContext: Error fetching preferences:', preferencesError);
       // Keep default value (true) if there's an error
     }
-  });
+  }, [preferencesError]);
 
   // Fetch admin notifications
   const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_NOTIFICATIONS, {

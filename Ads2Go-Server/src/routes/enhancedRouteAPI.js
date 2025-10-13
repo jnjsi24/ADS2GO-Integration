@@ -62,8 +62,37 @@ router.get('/route/:materialId', async (req, res) => {
     let totalQRScans = 0;
     let totalHoursOnline = 0;
 
-    // Process daily data
-    deviceData.dailyData.forEach(dailyRecord => {
+    // Filter dailyData to only include the selected date(s)
+    let filteredDailyData = deviceData.dailyData;
+    
+    if (date) {
+      // Single date filter
+      const targetDate = new Date(date);
+      targetDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(targetDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
+        const recordDate = new Date(dailyRecord.date);
+        return recordDate >= targetDate && recordDate < nextDay;
+      });
+      
+      console.log(`🗓️ [Enhanced Route API] Filtering for date ${date}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
+    } else if (startDate && endDate) {
+      // Date range filter
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      
+      filteredDailyData = deviceData.dailyData.filter(dailyRecord => {
+        const recordDate = new Date(dailyRecord.date);
+        return recordDate >= start && recordDate <= end;
+      });
+      
+      console.log(`🗓️ [Enhanced Route API] Filtering for range ${startDate} to ${endDate}: Found ${filteredDailyData.length} matching day(s) out of ${deviceData.dailyData.length} total days`);
+    }
+
+    // Process filtered daily data
+    filteredDailyData.forEach(dailyRecord => {
       if (dailyRecord.locationHistory && dailyRecord.locationHistory.length > 0) {
         // Use advanced GPS cleaning for better accuracy
         const cleanedPoints = GPSValidation.cleanGPSData(dailyRecord.locationHistory, {
@@ -174,10 +203,10 @@ router.get('/route/:materialId', async (req, res) => {
         metadata: {
           generatedAt: new Date().toISOString(),
           dataSource: 'DeviceDataHistoryV2',
-          totalDays: deviceData.dailyData.length,
+          totalDays: filteredDailyData.length,
           dateRange: {
-            start: deviceData.dailyData[0]?.date,
-            end: deviceData.dailyData[deviceData.dailyData.length - 1]?.date
+            start: filteredDailyData[0]?.date,
+            end: filteredDailyData[filteredDailyData.length - 1]?.date
           }
         }
       }
