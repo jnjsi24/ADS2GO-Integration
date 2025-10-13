@@ -168,6 +168,22 @@ const typeDefs = gql`
     dailyStats: [String]
   }
 
+  """
+  Screen control response
+  """
+  type SyncResult {
+    materialId: String
+    syncedDevices: Int
+    totalDevices: Int
+  }
+
+  type ScreenControlResponse {
+    success: Boolean
+    message: String
+    pausedCount: Int
+    syncResults: [SyncResult]
+  }
+
   type Query {
     """
     Get all screens with optional filtering
@@ -219,22 +235,22 @@ const typeDefs = gql`
     """
     Sync all screens
     """
-    syncAllScreens: String
+    syncAllScreens: ScreenControlResponse
 
     """
     Play all screens
     """
-    playAllScreens: String
+    playAllScreens: ScreenControlResponse
 
     """
     Pause all screens
     """
-    pauseAllScreens: String
+    pauseAllScreens: ScreenControlResponse
 
     """
     Stop all screens
     """
-    stopAllScreens: String
+    stopAllScreens: ScreenControlResponse
 
     """
     Restart all screens
@@ -249,12 +265,12 @@ const typeDefs = gql`
     """
     Lockdown all screens
     """
-    lockdownAllScreens: String
+    lockdownAllScreens: ScreenControlResponse
 
     """
     Unlock all screens
     """
-    unlockAllScreens: String
+    unlockAllScreens: ScreenControlResponse
 
     """
     Update screen metrics

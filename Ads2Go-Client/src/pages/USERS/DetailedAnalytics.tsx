@@ -606,8 +606,16 @@ const DetailedAnalytics: React.FC = () => {
   // Memoized chart data transformations for performance
   const performanceChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        impressions: day.impressions || 0,
+        adsPlayed: day.adsPlayed || 0,
+        qrScans: day.qrScans || 0,
+        completionRate: day.completionRate || 0,
+        revenue: 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -620,12 +628,16 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return analyticsData?.getUserAnalytics?.dailyStats || weeklyData;
     }
-  }, [selectedDevice, deviceAnalytics, analyticsData]);
+  }, [selectedDevice, deviceAnalytics, analyticsData, weeklyData]);
 
   const qrScansChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        qrScans: day.qrScans || 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -833,31 +845,39 @@ const DetailedAnalytics: React.FC = () => {
             </AnimatePresence>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={350}>
           <ComposedChart data={performanceChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <defs>
+              <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#1b5087" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#1b5087" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis 
               dataKey="date" 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: '#666' }}
               tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12, fill: '#666' }} />
             <Tooltip 
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
               labelFormatter={(value) => new Date(value).toLocaleDateString()}
               formatter={(value, name) => [
-                name === 'impressions' ? value.toLocaleString() : 
                 name === 'adsPlayed' ? value.toLocaleString() : 
                 name === 'qrScans' ? value.toLocaleString() :
-                name === 'revenue' ? `$${value}` :
                 `${value}%`,
-                name === 'impressions' ? 'Impressions' :
                 name === 'adsPlayed' ? 'Plays' : 
-                name === 'qrScans' ? 'QR Scans' :
-                name === 'revenue' ? 'Revenue' : 'Completion Rate'
+                name === 'qrScans' ? 'QR Scans' : 'Completion Rate'
               ]}
             />
-            <Bar dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} fill="#1b5087" />
-            <Line type="monotone" dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} stroke="#3674B5" strokeWidth={2} />
+            <Area 
+              type="monotone" 
+              dataKey={selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : 'completionRate'} 
+              fill="url(#colorMetric)" 
+              stroke="#1b5087" 
+              strokeWidth={3}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -912,27 +932,38 @@ const DetailedAnalytics: React.FC = () => {
       <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Time Analysis</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Daily Display Time</h4>
+          <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#1b5087]" />
+              Daily Display Time
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']} />
-                <Bar dataKey="completion" fill="#1b5087" name="Display Time (hours)" />
+                <Tooltip 
+                  formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#1b5087" radius={[8, 8, 0, 0]} name="Display Time (hours)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Device Performance</h4>
+          <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-lg border border-green-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+              Device Completion Rate
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={devicePerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="completion" fill="#3674B5" name="Completion Rate %" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#10b981" radius={[8, 8, 0, 0]} name="Completion Rate %" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1559,8 +1590,6 @@ const DetailedAnalytics: React.FC = () => {
         <div className="flex overflow-x-auto">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'performance', label: 'Performance', icon: TrendingUp },
-            { id: 'impressions', label: 'Impressions', icon: Eye },
             { id: 'display', label: 'Display Time', icon: Clock },
             { id: 'qr', label: 'QR Impressions', icon: Target },
             { id: 'tablets', label: 'Tablet Activity', icon: Users },
@@ -1572,7 +1601,7 @@ const DetailedAnalytics: React.FC = () => {
               className={`relative flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors group
                 ${selectedView === id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-5 h-5 transition-transform duration-200 ${selectedView === id ? 'scale-110' : 'group-hover:scale-105'}`} />
               {label}
               {/* Animated underline */}
               <span
@@ -1587,8 +1616,6 @@ const DetailedAnalytics: React.FC = () => {
 
       {/* Content based on selected view */}
       {selectedView === 'overview' && renderOverviewSection()}
-      {selectedView === 'performance' && renderOverviewSection()}
-      {selectedView === 'impressions' && renderImpressionsSection()}
       {selectedView === 'display' && renderDisplayTimeSection()}
       {selectedView === 'qr' && renderQRSection()}
       {selectedView === 'tablets' && renderTabletActivitySection()}

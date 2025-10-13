@@ -314,31 +314,53 @@ class OfflineQueueService {
 
   // Send queued ad playback to server
   private async sendQueuedAdPlayback(item: QueuedAdPlayback) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+    
+    // Get registration data to include deviceId
+    const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
+    const registration = await tabletRegistrationService.getRegistrationData();
+    
+    // Use the actual slot number from registration instead of the queued item
+    const actualSlotNumber = registration?.slotNumber || item.slotNumber;
+    
+    console.log(`🔍 [OfflineQueue] Sending ad playback: ${item.adTitle}`);
+    console.log(`🔍 [OfflineQueue] DeviceId: ${registration?.deviceId}`);
+    console.log(`🔍 [OfflineQueue] Queued slotNumber: ${item.slotNumber}`);
+    console.log(`🔍 [OfflineQueue] Registration slotNumber: ${registration?.slotNumber}`);
+    console.log(`🔍 [OfflineQueue] Using deviceSlot: ${actualSlotNumber}`);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {
+      const response = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          deviceId: registration?.deviceId || await tabletRegistrationService.generateDeviceId(),
+          deviceSlot: actualSlotNumber, // Use actual slot number from registration
           adId: item.adId,
           adTitle: item.adTitle,
           adDuration: item.adDuration,
-          startTime: item.startTime,
-          endTime: item.endTime,
-          viewTime: item.viewTime,
-          completionRate: item.completionRate,
-          impressions: item.impressions,
-          slotNumber: item.slotNumber,
-          isOffline: item.isOffline,
-          queuedTimestamp: item.timestamp
+          viewTime: item.viewTime
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Handle specific error cases
+        if (response.status === 400) {
+          const errorText = await response.text();
+          console.error(`❌ [OfflineQueue] Bad request (400) for ad playback ${item.id}:`, errorText);
+          throw new Error(`Bad request (400): ${errorText}`);
+        } else if (response.status === 502) {
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable (502) for ad playback ${item.id} - will retry later`);
+          throw new Error(`Server temporarily unavailable (502)`);
+        } else if (response.status >= 500) {
+          console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for ad playback ${item.id} - will retry later`);
+          throw new Error(`Server error (${response.status})`);
+        } else {
+          console.error(`❌ [OfflineQueue] Client error (${response.status}) for ad playback ${item.id}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
 
              // Only log successful sends occasionally to reduce noise
@@ -353,34 +375,43 @@ class OfflineQueueService {
 
   // Send queued location data to server
   private async sendQueuedLocationData(item: QueuedLocationData) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
     
     // Get registration data to include deviceId and materialId
     const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
     const registration = await tabletRegistrationService.getRegistrationData();
     
     try {
-      const response = await fetch(`${API_BASE_URL}/offlineQueue/location-data`, {
+      const response = await fetch(`${API_BASE_URL}/deviceTracking/location-update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          deviceId: registration?.deviceId,
+          materialId: registration?.materialId,
+          deviceSlot: registration?.slotNumber,
+          carGroupId: registration?.carGroupId,
           lat: item.lat,
           lng: item.lng,
           speed: item.speed,
           heading: item.heading,
-          accuracy: item.accuracy,
-          isOffline: item.isOffline,
-          queuedTimestamp: item.timestamp,
-          deviceId: registration?.deviceId,
-          materialId: registration?.materialId,
-          deviceSlot: registration?.slotNumber
+          accuracy: item.accuracy
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Handle specific error cases
+        if (response.status === 502) {
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable (502) for location data ${item.id} - will retry later`);
+          throw new Error(`Server temporarily unavailable (502)`);
+        } else if (response.status >= 500) {
+          console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for location data ${item.id} - will retry later`);
+          throw new Error(`Server error (${response.status})`);
+        } else {
+          console.error(`❌ [OfflineQueue] Client error (${response.status}) for location data ${item.id}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
 
              // Only log successful sends occasionally to reduce noise
@@ -395,24 +426,51 @@ class OfflineQueueService {
 
   // Send queued device status to server
   private async sendQueuedDeviceStatus(item: QueuedDeviceStatus) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+    
+    // Get registration data to include deviceId and deviceSlot
+    const tabletRegistrationService = (await import('./tabletRegistration')).TabletRegistrationService.getInstance();
+    const registration = await tabletRegistrationService.getRegistrationData();
     
     try {
-      const response = await fetch(`${API_BASE_URL}/offlineQueue/device-status`, {
+      const response = await fetch(`${API_BASE_URL}/deviceTracking/status-update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          deviceId: registration?.deviceId || await tabletRegistrationService.generateDeviceId(),
+          deviceSlot: registration?.slotNumber || 1,
           isOnline: item.isOnline,
-          lastSeen: item.lastSeen,
-          isOffline: item.isOffline,
-          queuedTimestamp: item.timestamp
+          deviceInfo: {
+            platform: 'mobile',
+            lastSeen: item.lastSeen,
+            isOffline: item.isOffline,
+            queuedTimestamp: item.timestamp
+          },
+          networkStatus: item.isOnline ? 'online' : 'offline'
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Handle specific error cases
+        if (response.status === 400) {
+          const errorText = await response.text();
+          console.error(`❌ [OfflineQueue] Bad request (400) for device status ${item.id}:`, errorText);
+          throw new Error(`Bad request (400): ${errorText}`);
+        } else if (response.status === 404) {
+          console.warn(`⚠️ [OfflineQueue] Device not found (404) for device status ${item.id} - device may need registration`);
+          throw new Error(`Device not found (404)`);
+        } else if (response.status === 502) {
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable (502) for device status ${item.id} - will retry later`);
+          throw new Error(`Server temporarily unavailable (502)`);
+        } else if (response.status >= 500) {
+          console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for device status ${item.id} - will retry later`);
+          throw new Error(`Server error (${response.status})`);
+        } else {
+          console.error(`❌ [OfflineQueue] Client error (${response.status}) for device status ${item.id}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
 
              // Only log successful sends occasionally to reduce noise
@@ -427,10 +485,10 @@ class OfflineQueueService {
 
   // Send queued QR scan to server
   private async sendQueuedQRScan(item: QueuedQRScan) {
-    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+    const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
     
     try {
-      const response = await fetch(`${API_BASE_URL}/offlineQueue/qr-scan`, {
+      const response = await fetch(`${API_BASE_URL}/deviceTracking/qr-scan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import API_CONFIG from '../../config/api';
+import ReportIssueModal from '../../components/ReportIssueModal';
 
 interface DriverProfile {
   driverId: string;
@@ -66,6 +67,7 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const router = useRouter();
   const { signOut } = useAuth();
 
@@ -211,6 +213,7 @@ export default function ProfileScreen() {
   }
 
   return (
+    <>
     <ScrollView 
       style={styles.container}
       refreshControl={
@@ -358,6 +361,12 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Report Issue Button */}
+      <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportModal(true)}>
+        <Ionicons name="mail-outline" size={20} color="#3b82f6" />
+        <Text style={styles.reportText}>Report an Issue</Text>
+      </TouchableOpacity>
+
       {/* Sign Out Button */}
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={20} color="#ef4444" />
@@ -367,6 +376,13 @@ export default function ProfileScreen() {
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
     </ScrollView>
+
+    {/* Report Issue Modal */}
+    <ReportIssueModal
+      visible={showReportModal}
+      onClose={() => setShowReportModal(false)}
+    />
+  </>
   );
 }
 
@@ -554,6 +570,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     fontWeight: '500',
+  },
+  reportButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  reportText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginLeft: 8,
   },
   signOutButton: {
     flexDirection: 'row',

@@ -18,6 +18,7 @@ import {
   User,
   Menu,
   X,
+  Database,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -80,6 +81,7 @@ const AdminSidebar: React.FC = () => {
     { label: 'Screen Control', path: '/admin/ads', icon: <Megaphone size={20} /> },
     { label: 'Newsletter', path: '/admin/newsletter', icon: <Mail size={20} /> },
     { label: 'Reports', path: '/admin/reports', icon: <FileText size={20} /> },
+    { label: 'Device Data History', path: '/admin/device-data-history', icon: <Database size={20} /> },
     { label: 'FAQs', path: '/admin/faq', icon: <HelpCircle size={20} /> },
   ];
 

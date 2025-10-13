@@ -236,10 +236,23 @@ const Dashboard: React.FC = () => {
       });
 
       if (!dailyResponse.ok) {
-        if (!silent) {
-          console.error('❌ HTTP error:', dailyResponse.status, dailyResponse.statusText);
+        // Handle 404 gracefully - device may have been unregistered
+        if (dailyResponse.status === 404) {
+          if (!silent) {
+            console.log('ℹ️ No device tracking found - device may not be registered yet or was unregistered');
+          }
+          setAnalytics(null);
+          setLoading(false);
+          return;
         }
-        throw new Error(`HTTP error! status: ${dailyResponse.status}`);
+        
+        // For other errors, log but don't crash
+        if (!silent) {
+          console.warn(`⚠️ Analytics endpoint returned status: ${dailyResponse.status}`);
+        }
+        setAnalytics(null);
+        setLoading(false);
+        return;
       }
 
       const screenTrackingData = await dailyResponse.json();
@@ -325,14 +338,9 @@ const Dashboard: React.FC = () => {
         throw new Error(screenTrackingData.message || 'Failed to fetch analytics');
       }
     } catch (error) {
-      console.error('Error fetching driver analytics:', error);
-      if (!silent) {
-        Alert.alert(
-          'Error',
-          'Failed to load analytics data. Please check your connection and try again.',
-          [{ text: 'OK' }]
-        );
-      }
+      console.log('ℹ️ Could not fetch driver analytics - this is normal if device is not registered');
+      setAnalytics(null);
+      // Don't show alert - this is expected behavior when device is unregistered
     } finally {
       if (silent) {
         setRefreshing(false);
@@ -553,9 +561,19 @@ const Dashboard: React.FC = () => {
 
   if (!analytics) {
     return (
-      <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
-        <Text style={styles.errorText}>Failed to load analytics</Text>
+      <View style={styles.noDeviceContainer}>
+        <View style={styles.noDeviceContent}>
+          <View style={styles.noDeviceIconContainer}>
+            <Ionicons name="information-circle-outline" size={64} color="#6b7280" />
+          </View>
+          <Text style={styles.noDeviceTitle}>No Device Registered</Text>
+          <Text style={styles.noDeviceMessage}>
+            Your device is not currently registered or has been unregistered by an administrator.
+          </Text>
+          <Text style={styles.noDeviceHint}>
+            Please contact support if you need assistance with device registration.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -804,6 +822,51 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#ef4444',
+  },
+  noDeviceContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 20,
+  },
+  noDeviceContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  noDeviceIconContainer: {
+    marginBottom: 20,
+  },
+  noDeviceTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noDeviceMessage: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  noDeviceHint: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 
   // Header

@@ -190,25 +190,37 @@ const Materials: React.FC = () => {
       }
     },
     errorPolicy: 'all',
-    onCompleted: (data) => {
-      console.log('Materials data loaded:', data);
-    },
-    onError: (error) => {
-      console.error('Error loading materials:', error);
-    }
   });
 
-  const { data: driversData, loading: driversLoading } = useQuery(GET_DRIVERS_FOR_MATERIALS, {
+  // Handle data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (data) {
+      console.log('Materials data loaded:', data);
+    }
+  }, [data]);
+
+  // Handle errors with useEffect instead of onError
+  useEffect(() => {
+    if (error) {
+      console.error('Error loading materials:', error);
+    }
+  }, [error]);
+
+  const { data: driversData, loading: driversLoading, error: driversError } = useQuery(GET_DRIVERS_FOR_MATERIALS, {
     context: {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }
     },
     errorPolicy: 'all',
-    onError: (error) => {
-      console.error('Error loading drivers:', error);
-    }
   });
+
+  // Handle drivers errors with useEffect instead of onError
+  useEffect(() => {
+    if (driversError) {
+      console.error('Error loading drivers:', driversError);
+    }
+  }, [driversError]);
 
   const [createMaterial, { loading: creating }] = useMutation(CREATE_MATERIAL, {
     context: {
@@ -273,13 +285,21 @@ const Materials: React.FC = () => {
     skip: !selectedTabletMaterialId,
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network',
-    onCompleted: (data) => {
-      console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data });
-    },
-    onError: (error) => {
-      console.error('Error loading tablets:', error);
-    }
   });
+
+  // Handle tablet data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (tabletData) {
+      console.log('Tablet query completed:', { materialId: selectedTabletMaterialId, data: tabletData });
+    }
+  }, [tabletData, selectedTabletMaterialId]);
+
+  // Handle tablet errors with useEffect instead of onError
+  useEffect(() => {
+    if (tabletError) {
+      console.error('Error loading tablets:', tabletError);
+    }
+  }, [tabletError]);
 
   // Tablet connection status query hook
   const { data: connectionStatusData, loading: connectionStatusLoading, error: connectionStatusError, refetch: refetchConnectionStatus } = useQuery(GET_TABLET_CONNECTION_STATUS, {
@@ -296,13 +316,21 @@ const Materials: React.FC = () => {
     skip: !selectedTabletMaterialId || !selectedTabletSlotNumber,
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network',
-    onCompleted: (data) => {
-      console.log('Connection status query completed:', { materialId: selectedTabletMaterialId, slotNumber: selectedTabletSlotNumber, data });
-    },
-    onError: (error) => {
-      console.error('Error loading tablet connection status:', error);
-    }
   });
+
+  // Handle connection status data loading with useEffect instead of onCompleted
+  useEffect(() => {
+    if (connectionStatusData) {
+      console.log('Connection status query completed:', { materialId: selectedTabletMaterialId, slotNumber: selectedTabletSlotNumber, data: connectionStatusData });
+    }
+  }, [connectionStatusData, selectedTabletMaterialId, selectedTabletSlotNumber]);
+
+  // Handle connection status errors with useEffect instead of onError
+  useEffect(() => {
+    if (connectionStatusError) {
+      console.error('Error loading tablet connection status:', connectionStatusError);
+    }
+  }, [connectionStatusError]);
 
   // Get connection status for both slots of a material
   const getSlotConnectionStatus = (materialId: string, slotNumber: number) => {

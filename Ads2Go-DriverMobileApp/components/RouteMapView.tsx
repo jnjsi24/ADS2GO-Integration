@@ -17,12 +17,20 @@ interface RoutePoint {
 interface RouteMapViewProps {
   route: RoutePoint[];
   style?: any;
+  showSpeedColors?: boolean;
+  showWaypoints?: boolean;
 }
 
-const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
+const RouteMapView: React.FC<RouteMapViewProps> = ({ 
+  route, 
+  style, 
+  showSpeedColors = false,
+  showWaypoints = false 
+}) => {
   // Always show the map, even with no data
   const routeData = route || [];
   console.log('🗺️ RouteMapView received route data:', routeData.length, 'points');
+  console.log('🎨 Speed colors:', showSpeedColors, 'Waypoints:', showWaypoints);
 
   // Create the HTML for the map using Leaflet (OpenStreetMap)
   const mapHtml = `
@@ -76,17 +84,32 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
       
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <script>
+        // Speed color calculation (Strava-style)
+        function getSpeedColor(speed) {
+          // Speed ranges in km/h
+          if (speed < 10) return '#22c55e';      // Green - slow
+          if (speed < 30) return '#84cc16';      // Light green
+          if (speed < 50) return '#eab308';      // Yellow
+          if (speed < 70) return '#f97316';      // Orange
+          if (speed < 90) return '#ef4444';      // Red
+          return '#dc2626';                       // Dark red - very fast
+        }
+
         // Initialize map
         function initMap() {
           const routePoints = ${JSON.stringify(routeData)};
-          console.log('🗺️ Initializing Leaflet map with', routePoints.length, 'points');
+          const showSpeedColors = ${showSpeedColors};
+          const showWaypoints = ${showWaypoints};
           
-          // Default center point (San Francisco) if no route data
+          console.log('🗺️ Initializing Leaflet map with', routePoints.length, 'points');
+          console.log('🎨 Speed colors:', showSpeedColors, 'Waypoints:', showWaypoints);
+          
+          // Default center point (Manila, Philippines) if no route data
           let centerLat, centerLng;
           if (routePoints.length === 0) {
-            console.log('🗺️ No route points - using default center');
-            centerLat = 37.7749;
-            centerLng = -122.4194;
+            console.log('🗺️ No route points - using Manila as default center');
+            centerLat = 14.5995;
+            centerLng = 120.9842;
           } else {
             // Calculate center point from route data
             centerLat = routePoints.reduce((sum, point) => sum + point.lat, 0) / routePoints.length;
@@ -105,23 +128,48 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
             maxZoom: 19
           }).addTo(map);
           
-          // Create route polyline only if we have route points
+          // Create route polyline(s) only if we have route points
           if (routePoints.length > 0) {
-            console.log('🗺️ Creating route polyline with', routePoints.length, 'points');
-            const routePath = routePoints.map(point => [point.lat, point.lng]);
+            console.log('🗺️ Creating route with', routePoints.length, 'points');
             
-            const routePolyline = L.polyline(routePath, {
-              color: '#3b82f6',
-              weight: 4,
-              opacity: 0.8,
-              smoothFactor: 1
-            }).addTo(map);
+            if (showSpeedColors && routePoints.length > 1) {
+              // Create speed-colored segments (Strava-style)
+              console.log('🎨 Creating speed-colored segments');
+              for (let i = 0; i < routePoints.length - 1; i++) {
+                const start = routePoints[i];
+                const end = routePoints[i + 1];
+                const avgSpeed = (start.speed + end.speed) / 2;
+                const color = getSpeedColor(avgSpeed);
+                
+                L.polyline(
+                  [[start.lat, start.lng], [end.lat, end.lng]], 
+                  {
+                    color: color,
+                    weight: 4,
+                    opacity: 0.8,
+                    smoothFactor: 1
+                  }
+                ).addTo(map);
+              }
+            } else {
+              // Single blue polyline
+              console.log('🗺️ Creating single blue polyline');
+              const routePath = routePoints.map(point => [point.lat, point.lng]);
+              L.polyline(routePath, {
+                color: '#3b82f6',
+                weight: 4,
+                opacity: 0.8,
+                smoothFactor: 1
+              }).addTo(map);
+            }
           } else {
             console.log('🗺️ No route points - showing empty map');
           }
           
           // Add markers and fit bounds only if we have route points
           if (routePoints.length > 0) {
+            const allMarkers = [];
+            
             // Add start marker
             const startMarker = L.marker([routePoints[0].lat, routePoints[0].lng], {
               icon: L.divIcon({
@@ -131,6 +179,7 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
                 iconAnchor: [10, 10]
               })
             }).addTo(map);
+            allMarkers.push(startMarker);
             
             const startPopup = L.popup({
               maxWidth: 250,
@@ -146,6 +195,33 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
             
             startMarker.bindPopup(startPopup);
             
+            // Add waypoint markers (every 10th point)
+            if (showWaypoints && routePoints.length > 10) {
+              console.log('📍 Adding waypoint markers');
+              for (let i = 10; i < routePoints.length - 1; i += 10) {
+                const point = routePoints[i];
+                const marker = L.circleMarker([point.lat, point.lng], {
+                  radius: 4,
+                  fillColor: getSpeedColor(point.speed),
+                  color: '#ffffff',
+                  weight: 2,
+                  opacity: 1,
+                  fillOpacity: 0.9
+                }).addTo(map);
+                
+                marker.bindPopup(\`
+                  <div style="padding: 8px;">
+                    <strong>Waypoint #\${Math.floor(i / 10)}</strong><br>
+                    <small>\${new Date(point.timestamp).toLocaleString()}</small><br>
+                    <small>Speed: \${point.speed.toFixed(1)} km/h</small><br>
+                    <small>\${point.address || point.lat.toFixed(6) + ', ' + point.lng.toFixed(6)}</small>
+                  </div>
+                \`);
+                
+                allMarkers.push(marker);
+              }
+            }
+            
             // Add end marker if there are multiple points
             if (routePoints.length > 1) {
               const endMarker = L.marker([routePoints[routePoints.length - 1].lat, routePoints[routePoints.length - 1].lng], {
@@ -156,6 +232,7 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
                   iconAnchor: [10, 10]
                 })
               }).addTo(map);
+              allMarkers.push(endMarker);
               
               const endPopup = L.popup({
                 maxWidth: 250,
@@ -171,8 +248,8 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ route, style }) => {
               
               endMarker.bindPopup(endPopup);
               
-              // Fit map to show the route
-              const group = new L.featureGroup([routePolyline]);
+              // Fit map to show the entire route
+              const group = new L.featureGroup(allMarkers);
               map.fitBounds(group.getBounds().pad(0.1));
             }
           }

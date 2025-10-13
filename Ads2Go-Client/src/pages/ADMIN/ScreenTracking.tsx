@@ -194,15 +194,16 @@ const ScreenTracking: React.FC = () => {
 
   // Auto-load historical route when screen is selected and historical tab is active
   useEffect(() => {
-    console.log('🔄 Tab/Selection changed:', { activeTab, selectedScreen: selectedScreen?.deviceId, selectedDate });
+    console.log('🔄 Tab/Selection changed:', { activeTab, selectedScreen: selectedScreen?.deviceId, selectedMaterial, selectedDate });
     
-    // Clear historical route data when switching to live tab or when no screen is selected
-    if (activeTab === 'live' || !selectedScreen) {
+    // Clear historical route data when switching to live tab or when no screen or material is selected
+    if (activeTab === 'live' || (!selectedScreen && selectedMaterial === 'all')) {
       console.log('🧹 Clearing historical route data');
       setHistoricalRouteData(null);
       return;
     }
     
+    // For historical tab with selected screen, fetch device-specific route
     if (activeTab === 'historical' && selectedScreen && selectedDate) {
       console.log('📡 Fetching historical route for:', selectedScreen.deviceId, 'on', selectedDate);
       // Clear previous data before fetching new data
@@ -210,7 +211,10 @@ const ScreenTracking: React.FC = () => {
       setClearMap(true); // Flag to clear map
       fetchHistoricalRoute(selectedScreen.deviceId, selectedDate);
     }
-  }, [activeTab, selectedScreen, selectedDate]);
+    
+    // Note: For material-only selection (no screens), the StravaStyleRouteMap component
+    // will fetch its own data directly from the API
+  }, [activeTab, selectedScreen, selectedMaterial, selectedDate]);
 
   // Debug: Log when historicalRouteData changes
   useEffect(() => {
@@ -385,7 +389,10 @@ const ScreenTracking: React.FC = () => {
     if (!screens) {
       console.log('No screens data available');
       setFilteredScreens([]);
-      setSelectedScreen(null); // Clear selection when no screens
+      // Don't clear selection if a material is selected - we may still want to show route data
+      if (selectedMaterial === 'all') {
+        setSelectedScreen(null);
+      }
       return;
     }
     
@@ -407,8 +414,12 @@ const ScreenTracking: React.FC = () => {
         setSelectedScreen(filtered[0]);
       }
     } else {
-      console.log('No screens available after filtering, clearing selection');
-      setSelectedScreen(null);
+      console.log('No screens available after filtering');
+      // Don't clear selection if a material is selected - we may still want to show route data
+      // Only clear if viewing all materials
+      if (selectedMaterial === 'all') {
+        setSelectedScreen(null);
+      }
     }
   }, [screens, selectedMaterial, selectedScreen]);
 
@@ -767,12 +778,22 @@ const ScreenTracking: React.FC = () => {
                     </div>
                   </div>
                 )}
-                {showMap && (
-                  activeTab === 'historical' && selectedScreen ? (
+                {showMap && (() => {
+                  // Determine if we should show the Strava-style map for historical data
+                  const shouldShowStravaMap = activeTab === 'historical' && (
+                    (selectedScreen && selectedScreen.materialId) || 
+                    (selectedMaterial !== 'all' && selectedMaterial)
+                  );
+                  
+                  // Get the material ID to use
+                  const mapMaterialId = selectedScreen?.materialId || selectedMaterial;
+                  
+                  return shouldShowStravaMap && mapMaterialId && mapMaterialId !== 'all' ? (
                     // Strava-style route visualization for historical data
-                    <>
+                    <div key={`strava-container-${mapMaterialId}-${selectedDate}`} className="h-full w-full">
                       <StravaStyleRouteMap
-                        materialId={selectedScreen.materialId || 'DGL-HEADDRESS-CAR-002'}
+                        key={`strava-map-${mapMaterialId}-${selectedDate}`}
+                        materialId={mapMaterialId}
                         date={selectedDate}
                         showSpeedColors={showSpeedColors}
                         showWaypoints={showWaypoints}
@@ -783,12 +804,13 @@ const ScreenTracking: React.FC = () => {
                         }}
                       />
                       {/* Debug info */}
-                      <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs">
-                        <div>Selected Screen: {selectedScreen?.deviceId}</div>
-                        <div>Material ID: {selectedScreen?.materialId || 'N/A'}</div>
+                      <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs z-[1000]">
+                        <div>Selected Screen: {selectedScreen?.deviceId || 'N/A'}</div>
+                        <div>Material ID: {mapMaterialId}</div>
                         <div>Date: {selectedDate}</div>
+                        <div>Filtered Screens: {filteredScreens?.length || 0}</div>
                       </div>
-                    </>
+                    </div>
                   ) : (
                     <MapView 
                       key={`map-${selectedDate}`}
@@ -1014,8 +1036,8 @@ const ScreenTracking: React.FC = () => {
                     </>
                   )}
                     </MapView>
-                  )
-                )}
+                  );
+                })()}
                 
                 {/* Historical Route Information - Only show for non-enhanced map */}
                 {activeTab === 'historical' && historicalRouteData && !(selectedScreen && historicalRouteData) && (
@@ -1059,7 +1081,7 @@ const ScreenTracking: React.FC = () => {
                 )}
 
                 {/* Show message when no historical data is available (Historical tab) */}
-                {activeTab === 'historical' && !loadingHistorical && !historicalRouteData && (
+                {activeTab === 'historical' && !loadingHistorical && !historicalRouteData && !selectedScreen && selectedMaterial === 'all' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-90">
                     <div className="text-center p-6">
                       <div className="text-gray-500 mb-2">
@@ -1067,10 +1089,10 @@ const ScreenTracking: React.FC = () => {
                       </div>
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No Historical Data</h3>
                       <p className="text-sm text-gray-600">
-                        Select a device and date to view historical routes.
+                        Select a material and date to view historical routes.
                       </p>
                       <p className="text-xs text-gray-500 mt-2">
-                        Available test dates: 2025-09-25, 2025-09-26, 2025-09-27, 2025-09-28, 2025-09-29
+                        Choose a material from the dropdown above to see route data for that date.
                       </p>
                     </div>
                   </div>

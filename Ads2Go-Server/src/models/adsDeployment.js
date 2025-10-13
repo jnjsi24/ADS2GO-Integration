@@ -9,6 +9,12 @@ const LCDSlotSchema = new mongoose.Schema({
     ref: 'Ad',
     required: true
   },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false, // Optional until migration runs
+    index: true
+  },
   slotNumber: {
     type: Number,
     min: 1,
@@ -90,6 +96,12 @@ const AdsDeploymentSchema = new mongoose.Schema({
       return this.lcdSlots.length === 0;
     }
   },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false, // Optional until migration runs
+    index: true
+  },
 
   // Deployment status and timing
   startTime: {
@@ -134,9 +146,12 @@ const AdsDeploymentSchema = new mongoose.Schema({
 
 // Indexes for efficient queries
 AdsDeploymentSchema.index({ adId: 1 });
+AdsDeploymentSchema.index({ userId: 1 });
 AdsDeploymentSchema.index({ driverId: 1 });
 AdsDeploymentSchema.index({ materialId: 1 });
 AdsDeploymentSchema.index({ 'lcdSlots.slotNumber': 1, materialId: 1 });
+AdsDeploymentSchema.index({ 'lcdSlots.userId': 1 });
+AdsDeploymentSchema.index({ materialId: 1, userId: 1 });
 
 // Generate unique deployment ID before saving
 AdsDeploymentSchema.pre('save', function(next) {
@@ -258,7 +273,7 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
 
     console.log(`ℹ️  Next available slot: ${nextSlot}`);
 
-    // Fetch the ad to get the mediaFile
+    // Fetch the ad to get the mediaFile and userId
     const Ad = require('./Ad');
     const ad = await Ad.findById(adId);
     if (!ad) {
@@ -268,6 +283,7 @@ AdsDeploymentSchema.statics.addToHEADDRESS = async function(materialId, driverId
     // Create new ad slot (this slot number is just for tracking, both tablet slots will use this ad)
     const newSlot = {
       adId,
+      userId: ad.userId,
       slotNumber: nextSlot,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
@@ -455,7 +471,7 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
 
     console.log(`ℹ️  Next available slot: ${nextSlot}`);
 
-    // Fetch the ad to get the mediaFile
+    // Fetch the ad to get the mediaFile and userId
     const Ad = require('./Ad');
     const ad = await Ad.findById(adId);
     if (!ad) {
@@ -465,6 +481,7 @@ AdsDeploymentSchema.statics.addToLCD = async function(materialId, driverId, adId
     // Create new ad slot
     const newSlot = {
       adId,
+      userId: ad.userId,
       slotNumber: nextSlot,
       startTime: new Date(startTime),
       endTime: new Date(endTime),
@@ -656,7 +673,7 @@ AdsDeploymentSchema.statics.reassignLCDSlots = async function(materialId) {
 };
 
 /**
- * Post-save hook to create analytics records when deployments are created
+ * Post-save hook to sync deployments to DeviceTracking and create analytics records
  */
 AdsDeploymentSchema.post('save', async function (doc) {
   // Skip if we're in a transaction to prevent conflicts
@@ -666,6 +683,39 @@ AdsDeploymentSchema.post('save', async function (doc) {
   }
 
   try {
+    // ====== SYNC DEPLOYED ADS TO DEVICE TRACKING ======
+    const DeviceTracking = require('./deviceTracking');
+    
+    // Sync deployedAds array to DeviceTracking
+    if (doc.lcdSlots && doc.lcdSlots.length > 0) {
+      const deployedAds = doc.lcdSlots.map(slot => ({
+        adId: slot.adId.toString(),
+        userId: slot.userId.toString(),
+        adTitle: slot.adTitle || '',
+        slotNumber: slot.slotNumber,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        status: slot.status,
+        mediaFile: slot.mediaFile,
+        deployedAt: slot.deployedAt,
+        deploymentId: doc._id
+      }));
+      
+      await DeviceTracking.updateOne(
+        { materialId: doc.materialId },
+        { 
+          $set: { 
+            deployedAds: deployedAds,
+            currentDeploymentId: doc._id,
+            lastDeploymentSync: new Date()
+          }
+        }
+      );
+      
+      console.log(`✅ Synced ${deployedAds.length} ads to DeviceTracking for ${doc.materialId}`);
+    }
+    // ====== END SYNC ======
+    
     const Analytics = require('./analytics');
     const Ad = require('./Ad');
     const Material = require('./Material');
