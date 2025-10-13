@@ -44,25 +44,42 @@ const Dashboard = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const { loading, error, data } = useQuery(GET_ADMIN_DETAILS, {
-    onCompleted: (data) => {
-      if (data?.getOwnAdminDetails) {
-        const admin = data.getOwnAdminDetails;
-        setAdminName(`${admin.firstName} ${admin.lastName}`);
-      }
-    },
-    onError: (error) => console.error("Error fetching admin details:", error),
-  });
+  const { loading, error, data } = useQuery(GET_ADMIN_DETAILS);
 
-  const { data: statsData, loading: statsLoading } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
+  const { data: statsData, loading: statsLoading, error: statsError } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
     pollInterval: 5000,
-    onError: (error) => console.error("Error fetching admin dashboard stats:", error),
   });
 
-  const { data: pendingAdsData, loading: pendingAdsLoading } = useQuery(GET_PENDING_ADS, {
+  const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
     pollInterval: 30000,
-    onError: (error) => console.error("Error fetching pending ads:", error),
   });
+
+  // Handle admin details data
+  useEffect(() => {
+    if (data?.getOwnAdminDetails) {
+      const admin = data.getOwnAdminDetails;
+      setAdminName(`${admin.firstName} ${admin.lastName}`);
+    }
+  }, [data]);
+
+  // Handle errors
+  useEffect(() => {
+    if (error) {
+      console.error("Error fetching admin details:", error);
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (statsError) {
+      console.error("Error fetching admin dashboard stats:", statsError);
+    }
+  }, [statsError]);
+
+  useEffect(() => {
+    if (pendingAdsError) {
+      console.error("Error fetching pending ads:", pendingAdsError);
+    }
+  }, [pendingAdsError]);
 
   if (loading || statsLoading || pendingAdsLoading) return <AdminLoader />;
 
