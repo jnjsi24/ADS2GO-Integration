@@ -29,6 +29,7 @@ export default function Home() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [newsletterMessage, setNewsletterMessage] = useState('');
+  const [pos, setPos] = useState({ x: 50, y: 50 });
 
   // State for contact form
   const [contactForm, setContactForm] = useState({
@@ -263,22 +264,6 @@ export default function Home() {
     }
   };
 
-  // Handle email form submission for the popup (legacy)
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setShowPopup(true);
-    setTimeout(() => setShowPopup(false), 3000);
-  };
-
-  // Modal handlers
-  const openModal = (modalName: keyof typeof modalStates) => {
-    setModalStates(prev => ({ ...prev, [modalName]: true }));
-  };
-
-  const closeModal = (modalName: keyof typeof modalStates) => {
-    setModalStates(prev => ({ ...prev, [modalName]: false }));
-  };
-
   return (
     <div className="min-h-screen relative">
       {/* Inline CSS for scroll animations */}
@@ -456,9 +441,9 @@ export default function Home() {
 
       <section
         ref={(el) => (sectionRefs.current[2] = el)}
-        className="section-hidden section-delay-3 bg-gray-50 py-8 sm:py-12"
+        className="section-hidden section-delay-3 bg-gray-50 py-8"
       >
-        <h2 className="text-2xl sm:text-3xl font-bold pt-6 sm:pt-10 text-center">Our Advertisers Partner</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold pt-2 text-center">Our Advertisers Partner</h2>
         <div className="max-w-6xl mx-auto px-4">
           <LogoLoop
             logos={techLogos}
@@ -564,22 +549,22 @@ export default function Home() {
         <div className="container mx-auto max-w-screen-xl">
           <div className="flex flex-col md:flex-row gap-6 sm:gap-8">
             <div className="md:w-1/2">
-              <h3 className="text-xl sm:text-2xl font-semibold mb-4 text-[#0C4A6E]">Get in Touch</h3>
+              <h3 className="text-xl sm:text-2xl font-semibold mb-4">Get in Touch</h3>
               <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
                 Have questions about our mobile advertising solutions or want to join as a driver? 
                 Reach out to our team, and we’ll get back to you as soon as possible. 
                 Your feedback and inquiries are important to us!
               </p>
-              <p className="text-sm sm:text-md text-[#475569]">
-                Email: <a href="mailto:support@ads2go.com" className="hover:text-[#F59E0B] transition-colors duration-300">support@ads2go.com</a><br />
-                Phone: <a href="tel:+1234567890" className="hover:text-[#F59E0B] transition-colors duration-300">+1 (234) 567-890</a>
+              <p className="text-sm sm:text-md">
+                Email: <a href="mailto:support@ads2go.com" className="transition-colors duration-300">support@ads2go.com</a><br />
+                Phone: <a href="tel:+1234567890" className="transition-colors duration-300">+1 (234) 567-890</a>
               </p>
             </div>
             <div className="md:w-1/2">
-              <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-left text-gray-900">Contact Us</h2>
-              <form onSubmit={handleNewsletterSubmit} className="bg-white p-4 sm:p-6 shadow-md">
+              <h3 className="text-xl font-semibold mb-2">Contact Us</h3>
+              <form onSubmit={handleNewsletterSubmit} className="mt-2">
                 <div className="mb-4">
-                  <label htmlFor="contact-name" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-name" className="block text-sm font-medium mb-1">
                     Name
                   </label>
                   <input
@@ -588,7 +573,7 @@ export default function Home() {
                     value={contactForm.name}
                     onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                     placeholder="Your name"
-                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                    className={`w-full p-2 pl-4 text-black focus:outline-none ${
                       contactStatus === 'error' && !contactForm.name.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
@@ -599,27 +584,27 @@ export default function Home() {
                   />
                 </div>
                 <div className="mb-4">
-                  <label htmlFor="contact-email" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-email" className="block text-sm font-medium mb-1">
                     Email
                   </label>
                   <input
                     id="contact-email"
                     type="email"
-                    value={contactForm.email}
-                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    value={newsletterEmail}
+                    onChange={(e) => setNewsletterEmail(e.target.value)}
                     placeholder="Your email address"
-                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none ${
-                      contactStatus === 'error' && !contactForm.email.trim() ? 'border-2 border-red-500' : ''
+                    className={`w-full p-2 pl-4 pr-10 text-black focus:outline-none ${
+                      newsletterStatus === 'error' && !newsletterEmail.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
                       WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
-                      WebkitTextFillColor: '#000000'
+                      WebkitTextFillColor: '#000000',
                     }}
-                    disabled={contactStatus === 'loading'}
+                    disabled={newsletterStatus === 'loading'}
                   />
                 </div>
                 <div className="mb-4">
-                  <label htmlFor="contact-message" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-message" className="block text-sm font-medium mb-1">
                     Message
                   </label>
                   <textarea
@@ -627,7 +612,7 @@ export default function Home() {
                     value={contactForm.message}
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     placeholder="Your message"
-                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none h-24 sm:h-32 resize-y ${
+                    className={`w-full p-2 pl-4 text-black focus:outline-none h-24 sm:h-32 resize-y ${
                       contactStatus === 'error' && !contactForm.message.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
@@ -637,86 +622,39 @@ export default function Home() {
                     disabled={contactStatus === 'loading'}
                   />
                 </div>
-                <div className="relative">
+                <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={contactStatus === 'loading'}
-                    className="px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold bg-[#3674B5] text-white hover:bg-[#1B5087] hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {contactStatus === 'loading' ? 'Sending...' : 'Send Message'}
-                  </button>
-                </div>
-                {contactMessage && (
-                  <div className={`mt-4 text-sm ${
-                    contactStatus === 'success' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {contactMessage}
-                  </div>
-                )}
-              </form>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <footer className="relative bg-gradient-to-br from-[#1B5087] to-[#3674B5] overflow-hidden text-white py-8 px-4">
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-0"></div>
-        <div className="relative z-10 container mx-auto max-w-screen-xl">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
-            <div>
-              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Ads2Go</h3>
-              <p className="pl-4 sm:pl-9 text-sm mb-2">Copyright © 2025 Ads2Go. All rights reserved.</p>
-            </div>
-            <div>
-              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Company</h3>
-              <ul className="pl-4 sm:pl-9 space-y-2">
-                <li>
-                  <button onClick={() => openModal('aboutUs')} className="hover:text-teal-400 text-left">
-                    About Us
-                  </button>
-                </li>
-                <li>
-                  <button onClick={() => openModal('blog')} className="hover:text-teal-400 text-left">
-                    Blog
-                  </button>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="pl-4 sm:pl-9 text-lg font-semibold mb-2">Support</h3>
-              <ul className="pl-4 sm:pl-9 space-y-2">
-                <li><Link to="/help" className="hover:text-teal-400">Help Center</Link></li>
-                <li>
-                  <button onClick={() => openModal('contactUs')} className="hover:text-teal-400 text-left">
-                    Contact Us
-                  </button>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Stay up to date</h3>
-              <form onSubmit={handleNewsletterSubmit} className="mt-2">
-                <div className="relative">
-                  <input
-                    type="email"
-                    placeholder="Your email address"
-                    value={newsletterEmail}
-                    onChange={(e) => setNewsletterEmail(e.target.value)}
-                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none ${
-                      newsletterStatus === 'error' ? 'border-2 border-red-500' : ''
-                    }`}
-                    style={{
-                      WebkitBoxShadow: '0 0 0 1000px #F1F5F9 inset',
-                      WebkitTextFillColor: '#000000',
+                    disabled={newsletterStatus === 'loading'}
+                    onMouseMove={(e) => {
+                      if (newsletterStatus === 'loading') return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = ((e.clientX - rect.left) / rect.width) * 100;
+                      const y = ((e.clientY - rect.top) / rect.height) * 100;
+                      setPos({ x, y });
                     }}
-                    disabled={newsletterStatus === 'loading'}
-                  />
-                  <button
-                    type="submit"
-                    disabled={newsletterStatus === 'loading'}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-black hover:text-teal-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`relative group inline-flex items-center justify-center overflow-hidden
+                                mt-6 py-2 rounded-md font-semibold text-white transition-all duration-300
+                                ${newsletterStatus === 'loading'
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "hover:scale-105"
+                                }`}
+                    style={newsletterStatus === 'loading' ? {} : {
+                      backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
+                                        radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+                    }}
                   >
-                    {newsletterStatus === 'loading' ? '⏳' : '➣'}
+                    <span className="inline-flex items-center gap-2 px-6">
+                      {newsletterStatus === 'loading' ? "Processing..." : "Send"}
+                    </span>
+                    {newsletterStatus !== 'loading' && (
+                      <span
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                        style={{
+                          background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                        }}
+                      />
+                    )}
                   </button>
                 </div>
                 {newsletterMessage && (
@@ -732,6 +670,46 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      <footer className="relative bg-gradient-to-br from-[#1B5087] to-[#3674B5] overflow-hidden text-white pt-6 px-4">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-0"></div>
+        <div className="relative z-10 container mx-auto max-w-screen-xl">
+          {/* Top Row: Logo + Description | Navigation Links */}
+          <div className="flex flex-col lg:flex-row justify-between items-center lg:items-start gap-8 mb-6">
+            {/* Left: Logo and Description */}
+            <div className="flex flex-col space-y-4 text-center lg:text-left">
+              <div className="flex items-center justify-center lg:justify-start gap-3">
+                <img 
+                  src="/image/Ads2GoLogoText.png" 
+                  alt="Ads2Go Logo" 
+                  className="h-12 w-32"
+                />
+              </div>
+              <p className="text-sm text-white/80 max-w-md mx-auto lg:mx-0">
+                Transforming advertising through innovative digital solutions. Reach your audience wherever they go with our dynamic ad platform.
+              </p>
+            </div>
+
+            {/* Right: Navigation Links - Horizontally aligned with logo */}
+            <div className="flex items-center justify-center lg:justify-end">
+              <div className="flex flex-col items-center lg:items-end gap-3">
+                {/* Navigation Links */}
+                <div className="flex flex-wrap justify-center lg:justify-end gap-4 mb-10">
+                  <button id="about-us" className="hover:text-white/70 text-lg">About</button>
+                  <button id="blog" className="hover:text-white/70 text-lg">Blog</button>
+                  <button id="help-center" className="hover:text-white/70 text-lg">Help Center</button>
+                  <button id="contact-us" className="hover:text-white/70 text-lg">Contact Us</button>
+                </div>
+
+                {/* Copyright (below navigation) */}
+                <div className="text-sm text-white/70 text-center lg:text-right">
+                  Copyright © 2025 Ads2Go. All rights reserved.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {showPopup && (
           <div className="fixed bottom-4 right-4 bg-[#DCFCE7] text-black p-3 rounded shadow-lg z-50 max-w-[90%] sm:max-w-md">
@@ -743,40 +721,6 @@ export default function Home() {
           </div>
         )}
       </footer>
-
-      {/* Modal Components */}
-      <AboutUsModal 
-        isOpen={modalStates.aboutUs} 
-        onClose={() => closeModal('aboutUs')} 
-      />
-      <ContactUsModal 
-        isOpen={modalStates.contactUs} 
-        onClose={() => closeModal('contactUs')} 
-      />
-      <PricingModal 
-        isOpen={modalStates.pricing} 
-        onClose={() => closeModal('pricing')} 
-      />
-      <TermsOfServiceModal 
-        isOpen={modalStates.termsOfService} 
-        onClose={() => closeModal('termsOfService')} 
-      />
-      <PrivacyPolicyModal 
-        isOpen={modalStates.privacyPolicy} 
-        onClose={() => closeModal('privacyPolicy')} 
-      />
-      <LegalModal 
-        isOpen={modalStates.legal} 
-        onClose={() => closeModal('legal')} 
-      />
-      <BlogModal 
-        isOpen={modalStates.blog} 
-        onClose={() => closeModal('blog')} 
-      />
-      <StatusModal 
-        isOpen={modalStates.status} 
-        onClose={() => closeModal('status')} 
-      />
     </div>
   );
 }

@@ -406,17 +406,17 @@ const FAQManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:pl-64 lg:pr-5">
       <div className="max-w-8xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
             <div className="flex items-center gap-3">
               <div>
                 <h1 className="text-3xl font-bold text-gray-800">FAQ Management</h1>
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
               <div className="relative w-40">
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
@@ -485,7 +485,7 @@ const FAQManagement: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end sm:justify-end mt-2 sm:mt-0">
             <button
               onClick={() => setIsCreateModalOpen(true)}
               className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
@@ -556,7 +556,7 @@ const FAQManagement: React.FC = () => {
                           draggedItem === faq.id ? 'opacity-50' : ''
                         }`}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
                               <GripVertical className="w-5 h-5 text-gray-400 cursor-move" />
@@ -575,7 +575,7 @@ const FAQManagement: React.FC = () => {
                             </div>
                             <h3 className="text-lg font-semibold text-gray-700 mb-2">{faq.question}</h3>
                           </div>
-                          <div className="flex items-center gap-2 ml-4">
+                          <div className="flex items-center gap-2 sm:ml-4 flex-wrap">
                             <button
                               onClick={() => setExpandedFAQ(expandedFAQ === faq.id ? null : faq.id)}
                               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
@@ -671,7 +671,7 @@ const FAQManagement: React.FC = () => {
         {/* Create FAQ Modal */}
         {isCreateModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-lg p-4 sm:p-6 w-[95%] sm:w-full max-w-xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold mb-4">Create New FAQ</h2>
               <form onSubmit={handleCreateFAQ} className="space-y-4">
                 <div>

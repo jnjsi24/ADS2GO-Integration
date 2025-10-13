@@ -411,9 +411,22 @@ router.post('/qr-scan', async (req, res) => {
     } else {
     }
     
+    // Get userId from Ad collection
+    const ad = await Ad.findById(adId).select('userId');
+    
+    if (!ad) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ad not found'
+      });
+    }
+    
+    const userId = ad.userId.toString();
+    
     // Create QR scan data
     const qrScanData = {
       adId: adId,
+      userId: userId,
       adTitle: adTitle || `Ad ${adId}`,
       materialId: materialId,
       slotNumber: parseInt(slotNumber),

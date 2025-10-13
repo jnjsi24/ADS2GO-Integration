@@ -1,4 +1,4 @@
-const ScreenTracking = require('../models/screenTracking');
+const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const { checkAuth } = require('../middleware/auth');
 
@@ -15,7 +15,7 @@ const resolvers = {
         const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
         
         // Mark devices as offline if lastSeen is older than 2 minutes
-        await ScreenTracking.updateMany(
+        await DeviceTracking.updateMany(
           { 
             'devices.isOnline': true,
             'devices.lastSeen': { $lt: twoMinutesAgo }
@@ -78,7 +78,7 @@ const resolvers = {
           if (filters.status === 'maintenance') query['screenMetrics.maintenanceMode'] = true;
         }
 
-        const screens = await ScreenTracking.find(query);
+        const screens = await DeviceTracking.find(query);
         
         // Auto-sync root isOnline with devices array before processing
         for (const screen of screens) {
@@ -291,7 +291,7 @@ const resolvers = {
       }
 
       try {
-        const screen = await ScreenTracking.findOne({ deviceId });
+        const screen = await DeviceTracking.findOne({ deviceId });
         if (!screen) {
           throw new Error('Screen not found');
         }
@@ -357,7 +357,7 @@ const resolvers = {
 
       try {
         // Get all screens for analytics
-        const screens = await ScreenTracking.find({});
+        const screens = await DeviceTracking.find({});
         
         const totalDevices = screens.length;
         const onlineDevices = screens.filter(s => s.isOnline).length;
@@ -417,7 +417,7 @@ const resolvers = {
       }
 
       try {
-        const screens = await ScreenTracking.find({});
+        const screens = await DeviceTracking.find({});
         return screens.map(screen => ({
           id: screen._id,
           deviceId: screen.deviceId,
@@ -474,7 +474,7 @@ const resolvers = {
       }
 
       try {
-        const screen = await ScreenTracking.findOne({ deviceId });
+        const screen = await DeviceTracking.findOne({ deviceId });
         if (!screen) {
           throw new Error('Device not found');
         }
@@ -500,28 +500,241 @@ const resolvers = {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens synced successfully' };
+      
+      try {
+        console.log('🔄 [SyncAll] Starting sync all command...');
+        
+        // Get the device status service instance
+        const deviceStatusService = require('../services/deviceStatusService');
+        console.log('🔄 [SyncAll] Device status service loaded');
+        
+        const service = deviceStatusService;
+        console.log('🔄 [SyncAll] Device status service instance obtained');
+        
+        // Group devices by material ID
+        const devicesByMaterial = new Map();
+        const activeConnections = service.activeConnections || new Map();
+        
+        console.log(`🔄 [SyncAll] Found ${activeConnections.size} active connections`);
+        
+        // Group playback connections by material ID
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
+            const materialId = ws.materialId;
+            if (materialId) {
+              if (!devicesByMaterial.has(materialId)) {
+                devicesByMaterial.set(materialId, []);
+              }
+              devicesByMaterial.get(materialId).push({ deviceId, ws });
+            }
+          }
+        }
+        
+        console.log(`🔄 [SyncAll] Found ${devicesByMaterial.size} materials with active devices`);
+        
+        let totalSyncedDevices = 0;
+        const syncResults = [];
+        
+        // Sync devices within each material group
+        for (const [materialId, devices] of devicesByMaterial) {
+          if (devices.length >= 1) { // Allow sync even with single device for testing
+            console.log(`🔄 [SyncAll] Syncing ${devices.length} devices for material: ${materialId}`);
+            
+            // Find the device with the most recent ad activity (or use the first one as reference)
+            const referenceDevice = devices[0];
+            const referenceDeviceId = referenceDevice.deviceId;
+            
+            console.log(`🔄 [SyncAll] Using device ${referenceDeviceId} as reference for material ${materialId}`);
+            
+            // Create a sync timestamp that all devices will use for perfect synchronization
+            const syncTimestamp = new Date().toISOString();
+            const syncDelay = 3000; // 3 second delay to ensure all devices receive the command
+            
+            // Send sync command to ALL devices in this material group (including reference)
+            for (const { deviceId, ws } of devices) {
+              try {
+                const syncMessage = {
+                  type: 'slotSync',
+                  timestamp: syncTimestamp,
+                  command: 'sync',
+                  materialId: materialId,
+                  referenceDeviceId: referenceDeviceId,
+                  targetDeviceId: deviceId,
+                  syncDelay: syncDelay, // Delay before executing sync
+                  executeAt: new Date(Date.now() + syncDelay).toISOString(), // Exact time to execute
+                  testMode: devices.length === 1 // Mark as test mode for single device
+                };
+                
+                console.log(`🔄 [SyncAll] Sending sync command to device: ${deviceId} (material: ${materialId}) - Execute at: ${syncMessage.executeAt}${devices.length === 1 ? ' [TEST MODE]' : ''}`);
+                ws.send(JSON.stringify(syncMessage));
+                totalSyncedDevices++;
+                console.log(`🔄 [SyncAll] ✅ Sent sync command to device: ${deviceId}`);
+              } catch (error) {
+                console.error(`❌ [SyncAll] Failed to send sync command to ${deviceId}:`, error);
+              }
+            }
+            
+            syncResults.push({
+              materialId: materialId,
+              syncedDevices: devices.length - 1, // Exclude reference device
+              totalDevices: devices.length
+            });
+          } else {
+            console.log(`🔄 [SyncAll] Skipping material ${materialId} - only 1 device (no sync needed)`);
+          }
+        }
+        
+        console.log(`🔄 [SyncAll] Sync commands sent to ${totalSyncedDevices} devices across ${syncResults.length} materials`);
+        
+        return { 
+          success: true, 
+          message: `Sync commands sent to ${totalSyncedDevices} devices across ${syncResults.length} materials`,
+          pausedCount: totalSyncedDevices,
+          syncResults: syncResults
+        };
+      } catch (error) {
+        console.error('❌ [SyncAll] Error sending sync commands:', error);
+        console.error('❌ [SyncAll] Error stack:', error.stack);
+        return { 
+          success: false, 
+          message: 'Failed to send sync commands',
+          error: error.message 
+        };
+      }
     },
 
     playAllScreens: async (_, __, { admin, superAdmin }) => {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens started playing' };
+      
+      try {
+        console.log('▶️ [PlayAll] Starting play all command...');
+        
+        // Get the device status service instance
+        const deviceStatusService = require('../services/deviceStatusService');
+        console.log('▶️ [PlayAll] Device status service loaded');
+        
+        const service = deviceStatusService;
+        console.log('▶️ [PlayAll] Device status service instance obtained');
+        
+        const playMessage = {
+          type: 'resumeAll',
+          timestamp: new Date().toISOString(),
+          command: 'resume'
+        };
+        
+        let resumedCount = 0;
+        const activeConnections = service.activeConnections || new Map();
+        
+        console.log(`▶️ [PlayAll] Found ${activeConnections.size} active connections`);
+        
+        // Send resume command only to playback connections
+        for (const [deviceId, ws] of activeConnections) {
+          // Check if the connection is a playback connection and not an admin connection
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) { // WebSocket.OPEN
+            try {
+              console.log(`▶️ [PlayAll] Sending to device: ${deviceId}, connection type: ${ws.connectionType || 'unknown'}`);
+              ws.send(JSON.stringify(playMessage));
+              resumedCount++;
+              console.log(`▶️ [PlayAll] ✅ Sent resume command to device: ${deviceId}`);
+            } catch (error) {
+              console.error(`❌ [PlayAll] Failed to send resume command to ${deviceId}:`, error);
+            }
+          } else {
+            console.log(`▶️ [PlayAll] Skipping device ${deviceId} - not a playback connection (type: ${ws?.connectionType}, isAdmin: ${ws?.isAdmin})`);
+          }
+        }
+        
+        console.log(`▶️ [PlayAll] Resume command sent to ${resumedCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Resume command sent to ${resumedCount} devices`,
+          pausedCount: resumedCount 
+        };
+      } catch (error) {
+        console.error('❌ [PlayAll] Error sending resume commands:', error);
+        console.error('❌ [PlayAll] Error stack:', error.stack);
+        return { 
+          success: false, 
+          message: 'Failed to send resume commands',
+          error: error.message 
+        };
+      }
     },
 
     pauseAllScreens: async (_, __, { admin, superAdmin }) => {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens paused' };
+      
+      try {
+        console.log('⏸️ [PauseAll] Starting pause all command...');
+        
+        // Get the device status service instance
+        const deviceStatusService = require('../services/deviceStatusService');
+        console.log('⏸️ [PauseAll] Device status service loaded');
+        
+        const service = deviceStatusService;
+        console.log('⏸️ [PauseAll] Device status service instance obtained');
+        
+        // Send pause command to all connected devices
+        const pauseMessage = {
+          type: 'pauseAll',
+          timestamp: new Date().toISOString(),
+          command: 'pause'
+        };
+        
+        let pausedCount = 0;
+        const activeConnections = service.activeConnections || new Map();
+        
+        console.log(`⏸️ [PauseAll] Found ${activeConnections.size} active connections`);
+        
+        // Send pause command only to playback connections (devices that can pause ads)
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1) { // WebSocket.OPEN
+            // Only send pause commands to playback connections, not status connections
+            if (ws.connectionType === 'playback' && !ws.isAdmin) {
+              try {
+                console.log(`⏸️ [PauseAll] Sending to device: ${deviceId}, connection type: ${ws.connectionType}`);
+                ws.send(JSON.stringify(pauseMessage));
+                pausedCount++;
+                console.log(`⏸️ [PauseAll] ✅ Sent pause command to device: ${deviceId}`);
+              } catch (error) {
+                console.error(`❌ [PauseAll] Failed to send pause command to ${deviceId}:`, error);
+              }
+            } else {
+              console.log(`⏸️ [PauseAll] Skipping device ${deviceId} - not a playback connection (type: ${ws.connectionType}, isAdmin: ${ws.isAdmin})`);
+            }
+          } else {
+            console.log(`⏸️ [PauseAll] Skipping device ${deviceId} - WebSocket not open (state: ${ws?.readyState})`);
+          }
+        }
+        
+        console.log(`⏸️ [PauseAll] Pause command sent to ${pausedCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Pause command sent to ${pausedCount} devices`,
+          pausedCount 
+        };
+      } catch (error) {
+        console.error('❌ [PauseAll] Error sending pause commands:', error);
+        console.error('❌ [PauseAll] Error stack:', error.stack);
+        return { 
+          success: false, 
+          message: 'Failed to send pause commands',
+          error: error.message 
+        };
+      }
     },
 
     stopAllScreens: async (_, __, { admin, superAdmin }) => {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens stopped' };
+      return { success: true, message: 'All screens stopped', pausedCount: 0 };
     },
 
     restartAllScreens: async (_, __, { admin, superAdmin }) => {
@@ -542,14 +755,106 @@ const resolvers = {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens locked down' };
+      
+      try {
+        console.log('🔒 [LockdownAll] Starting lockdown command...');
+        
+        const deviceStatusService = require('../services/deviceStatusService');
+        const service = deviceStatusService;
+        
+        const activeConnections = service.activeConnections || new Map();
+        let lockedCount = 0;
+        
+        console.log(`🔒 [LockdownAll] Found ${activeConnections.size} active connections`);
+        
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
+            try {
+              const lockMessage = {
+                type: 'lockdown',
+                timestamp: new Date().toISOString(),
+                command: 'lock',
+                message: 'Screen locked by admin'
+              };
+              
+              console.log(`🔒 [LockdownAll] Sending lockdown command to device: ${deviceId}`);
+              ws.send(JSON.stringify(lockMessage));
+              lockedCount++;
+              console.log(`🔒 [LockdownAll] ✅ Sent lockdown command to device: ${deviceId}`);
+            } catch (error) {
+              console.error(`❌ [LockdownAll] Failed to send lockdown command to ${deviceId}:`, error);
+            }
+          }
+        }
+        
+        console.log(`🔒 [LockdownAll] Lockdown commands sent to ${lockedCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Lockdown commands sent to ${lockedCount} devices`,
+          lockedCount: lockedCount
+        };
+      } catch (error) {
+        console.error('❌ [LockdownAll] Error sending lockdown commands:', error);
+        return { 
+          success: false, 
+          message: 'Failed to send lockdown commands',
+          error: error.message 
+        };
+      }
     },
 
     unlockAllScreens: async (_, __, { admin, superAdmin }) => {
       if (!admin && !superAdmin) {
         throw new Error('Not authorized');
       }
-      return { success: true, message: 'All screens unlocked' };
+      
+      try {
+        console.log('🔓 [UnlockAll] Starting unlock command...');
+        
+        const deviceStatusService = require('../services/deviceStatusService');
+        const service = deviceStatusService;
+        
+        const activeConnections = service.activeConnections || new Map();
+        let unlockedCount = 0;
+        
+        console.log(`🔓 [UnlockAll] Found ${activeConnections.size} active connections`);
+        
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
+            try {
+              const unlockMessage = {
+                type: 'unlock',
+                timestamp: new Date().toISOString(),
+                command: 'unlock',
+                message: 'Screen unlocked by admin'
+              };
+              
+              console.log(`🔓 [UnlockAll] Sending unlock command to device: ${deviceId}`);
+              ws.send(JSON.stringify(unlockMessage));
+              unlockedCount++;
+              console.log(`🔓 [UnlockAll] ✅ Sent unlock command to device: ${deviceId}`);
+            } catch (error) {
+              console.error(`❌ [UnlockAll] Failed to send unlock command to ${deviceId}:`, error);
+            }
+          }
+        }
+        
+        console.log(`🔓 [UnlockAll] Unlock commands sent to ${unlockedCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Unlock commands sent to ${unlockedCount} devices`,
+          unlockedCount: unlockedCount
+        };
+      } catch (error) {
+        console.error('❌ [UnlockAll] Error sending unlock commands:', error);
+        return { 
+          success: false, 
+          message: 'Failed to send unlock commands',
+          error: error.message 
+        };
+      }
     },
 
     // Individual screen operations

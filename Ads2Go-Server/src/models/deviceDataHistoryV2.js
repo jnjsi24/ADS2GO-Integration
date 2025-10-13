@@ -37,6 +37,7 @@ const HourlyStatsSchema = new mongoose.Schema({
 // Ad performance schema
 const AdPerformanceSchema = new mongoose.Schema({
   adId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   adTitle: { type: String, required: true },
   playCount: { type: Number, default: 0 },
   totalViewTime: { type: Number, default: 0 },
@@ -116,6 +117,7 @@ const DailyDataSchema = new mongoose.Schema({
   // QR scan details
   qrScans: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: false }, // Optional until migration runs
     adTitle: { type: String, required: true },
     materialId: { type: String, required: true },
     slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -140,6 +142,7 @@ const DailyDataSchema = new mongoose.Schema({
   // Ad playback details (limited to 800 entries)
   adPlaybacks: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: false }, // Optional until migration runs
     adTitle: { type: String, required: true },
     materialId: { type: String, required: true },
     slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -172,11 +175,34 @@ const DailyDataSchema = new mongoose.Schema({
   // QR scans per ad
   qrScansByAd: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: false }, // Optional until migration runs
     adTitle: { type: String, required: true },
     scanCount: { type: Number, default: 0 },
     lastScanned: { type: Date },
     firstScanned: { type: Date }
   }],
+  
+  // Deployed ads (synced from AdsDeployment) - shows which ads SHOULD be playing
+  deployedAds: [{
+    adId: { type: String, required: true },
+    userId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    slotNumber: { type: Number, min: 1, max: 5 },
+    startTime: { type: Date },
+    endTime: { type: Date },
+    status: { 
+      type: String, 
+      enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
+      default: 'SCHEDULED'
+    },
+    mediaFile: { type: String },
+    deployedAt: { type: Date },
+    deploymentId: { type: String }
+  }],
+  
+  // Reference to current deployment
+  currentDeploymentId: { type: String },
+  lastDeploymentSync: { type: Date },
   
   // Metadata
   archivedAt: { type: Date, default: Date.now },
@@ -271,8 +297,11 @@ const DeviceDataHistoryV2Schema = new mongoose.Schema({
 
 // Indexes for efficient queries
 DeviceDataHistoryV2Schema.index({ materialId: 1 });
+DeviceDataHistoryV2Schema.index({ carGroupId: 1 });
+DeviceDataHistoryV2Schema.index({ updatedAt: -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1, materialId: 1 });
+DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite for search
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {

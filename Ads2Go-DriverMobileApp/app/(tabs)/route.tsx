@@ -8,7 +8,9 @@ import {
   Alert, 
   Dimensions,
   TouchableOpacity,
-  RefreshControl
+  RefreshControl,
+  Platform,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -55,14 +57,44 @@ const RouteTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Date selection for historical data
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
-    loadDriverInfoAndRoute();
-  }, []);
+    console.log('🔄 [Route Tab] Date changed to:', selectedDate.toISOString().split('T')[0]);
+    loadDriverInfoAndRoute(false); // Initial load with loading screen
 
-  const loadDriverInfoAndRoute = async () => {
+    // Auto-refresh every 30 seconds for today's date only
+    let refreshInterval: ReturnType<typeof setInterval> | null = null;
+    
+    const isToday = selectedDate.toDateString() === new Date().toDateString();
+    if (isToday) {
+      console.log('📅 [Route Tab] Today detected - enabling auto-refresh');
+      refreshInterval = setInterval(() => {
+        console.log('🔄 Auto-refreshing route data...');
+        loadDriverInfoAndRoute(true); // Silent background refresh
+      }, 30000); // 30 seconds
+    } else {
+      console.log('📅 [Route Tab] Historical date - no auto-refresh');
+    }
+
+    // Cleanup interval on unmount or date change
+    return () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [selectedDate]); // Reload when date changes
+
+  const loadDriverInfoAndRoute = async (silentRefresh = false) => {
     try {
-      setLoading(true);
+      // Only show loading screen for initial loads, not for background refreshes
+      if (!silentRefresh) {
+        setLoading(true);
+      }
       setError(null);
 
       // Load driver info from AsyncStorage
@@ -89,8 +121,12 @@ const RouteTab: React.FC = () => {
       });
 
       if (!driverResponse.ok) {
-        // If driver endpoint fails, show the page with no device info
-        console.warn('Driver endpoint failed:', driverResponse.status);
+        // Handle 404 gracefully - device may have been unregistered
+        if (driverResponse.status === 404) {
+          console.log('ℹ️ No device tracking found - device may not be registered yet or was unregistered');
+        } else {
+          console.warn('⚠️ Driver endpoint returned status:', driverResponse.status);
+        }
         setDriverInfo({
           driverId,
           materialId: 'Not Assigned',
@@ -154,16 +190,27 @@ const RouteTab: React.FC = () => {
         deviceId
       });
 
-      // Only fetch route data if we have a valid deviceId
-      if (deviceId && deviceId !== 'Unknown' && deviceId !== 'No Device') {
-        await fetchDriverRouteData(deviceId);
+      // Use deviceId if available, otherwise use materialId as fallback
+      const identifierForRoute = (deviceId && deviceId !== 'Unknown' && deviceId !== 'No Device') 
+        ? deviceId 
+        : materialId;
+
+      console.log('🆔 [Route Tab] Using identifier for route:', identifierForRoute);
+
+      // Only fetch route data if we have a valid identifier
+      if (identifierForRoute && identifierForRoute !== 'Not Assigned') {
+        await fetchDriverRouteData(identifierForRoute);
       } else {
+        console.log('ℹ️ [Route Tab] No valid identifier, skipping route fetch - device not registered');
         // No valid device, but show the page anyway
         setRouteData(null);
       }
 
+      // Update last refresh timestamp
+      setLastUpdate(new Date());
+
     } catch (err) {
-      console.error('Error loading driver info:', err);
+      console.log('ℹ️ [Route Tab] Could not load driver info - this is normal if device is not registered');
       // Don't set error state - show the page with limited info
       setDriverInfo({
         driverId: 'Unknown',
@@ -172,7 +219,10 @@ const RouteTab: React.FC = () => {
       });
       setRouteData(null);
     } finally {
-      setLoading(false);
+      // Only hide loading screen if we showed it (not for silent refreshes)
+      if (!silentRefresh) {
+        setLoading(false);
+      }
     }
   };
 
@@ -186,7 +236,13 @@ const RouteTab: React.FC = () => {
         return;
       }
 
-      const response = await fetch(`${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}`, {
+      // Format date for API (YYYY-MM-DD)
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      const url = `${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}?date=${dateStr}`;
+      
+      console.log('🗺️ Fetching route data for date:', dateStr);
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -217,9 +273,14 @@ const RouteTab: React.FC = () => {
       }
       
       if (result.success) {
+        console.log('✅ Route data received successfully');
+        console.log('📊 Route points:', result.data?.route?.length || 0);
+        console.log('📍 First point:', result.data?.route?.[0]);
+        console.log('📍 Last point:', result.data?.route?.[result.data.route?.length - 1]);
+        console.log('📈 Metrics:', result.data?.metrics);
         setRouteData(result.data);
       } else {
-        console.warn('Route data fetch unsuccessful:', result.message);
+        console.warn('❌ Route data fetch unsuccessful:', result.message);
         setRouteData(null);
       }
     } catch (err) {
@@ -231,7 +292,7 @@ const RouteTab: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadDriverInfoAndRoute();
+    await loadDriverInfoAndRoute(true); // Silent refresh, use native pull indicator
     setRefreshing(false);
   };
 
@@ -253,12 +314,149 @@ const RouteTab: React.FC = () => {
     return new Date(timestamp).toLocaleString();
   };
 
+  const formatTime = (timestamp: string): string => {
+    return new Date(timestamp).toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
   const getStatusColor = (isOnline: boolean): string => {
     return isOnline ? '#22c55e' : '#ef4444';
   };
 
   const getStatusText = (isOnline: boolean): string => {
     return isOnline ? 'ONLINE' : 'OFFLINE';
+  };
+
+  // Segment route into movement and idle periods
+  const segmentRoute = (points: RoutePoint[]) => {
+    if (!points || points.length === 0) return [];
+
+    const segments: Array<{
+      type: 'TRAVELED' | 'IDLE';
+      startTime: string;
+      endTime: string;
+      startLocation: { lat: number; lng: number; address: string };
+      endLocation: { lat: number; lng: number; address: string };
+      distance: number;
+      duration: number;
+    }> = [];
+
+    let currentSegment: any = null;
+    const IDLE_THRESHOLD = 0.05; // km - if distance < 50m, consider it idle
+    const MIN_SEGMENT_DURATION = 60; // seconds - minimum duration to create a segment
+
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      
+      if (!currentSegment) {
+        // Start first segment
+        currentSegment = {
+          type: 'TRAVELED',
+          startTime: point.timestamp,
+          endTime: point.timestamp,
+          startLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          endLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          distance: 0,
+          duration: 0,
+          points: [point]
+        };
+        continue;
+      }
+
+      // Calculate distance from last point in segment
+      const lastPoint = currentSegment.points[currentSegment.points.length - 1];
+      const distanceFromLast = calculateDistance(
+        lastPoint.lat, lastPoint.lng,
+        point.lat, point.lng
+      );
+
+      // Calculate distance from segment start
+      const distanceFromStart = calculateDistance(
+        currentSegment.startLocation.lat, currentSegment.startLocation.lng,
+        point.lat, point.lng
+      );
+
+      // Calculate duration
+      const duration = (new Date(point.timestamp).getTime() - new Date(currentSegment.startTime).getTime()) / 1000;
+
+      // Determine if moving or idle based on speed and distance
+      const isMoving = point.speed > 1 || distanceFromLast > IDLE_THRESHOLD;
+
+      if (currentSegment.type === 'TRAVELED' && !isMoving && duration > MIN_SEGMENT_DURATION) {
+        // Was traveling, now stopped - save traveled segment
+        currentSegment.endTime = lastPoint.timestamp;
+        currentSegment.endLocation = { 
+          lat: lastPoint.lat, 
+          lng: lastPoint.lng, 
+          address: lastPoint.address 
+        };
+        currentSegment.duration = (new Date(currentSegment.endTime).getTime() - new Date(currentSegment.startTime).getTime()) / 1000;
+        segments.push({ ...currentSegment });
+
+        // Start idle segment
+        currentSegment = {
+          type: 'IDLE',
+          startTime: point.timestamp,
+          endTime: point.timestamp,
+          startLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          endLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          distance: 0,
+          duration: 0,
+          points: [point]
+        };
+      } else if (currentSegment.type === 'IDLE' && isMoving) {
+        // Was idle, now traveling - save idle segment
+        currentSegment.endTime = lastPoint.timestamp;
+        currentSegment.duration = (new Date(currentSegment.endTime).getTime() - new Date(currentSegment.startTime).getTime()) / 1000;
+        if (currentSegment.duration > MIN_SEGMENT_DURATION) {
+          segments.push({ ...currentSegment });
+        }
+
+        // Start traveling segment
+        currentSegment = {
+          type: 'TRAVELED',
+          startTime: point.timestamp,
+          endTime: point.timestamp,
+          startLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          endLocation: { lat: point.lat, lng: point.lng, address: point.address },
+          distance: distanceFromLast,
+          duration: 0,
+          points: [point]
+        };
+      } else {
+        // Continue current segment
+        currentSegment.points.push(point);
+        currentSegment.endTime = point.timestamp;
+        currentSegment.endLocation = { lat: point.lat, lng: point.lng, address: point.address };
+        if (currentSegment.type === 'TRAVELED') {
+          currentSegment.distance += distanceFromLast;
+        }
+        currentSegment.duration = (new Date(currentSegment.endTime).getTime() - new Date(currentSegment.startTime).getTime()) / 1000;
+      }
+    }
+
+    // Add final segment if it has meaningful duration
+    if (currentSegment && currentSegment.duration > MIN_SEGMENT_DURATION) {
+      segments.push(currentSegment);
+    }
+
+    return segments;
+  };
+
+  // Calculate distance between two points (Haversine formula)
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   };
 
   if (loading) {
@@ -275,9 +473,32 @@ const RouteTab: React.FC = () => {
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadDriverInfoAndRoute}>
+        <TouchableOpacity style={styles.retryButton} onPress={() => loadDriverInfoAndRoute(false)}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Check if device is not registered
+  const isDeviceUnregistered = driverInfo?.deviceId === 'No Device' || 
+                                driverInfo?.materialId === 'Not Assigned';
+
+  if (isDeviceUnregistered) {
+    return (
+      <View style={styles.noDeviceContainer}>
+        <View style={styles.noDeviceContent}>
+          <View style={styles.noDeviceIconContainer}>
+            <Ionicons name="information-circle-outline" size={64} color="#6b7280" />
+          </View>
+          <Text style={styles.noDeviceTitle}>No Device Registered</Text>
+          <Text style={styles.noDeviceMessage}>
+            Your device is not currently registered or has been unregistered by an administrator.
+          </Text>
+          <Text style={styles.noDeviceHint}>
+            Please contact support if you need assistance with device registration.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -293,6 +514,23 @@ const RouteTab: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Route Tracking</Text>
         <Text style={styles.headerSubtitle}>GPS Route Visualization</Text>
+        
+        {/* Auto-refresh indicator */}
+        {lastUpdate && (
+          <View style={styles.refreshIndicator}>
+            <Ionicons 
+              name="sync" 
+              size={12} 
+              color={selectedDate.toDateString() === new Date().toDateString() ? '#22c55e' : '#9ca3af'} 
+            />
+            <Text style={styles.refreshText}>
+              {selectedDate.toDateString() === new Date().toDateString() 
+                ? `Auto-updating • Last: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+                : `Updated: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+              }
+            </Text>
+          </View>
+        )}
         
         {driverInfo && (
           <View style={styles.driverInfo}>
@@ -314,32 +552,203 @@ const RouteTab: React.FC = () => {
         )}
       </View>
 
-      {/* Route Status Card */}
+      {/* Date Selector */}
+      <View style={styles.controlsCard}>
+        <View style={styles.controlsRow}>
+          <TouchableOpacity 
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar" size={20} color="#3b82f6" />
+            <Text style={styles.dateButtonText}>
+              {selectedDate.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+              })}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#6b7280" />
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.todayButton}
+            onPress={() => setSelectedDate(new Date())}
+          >
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerModal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Date</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                <Ionicons name="close" size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.dateList}>
+              {/* Generate last 30 days */}
+              {Array.from({ length: 30 }, (_, i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const isSelected = date.toDateString() === selectedDate.toDateString();
+                
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                    onPress={() => {
+                      setSelectedDate(date);
+                      setShowDatePicker(false);
+                    }}
+                  >
+                    <View style={styles.dateItemContent}>
+                      <Text style={[styles.dateItemText, isSelected && styles.dateItemTextSelected]}>
+                        {date.toLocaleDateString('en-US', { 
+                          weekday: 'short',
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        })}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={24} color="#3b82f6" />
+                      )}
+                    </View>
+                    {i === 0 && <Text style={styles.todayBadge}>Today</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Route Statistics - Always show */}
+      <View style={styles.metricsContainer}>
+        <Text style={styles.metricsTitle}>Route Statistics</Text>
+        
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricCard}>
+            <Ionicons name="speedometer" size={24} color="#22c55e" />
+            <Text style={styles.metricLabel}>Distance</Text>
+            <Text style={styles.metricValue}>
+              {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km
+            </Text>
+          </View>
+          
+          <View style={styles.metricCard}>
+            <Ionicons name="time" size={24} color="#3b82f6" />
+            <Text style={styles.metricLabel}>Duration</Text>
+            <Text style={styles.metricValue}>
+              {routeData?.metrics?.totalDuration ? formatDuration(routeData.metrics.totalDuration) : '0s'}
+            </Text>
+          </View>
+          
+          <View style={styles.metricCard}>
+            <Ionicons name="trending-up" size={24} color="#f59e0b" />
+            <Text style={styles.metricLabel}>Avg Speed</Text>
+            <Text style={styles.metricValue}>
+              {routeData?.metrics?.averageSpeed?.toFixed(1) || '0.0'} km/h
+            </Text>
+          </View>
+          
+          <View style={styles.metricCard}>
+            <Ionicons name="location" size={24} color="#8b5cf6" />
+            <Text style={styles.metricLabel}>Points</Text>
+            <Text style={styles.metricValue}>
+              {routeData?.metrics?.pointCount || routeData?.route?.length || 0}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Route Status Timeline */}
       <View style={styles.statusCard}>
         <View style={styles.statusHeader}>
-          <Ionicons name="map" size={24} color="#3b82f6" />
-          <Text style={styles.statusTitle}>Route Status</Text>
+          <Ionicons name="time" size={24} color="#3b82f6" />
+          <Text style={styles.statusTitle}>Route Timeline</Text>
         </View>
         
-        {routeData ? (
-          <View style={styles.statusContent}>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Device ID:</Text>
-              <Text style={styles.statusValue} numberOfLines={1} ellipsizeMode="middle">
-                {routeData.deviceId}
-              </Text>
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>GPS Points:</Text>
-              <Text style={styles.statusValue}>{routeData.metrics.pointCount}</Text>
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Last Update:</Text>
-              <Text style={styles.statusValue}>
-                {routeData.metrics.endTime ? formatTimestamp(routeData.metrics.endTime) : 'N/A'}
-              </Text>
-            </View>
-          </View>
+        {routeData && routeData.route.length > 0 ? (
+          <ScrollView style={styles.timelineContainer} nestedScrollEnabled>
+            {segmentRoute(routeData.route).map((segment, index) => (
+              <View key={index} style={styles.timelineItem}>
+                <View style={styles.timelineIconContainer}>
+                  {segment.type === 'TRAVELED' ? (
+                    <View style={[styles.timelineIcon, { backgroundColor: '#22c55e' }]}>
+                      <Ionicons name="car" size={16} color="#ffffff" />
+                    </View>
+                  ) : (
+                    <View style={[styles.timelineIcon, { backgroundColor: '#f59e0b' }]}>
+                      <Ionicons name="pause" size={16} color="#ffffff" />
+                    </View>
+                  )}
+                  {index < segmentRoute(routeData.route).length - 1 && (
+                    <View style={styles.timelineLine} />
+                  )}
+                </View>
+                
+                <View style={styles.timelineContent}>
+                  <View style={styles.timelineHeader}>
+                    <Text style={styles.timelineTime}>
+                      {formatTime(segment.startTime)} - {formatTime(segment.endTime)}
+                    </Text>
+                    <Text style={[
+                      styles.timelineType,
+                      { color: segment.type === 'TRAVELED' ? '#22c55e' : '#f59e0b' }
+                    ]}>
+                      {segment.type === 'TRAVELED' ? 'TRAVELED' : 'IDLE/STOPPED'}
+                    </Text>
+                  </View>
+                  
+                  {segment.type === 'TRAVELED' ? (
+                    <View style={styles.timelineDetails}>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="navigate" size={14} color="#3b82f6" />
+                        <Text style={styles.locationText} numberOfLines={2}>
+                          From: {segment.startLocation.address || 
+                            `${segment.startLocation.lat.toFixed(6)}, ${segment.startLocation.lng.toFixed(6)}`}
+                        </Text>
+                      </View>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location" size={14} color="#ef4444" />
+                        <Text style={styles.locationText} numberOfLines={2}>
+                          To: {segment.endLocation.address || 
+                            `${segment.endLocation.lat.toFixed(6)}, ${segment.endLocation.lng.toFixed(6)}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.distanceText}>
+                        Distance: {segment.distance.toFixed(2)} km • Duration: {formatDuration(segment.duration)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={styles.timelineDetails}>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location" size={14} color="#f59e0b" />
+                        <Text style={styles.locationText} numberOfLines={2}>
+                          Stopped at: {segment.startLocation.address || 
+                            `${segment.startLocation.lat.toFixed(6)}, ${segment.startLocation.lng.toFixed(6)}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.distanceText}>
+                        Duration: {formatDuration(segment.duration)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
         ) : (
           <View style={styles.noDataContainer}>
             <Ionicons name="location-outline" size={32} color="#9ca3af" />
@@ -357,124 +766,14 @@ const RouteTab: React.FC = () => {
         )}
       </View>
 
-      {/* Ad Campaign Card */}
-      <View style={styles.adCard}>
-        {/* Header Section */}
-        <View style={styles.metricsHeader}>
-          <View style={styles.headerLeft}>
-            <View style={styles.titleRow}>
-              <Text style={styles.adTitle}>Ad Campaign</Text>
-              <View style={styles.periodTag}>
-                <Text style={styles.periodText}>30 Days</Text>
-              </View>
-            </View>
-
-            <Text style={styles.companyInfo}>
-              Sample Company <Text style={styles.adId}>#AdID3264</Text>
-            </Text>
-
-          </View>
-        </View>
-
-        {/* QR and Distance Row */}
-        <View style={styles.qrDistanceRow}>
-          <Ionicons name="qr-code" size={22} color="#3b82f6" style={{ marginRight: 6 }} />
-          <Text style={styles.qrValue}>{routeData?.metrics?.pointCount || 0}</Text>
-          <Text style={styles.verticalDivider}>|</Text>
-          <Text style={styles.distanceValue}>
-            {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km Today
-          </Text>
-        </View>
-        
-        <View style={styles.divider} />
-
-        {/* Location Card: EDSA */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="location" size={16} color="#ffffff" />
-            </View>
-            <View style={styles.dashedLineFull} />
-          </View>
-
-          <View style={styles.textContainer}>
-            <Text style={styles.locationName}>EDSA Street</Text>
-            <Text style={styles.locationSubText}>
-              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
-            </Text>
-          </View>
-        </View>
-
-        {/* Distance + Hours Pill */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.dashedLineFull} />
-          </View>
-          <View style={styles.textContainer}>
-            <View style={styles.locationPill}>
-              <Text style={styles.locationPillText}>
-                {routeData?.metrics?.totalDistance?.toFixed(2) || '0.00'} km - {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Kalayaan Section */}
-        <View style={styles.routeRow}>
-          <View style={styles.iconLineContainer}>
-            <View style={styles.iconCircle2}>
-              <Ionicons name="locate" size={16} color="#ffffff" />
-            </View>
-          </View>
-
-          <View style={styles.textContainer}>
-            <Text style={styles.locationName}>Kalayaan Street</Text>
-            <Text style={styles.locationSubText}>
-              {routeData?.metrics?.totalDuration ? Math.round(routeData.metrics.totalDuration / 3600) : 0} hours remaining • 11:59 PM
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Route Metrics */}
-      {routeData && routeData.metrics && (
-        <View style={styles.metricsContainer}>
-          <Text style={styles.metricsTitle}>Route Statistics</Text>
-          
-          <View style={styles.metricsGrid}>
-            <View style={styles.metricCard}>
-              <Ionicons name="speedometer" size={24} color="#22c55e" />
-              <Text style={styles.metricLabel}>Distance</Text>
-              <Text style={styles.metricValue}>{routeData.metrics.totalDistance.toFixed(2)} km</Text>
-            </View>
-            
-            <View style={styles.metricCard}>
-              <Ionicons name="time" size={24} color="#3b82f6" />
-              <Text style={styles.metricLabel}>Duration</Text>
-              <Text style={styles.metricValue}>{formatDuration(routeData.metrics.totalDuration)}</Text>
-            </View>
-            
-            <View style={styles.metricCard}>
-              <Ionicons name="trending-up" size={24} color="#f59e0b" />
-              <Text style={styles.metricLabel}>Avg Speed</Text>
-              <Text style={styles.metricValue}>{routeData.metrics.averageSpeed.toFixed(1)} km/h</Text>
-            </View>
-            
-            <View style={styles.metricCard}>
-              <Ionicons name="location" size={24} color="#8b5cf6" />
-              <Text style={styles.metricLabel}>Points</Text>
-              <Text style={styles.metricValue}>{routeData.metrics.pointCount}</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* Interactive Route Map */}
       <View style={styles.mapContainer}>
         <View style={styles.mapWrapper}>
           <RouteMapView 
             route={routeData?.route || []} 
             style={styles.map}
+            showSpeedColors={false}
+            showWaypoints={false}
           />
         </View>
       </View>
@@ -549,6 +848,51 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     textAlign: 'center',
   },
+  noDeviceContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 20,
+  },
+  noDeviceContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  noDeviceIconContainer: {
+    marginBottom: 20,
+  },
+  noDeviceTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noDeviceMessage: {
+    fontSize: 15,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  noDeviceHint: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   retryButton: {
     marginTop: 16,
     backgroundColor: '#3b82f6',
@@ -576,6 +920,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginTop: 4,
+  },
+  refreshIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    gap: 6,
+  },
+  refreshText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
   },
   driverInfo: {
     marginTop: 16,
@@ -785,8 +1143,8 @@ const styles = StyleSheet.create({
     height: 20,
   },
 
-  // Ad Campaign Styles
-  adCard: {
+  // Date and Controls Styles
+  controlsCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
     marginHorizontal: 20,
@@ -799,133 +1157,174 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  metricsHeader: {
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  headerLeft: {
-    flexDirection: 'column',
-  },
-  titleRow: {
+  dateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    flex: 1,
+    marginRight: 8,
   },
-  adTitle: {
+  dateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginLeft: 8,
+    marginRight: 8,
+    flex: 1,
+  },
+  todayButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  todayButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  
+  // Date Picker Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#111827',
   },
-  periodTag: {
-    backgroundColor: '#22c55e',
-    borderRadius: 9999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginLeft: 8,
+  dateList: {
+    padding: 10,
   },
-  periodText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 13,
+  dateItem: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#f8fafc',
   },
-  adId: {
-    color: '#22c55e',
-    fontWeight: '700',
+  dateItemSelected: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
   },
-  companyInfo: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 4,
-  },
-  qrDistanceRow: {
+  dateItemContent: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 12,
   },
-  qrValue: {
+  dateItemText: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#111827',
-    marginRight: 8,
+    fontWeight: '500',
   },
-  verticalDivider: {
-    fontSize: 16,
-    color: '#9ca3af',
-    marginHorizontal: 8,
-  },
-  distanceValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 10,
-  },
-  routeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  iconLineContainer: {
-    alignItems: 'center',
-    width: 30,
-  },
-  dashedLineFull: {
-    width: 2,
-    flex: 1,
-    backgroundColor: 'transparent',
-    borderLeftWidth: 2,
-    borderColor: '#9ca3af',
-    borderStyle: 'dashed',
-    marginVertical: 2,
-  },
-  textContainer: {
-    flex: 1,
-    paddingBottom: 8,
-  },
-  locationName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-    marginLeft: 10,
-  },
-  locationSubText: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 2,
-    marginLeft: 10,
-  },
-  locationPill: {
-    backgroundColor: '#e5e7eb',
-    borderRadius: 9999,
-    paddingVertical: 8,
-    paddingHorizontal: 40,
-    alignSelf: 'flex-start',
-    marginVertical: 6,
-  },
-  locationPillText: {
+  dateItemTextSelected: {
     color: '#3b82f6',
     fontWeight: '700',
+  },
+  todayBadge: {
+    fontSize: 12,
+    color: '#22c55e',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  
+  // Timeline Styles
+  timelineContainer: {
+    maxHeight: 400,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  timelineIconContainer: {
+    alignItems: 'center',
+    width: 40,
+    marginRight: 12,
+  },
+  timelineIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#e5e7eb',
+    marginTop: 4,
+  },
+  timelineContent: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6',
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  timelineTime: {
     fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
   },
-  iconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#3b82f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
+  timelineType: {
+    fontSize: 12,
+    fontWeight: '700',
   },
-  iconCircle2: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#d1d5db',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
+  timelineDetails: {
+    gap: 6,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  locationText: {
+    fontSize: 13,
+    color: '#6b7280',
+    flex: 1,
+    lineHeight: 18,
+  },
+  distanceText: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+    fontWeight: '600',
   },
 });
 

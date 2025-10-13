@@ -114,3 +114,41 @@ export const CHANGE_PASSWORD = gql`
     }
   }
 `;
+
+// ✅ Screen Control Mutations
+export const PAUSE_ALL_SCREENS = gql`
+  mutation PauseAllScreens {
+    pauseAllScreens {
+      success
+      message
+      pausedCount
+    }
+  }
+`;
+
+export const PLAY_ALL_SCREENS = gql`
+  mutation PlayAllScreens {
+    playAllScreens {
+      success
+      message
+    }
+  }
+`;
+
+export const SYNC_ALL_SCREENS = gql`
+  mutation SyncAllScreens {
+    syncAllScreens {
+      success
+      message
+    }
+  }
+`;
+
+export const STOP_ALL_SCREENS = gql`
+  mutation StopAllScreens {
+    stopAllScreens {
+      success
+      message
+    }
+  }
+`;
