@@ -35,7 +35,14 @@ const graphqlUri = cleanServerUrl.endsWith('/graphql') ? cleanServerUrl : cleanS
 
 const httpLink = createHttpLink({
   uri: graphqlUri,
-  credentials: 'include'
+  credentials: 'include',
+  // Add timeout configuration
+  fetch: (uri, options) => {
+    return fetch(uri, {
+      ...options,
+      signal: AbortSignal.timeout(30000), // 30 second timeout
+    });
+  }
 });
 
 const authLink = setContext((_, { headers }) => {
@@ -119,15 +126,19 @@ const client = new ApolloClient({
     watchQuery: {
       fetchPolicy: 'network-only',
       errorPolicy: 'all',
+      notifyOnNetworkStatusChange: true,
     },
     query: {
       fetchPolicy: 'network-only',
       errorPolicy: 'all',
+      notifyOnNetworkStatusChange: true,
     },
     mutate: {
       errorPolicy: 'all',
     },
   },
+  // Increase timeout to 30 seconds
+  connectToDevTools: process.env.NODE_ENV === 'development',
 });
 
 export default client;
