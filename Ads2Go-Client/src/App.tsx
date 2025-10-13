@@ -51,6 +51,7 @@ import NewsletterManagement from './pages/ADMIN/NewsletterManagement';
 import UserAdsPage from './pages/ADMIN/UserAdsPage';
 import AdminNotifications from './pages/ADMIN/AdminNotifications';
 import AdminAccount from './pages/ADMIN/AdminAccount';
+import DeviceDataHistoryV2 from './pages/ADMIN/DeviceDataHistoryV2';
 
 // Super Admin pages
 import SuperAdminLogin from './pages/AUTH/SuperAdminLogin';
@@ -195,6 +196,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <AdminNotifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/device-data-history"
+          element={
+            <ProtectedRoute>
+              <DeviceDataHistoryV2 />
             </ProtectedRoute>
           }
         />
