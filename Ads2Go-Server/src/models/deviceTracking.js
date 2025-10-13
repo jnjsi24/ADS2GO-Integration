@@ -34,6 +34,7 @@ const HourlyStatsSchema = new mongoose.Schema({
 // Ad Playback Schema for real-time tracking
 const AdPlaybackSchema = new mongoose.Schema({
   adId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   adTitle: { type: String, required: true },
   materialId: { type: String, required: true },
   slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -48,6 +49,7 @@ const AdPlaybackSchema = new mongoose.Schema({
 // QR Scan Schema for real-time tracking
 const QRScanSchema = new mongoose.Schema({
   adId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   adTitle: { type: String, required: true },
   materialId: { type: String, required: true },
   slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -168,6 +170,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // Current ad being played (simplified schema for real-time updates)
   currentAd: {
     adId: { type: String },
+    userId: { type: String },
     adTitle: { type: String },
     materialId: { type: String },
     slotNumber: { type: Number },
@@ -182,6 +185,31 @@ const DeviceTrackingSchema = new mongoose.Schema({
     impressions: { type: Number, default: 1 }
   },
   
+  // Deployed ads (synced from AdsDeployment) - shows which ads SHOULD be playing
+  deployedAds: [{
+    adId: { type: String, required: true },
+    userId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    slotNumber: { type: Number, min: 1, max: 5 },
+    startTime: { type: Date },
+    endTime: { type: Date },
+    status: { 
+      type: String, 
+      enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
+      default: 'SCHEDULED'
+    },
+    mediaFile: { type: String },
+    deployedAt: { type: Date },
+    deploymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdsDeployment' }
+  }],
+  
+  // Reference to current deployment
+  currentDeploymentId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'AdsDeployment' 
+  },
+  lastDeploymentSync: { type: Date },
+  
   // Real-time data arrays (for current day)
   adPlaybacks: [AdPlaybackSchema],
   qrScans: [QRScanSchema],
@@ -193,6 +221,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // Ad performance tracking
   adPerformance: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: true },
     adTitle: { type: String, required: true },
     playCount: { type: Number, default: 0 },
     totalViewTime: { type: Number, default: 0 },
@@ -206,6 +235,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // QR scans per ad
   qrScansByAd: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: true },
     adTitle: { type: String, required: true },
     scanCount: { type: Number, default: 0 },
     lastScanned: { type: Date },
@@ -975,11 +1005,14 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
   // Clean up old ad playbacks (keep only last 800)
   this.cleanupAdPlaybacks();
   
-  // Update ad performance
+  // Update ad performance (filter out entries without userId before adding new ones)
+  this.adPerformance = this.adPerformance.filter(perf => perf.userId);
+  
   let adPerf = this.adPerformance.find(ad => ad.adId === adId);
   if (!adPerf) {
     adPerf = {
       adId,
+      userId: 'UNKNOWN', // Placeholder - this method is deprecated, use the route endpoint instead
       adTitle,
       playCount: 0,
       totalViewTime: 0,
@@ -1008,23 +1041,31 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
 };
 
 DeviceTrackingSchema.methods.trackQRScan = function(qrScanData) {
-  // Add QR scan
-  this.qrScans.push(qrScanData);
-  this.totalQRScans += 1;
+  // Add QR scan (only if it has userId)
+  if (qrScanData.userId) {
+    this.qrScans.push(qrScanData);
+    this.totalQRScans += 1;
+  }
   
-  // Update QR scans per ad
-  const existingAdScan = this.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
-  if (existingAdScan) {
-    existingAdScan.scanCount += 1;
-    existingAdScan.lastScanned = new Date();
-  } else {
-    this.qrScansByAd.push({
-      adId: qrScanData.adId,
-      adTitle: qrScanData.adTitle,
-      scanCount: 1,
-      lastScanned: new Date(),
-      firstScanned: new Date()
-    });
+  // Filter out entries without userId
+  this.qrScansByAd = this.qrScansByAd.filter(scan => scan.userId);
+  
+  // Update QR scans per ad (only if qrScanData has userId)
+  if (qrScanData.userId) {
+    const existingAdScan = this.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+    if (existingAdScan) {
+      existingAdScan.scanCount += 1;
+      existingAdScan.lastScanned = new Date();
+    } else {
+      this.qrScansByAd.push({
+        adId: qrScanData.adId,
+        userId: qrScanData.userId,
+        adTitle: qrScanData.adTitle,
+        scanCount: 1,
+        lastScanned: new Date(),
+        firstScanned: new Date()
+      });
+    }
   }
   
   // Update hourly stats
