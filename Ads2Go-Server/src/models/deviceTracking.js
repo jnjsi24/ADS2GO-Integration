@@ -586,7 +586,7 @@ DeviceTrackingSchema.methods.getSlot = function(slotNumber) {
 };
 
 // Helper method to update a specific slot
-DeviceTrackingSchema.methods.updateSlot = function(slotNumber, updateData) {
+DeviceTrackingSchema.methods.updateSlot = async function(slotNumber, updateData) {
   const slot = this.getSlot(slotNumber);
   if (slot) {
     Object.assign(slot, updateData);
@@ -604,7 +604,31 @@ DeviceTrackingSchema.methods.updateSlot = function(slotNumber, updateData) {
   this.isOnline = this.slots.some(slot => slot.isOnline);
   this.lastSeen = new Date();
   
-  return this.save();
+  // Retry logic for version conflicts
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await this.save();
+    } catch (error) {
+      if (error.name === 'VersionError' && retries > 1) {
+        console.log(`Version conflict, retrying... (${4 - retries}/3)`);
+        // Reload the document to get the latest version
+        const freshDoc = await this.constructor.findById(this._id);
+        if (freshDoc) {
+          // Update the slot on the fresh document with the same data
+          await freshDoc.updateSlot(slotNumber, updateData);
+          this.set(freshDoc.toObject());
+          retries--;
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error('Failed to save after retries');
 };
 
 // Helper method to get slot status for dashboard

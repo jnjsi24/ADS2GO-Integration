@@ -127,9 +127,9 @@ const getAPIBaseURL = () => {
     return serverUrl;
   }
 
-  // Fallback to hosted server
-  const fallbackUrl = 'https://ads2go-server.onrender.com';
-  console.log('🔧 Using fallback hosted server URL:', fallbackUrl);
+  // Fallback to local server
+  const fallbackUrl = 'http://192.168.1.7:5000';
+  console.log('🔧 Using fallback local server URL:', fallbackUrl);
   return fallbackUrl;
 };
 
@@ -532,6 +532,9 @@ export class TabletRegistrationService {
         return false;
       }
 
+      // Validate speed value - ensure it's non-negative
+      const validSpeed = speed && speed >= 0 ? speed : 0;
+
       // Validate that we have proper registration data
       if (!this.registration.materialId || this.registration.materialId.startsWith('TABLET-')) {
         console.log('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
@@ -542,13 +545,13 @@ export class TabletRegistrationService {
       this.currentSpeedLimit = await this.detectSpeedLimit(lat, lng);
       
       // Check for speed violations
-      const violation = this.checkForSpeedViolation(speed, lat, lng, accuracy);
+      const violation = this.checkForSpeedViolation(validSpeed, lat, lng, accuracy);
 
       const locationUpdate: LocationUpdate = {
         deviceId: this.registration.deviceId,
         lat,
         lng,
-        speed,
+        speed: validSpeed,
         heading,
         accuracy,
         speedLimit: this.currentSpeedLimit,
@@ -564,7 +567,7 @@ export class TabletRegistrationService {
       await offlineQueueService.queueLocationData({
         lat: lat,
         lng: lng,
-        speed: speed,
+        speed: validSpeed,
         heading: heading,
         accuracy: accuracy
       });
@@ -591,7 +594,7 @@ export class TabletRegistrationService {
             carGroupId: this.registration.carGroupId, // Add carGroupId for dashboard
             lat: locationUpdate.lat,
             lng: locationUpdate.lng,
-            speed: locationUpdate.speed,
+            speed: validSpeed,
             heading: locationUpdate.heading,
             accuracy: locationUpdate.accuracy
           }),
@@ -726,7 +729,7 @@ export class TabletRegistrationService {
           await this.updateLocationTracking(
             latitude, 
             longitude, 
-            speed || 0, 
+            speed && speed >= 0 ? speed : 0, 
             heading || 0, 
             accuracy || 0
           );

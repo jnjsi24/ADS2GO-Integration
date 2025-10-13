@@ -12,7 +12,7 @@ import companyAdService, { CompanyAd } from '../services/companyAdService';
 import offlineQueueService from '../services/offlineQueueService';
 
 // API Base URL - should match the one in tabletRegistration service
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
 
 // Suppress expo-av deprecation warning
 const originalWarn = console.warn;
@@ -59,6 +59,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isRegistered, setIsRegistered] = useState<boolean | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncData, setSyncData] = useState<any>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -89,6 +91,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     if (isRegistered) {
       // Set up slot synchronization callback
       playbackWebSocketService.setSlotSyncCallback(handleSlotSync);
+      // Set up pause all callback
+      playbackWebSocketService.setPauseAllCallback(handlePauseAll);
+      // Set up resume all callback
+      playbackWebSocketService.setResumeAllCallback(handleResumeAll);
+      // Set up lockdown callback
+      playbackWebSocketService.setLockdownCallback(handleLockdown);
+      // Set up unlock callback
+      playbackWebSocketService.setUnlockCallback(handleUnlock);
       
       // Connect to WebSocket
       playbackWebSocketService.connect().then((connected) => {
@@ -106,14 +116,88 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
     return () => {
       playbackWebSocketService.setSlotSyncCallback(() => {});
+      playbackWebSocketService.setPauseAllCallback(() => {});
+      playbackWebSocketService.setResumeAllCallback(() => {});
       playbackWebSocketService.stopPeriodicSync();
     };
   }, [isRegistered]);
+
+  // Execute perfect synchronization
+  const executePerfectSync = (message: any) => {
+    try {
+      console.log(`🔄 [AdPlayer] Executing perfect sync for material: ${message.materialId}${message.testMode ? ' [TEST MODE]' : ''}`);
+      
+      // Set syncing state to show visual indicator
+      setIsSyncing(true);
+      setIsPaused(false);
+      
+      // If this is the reference device, just continue playing
+      if (message.targetDeviceId === message.referenceDeviceId) {
+        console.log(`🔄 [AdPlayer] This is the reference device - continuing current playback`);
+        // In test mode, show sync indicator briefly
+        if (message.testMode) {
+          setTimeout(() => {
+            setIsSyncing(false);
+            console.log(`🔄 [AdPlayer] Test mode sync completed`);
+          }, 2000);
+        }
+        return;
+      }
+      
+      // For non-reference devices, sync to the reference device's state
+      console.log(`🔄 [AdPlayer] Syncing to reference device: ${message.referenceDeviceId}`);
+      
+      // Request current state from reference device
+      playbackWebSocketService.requestSync();
+      
+      // Set a flag to indicate we're in perfect sync mode
+      setSyncData({
+        ...message,
+        perfectSync: true,
+        executedAt: new Date().toISOString()
+      });
+      
+      // Auto-clear sync state after 5 seconds
+      setTimeout(() => {
+        setIsSyncing(false);
+        console.log(`🔄 [AdPlayer] Sync state cleared`);
+      }, 5000);
+      
+      console.log(`🔄 [AdPlayer] Perfect sync executed successfully`);
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error executing perfect sync:', error);
+      setIsSyncing(false);
+    }
+  };
 
   // Handle slot synchronization messages
   const handleSlotSync = (message: any) => {
     console.log('🔄 [AdPlayer] Received slot sync:', message);
     
+    // Check if this is a perfect sync command with delayed execution
+    if (message.command === 'sync' && message.executeAt && message.syncDelay) {
+      console.log(`🔄 [AdPlayer] Perfect sync command received - Execute at: ${message.executeAt}`);
+      
+      const executeTime = new Date(message.executeAt).getTime();
+      const currentTime = Date.now();
+      const delay = executeTime - currentTime;
+      
+      if (delay > 0) {
+        console.log(`🔄 [AdPlayer] Waiting ${delay}ms before executing sync...`);
+        setIsSyncing(true);
+        
+        setTimeout(() => {
+          console.log(`🔄 [AdPlayer] Executing perfect sync now!`);
+          executePerfectSync(message);
+        }, delay);
+      } else {
+        console.log(`🔄 [AdPlayer] Execute time has passed, executing sync immediately`);
+        executePerfectSync(message);
+      }
+      return;
+    }
+    
+    // Original sync logic for backward compatibility
     if (message.sourceSlot !== slotNumber) {
       setSyncData(message);
       setIsSyncing(true);
@@ -145,6 +229,171 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         // Don't interrupt current playback for loading states
         setIsSyncing(false);
       }
+    }
+  };
+
+  // Handle pause all command from server
+  const handlePauseAll = (message: any) => {
+    try {
+      console.log('⏸️ [AdPlayer] Received pause all command:', message);
+      console.log('⏸️ [AdPlayer] Current ad state:', currentAd);
+      console.log('⏸️ [AdPlayer] Video ref state:', videoRef.current ? 'available' : 'not available');
+      console.log('⏸️ [AdPlayer] isPaused state:', isPaused);
+      
+      // Always set paused state when pause command is received
+      console.log('⏸️ [AdPlayer] Setting paused state to true');
+      setIsPaused(true);
+      
+      // Force pause the video immediately
+      if (videoRef.current) {
+        console.log('⏸️ [AdPlayer] Force pausing video player');
+        videoRef.current.pauseAsync().catch(err => {
+          console.log('⏸️ [AdPlayer] Video pause error (expected):', err.message);
+        });
+      } else {
+        console.log('⏸️ [AdPlayer] Video ref not ready, but marking as paused');
+      }
+      
+      // Note: GPS location tracking should continue even when paused
+      // Only ad playback analytics should stop
+      console.log('⏸️ [AdPlayer] GPS location tracking will continue - only ad playback stopped');
+      
+      // If we have a current ad, update it and send WebSocket update
+      if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
+        console.log('⏸️ [AdPlayer] Pausing current ad due to pause all command:', currentAd.adTitle);
+        
+        // Update the current ad state to paused
+        // Note: currentAd is derived from currentAdIndex, so we don't need to update it directly
+        
+        // Send pause state update to server
+        playbackWebSocketService.updatePlaybackDataAndSend({
+          adId: currentAd.adId,
+          adTitle: currentAd.adTitle,
+          state: 'paused',
+          currentTime: 0,
+          duration: currentAd.duration || 0,
+          progress: 0,
+        });
+        
+        console.log('⏸️ [AdPlayer] Ad paused successfully');
+      } else {
+        console.log('⏸️ [AdPlayer] No current ad to update, but video is paused');
+        console.log('⏸️ [AdPlayer] Current ad details:', {
+          currentAd,
+          adTitle: currentAd?.adTitle,
+          isNoAd: currentAd?.adTitle === 'No Ad'
+        });
+      }
+      
+      console.log('⏸️ [AdPlayer] Pause all command processed successfully');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling pause all command:', error);
+    }
+  };
+
+  // Resume ad playback
+  const resumeAd = () => {
+    try {
+      console.log('▶️ [AdPlayer] Resuming ad playback');
+      setIsPaused(false);
+      
+      if (videoRef.current) {
+        console.log('▶️ [AdPlayer] Starting video player');
+        videoRef.current.playAsync();
+      }
+      
+      // Reset ad start time
+      // Note: currentAd is derived from currentAdIndex, so we don't need to update it directly
+      
+      // Note: GPS location tracking was never stopped, so no need to restart it
+      console.log('▶️ [AdPlayer] Ad resumed successfully - GPS tracking continues');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error resuming ad:', error);
+    }
+  };
+
+  // Handle resume all command from server
+  const handleResumeAll = (message: any) => {
+    try {
+      console.log('▶️ [AdPlayer] Received resume all command:', message);
+      console.log('▶️ [AdPlayer] Current ad state:', currentAd);
+      console.log('▶️ [AdPlayer] Video ref state:', videoRef.current ? 'available' : 'not available');
+      console.log('▶️ [AdPlayer] isPaused state:', isPaused);
+      
+      // Set resumed state when resume command is received
+      console.log('▶️ [AdPlayer] Setting paused state to false');
+      setIsPaused(false);
+      
+      // Try to resume the video if it exists
+      if (videoRef.current) {
+        console.log('▶️ [AdPlayer] Resuming video player');
+        videoRef.current.playAsync().catch(err => {
+          console.log('▶️ [AdPlayer] Video resume error (expected):', err.message);
+        });
+      } else {
+        console.log('▶️ [AdPlayer] Video ref not ready, but marking as resumed');
+      }
+      
+      // If we have a current ad, update it and send WebSocket update
+      if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
+        console.log('▶️ [AdPlayer] Resuming current ad due to resume all command:', currentAd.adTitle);
+        
+        // Update the current ad state to resumed
+        // Note: currentAd is derived from currentAdIndex, so we don't need to update it directly
+        
+        // Send resume state update to server
+        playbackWebSocketService.updatePlaybackDataAndSend({
+          adId: currentAd.adId,
+          adTitle: currentAd.adTitle,
+          state: 'playing',
+          currentTime: 0,
+          duration: currentAd.duration || 0,
+          progress: 0,
+        });
+        
+        console.log('▶️ [AdPlayer] Ad resumed successfully');
+      } else {
+        console.log('▶️ [AdPlayer] No current ad to update, but video is resumed');
+        console.log('▶️ [AdPlayer] Current ad details:', {
+          currentAd,
+          adTitle: currentAd?.adTitle,
+          isNoAd: currentAd?.adTitle === 'No Ad'
+        });
+      }
+      
+      console.log('▶️ [AdPlayer] Resume all command processed successfully');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling resume all command:', error);
+    }
+  };
+
+  // Handle lockdown command from server
+  const handleLockdown = (message: any) => {
+    try {
+      console.log('🔒 [AdPlayer] Received lockdown command:', message);
+      
+      // Lock the screen - prevent user interaction but keep ads playing
+      setIsLocked(true);
+      // Note: We don't pause the video - ads should continue playing
+      
+      console.log('🔒 [AdPlayer] Screen locked - user interaction disabled, ads continue playing');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling lockdown:', error);
+    }
+  };
+
+  // Handle unlock command from server
+  const handleUnlock = (message: any) => {
+    try {
+      console.log('🔓 [AdPlayer] Received unlock command:', message);
+      
+      // Unlock the screen - allow user interaction again
+      setIsLocked(false);
+      // Note: Video continues playing normally - no need to resume
+      
+      console.log('🔓 [AdPlayer] Screen unlocked - user interaction enabled');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling unlock:', error);
     }
   };
 
@@ -224,6 +473,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track ad playback
   const trackAdPlayback = async (adId: string, adTitle: string, adDuration: number, viewTime: number = 0) => {
     try {
+      // Skip ad tracking if paused
+      if (isPaused) {
+        console.log(`⏸️ [AdPlayer] Skipping ad tracking - video is paused`);
+        return;
+      }
+      
       console.log(`🎬 Tracking ad playback: ${adTitle} (${adDuration}s) - View time: ${viewTime}s - ${isOffline ? 'OFFLINE' : 'ONLINE'}`);
       
       // If this is a company ad, increment play count
@@ -328,7 +583,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         gpsData = {
           lat: location.coords.latitude,
           lng: location.coords.longitude,
-          speed: location.coords.speed || 0,
+          speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
           heading: location.coords.heading || 0,
           accuracy: location.coords.accuracy || 0,
           altitude: location.coords.altitude || 0
@@ -473,7 +728,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         gpsData = {
           lat: location.coords.latitude,
           lng: location.coords.longitude,
-          speed: location.coords.speed || 0,
+          speed: location.coords.speed && location.coords.speed >= 0 ? location.coords.speed : 0,
           heading: location.coords.heading || 0,
           accuracy: location.coords.accuracy || 0,
           altitude: location.coords.altitude || 0
@@ -618,7 +873,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log(`🔍 QR URL: ${generateQRData()}`);
       
       // Test QR scan tracking
-      await trackQRDisplay();
+      await trackQRDisplay(currentAd.adId, currentAd.adTitle);
       
       // Note: QR scan tracking is now handled by the tracking page, not the Android app
       console.log('🔍 QR scan will be tracked when user visits the tracking URL');
@@ -1209,7 +1464,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             style={styles.video}
             useNativeControls={false}
             resizeMode={ResizeMode.COVER}
-            shouldPlay={true}
+            shouldPlay={!isPaused}
             isLooping={true} // Loop the company ad when it's the only option
             onPlaybackStatusUpdate={(status) => {
               if (status.isLoaded) {
@@ -1284,8 +1539,9 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       <TouchableOpacity 
         style={styles.videoContainer}
-        onPress={handleScreenTap}
-        activeOpacity={1}
+        onPress={isLocked ? undefined : handleScreenTap}
+        activeOpacity={isLocked ? 1 : 1}
+        disabled={isLocked}
       >
         <Video
           key={`${currentAd?.adId || 'no-ad'}-${retryCount}`} // Force re-render when switching ads or retrying
@@ -1294,7 +1550,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
           style={styles.video}
           useNativeControls={false}
           resizeMode={ResizeMode.COVER}
-          shouldPlay={true}
+          shouldPlay={!isPaused}
           isLooping={false}
           onPlaybackStatusUpdate={(status) => {
             if (status.isLoaded) {
@@ -1589,7 +1845,98 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         
         {/* Minimal Ad Info Overlay - Always visible */}
         <View style={styles.adInfoOverlay}>
-          <Text style={styles.adTitle}>{currentAd?.adTitle || 'No Ad'}</Text>
+        <Text style={styles.adTitle}>
+          {currentAd?.adTitle || 'No Ad'}
+          {isPaused && ' ⏸️ PAUSED'}
+          {isSyncing && ' 🔄 SYNCING'}
+          {isLocked && ' 🔒 LOCKED'}
+        </Text>
+        {isPaused && (
+          <View style={{ alignItems: 'center', marginTop: 10 }}>
+            <Text style={[styles.adTitle, { color: '#ff6b6b', fontSize: 16, marginBottom: 10 }]}>
+              🎬 Video Paused by Admin
+            </Text>
+            <TouchableOpacity 
+              style={{
+                backgroundColor: '#4CAF50',
+                paddingHorizontal: 20,
+                paddingVertical: 10,
+                borderRadius: 5,
+              }}
+              onPress={resumeAd}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                ▶️ Resume Ad
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {isSyncing && (
+          <View style={{ alignItems: 'center', marginTop: 10 }}>
+            <Text style={[styles.adTitle, { color: '#2196F3', fontSize: 16, marginBottom: 10 }]}>
+              🔄 Syncing with other devices...
+            </Text>
+            <Text style={[styles.adTitle, { color: '#666', fontSize: 14 }]}>
+              Perfect synchronization in progress
+            </Text>
+            {syncData?.executeAt && (
+              <Text style={[styles.adTitle, { color: '#999', fontSize: 12, marginTop: 5 }]}>
+                Execute at: {new Date(syncData.executeAt).toLocaleTimeString()}
+              </Text>
+            )}
+          </View>
+        )}
+        
+        {isLocked && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            elevation: 9999,
+          }}>
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              <Text style={{
+                color: '#ff4444',
+                fontSize: 24,
+                fontWeight: 'bold',
+                marginBottom: 20,
+                textAlign: 'center'
+              }}>
+                🔒 SCREEN LOCKED
+              </Text>
+              <Text style={{
+                color: '#ffffff',
+                fontSize: 16,
+                textAlign: 'center',
+                marginBottom: 10
+              }}>
+                Screen locked by admin for safety
+              </Text>
+              <Text style={{
+                color: '#cccccc',
+                fontSize: 14,
+                textAlign: 'center',
+                marginBottom: 5
+              }}>
+                Ads continue playing - no user interaction allowed
+              </Text>
+              <Text style={{
+                color: '#cccccc',
+                fontSize: 12,
+                textAlign: 'center'
+              }}>
+                Contact administrator to unlock
+              </Text>
+            </View>
+          </View>
+        )}
         </View>
 
         {/* Ad Counter - Always visible */}
