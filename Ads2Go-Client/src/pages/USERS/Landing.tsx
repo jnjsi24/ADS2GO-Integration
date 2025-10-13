@@ -549,22 +549,22 @@ export default function Home() {
         <div className="container mx-auto max-w-screen-xl">
           <div className="flex flex-col md:flex-row gap-6 sm:gap-8">
             <div className="md:w-1/2">
-              <h3 className="text-xl sm:text-2xl font-semibold mb-4 text-[#0C4A6E]">Get in Touch</h3>
+              <h3 className="text-xl sm:text-2xl font-semibold mb-4">Get in Touch</h3>
               <p className="text-base sm:text-lg text-[#475569] mb-4 sm:mb-6 leading-relaxed">
                 Have questions about our mobile advertising solutions or want to join as a driver? 
                 Reach out to our team, and we’ll get back to you as soon as possible. 
                 Your feedback and inquiries are important to us!
               </p>
-              <p className="text-sm sm:text-md text-[#475569]">
-                Email: <a href="mailto:support@ads2go.com" className="hover:text-[#F59E0B] transition-colors duration-300">support@ads2go.com</a><br />
-                Phone: <a href="tel:+1234567890" className="hover:text-[#F59E0B] transition-colors duration-300">+1 (234) 567-890</a>
+              <p className="text-sm sm:text-md">
+                Email: <a href="mailto:support@ads2go.com" className="transition-colors duration-300">support@ads2go.com</a><br />
+                Phone: <a href="tel:+1234567890" className="transition-colors duration-300">+1 (234) 567-890</a>
               </p>
             </div>
             <div className="md:w-1/2">
-              <h3 className="text-lg font-semibold mb-2">Contact Us</h3>
+              <h3 className="text-xl font-semibold mb-2">Contact Us</h3>
               <form onSubmit={handleNewsletterSubmit} className="mt-2">
                 <div className="mb-4">
-                  <label htmlFor="contact-name" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-name" className="block text-sm font-medium mb-1">
                     Name
                   </label>
                   <input
@@ -573,7 +573,7 @@ export default function Home() {
                     value={contactForm.name}
                     onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                     placeholder="Your name"
-                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                    className={`w-full p-2 pl-4 text-black focus:outline-none ${
                       contactStatus === 'error' && !contactForm.name.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
@@ -584,7 +584,7 @@ export default function Home() {
                   />
                 </div>
                 <div className="mb-4">
-                  <label htmlFor="contact-email" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-email" className="block text-sm font-medium mb-1">
                     Email
                   </label>
                   <input
@@ -593,7 +593,7 @@ export default function Home() {
                     value={newsletterEmail}
                     onChange={(e) => setNewsletterEmail(e.target.value)}
                     placeholder="Your email address"
-                    className={`w-full p-2 pl-4 pr-10 bg-[#F1F5F9] text-black rounded focus:outline-none ${
+                    className={`w-full p-2 pl-4 pr-10 text-black focus:outline-none ${
                       newsletterStatus === 'error' && !newsletterEmail.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
@@ -604,7 +604,7 @@ export default function Home() {
                   />
                 </div>
                 <div className="mb-4">
-                  <label htmlFor="contact-message" className="block text-sm font-medium text-[#0C4A6E] mb-1">
+                  <label htmlFor="contact-message" className="block text-sm font-medium mb-1">
                     Message
                   </label>
                   <textarea
@@ -612,7 +612,7 @@ export default function Home() {
                     value={contactForm.message}
                     onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
                     placeholder="Your message"
-                    className={`w-full p-2 pl-4 bg-[#F1F5F9] text-black rounded focus:outline-none h-24 sm:h-32 resize-y ${
+                    className={`w-full p-2 pl-4 text-black focus:outline-none h-24 sm:h-32 resize-y ${
                       contactStatus === 'error' && !contactForm.message.trim() ? 'border-2 border-red-500' : ''
                     }`}
                     style={{
@@ -640,7 +640,7 @@ export default function Home() {
                                   : "hover:scale-105"
                                 }`}
                     style={newsletterStatus === 'loading' ? {} : {
-                      backgroundImage: `linear-gradient(to right, #FFB877 0%, #FF9B45 100%),
+                      backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
                                         radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
                     }}
                   >
@@ -696,12 +696,10 @@ export default function Home() {
               <div className="flex flex-col items-center lg:items-end gap-3">
                 {/* Navigation Links */}
                 <div className="flex flex-wrap justify-center lg:justify-end gap-4 mb-10">
-                  <button className="hover:text-white/70 text-lg">About</button>
-                  <button className="hover:text-white/70 text-lg">Blog</button>
-                  <Link to="/help" className="hover:text-white/70 text-lg">
-                    Help Center
-                  </Link>
-                  <button className="hover:text-white/70 text-lg">Contact Us</button>
+                  <button id="about-us" className="hover:text-white/70 text-lg">About</button>
+                  <button id="blog" className="hover:text-white/70 text-lg">Blog</button>
+                  <button id="help-center" className="hover:text-white/70 text-lg">Help Center</button>
+                  <button id="contact-us" className="hover:text-white/70 text-lg">Contact Us</button>
                 </div>
 
                 {/* Copyright (below navigation) */}
