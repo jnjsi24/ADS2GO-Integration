@@ -252,7 +252,7 @@ const Login: React.FC = () => {
       )}
 
       <div className="relative z-10 p-8 sm:p-10 
-                rounded-xl shadow-2xl w-full max-w-xl
+                rounded-md shadow-2xl w-full max-w-xl
                 bg-white/20 backdrop-blur-lg border border-white/30">
         {/* Ads2Go Logo */}
         <div className="flex justify-center mb-6">
@@ -352,9 +352,9 @@ const Login: React.FC = () => {
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
                         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                        className="absolute text-blue-600"
+                        className="absolute text-white"
                       >
-                        <Check size={16} strokeWidth={3} />
+                        <Check size={11} strokeWidth={3} />
                       </motion.div>
                     )}
                   </AnimatePresence>

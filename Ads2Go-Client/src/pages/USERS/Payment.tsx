@@ -349,14 +349,8 @@ const Payment: React.FC<PaymentProps> = ({
                 {paymentItem.status}
               </span>
             </div>
-            <table className="w-full text-sm bg-gray-100 rounded-lg mt-5 p-4">
+            <table className="w-full text-sm bg-gray-50 shadow-md rounded-lg mt-5 p-4">
               <tbody className="divide-y">
-                <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Price</td>
-                  <td className="py-2 px-4 text-gray-800">
-                    ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
-                  </td>
-                </tr>
                 <tr>
                   <td className="py-2 px-4 text-gray-600 font-medium">Mode of Payment</td>
                   <td className="py-2 px-4 text-gray-800">

@@ -888,7 +888,7 @@ const ManageAds: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full m-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Reject Advertisement</h2>
+              <h2 className="text-xl font-bold text-gray-800 mb-5">Reject Advertisement</h2>
               <button
                 onClick={() => {
                   setShowRejectModal(false);
@@ -900,23 +900,40 @@ const ManageAds: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Reason for rejection <span className="text-red-500">*</span>
-              </label>
+
+            <div className="relative mb-6">
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                rows={4}
-                placeholder="Please provide a detailed reason for rejecting this advertisement..."
+                id="rejectReason"
+                className={`peer w-full px-0 pb-2 text-gray-800 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 transition resize-none ${
+                  !rejectReason.trim() ? 'border-gray-300' : 'border-gray-400'
+                } ${rejectReason ? 'mt-3' : ''}`}  
+                style={{
+                  backgroundColor: 'transparent',
+                  height: rejectReason ? '6rem' : 'auto',
+                  minHeight: '2.5rem',
+                  maxHeight: '6rem',
+                  transition: 'margin 0.2s ease'
+                }}
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">This reason will be visible to the advertiser.</p>
+              <label
+                htmlFor="rejectReason"
+                className={`absolute left-0 text-gray-600 bg-transparent px-1 transition-all duration-200 ${
+                  rejectReason
+                    ? '-top-4 text-sm text-gray-700 font-bold mb-3'  /* ✅ Adds spacing when active */
+                    : 'top-6 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                } peer-focus:-top-4 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-bold peer-focus:mb-3`}  /* ✅ Spacing also on focus */
+              >
+                Reason for rejection
+              </label>
+              <p className="text-xs text-gray-500 mt-2">
+                This reason will be visible to the advertiser.
+              </p>
             </div>
-            
-            <div className="flex gap-3 justify-end">
+
+            <div className="flex gap-3 justify-between">
               <button
                 onClick={() => {
                   setShowRejectModal(false);
@@ -939,7 +956,9 @@ const ManageAds: React.FC = () => {
                 {adToReject && processingAds.has(adToReject) && (
                   <div className="w-4 h-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
                 )}
-                {adToReject && processingAds.has(adToReject) ? 'Processing...' : 'Reject Advertisement'}
+                {adToReject && processingAds.has(adToReject)
+                  ? 'Processing...'
+                  : 'Reject Advertisement'}
               </button>
             </div>
           </div>
