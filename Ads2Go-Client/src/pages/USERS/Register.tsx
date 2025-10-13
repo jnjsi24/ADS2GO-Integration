@@ -343,6 +343,7 @@ const Register: React.FC = () => {
         className={`peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${
           error ? 'border-red-400' : 'border-gray-300'
         } text-white`}
+        style={{ backgroundColor: 'transparent' }}
       />
       <label
         htmlFor={id}
@@ -378,6 +379,19 @@ const Register: React.FC = () => {
       className="min-h-screen flex items-center justify-center bg-cover bg-center"
       style={{ backgroundImage: "url('/image/signup.png')" }}
     >
+      <style>
+        {`
+          input:-webkit-autofill,
+          input:-webkit-autofill:hover,
+          input:-webkit-autofill:focus,
+          input:-webkit-autofill:active {
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: white;
+            transition: background-color 5000s ease-in-out 0s;
+            box-shadow: inset 0 0 20px 20px transparent !important;
+          }
+        `}
+      </style>
       <div className="fixed top-0 left-0 w-full h-full bg-black bg-opacity-40 z-0"></div>
 
       <div className="relative z-10 p-8 sm:p-10 mb-5 mt-5
