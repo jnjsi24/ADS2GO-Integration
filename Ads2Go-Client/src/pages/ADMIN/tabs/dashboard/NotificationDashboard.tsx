@@ -28,7 +28,7 @@ interface PendingAd {
     firstName: string;
     lastName: string;
   } | null;
-  materialId?: string;
+  materialId?: string[];
   planId?: string;
 }
 
@@ -60,31 +60,44 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
   
   // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
     pollInterval: 30000, // Refresh every 30 seconds
-    onError: (error) => {
-      console.error('Error fetching notifications:', error);
-    }
   });
 
   // Fetch pending ads
-  const { data: pendingAdsData, loading: pendingAdsLoading, refetch: refetchPendingAds } = useQuery(GET_PENDING_ADS, {
+  const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError, refetch: refetchPendingAds } = useQuery(GET_PENDING_ADS, {
     pollInterval: 30000,
-    onCompleted: (data) => {
-      console.log('🔔 Frontend: Pending ads data received:', data);
-    },
-    onError: (error) => {
-      console.error('Error fetching pending ads:', error);
-    }
   });
 
   // Fetch pending materials
-  const { data: pendingMaterialsData, loading: pendingMaterialsLoading, refetch: refetchPendingMaterials } = useQuery(GET_PENDING_MATERIALS, {
+  const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError, refetch: refetchPendingMaterials } = useQuery(GET_PENDING_MATERIALS, {
     pollInterval: 30000,
-    onError: (error) => {
-      console.error('Error fetching pending materials:', error);
-    }
   });
+
+  // Handle query errors
+  useEffect(() => {
+    if (notificationsError) {
+      console.error('Error fetching notifications:', notificationsError);
+    }
+  }, [notificationsError]);
+
+  useEffect(() => {
+    if (pendingAdsData) {
+      console.log('🔔 Frontend: Pending ads data received:', pendingAdsData);
+    }
+  }, [pendingAdsData]);
+
+  useEffect(() => {
+    if (pendingAdsError) {
+      console.error('Error fetching pending ads:', pendingAdsError);
+    }
+  }, [pendingAdsError]);
+
+  useEffect(() => {
+    if (pendingMaterialsError) {
+      console.error('Error fetching pending materials:', pendingMaterialsError);
+    }
+  }, [pendingMaterialsError]);
 
   // Mark notification as read
   const [markAsRead] = useMutation(MARK_NOTIFICATION_READ, {

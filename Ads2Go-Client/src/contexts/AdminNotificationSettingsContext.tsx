@@ -39,31 +39,39 @@ export const AdminNotificationSettingsProvider: React.FC<AdminNotificationSettin
   const [error, setError] = useState<string | null>(null);
 
   // Fetch notification preferences (skip for SuperAdmins)
-  const { loading: preferencesLoading, refetch: refetchPreferences } = useQuery(
+  const { data: preferencesData, loading: preferencesLoading, error: preferencesError, refetch: refetchPreferences } = useQuery(
     GET_ADMIN_NOTIFICATION_PREFERENCES,
     {
       skip: !isAuthenticated || !admin || admin.role === 'SUPERADMIN',
-      onCompleted: (data) => {
-        console.log('🔔 AdminNotificationSettings: Preferences loaded:', data);
-        if (data?.getAdminNotificationPreferences) {
-          setNotificationSettings({
-            enableDesktopNotifications: data.getAdminNotificationPreferences.enableDesktopNotifications,
-            enableNotificationBadge: data.getAdminNotificationPreferences.enableNotificationBadge,
-            pushNotificationTimeout: data.getAdminNotificationPreferences.pushNotificationTimeout,
-            communicationEmails: data.getAdminNotificationPreferences.communicationEmails,
-            announcementsEmails: data.getAdminNotificationPreferences.announcementsEmails,
-          });
-        }
-        setIsLoading(false);
-        setError(null);
-      },
-      onError: (error) => {
-        console.error('❌ AdminNotificationSettings: Error fetching preferences:', error);
-        setError('Failed to load notification preferences');
-        setIsLoading(false);
-      }
     }
   );
+
+  // Handle preferences data changes
+  useEffect(() => {
+    if (preferencesData) {
+      console.log('🔔 AdminNotificationSettings: Preferences loaded:', preferencesData);
+      if (preferencesData?.getAdminNotificationPreferences) {
+        setNotificationSettings({
+          enableDesktopNotifications: preferencesData.getAdminNotificationPreferences.enableDesktopNotifications,
+          enableNotificationBadge: preferencesData.getAdminNotificationPreferences.enableNotificationBadge,
+          pushNotificationTimeout: preferencesData.getAdminNotificationPreferences.pushNotificationTimeout,
+          communicationEmails: preferencesData.getAdminNotificationPreferences.communicationEmails,
+          announcementsEmails: preferencesData.getAdminNotificationPreferences.announcementsEmails,
+        });
+      }
+      setIsLoading(false);
+      setError(null);
+    }
+  }, [preferencesData]);
+
+  // Handle preferences errors
+  useEffect(() => {
+    if (preferencesError) {
+      console.error('❌ AdminNotificationSettings: Error fetching preferences:', preferencesError);
+      setError('Failed to load notification preferences');
+      setIsLoading(false);
+    }
+  }, [preferencesError]);
 
   // Update notification preferences mutation
   const [updateNotificationPreferences] = useMutation(UPDATE_ADMIN_NOTIFICATION_PREFERENCES, {
