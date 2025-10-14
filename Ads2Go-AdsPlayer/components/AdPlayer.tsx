@@ -33,9 +33,11 @@ interface AdPlayerProps {
   slotNumber: number;
   onAdError?: (error: string) => void;
   isOffline?: boolean;
+  isLocked?: boolean;
+  onLockStateChange?: (isLocked: boolean) => void;
 }
 
-const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false }) => {
+const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false, isLocked = false, onLockStateChange }) => {
   const [ads, setAds] = useState<Ad[]>([]);
   const [companyAds, setCompanyAds] = useState<CompanyAd[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -60,7 +62,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncData, setSyncData] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -371,12 +372,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const handleLockdown = (message: any) => {
     try {
       console.log('🔒 [AdPlayer] Received lockdown command:', message);
+      console.log('🔒 [AdPlayer] Current isLocked state:', isLocked);
       
       // Lock the screen - prevent user interaction but keep ads playing
-      setIsLocked(true);
+      onLockStateChange?.(true);
       // Note: We don't pause the video - ads should continue playing
       
       console.log('🔒 [AdPlayer] Screen locked - user interaction disabled, ads continue playing');
+      console.log('🔒 [AdPlayer] New isLocked state:', true);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling lockdown:', error);
     }
@@ -386,12 +389,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const handleUnlock = (message: any) => {
     try {
       console.log('🔓 [AdPlayer] Received unlock command:', message);
+      console.log('🔓 [AdPlayer] Current isLocked state:', isLocked);
       
       // Unlock the screen - allow user interaction again
-      setIsLocked(false);
+      onLockStateChange?.(false);
       // Note: Video continues playing normally - no need to resume
       
       console.log('🔓 [AdPlayer] Screen unlocked - user interaction enabled');
+      console.log('🔓 [AdPlayer] New isLocked state:', false);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling unlock:', error);
     }
@@ -1537,19 +1542,23 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         </View>
       )}
       
-      <TouchableOpacity 
-        style={styles.videoContainer}
-        onPress={isLocked ? undefined : handleScreenTap}
-        activeOpacity={isLocked ? 1 : 1}
-        disabled={isLocked}
-      >
+        <View 
+          style={[styles.videoContainer, isLocked && styles.fullscreenVideoContainer]}
+          pointerEvents={isLocked ? 'none' : 'auto'}
+        >
+          <TouchableOpacity 
+            onPress={isLocked ? undefined : handleScreenTap}
+            activeOpacity={isLocked ? 1 : 1}
+            disabled={isLocked}
+            style={{ flex: 1 }}
+          >
         <Video
           key={`${currentAd?.adId || 'no-ad'}-${retryCount}`} // Force re-render when switching ads or retrying
           ref={videoRef}
           source={{ uri: currentAd?.mediaFile || '' }}
-          style={styles.video}
+          style={isLocked ? styles.fullscreenVideo : styles.video}
           useNativeControls={false}
-          resizeMode={ResizeMode.COVER}
+          resizeMode={isLocked ? ResizeMode.CONTAIN : ResizeMode.COVER}
           shouldPlay={!isPaused}
           isLooping={false}
           onPlaybackStatusUpdate={(status) => {
@@ -1842,6 +1851,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
         />
+          </TouchableOpacity>
+        </View>
         
         {/* Minimal Ad Info Overlay - Always visible */}
         <View style={styles.adInfoOverlay}>
@@ -1885,56 +1896,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 Execute at: {new Date(syncData.executeAt).toLocaleTimeString()}
               </Text>
             )}
-          </View>
-        )}
-        
-        {isLocked && (
-          <View style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 9999,
-            elevation: 9999,
-          }}>
-            <View style={{ alignItems: 'center', padding: 20 }}>
-              <Text style={{
-                color: '#ff4444',
-                fontSize: 24,
-                fontWeight: 'bold',
-                marginBottom: 20,
-                textAlign: 'center'
-              }}>
-                🔒 SCREEN LOCKED
-              </Text>
-              <Text style={{
-                color: '#ffffff',
-                fontSize: 16,
-                textAlign: 'center',
-                marginBottom: 10
-              }}>
-                Screen locked by admin for safety
-              </Text>
-              <Text style={{
-                color: '#cccccc',
-                fontSize: 14,
-                textAlign: 'center',
-                marginBottom: 5
-              }}>
-                Ads continue playing - no user interaction allowed
-              </Text>
-              <Text style={{
-                color: '#cccccc',
-                fontSize: 12,
-                textAlign: 'center'
-              }}>
-                Contact administrator to unlock
-              </Text>
-            </View>
           </View>
         )}
         </View>
@@ -2005,8 +1966,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             </View>
           </View>
         )}
-
-      </TouchableOpacity>
 
       {/* Controls */}
       {showControls && (
@@ -2099,8 +2058,23 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  fullscreenVideoContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 1000,
+  },
   video: {
     flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
     backgroundColor: '#000',
   },
   adInfoOverlay: {

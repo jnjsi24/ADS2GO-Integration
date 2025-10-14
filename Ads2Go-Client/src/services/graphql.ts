@@ -152,3 +152,43 @@ export const STOP_ALL_SCREENS = gql`
     }
   }
 `;
+
+export const LOCKDOWN_ALL_SCREENS = gql`
+  mutation LockdownAllScreens {
+    lockdownAllScreens {
+      success
+      message
+      pausedCount
+    }
+  }
+`;
+
+export const UNLOCK_ALL_SCREENS = gql`
+  mutation UnlockAllScreens {
+    unlockAllScreens {
+      success
+      message
+      pausedCount
+    }
+  }
+`;
+
+export const FULLSCREEN_ALL_SCREENS = gql`
+  mutation FullscreenAllScreens {
+    fullscreenAllScreens {
+      success
+      message
+      fullscreenCount
+    }
+  }
+`;
+
+export const EXIT_FULLSCREEN_ALL_SCREENS = gql`
+  mutation ExitFullscreenAllScreens {
+    exitFullscreenAllScreens {
+      success
+      message
+      exitFullscreenCount
+    }
+  }
+`;
