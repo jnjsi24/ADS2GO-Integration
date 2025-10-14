@@ -356,7 +356,7 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden pl-72 pr-5 p-5">
+    <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-5 pt-20 lg:pt-5">
     {/* Background Image */}
     <div
       className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
@@ -406,7 +406,7 @@ const AdDetailsPage: React.FC = () => {
       </AnimatePresence>
 
     {/* Content Layer */}
-    <div className="relative z-10 min-h-screen rounded-xl p-5">
+    <div className="relative z-10 min-h-screen rounded-xl p-3 sm:p-5">
       <button
         onClick={() => navigate('/advertisements')}
         className="py-2 text-black/90 rounded-lg hover:text-black/90 transition-colors flex items-center mb-4"

@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import API_CONFIG from '../../config/api';
 import ReportIssueModal from '../../components/ReportIssueModal';
+import { request, gql } from 'graphql-request';
 
 interface DriverProfile {
   driverId: string;
@@ -34,6 +35,17 @@ interface DriverProfile {
   joinDate: string;
   lastActive: string;
 }
+
+interface Material {
+  id: string;
+  materialId: string;
+  materialType: string;
+  status: string;
+  assignedDate: string;
+  deviceId?: string;
+}
+
+type TabType = 'profile' | 'vehicle' | 'material';
 
 const GET_DRIVER_PROFILE = `
   query GetDriverProfile($driverId: ID!) {
@@ -63,11 +75,49 @@ const GET_DRIVER_PROFILE = `
   }
 `;
 
+const GET_DRIVER_MATERIALS = gql`
+  query GetDriverMaterials($driverId: ID!) {
+    getDriverMaterials(driverId: $driverId) {
+      success
+      message
+      materials {
+        id
+        materialId
+        materialType
+        materialName
+        description
+        status
+        assignedDate
+        mountedAt
+        location {
+          address
+          coordinates
+        }
+      }
+    }
+  }
+`;
+
+const GET_DRIVER_ANALYTICS = `
+  query GetDriverAnalytics($driverId: ID!) {
+    getDriverAnalytics(driverId: $driverId) {
+      success
+      message
+      analytics {
+        totalDistance
+        totalHours
+      }
+    }
+  }
+`;
+
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
   const router = useRouter();
   const { signOut } = useAuth();
 
@@ -85,6 +135,7 @@ export default function ProfileScreen() {
         return;
       }
 
+      // Fetch profile data
       const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
         method: 'POST',
         headers: {
@@ -99,9 +150,11 @@ export default function ProfileScreen() {
 
       const result = await response.json();
 
+      let profileData: DriverProfile | null = null;
+
       if (result.data?.getDriver?.success && result.data.getDriver.driver) {
         const driverData = result.data.getDriver.driver;
-        setProfile({
+        profileData = {
           driverId: driverData.driverId || 'Unknown',
           firstName: driverData.firstName || 'Driver',
           lastName: driverData.lastName || '',
@@ -113,18 +166,18 @@ export default function ProfileScreen() {
           vehicleType: driverData.vehicleType || 'Unknown',
           isOnline: driverData.accountStatus === 'ACTIVE',
           totalEarnings: driverData.totalEarnings || 0,
-          totalDistance: 0, // Not available in driver profile
-          totalHours: 0, // Not available in driver profile
-          rating: 0, // Not available in driver profile
+          totalDistance: 0,
+          totalHours: 0,
+          rating: 0,
           joinDate: driverData.dateJoined || new Date().toISOString(),
           lastActive: driverData.lastLogin || new Date().toISOString(),
-        });
+        };
       } else {
         // Fallback to stored driver info if API fails
         const driverInfo = await AsyncStorage.getItem('driverInfo');
         if (driverInfo) {
           const driver = JSON.parse(driverInfo);
-          setProfile({
+          profileData = {
             driverId: driver.driverId || driver.id || 'Unknown',
             firstName: driver.firstName || 'Driver',
             lastName: driver.lastName || '',
@@ -141,9 +194,53 @@ export default function ProfileScreen() {
             rating: 0,
             joinDate: driver.dateJoined || new Date().toISOString(),
             lastActive: driver.lastLogin || new Date().toISOString(),
-          });
+          };
         }
       }
+
+      // Fetch analytics for distance and hours
+      try {
+        const analyticsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: GET_DRIVER_ANALYTICS,
+            variables: { driverId },
+          }),
+        });
+
+        const analyticsResult = await analyticsResponse.json();
+        if (analyticsResult.data?.getDriverAnalytics?.success && profileData) {
+          const analytics = analyticsResult.data.getDriverAnalytics.analytics;
+          profileData.totalDistance = analytics?.totalDistance || 0;
+          profileData.totalHours = analytics?.totalHours || 0;
+        }
+      } catch (error) {
+        console.log('Analytics not available:', error);
+      }
+
+      setProfile(profileData);
+
+      // Fetch materials
+      try {
+        const materialsData = await request(
+          API_CONFIG.API_URL, 
+          GET_DRIVER_MATERIALS, 
+          { driverId }, 
+          { Authorization: `Bearer ${token}` }
+        ) as any;
+
+        if (materialsData.getDriverMaterials?.success) {
+          setMaterials(materialsData.getDriverMaterials.materials || []);
+        }
+      } catch (error) {
+        console.log('Materials not available:', error);
+        setMaterials([]);
+      }
+
     } catch (error) {
       console.error('Error loading profile:', error);
       Alert.alert('Error', 'Failed to load profile');
@@ -212,6 +309,133 @@ export default function ProfileScreen() {
     );
   }
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'profile':
+        return (
+          <View style={styles.tabContent}>
+            <View style={styles.infoRow}>
+              <Ionicons name="mail-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{profile!.email}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="call-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Phone</Text>
+                <Text style={styles.infoValue}>{profile!.phoneNumber}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="card-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>License Number</Text>
+                <Text style={styles.infoValue}>{profile!.licenseNumber}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="calendar-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Joined</Text>
+                <Text style={styles.infoValue}>{formatDate(profile!.joinDate)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="time-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Last Active</Text>
+                <Text style={styles.infoValue}>{formatDate(profile!.lastActive)}</Text>
+              </View>
+            </View>
+          </View>
+        );
+      
+      case 'vehicle':
+        return (
+          <View style={styles.tabContent}>
+            <View style={styles.infoRow}>
+              <Ionicons name="car-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Plate Number</Text>
+                <Text style={styles.infoValue}>{profile!.vehiclePlateNumber}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="car-sport-outline" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Model</Text>
+                <Text style={styles.infoValue}>{profile!.vehicleModel}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Ionicons name="car-sport" size={20} color="#9ca3af" />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>Type</Text>
+                <Text style={styles.infoValue}>{profile!.vehicleType}</Text>
+              </View>
+            </View>
+          </View>
+        );
+      
+      case 'material':
+        return (
+          <View style={styles.tabContent}>
+            {materials.length > 0 ? (
+              materials.map((material, index) => (
+                <View key={material.id || index}>
+                  <View style={styles.infoRow}>
+                    <Ionicons name="cube-outline" size={20} color="#9ca3af" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoLabel}>MATERIAL ID</Text>
+                      <Text style={styles.infoValue}>{material.materialId}</Text>
+                      <Text style={styles.materialStatus}>
+                        {material.status === 'ACTIVE' ? 'MOUNTED' : material.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Ionicons name="calendar-outline" size={20} color="#9ca3af" />
+                    <View style={styles.infoTextContainer}>
+                      <Text style={styles.infoLabel}>Assigned</Text>
+                      <Text style={styles.infoValue}>{formatDate(material.assignedDate)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Materials Button */}
+                  <TouchableOpacity 
+                    style={styles.materialsActionButton} 
+                    onPress={() => router.push('/materials')}
+                  >
+                    <Ionicons name="cube-outline" size={20} color="#ffffff" />
+                    <Text style={styles.materialsActionText}>View All Materials</Text>
+                    <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Ionicons name="cube-outline" size={48} color="#d1d5db" />
+                <Text style={styles.emptyStateText}>No materials assigned</Text>
+                <Text style={styles.emptyStateSubtext}>Materials will appear here when assigned to you</Text>
+              </View>
+            )}
+          </View>
+        );
+      
+      default:
+        return null;
+    }
+  };
+
   return (
     <>
     <ScrollView 
@@ -222,156 +446,82 @@ export default function ProfileScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.profileImageContainer}>
-          <Ionicons name="person-circle" size={80} color="#3674B5" />
+        <View style={styles.headerTop}>
+          <View style={styles.profileAvatarContainer}>
+            <Ionicons name="person-circle" size={70} color="#5b8ec5" />
+            {profile.isOnline && <View style={styles.onlineIndicator} />}
+          </View>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setShowReportModal(true)}>
+              <Ionicons name="mail-outline" size={24} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
+              <Ionicons name="log-out-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
         </View>
+        
         <Text style={styles.name}>
           {profile.firstName} {profile.lastName}
         </Text>
         <Text style={styles.driverId}>Driver ID: {profile.driverId}</Text>
-        <View style={styles.statusContainer}>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: profile.isOnline ? '#22c55e' : '#ef4444' },
-            ]}
-          />
-          <Text style={styles.statusText}>
-            {profile.isOnline ? 'ONLINE' : 'OFFLINE'}
-          </Text>
-        </View>
       </View>
 
       {/* Stats Cards */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
-          <Ionicons name="cash-outline" size={24} color="#22c55e" />
-          <Text style={styles.statValue}>₱{profile.totalEarnings.toLocaleString()}</Text>
-          <Text style={styles.statLabel}>Total Earnings</Text>
+          <View style={styles.statIconContainer}>
+            <Ionicons name="cash-outline" size={32} color="#4ade80" />
+          </View>
+          <Text style={styles.statValue}>₱ {profile.totalEarnings}</Text>
+          <Text style={styles.statLabel}>Earnings</Text>
         </View>
         <View style={styles.statCard}>
-          <Ionicons name="speedometer-outline" size={24} color="#3b82f6" />
+          <View style={styles.statIconContainer}>
+            <Ionicons name="speedometer-outline" size={32} color="#3b82f6" />
+          </View>
           <Text style={styles.statValue}>{profile.totalDistance.toFixed(1)} km</Text>
-          <Text style={styles.statLabel}>Total Distance</Text>
+          <Text style={styles.statLabel}>Distance</Text>
         </View>
         <View style={styles.statCard}>
-          <Ionicons name="time-outline" size={24} color="#f59e0b" />
-          <Text style={styles.statValue}>{profile.totalHours.toFixed(1)}h</Text>
-          <Text style={styles.statLabel}>Total Hours</Text>
+          <View style={styles.statIconContainer}>
+            <Ionicons name="time-outline" size={32} color="#f59e0b" />
+          </View>
+          <Text style={styles.statValue}>{profile.totalHours.toFixed(1)}. hours</Text>
+          <Text style={styles.statLabel}>Hours</Text>
         </View>
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.quickActionsSection}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
         <TouchableOpacity 
-          style={styles.materialsButton} 
-          onPress={() => router.push('/materials')}
+          style={[styles.tab, activeTab === 'profile' && styles.activeTab]}
+          onPress={() => setActiveTab('profile')}
         >
-          <View style={styles.materialsButtonContent}>
-            <View style={styles.materialsIconContainer}>
-              <Ionicons name="cube-outline" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.materialsTextContainer}>
-              <Text style={styles.materialsButtonTitle}>Materials</Text>
-              <Text style={styles.materialsButtonSubtitle}>View assigned materials and upload photos</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#ffffff" />
-          </View>
+          <Text style={[styles.tabText, activeTab === 'profile' && styles.activeTabText]}>
+            Profile Information
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'vehicle' && styles.activeTab]}
+          onPress={() => setActiveTab('vehicle')}
+        >
+          <Text style={[styles.tabText, activeTab === 'vehicle' && styles.activeTabText]}>
+            Vehicle Information
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'material' && styles.activeTab]}
+          onPress={() => setActiveTab('material')}
+        >
+          <Text style={[styles.tabText, activeTab === 'material' && styles.activeTabText]}>
+            Material Information
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Profile Information */}
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Personal Information</Text>
-        
-        <View style={styles.infoItem}>
-          <Ionicons name="mail-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{profile.email}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="call-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Phone</Text>
-            <Text style={styles.infoValue}>{profile.phoneNumber}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="card-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>License Number</Text>
-            <Text style={styles.infoValue}>{profile.licenseNumber}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Vehicle Information */}
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Vehicle Information</Text>
-        
-        <View style={styles.infoItem}>
-          <Ionicons name="car-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Plate Number</Text>
-            <Text style={styles.infoValue}>{profile.vehiclePlateNumber}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="car-sport-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Model</Text>
-            <Text style={styles.infoValue}>{profile.vehicleModel}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="car-sport" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Type</Text>
-            <Text style={styles.infoValue}>{profile.vehicleType}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Account Information */}
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Account Information</Text>
-        
-        <View style={styles.infoItem}>
-          <Ionicons name="calendar-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Joined</Text>
-            <Text style={styles.infoValue}>{formatDate(profile.joinDate)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoItem}>
-          <Ionicons name="time-outline" size={20} color="#6b7280" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Last Active</Text>
-            <Text style={styles.infoValue}>{formatDate(profile.lastActive)}</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Report Issue Button */}
-      <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportModal(true)}>
-        <Ionicons name="mail-outline" size={20} color="#3b82f6" />
-        <Text style={styles.reportText}>Report an Issue</Text>
-      </TouchableOpacity>
-
-      {/* Sign Out Button */}
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
+      {/* Tab Content */}
+      {renderTabContent()}
 
       {/* Bottom Spacing */}
       <View style={styles.bottomSpacing} />
@@ -389,13 +539,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     fontSize: 16,
@@ -406,7 +556,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 40,
   },
   errorText: {
@@ -428,196 +578,168 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#ffffff',
-    alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 24,
     paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingTop: 60,
   },
-  profileImageContainer: {
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
+  profileAvatarContainer: {
+    position: 'relative',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#22c55e',
+    borderWidth: 3,
+    borderColor: '#ffffff',
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconButton: {
+    padding: 4,
+  },
   name: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     color: '#111827',
     marginBottom: 4,
   },
   driverId: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 12,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  statusText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
     color: '#6b7280',
   },
   statsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginTop: 20,
+    marginBottom: 30,
     gap: 12,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  quickActionsSection: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  materialsButton: {
-    backgroundColor: '#3674B5',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  materialsButtonContent: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  materialsIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  statIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#e5e7eb',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginBottom: 8,
   },
-  materialsTextContainer: {
-    flex: 1,
-  },
-  materialsButtonTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
-  },
-  materialsButtonSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  infoSection: {
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 18,
+  statValue: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 16,
+    marginBottom: 2,
   },
-  infoItem: {
+  statLabel: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  tabsContainer: {
     flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 8,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 14,
     alignItems: 'center',
-    paddingVertical: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#3b82f6',
+  },
+  tabText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  activeTabText: {
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  tabContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    backgroundColor: '#ffffff',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
-  infoContent: {
+  infoTextContainer: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   infoLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 2,
+    fontSize: 13,
+    color: '#9ca3af',
+    marginBottom: 4,
   },
   infoValue: {
     fontSize: 16,
     color: '#111827',
     fontWeight: '500',
   },
-  reportButton: {
+  materialStatus: {
+    fontSize: 12,
+    color: '#22c55e',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  materialsActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginBottom: 12,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#3b82f6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#3674B5',
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 20,
+    gap: 8,
   },
-  reportText: {
-    fontSize: 16,
+  materialsActionText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#3b82f6',
-    marginLeft: 8,
+    color: '#ffffff',
   },
-  signOutButton: {
-    flexDirection: 'row',
+  emptyStateContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    marginHorizontal: 20,
-    marginBottom: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 40,
   },
-  signOutText: {
+  emptyStateText: {
     fontSize: 16,
+    color: '#6b7280',
     fontWeight: '600',
-    color: '#ef4444',
-    marginLeft: 8,
+    marginTop: 12,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 4,
+    textAlign: 'center',
   },
   bottomSpacing: {
-    height: 20,
+    height: 40,
   },
 });

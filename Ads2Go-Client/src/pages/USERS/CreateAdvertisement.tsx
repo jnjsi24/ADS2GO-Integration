@@ -1195,24 +1195,24 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
     {/* Content */}
-    <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
+    <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
       <button
         onClick={() => navigate('/advertisements')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-3"
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-12 lg:pt-3"
       >
         <ChevronLeft className="w-5 h-5" />
-        Back to Advertisement
+        <span className="text-sm sm:text-base">Back to Advertisement</span>
       </button>
       <div>
-        <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="max-w-3xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
           <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900">Create Advertisement</h2>
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">Create Advertisement</h2>
           </div>
         </div>
       </div>
       <div>
-        <div className="max-w-sm mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-sm mx-auto px-2 sm:px-4 py-4">
+          <div className="flex items-center justify-between overflow-x-auto">
             {steps.map((step, index) => {
               const StepIcon = step.icon;
               const isActive = currentStep === step.number;
@@ -1261,18 +1261,19 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           </div>
         </div>
       </div>
-      <div className="max-w-3xl mx-auto px-4 py-8">
+      <div className="max-w-3xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
         <form onSubmit={handleSubmit}>
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
-          <div className="flex justify-between mt-8">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8">
             <button
               type="button"
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
               disabled={currentStep === 1}
-              className="flex items-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
             >
+              <ChevronLeft className="w-5 h-5" />
               Previous
             </button>
             {currentStep < 3 ? (
@@ -1287,7 +1288,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   button.style.setProperty('--x', `${x}px`);
                   button.style.setProperty('--y', `${y}px`);
                 }}
-                className="relative flex items-center gap-2 mr-7 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
+                className="relative flex items-center justify-center gap-2 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] order-1 sm:order-2 w-full sm:w-auto"
               >
                 {/* Shiny Hover Effect */}
                 <span
@@ -1301,7 +1302,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 <ChevronRight className="w-5 h-5 relative z-10" />
               </button>
             ) : (
-              <div className="flex flex-col items-end space-y-2">
+              <div className="flex flex-col items-stretch sm:items-end space-y-2 w-full sm:w-auto order-1 sm:order-2">
                 
                 <button
                   type="submit"
@@ -1314,7 +1315,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     button.style.setProperty('--x', `${x}px`);
                     button.style.setProperty('--y', `${y}px`);
                   }}
-                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full sm:w-auto"
                 >
                   {/* Shiny Hover Effect */}
                   <span
