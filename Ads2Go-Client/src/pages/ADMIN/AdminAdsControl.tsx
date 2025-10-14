@@ -40,8 +40,7 @@ import Alerts from './tabs/adminAdsControl/Alerts';
 import { AdminLoader } from "../../components/ProtectedRoute";
 
 const AdminAdsControl: React.FC = () => {
-  // Cache busting - force component reload
-  console.log('🔄 AdminAdsControl NEW VERSION loaded - Cache busted at:', new Date().toISOString());
+  // Component loaded
   
   // Initialize GraphQL service
   const apolloClient = useApolloClient();
@@ -56,10 +55,7 @@ const AdminAdsControl: React.FC = () => {
   const [adAnalytics, setAdAnalytics] = useState<AdAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Debug loading state changes
-  useEffect(() => {
-    console.log('🔄 Loading state changed to:', loading);
-  }, [loading]);
+  // Removed excessive debug logging
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(true); // Default to true since ads play automatically
@@ -320,8 +316,8 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // Set up auto-refresh every 5 seconds (reduced to not override WebSocket updates)
-    const interval = setInterval(autoRefreshData, 5000);
+    // Removed aggressive auto-refresh - rely on WebSocket updates for real-time data
+    // Users can manually refresh using the refresh button if needed
     
     // Subscribe to real-time WebSocket updates for immediate processing
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
@@ -379,7 +375,7 @@ const AdminAdsControl: React.FC = () => {
     });
     
     return () => {
-      clearInterval(interval);
+      // clearInterval(interval); // No longer needed
       unsubscribe();
     };
   }, [fetchData, autoRefreshData]);

@@ -15,6 +15,7 @@
     "@graphql-tools/merge": "^9.0.24",
     "apollo-server-express": "^3.13.0",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^4.18.2",
@@ -31,12 +32,13 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "multer": "^2.0.2",
+    "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
     "node-geocoder": "^4.4.1",
     "node-osrm": "^1.0.3",
     "nodemailer": "^6.9.7",
     "uuid": "^9.0.1",
-    "ws": "^8.11.0"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

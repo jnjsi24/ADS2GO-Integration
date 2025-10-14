@@ -61,17 +61,17 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 60000, // Refresh every 60 seconds (reduced frequency)
   });
 
   // Fetch pending ads
   const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError, refetch: refetchPendingAds } = useQuery(GET_PENDING_ADS, {
-    pollInterval: 30000,
+    pollInterval: 60000, // Reduced frequency
   });
 
   // Fetch pending materials
   const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError, refetch: refetchPendingMaterials } = useQuery(GET_PENDING_MATERIALS, {
-    pollInterval: 30000,
+    pollInterval: 60000, // Reduced frequency
   });
 
   // Handle query errors

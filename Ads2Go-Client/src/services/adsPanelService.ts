@@ -1,10 +1,9 @@
-// AdsPanel API Service - V4 (REAL ADS) - CACHE BUSTED
+// AdsPanel API Service - V4 (REAL ADS)
 // Force correct API base URL for REST endpoints (not GraphQL)
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// Aggressive cache busting - force browser to reload this file
-const CACHE_BUST = Date.now();
-console.log('🔄 AdsPanelService V4 (REAL ADS) loaded - Cache busted at:', new Date().toISOString(), 'Cache bust ID:', CACHE_BUST);
+// Removed aggressive cache busting to prevent constant reloads
+console.log('🔄 AdsPanelService V4 (REAL ADS) loaded at:', new Date().toISOString());
 
 export interface ScreenData {
   deviceId: string;

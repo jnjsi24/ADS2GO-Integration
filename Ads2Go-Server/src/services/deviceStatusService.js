@@ -300,6 +300,13 @@ class DeviceStatusService {
     ws.slotNumber = slotNumber;
     this.activeConnections.set(deviceId, ws);
     
+    // Also register in DeviceStatusManager for status tracking
+    if (!ws.isAdmin) {
+      const deviceStatusManager = require('./deviceStatusManager');
+      deviceStatusManager.setWebSocketStatus(deviceId, true, new Date());
+      console.log(`🔌 [DeviceStatusManager] Registered playback connection for ${deviceId} as online`);
+    }
+    
     // Store slot-specific connections for synchronization
     if (materialId && slotNumber) {
       const slotKey = `${materialId}-${slotNumber}`;
@@ -368,6 +375,13 @@ class DeviceStatusService {
         // Clean up slot connections before removing the main connection
         this.cleanupSlotConnections(deviceId, materialId, slotNumber);
         this.removeConnection(deviceId);
+        
+        // Also update DeviceStatusManager for status tracking
+        if (!ws.isAdmin) {
+          const deviceStatusManager = require('./deviceStatusManager');
+          deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
+          console.log(`🔌 [DeviceStatusManager] Marked playback connection for ${deviceId} as offline`);
+        }
       }
     });
   }

@@ -15,10 +15,17 @@ const resolvers = {
         const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
         
         // Mark devices as offline if lastSeen is older than 2 minutes
+        // BUT only if they don't have an active websocket connection
+        const allStatuses = deviceStatusService.getAllDeviceStatuses();
+        const activeWebSocketDevices = allStatuses
+          .filter(status => status.isOnline && status.source === 'websocket')
+          .map(status => status.deviceId);
+        
         await DeviceTracking.updateMany(
           { 
             'devices.isOnline': true,
-            'devices.lastSeen': { $lt: twoMinutesAgo }
+            'devices.lastSeen': { $lt: twoMinutesAgo },
+            'devices.deviceId': { $nin: activeWebSocketDevices } // Exclude devices with active websocket
           },
           { 
             $set: { 
@@ -114,8 +121,8 @@ const resolvers = {
               let deviceStatus = deviceStatusService.getDeviceStatus(device.deviceId);
               let isActuallyOnline = false;
               
-              if (deviceStatus) {
-                isActuallyOnline = deviceStatus.isOnline;
+              if (deviceStatus && deviceStatus.isOnline) {
+                isActuallyOnline = true;
               } else {
                 // Fallback to device status
                 isActuallyOnline = device.isOnline;
@@ -194,8 +201,8 @@ const resolvers = {
             let deviceStatus = deviceStatusService.getDeviceStatus(screen.deviceId);
             let isActuallyOnline = false;
             
-            if (deviceStatus) {
-              isActuallyOnline = deviceStatus.isOnline;
+            if (deviceStatus && deviceStatus.isOnline) {
+              isActuallyOnline = true;
             } else {
               // Fallback to database status
               isActuallyOnline = screen.isOnline;

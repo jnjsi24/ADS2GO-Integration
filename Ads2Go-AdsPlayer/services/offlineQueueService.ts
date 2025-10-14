@@ -330,7 +330,7 @@ class OfflineQueueService {
     console.log(`🔍 [OfflineQueue] Using deviceSlot: ${actualSlotNumber}`);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/deviceTracking/ad-playback`, {
+      const response = await fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -356,7 +356,9 @@ class OfflineQueueService {
           throw new Error(`Server temporarily unavailable (502)`);
         } else if (response.status >= 500) {
           console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for ad playback ${item.id} - will retry later`);
-          throw new Error(`Server error (${response.status})`);
+          // Don't throw error for 500s, just log and continue - the item will be retried later
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable, ad playback ${item.id} will be retried when server recovers`);
+          return; // Exit without throwing error
         } else {
           console.error(`❌ [OfflineQueue] Client error (${response.status}) for ad playback ${item.id}`);
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -407,7 +409,9 @@ class OfflineQueueService {
           throw new Error(`Server temporarily unavailable (502)`);
         } else if (response.status >= 500) {
           console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for location data ${item.id} - will retry later`);
-          throw new Error(`Server error (${response.status})`);
+          // Don't throw error for 500s, just log and continue - the item will be retried later
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable, location data ${item.id} will be retried when server recovers`);
+          return; // Exit without throwing error
         } else {
           console.error(`❌ [OfflineQueue] Client error (${response.status}) for location data ${item.id}`);
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -466,7 +470,9 @@ class OfflineQueueService {
           throw new Error(`Server temporarily unavailable (502)`);
         } else if (response.status >= 500) {
           console.warn(`⚠️ [OfflineQueue] Server error (${response.status}) for device status ${item.id} - will retry later`);
-          throw new Error(`Server error (${response.status})`);
+          // Don't throw error for 500s, just log and continue - the item will be retried later
+          console.warn(`⚠️ [OfflineQueue] Server temporarily unavailable, device status ${item.id} will be retried when server recovers`);
+          return; // Exit without throwing error
         } else {
           console.error(`❌ [OfflineQueue] Client error (${response.status}) for device status ${item.id}`);
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);

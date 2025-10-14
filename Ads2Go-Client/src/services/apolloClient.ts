@@ -138,7 +138,9 @@ const client = new ApolloClient({
     },
   },
   // Increase timeout to 30 seconds
-  connectToDevTools: process.env.NODE_ENV === 'development',
+  devtools: {
+    enabled: process.env.NODE_ENV === 'development',
+  },
 });
 
 export default client;

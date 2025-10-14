@@ -645,8 +645,24 @@ DeviceTrackingSchema.methods.updateSlot = async function(slotNumber, updateData)
         // Reload the document to get the latest version
         const freshDoc = await this.constructor.findById(this._id);
         if (freshDoc) {
-          // Update the slot on the fresh document with the same data
-          await freshDoc.updateSlot(slotNumber, updateData);
+          // Update the slot on the fresh document directly without recursion
+          const freshSlot = freshDoc.getSlot(slotNumber);
+          if (freshSlot) {
+            Object.assign(freshSlot, updateData);
+            freshSlot.lastSeen = new Date();
+          } else {
+            freshDoc.slots.push({
+              slotNumber: parseInt(slotNumber),
+              ...updateData,
+              lastSeen: new Date()
+            });
+          }
+          
+          // Update car-level online status
+          freshDoc.isOnline = freshDoc.slots.some(slot => slot.isOnline);
+          freshDoc.lastSeen = new Date();
+          
+          // Update this document with the fresh data
           this.set(freshDoc.toObject());
           retries--;
         } else {

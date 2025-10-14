@@ -33,10 +33,9 @@ class WebSocketService {
     });
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-    // Cache bust to force reload
-    const cacheBust = Date.now();
+    // Removed cache busting to prevent constant reconnections
     // Use playback endpoint with admin=true for general admin connections
-    return `${protocol}//${host}/ws/playback?admin=true&cb=${cacheBust}`;
+    return `${protocol}//${host}/ws/playback?admin=true`;
   }
 
   private connect(): void {
