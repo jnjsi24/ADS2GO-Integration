@@ -104,6 +104,22 @@ interface DriverAnalytics {
     totalMonths: number;
     message?: string;
   } | null;
+  last7DaysData?: {
+    period: string;
+    dateRange: {
+      startDate: string;
+      endDate: string;
+    };
+    dailyBreakdown: Array<{
+      date: string;
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+    }>;
+  } | null;
 }
 
 const Dashboard: React.FC = () => {
@@ -290,6 +306,51 @@ const Dashboard: React.FC = () => {
           return Math.max(0, Number(value));
         };
 
+        // Fetch last 7 days data from DeviceDataHistoryV2 for the graph
+        let last7DaysData = null;
+        try {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          sevenDaysAgo.setHours(0, 0, 0, 0);
+          
+          const today = new Date();
+          today.setHours(23, 59, 59, 999);
+          
+          const last7DaysUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${sevenDaysAgo.toISOString()}&endDate=${today.toISOString()}`;
+          
+          if (!silent) {
+            console.log('📊 Fetching last 7 days data from:', last7DaysUrl);
+          }
+          
+          const last7DaysResponse = await fetch(last7DaysUrl, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (last7DaysResponse.ok) {
+            const last7DaysResult = await last7DaysResponse.json();
+            if (last7DaysResult.success && last7DaysResult.data.dailyData) {
+              last7DaysData = {
+                period: 'last7days',
+                dateRange: {
+                  startDate: sevenDaysAgo.toISOString(),
+                  endDate: today.toISOString()
+                },
+                dailyBreakdown: last7DaysResult.data.dailyData.dailyBreakdown || []
+              };
+              
+              if (!silent) {
+                console.log('📊 Last 7 days data fetched:', last7DaysData.dailyBreakdown.length, 'days');
+              }
+            }
+          }
+        } catch (last7DaysError) {
+          console.log('⚠️ Could not fetch last 7 days data:', last7DaysError);
+          // Continue without last 7 days data
+        }
+
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
           driverId: data.driverId || 'Unknown',
@@ -339,7 +400,9 @@ const Dashboard: React.FC = () => {
             monthlyBreakdown: data.monthlyData.monthlyBreakdown || [],
             totalMonths: data.monthlyData.totalMonths || 0,
             message: data.monthlyData.message
-          } : null
+          } : null,
+          // Add last 7 days data for the graph
+          last7DaysData: last7DaysData
         };
         
         setAnalytics(transformedAnalytics);
@@ -379,26 +442,18 @@ const Dashboard: React.FC = () => {
   const getChartData = () => {
     if (!analytics) return null;
 
-    const isToday = isSelectedDateToday();
-
-    if (isToday) {
-      // For today, show last 7 days trend from DeviceTracking's dailyPerformance
-      const data = analytics.dailyPerformance.slice(-7);
+    // Always use last 7 days data from DeviceDataHistoryV2 for the graph
+    const last7Days = analytics.last7DaysData?.dailyBreakdown || [];
+    
+    // If we have last 7 days data from DeviceDataHistoryV2, use it
+    if (last7Days.length > 0) {
+      // Sort by date and take last 7 days
+      const sortedData = [...last7Days].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      ).slice(-7);
       
-      // Ensure we have at least some data points
-      if (data.length === 0) {
-        return {
-          labels: ['No Data'],
-          datasets: [{
-            data: [0],
-            color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-            strokeWidth: 2
-          }]
-        };
-      }
-
       return {
-        labels: data.map(d => {
+        labels: sortedData.map(d => {
           try {
             return new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
           } catch {
@@ -406,13 +461,13 @@ const Dashboard: React.FC = () => {
           }
         }),
         datasets: [{
-          data: data.map(d => {
+          data: sortedData.map(d => {
             let value = 0;
             switch (selectedMetric) {
-              case 'distance': value = d.totalDistance; break;
-              case 'hours': value = d.totalHours; break;
-              case 'qrImpressions': value = d.qrImpressions || 0; break;
-              default: value = d.totalDistance; break;
+              case 'distance': value = d.totalDistance || 0; break;
+              case 'hours': value = d.totalHours || 0; break;
+              case 'qrImpressions': value = d.totalQRImpressions || 0; break;
+              default: value = d.totalDistance || 0; break;
             }
             return sanitizeChartValue(value);
           }),
@@ -420,7 +475,12 @@ const Dashboard: React.FC = () => {
           strokeWidth: 2
         }]
       };
-    } else {
+    }
+    
+    // Fallback: If no last 7 days data, check if viewing a specific past date
+    const isToday = isSelectedDateToday();
+    
+    if (!isToday) {
       // Past date: Show data for selected date from DeviceDataHistoryV2
       const data = analytics.dailyData?.dailyBreakdown || [];
       
@@ -462,6 +522,44 @@ const Dashboard: React.FC = () => {
         }]
       };
     }
+    
+    // Last fallback: Use dailyPerformance from current tracking (should rarely happen)
+    const data = analytics.dailyPerformance.slice(-7);
+    
+    if (data.length === 0) {
+      return {
+        labels: ['No Data'],
+        datasets: [{
+          data: [0],
+          color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+          strokeWidth: 2
+        }]
+      };
+    }
+
+    return {
+      labels: data.map(d => {
+        try {
+          return new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
+        } catch {
+          return 'Invalid Date';
+        }
+      }),
+      datasets: [{
+        data: data.map(d => {
+          let value = 0;
+          switch (selectedMetric) {
+            case 'distance': value = d.totalDistance; break;
+            case 'hours': value = d.totalHours; break;
+            case 'qrImpressions': value = d.qrImpressions || 0; break;
+            default: value = d.totalDistance; break;
+          }
+          return sanitizeChartValue(value);
+        }),
+        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // Blue
+        strokeWidth: 2
+      }]
+    };
   };
 
   const getMetricLabel = () => {
