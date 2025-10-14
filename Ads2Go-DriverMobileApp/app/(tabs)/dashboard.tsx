@@ -4,8 +4,9 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
-import { LinearGradient } from 'react-native-svg';
+import { LinearGradient, Circle } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Svg from 'react-native-svg';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -594,29 +595,28 @@ const Dashboard: React.FC = () => {
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-        <View style={styles.headerContent}>
-          {/* Profile Image */}
-          <View style={styles.profileContainer}>
-            <Ionicons name="person-circle" size={60} color="#3674B5" />
-          </View>
+          <View style={styles.headerContent}>
+            {/* Profile Image */}
+            <View style={styles.profileContainer}>
+              <Ionicons name="person-circle" size={50} color="#3674B5" />
+            </View>
 
-          {/* Text */}
-          <View style={styles.textContainer}>
-            <Text style={styles.headerSubtitle}>
-              Welcome back, {user?.firstName || 'Driver'}
-            </Text>
+            {/* Text */}
+            <View style={styles.welcomeTextContainer}>
+              <Text style={styles.welcomeText}>
+                Welcome back, {user?.firstName || 'Driver'}
+              </Text>
+            </View>
           </View>
-
         </View>
-      </View>
 
 
-      {/* Balance Container */}
+      {/* Payment Balance Card */}
       <View style={styles.cardContainer}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.balanceLabel}>Payout Balance</Text>
+        <View style={styles.balanceHeader}>
+          <Text style={styles.balanceLabel}>Payment Balance</Text>
+          <Text style={styles.balanceCurrency}>PHP</Text>
         </View>
-        <Text style={styles.balanceCurrency}>PHP</Text>
         <Text style={styles.balanceAmount}>2,450.00</Text>
       </View>
 
@@ -690,27 +690,47 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
-      {/* Numerical Value Display */}
-      <View style={styles.metricValueContainer}>
-        <View style={styles.metricValueCard}>
-          <Text style={styles.metricValueLabel}>{getMetricShortLabel()}</Text>
-          <View style={styles.metricValueRow}>
-            <Text style={styles.metricValueNumber}>
-              {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
-            </Text>
-            {getMetricUnit() && (
-              <Text style={styles.metricValueUnit}> {getMetricUnit()}</Text>
-            )}
+      {/* Circular Gauge Display */}
+      <View style={styles.gaugeContainer}>
+        <View style={styles.gaugeCard}>
+          <Text style={styles.gaugeTitle}>{getMetricShortLabel().toUpperCase()}</Text>
+          
+          {/* Circular Progress */}
+          <View style={styles.circularGaugeWrapper}>
+            <Svg width={220} height={220} style={styles.circularGauge}>
+              {/* Background Circle */}
+              <Circle
+                cx="110"
+                cy="110"
+                r="90"
+                stroke="#9CA3AF"
+                strokeWidth="14"
+                fill="none"
+              />
+              {/* Progress Circle */}
+              <Circle
+                cx="110"
+                cy="110"
+                r="90"
+                stroke="#2563EB"
+                strokeWidth="14"
+                fill="none"
+                strokeDasharray={`${Math.min((getCurrentMetricValue() / (selectedMetric === 'distance' ? 100 : 10)) * 565, 565)} 565`}
+                strokeLinecap="round"
+                rotation="-90"
+                origin="110, 110"
+              />
+            </Svg>
+            
+            {/* Value in Center */}
+            <View style={styles.gaugeValueContainer}>
+              <Text style={styles.gaugeValue}>
+                {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
+              </Text>
+              <Text style={styles.gaugeUnit}>{getMetricUnit()}</Text>
+            </View>
           </View>
-          <Text style={styles.metricValuePeriod}>
-            {selectedDataPoint 
-              ? `${selectedDataPoint.label}` 
-              : selectedDate.toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}
-          </Text>
+          
           {selectedDataPoint && !isSelectedDateToday() && (
             <TouchableOpacity 
               onPress={() => setSelectedDataPoint(null)}
@@ -722,32 +742,28 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
-      {/* Chart */}
-      {chartData && chartData.datasets && chartData.datasets.length > 0 && (
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>
-            {isSelectedDateToday() ? 'Last 7 Days' : selectedDate.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
-            })} {getMetricLabel()}
-          </Text>
+      {/* Last 7 Days Chart */}
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>
+          Last 7 Days {getMetricShortLabel()} ({getMetricUnit()})
+        </Text>
+        {chartData && chartData.datasets && chartData.datasets.length > 0 && chartData.datasets[0].data.some((val: number) => val > 0) ? (
           <LineChart
             data={chartData}
-            width={screenWidth - 40}
-            height={220}
+            width={screenWidth - 80}
+            height={180}
             chartConfig={{
               backgroundColor: '#ffffff',
               backgroundGradientFrom: '#ffffff',
               backgroundGradientTo: '#ffffff',
               decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+              color: (opacity = 1) => `rgba(54, 116, 181, ${opacity})`,
               labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
               style: {
                 borderRadius: 16
               },
               propsForDots: {
-                r: '6',
+                r: '5',
                 strokeWidth: '2',
                 stroke: '#3674B5'
               }
@@ -756,12 +772,18 @@ const Dashboard: React.FC = () => {
             style={styles.chart}
             onDataPointClick={handleDataPointClick}
           />
-        </View>
-      )}
+        ) : (
+          <>
+            <View style={styles.noDataIndicator}>
+              <View style={styles.noDataDot} />
+              <Text style={styles.noDataText}>No Data</Text>
+            </View>
+          </>
+        )}
+      </View>
 
-
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
+      {/* Bottom Spacing */}
+      <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
@@ -770,11 +792,11 @@ const Dashboard: React.FC = () => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f3f4f6',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f3f4f6',
   },
   loadingContainer: {
     flex: 1,
@@ -898,8 +920,9 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    paddingVertical: 15,
+    paddingVertical: 20,
     paddingHorizontal: 20,
+    backgroundColor: '#f3f4f6',
   },
   headerContent: {
     flexDirection: 'row',
@@ -908,8 +931,11 @@ const styles = StyleSheet.create({
   profileContainer: {
     marginRight: 12,
   },
-  headerSubtitle: {
-    fontSize: 18,
+  welcomeTextContainer: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#111827',
   },
@@ -935,48 +961,46 @@ const styles = StyleSheet.create({
 
   // Balance Container
   cardContainer: {
-    backgroundColor: '#3674B5', // elegant blue tone
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#5B8EC5',
+    borderRadius: 16,
+    padding: 24,
     marginHorizontal: 20,
     marginTop: 10,
-    marginBottom: 10,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
   
-  cardHeader: {
+  balanceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
   
   balanceLabel: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  
-  cardLogo: {
-    width: 40,
-    height: 30,
-    resizeMode: 'contain',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '400',
+    opacity: 0.9,
   },
   
   balanceCurrency: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    marginTop: 10,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    opacity: 0.9,
   },
   
   balanceAmount: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#FFFFFF',
+    fontSize: 48,
+    fontWeight: '700',
+    letterSpacing: -1,
+    textAlign: 'right',
   },
   
   cardNumber: {
@@ -1238,12 +1262,12 @@ const styles = StyleSheet.create({
   // Chart Controls
   chartControls: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   datePickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
     gap: 8,
   },
   datePickerButton: {
@@ -1252,21 +1276,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   datePickerText: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#1f2937',
     marginLeft: 8,
   },
@@ -1287,71 +1311,77 @@ const styles = StyleSheet.create({
   metricSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 8,
   },
   metricButton: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   metricButtonActive: {
-    backgroundColor: '#3674B5',
+    borderBottomColor: '#3B82F6',
   },
   metricButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     color: '#6b7280',
+    textAlign: 'center',
   },
   metricButtonTextActive: {
-    color: '#ffffff',
+    color: '#3B82F6',
+    fontWeight: '600',
   },
-  // Numerical Value Display
-  metricValueContainer: {
+  // Circular Gauge Display
+  gaugeContainer: {
     marginHorizontal: 20,
     marginBottom: 16,
   },
-  metricValueCard: {
-    backgroundColor: '#ffffff',
+  gaugeCard: {
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#3674B5',
   },
-  metricValueLabel: {
+  gaugeTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
+    marginBottom: 20,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    letterSpacing: 1,
   },
-  metricValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 4,
+  circularGaugeWrapper: {
+    position: 'relative',
+    width: 220,
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  metricValueNumber: {
-    fontSize: 48,
+  circularGauge: {
+    position: 'absolute',
+  },
+  gaugeValueContainer: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gaugeValue: {
+    fontSize: 56,
     fontWeight: '700',
-    color: '#3674B5',
+    color: '#1f2937',
   },
-  metricValueUnit: {
-    fontSize: 24,
-    fontWeight: '600',
+  gaugeUnit: {
+    fontSize: 20,
+    fontWeight: '500',
     color: '#6b7280',
-    marginLeft: 4,
+    marginTop: 4,
   },
-  metricValuePeriod: {
+  gaugePeriod: {
     fontSize: 12,
     fontWeight: '500',
     color: '#9ca3af',
@@ -1359,25 +1389,49 @@ const styles = StyleSheet.create({
   chartContainer: {
     marginHorizontal: 20,
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
-    
+    marginBottom: 16,
   },
   chartTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-    textAlign: 'center',
-   
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'left',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  chartSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9ca3af',
+    marginBottom: 8,
   },
   chart: {
     borderRadius: 16,
+  },
+  noDataIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noDataDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#3674B5',
+    marginRight: 8,
+  },
+  noDataText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
   },
   resetButton: {
     marginTop: 12,
@@ -1393,7 +1447,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomSpacing: {
-    height: 20,
+    height: 40,
   },
 });
 
