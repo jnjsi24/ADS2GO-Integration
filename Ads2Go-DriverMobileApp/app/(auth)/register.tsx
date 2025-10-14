@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import API_CONFIG from "../../config/api";
 import { FontAwesome5, FontAwesome, AntDesign, Ionicons } from '@expo/vector-icons';
+import LocationAutocomplete from '../../components/LocationAutocomplete';
 
 const { width } = Dimensions.get('window');
 
@@ -590,11 +591,14 @@ const RegisterForm = () => {
             {renderInput('First Name', firstName, setFirstName, { required: true, placeholder: 'Enter First Name' })}
             {renderInput('Middle Name', middleName, setMiddleName, { placeholder: 'Optional' })}
             {renderInput('Last Name', lastName, setLastName, { required: true, placeholder: 'Enter Last Name' })}
-            {renderInput('Address', address, setAddress, { 
-              multiline: true, 
-              required: true,
-              placeholder: 'Enter your complete address' 
-            })}
+            
+            <LocationAutocomplete
+              label="Address"
+              value={address}
+              onChange={setAddress}
+              placeholder="Select your location..."
+              required
+            />
 
             <View style={styles.formButtonContainer}>
               {currentStep > 0 && (
