@@ -4,7 +4,7 @@
   "description": "Ads2Go Full-Stack Application",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"cross-env PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
+    "start": "npx concurrently \"cross-env PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
     "start:client": "cross-env PORT=3000 npm start --prefix Ads2Go-Client",
     "start:server": "npm run dev --prefix Ads2Go-Server",
     "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",

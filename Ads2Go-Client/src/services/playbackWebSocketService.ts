@@ -32,12 +32,15 @@ class PlaybackWebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    console.log('🔧 Playback WebSocket Service Configuration:', {
-      envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
-      finalUrl: actualServerUrl,
-      usingFallback: !serverUrl,
-      reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
-    });
+    // Playback WebSocket configuration logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 Playback WebSocket Service Configuration:', {
+        envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
+        finalUrl: actualServerUrl,
+        usingFallback: !serverUrl,
+        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
+      });
+    }
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     return `${protocol}//${host}/ws/playback?admin=true`;
