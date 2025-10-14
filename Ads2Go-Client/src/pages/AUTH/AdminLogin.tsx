@@ -61,7 +61,7 @@ const AdminLogin: React.FC = () => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-lg" />
   
       {/* Form Container */}
-      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-xl shadow-2xl">
+      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-md shadow-2xl">
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
             <img 
@@ -138,7 +138,7 @@ const AdminLogin: React.FC = () => {
           <button
             type="submit"
             disabled={isLoggingIn}
-            className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold transition disabled:bg-gray-400"
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold transition disabled:bg-gray-400"
           >
             {isLoggingIn ? (
               <div className="flex items-center justify-center">
@@ -146,7 +146,7 @@ const AdminLogin: React.FC = () => {
                 Logging in...
               </div>
             ) : (
-              "LOGIN"
+              "Login"
             )}
           </button>
         </form>

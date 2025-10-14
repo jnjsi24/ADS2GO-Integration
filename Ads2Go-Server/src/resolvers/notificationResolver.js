@@ -112,13 +112,26 @@ const notificationResolvers = {
           .sort({ createdAt: -1 });
         
         console.log('🔔 Backend: Found pending ads:', pendingAds.length);
-        console.log('🔔 Backend: Pending ads details:', pendingAds.map(ad => ({
+        
+        // Transform the data to match PendingAd schema
+        const transformedAds = pendingAds.map(ad => ({
           id: ad._id,
           title: ad.title,
           status: ad.status,
-          userId: ad.userId
+          createdAt: ad.createdAt,
+          user: ad.userId,
+          materialId: ad.materialId && ad.materialId.length > 0 ? ad.materialId[0] : null, // Take first material ID
+          planId: ad.planId
+        }));
+        
+        console.log('🔔 Backend: Pending ads details:', transformedAds.map(ad => ({
+          id: ad.id,
+          title: ad.title,
+          status: ad.status,
+          userId: ad.user,
+          materialId: ad.materialId
         })));
-        return pendingAds;
+        return transformedAds;
       } catch (error) {
         console.error('Error fetching pending ads:', error);
         throw new Error('Failed to fetch pending ads');

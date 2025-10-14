@@ -369,13 +369,22 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
           .location-input input::placeholder {
             color: rgba(255, 255, 255, 0.7) !important;
           }
+          .location-input input:-webkit-autofill,
+          .location-input input:-webkit-autofill:hover,
+          .location-input input:-webkit-autofill:focus,
+          .location-input input:-webkit-autofill:active {
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: white;
+            transition: background-color 5000s ease-in-out 0s;
+            box-shadow: inset 0 0 20px 20px transparent !important;
+          }
         `}
       </style>
       <div className="relative location-input">
       {/* Inline Address Builder */}
       <div className="space-y-3">
         {/* Location Selection */}
-        <div className="relative">
+        <div className="relative mt-8">
           <input
             ref={inputRef}
             type="text"
@@ -386,19 +395,20 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
             onBlur={handleInputBlur}
             onClick={handleInputClick}
             placeholder=""
-            className={`peer w-full px-3 py-4 pr-20 border shadow-sm focus:outline-none bg-transparent text-white placeholder-transparent transition ${
+            className={`peer w-full px-0 pt-5 pb-2 pr-20 border-b focus:outline-none bg-transparent text-white placeholder-transparent transition ${
               error ? 'border-red-300' : 'border-gray-300'
             }`}
+            style={{ backgroundColor: 'transparent' }}
           />
           <label
-            className={`absolute left-3 text-white bg-transparent transition-all duration-200 ${
-              (getLocationDisplay() || value) ? '-top-4 bg-black/20 text-sm p-1 font-bold' : 'peer-placeholder-shown:top-3 peer-placeholder-shown:text-base'
-            } peer-focus:-top-4 peer-focus:text-sm peer-focus:font-bold peer-focus:p-1 peer-focus:bg-black/30 peer-focus:backdrop-blur-lg`}
+            className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
+              (getLocationDisplay() || value) ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base'
+            } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
           >
             {label}
           </label>
           
-          <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-1">
+          <div className="absolute inset-y-0 right-0 flex items-center pr-0 space-x-1">
             {(selectedRegion || selectedCity) && (
               <button
                 type="button"
@@ -422,6 +432,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               onChange={handleAddressChange}
               placeholder=""
               className="peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
+              style={{ backgroundColor: 'transparent' }}
             />
             <label
               className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${

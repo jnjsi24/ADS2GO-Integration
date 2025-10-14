@@ -113,7 +113,7 @@ const UserReportsList: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="p-6">
         <div className="animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="space-y-3">
@@ -127,7 +127,7 @@ const UserReportsList: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="p-6">
         <div className="text-center text-red-600">
           <p>Error loading reports: {error.message}</p>
         </div>
@@ -139,9 +139,8 @@ const UserReportsList: React.FC = () => {
 
   if (reports.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6">
+      <div className="p-6">
         <div className="text-center text-gray-500">
-          <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium mb-2">No reports submitted yet</h3>
           <p>You haven't submitted any reports yet. Create your first report to get help!</p>
         </div>
@@ -150,17 +149,10 @@ const UserReportsList: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      <div className="p-6 border-b">
-        <h2 className="text-xl font-semibold text-gray-900">Your Submitted Reports</h2>
-        <p className="text-sm text-gray-600 mt-1">
-          Track the status of your reports and see admin responses
-        </p>
-      </div>
-
+    <div className="">
       <div className="divide-y divide-gray-200">
         {reports.map((report: UserReport) => (
-          <div key={report.id} className="p-6">
+          <div key={report.id}>
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
@@ -171,12 +163,18 @@ const UserReportsList: React.FC = () => {
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                  <span><strong>Category:</strong> {getCategoryLabel(report.reportType)}</span>
-                  {report.resolvedAt && (
-                    <span><strong>Resolved:</strong> {formatDate(report.resolvedAt)}</span>
-                  )}
-                </div>
+               <div className="flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-gray-600 mb-3">
+                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-[#3674B5]/70 text-white"> {getCategoryLabel(report.reportType)}</span>
+                {report.resolvedAt && (
+                  <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolved:</strong> {formatDate(report.resolvedAt)}</span>
+                )}
+                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"> {report.id}</span>
+                <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Last Updated:</strong> {formatDate(report.updatedAt)}</span>
+                {report.status === 'RESOLVED' && report.resolvedAt && (
+                  <span className="flex items-center gap-2 rounded-md px-2 py-1 bg-gray-300"><strong>Resolution Date:</strong> {formatDate(report.resolvedAt)}</span>
+                )}
+              </div>
+
 
               </div>
 
@@ -198,17 +196,8 @@ const UserReportsList: React.FC = () => {
             </div>
 
             {expandedReport === report.id && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="pt-4">
                 <div className="space-y-4">
-                  {/* Report Details */}
-                  <div className="text-sm text-gray-600">
-                    <p><strong>Report ID:</strong> {report.id}</p>
-                    <p><strong>Last Updated:</strong> {formatDate(report.updatedAt)}</p>
-                    {report.status === 'RESOLVED' && report.resolvedAt && (
-                      <p><strong>Resolution Date:</strong> {formatDate(report.resolvedAt)}</p>
-                    )}
-                  </div>
-
                   {/* Description */}
                   <div>
                     <p className="text-sm font-medium text-gray-600 mb-2"><strong>Description:</strong></p>
@@ -217,98 +206,106 @@ const UserReportsList: React.FC = () => {
 
                   {/* Attachments */}
                   {report.attachments && report.attachments.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-600 mb-2"><strong>Attachments:</strong></p>
-                      <div className="space-y-3">
-                        {report.attachments.map((attachment, index) => {
-                          const isImage = attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) || 
-                                         attachment.includes('data:image/') ||
-                                         attachment.includes('firebasestorage.googleapis.com') && 
-                                         (attachment.includes('image') || attachment.match(/\.(jpg|jpeg|png|gif|webp)/i));
-                          
-                          const isPdf = attachment.match(/\.pdf$/i) || attachment.includes('application/pdf');
-                          
-                          const getFileType = (url: string) => {
-                            if (isImage) return 'image';
-                            if (isPdf) return 'pdf';
-                            if (url.includes('data:text/')) return 'text';
-                            return 'file';
-                          };
+  <div>
+    <p className="text-sm font-medium text-gray-600 mb-2">
+      <strong>Attachments:</strong>
+    </p>
 
-                          const fileType = getFileType(attachment);
-                          const fileName = `Attachment ${index + 1}`;
+    <div className="space-y-3">
+      {/* Image attachments grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {report.attachments.map((attachment, index) => {
+          const isImage =
+            attachment.match(/\.(jpg|jpeg|png|gif|webp)$/i) ||
+            attachment.includes('data:image/') ||
+            (attachment.includes('firebasestorage.googleapis.com') &&
+              (attachment.includes('image') ||
+                attachment.match(/\.(jpg|jpeg|png|gif|webp)/i)));
 
-                          return (
-                            <div key={index} className="border border-gray-200 rounded-lg p-3">
-                              {fileType === 'image' ? (
-                                <div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <FileText className="w-4 h-4 text-green-600" />
-                                    <span className="text-sm font-medium text-gray-700">{fileName}</span>
-                                    <a
-                                      href={attachment}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:text-blue-800 text-xs underline ml-auto"
-                                    >
-                                      Open in new tab
-                                    </a>
-                                  </div>
-                                  <div className="max-w-md">
-                                    <img
-                                      src={attachment}
-                                      alt={fileName}
-                                      className="max-w-full h-auto rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                                      onClick={() => window.open(attachment, '_blank')}
-                                      onError={(e) => {
-                                        // Fallback to link if image fails to load
-                                        e.currentTarget.style.display = 'none';
-                                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                                      }}
-                                    />
-                                    <div className="hidden">
-                                      <a
-                                        href={attachment}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 text-sm underline"
-                                      >
-                                        {fileName} (Image)
-                                      </a>
-                                    </div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-3">
-                                  <div className="flex-shrink-0">
-                                    {fileType === 'pdf' ? (
-                                      <FileText className="w-5 h-5 text-red-600" />
-                                    ) : fileType === 'text' ? (
-                                      <FileText className="w-5 h-5 text-blue-600" />
-                                    ) : (
-                                      <FileText className="w-5 h-5 text-gray-600" />
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-700">{fileName}</p>
-                                    <p className="text-xs text-gray-500 capitalize">{fileType} file</p>
-                                  </div>
-                                  <a
-                                    href={attachment}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:text-blue-800 text-sm underline"
-                                  >
-                                    Open
-                                  </a>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+          const isPdf = attachment.match(/\.pdf$/i) || attachment.includes('application/pdf');
+
+          const getFileType = (url: string) => {
+            if (isImage) return 'image';
+            if (isPdf) return 'pdf';
+            if (url.includes('data:text/')) return 'text';
+            return 'file';
+          };
+
+          const fileType = getFileType(attachment);
+          const fileName = `Attachment ${index + 1}`;
+
+          // 🖼 If image: show in fixed grid cell
+          if (fileType === 'image') {
+            return (
+              <div
+                key={index}
+                className="relative border border-gray-200 rounded-lg p-2 bg-white shadow-sm hover:shadow-md transition-all"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-green-600" />
+                    <span className="text-xs font-medium text-gray-700">{fileName}</span>
+                  </div>
+                  <a
+                    href={attachment}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 text-xs underline"
+                  >
+                    Open
+                  </a>
+                </div>
+                <img
+                  src={attachment}
+                  alt={fileName}
+                  className="w-full h-40 object-cover rounded-md border border-gray-200 cursor-pointer"
+                  onClick={() => window.open(attachment, '_blank')}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              </div>
+            );
+          }
+
+          // 📄 Non-image file layout
+          return (
+            <div
+              key={index}
+              className="flex items-center justify-between border border-gray-200 rounded-lg p-3 shadow-sm bg-white"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  {fileType === 'pdf' ? (
+                    <FileText className="w-5 h-5 text-red-600" />
+                  ) : fileType === 'text' ? (
+                    <FileText className="w-5 h-5 text-blue-600" />
+                  ) : (
+                    <FileText className="w-5 h-5 text-gray-600" />
                   )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-700">{fileName}</p>
+                  <p className="text-xs text-gray-500 capitalize">{fileType} file</p>
+                </div>
+              </div>
+              <a
+                href={attachment}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 text-sm underline"
+              >
+                Open
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
+
 
                   {/* Admin Notes */}
                   {report.adminNotes && (

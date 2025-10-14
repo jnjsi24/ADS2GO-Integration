@@ -137,15 +137,15 @@ class DailyArchiveJobV2 {
           .filter(loc => loc && loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length >= 2)
           .slice(-4114), // 8 hours at 7s intervals
         
-        // Ad performance
-        adPerformance: device.adPerformance || [],
+        // Ad performance (filter out entries without userId)
+        adPerformance: (device.adPerformance || []).filter(perf => perf.userId),
         
-        // QR scan details (filter out invalid location data)
-        qrScans: this.cleanQRScanData(device.qrScans),
-        qrScansByAd: device.qrScansByAd || [],
+        // QR scan details (filter out invalid location data and entries without userId)
+        qrScans: this.cleanQRScanData(device.qrScans).filter(scan => scan.userId),
+        qrScansByAd: (device.qrScansByAd || []).filter(scan => scan.userId),
         
-        // Ad playback details (keep last 800 entries)
-        adPlaybacks: (device.adPlaybacks || []).slice(-800),
+        // Ad playback details (keep last 800 entries, filter out entries without userId)
+        adPlaybacks: (device.adPlaybacks || []).filter(pb => pb.userId).slice(-800),
         
         // Network and connectivity
         networkStatus: device.networkStatus || {},
@@ -156,6 +156,11 @@ class DailyArchiveJobV2 {
         // Basic vehicle display status
         isDisplaying: device.isDisplaying !== false,
         maintenanceMode: device.maintenanceMode || false,
+        
+        // Deployed ads (synced from AdsDeployment)
+        deployedAds: device.deployedAds || [],
+        currentDeploymentId: device.currentDeploymentId ? device.currentDeploymentId.toString() : undefined,
+        lastDeploymentSync: device.lastDeploymentSync || undefined,
         
         // Metadata
         archivedAt: new Date(),

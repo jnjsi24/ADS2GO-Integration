@@ -22,11 +22,11 @@ import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics'
 import { ArrowLeft, Download, RefreshCw, TrendingUp, Eye, Play, Clock, Target, Users, MapPin, Calendar, BarChart3, Monitor, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const DetailedAnalytics: React.FC = () => {
   const { user } = useUserAuth();
   const [selectedPeriod, setSelectedPeriod] = useState<'1d' | '7d' | '30d'>('7d');
-  const [selectedMetric, setSelectedMetric] = useState<'impressions' | 'plays' | 'completion' | 'qr' | 'revenue'>('impressions');
   const [selectedView, setSelectedView] = useState<'overview' | 'performance' | 'impressions' | 'display' | 'qr' | 'tablets' | 'ads'>('overview');
   const [userFirstName, setUserFirstName] = useState('User');
   
@@ -44,6 +44,21 @@ const DetailedAnalytics: React.FC = () => {
   const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const deviceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const directFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Device Dropdown States
+  const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
+  const [selectedDeviceLabel, setSelectedDeviceLabel] = useState("All Devices");
+  const [pos, setPos] = useState({ x: 50, y: 50 });
+
+
+  // Period Dropdown States
+  const [showPeriodDropdown, setShowPeriodDropdown] = useState(false);
+  const [selectedPeriodLabel, setSelectedPeriodLabel] = useState("Last 7 days");
+
+  const [showMetricDropdown, setShowMetricDropdown] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState<'impressions' | 'plays' | 'completion' | 'qr' | 'revenue'>('impressions');
+
+
+
 
   // Fetch analytics data with optimized cache policy
   const { data: analyticsData, loading: analyticsLoading, error: analyticsError, refetch: refetchAnalytics } = useQuery(GET_USER_ANALYTICS, {
@@ -176,9 +191,30 @@ const DetailedAnalytics: React.FC = () => {
   // Handle device selection change
   const handleDeviceChange = (deviceId: string) => {
     console.log('🔄 handleDeviceChange called with deviceId:', deviceId);
+
+    const selected = availableDevices.find((d) => d.materialId === deviceId);
+
     setSelectedDevice(deviceId);
+    setSelectedDeviceLabel(selected ? selected.name : "All Devices");
+    setShowDeviceDropdown(false);
+
+    // Fetch analytics data for the selected device
     fetchDeviceAnalytics(deviceId);
   };
+
+  const handlePeriodChange = useCallback((value: string) => {
+    const newPeriod = value as '1d' | '7d' | '30d';
+    setSelectedPeriod(newPeriod);
+    setShowPeriodDropdown(false);
+
+    if (newPeriod === '1d') setSelectedPeriodLabel('Last 24 hours');
+    else if (newPeriod === '7d') setSelectedPeriodLabel('Last 7 days');
+    else if (newPeriod === '30d') setSelectedPeriodLabel('Last 30 days');
+
+    // ✅ Re-fetch analytics when the period changes
+    fetchDeviceAnalytics(selectedDevice);
+  }, [selectedDevice, fetchDeviceAnalytics]);
+
 
   // Fetch direct analytics data when "All Devices" is selected with debouncing and useCallback
   const fetchDirectAnalytics = useCallback(async () => {
@@ -532,11 +568,6 @@ const DetailedAnalytics: React.FC = () => {
 
   const colors = ['#1b5087', '#3674B5', '#E78B48', '#FFAB5B', '#D4C9BE', '#EFEEEA'];
 
-  const handlePeriodChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newPeriod = e.target.value as '1d' | '7d' | '30d';
-    setSelectedPeriod(newPeriod);
-  }, []);
-
   // Refetch analytics when period or device selection changes with debouncing
   useEffect(() => {
     // Clear any pending refetch
@@ -575,8 +606,16 @@ const DetailedAnalytics: React.FC = () => {
   // Memoized chart data transformations for performance
   const performanceChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        impressions: day.impressions || 0,
+        adsPlayed: day.adsPlayed || 0,
+        qrScans: day.qrScans || 0,
+        completionRate: day.completionRate || 0,
+        revenue: 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -589,12 +628,16 @@ const DetailedAnalytics: React.FC = () => {
     } else {
       return analyticsData?.getUserAnalytics?.dailyStats || weeklyData;
     }
-  }, [selectedDevice, deviceAnalytics, analyticsData]);
+  }, [selectedDevice, deviceAnalytics, analyticsData, weeklyData]);
 
   const qrScansChartData = useMemo(() => {
     if (selectedDevice === 'all') {
-      // For "All Devices" - use only UserAnalytics data, no daily breakdown available
-      return [];
+      // For "All Devices" - use UserAnalytics dailyStats data
+      const dailyStats = analyticsData?.getUserAnalytics?.dailyStats || [];
+      return dailyStats.map((day: any) => ({
+        date: day.date,
+        qrScans: day.qrScans || 0
+      }));
     } else if (selectedDevice !== 'all' && deviceAnalytics?.dailyBreakdown) {
       return deviceAnalytics.dailyBreakdown.map((day: any) => ({
         date: day.date,
@@ -650,7 +693,7 @@ const DetailedAnalytics: React.FC = () => {
     <div className="space-y-6">
       {/* Key Metrics Overview - Updated for UserAnalytics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white/60 p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Plays</p>
@@ -668,7 +711,7 @@ const DetailedAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white/60 p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">QR Scans</p>
@@ -686,7 +729,7 @@ const DetailedAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white/60 p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Materials</p>
@@ -704,7 +747,7 @@ const DetailedAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white/60 p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Completion Rate</p>
@@ -722,7 +765,7 @@ const DetailedAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white/60 p-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Display Time</p>
@@ -742,46 +785,99 @@ const DetailedAnalytics: React.FC = () => {
       </div>
 
       {/* Performance Over Time */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-800">Performance Over Time</h3>
-          <select
-            className="text-sm text-gray-600 bg-white rounded-lg px-3 py-1 border border-gray-200 focus:outline-none"
-            value={selectedMetric}
-            onChange={(e) => setSelectedMetric(e.target.value as 'impressions' | 'plays' | 'completion' | 'qr' | 'revenue')}
-          >
-            <option value="impressions">Impressions</option>
-            <option value="plays">Plays</option>
-            <option value="completion">Completion Rate</option>
-            <option value="qr">QR Scans</option>
-            <option value="revenue">Revenue</option>
-          </select>
+          <div className="relative w-40">
+            {/* Button that toggles the dropdown */}
+            <button
+              onClick={() => setShowMetricDropdown(!showMetricDropdown)}
+              className="flex items-center justify-between w-full text-sm text-gray-700 rounded-md px-3 py-2 bg-white/60 border border-gray-200 shadow-sm transition-colors"
+            >
+              {(() => {
+                switch (selectedMetric) {
+                  case 'impressions': return 'Impressions';
+                  case 'plays': return 'Plays';
+                  case 'completion': return 'Completion Rate';
+                  case 'qr': return 'QR Scans';
+                  case 'revenue': return 'Revenue';
+                  default: return 'Select Metric';
+                }
+              })()}
+              <ChevronDown
+                size={16}
+                className={`transform transition-transform duration-200 ${showMetricDropdown ? 'rotate-180' : 'rotate-0'}`}
+              />
+            </button>
+
+            {/* AnimatePresence dropdown */}
+            <AnimatePresence>
+              {showMetricDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full bg-white rounded-md shadow-lg border border-gray-200 overflow-hidden"
+                >
+                  {[
+                    { value: 'impressions', label: 'Impressions' },
+                    { value: 'plays', label: 'Plays' },
+                    { value: 'completion', label: 'Completion Rate' },
+                    { value: 'qr', label: 'QR Scans' },
+                    { value: 'revenue', label: 'Revenue' },
+                  ].map((metric) => (
+                    <button
+                      key={metric.value}
+                      onClick={() => {
+                        setSelectedMetric(metric.value as any);
+                        setShowMetricDropdown(false);
+                      }}
+                      className={`block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors ${
+                        selectedMetric === metric.value ? 'bg-blue-50 text-[#3674B5]' : ''
+                      }`}
+                    >
+                      {metric.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={350}>
           <ComposedChart data={performanceChartData}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <defs>
+              <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#1b5087" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#1b5087" stopOpacity={0.1}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis 
               dataKey="date" 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: '#666' }}
               tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12, fill: '#666' }} />
             <Tooltip 
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
               labelFormatter={(value) => new Date(value).toLocaleDateString()}
               formatter={(value, name) => [
-                name === 'impressions' ? value.toLocaleString() : 
                 name === 'adsPlayed' ? value.toLocaleString() : 
                 name === 'qrScans' ? value.toLocaleString() :
-                name === 'revenue' ? `$${value}` :
                 `${value}%`,
-                name === 'impressions' ? 'Impressions' :
                 name === 'adsPlayed' ? 'Plays' : 
-                name === 'qrScans' ? 'QR Scans' :
-                name === 'revenue' ? 'Revenue' : 'Completion Rate'
+                name === 'qrScans' ? 'QR Scans' : 'Completion Rate'
               ]}
             />
-            <Bar dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} fill="#1b5087" />
-            <Line type="monotone" dataKey={selectedMetric === 'impressions' ? 'impressions' : selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : selectedMetric === 'revenue' ? 'revenue' : 'completionRate'} stroke="#3674B5" strokeWidth={2} />
+            <Area 
+              type="monotone" 
+              dataKey={selectedMetric === 'plays' ? 'adsPlayed' : selectedMetric === 'qr' ? 'qrScans' : 'completionRate'} 
+              fill="url(#colorMetric)" 
+              stroke="#1b5087" 
+              strokeWidth={3}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -790,7 +886,7 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderImpressionsSection = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Impressions Analysis</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
@@ -833,30 +929,41 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderDisplayTimeSection = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Time Analysis</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Daily Display Time</h4>
+          <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-[#1b5087]" />
+              Daily Display Time
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']} />
-                <Bar dataKey="completion" fill="#1b5087" name="Display Time (hours)" />
+                <Tooltip 
+                  formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#1b5087" radius={[8, 8, 0, 0]} name="Display Time (hours)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div>
-            <h4 className="text-md font-medium text-gray-700 mb-3">Device Performance</h4>
+          <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-lg border border-green-100">
+            <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+              Device Completion Rate
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={devicePerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="completion" fill="#3674B5" name="Completion Rate %" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                />
+                <Bar dataKey="completion" fill="#10b981" radius={[8, 8, 0, 0]} name="Completion Rate %" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -867,7 +974,7 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderQRSection = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">QR Scans Analysis - Real Data from UserAnalytics</h3>
         
         {/* QR Summary Cards */}
@@ -959,12 +1066,12 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderTabletActivitySection = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Activity Overview - Real Data from UserAnalytics</h3>
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-green-600">Total Materials</p>
@@ -975,7 +1082,7 @@ const DetailedAnalytics: React.FC = () => {
               <div className="text-green-500">📱</div>
             </div>
           </div>
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-blue-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-blue-600">Total Devices</p>
@@ -986,7 +1093,7 @@ const DetailedAnalytics: React.FC = () => {
               <div className="text-blue-500">💻</div>
             </div>
           </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
+          <div className="bg-orange-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-orange-600">Avg. Completion</p>
@@ -1013,7 +1120,7 @@ const DetailedAnalytics: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Time</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white/60 divide-y divide-gray-200">
               {selectedDevice === 'all' ? (
                 // For "All Devices" - use only UserAnalytics data from direct API
                 directAnalyticsData?.deviceStats?.length > 0 ? 
@@ -1110,12 +1217,12 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderDetailedAdsSection = () => (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white/20 p-6 shadow-md">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Ads Analytics - Real Data from UserAnalytics</h3>
         
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-blue-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-blue-600">Total Ads</p>
@@ -1126,7 +1233,7 @@ const DetailedAnalytics: React.FC = () => {
               <div className="text-blue-500">📺</div>
             </div>
           </div>
-          <div className="bg-green-50 p-4 rounded-lg">
+          <div className="bg-green-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-green-600">Active Ads</p>
@@ -1137,7 +1244,7 @@ const DetailedAnalytics: React.FC = () => {
               <div className="text-green-500">▶️</div>
             </div>
           </div>
-          <div className="bg-orange-50 p-4 rounded-lg">
+          <div className="bg-orange-50 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-orange-600">QR Conversion</p>
@@ -1153,20 +1260,20 @@ const DetailedAnalytics: React.FC = () => {
         {/* Detailed Ads Table - Real Data from UserAnalytics */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ad Title</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materials</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Impressions</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Play Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Scans</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completion</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Conversion</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Ad Title</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Materials</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Impressions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Play Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">QR Scans</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Completion</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">QR Conversion</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Last Updated</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white/60 divide-y divide-gray-200">
               {(selectedDevice === 'all' ? 
                 // For "All Devices" - use only UserAnalytics data from direct API
                 directAnalyticsData?.adPerformance :
@@ -1254,66 +1361,177 @@ const DetailedAnalytics: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pl-72 pr-5 p-10">
+   <div className="relative min-h-screen overflow-hidden">
+    {/* Background layer */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
+    ></div>
+
+    {/* Translucent overlay */}
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+
+    {/* Foreground content */}
+    <div className="relative min-h-screen bg-transparent pl-72 pr-5 p-10 flex flex-col">
       {/* Header Section */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-4">
-          <Link 
-            to="/dashboard" 
-            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+      <div className="flex flex-col gap-4 mb-6">
+        {/* Row 1: Back to Dashboard */}
+        <div className="flex justify-between items-center">
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors w-fit"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+            <ArrowLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Back to Dashboard</span>
           </Link>
+        </div>
+
+        {/* Row 2: Detailed Analytics + Filters */}
+        <div className="flex justify-between items-center">
+          {/* Left: Title */}
           <div>
             <h1 className="text-3xl font-semibold text-gray-800">Detailed Analytics</h1>
-            <p className="text-gray-500 text-sm">Comprehensive insights for {userFirstName}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Device Selection Dropdown */}
-          <div className="relative">
-            <select
-              className="text-sm text-gray-600 bg-white rounded-lg px-4 py-2 pr-8 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-              value={selectedDevice}
-              onChange={(e) => handleDeviceChange(e.target.value)}
-            >
-              <option value="all">All Devices</option>
-              {availableDevices.map((device) => (
-                <option key={device.id} value={device.materialId}>
-                  {device.name}
-                </option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-              <ChevronDown className="w-4 h-4 text-gray-400" />
+
+          {/* Right: Filters */}
+          <div className="flex items-center gap-3">
+            {/* Device Selection Dropdown */}
+            <div className="relative w-32">
+              <button
+                onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
+                className="flex items-center justify-between w-full text-sm text-gray-700 rounded-md px-4 py-2 shadow-md focus:outline-none bg-white/60 gap-2"
+              >
+                {selectedDeviceLabel || "All Devices"}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showDeviceDropdown ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showDeviceDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-md bg-white overflow-hidden"
+                  >
+                    <button
+                      onClick={() => handleDeviceChange("all")}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      All Devices
+                    </button>
+                    {availableDevices.map((device) => (
+                      <button
+                        key={device.id}
+                        onClick={() => handleDeviceChange(device.materialId)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {device.name}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Period Filter */}
+            <div className="relative w-36">
+              <button
+                onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
+                className="flex items-center justify-between w-full text-sm text-gray-700 rounded-md px-4 py-2 shadow-md focus:outline-none bg-white/60 gap-2"
+              >
+                {selectedPeriodLabel}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showPeriodDropdown ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showPeriodDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-md bg-white overflow-hidden"
+                  >
+                    {[
+                      { value: "1d", label: "Last 24 hours" },
+                      { value: "7d", label: "Last 7 days" },
+                      { value: "30d", label: "Last 30 days" },
+                    ].map((period) => (
+                      <button
+                        key={period.value}
+                        onClick={() => handlePeriodChange(period.value)}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {period.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
+        </div>
+
+        {/* Row 3: Refresh + Export Buttons */}
+        <div className="flex justify-between items-center">
+          {/* Empty space on left to align with title */}
+          <div></div>
           
-          <select
-            className="text-sm text-gray-600 bg-white rounded-lg px-4 py-2 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={selectedPeriod}
-            onChange={handlePeriodChange}
-          >
-            <option value="1d">Last 24 hours</option>
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-          </select>
-          <button
-            onClick={handleRefresh}
-            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-            title="Refresh data"
-          >
-            <RefreshCw className="w-5 h-5 text-gray-600" />
-          </button>
-          <button
-            onClick={exportData}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          {/* Right: Action Buttons */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRefresh}
+              onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                setPos({ x, y });
+              }}
+              className={`relative group inline-flex items-center justify-center overflow-hidden
+                          px-4 py-2 text-sm font-semibold text-white
+                          transition-all duration-300 hover:scale-105`}
+              style={{
+                backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
+                                  radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </span>
+
+              {/* Light-blue shine effect following mouse */}
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                style={{
+                  background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                }}
+              />
+            </button>
+            <button
+              onClick={exportData}
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-green-500 text-green-600 hover:text-green-600 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
 
       {/* Device Information Banner */}
       {selectedDevice !== 'all' && deviceAnalytics && (
@@ -1368,37 +1586,36 @@ const DetailedAnalytics: React.FC = () => {
       )}
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div className="flex border-b border-gray-200 overflow-x-auto">
+      <div className="mb-6">
+        <div className="flex overflow-x-auto">
           {[
             { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'performance', label: 'Performance', icon: TrendingUp },
-            { id: 'impressions', label: 'Impressions', icon: Eye },
             { id: 'display', label: 'Display Time', icon: Clock },
             { id: 'qr', label: 'QR Impressions', icon: Target },
             { id: 'tablets', label: 'Tablet Activity', icon: Users },
-            { id: 'ads', label: 'Detailed Ads', icon: BarChart3 }
+            { id: 'ads', label: 'Detailed Ads', icon: BarChart3 },
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setSelectedView(id as any)}
-              className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
-                selectedView === id
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              className={`relative flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors group
+                ${selectedView === id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-5 h-5 transition-transform duration-200 ${selectedView === id ? 'scale-110' : 'group-hover:scale-105'}`} />
               {label}
+              {/* Animated underline */}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                  ${selectedView === id ? 'w-full' : 'w-0 group-hover:w-full'}`}
+              />
             </button>
           ))}
         </div>
       </div>
 
+
       {/* Content based on selected view */}
       {selectedView === 'overview' && renderOverviewSection()}
-      {selectedView === 'performance' && renderOverviewSection()}
-      {selectedView === 'impressions' && renderImpressionsSection()}
       {selectedView === 'display' && renderDisplayTimeSection()}
       {selectedView === 'qr' && renderQRSection()}
       {selectedView === 'tablets' && renderTabletActivitySection()}
@@ -1406,7 +1623,7 @@ const DetailedAnalytics: React.FC = () => {
 
       {/* Top Performing Ads - Updated for UserAnalytics */}
       {topPerformingAds.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mt-6">
+        <div className="bg-white/60 p-6 rounded-lg shadow-md mt-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">
             Top Performing Ads {selectedDevice !== 'all' ? `on ${deviceAnalytics?.deviceInfo?.deviceName || 'Selected Device'}` : ''}
           </h3>
@@ -1450,6 +1667,7 @@ const DetailedAnalytics: React.FC = () => {
           <p className="text-red-800">Error loading analytics data: {analyticsError.message}</p>
         </div>
       )}
+    </div>
     </div>
   );
 };

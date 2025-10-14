@@ -18,6 +18,7 @@ interface PaymentProps {
     adFormat?: string;
     adLengthSeconds: number;
     status: Status;
+    adStatus?: string; // Ad approval status
   };
   paymentType: string;
   onClose: () => void;
@@ -109,73 +110,146 @@ const Payment: React.FC<PaymentProps> = ({
   };
 
   const handlePayNow = async () => {
-    if (isProcessing || loading) return;
-    if (!selectedMethod) {
-      showError("Please select a payment method");
-      return;
-    }
-    // Validate fields (frontend only)
-    if (selectedMethod === "CREDIT_CARD" && (!cardNumber || !cardHolder || !expiry || !cvv)) {
+  if (isProcessing || loading) return;
+  
+  // Check if ad is approved
+  if (paymentItem.adStatus !== 'APPROVED') {
+    showError("⚠️ Ad must be approved first before you can make a payment.");
+    return;
+  }
+  
+  if (!selectedMethod) {
+    showError("Please select a payment method");
+    return;
+  }
+
+  // ============ 🔍 VALIDATION RULES ============ //
+  const nameRegex = /^[A-Za-z\s]+$/; // only letters + spaces
+  const numberOnly = /^[0-9]+$/;
+  const cardNumberRegex = /^[0-9]{16,19}$/;
+  const cvvRegex = /^[0-9]{3,4}$/;
+  const expiryRegex = /^(0[1-9]|1[0-2])\/([0-9]{2})$/; // MM/YY
+  const gcashPaypalNumberRegex = /^09\d{9}$/; // starts with 09 + 11 digits
+
+  // ============ CREDIT CARD VALIDATION ============ //
+  if (selectedMethod === "CREDIT_CARD") {
+    if (!cardNumber || !cardHolder || !expiry || !cvv) {
       showError("Please complete all credit card fields");
       return;
     }
-    if (selectedMethod === "GCASH" && (!gcashNumber || !gcashName)) {
+    if (!cardNumberRegex.test(cardNumber)) {
+      showError("Card number must be 16–19 digits only (no letters or symbols)");
+      return;
+    }
+    if (!nameRegex.test(cardHolder)) {
+      showError("Card holder name must contain only letters");
+      return;
+    }
+    if (!expiryRegex.test(expiry)) {
+      showError("Expiry date must be in MM/YY format");
+      return;
+    }
+    if (!cvvRegex.test(cvv)) {
+      showError("CVV must be 3–4 digits only");
+      return;
+    }
+  }
+
+  // ============ GCASH VALIDATION ============ //
+  if (selectedMethod === "GCASH") {
+    if (!gcashNumber || !gcashName) {
       showError("Please complete all GCash fields");
       return;
     }
-    if (selectedMethod === "PAYPAL" && (!paypalNumber || !paypalName)) {
+    if (!gcashPaypalNumberRegex.test(gcashNumber)) {
+      showError("GCash number must start with 09 and be 11 digits");
+      return;
+    }
+    if (!nameRegex.test(gcashName)) {
+      showError("GCash registered name must contain only letters");
+      return;
+    }
+  }
+
+  // ============ PAYPAL VALIDATION ============ //
+  if (selectedMethod === "PAYPAL") {
+    if (!paypalNumber || !paypalName) {
       showError("Please complete all PayPal fields");
       return;
     }
-    if (selectedMethod === "BANK_TRANSFER" && (!bankName || !bankAccountName || !bankAccountNumber)) {
+    if (!gcashPaypalNumberRegex.test(paypalNumber)) {
+      showError("PayPal number must start with 09 and be 11 digits");
+      return;
+    }
+    if (!nameRegex.test(paypalName)) {
+      showError("PayPal registered name must contain only letters");
+      return;
+    }
+  }
+
+  // ============ BANK TRANSFER VALIDATION ============ //
+  if (selectedMethod === "BANK_TRANSFER") {
+    if (!bankName || !bankAccountName || !bankAccountNumber) {
       showError("Please complete all bank transfer fields");
       return;
     }
-    if (selectedMethod === "CASH") {
-      showError("Cash payments must be completed in person at 123 Main Street, Manila.");
-      return; // Don't call mutation for CASH (handle manually if needed)
+    if (!nameRegex.test(bankAccountName)) {
+      showError("Account name must contain only letters");
+      return;
     }
-
-    setIsProcessing(true);
-
-    // Input matches CreatePaymentInput (no receiptId)
-    const input = {
-      adsId: paymentItem.id,
-      paymentType: selectedMethod,
-      paymentDate: new Date().toISOString(),
-    };
-
-    try {
-      const { data } = await createPayment({ variables: { input } });
-      if (data?.createPayment?.success) {
-        showSuccess(`✅ Payment for ${paymentItem.productName} is now PAID!`);
-        onSuccess?.();
-        setTimeout(onClose, 2000); // Close after success message
-      } else {
-        showError(data?.createPayment?.message || "Payment failed.");
-      }
-    } catch (err: any) {
-      const msg = err.message || "Unknown error";
-      if (msg.includes("Ad is not approved")) {
-        showError("⚠️ This ad is not yet approved.");
-      } else if (msg.includes("A payment already exists")) {
-        showError("⚠️ A payment already exists for this ad.");
-      } else if (msg.includes("You are not authorized")) {
-        showError("⚠️ You are not authorized to pay for this ad.");
-      } else {
-        showError(`❌ Unexpected error: ${msg}`);
-      }
-    } finally {
-      setIsProcessing(false);
+    if (!numberOnly.test(bankAccountNumber)) {
+      showError("Account number must contain digits only");
+      return;
     }
+  }
+
+  // ============ CASH VALIDATION ============ //
+  if (selectedMethod === "CASH") {
+    showError("Cash payments must be completed in person at 123 Main Street, Manila.");
+    return;
+  }
+
+  // ✅ All validation passed
+  setIsProcessing(true);
+
+  const input = {
+    adsId: paymentItem.id,
+    paymentType: selectedMethod,
+    paymentDate: new Date().toISOString(),
   };
+
+  try {
+    const { data } = await createPayment({ variables: { input } });
+    if (data?.createPayment?.success) {
+      showSuccess(`✅ Payment for ${paymentItem.productName} is now PAID!`);
+      onSuccess?.();
+      setTimeout(onClose, 2000);
+    } else {
+      showError(data?.createPayment?.message || "Payment failed.");
+    }
+  } catch (err: any) {
+    const msg = err.message || "Unknown error";
+    if (msg.includes("Ad must be approved first") || msg.includes("Ad is not approved")) {
+      showError("⚠️ Ad must be approved first before you can make a payment.");
+    } else if (msg.includes("A payment already exists")) {
+      showError("⚠️ A payment already exists for this ad.");
+    } else if (msg.includes("You are not authorized")) {
+      showError("⚠️ You are not authorized to pay for this ad.");
+    } else {
+      showError(`❌ Unexpected error: ${msg}`);
+    }
+  } finally {
+    setIsProcessing(false);
+  }
+};
+
 
   const isButtonDisabled = loading || isProcessing;
   const isPending = paymentItem.status === "PENDING";
 
   return (
     <div className="fixed inset-0 z-[60] bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-lg shadow-xl p-8 ${isPending ? "w-full max-w-4xl" : "w-96"} relative`}>
+      <div className={`bg-white rounded-md shadow-xl p-8 ${isPending ? "w-full max-w-4xl" : "w-96"} relative`}>
         {/* Close button */}
         <button
           onClick={onClose}
@@ -199,7 +273,7 @@ const Payment: React.FC<PaymentProps> = ({
               <div className="relative mb-4">
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="w-full flex justify-between items-center border rounded-md px-4 py-2 text-sm bg-white focus:outline-none"
+                  className="w-full flex justify-between items-center border shadow-md rounded-md px-4 py-2 text-sm bg-white focus:outline-none"
                 >
                   {methods.find(m => m.value === selectedMethod)?.label || "Choose Method"}
                   <ChevronDown
@@ -210,7 +284,7 @@ const Payment: React.FC<PaymentProps> = ({
                   />
                 </button>
                 {isDropdownOpen && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border rounded-md shadow-md">
+                  <div className="absolute z-10 mt-1 w-full bg-white border shadow-md rounded-md">
                     {methods.map((method) => (
                       <div
                         key={method.value}
@@ -219,7 +293,7 @@ const Payment: React.FC<PaymentProps> = ({
                           setIsDropdownOpen(false);
                         }}
                         className={`px-4 py-2 text-sm cursor-pointer hover:bg-gray-100 ${
-                          selectedMethod === method.value ? "bg-orange-50" : ""
+                          selectedMethod === method.value ? "bg-gray-100" : ""
                         }`}
                       >
                         {method.label}
@@ -233,32 +307,45 @@ const Payment: React.FC<PaymentProps> = ({
                 <div className="space-y-3">
                   <input
                     value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ""); // remove non-digits
+                      if (value.length <= 19) setCardNumber(value);
+                    }}
                     type="text"
                     placeholder="Card Number"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <input
                     value={cardHolder}
-                    onChange={(e) => setCardHolder(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, ""); // letters + spaces only
+                      setCardHolder(value);
+                    }}
                     type="text"
                     placeholder="Card Holder Name"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <div className="flex gap-3">
                     <input
                       value={expiry}
-                      onChange={(e) => setExpiry(e.target.value)}
+                       onChange={(e) => {
+                        // Allow MM/YY format only
+                        const value = e.target.value.replace(/[^0-9/]/g, "");
+                        setExpiry(value);
+                      }}
                       type="text"
                       placeholder="Expiry (MM/YY)"
-                      className="flex-1 border rounded-md px-4 py-2 text-sm focus:outline-none"
+                      className="flex-1 border rounded-md px-4 shadow-md py-2 text-sm focus:outline-none"
                     />
                     <input
                       value={cvv}
-                      onChange={(e) => setCvv(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, ""); // digits only
+                        if (value.length <= 4) setCvv(value);
+                      }}
                       type="text"
                       placeholder="CVV"
-                      className="w-24 border rounded-md px-4 py-2 text-sm focus:outline-none"
+                      className="w-24 border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                     />
                   </div>
                 </div>
@@ -267,17 +354,23 @@ const Payment: React.FC<PaymentProps> = ({
                 <div className="space-y-3">
                   <input
                     value={gcashNumber}
-                    onChange={(e) => setGcashNumber(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ""); // digits only
+                      if (value.length <= 11) setGcashNumber(value);
+                    }}
                     type="text"
                     placeholder="GCash Mobile Number"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <input
                     value={gcashName}
-                    onChange={(e) => setGcashName(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, ""); // letters + spaces only
+                      setGcashName(value);
+                    }}
                     type="text"
                     placeholder="Registered Name"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                 </div>
               )}
@@ -285,17 +378,23 @@ const Payment: React.FC<PaymentProps> = ({
                 <div className="space-y-3">
                   <input
                     value={paypalNumber}
-                    onChange={(e) => setPaypalNumber(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ""); // digits only
+                      if (value.length <= 11) setPaypalNumber(value);
+                    }}
                     type="text"
                     placeholder="Paypal Mobile Number"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <input
                     value={paypalName}
-                    onChange={(e) => setPaypalName(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, "");
+                      setPaypalName(value);
+                    }}
                     type="text"
                     placeholder="Registered Name"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                 </div>
               )}
@@ -306,26 +405,32 @@ const Payment: React.FC<PaymentProps> = ({
                     onChange={(e) => setBankName(e.target.value)}
                     type="text"
                     placeholder="Bank Name"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <input
                     value={bankAccountName}
-                    onChange={(e) => setBankAccountName(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^A-Za-z\s]/g, ""); // only letters + spaces
+                      setBankAccountName(value);
+                    }}
                     type="text"
                     placeholder="Account Name"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                   <input
                     value={bankAccountNumber}
-                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ""); // only digits
+                      if (value.length <= 16) setBankAccountNumber(value);
+                    }}
                     type="text"
                     placeholder="Account Number"
-                    className="w-full border rounded-md px-4 py-2 text-sm focus:outline-none"
+                    className="w-full border rounded-md shadow-md px-4 py-2 text-sm focus:outline-none"
                   />
                 </div>
               )}
               {selectedMethod === "CASH" && (
-                <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-md text-sm text-gray-700">
+                <div className="mt-4 p-3 border text-sm text-gray-700">
                   Please go to <strong>123 Main Street, Manila</strong> to complete your payment.
                 </div>
               )}
@@ -349,54 +454,68 @@ const Payment: React.FC<PaymentProps> = ({
                 {paymentItem.status}
               </span>
             </div>
-            <table className="w-full text-sm bg-gray-100 rounded-lg mt-5 p-4">
+            <table className="w-full text-sm shadow-md rounded-lg mt-5 p-4">
               <tbody className="divide-y">
                 <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Price</td>
-                  <td className="py-2 px-4 text-gray-800">
-                    ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Mode of Payment</td>
-                  <td className="py-2 px-4 text-gray-800">
+                  <td className="py-2 px-4 text-gray-600">Mode of Payment</td>
+                  <td className="py-2 px-4 text-gray-800 font-medium">
                     {paymentType || "N/A"}
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Ad Type</td>
-                  <td className="py-2 px-4 text-gray-800">
+                  <td className="py-2 px-4 text-gray-600">Ad Type</td>
+                  <td className="py-2 px-4 text-gray-800 font-medium">
                     {paymentItem.adType || "N/A"}
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Duration</td>
-                  <td className="py-2 px-4 text-gray-800">
+                  <td className="py-2 px-4 text-gray-600">Duration</td>
+                  <td className="py-2 px-4 text-gray-800 font-medium">
                     {paymentItem.durationDays} days
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Ad Format</td>
-                  <td className="py-2 px-4 text-gray-800">
+                  <td className="py-2 px-4 text-gray-600">Ad Format</td>
+                  <td className="py-2 px-4 text-gray-800 font-medium">
                     {paymentItem.adFormat || "N/A"}
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-2 px-4 text-gray-600 font-medium">Ad Length</td>
-                  <td className="py-2 px-4 text-gray-800">
+                  <td className="py-2 px-4 text-gray-600">Ad Length</td>
+                  <td className="py-2 px-4 text-gray-800 font-medium">
                     {paymentItem.adLengthSeconds} seconds
                   </td>
                 </tr>
+                {/* Receipt ID - Only show when payment is PAID */}
+                {!isPending && paymentItem.receiptId && (
+                  <tr>
+                    <td className="py-2 px-4 text-gray-600">Receipt ID</td>
+                    <td className="py-2 px-4 text-gray-800 font-medium">
+                      {paymentItem.receiptId}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
             {isPending && (
               <div className="mt-6 flex justify-between text-base font-semibold">
                 <span>Due today</span>
-                <span className="text-gray-900 text-xl">
+                <span className="text-gray-900 font-bold text-xl">
                   ₱{parseFloat(paymentItem.totalPrice.replace("$", "")).toFixed(2)}
                 </span>
               </div>
             )}
+            
+            {/* Approval Status Warning */}
+            {paymentItem.adStatus !== 'APPROVED' && isPending && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800 flex items-center gap-2">
+                  <span className="text-yellow-500">⚠️</span>
+                  <span><strong>Ad pending approval:</strong> Your ad must be approved by an admin before payment can be processed.</span>
+                </p>
+              </div>
+            )}
+            
             {/* Pay Now Button (Only show for Pending status and non-CASH) */}
             {isPending && selectedMethod !== "CASH" && (
               <div className="flex justify-end">

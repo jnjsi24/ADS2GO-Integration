@@ -34,6 +34,7 @@ const HourlyStatsSchema = new mongoose.Schema({
 // Ad Playback Schema for real-time tracking
 const AdPlaybackSchema = new mongoose.Schema({
   adId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   adTitle: { type: String, required: true },
   materialId: { type: String, required: true },
   slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -48,6 +49,7 @@ const AdPlaybackSchema = new mongoose.Schema({
 // QR Scan Schema for real-time tracking
 const QRScanSchema = new mongoose.Schema({
   adId: { type: String, required: true },
+  userId: { type: String, required: true, index: true },
   adTitle: { type: String, required: true },
   materialId: { type: String, required: true },
   slotNumber: { type: Number, required: true, min: 1, max: 5 },
@@ -168,6 +170,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // Current ad being played (simplified schema for real-time updates)
   currentAd: {
     adId: { type: String },
+    userId: { type: String },
     adTitle: { type: String },
     materialId: { type: String },
     slotNumber: { type: Number },
@@ -182,6 +185,31 @@ const DeviceTrackingSchema = new mongoose.Schema({
     impressions: { type: Number, default: 1 }
   },
   
+  // Deployed ads (synced from AdsDeployment) - shows which ads SHOULD be playing
+  deployedAds: [{
+    adId: { type: String, required: true },
+    userId: { type: String, required: true },
+    adTitle: { type: String, required: true },
+    slotNumber: { type: Number, min: 1, max: 5 },
+    startTime: { type: Date },
+    endTime: { type: Date },
+    status: { 
+      type: String, 
+      enum: ['SCHEDULED', 'RUNNING', 'COMPLETED', 'PAUSED', 'CANCELLED', 'REMOVED'],
+      default: 'SCHEDULED'
+    },
+    mediaFile: { type: String },
+    deployedAt: { type: Date },
+    deploymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'AdsDeployment' }
+  }],
+  
+  // Reference to current deployment
+  currentDeploymentId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'AdsDeployment' 
+  },
+  lastDeploymentSync: { type: Date },
+  
   // Real-time data arrays (for current day)
   adPlaybacks: [AdPlaybackSchema],
   qrScans: [QRScanSchema],
@@ -193,6 +221,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // Ad performance tracking
   adPerformance: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: true },
     adTitle: { type: String, required: true },
     playCount: { type: Number, default: 0 },
     totalViewTime: { type: Number, default: 0 },
@@ -206,6 +235,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
   // QR scans per ad
   qrScansByAd: [{
     adId: { type: String, required: true },
+    userId: { type: String, required: true },
     adTitle: { type: String, required: true },
     scanCount: { type: Number, default: 0 },
     lastScanned: { type: Date },
@@ -586,7 +616,7 @@ DeviceTrackingSchema.methods.getSlot = function(slotNumber) {
 };
 
 // Helper method to update a specific slot
-DeviceTrackingSchema.methods.updateSlot = function(slotNumber, updateData) {
+DeviceTrackingSchema.methods.updateSlot = async function(slotNumber, updateData) {
   const slot = this.getSlot(slotNumber);
   if (slot) {
     Object.assign(slot, updateData);
@@ -604,7 +634,31 @@ DeviceTrackingSchema.methods.updateSlot = function(slotNumber, updateData) {
   this.isOnline = this.slots.some(slot => slot.isOnline);
   this.lastSeen = new Date();
   
-  return this.save();
+  // Retry logic for version conflicts
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      return await this.save();
+    } catch (error) {
+      if (error.name === 'VersionError' && retries > 1) {
+        console.log(`Version conflict, retrying... (${4 - retries}/3)`);
+        // Reload the document to get the latest version
+        const freshDoc = await this.constructor.findById(this._id);
+        if (freshDoc) {
+          // Update the slot on the fresh document with the same data
+          await freshDoc.updateSlot(slotNumber, updateData);
+          this.set(freshDoc.toObject());
+          retries--;
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error('Failed to save after retries');
 };
 
 // Helper method to get slot status for dashboard
@@ -928,14 +982,27 @@ DeviceTrackingSchema.methods.calculateDistance = function(lat1, lng1, lat2, lng2
   return R * c;
 };
 
-DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {
+DeviceTrackingSchema.methods.trackAdPlayback = async function(adId, adTitle, adDuration, viewTime = 0, slotNumber = null) {
   const now = new Date();
   const completionRate = adDuration > 0 ? Math.min(100, (viewTime / adDuration) * 100) : 0;
   const slot = slotNumber || this.deviceSlot || 1;
   
+  // Look up userId from Ad collection
+  let userId = null;
+  try {
+    const Ad = require('./Ad');
+    const ad = await Ad.findById(adId).select('userId');
+    if (ad && ad.userId) {
+      userId = ad.userId.toString();
+    }
+  } catch (error) {
+    console.error(`❌ Error fetching userId for ad ${adId}:`, error.message);
+  }
+  
   // Update current ad (simplified)
   this.currentAd = {
     adId,
+    userId,
     adTitle,
     materialId: this.materialId,
     slotNumber: slot,
@@ -950,22 +1017,27 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
     impressions: 1
   };
   
-  // Create clean ad playback record (minimal data)
-  const playbackRecord = {
-    adId,
-    adTitle,
-    materialId: this.materialId,
-    slotNumber: slot,
-    adDuration: adDuration,
-    startTime: now,
-    endTime: null,
-    viewTime: Math.round(viewTime * 100) / 100, // Round to 2 decimal places
-    completionRate: Math.round(completionRate * 100) / 100, // Round to 2 decimal places
-    impressions: 1
-  };
-  
-  // Add to ad playbacks
-  this.adPlaybacks.push(playbackRecord);
+  // Only create playback record if we have userId (required field)
+  if (userId) {
+    const playbackRecord = {
+      adId,
+      userId,
+      adTitle,
+      materialId: this.materialId,
+      slotNumber: slot,
+      adDuration: adDuration,
+      startTime: now,
+      endTime: null,
+      viewTime: Math.round(viewTime * 100) / 100, // Round to 2 decimal places
+      completionRate: Math.round(completionRate * 100) / 100, // Round to 2 decimal places
+      impressions: 1
+    };
+    
+    // Add to ad playbacks
+    this.adPlaybacks.push(playbackRecord);
+  } else {
+    console.warn(`⚠️  Skipping adPlayback for ${adId} - no userId found`);
+  }
   
   // Update totals
   this.totalAdPlays += 1;
@@ -975,29 +1047,37 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
   // Clean up old ad playbacks (keep only last 800)
   this.cleanupAdPlaybacks();
   
-  // Update ad performance
-  let adPerf = this.adPerformance.find(ad => ad.adId === adId);
-  if (!adPerf) {
-    adPerf = {
-      adId,
-      adTitle,
-      playCount: 0,
-      totalViewTime: 0,
-      averageViewTime: 0,
-      completionRate: 0,
-      firstPlayed: now,
-      lastPlayed: now,
-      impressions: 0
-    };
-    this.adPerformance.push(adPerf);
-  }
+  // Update ad performance (filter out entries without userId before adding new ones)
+  this.adPerformance = this.adPerformance.filter(perf => perf.userId);
   
-  adPerf.playCount += 1;
-  adPerf.totalViewTime += viewTime;
-  adPerf.averageViewTime = adPerf.totalViewTime / adPerf.playCount;
-  adPerf.completionRate = adDuration > 0 ? Math.min(100, (adPerf.totalViewTime / (adDuration * adPerf.playCount)) * 100) : 0;
-  adPerf.lastPlayed = now;
-  adPerf.impressions += 1;
+  // Only update adPerformance if we have userId
+  if (userId) {
+    let adPerf = this.adPerformance.find(ad => ad.adId === adId);
+    if (!adPerf) {
+      adPerf = {
+        adId,
+        userId,
+        adTitle,
+        playCount: 0,
+        totalViewTime: 0,
+        averageViewTime: 0,
+        completionRate: 0,
+        firstPlayed: now,
+        lastPlayed: now,
+        impressions: 0
+      };
+      this.adPerformance.push(adPerf);
+    }
+    
+    adPerf.playCount += 1;
+    adPerf.totalViewTime += viewTime;
+    adPerf.averageViewTime = adPerf.totalViewTime / adPerf.playCount;
+    adPerf.completionRate = adDuration > 0 ? Math.min(100, (adPerf.totalViewTime / (adDuration * adPerf.playCount)) * 100) : 0;
+    adPerf.lastPlayed = now;
+    adPerf.impressions += 1;
+  } else {
+    console.warn(`⚠️  Skipping adPerformance update for ${adId} - no userId found`);
+  }
   
   // Update hourly stats
   this.updateHourlyStats('adPlays', 1);
@@ -1008,23 +1088,31 @@ DeviceTrackingSchema.methods.trackAdPlayback = function(adId, adTitle, adDuratio
 };
 
 DeviceTrackingSchema.methods.trackQRScan = function(qrScanData) {
-  // Add QR scan
-  this.qrScans.push(qrScanData);
-  this.totalQRScans += 1;
+  // Add QR scan (only if it has userId)
+  if (qrScanData.userId) {
+    this.qrScans.push(qrScanData);
+    this.totalQRScans += 1;
+  }
   
-  // Update QR scans per ad
-  const existingAdScan = this.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
-  if (existingAdScan) {
-    existingAdScan.scanCount += 1;
-    existingAdScan.lastScanned = new Date();
-  } else {
-    this.qrScansByAd.push({
-      adId: qrScanData.adId,
-      adTitle: qrScanData.adTitle,
-      scanCount: 1,
-      lastScanned: new Date(),
-      firstScanned: new Date()
-    });
+  // Filter out entries without userId
+  this.qrScansByAd = this.qrScansByAd.filter(scan => scan.userId);
+  
+  // Update QR scans per ad (only if qrScanData has userId)
+  if (qrScanData.userId) {
+    const existingAdScan = this.qrScansByAd.find(scan => scan.adId === qrScanData.adId);
+    if (existingAdScan) {
+      existingAdScan.scanCount += 1;
+      existingAdScan.lastScanned = new Date();
+    } else {
+      this.qrScansByAd.push({
+        adId: qrScanData.adId,
+        userId: qrScanData.userId,
+        adTitle: qrScanData.adTitle,
+        scanCount: 1,
+        lastScanned: new Date(),
+        firstScanned: new Date()
+      });
+    }
   }
   
   // Update hourly stats

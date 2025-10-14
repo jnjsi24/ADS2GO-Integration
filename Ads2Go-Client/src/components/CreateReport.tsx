@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useMutation } from '@apollo/client';
 import { CREATE_USER_REPORT } from '../graphql/userReport/mutations/CreateUserReport';
-import { X, FileText, AlertCircle, CheckCircle, Loader2, Upload, Link } from 'lucide-react';
+import { X, FileText, ChevronDown, AlertCircle, CheckCircle, Loader2, Upload, Link, CloudUpload } from 'lucide-react';
 import { uploadFileToFirebase } from '../utils/fileUpload';
+import { motion, AnimatePresence } from "framer-motion";
 
 interface CreateReportProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface FormData {
   description: string;
   category: string;
   attachments: string[];
+  mediaFile?: File;
 }
 
 const categories = [
@@ -31,7 +33,8 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
     subject: '',
     description: '',
     category: '',
-    attachments: []
+    attachments: [],
+    mediaFile: undefined,
   });
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [errors, setErrors] = useState<Partial<FormData>>({});
@@ -39,6 +42,9 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [mediaFileError, setMediaFileError] = useState('');
 
   const [createUserReport] = useMutation(CREATE_USER_REPORT);
 
@@ -60,23 +66,72 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const validFiles = files.filter(file => {
       const maxSize = 10 * 1024 * 1024; // 10MB
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'];
-      return file.size <= maxSize && allowedTypes.includes(file.type);
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 
+        'application/pdf', 'text/plain', 
+        'video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/quicktime'
+      ];
+      const isValid = file.size <= maxSize && allowedTypes.includes(file.type);
+      if (!isValid) {
+        setMediaFileError('Please ensure files are images, videos, PDFs, or text files under 10MB.');
+      }
+      return isValid;
     });
 
     if (validFiles.length !== files.length) {
-      alert('Some files were rejected. Please ensure files are images, PDFs, or text files under 10MB.');
+      setMediaFileError('Some files were rejected. Please ensure files are images, videos, PDFs, or text files under 10MB.');
+    } else {
+      setMediaFileError('');
     }
 
     setUploadedFiles(prev => [...prev, ...validFiles]);
+    setFormData(prev => ({ ...prev, mediaFile: validFiles[0] }));
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter(file => {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      const allowedTypes = [
+        'image/jpeg', 'image/png', 'image/gif', 'image/webp', 
+        'application/pdf', 'text/plain', 
+        'video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/quicktime'
+      ];
+      const isValid = file.size <= maxSize && allowedTypes.includes(file.type);
+      if (!isValid) {
+        setMediaFileError('Please ensure files are images, videos, PDFs, or text files under 10MB.');
+      }
+      return isValid;
+    });
+
+    if (validFiles.length !== files.length) {
+      setMediaFileError('Some files were rejected. Please ensure files are images, videos, PDFs, or text files under 10MB.');
+    } else {
+      setMediaFileError('');
+    }
+
+    setUploadedFiles(prev => [...prev, ...validFiles]);
+    setFormData(prev => ({ ...prev, mediaFile: validFiles[0] }));
   };
 
   const handleRemoveFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    setFormData(prev => ({ ...prev, mediaFile: undefined }));
   };
 
   const handleRemoveAttachment = (index: number) => {
@@ -119,26 +174,24 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsSubmitting(true);
     setUploadProgress(0);
-    
+
     try {
       let firebaseUrls: string[] = [];
-      
-      // Upload files to Firebase Storage if any
+
       if (uploadedFiles.length > 0) {
         console.log('Uploading files to Firebase Storage...');
-        
         for (let i = 0; i < uploadedFiles.length; i++) {
           const file = uploadedFiles[i];
           const progress = Math.round(((i + 1) / uploadedFiles.length) * 100);
           setUploadProgress(progress);
-          
+
           try {
             const firebaseUrl = await uploadFileToFirebase(file, 'user-reports');
             firebaseUrls.push(firebaseUrl);
@@ -150,7 +203,6 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
         }
       }
 
-      // Combine URL attachments and Firebase URLs
       const allAttachments = [...formData.attachments, ...firebaseUrls];
 
       console.log('Submitting report with attachments:', allAttachments);
@@ -167,25 +219,24 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
       });
 
       if (result.data?.createUserReport?.success) {
-        // Reset form
         setFormData({
           subject: '',
           description: '',
           category: '',
-          attachments: []
+          attachments: [],
+          mediaFile: undefined,
         });
         setAttachmentUrl('');
         setUploadedFiles([]);
         setErrors({});
         setUploadProgress(null);
-        
+
         onSuccess?.();
         onClose();
       }
     } catch (error) {
       console.error('Error creating report:', error);
       setUploadProgress(null);
-      // You might want to show a toast notification here
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +248,8 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
         subject: '',
         description: '',
         category: '',
-        attachments: []
+        attachments: [],
+        mediaFile: undefined,
       });
       setAttachmentUrl('');
       setErrors({});
@@ -209,44 +261,43 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-6">
           <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-[#3674B5]" />
             <h2 className="text-xl font-semibold text-gray-900">Create New Report</h2>
           </div>
-          <button
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Subject */}
-          <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-              Subject *
-            </label>
+          <div className="relative">
             <input
               type="text"
               id="subject"
               name="subject"
+              required
               value={formData.subject}
               onChange={handleInputChange}
-              placeholder="Short summary of the issue (ex: 'App keeps freezing on login')"
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
-                errors.subject ? 'border-red-500' : 'border-gray-300'
-              }`}
+              placeholder=" "
               maxLength={200}
               disabled={isSubmitting}
+              className={`peer w-full px-0 pt- pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] placeholder-transparent transition 
+                ${errors.subject ? 'border-red-500' : 'border-gray-300'}`}
             />
+            <label
+              htmlFor="subject"
+              className={`absolute -top-5 left-0 text-gray-600 transition-all duration-200
+                ${formData.subject
+                  ? '-top-5 text-sm text-[#3674B5] font-semibold'
+                  : 'peer-placeholder-shown:top-1 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'}
+                peer-focus:-top-5 peer-focus:text-sm peer-focus:text-black peer-focus:font-semibold`}
+            >
+              Subject
+            </label>
             {errors.subject && (
-              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+              <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                 <AlertCircle className="w-4 h-4" />
                 {errors.subject}
               </p>
@@ -255,54 +306,108 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
           </div>
 
           {/* Category */}
-          <div>
-            <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-              Category *
+          <div className="relative">
+            <label className="block text-sm font-medium mt-6 text-gray-700 mb-2">
+              Category
             </label>
-            <select
-              id="category"
-              name="category"
-              value={formData.category}
-              onChange={handleInputChange}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
-                errors.category ? 'border-red-500' : 'border-gray-300'
+            <button
+              type="button"
+              onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                errors.category ? "border-red-500" : "border-gray-300"
               }`}
               disabled={isSubmitting}
             >
-              <option value="">Select a category</option>
-              {categories.map((category) => (
-                <option key={category.value} value={category.value}>
-                  {category.label}
-                </option>
-              ))}
-            </select>
-            {errors.category && (
-              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {errors.category}
-              </p>
-            )}
+              {formData.category
+                ? categories.find((c) => c.value === formData.category)?.label
+                : "Select a category"}
+              <ChevronDown
+                size={18}
+                className={`transform transition-transform duration-200 ${
+                  showCategoryDropdown ? "rotate-180" : "rotate-0"
+                }`}
+              />
+            </button>
+            <AnimatePresence>
+              {showCategoryDropdown && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-md bg-white border border-gray-200 overflow-hidden"
+                >
+                  {categories.map((category) => (
+                    <button
+                      key={category.value}
+                      type="button"
+                      onClick={() => {
+                        handleInputChange({
+                          target: { name: "category", value: category.value },
+                        } as React.ChangeEvent<HTMLSelectElement>);
+                        setShowCategoryDropdown(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-xs ml-2 text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                    >
+                      {category.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {errors.category && (
+                <motion.p
+                  key="category-error"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                  className="mt-1 text-sm text-red-600 flex items-center gap-1"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.category}
+                </motion.p>
+              )}
+            </AnimatePresence>
           </div>
 
-
           {/* Description */}
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
-            </label>
+          <div className="relative mt-6">
             <textarea
               id="description"
               name="description"
+              required
               value={formData.description}
-              onChange={handleInputChange}
-              placeholder="Detailed explanation of the problem"
-              rows={6}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5] ${
-                errors.description ? 'border-red-500' : 'border-gray-300'
-              }`}
-              maxLength={2000}
+              onChange={(e) => {
+                handleInputChange(e);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px`;
+              }}
+              placeholder=" "
               disabled={isSubmitting}
+              maxLength={2000}
+              className={`peer w-full px-0 pt-6 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-[#3674B5] placeholder-transparent transition 
+                ${errors.description ? 'border-red-500' : 'border-gray-300'}`}
+              style={{
+                minHeight: "40px",
+                maxHeight: "100px",
+                resize: "none",
+                overflowY: "auto",
+              }}
             />
+            <label
+              htmlFor="description"
+              className={`absolute left-0 bg-white text-gray-600 transition-all duration-200
+                ${
+                  formData.description
+                    ? '-top-2 text-sm text-[#3674B5] font-semibold'
+                    : 'peer-placeholder-shown:top-5 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-500'
+                }
+                peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black peer-focus:font-semibold`}
+            >
+              Description
+            </label>
             {errors.description && (
               <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle className="w-4 h-4" />
@@ -312,111 +417,134 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
             <p className="mt-1 text-xs text-gray-500">{formData.description.length}/2000 characters</p>
           </div>
 
-          {/* Attachments */}
+          {/* Media File Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Attachments (Optional)
+            <label className="block text-sm font-bold text-gray-700 mb-2">
+              Media File
             </label>
-            <div className="space-y-4">
-              {/* File Upload Section */}
-              <div>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    disabled={isSubmitting}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isSubmitting}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Upload Files
-                  </button>
-                  <span className="text-xs text-gray-500 self-center">
-                    Images, PDFs, text files (max 10MB each)
-                  </span>
-                </div>
-
-                {/* Uploaded Files Display */}
-                {uploadedFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">Uploaded Files:</p>
-                    {uploadedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 bg-green-50 rounded-lg">
-                        <FileText className="w-4 h-4 text-green-600" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-700 truncate">{file.name}</p>
-                          <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFile(index)}
-                          disabled={isSubmitting}
-                          className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <div
+              className={`border-2 border-dashed border-black/70 rounded-lg p-6 transition-colors flex flex-col items-center justify-center text-center
+                ${isDragging
+                  ? 'border-blue-500 bg-blue-50'
+                  : mediaFileError
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-black/60 bg-transparent'}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <CloudUpload
+                className={`w-12 h-12 mb-4 ${mediaFileError ? 'text-red-400' : 'text-black/60'}`}
+              />
+              <p className="text-black/80 mb-4">Drag your file image/video here</p>
+              <div className="flex items-center justify-center mb-4 w-full">
+                <div
+                  className={`grow max-w-40 h-px ${mediaFileError ? 'bg-red-300' : 'bg-gray-300'}`}
+                ></div>
+                <span
+                  className={`mx-3 text-sm ${mediaFileError ? 'text-red-400' : 'text-black/80'}`}
+                >
+                  or
+                </span>
+                <div
+                  className={`grow max-w-40 h-px ${mediaFileError ? 'bg-red-300' : 'bg-gray-300'}`}
+                ></div>
               </div>
-
-              {/* URL Input Section */}
-              <div>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={attachmentUrl}
-                    onChange={(e) => setAttachmentUrl(e.target.value)}
-                    placeholder="Or paste a link to screenshots, documents, etc."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3674B5]"
-                    disabled={isSubmitting}
+              <div className="flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMediaFileError('');
+                    document.getElementById('media-upload')?.click();
+                  }}
+                  onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    const button = e.currentTarget;
+                    const rect = button.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    button.style.setProperty('--x', `${x}px`);
+                    button.style.setProperty('--y', `${y}px`);
+                  }}
+                  className={`relative p-3 font-medium text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
+                    ${mediaFileError
+                      ? 'bg-red-500 hover:bg-red-600'
+                      : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5]'}`}
+                >
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                    style={{
+                      background:
+                        'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                    }}
                   />
-                  <button
-                    type="button"
-                    onClick={handleAddAttachment}
-                    disabled={!attachmentUrl.trim() || isSubmitting}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Link className="w-4 h-4" />
-                    Add Link
-                  </button>
-                </div>
-                
-                {formData.attachments.length > 0 && (
-                  <div className="space-y-2 mt-3">
-                    <p className="text-sm text-gray-600">Links:</p>
-                    {formData.attachments.map((attachment, index) => (
-                      <div key={index} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                        <Link className="w-4 h-4 text-blue-600" />
-                        <span className="flex-1 text-sm text-gray-700 truncate">{attachment}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(index)}
-                          disabled={isSubmitting}
-                          className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  <span className="relative z-10">Click to upload file</span>
+                </button>
               </div>
+              <input
+                type="file"
+                accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
+                onChange={handleFileInputChange}
+                className="hidden"
+                id="media-upload"
+              />
+              {formData.mediaFile && !mediaFileError && (
+                <p className="text-sm text-green-600 mt-2">
+                  Selected: {formData.mediaFile.name}
+                </p>
+              )}
             </div>
+            {(mediaFileError || errors.mediaFile) && (
+              <p className="text-sm text-red-600 mt-1">
+                {mediaFileError}
+              </p>
+            )}
+          </div>
+
+          {/* URL Input Section */}
+          <div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={attachmentUrl}
+                onChange={(e) => setAttachmentUrl(e.target.value)}
+                placeholder="Or paste a link to screenshots, documents, etc."
+                className="flex-1 px-3 py-2 border-b border-gray-300 focus:outline-none"
+                disabled={isSubmitting}
+              />
+              <button
+                type="button"
+                onClick={handleAddAttachment}
+                disabled={!attachmentUrl.trim() || isSubmitting}
+                className="flex items-center gap-2 px-4 py-2 text-black hover:text-black/70 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Link className="w-4 h-4" />
+                Add Link
+              </button>
+            </div>
+            {formData.attachments.length > 0 && (
+              <div className="space-y-2 mt-3">
+                <p className="text-sm text-gray-600">Links:</p>
+                {formData.attachments.map((attachment, index) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                    <Link className="w-4 h-4 text-blue-600" />
+                    <span className="flex-1 text-sm text-gray-700 truncate">{attachment}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAttachment(index)}
+                      disabled={isSubmitting}
+                      className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Upload Progress */}
           {uploadProgress !== null && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Upload className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-blue-800">
@@ -424,7 +552,7 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
                 </span>
               </div>
               <div className="w-full bg-blue-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${uploadProgress}%` }}
                 ></div>
@@ -434,31 +562,51 @@ const CreateReport: React.FC<CreateReportProps> = ({ isOpen, onClose, onSuccess 
           )}
 
           {/* Submit Button */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
+          <div className="flex justify-between gap-3 pt-4">
             <button
               type="button"
               onClick={handleClose}
               disabled={isSubmitting}
-              className="px-6 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors disabled:opacity-50 flex items-center gap-2"
+              onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                const button = e.currentTarget;
+                const rect = button.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                button.style.setProperty('--x', `${x}px`);
+                button.style.setProperty('--y', `${y}px`);
+              }}
+              className={`relative px-6 py-2 font-medium text-sm text-white transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md
+                ${isSubmitting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-[#1B5087] to-[#3674B5] hover:from-[#2B5F9B] hover:to-[#4C8CD4]'}`}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {uploadProgress !== null ? 'Uploading...' : 'Creating Report...'}
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  Create Report
-                </>
-              )}
+              <span
+                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                style={{
+                  background:
+                    'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
+                }}
+              />
+              <span className="relative z-10 flex items-center gap-2">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {uploadProgress !== null ? 'Uploading...' : 'Creating Report...'}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Create Report
+                  </>
+                )}
+              </span>
             </button>
           </div>
         </form>

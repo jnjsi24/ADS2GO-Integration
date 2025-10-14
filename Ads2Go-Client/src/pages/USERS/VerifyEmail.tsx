@@ -130,7 +130,7 @@ const VerifyEmail: React.FC = () => {
                   onChange={(e) => handleInputChange(e, index)}
                   onKeyDown={(e) => handleKeyDown(e, index)}
                   onPaste={handlePaste}
-                  className="w-12 h-12 text-2xl text-center border-2 border-gray-300 rounded-lg shadow-sm outline-none bg-white/90"
+                  className="w-12 h-12 text-2xl text-center border-2 border-gray-300 rounded-md shadow-sm outline-none bg-white/90"
                 />
               ))}
             </div>
@@ -155,7 +155,7 @@ const VerifyEmail: React.FC = () => {
           <button
             type="submit"
             disabled={code.join('').length !== 6 || verifyLoading}
-            className={`w-full py-2 px-4 rounded font-semibold focus:outline-none transition-colors ${
+            className={`w-full py-2 px-4 font-semibold focus:outline-none transition-colors ${
               code.join('').length === 6 && !verifyLoading
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'

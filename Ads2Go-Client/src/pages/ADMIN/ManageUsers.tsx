@@ -482,7 +482,7 @@ const ManageUsers: React.FC = () => {
         {/* Header with Title and Filters */}
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
           {!isMobile && (
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
+            <h1 className="text-2xl pt-4 lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
           )}
         
         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">

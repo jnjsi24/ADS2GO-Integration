@@ -27,6 +27,7 @@ interface PaymentItem {
   adLengthSeconds: number;
   totalPrice: string;
   receiptId?: string;
+  adStatus?: string; // Ad approval status (PENDING, APPROVED, etc.)
 }
 
 const GET_USER_ADS_WITH_PAYMENTS = gql`
@@ -41,6 +42,7 @@ const GET_USER_ADS_WITH_PAYMENTS = gql`
         adLengthSeconds
         totalPrice
         durationDays
+        status
         createdAt
         planId {
           title
@@ -133,6 +135,7 @@ const PaymentHistory: React.FC = () => {
           adLengthSeconds: ad.adLengthSeconds || 0,
           totalPrice,
           receiptId: payment?.receiptId || "",
+          adStatus: ad.status || "PENDING", // Include ad approval status
         };
       });
       setPayments(mappedPayments);
@@ -287,52 +290,85 @@ const PaymentHistory: React.FC = () => {
       </div>
 
       {/* Payment Cards */}
-      <div className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
-              key={item.id}
-              className="rounded-lg shadow-md bg-white overflow-hidden relative flex flex-col cursor-pointer"
+              className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >
-              {/* Main Product Info Section */}
-              <div className="p-4 flex-grow flex items-start space-x-4">
-                <div className="flex-grow">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        <span className="font-bold">{item.productName}</span>
-                      </p>
-                      <h3 className="text-2xl font-bold text-[#FF9B45]">{item.totalPrice}</h3>
+              <div className="flex items-start">
+                {/* Media Section (image/video) */}
+                <div className="w-1/4 relative h-44 flex-shrink-0">
+                  {item.imageUrl ? (
+                    item.adFormat && item.adFormat.toLowerCase() === "video" ? (
+                      <video
+                        src={item.imageUrl}
+                        className="w-full h-full object-cover"
+                        autoPlay
+                        loop
+                        muted
+                        controls
+                        onError={(e) => console.error("Video load error:", e)}
+                      >
+                        <source src={item.imageUrl} type="video/mp4" />
+                        <source src={item.imageUrl} type="video/webm" />
+                        <source src={item.imageUrl} type="video/ogg" />
+                        Your browser does not support the video tag.
+                      </video>
+                    ) : (
+                      <img
+                        src={item.imageUrl}
+                        alt={item.productName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => console.error("Image load error:", e)}
+                      />
+                    )
+                  ) : (
+                    <div className="w-full h-full bg-gray-400 flex items-center justify-center text-black/70">
+                      No Media
                     </div>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">{item.paymentType || "N/A"}</p>
-                  {item.status === "PENDING" && (
-                    <p className="text-xs text-red-500 mt-5 font-semibold">
-                      Please pay before {getPaymentDeadline(data.getUserAdsWithPayments.find((p: any) => p.ad.id === item.id)?.ad.createdAt || new Date().toISOString())}
-                    </p>
                   )}
+                  {/* Overlay Title */}
+                  <div className="absolute -bottom-1 left-0 w-full bg-black/40 backdrop-blur-sm text-white text-center py-1 px-2">
+                    <p className="text-sm font-semibold truncate">{item.productName}</p>
+                  </div>
                 </div>
-              </div>
-              <span
-                className={`absolute top-2 right-2 inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(item.status)}`}
-              >
-                {item.status}
-              </span>
 
-              {/* Footer for the button */}
-              <div className="p-1 mt-auto transition-colors">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedPayment(item);
-                    setSelectedPaymentType(item.paymentType || "");
-                    setIsModalOpen(true);
-                  }}
-                  className="text-black text-xs font-medium px-4 py-3 flex justify-center items-center text-center w-full transition-all duration-300s"
-                >
-                  View Details <span className="ml-1">›</span>
-                </button>
+                {/* Details Section */}
+                <div className="w-3/4 pl-4 flex flex-col justify-between p-3">
+                  <div>
+                    <span
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
+                        item.status
+                      )}`}
+                    >
+                      {item.status}
+                    </span>
+                    <h3 className="text-2xl font-bold text-black/80 mt-2">
+                      {item.amount}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {item.status === "PAID"
+                        ? "Transaction completed successfully. Your advertisements are now available for viewing."
+                        : "Awaiting payment confirmation. Your ad will be activated once the transaction is complete."}
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedPayment(item);
+                        setSelectedPaymentType(item.paymentType || "");
+                        setIsModalOpen(true);
+                      }}
+                      className="text-[#3674B5] hover:text-[#3674B5]/80 font-bold hover:underline text-xs px-4 py-2 transition-all duration-300 hover:underline-offset-4"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))

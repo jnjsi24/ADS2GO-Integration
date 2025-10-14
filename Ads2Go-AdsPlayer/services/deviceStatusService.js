@@ -123,7 +123,7 @@ class DeviceStatusService {
 
     try {
       // Use the same host as the API URL but with WebSocket protocol
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://ads2go-server.onrender.com';
+      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
       const wsProtocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/status?deviceId=${this.deviceId}&materialId=${this.materialId}`;
