@@ -223,16 +223,16 @@ const Settings: React.FC = () => {
   <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
   {/* Main Content */}
-  <div className="relative min-h-screen bg-transparent pl-60 pr-1 mt-7">
+  <div className="relative min-h-screen bg-transparent lg:pl-60 px-4 sm:px-5 lg:pr-1 pt-20 lg:pt-7">
     <div className="flex">
-      <div className="flex-1 p-6 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-2">Notifications</h2>
-          <form className="space-y-6" onSubmit={handleNotificationSubmit}>
-            <div className="bg-white/70 shadow-md p-4 ">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Enable Desktop Notification</h3>
-                  <p className="text-sm text-gray-600">Receive notifications for all messages, contacts, and documents</p>
+      <div className="flex-1 p-4 sm:p-6 rounded-lg shadow">
+        <h2 className="text-lg sm:text-xl font-semibold mb-2">Notifications</h2>
+          <form className="space-y-4 sm:space-y-6" onSubmit={handleNotificationSubmit}>
+            <div className="bg-white/70 shadow-md p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold">Enable Desktop Notification</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Receive notifications for all messages, contacts, and documents</p>
                 </div>
                 <button
                   type="button"
@@ -244,11 +244,11 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/70 shadow-md p-4 ">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Enable Notification Badge</h3>
-                  <p className="text-sm text-gray-600">Show a red badge on the app icon when you have unread messages</p>
+            <div className="bg-white/70 shadow-md p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold">Enable Notification Badge</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Show a red badge on the app icon when you have unread messages</p>
                 </div>
                 <button
                   type="button"
@@ -260,13 +260,13 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/70 shadow-md p-4 ">
-              <h3 className="text-lg font-semibold">Push Notification Time-out</h3>
+            <div className="bg-white/70 shadow-md p-3 sm:p-4">
+              <h3 className="text-base sm:text-lg font-semibold">Push Notification Time-out</h3>
               <select
                 name="pushNotificationTimeout"
                 value={notificationForm.pushNotificationTimeout}
                 onChange={handleInputChange}
-                className="mt-2 block w-32 border-gray-300  focus:outline-none"
+                className="mt-2 block w-full sm:w-32 border-gray-300 focus:outline-none"
               >
                 <option value="5">5 Minutes</option>
                 <option value="10">10 Minutes</option>
@@ -275,13 +275,13 @@ const Settings: React.FC = () => {
               </select>
             </div>
 
-            <h2 className="text-xl font-semibold mt-6">Email Notifications</h2>
+            <h2 className="text-lg sm:text-xl font-semibold mt-6">Email Notifications</h2>
 
-            <div className="bg-white/70 shadow-md p-4 ">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Communication Emails</h3>
-                  <p className="text-sm text-gray-600">Receive emails for messages, contacts, and documents</p>
+            <div className="bg-white/70 shadow-md p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold">Communication Emails</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Receive emails for messages, contacts, and documents</p>
                 </div>
                 <button
                   type="button"
@@ -293,11 +293,11 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white/70 shadow-md p-4 ">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold">Announcements & Updates</h3>
-                  <p className="text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
+            <div className="bg-white/70 shadow-md p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                <div className="flex-1">
+                  <h3 className="text-base sm:text-lg font-semibold">Announcements & Updates</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">Receive emails about product updates, improvements, etc.</p>
                   {!notificationForm.announcementsEmails && queuedEmailStats.pending > 0 && (
                     <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 ">
                       <p className="text-xs text-yellow-700">
