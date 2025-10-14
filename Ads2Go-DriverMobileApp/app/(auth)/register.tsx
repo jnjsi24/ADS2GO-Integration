@@ -821,8 +821,11 @@ const RegisterForm = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.header}>
-        <Text style={styles.logo}>✨</Text>
-        <Text style={styles.title}>Ads2go</Text>
+        <Image 
+          source={require('../../assets/images/Ads2GoLogoDriver.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tab, styles.tabInactive]}
@@ -861,7 +864,7 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 5,
   },
-  logo: { fontSize: 30 },
+  logo: { width: 120, height: 120, marginBottom: 10 },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
