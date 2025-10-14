@@ -92,7 +92,7 @@ const Notifications: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white pl-72 pr-5 p-10">
+      <div className="min-h-screen bg-white lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10 pt-20 lg:pt-10">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -114,7 +114,7 @@ const Notifications: React.FC = () => {
   <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
   {/* Main Content */}
-  <div className="relative min-h-screen pl-72 pr-5 p-10">
+  <div className="relative min-h-screen lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10 pt-20 lg:pt-10">
     {/* Header */}
     <div className="flex justify-between items-center mb-6">
         <div>

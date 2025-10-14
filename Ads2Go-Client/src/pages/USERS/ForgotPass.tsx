@@ -59,7 +59,7 @@ const ForgotPass: React.FC = () => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-lg" />
 
       {/* Centered Form */}
-      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-md shadow-2xl">
+      <div className="relative z-10 w-full max-w-md px-6 sm:px-8 py-8 sm:py-10 bg-white/40 rounded-md shadow-2xl mx-4">
         <h2 className="text-3xl font-bold text-center text-white mb-4">
           {step === "request" ? "Forgot Password" : "Reset Password"}
         </h2>

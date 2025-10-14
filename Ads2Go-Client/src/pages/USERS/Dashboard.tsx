@@ -373,11 +373,11 @@ const Dashboard = () => {
       {/* Overlay */}
       <div className="absolute inset-0 bg-white/50 backdrop-blur-lg"></div>
       {/* Content */}
-      <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 p-10">
+      <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
         {/* Header Section */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 pt-12 lg:pt-0">
           <div>
-            <h1 className="text-3xl font-semibold text-gray-800">Welcome back, {userFirstName}!</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-gray-800">Welcome back, {userFirstName}!</h1>
             <p className="text-gray-500 text-sm">Here's your analytic detail</p>
           </div>
         </div>
@@ -415,17 +415,17 @@ const Dashboard = () => {
           </div>
         )}
         {/* Metrics Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
           {/* Column 1: Ad Performance Overview */}
           <div
-            className="relative p-6 shadow-xl col-span-2 text-white cursor-pointer
+            className="relative p-4 sm:p-6 shadow-xl md:col-span-2 text-white cursor-pointer
                        bg-[#1b5087]/60 backdrop-blur-md border border-white/20
                        hover:bg-[#1b5087]/70 transition-all duration-300"
             onClick={() => window.location.href = '/detailed-analytics'}
           >
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-lg font-semibold">Ad Performance Overview</span>
-              <div className="relative w-32" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+              <span className="text-base sm:text-lg font-semibold">Ad Performance Overview</span>
+              <div className="relative w-28 sm:w-32" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => setShowAnalyticsPeriodDropdown(!showAnalyticsPeriodDropdown)}
                   className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
@@ -526,26 +526,26 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4 mt-4 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mt-4 text-center">
               <div className="bg-[#1b5087]/60 p-3">
-                <p className="text-2xl font-bold">
+                <p className="text-xl sm:text-2xl font-bold">
                   {analyticsLoading ? '...' : Math.floor((analyticsSummary.totalAdsPlayed * 0.5) || 0).toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-300">Total Airtime (Minutes)</p>
+                <p className="text-xs sm:text-sm text-gray-300">Total Airtime (Minutes)</p>
                 <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
               </div>
               <div className="bg-[#2876c7]/60 p-3">
-                <p className="text-2xl font-bold">
+                <p className="text-xl sm:text-2xl font-bold">
                   {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-300">Total Ad Plays</p>
+                <p className="text-xs sm:text-sm text-gray-300">Total Ad Plays</p>
                 <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
               </div>
               <div className="bg-[#1b5087]/60 p-3">
-                <p className="text-2xl font-bold">
+                <p className="text-xl sm:text-2xl font-bold">
                   {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-300">Active Ads</p>
+                <p className="text-xs sm:text-sm text-gray-300">Active Ads</p>
                 <p className="text-xs text-gray-400">{analyticsPeriod === '1d' ? 'Last 24h' : analyticsPeriod === '7d' ? 'Last 7 days' : 'Last 30 days'}</p>
               </div>
             </div>
@@ -692,14 +692,14 @@ const Dashboard = () => {
           </div>
         </div>
         {/* Car Location Heat Map */}
-        <div className="pt-10" onClick={() => window.location.href = '/detailed-analytics'}>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-800">Car Location Heat Map</h2>
-            <div className="text-sm text-gray-500">
+        <div className="pt-6 lg:pt-10" onClick={() => window.location.href = '/detailed-analytics'}>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Car Location Heat Map</h2>
+            <div className="text-xs sm:text-sm text-gray-500">
               Last updated: {new Date().toLocaleTimeString()}
             </div>
           </div>
-          <div className="relative bg-gray-100 overflow-hidden" style={{ height: '400px' }}>
+          <div className="relative bg-gray-100 overflow-hidden" style={{ height: '300px', minHeight: '250px' }}>
             <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50">
               <div className="absolute inset-0 opacity-20">
                 <svg width="100%" height="100%" className="w-full h-full">
@@ -755,32 +755,32 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-red-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-red-600">High Traffic Zones</p>
-                  <p className="text-lg font-bold text-red-700">3</p>
+                  <p className="text-xs sm:text-sm text-red-600">High Traffic Zones</p>
+                  <p className="text-base sm:text-lg font-bold text-red-700">3</p>
                 </div>
-                <div className="text-red-500">🔥</div>
+                <div className="text-red-500 text-xl sm:text-2xl">🔥</div>
               </div>
             </div>
             <div className="bg-yellow-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">Medium Traffic</p>
-                  <p className="text-lg font-bold text-yellow-700">3</p>
+                  <p className="text-xs sm:text-sm text-yellow-600">Medium Traffic</p>
+                  <p className="text-base sm:text-lg font-bold text-yellow-700">3</p>
                 </div>
-                <div className="text-yellow-500">⚡</div>
+                <div className="text-yellow-500 text-xl sm:text-2xl">⚡</div>
               </div>
             </div>
             <div className="bg-green-50 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">Low Traffic</p>
-                  <p className="text-lg font-bold text-green-700">3</p>
+                  <p className="text-xs sm:text-sm text-green-600">Low Traffic</p>
+                  <p className="text-base sm:text-lg font-bold text-green-700">3</p>
                 </div>
-                <div className="text-green-500">📍</div>
+                <div className="text-green-500 text-xl sm:text-2xl">📍</div>
               </div>
             </div>
           </div>

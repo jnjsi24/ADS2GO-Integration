@@ -376,20 +376,20 @@ const Advertisements: React.FC = () => {
         }}
       ></div>
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
-      <div className="relative min-h-screen bg-transparent pl-64 pr-5 flex flex-col">
+      <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 flex flex-col">
         <div className="bg-transparent w-full flex-1 flex flex-col">
-          <div className="flex justify-between items-center mb-6 pt-10">
-            <h1 className="text-3xl ml-5 font-bold text-gray-800">Advertisements</h1>
-            <div className="flex flex-col items-end gap-3">
-              <div className="flex gap-1">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-16 lg:pt-10 gap-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Advertisements</h1>
+            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
                 <input
                   type="text"
-                  className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
+                  className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
                   placeholder="Search Advertisements"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                <div className="relative w-32">
+                <div className="relative w-full sm:w-32">
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                     className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
@@ -422,10 +422,10 @@ const Advertisements: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex justify-end mb-6">
+          <div className="flex justify-start lg:justify-end mb-6">
             <button
               onClick={() => navigate('/create-advertisement')}
-              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
+              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-full sm:w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
               onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
                 const button = e.currentTarget;
                 const rect = button.getBoundingClientRect();

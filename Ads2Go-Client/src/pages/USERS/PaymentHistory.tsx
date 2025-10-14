@@ -236,23 +236,23 @@ const PaymentHistory: React.FC = () => {
       <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
   {/* Main Content */}
-  <div className="relative z-10 min-h-screen bg-transparent pl-72 pr-5 pt-10 p-8">
+  <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:pt-10 lg:p-8">
     {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Payment History</h1>
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 pt-12 lg:pt-0">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Payment History</h1>
 
         {/* Search + Filters */}
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex gap-2">
+        <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white/70"
+              className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
             {/* Filter for Status */}
-            <div className="relative w-32">
+            <div className="relative w-full sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                 className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
