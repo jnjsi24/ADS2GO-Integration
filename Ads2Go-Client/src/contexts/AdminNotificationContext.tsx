@@ -58,9 +58,6 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle preferences data changes
   useEffect(() => {
     if (preferencesData?.getAdminNotificationPreferences) {
-      console.log('🔔 AdminNotificationContext: Preferences loaded:', preferencesData);
-      console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(preferencesData, null, 2));
-      console.log('🔔 AdminNotificationContext: Setting enableNotificationBadge to:', preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
       setEnableNotificationBadge(preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
     }
   }, [preferencesData]);
@@ -83,16 +80,10 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle notifications data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (data) {
-      console.log('🔔 AdminNotificationContext: Query completed with data:', data);
-      console.log('🔔 AdminNotificationContext: Raw notifications data:', JSON.stringify(data, null, 2));
       if (data?.getAdminNotifications) {
         const notificationsArray = data.getAdminNotifications.notifications || [];
-        console.log('🔔 AdminNotificationContext: Notifications array:', notificationsArray);
-        console.log('🔔 AdminNotificationContext: Unread count from backend:', data.getAdminNotifications.unreadCount);
         setNotifications(notificationsArray);
-        console.log('🔔 AdminNotificationContext: Set notifications:', notificationsArray);
       } else {
-        console.log('🔔 AdminNotificationContext: No notifications found');
         setNotifications([]);
       }
       setIsLoading(false);
@@ -117,10 +108,8 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending ads data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (pendingAdsData) {
-      console.log('🔔 AdminNotificationContext: Pending ads data:', pendingAdsData);
       if (pendingAdsData?.getPendingAds) {
         setPendingAds(pendingAdsData.getPendingAds);
-        console.log('🔔 AdminNotificationContext: Set pending ads:', pendingAdsData.getPendingAds);
       } else {
         setPendingAds([]);
       }
@@ -144,10 +133,8 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle pending materials data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (pendingMaterialsData) {
-      console.log('🔔 AdminNotificationContext: Pending materials data:', pendingMaterialsData);
       if (pendingMaterialsData?.getPendingMaterials) {
         setPendingMaterials(pendingMaterialsData.getPendingMaterials);
-        console.log('🔔 AdminNotificationContext: Set pending materials:', pendingMaterialsData.getPendingMaterials);
       } else {
         setPendingMaterials([]);
       }
@@ -167,18 +154,20 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const totalPendingCount = unreadCount + pendingAds.length + pendingMaterials.length;
   const totalDisplayCount = enableNotificationBadge ? totalPendingCount : 0;
 
-  // Debug logging
-  console.log('🔔 AdminNotificationContext Debug:', {
-    notificationsCount: notifications.length,
-    unreadCount,
-    enableNotificationBadge,
-    displayBadgeCount,
-    pendingAdsCount: pendingAds.length,
-    pendingMaterialsCount: pendingMaterials.length,
-    totalPendingCount,
-    totalDisplayCount,
-    notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
-  });
+  // Debug logging (reduced frequency)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔔 AdminNotificationContext Debug:', {
+      notificationsCount: notifications.length,
+      unreadCount,
+      enableNotificationBadge,
+      displayBadgeCount,
+      pendingAdsCount: pendingAds.length,
+      pendingMaterialsCount: pendingMaterials.length,
+      totalPendingCount,
+      totalDisplayCount,
+      notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
+    });
+  }
 
   const refetchNotifications = async () => {
     console.log('🔔 AdminNotificationContext: Manual refresh triggered');

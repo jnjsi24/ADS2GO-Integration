@@ -25,12 +25,15 @@ class WebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    console.log('🔧 WebSocket Service Configuration:', {
-      envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
-      finalUrl: actualServerUrl,
-      usingFallback: !serverUrl,
-      reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
-    });
+    // WebSocket configuration logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 WebSocket Service Configuration:', {
+        envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
+        finalUrl: actualServerUrl,
+        usingFallback: !serverUrl,
+        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
+      });
+    }
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
     // Cache bust to force reload
