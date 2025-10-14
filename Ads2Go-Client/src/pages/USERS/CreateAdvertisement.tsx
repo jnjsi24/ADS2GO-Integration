@@ -1211,7 +1211,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         </div>
       </div>
       <div>
-        <div className="max-w-sm mx-auto px-2 sm:px-4 py-4">
+        <div className="max-w-md mx-auto px-2 sm:px-4 py-4">
           <div className="flex items-center justify-between overflow-x-auto">
             {steps.map((step, index) => {
               const StepIcon = step.icon;

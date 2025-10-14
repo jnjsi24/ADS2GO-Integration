@@ -150,14 +150,17 @@ const ScrollingTestimonials: React.FC = () => {
   const totalWidth = (cardWidth + gap * 2) * row1.length;
 
   return (
-    <section className="py-16 px-4 relative overflow-hidden bg-gradient-to-br from-[#1B5087] to-[#3674B5]">
-      {/* Soft overlay for depth */}
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-0"></div>
+    <section className="py-16 px-4 relative overflow-hidden bg-fixed bg-center bg-cover text-white"
+      style={{ backgroundImage: "url('/image/land1.png')" }}
+    >
+      {/* Optional dark overlay for better text contrast */}
+      <div className="absolute inset-0 bg-black/10 z-0"></div>
+
       <div className="container mx-auto text-center relative z-10">
-        <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-black/70 mb-4">
           Trusted by Businesses Across the Philippines
         </h2>
-        <p className="text-lg text-gray-200 mb-12 max-w-2xl mx-auto">
+        <p className="text-lg text-black/60 mb-12 max-w-2xl mx-auto">
           See how companies of all sizes are driving growth with our innovative mobile advertising platform.
         </p>
         {/* Three Rows of Scrolling Testimonials */}
@@ -191,8 +194,10 @@ const ScrollingTestimonials: React.FC = () => {
                 {[...row.data, ...row.data].map((testimonial, idx) => (
                   <div
                     key={`row-${i}-${idx}`}
-                    className="inline-flex mx-1 w-80 backdrop-blur-md bg-white/10 border border-white/20 shadow-lg hover:shadow-2xl transition-all duration-300 flex-shrink-0"
-                  >
+                    className="inline-flex mx-1 w-80 backdrop-blur-md shadow-md hover:shadow-md transition-all duration-300 hover:scale-105
+                                bg-gradient-to-br from-white/70 to-gray-100/10 relative flex-shrink-0"
+                    >
+
                     <div className="p-6 w-full">
                       <div className="flex items-start mb-4">
                         <div className="flex-shrink-0">
@@ -206,15 +211,15 @@ const ScrollingTestimonials: React.FC = () => {
                           </div>
                         </div>
                         <div className="ml-4 flex-1 min-w-0">
-                          <h3 className="font-semibold text-white text-sm leading-tight">
+                          <h3 className="font-semibold text-black text-sm leading-tight">
                             {testimonial.name}
                           </h3>
-                          <p className="text-xs text-gray-300 mt-1 leading-tight">
+                          <p className="text-xs text-gray-700 mt-1 leading-tight">
                             {testimonial.role}
                           </p>
                         </div>
                       </div>
-                      <p className="text-gray-100 text-sm leading-relaxed line-clamp-4 italic">
+                      <p className="text-gray-700 text-sm leading-relaxed line-clamp-4 italic">
                         “{testimonial.quote}”
                       </p>
                     </div>

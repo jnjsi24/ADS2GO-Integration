@@ -169,7 +169,7 @@ const SideNavbar: React.FC = () => {
       {/* Mobile Hamburger Button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="hamburger-button fixed top-4 left-4 z-[1100] p-2 rounded-lg bg-white shadow-lg lg:hidden hover:bg-gray-100 transition-colors"
+        className="hamburger-button fixed top-4 left-4 z-[1100] p-2 rounded-lg bg-white/10 shadow-lg lg:hidden hover:bg-gray-100 transition-colors"
         aria-label="Toggle menu"
       >
         {isMobileMenuOpen ? <X size={24} className="text-gray-800" /> : <Menu size={24} className="text-gray-800" />}
@@ -177,8 +177,9 @@ const SideNavbar: React.FC = () => {
       
       {/* Static navbar with smooth animations - Desktop */}
       <div 
-        className={`mobile-menu h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out shadow-xl bg-white
-                  ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        className={`mobile-menu h-screen w-60 flex flex-col justify-between fixed transition-all duration-500 ease-in-out shadow-xl
+          bg-white/90 lg:bg-white/10
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
         style={{
           willChange: 'auto',
           transform: isMobileMenuOpen ? 'translateZ(0)' : undefined,
@@ -188,6 +189,7 @@ const SideNavbar: React.FC = () => {
           zIndex: 1000,
         }}
       >
+
 
       <div className="p-6">
         {/* Logo */}

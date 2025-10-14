@@ -323,7 +323,7 @@ export const HamburgerMenuOverlay: React.FC<HamburgerMenuOverlayProps> = ({
             <Menu
               className={`absolute transition-all duration-300 ${isOpen ? 'opacity-0 rotate-45 scale-0' : 'opacity-100 rotate-0 scale-100'}`}
               size={buttonSize === 'sm' ? 16 : buttonSize === 'md' ? 20 : 24}
-              color={buttonColor}
+              color="black"
             />
             <X
               className={`absolute transition-all duration-300 ${isOpen ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-45 scale-0'}`}
