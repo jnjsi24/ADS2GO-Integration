@@ -4,8 +4,8 @@
   "description": "Ads2Go Full-Stack Application",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
-    "start:client": "PORT=3000 npm start --prefix Ads2Go-Client",
+    "start": "concurrently \"cross-env PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
+    "start:client": "cross-env PORT=3000 npm start --prefix Ads2Go-Client",
     "start:server": "npm run dev --prefix Ads2Go-Server",
     "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",
     "install:all": "npm install && npm install --prefix Ads2Go-Client && npm install --prefix Ads2Go-Server && npm install --prefix Ads2Go-MobileAppExpo && npm install --prefix androidPlayerExpo",
@@ -16,5 +16,8 @@
     "concurrently": "^8.2.2",
     "ws": "^8.18.3"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
 }

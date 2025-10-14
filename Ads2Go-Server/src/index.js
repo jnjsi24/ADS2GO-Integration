@@ -5,7 +5,7 @@ const { ApolloServer } = require('@apollo/server');
 const { expressMiddleware } = require('@apollo/server/express4');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config({ path: '.env.development' });
+require('dotenv').config();
 
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
