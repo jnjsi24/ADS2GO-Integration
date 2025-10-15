@@ -264,6 +264,25 @@ const UserAnalyticsSchema = new mongoose.Schema({
   // Array of ads for this user
   ads: [AdAnalyticsSchema],
   
+  // Lean summary structure for fast dashboards
+  summary: {
+    totalAdImpressions: { type: Number, default: 0 },
+    totalAdPlays: { type: Number, default: 0 },
+    totalAdPlayTime: { type: Number, default: 0 },
+    totalQRScans: { type: Number, default: 0 },
+    totalDevices: { type: Number, default: 0 }
+  },
+
+  // Daily buckets (optional, populated by sync job)
+  dailyStats: [{
+    date: { type: String, required: true },
+    impressions: { type: Number, default: 0 },
+    adsPlayed: { type: Number, default: 0 },
+    displayTime: { type: Number, default: 0 },
+    qrScans: { type: Number, default: 0 },
+    completionRate: { type: Number, default: 0 }
+  }],
+
   // User-level aggregated analytics
   totalAds: { type: Number, default: 0 },
   totalMaterials: { type: Number, default: 0 },
