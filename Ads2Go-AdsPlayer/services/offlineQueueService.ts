@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log } from '../utils/logger';
 
 interface QueuedAdPlayback {
   id: string;
@@ -66,7 +67,7 @@ class OfflineQueueService {
   // Set online/offline status
   setOnlineStatus(isOnline: boolean) {
     this.isOnline = isOnline;
-    console.log(`📡 [OfflineQueue] Status changed to: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    log.deviceTracking(`Status changed to: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
     
     // If coming back online, trigger sync
     if (isOnline && !this.syncInProgress) {
@@ -90,7 +91,7 @@ class OfflineQueueService {
       
       // Only log ad playback queuing occasionally to reduce noise
       if (Math.random() < 0.2) { // Log ~20% of ad playbacks
-        console.log(`📦 [OfflineQueue] Queued ad playback: ${queuedItem.adTitle} (${queuedItem.isOffline ? 'OFFLINE' : 'ONLINE'})`);
+        log.adAnalytics(`Queued ad playback: ${queuedItem.adTitle}`, { status: queuedItem.isOffline ? 'OFFLINE' : 'ONLINE' });
       }
       
       // If online, try to send immediately
@@ -118,7 +119,7 @@ class OfflineQueueService {
       
       // Only log location data queuing occasionally to reduce noise
       if (Math.random() < 0.1) { // Log ~10% of location updates
-        console.log(`📦 [OfflineQueue] Queued location data: ${queuedItem.lat}, ${queuedItem.lng} (${queuedItem.isOffline ? 'OFFLINE' : 'ONLINE'})`);
+        log.deviceTracking(`Queued location data: ${queuedItem.lat}, ${queuedItem.lng}`, { status: queuedItem.isOffline ? 'OFFLINE' : 'ONLINE' });
       }
       
       // If online, try to send immediately
@@ -146,7 +147,7 @@ class OfflineQueueService {
       
       // Only log device status queuing occasionally to reduce noise
       if (Math.random() < 0.05) { // Log ~5% of device status updates
-        console.log(`📦 [OfflineQueue] Queued device status: ${queuedItem.isOnline ? 'ONLINE' : 'OFFLINE'} (${queuedItem.isOffline ? 'OFFLINE' : 'ONLINE'})`);
+        log.deviceTracking(`Queued device status: ${queuedItem.isOnline ? 'ONLINE' : 'OFFLINE'}`, { status: queuedItem.isOffline ? 'OFFLINE' : 'ONLINE' });
       }
       
       // If online, try to send immediately
@@ -172,7 +173,7 @@ class OfflineQueueService {
       existingQueue.push(queuedItem);
       await AsyncStorage.setItem(this.QR_SCAN_QUEUE_KEY, JSON.stringify(existingQueue));
       
-      console.log(`📦 [OfflineQueue] Queued QR scan: ${queuedItem.adTitle} (${queuedItem.isOffline ? 'OFFLINE' : 'ONLINE'})`);
+      log.deviceTracking(`Queued QR scan: ${queuedItem.adTitle}`, { status: queuedItem.isOffline ? 'OFFLINE' : 'ONLINE' });
       
       // If online, try to send immediately
       if (this.isOnline) {
@@ -201,7 +202,7 @@ class OfflineQueueService {
     }
 
     this.syncInProgress = true;
-    console.log('🔄 [OfflineQueue] Starting sync of queued data...');
+    log.adAnalytics('Starting sync of queued data');
 
     try {
       // Sync ad playbacks
@@ -216,7 +217,7 @@ class OfflineQueueService {
       // Sync QR scans
       await this.syncQRScans();
       
-      console.log('✅ [OfflineQueue] Sync completed successfully');
+      log.adAnalytics('Sync completed successfully');
     } catch (error) {
       console.error('❌ [OfflineQueue] Error during sync:', error);
     } finally {
@@ -323,11 +324,14 @@ class OfflineQueueService {
     // Use the actual slot number from registration instead of the queued item
     const actualSlotNumber = registration?.slotNumber || item.slotNumber;
     
-    console.log(`🔍 [OfflineQueue] Sending ad playback: ${item.adTitle}`);
-    console.log(`🔍 [OfflineQueue] DeviceId: ${registration?.deviceId}`);
-    console.log(`🔍 [OfflineQueue] Queued slotNumber: ${item.slotNumber}`);
-    console.log(`🔍 [OfflineQueue] Registration slotNumber: ${registration?.slotNumber}`);
-    console.log(`🔍 [OfflineQueue] Using deviceSlot: ${actualSlotNumber}`);
+    // Only log analytics occasionally to reduce noise
+    if (Math.random() < 0.2) { // Log ~20% of analytics
+      log.adAnalytics('Sending ad playback', { 
+        adTitle: item.adTitle, 
+        deviceId: registration?.deviceId, 
+        slotNumber: actualSlotNumber 
+      });
+    }
     
     try {
       const response = await fetch(`${API_BASE_URL}/offlineQueue/ad-playback`, {

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { log } from '../utils/logger';
 
 interface AdDetails {
   adId: string;
@@ -73,7 +74,7 @@ class PlaybackWebSocketService {
         this.deviceId = data.deviceId;
         this.materialId = data.materialId;
         this.slotNumber = data.slotNumber;
-        console.log('🔌 [WebSocket] Loaded device info:', { deviceId: this.deviceId, materialId: this.materialId, slotNumber: this.slotNumber });
+        log.deviceTracking('Loaded device info', { deviceId: this.deviceId, materialId: this.materialId, slotNumber: this.slotNumber });
       } else {
         console.log('🔌 [WebSocket] No registration data found, device not registered');
         this.deviceId = null;
@@ -124,11 +125,11 @@ class PlaybackWebSocketService {
       const baseUrl = apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
       const wsUrl = `${wsProtocol}://${baseUrl}/ws/playback?deviceId=${this.deviceId}&materialId=${this.materialId}&slotNumber=${this.slotNumber}`;
       
-      console.log('🔌 [WebSocket] Using server URL:', apiUrl);
-      console.log('🔌 [WebSocket] WebSocket URL:', wsUrl);
+      log.deviceTracking('WebSocket server URL', { url: apiUrl });
+      log.deviceTracking('WebSocket URL', { url: wsUrl });
       // Only log connection attempts if not in reconnection mode
       if (this.reconnectAttempts === 0) {
-        console.log('🔌 [WebSocket] Connecting to playback server...');
+        log.deviceTracking('Connecting to playback server...');
       }
 
       this.ws = new WebSocket(wsUrl);
@@ -340,17 +341,14 @@ class PlaybackWebSocketService {
           isCompanyAd: update.adDetails?.isCompanyAd || false
         });
       } else {
-        console.log(`🎬 [WebSocket] Sent detailed state update:`, {
-          deviceId: update.deviceId,
-          adTitle: update.adTitle,
-          state: update.state,
-          progress: `${update.progress.toFixed(1)}%`,
-          currentTime: `${update.currentTime.toFixed(1)}s`,
-          adIndex: update.adDetails?.adIndex || 'N/A',
-          totalAds: update.adDetails?.totalAds || 'N/A',
-          isCompanyAd: update.adDetails?.isCompanyAd || false,
-          mediaFile: update.adDetails?.mediaFile || 'N/A'
-        });
+        // Only log WebSocket updates occasionally to reduce noise
+        if (Math.random() < 0.05) { // Log ~5% of WebSocket updates
+          log.deviceTracking(`WebSocket state update`, {
+            adTitle: update.adTitle,
+            state: update.state,
+            progress: `${update.progress.toFixed(1)}%`
+          });
+        }
       }
     } catch (error) {
       console.error('Error sending playback update:', error);

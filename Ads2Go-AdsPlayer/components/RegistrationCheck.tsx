@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import tabletRegistrationService from '../services/tabletRegistration';
+import { log } from '../utils/logger';
 
 interface RegistrationCheckProps {
   children: React.ReactNode;
@@ -20,7 +21,7 @@ export default function RegistrationCheck({ children }: RegistrationCheckProps) 
       const registered = await tabletRegistrationService.checkRegistrationStatus();
       setIsRegistered(registered);
       
-      console.log('Registration status:', registered);
+      log.deviceTracking('Registration status', { registered });
       
       // If not registered, redirect to registration screen
       if (!registered) {

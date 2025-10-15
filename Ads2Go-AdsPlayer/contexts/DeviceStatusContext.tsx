@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import deviceStatusService from '../services/deviceStatusService';
 import tabletRegistrationService from '../services/tabletRegistration';
+import { log } from '../utils/logger';
 
 type DeviceStatus = {
   isOnline: boolean;
@@ -39,7 +40,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // Try to get material ID from registration data
         const registration = await tabletRegistrationService.getRegistrationData();
         if (registration && registration.materialId) {
-          console.log('Using material ID from registration:', registration.materialId);
+          log.deviceTracking('Using material ID from registration', { materialId: registration.materialId });
           setMaterialIdState(registration.materialId);
           // Save to SecureStore for future use
           await SecureStore.setItemAsync('device_material_id', registration.materialId);
@@ -49,7 +50,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // First try to load from SecureStore
         const savedMaterialId = await SecureStore.getItemAsync('device_material_id');
         if (savedMaterialId) {
-          console.log('Using material ID from SecureStore:', savedMaterialId);
+          log.deviceTracking('Using material ID from SecureStore', { materialId: savedMaterialId });
           setMaterialIdState(savedMaterialId);
           return;
         }
@@ -66,7 +67,7 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
         
         if (envMaterialId) {
-          console.log('Using material ID from environment:', envMaterialId);
+          log.deviceTracking('Using material ID from environment', { materialId: envMaterialId });
           setMaterialIdState(envMaterialId);
           // Save to SecureStore for future use
           await SecureStore.setItemAsync('device_material_id', envMaterialId);
@@ -128,14 +129,14 @@ export const DeviceStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Initialize WebSocket when materialId changes
   useEffect(() => {
     if (!materialId) {
-      console.log('No materialId set, checking if registration can provide one...');
+      log.deviceTracking('No materialId set, checking if registration can provide one...');
       
       // Try to get material ID from registration data if not available
       const checkForMaterialId = async () => {
         try {
           const registration = await tabletRegistrationService.getRegistrationData();
           if (registration && registration.materialId) {
-            console.log('Found material ID from registration, updating:', registration.materialId);
+            log.deviceTracking('Found material ID from registration, updating', { materialId: registration.materialId });
             setMaterialIdState(registration.materialId);
             return;
           }

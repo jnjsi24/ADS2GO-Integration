@@ -12,6 +12,7 @@ import offlineQueueService from '../../services/offlineQueueService';
 import AdPlayer from '../../components/AdPlayer';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
+import { configureCleanLogging } from '../../utils/loggerConfig';
 
 export default function HomeScreen() {
   const { status: deviceStatus } = useDeviceStatus();
@@ -30,6 +31,8 @@ export default function HomeScreen() {
   const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
+    // Configure clean logging for better console output
+    configureCleanLogging();
     initializeApp();
     
     // Cleanup function to stop tracking when component unmounts

@@ -1,5 +1,6 @@
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
+import { log } from '../utils/logger';
 
 export interface CompanyAd {
   id: string;
@@ -34,7 +35,7 @@ class CompanyAdService {
    */
   async fetchActiveCompanyAds(): Promise<CompanyAdResponse> {
     try {
-      console.log('🏢 Fetching active company ads...');
+      log.adPlayback('Fetching active company ads...');
       
       const response = await fetch(`${API_BASE_URL}/graphql`, {
         method: 'POST',

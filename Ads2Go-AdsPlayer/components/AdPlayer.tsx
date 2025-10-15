@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Ad } from '../services/tabletRegistration';
+import { log } from '../utils/logger';
 
 interface AdPlayerProps {
   materialId: string;
@@ -547,7 +548,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         try {
           const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
           if (success) {
-            console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
+            log.adAnalytics(`Ad playback tracked successfully: ${adTitle}`);
           } else {
             console.log(`❌ Failed to track ad playback: ${adTitle}`);
           }
@@ -862,7 +863,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   useEffect(() => {
     if (currentAd && currentAdIndex >= 0 && !isOffline && !trackedAds.has(currentAd.adId)) {
       // Note: QR display tracking is now handled by the tracking page when users scan
-      console.log(`📱 QR code displayed for ad: ${currentAd.adTitle}`);
+      // Only log QR display occasionally to reduce noise
+      if (Math.random() < 0.4) { // Log ~40% of QR displays
+        log.deviceTracking('QR code displayed', { adTitle: currentAd.adTitle });
+      }
       setTrackedAds(prev => new Set(prev).add(currentAd.adId));
     }
   }, [currentAd?.adId, currentAdIndex, isOffline, trackedAds]);
@@ -937,15 +941,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Use advertiser website if available, otherwise use fallback
       const redirectUrl = advertiserWebsite || fallbackUrl;
       
-      console.log('🔍 Generating QR data for ad:', {
-        adId: currentAd.adId,
-        adTitle: currentAd.adTitle,
-        website: advertiserWebsite,
-        hasWebsite: !!advertiserWebsite,
-        redirectUrl: redirectUrl,
-        adSlotNumber: adSlotNumber,
-        currentAdIndex: currentAdIndex
-      });
+      // Only log QR generation occasionally to reduce noise
+      if (Math.random() < 0.3) { // Log ~30% of QR generations
+        log.deviceTracking('QR code generated', {
+          adTitle: currentAd.adTitle,
+          hasWebsite: !!advertiserWebsite,
+          adSlotNumber: adSlotNumber
+        });
+      }
       
       const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
         ad_id: currentAd.adId,
@@ -957,7 +960,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         scan_time: Date.now().toString()
       }).toString();
       
-      console.log('🔍 Using tracking URL:', trackingUrl);
+      // Only log tracking URL occasionally to reduce noise
+      if (Math.random() < 0.2) { // Log ~20% of tracking URLs
+        log.deviceTracking('Tracking URL created', { 
+          adTitle: currentAd.adTitle,
+          adId: currentAd.adId 
+        });
+      }
       
       // Set QR data and mark as ready
       setQrData(trackingUrl);
@@ -1102,7 +1111,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Fetch company ads
   const fetchCompanyAds = async () => {
     try {
-      console.log('🏢 Fetching company ads...');
+      log.adPlayback('Fetching company ads...');
       const result = await companyAdService.fetchActiveCompanyAds();
       
       if (result.success && result.ads.length > 0) {
@@ -1128,7 +1137,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Check network status first
       const isConnected = await checkNetworkStatus();
       if (!isConnected) {
-        console.log('Network is offline, loading cached ads');
+        log.adPlayback('Network is offline, loading cached ads');
         const hasCached = await loadCachedAds();
         if (hasCached) {
           setIsDeviceOffline(true);
@@ -1262,7 +1271,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track ad playback when current ad changes
   useEffect(() => {
     if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
-      console.log(`🎬 Starting ad playback tracking: ${currentAd.adTitle}`);
+      // Only log ad tracking occasionally to reduce noise
+      if (Math.random() < 0.5) { // Log ~50% of ad tracking
+        log.adPlayback('Starting ad tracking', { 
+          adTitle: currentAd.adTitle,
+          duration: currentAd.duration
+        });
+      }
       setAdStartTime(new Date());
       trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration, 0); // Start of ad playback
       
@@ -1275,7 +1290,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // DON'T send any WebSocket updates yet - wait for video to actually load
       // The onLoadStart, onLoad, and onReadyForDisplay will handle the buffering states
-      console.log(`🎬 [AdPlayer] New ad loaded: ${currentAd.adTitle} - waiting for video to load before sending WebSocket updates`);
+      // Only log ad loading occasionally to reduce noise
+      if (Math.random() < 0.3) { // Log ~30% of ad loading
+        log.adPlayback('New ad loaded', { adTitle: currentAd.adTitle });
+      }
     }
   }, [currentAdIndex, currentAd?.adTitle, currentAd?.adId]);
 
@@ -1288,19 +1306,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   }, [isOffline]);
 
-  // Debug logging
-  console.log('Current ad:', {
-    currentAdIndex,
-    isCompanyAd: currentAdIndex === -1,
-    adTitle: currentAd?.adTitle || 'No ad',
-    adId: currentAd?.adId || 'No ID',
-    duration: currentAd?.duration || 0,
-    mediaFile: currentAd?.mediaFile || 'No media',
-    totalAds: ads.length,
-    isOffline,
-    networkStatus,
-    adStartTime: adStartTime ? 'Set' : 'Not set'
-  });
+  // Debug logging - only log occasionally to reduce noise
+  if (Math.random() < 0.05) { // Log ~5% of renders
+    log.adPlayback('Ad state', {
+      adTitle: currentAd?.adTitle || 'No ad',
+      duration: currentAd?.duration || 0
+    });
+  }
 
   const handleVideoEnd = async () => {
     // End tracking for current ad
@@ -1786,7 +1798,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
           onLoad={() => {
-            console.log('Video loaded successfully:', currentAd?.mediaFile);
+            // Only log video events occasionally to reduce noise
+            if (Math.random() < 0.3) { // Log ~30% of video events
+              log.adPlayback('Video loaded', { adTitle: currentAd?.adTitle });
+            }
             if (currentAd) {
               playbackWebSocketService.updatePlaybackDataAndSend({
                 adId: currentAd.adId,
@@ -1814,9 +1829,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
           onReadyForDisplay={() => {
-            console.log('Video ready for display:', currentAd?.mediaFile);
+            // Only log video events occasionally to reduce noise
+            if (Math.random() < 0.3) { // Log ~30% of video events
+              log.adPlayback('Video ready', { adTitle: currentAd?.adTitle });
+            }
             if (currentAd && !websocketUpdatesStarted) {
-              console.log('🎬 [AdPlayer] Video ready for display - but NOT starting progress yet, waiting for actual playback');
+              // Only log debug info occasionally
+              if (Math.random() < 0.1) { // Log ~10% of debug info
+                log.adPlayback('Video ready - waiting for playback');
+              }
               
               // Clear transitioning state - video is ready
               setIsTransitioning(false);

@@ -6,6 +6,7 @@ import playbackWebSocketService from './playbackWebSocketService';
 import offlineQueueService from './offlineQueueService';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
+import { log } from '../utils/logger';
 
 export interface ConnectionDetails {
   materialId: string;
@@ -113,7 +114,7 @@ const getAPIBaseURL = () => {
   // Check environment variables first
   const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.API_URL;
   if (envUrl) {
-    console.log('🔧 Using environment API URL:', envUrl);
+    log.deviceTracking('Using environment API URL', { url: envUrl });
     return envUrl;
   }
 
@@ -123,13 +124,13 @@ const getAPIBaseURL = () => {
   
   if (serverIp && serverPort) {
     const serverUrl = `http://${serverIp}:${serverPort}`;
-    console.log('🔧 Using constructed server URL:', serverUrl);
+    log.deviceTracking('Using constructed server URL', { url: serverUrl });
     return serverUrl;
   }
 
   // Fallback to local server
   const fallbackUrl = 'http://192.168.1.7:5000';
-  console.log('🔧 Using fallback local server URL:', fallbackUrl);
+  log.deviceTracking('Using fallback local server URL', { url: fallbackUrl });
   return fallbackUrl;
 };
 
@@ -174,17 +175,20 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.material && result.material.materialId) {
-          console.log('Converted ObjectId to materialId:', objectId, '→', result.material.materialId);
-          return result.material.materialId;
-        }
+      if (result.success && result.material && result.material.materialId) {
+        log.deviceTracking('Converted ObjectId to materialId', { 
+          objectId, 
+          materialId: result.material.materialId 
+        });
+        return result.material.materialId;
+      }
       }
     } catch (error) {
-      console.error('Error converting ObjectId to materialId:', error);
+      log.error('Error converting ObjectId to materialId', { error, objectId });
     }
 
     // If conversion fails, return the original ObjectId but log a warning
-    console.warn('⚠️  Could not convert ObjectId to materialId format. Using ObjectId as fallback.');
+    log.warning('Could not convert ObjectId to materialId format. Using ObjectId as fallback.', { objectId });
     return objectId;
   }
 
@@ -243,23 +247,23 @@ export class TabletRegistrationService {
     try {
       // First check if registration was explicitly cleared
       const wasCleared = await AsyncStorage.getItem('registration_cleared');
-      console.log('🔍 Checking registration cleared flag in checkRegistrationStatus:', wasCleared);
+      log.deviceTracking('Checking registration cleared flag', { wasCleared });
       
       // If registration was cleared, don't check anything - respect the cleared state
       if (wasCleared) {
-        console.log('Registration was explicitly cleared, returning false');
+        log.deviceTracking('Registration was explicitly cleared, returning false');
         return false;
       }
       
       // Check if we have existing registration data
       const registrationData = await AsyncStorage.getItem('tabletRegistration');
       if (!registrationData) {
-        console.log('🔍 No registration data found, returning false');
+        log.deviceTracking('No registration data found, returning false');
         return false;
       }
 
       this.registration = JSON.parse(registrationData);
-      console.log('🔍 Found local registration data:', {
+      log.deviceTracking('Found local registration data', {
         deviceId: this.registration?.deviceId,
         materialId: this.registration?.materialId,
         slotNumber: this.registration?.slotNumber,
@@ -268,14 +272,14 @@ export class TabletRegistrationService {
 
       // If no device ID or material ID, it's not a valid registration
       if (!this.registration?.deviceId || !this.registration?.materialId) {
-        console.log('❌ Invalid registration data - missing deviceId or materialId');
+        log.error('Invalid registration data - missing deviceId or materialId');
         return false;
       }
 
       // IMPORTANT: Verify with server that this tablet is still registered
       // This handles the case where admin unregistered the tablet from the dashboard
       try {
-        console.log('🔄 Verifying registration with server...');
+        log.deviceTracking('Verifying registration with server');
         const response = await fetch(`${API_BASE_URL}/tablet/configuration/${this.registration.materialId}`);
         
         if (response.ok) {
@@ -305,7 +309,7 @@ export class TabletRegistrationService {
                 return false;
               }
               
-              console.log('✅ Server confirmed registration is still valid');
+              log.deviceTracking('Server confirmed registration is still valid');
               return this.registration.isRegistered || false;
             } else {
               console.log('❌ Slot not found on server');
@@ -353,7 +357,7 @@ export class TabletRegistrationService {
       const registrationData = await AsyncStorage.getItem('tabletRegistration');
       if (registrationData) {
         this.registration = JSON.parse(registrationData);
-        console.log('📝 Loaded registration data from storage (cached for future use)');
+        log.deviceTracking('Loaded registration data from storage (cached for future use)');
         return this.registration;
       }
       
@@ -522,13 +526,13 @@ export class TabletRegistrationService {
   async updateLocationTracking(lat: number, lng: number, speed: number = 0, heading: number = 0, accuracy: number = 0): Promise<boolean> {
     try {
       if (!this.registration) {
-        console.log('Device not registered - skipping location tracking');
+        log.deviceTracking('Device not registered - skipping location tracking');
         return false;
       }
 
       // Skip if GPS is still initializing (coordinates are [0,0])
       if (lat === 0 && lng === 0) {
-        console.log('⏳ GPS still initializing - skipping location update (coordinates are [0,0])');
+        log.deviceTracking('GPS still initializing - skipping location update (coordinates are [0,0])');
         return false;
       }
 
@@ -537,7 +541,7 @@ export class TabletRegistrationService {
 
       // Validate that we have proper registration data
       if (!this.registration.materialId || this.registration.materialId.startsWith('TABLET-')) {
-        console.log('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
+        log.deviceTracking('Invalid registration data - materialId is missing or looks like deviceId. Skipping location tracking.');
         return false;
       }
 
@@ -560,7 +564,7 @@ export class TabletRegistrationService {
 
       // Only log location updates occasionally to reduce noise
       if (Math.random() < 0.1) { // Log ~10% of location updates
-        console.log('Updating location tracking:', locationUpdate);
+        log.deviceTracking('Updating location tracking', locationUpdate);
       }
 
       // Queue location data (will send immediately if online, queue if offline)
@@ -574,11 +578,14 @@ export class TabletRegistrationService {
 
       // If simulating offline, don't send to server
       if (this.simulatingOffline) {
-        console.log('📦 [Location] Queued location data (offline mode)');
+        log.deviceTracking('Queued location data (offline mode)');
         return true;
       }
 
-      console.log('API URL:', `${API_BASE_URL}/deviceTracking/location-update`);
+      // Only log API URL occasionally to reduce noise
+      if (Math.random() < 0.05) { // Log ~5% of API calls
+        log.deviceTracking('API URL', { url: `${API_BASE_URL}/deviceTracking/location-update` });
+      }
 
       // Send to device tracking endpoint (unified location tracking)
       try {
@@ -611,7 +618,7 @@ export class TabletRegistrationService {
         const result = await deviceTrackingResponse.json();
         
         if (result.success) {
-          console.log('✅ Location tracking updated successfully');
+          log.deviceTracking('Location tracking updated successfully');
           return true;
         } else {
           console.error('❌ Location tracking failed:', result.message);
@@ -664,7 +671,7 @@ export class TabletRegistrationService {
 
   async startLocationTracking(): Promise<void> {
     if (this.isTracking) {
-      console.log('Location tracking already started');
+      log.deviceTracking('Location tracking already started');
       return;
     }
 
@@ -734,13 +741,16 @@ export class TabletRegistrationService {
             accuracy || 0
           );
 
-          console.log('Location updated:', { latitude, longitude, speed, heading, accuracy });
+          // Only log location updates occasionally to reduce noise
+          if (Math.random() < 0.1) { // Log ~10% of location updates
+            log.deviceTracking('Location updated', { latitude, longitude, speed, heading, accuracy });
+          }
         } catch (error) {
           console.error('Error updating location:', error);
         }
       }, 7000); // Update every 7 seconds
 
-      console.log('Location tracking started');
+      log.deviceTracking('Location tracking started');
     } catch (error) {
       console.error('Error starting location tracking:', error);
       this.isTracking = false;
@@ -754,7 +764,7 @@ export class TabletRegistrationService {
     }
     
     this.isTracking = false;
-    console.log('Location tracking stopped');
+    log.deviceTracking('Location tracking stopped');
     
     // Update server that we're no longer tracking
     if (this.registration) {
@@ -823,19 +833,25 @@ export class TabletRegistrationService {
           // Check time restrictions
           if (zone.timeRestrictions) {
             if (currentHour >= zone.timeRestrictions.start && currentHour <= zone.timeRestrictions.end) {
-              console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name} - School hours)`);
+              // Only log speed limits occasionally to reduce noise
+              if (Math.random() < 0.1) { // Log ~10% of speed limit detections
+                log.deviceTracking(`Speed limit: ${zone.speedLimit} km/h (${zone.name})`);
+              }
               return zone.speedLimit;
             }
           }
           
-          console.log(`🚦 Speed limit detected: ${zone.speedLimit} km/h (${zone.name})`);
+          // Only log speed limits occasionally to reduce noise
+          if (Math.random() < 0.1) { // Log ~10% of speed limit detections
+            log.deviceTracking(`Speed limit: ${zone.speedLimit} km/h (${zone.name})`);
+          }
           return zone.speedLimit;
         }
       }
       
       // Default speed limit based on location
       const defaultLimit = this.getDefaultSpeedLimit(lat, lng);
-      console.log(`🚦 Default speed limit: ${defaultLimit} km/h`);
+      log.deviceTracking(`Default speed limit: ${defaultLimit} km/h`);
       return defaultLimit;
       
     } catch (error) {
@@ -1335,7 +1351,14 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Ad playback tracked successfully:', result);
+        // Only log analytics occasionally to reduce noise
+        if (Math.random() < 0.3) { // Log ~30% of analytics
+          log.adAnalytics('Ad playback tracked successfully', { 
+            success: result.success, 
+            totalAdsPlayed: result.data?.totalAdsPlayed,
+            totalAdImpressions: result.data?.totalAdImpressions 
+          });
+        }
         return true;
       } else {
         console.error('Failed to track ad playback:', response.status, response.statusText);
@@ -1368,7 +1391,7 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Ad playback ended successfully:', result);
+        log.adAnalytics('Ad playback ended successfully', result);
         return true;
       } else {
         console.error('Failed to end ad playback:', response.status, response.statusText);
@@ -1402,7 +1425,7 @@ export class TabletRegistrationService {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Driver activity updated successfully:', result);
+        log.adAnalytics('Driver activity updated successfully', result);
         return true;
       } else {
         console.error('Failed to update driver activity:', response.status, response.statusText);
