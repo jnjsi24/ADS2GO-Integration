@@ -90,6 +90,8 @@ const typeDefs = gql`
     driver: Driver
     totalCalculations: Int!
     totalSalary: Float!
+    totalDistanceSalary: Float!
+    totalHoursSalary: Float!
     averageMonthlySalary: Float!
     lastCalculationDate: String
     currentStatus: SalaryCalculationStatus

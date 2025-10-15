@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpa
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../config/api';
+import API_CONFIG from '../config/api';
 
 interface SalaryCalculation {
   id: string;
@@ -60,6 +60,8 @@ interface SalarySummary {
   };
   totalCalculations: number;
   totalSalary: number;
+  totalDistanceSalary: number;
+  totalHoursSalary: number;
   averageMonthlySalary: number;
   lastCalculationDate?: string;
   currentStatus?: string;
@@ -150,9 +152,9 @@ const SalaryScreen: React.FC = () => {
 
       const calculationsData = await calculationsResponse.json();
       
-      if (calculationsData.data?.getMySalaryCalculations?.success) {
-        setCalculations(calculationsData.data.getMySalaryCalculations.calculations);
-      }
+        if (calculationsData.data?.getMySalaryCalculations?.success) {
+          setCalculations(calculationsData.data.getMySalaryCalculations.calculations);
+        }
 
       // Fetch salary summary
       const summaryResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
@@ -179,6 +181,8 @@ const SalaryScreen: React.FC = () => {
                   }
                   totalCalculations
                   totalSalary
+                  totalDistanceSalary
+                  totalHoursSalary
                   averageMonthlySalary
                   lastCalculationDate
                   currentStatus
@@ -293,24 +297,22 @@ const SalaryScreen: React.FC = () => {
             <Text style={styles.summaryTitle}>Salary Summary</Text>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Calculations</Text>
-                <Text style={styles.summaryValue}>{summary.totalCalculations}</Text>
+                <Text style={styles.summaryLabel}>Total Distance Salary</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCurrency(summary.totalDistanceSalary || 0)}
+                </Text>
               </View>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Total Earnings</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(summary.totalSalary)}</Text>
+                <Text style={styles.summaryLabel}>Total Hours Salary</Text>
+                <Text style={styles.summaryValue}>
+                  {formatCurrency(summary.totalHoursSalary || 0)}
+                </Text>
               </View>
             </View>
             <View style={styles.summaryRow}>
               <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Average Monthly</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(summary.averageMonthlySalary)}</Text>
-              </View>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Last Calculation</Text>
-                <Text style={styles.summaryValue}>
-                  {summary.lastCalculationDate ? formatDate(summary.lastCalculationDate) : 'N/A'}
-                </Text>
+                <Text style={styles.summaryLabel}>Total Earnings</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(summary.totalSalary)}</Text>
               </View>
             </View>
           </View>

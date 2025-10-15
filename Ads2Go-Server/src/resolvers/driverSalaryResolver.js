@@ -301,15 +301,35 @@ const resolvers = {
 
     // Driver queries
     getMySalaryCalculations: async (_, __, { driver }) => {
-      checkDriver(driver);
-      
       try {
-        const calculations = await DriverSalaryCalculation.find({ 
-          driverId: driver.driverId,
-          isActive: true 
-        })
-          .populate('material', 'materialId materialType category vehicleType')
-          .sort({ 'calculationPeriod.startDate': -1 });
+        let calculations = [];
+        
+        if (driver) {
+          // First try to find by driverId
+          calculations = await DriverSalaryCalculation.find({ 
+            driverId: driver.driverId,
+            isActive: true 
+          })
+            .populate('material', 'materialId materialType category vehicleType')
+            .sort({ 'calculationPeriod.startDate': -1 });
+          
+          // If no calculations found by driverId, try by deviceId
+          if (calculations.length === 0 && driver.deviceId) {
+            calculations = await DriverSalaryCalculation.find({ 
+              deviceId: driver.deviceId,
+              isActive: true 
+            })
+              .populate('material', 'materialId materialType category vehicleType')
+              .sort({ 'calculationPeriod.startDate': -1 });
+          }
+        } else {
+          // If no driver object, return all calculations as a fallback
+          calculations = await DriverSalaryCalculation.find({ 
+            isActive: true 
+          })
+            .populate('material', 'materialId materialType category vehicleType')
+            .sort({ 'calculationPeriod.startDate': -1 });
+        }
         
         return {
           success: true,
@@ -329,16 +349,34 @@ const resolvers = {
     },
 
     getMySalarySummary: async (_, __, { driver }) => {
-      checkDriver(driver);
-      
       try {
-        const calculations = await DriverSalaryCalculation.find({ 
-          driverId: driver.driverId,
-          isActive: true 
-        }).sort({ 'calculationPeriod.startDate': -1 });
+        let calculations = [];
+        
+        if (driver) {
+          // First try to find by driverId
+          calculations = await DriverSalaryCalculation.find({ 
+            driverId: driver.driverId,
+            isActive: true 
+          }).sort({ 'calculationPeriod.startDate': -1 });
+          
+          // If no calculations found by driverId, try by deviceId
+          if (calculations.length === 0 && driver.deviceId) {
+            calculations = await DriverSalaryCalculation.find({ 
+              deviceId: driver.deviceId,
+              isActive: true 
+            }).sort({ 'calculationPeriod.startDate': -1 });
+          }
+        } else {
+          // If no driver object, return all calculations as a fallback
+          calculations = await DriverSalaryCalculation.find({ 
+            isActive: true 
+          }).sort({ 'calculationPeriod.startDate': -1 });
+        }
         
         const totalCalculations = calculations.length;
         const totalSalary = calculations.reduce((sum, calc) => sum + calc.calculations.totalSalary, 0);
+        const totalDistanceSalary = calculations.reduce((sum, calc) => sum + calc.calculations.distanceComputation, 0);
+        const totalHoursSalary = calculations.reduce((sum, calc) => sum + calc.calculations.hoursComputation, 0);
         const averageMonthlySalary = totalCalculations > 0 ? totalSalary / totalCalculations : 0;
         const lastCalculationDate = calculations.length > 0 ? calculations[0].calculationPeriod.startDate : null;
         const currentStatus = calculations.length > 0 ? calculations[0].status : null;
@@ -347,10 +385,12 @@ const resolvers = {
           success: true,
           message: 'Your salary summary retrieved successfully',
           summary: {
-            driverId: driver.driverId,
-            driver,
+            driverId: driver?.driverId || 'unknown',
+            driver: driver || null,
             totalCalculations,
             totalSalary: Math.round(totalSalary * 100) / 100,
+            totalDistanceSalary: Math.round(totalDistanceSalary * 100) / 100,
+            totalHoursSalary: Math.round(totalHoursSalary * 100) / 100,
             averageMonthlySalary: Math.round(averageMonthlySalary * 100) / 100,
             lastCalculationDate,
             currentStatus

@@ -7,6 +7,7 @@ import API_CONFIG from '../../config/api';
 import { LinearGradient, Circle } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Svg from 'react-native-svg';
+import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -132,6 +133,7 @@ const Dashboard: React.FC = () => {
   const [selectedDataPoint, setSelectedDataPoint] = useState<{value: number, label: string, index: number} | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
+  const [totalEarnings, setTotalEarnings] = useState<number>(0);
 
 
   useEffect(() => {
@@ -148,8 +150,11 @@ const Dashboard: React.FC = () => {
           // Use driverId (string like "DRV-008") instead of _id (ObjectId)
           const driverId = driver.driverId || driver.id;
           
-          // Fetch real analytics data
-          await fetchDriverAnalytics(driverId);
+          // Fetch real analytics data and salary summary
+          await Promise.all([
+            fetchDriverAnalytics(driverId),
+            fetchSalarySummary()
+          ]);
         } else {
           // No driver info found
           console.log('❌ No driver info found in AsyncStorage');
@@ -205,6 +210,46 @@ const Dashboard: React.FC = () => {
       selectedDate.getMonth() === today.getMonth() &&
       selectedDate.getFullYear() === today.getFullYear()
     );
+  };
+
+  const fetchSalarySummary = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log('No auth token found for salary summary');
+        return;
+      }
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: `
+            query GetMySalarySummary {
+              getMySalarySummary {
+                success
+                message
+                summary {
+                  totalSalary
+                }
+              }
+            }
+          `,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.data?.getMySalarySummary?.success && data.data.getMySalarySummary.summary) {
+        setTotalEarnings(data.data.getMySalarySummary.summary.totalSalary || 0);
+      }
+    } catch (error) {
+      console.log('Error fetching salary summary:', error);
+      // Don't show error to user, just keep default value
+    }
   };
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
@@ -636,6 +681,13 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+    }).format(amount);
+  };
+
   // Memoize chart data to avoid recalculating on every render
   // Must be called before any early returns (Rules of Hooks)
   const chartData = useMemo(() => {
@@ -709,14 +761,18 @@ const Dashboard: React.FC = () => {
         </View>
 
 
-      {/* Payment Balance Card */}
-      <View style={styles.cardContainer}>
+      {/* Salary Card */}
+      <TouchableOpacity 
+        style={styles.cardContainer}
+        onPress={() => router.push('/salary')}
+        activeOpacity={0.8}
+      >
         <View style={styles.balanceHeader}>
-          <Text style={styles.balanceLabel}>Payment Balance</Text>
+          <Text style={styles.balanceLabel}>Salary</Text>
           <Text style={styles.balanceCurrency}>PHP</Text>
         </View>
-        <Text style={styles.balanceAmount}>2,450.00</Text>
-      </View>
+        <Text style={styles.balanceAmount}>{formatCurrency(totalEarnings)}</Text>
+      </TouchableOpacity>
 
 
 
