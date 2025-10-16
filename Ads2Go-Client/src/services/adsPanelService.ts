@@ -2,8 +2,10 @@
 // Force correct API base URL for REST endpoints (not GraphQL)
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// Removed aggressive cache busting to prevent constant reloads
-console.log('🔄 AdsPanelService V4 (REAL ADS) loaded at:', new Date().toISOString());
+// Service initialization logging (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔄 AdsPanelService V4 (REAL ADS) loaded at:', new Date().toISOString());
+}
 
 export interface ScreenData {
   deviceId: string;

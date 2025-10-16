@@ -58,9 +58,6 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle preferences data changes
   useEffect(() => {
     if (preferencesData?.getAdminNotificationPreferences) {
-      console.log('🔔 AdminNotificationContext: Preferences loaded:', preferencesData);
-      console.log('🔔 AdminNotificationContext: Raw preferences data:', JSON.stringify(preferencesData, null, 2));
-      console.log('🔔 AdminNotificationContext: Setting enableNotificationBadge to:', preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
       setEnableNotificationBadge(preferencesData.getAdminNotificationPreferences.enableNotificationBadge);
     }
   }, [preferencesData]);
@@ -157,18 +154,20 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const totalPendingCount = unreadCount + pendingAds.length + pendingMaterials.length;
   const totalDisplayCount = enableNotificationBadge ? totalPendingCount : 0;
 
-  // Debug logging
-  console.log('🔔 AdminNotificationContext Debug:', {
-    notificationsCount: notifications.length,
-    unreadCount,
-    enableNotificationBadge,
-    displayBadgeCount,
-    pendingAdsCount: pendingAds.length,
-    pendingMaterialsCount: pendingMaterials.length,
-    totalPendingCount,
-    totalDisplayCount,
-    notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
-  });
+  // Debug logging (reduced frequency)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔔 AdminNotificationContext Debug:', {
+      notificationsCount: notifications.length,
+      unreadCount,
+      enableNotificationBadge,
+      displayBadgeCount,
+      pendingAdsCount: pendingAds.length,
+      pendingMaterialsCount: pendingMaterials.length,
+      totalPendingCount,
+      totalDisplayCount,
+      notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
+    });
+  }
 
   const refetchNotifications = async () => {
     console.log('🔔 AdminNotificationContext: Manual refresh triggered');

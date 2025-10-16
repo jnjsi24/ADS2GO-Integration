@@ -120,7 +120,7 @@ const notificationResolvers = {
           status: ad.status,
           createdAt: ad.createdAt,
           user: ad.userId,
-          materialId: ad.materialId || [], // Return the full array as expected by schema
+          materialId: ad.materialId || [], // Return as array to match schema
           planId: ad.planId
         }));
         
