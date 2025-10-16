@@ -32,6 +32,7 @@
     "mongoose": "^8.0.3",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
     "node-geocoder": "^4.4.1",
     "node-osrm": "^1.0.3",
     "nodemailer": "^6.9.7",

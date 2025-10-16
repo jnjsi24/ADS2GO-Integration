@@ -727,7 +727,6 @@ router.get('/user/:userId/direct', async (req, res) => {
       return res.status(400).json({ success: false, message: analytics.message });
     }
     
-    console.log('✅ Direct API returning data:', JSON.stringify(analytics.data.summary, null, 2));
     
     res.json({ 
       success: true, 
