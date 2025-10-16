@@ -4,7 +4,10 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 // Aggressive cache busting - force browser to reload this file
 const CACHE_BUST = Date.now();
-console.log('🔄 AdsPanelService V4 (REAL ADS) loaded - Cache busted at:', new Date().toISOString(), 'Cache bust ID:', CACHE_BUST);
+// Service initialization logging (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔄 AdsPanelService V4 (REAL ADS) loaded - Cache busted at:', new Date().toISOString(), 'Cache bust ID:', CACHE_BUST);
+}
 
 export interface ScreenData {
   deviceId: string;

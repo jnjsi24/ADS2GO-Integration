@@ -302,6 +302,10 @@ DeviceDataHistoryV2Schema.index({ updatedAt: -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1, materialId: 1 });
 DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite for search
+// Indexes to support userId-scoped analytics queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScans.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.userId': 1, 'dailyData.date': 1 });
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {

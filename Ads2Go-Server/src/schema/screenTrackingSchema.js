@@ -181,6 +181,8 @@ const typeDefs = gql`
     success: Boolean
     message: String
     pausedCount: Int
+    fullscreenCount: Int
+    exitFullscreenCount: Int
     syncResults: [SyncResult]
   }
 
@@ -271,6 +273,16 @@ const typeDefs = gql`
     Unlock all screens
     """
     unlockAllScreens: ScreenControlResponse
+
+    """
+    Set fullscreen on all screens
+    """
+    fullscreenAllScreens: ScreenControlResponse
+
+    """
+    Exit fullscreen on all screens
+    """
+    exitFullscreenAllScreens: ScreenControlResponse
 
     """
     Update screen metrics

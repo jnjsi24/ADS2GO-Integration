@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
 } from "react-native";
 import { useRouter, useLocalSearchParams, type Router } from "expo-router";
 import { useAuth } from '../../contexts/AuthContext';
@@ -249,7 +250,11 @@ export default function Login() {
     <View style={styles.container}>
       {/* Logo / Brand */}
       <View style={styles.header}>
-        <Text style={styles.logo}>✨</Text>
+        <Image 
+          source={require('../../assets/images/Ads2GoLogoDriver.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.subtitle}>Sign in to continue</Text>
       </View>
 
@@ -389,7 +394,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   header: { alignItems: "center", marginBottom: 30 },
-  logo: { fontSize: 30 },
+  logo: { width: 120, height: 120 },
   title: { fontSize: 22, fontWeight: "700", marginTop: 8 },
   tabContainer: {
     flexDirection: 'row',

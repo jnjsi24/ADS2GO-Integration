@@ -47,6 +47,8 @@ class PlaybackWebSocketService {
   private onResumeAll: ((message: any) => void) | null = null;
   private onLockdown: ((message: any) => void) | null = null;
   private onUnlock: ((message: any) => void) | null = null;
+  private onFullscreen: ((message: any) => void) | null = null;
+  private onExitFullscreen: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
 
@@ -168,6 +170,12 @@ class PlaybackWebSocketService {
           } else if (message.type === 'unlock') {
             console.log('🔓 [WebSocket] Received unlock command:', message);
             this.handleUnlock(message);
+          } else if (message.type === 'fullscreen') {
+            console.log('🖥️ [WebSocket] Received fullscreen command:', message);
+            this.handleFullscreen(message);
+          } else if (message.type === 'exit-fullscreen') {
+            console.log('🖥️ [WebSocket] Received exit fullscreen command:', message);
+            this.handleExitFullscreen(message);
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -479,6 +487,34 @@ class PlaybackWebSocketService {
     }
   }
 
+  // Handle fullscreen command from server
+  private handleFullscreen(message: any) {
+    try {
+      console.log('🖥️ [WebSocket] Handling fullscreen command:', message);
+      
+      // Emit fullscreen event to the AdPlayer component
+      if (this.onFullscreen) {
+        this.onFullscreen(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling fullscreen command:', error);
+    }
+  }
+
+  // Handle exit fullscreen command from server
+  private handleExitFullscreen(message: any) {
+    try {
+      console.log('🖥️ [WebSocket] Handling exit fullscreen command:', message);
+      
+      // Emit exit fullscreen event to the AdPlayer component
+      if (this.onExitFullscreen) {
+        this.onExitFullscreen(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling exit fullscreen command:', error);
+    }
+  }
+
   // Request synchronization with other slots
   requestSync() {
     if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
@@ -558,6 +594,14 @@ class PlaybackWebSocketService {
 
   setUnlockCallback(callback: (message: any) => void) {
     this.onUnlock = callback;
+  }
+
+  setFullscreenCallback(callback: (message: any) => void) {
+    this.onFullscreen = callback;
+  }
+
+  setExitFullscreenCallback(callback: (message: any) => void) {
+    this.onExitFullscreen = callback;
   }
 
   isWebSocketConnected(): boolean {

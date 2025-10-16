@@ -3,7 +3,11 @@ import {
   PAUSE_ALL_SCREENS, 
   PLAY_ALL_SCREENS, 
   SYNC_ALL_SCREENS, 
-  STOP_ALL_SCREENS 
+  STOP_ALL_SCREENS,
+  LOCKDOWN_ALL_SCREENS,
+  UNLOCK_ALL_SCREENS,
+  FULLSCREEN_ALL_SCREENS,
+  EXIT_FULLSCREEN_ALL_SCREENS
 } from './graphql';
 
 class GraphQLService {
@@ -81,13 +85,51 @@ class GraphQLService {
   }
 
   async lockdownAllScreens(): Promise<{ success: boolean; message: string }> {
-    // This would need to be implemented in the server
-    return { success: true, message: 'Lockdown all screens not implemented yet' };
+    try {
+      const { data } = await this.client.mutate({
+        mutation: LOCKDOWN_ALL_SCREENS,
+      });
+      return data.lockdownAllScreens;
+    } catch (error) {
+      console.error('Error locking all screens:', error);
+      throw error;
+    }
   }
 
   async unlockAllScreens(): Promise<{ success: boolean; message: string }> {
-    // This would need to be implemented in the server
-    return { success: true, message: 'Unlock all screens not implemented yet' };
+    try {
+      const { data } = await this.client.mutate({
+        mutation: UNLOCK_ALL_SCREENS,
+      });
+      return data.unlockAllScreens;
+    } catch (error) {
+      console.error('Error unlocking all screens:', error);
+      throw error;
+    }
+  }
+
+  async fullscreenAllScreens(): Promise<{ success: boolean; message: string; fullscreenCount?: number }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: FULLSCREEN_ALL_SCREENS,
+      });
+      return data.fullscreenAllScreens;
+    } catch (error) {
+      console.error('Error setting fullscreen on all screens:', error);
+      throw error;
+    }
+  }
+
+  async exitFullscreenAllScreens(): Promise<{ success: boolean; message: string; exitFullscreenCount?: number }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: EXIT_FULLSCREEN_ALL_SCREENS,
+      });
+      return data.exitFullscreenAllScreens;
+    } catch (error) {
+      console.error('Error exiting fullscreen on all screens:', error);
+      throw error;
+    }
   }
 
   // Individual screen actions

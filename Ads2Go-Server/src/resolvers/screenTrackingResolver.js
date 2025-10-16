@@ -767,6 +767,16 @@ const resolvers = {
         
         console.log(`🔒 [LockdownAll] Found ${activeConnections.size} active connections`);
         
+        // Debug: Log all connections
+        for (const [deviceId, ws] of activeConnections) {
+          console.log(`🔒 [LockdownAll] Connection ${deviceId}:`, {
+            readyState: ws?.readyState,
+            connectionType: ws?.connectionType,
+            isAdmin: ws?.isAdmin,
+            materialId: ws?.materialId
+          });
+        }
+        
         for (const [deviceId, ws] of activeConnections) {
           if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
             try {
@@ -968,6 +978,132 @@ const resolvers = {
         throw new Error('Not authorized');
       }
       return { success: true, message: 'Skipped to next ad' };
+    },
+
+    fullscreenAllScreens: async (_, __, { admin, superAdmin }) => {
+      if (!admin && !superAdmin) {
+        throw new Error('Not authorized');
+      }
+
+      try {
+        console.log('🖥️ [FullscreenAll] Starting fullscreen command for all screens');
+        
+        const deviceStatusService = require('../services/deviceStatusService');
+        const service = deviceStatusService;
+        
+        const fullscreenMessage = {
+          type: 'fullscreen',
+          command: 'fullscreen',
+          timestamp: new Date().toISOString(),
+          source: 'admin'
+        };
+
+        let fullscreenCount = 0;
+        const activeConnections = service.activeConnections || new Map();
+        
+        console.log(`🖥️ [FullscreenAll] Found ${activeConnections.size} active connections`);
+        
+        // Debug: Log all connections
+        for (const [deviceId, ws] of activeConnections) {
+          console.log(`🖥️ [FullscreenAll] Connection ${deviceId}:`, {
+            readyState: ws?.readyState,
+            connectionType: ws?.connectionType,
+            isAdmin: ws?.isAdmin,
+            materialId: ws?.materialId
+          });
+        }
+        
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
+            try {
+              console.log(`🖥️ [FullscreenAll] Sending fullscreen command to device: ${deviceId}`);
+              ws.send(JSON.stringify(fullscreenMessage));
+              fullscreenCount++;
+              console.log(`🖥️ [FullscreenAll] ✅ Sent fullscreen command to device: ${deviceId}`);
+            } catch (error) {
+              console.error(`❌ [FullscreenAll] Failed to send fullscreen command to ${deviceId}:`, error);
+            }
+          }
+        }
+        
+        console.log(`🖥️ [FullscreenAll] Fullscreen command sent to ${fullscreenCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Fullscreen command sent to ${fullscreenCount} devices`,
+          fullscreenCount 
+        };
+      } catch (error) {
+        console.error('❌ [FullscreenAll] Error sending fullscreen commands:', error);
+        return { 
+          success: false, 
+          message: 'Failed to send fullscreen commands',
+          error: error.message 
+        };
+      }
+    },
+
+    exitFullscreenAllScreens: async (_, __, { admin, superAdmin }) => {
+      if (!admin && !superAdmin) {
+        throw new Error('Not authorized');
+      }
+
+      try {
+        console.log('🖥️ [ExitFullscreenAll] Starting exit fullscreen command for all screens');
+        
+        const deviceStatusService = require('../services/deviceStatusService');
+        const service = deviceStatusService;
+        
+        const exitFullscreenMessage = {
+          type: 'exit-fullscreen',
+          command: 'exit-fullscreen',
+          timestamp: new Date().toISOString(),
+          source: 'admin'
+        };
+
+        let exitFullscreenCount = 0;
+        const activeConnections = service.activeConnections || new Map();
+        
+        console.log(`🖥️ [ExitFullscreenAll] Found ${activeConnections.size} active connections`);
+        
+        // Debug: Log all connections
+        for (const [deviceId, ws] of activeConnections) {
+          console.log(`🖥️ [ExitFullscreenAll] Connection ${deviceId}:`, {
+            readyState: ws?.readyState,
+            connectionType: ws?.connectionType,
+            isAdmin: ws?.isAdmin,
+            materialId: ws?.materialId
+          });
+        }
+        
+        for (const [deviceId, ws] of activeConnections) {
+          if (ws && ws.readyState === 1 && ws.connectionType === 'playback' && !ws.isAdmin) {
+            try {
+              console.log(`🖥️ [ExitFullscreenAll] Sending exit fullscreen command to device: ${deviceId}`);
+              ws.send(JSON.stringify(exitFullscreenMessage));
+              exitFullscreenCount++;
+              console.log(`🖥️ [ExitFullscreenAll] ✅ Sent exit fullscreen command to device: ${deviceId}`);
+            } catch (error) {
+              console.error(`❌ [ExitFullscreenAll] Failed to send exit fullscreen command to ${deviceId}:`, error);
+            }
+          }
+        }
+        
+        console.log(`🖥️ [ExitFullscreenAll] Exit fullscreen command sent to ${exitFullscreenCount} devices`);
+        
+        return { 
+          success: true, 
+          message: `Exit fullscreen command sent to ${exitFullscreenCount} devices`,
+          exitFullscreenCount 
+        };
+      } catch (error) {
+        console.error('❌ [ExitFullscreenAll] Error sending exit fullscreen commands:', error);
+        return { 
+          success: false, 
+          message: 'Failed to send exit fullscreen commands',
+          error: error.message 
+        };
+      }
     }
   }
 };
