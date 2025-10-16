@@ -4,8 +4,10 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
-import { LinearGradient } from 'react-native-svg';
+import { LinearGradient, Circle } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Svg from 'react-native-svg';
+import { router } from 'expo-router';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -103,6 +105,22 @@ interface DriverAnalytics {
     totalMonths: number;
     message?: string;
   } | null;
+  last7DaysData?: {
+    period: string;
+    dateRange: {
+      startDate: string;
+      endDate: string;
+    };
+    dailyBreakdown: Array<{
+      date: string;
+      totalDistance: number;
+      totalHours: number;
+      totalQRImpressions: number;
+      totalAdImpressions: number;
+      totalAdPlayTime: number;
+      totalAdPlays: number;
+    }>;
+  } | null;
 }
 
 const Dashboard: React.FC = () => {
@@ -115,6 +133,7 @@ const Dashboard: React.FC = () => {
   const [selectedDataPoint, setSelectedDataPoint] = useState<{value: number, label: string, index: number} | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [dataCache, setDataCache] = useState<{[key: string]: {data: DriverAnalytics, timestamp: number}}>({});
+  const [totalEarnings, setTotalEarnings] = useState<number>(0);
 
 
   useEffect(() => {
@@ -131,8 +150,11 @@ const Dashboard: React.FC = () => {
           // Use driverId (string like "DRV-008") instead of _id (ObjectId)
           const driverId = driver.driverId || driver.id;
           
-          // Fetch real analytics data
-          await fetchDriverAnalytics(driverId);
+          // Fetch real analytics data and salary summary
+          await Promise.all([
+            fetchDriverAnalytics(driverId),
+            fetchSalarySummary()
+          ]);
         } else {
           // No driver info found
           console.log('❌ No driver info found in AsyncStorage');
@@ -188,6 +210,46 @@ const Dashboard: React.FC = () => {
       selectedDate.getMonth() === today.getMonth() &&
       selectedDate.getFullYear() === today.getFullYear()
     );
+  };
+
+  const fetchSalarySummary = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log('No auth token found for salary summary');
+        return;
+      }
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: `
+            query GetMySalarySummary {
+              getMySalarySummary {
+                success
+                message
+                summary {
+                  totalSalary
+                }
+              }
+            }
+          `,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.data?.getMySalarySummary?.success && data.data.getMySalarySummary.summary) {
+        setTotalEarnings(data.data.getMySalarySummary.summary.totalSalary || 0);
+      }
+    } catch (error) {
+      console.log('Error fetching salary summary:', error);
+      // Don't show error to user, just keep default value
+    }
   };
 
   const fetchDriverAnalytics = async (driverId: string, silent: boolean = false) => {
@@ -289,6 +351,51 @@ const Dashboard: React.FC = () => {
           return Math.max(0, Number(value));
         };
 
+        // Fetch last 7 days data from DeviceDataHistoryV2 for the graph
+        let last7DaysData = null;
+        try {
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+          sevenDaysAgo.setHours(0, 0, 0, 0);
+          
+          const today = new Date();
+          today.setHours(23, 59, 59, 999);
+          
+          const last7DaysUrl = `${API_CONFIG.BASE_URL}/screenTracking/driver/${driverId}?period=daily&startDate=${sevenDaysAgo.toISOString()}&endDate=${today.toISOString()}`;
+          
+          if (!silent) {
+            console.log('📊 Fetching last 7 days data from:', last7DaysUrl);
+          }
+          
+          const last7DaysResponse = await fetch(last7DaysUrl, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (last7DaysResponse.ok) {
+            const last7DaysResult = await last7DaysResponse.json();
+            if (last7DaysResult.success && last7DaysResult.data.dailyData) {
+              last7DaysData = {
+                period: 'last7days',
+                dateRange: {
+                  startDate: sevenDaysAgo.toISOString(),
+                  endDate: today.toISOString()
+                },
+                dailyBreakdown: last7DaysResult.data.dailyData.dailyBreakdown || []
+              };
+              
+              if (!silent) {
+                console.log('📊 Last 7 days data fetched:', last7DaysData.dailyBreakdown.length, 'days');
+              }
+            }
+          }
+        } catch (last7DaysError) {
+          console.log('⚠️ Could not fetch last 7 days data:', last7DaysError);
+          // Continue without last 7 days data
+        }
+
         // Transform ScreenTracking data to match our interface
         const transformedAnalytics: DriverAnalytics = {
           driverId: data.driverId || 'Unknown',
@@ -338,7 +445,9 @@ const Dashboard: React.FC = () => {
             monthlyBreakdown: data.monthlyData.monthlyBreakdown || [],
             totalMonths: data.monthlyData.totalMonths || 0,
             message: data.monthlyData.message
-          } : null
+          } : null,
+          // Add last 7 days data for the graph
+          last7DaysData: last7DaysData
         };
         
         setAnalytics(transformedAnalytics);
@@ -378,26 +487,18 @@ const Dashboard: React.FC = () => {
   const getChartData = () => {
     if (!analytics) return null;
 
-    const isToday = isSelectedDateToday();
-
-    if (isToday) {
-      // For today, show last 7 days trend from DeviceTracking's dailyPerformance
-      const data = analytics.dailyPerformance.slice(-7);
+    // Always use last 7 days data from DeviceDataHistoryV2 for the graph
+    const last7Days = analytics.last7DaysData?.dailyBreakdown || [];
+    
+    // If we have last 7 days data from DeviceDataHistoryV2, use it
+    if (last7Days.length > 0) {
+      // Sort by date and take last 7 days
+      const sortedData = [...last7Days].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      ).slice(-7);
       
-      // Ensure we have at least some data points
-      if (data.length === 0) {
-        return {
-          labels: ['No Data'],
-          datasets: [{
-            data: [0],
-            color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-            strokeWidth: 2
-          }]
-        };
-      }
-
       return {
-        labels: data.map(d => {
+        labels: sortedData.map(d => {
           try {
             return new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
           } catch {
@@ -405,13 +506,13 @@ const Dashboard: React.FC = () => {
           }
         }),
         datasets: [{
-          data: data.map(d => {
+          data: sortedData.map(d => {
             let value = 0;
             switch (selectedMetric) {
-              case 'distance': value = d.totalDistance; break;
-              case 'hours': value = d.totalHours; break;
-              case 'qrImpressions': value = d.qrImpressions || 0; break;
-              default: value = d.totalDistance; break;
+              case 'distance': value = d.totalDistance || 0; break;
+              case 'hours': value = d.totalHours || 0; break;
+              case 'qrImpressions': value = d.totalQRImpressions || 0; break;
+              default: value = d.totalDistance || 0; break;
             }
             return sanitizeChartValue(value);
           }),
@@ -419,7 +520,12 @@ const Dashboard: React.FC = () => {
           strokeWidth: 2
         }]
       };
-    } else {
+    }
+    
+    // Fallback: If no last 7 days data, check if viewing a specific past date
+    const isToday = isSelectedDateToday();
+    
+    if (!isToday) {
       // Past date: Show data for selected date from DeviceDataHistoryV2
       const data = analytics.dailyData?.dailyBreakdown || [];
       
@@ -461,6 +567,44 @@ const Dashboard: React.FC = () => {
         }]
       };
     }
+    
+    // Last fallback: Use dailyPerformance from current tracking (should rarely happen)
+    const data = analytics.dailyPerformance.slice(-7);
+    
+    if (data.length === 0) {
+      return {
+        labels: ['No Data'],
+        datasets: [{
+          data: [0],
+          color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+          strokeWidth: 2
+        }]
+      };
+    }
+
+    return {
+      labels: data.map(d => {
+        try {
+          return new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
+        } catch {
+          return 'Invalid Date';
+        }
+      }),
+      datasets: [{
+        data: data.map(d => {
+          let value = 0;
+          switch (selectedMetric) {
+            case 'distance': value = d.totalDistance; break;
+            case 'hours': value = d.totalHours; break;
+            case 'qrImpressions': value = d.qrImpressions || 0; break;
+            default: value = d.totalDistance; break;
+          }
+          return sanitizeChartValue(value);
+        }),
+        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`, // Blue
+        strokeWidth: 2
+      }]
+    };
   };
 
   const getMetricLabel = () => {
@@ -537,6 +681,13 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+    }).format(amount);
+  };
+
   // Memoize chart data to avoid recalculating on every render
   // Must be called before any early returns (Rules of Hooks)
   const chartData = useMemo(() => {
@@ -594,31 +745,34 @@ const Dashboard: React.FC = () => {
       <ScrollView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-        <View style={styles.headerContent}>
-          {/* Profile Image */}
-          <View style={styles.profileContainer}>
-            <Ionicons name="person-circle" size={60} color="#3674B5" />
+          <View style={styles.headerContent}>
+            {/* Profile Image */}
+            <View style={styles.profileContainer}>
+              <Ionicons name="person-circle" size={50} color="#3674B5" />
+            </View>
+
+            {/* Text */}
+            <View style={styles.welcomeTextContainer}>
+              <Text style={styles.welcomeText}>
+                Welcome back, {user?.firstName || 'Driver'}
+              </Text>
+            </View>
           </View>
-
-          {/* Text */}
-          <View style={styles.textContainer}>
-            <Text style={styles.headerSubtitle}>
-              Welcome back, {user?.firstName || 'Driver'}
-            </Text>
-          </View>
-
         </View>
-      </View>
 
 
-      {/* Balance Container */}
-      <View style={styles.cardContainer}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.balanceLabel}>Payout Balance</Text>
+      {/* Salary Card */}
+      <TouchableOpacity 
+        style={styles.cardContainer}
+        onPress={() => router.push('/salary')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.balanceHeader}>
+          <Text style={styles.balanceLabel}>Salary</Text>
+          <Text style={styles.balanceCurrency}>PHP</Text>
         </View>
-        <Text style={styles.balanceCurrency}>PHP</Text>
-        <Text style={styles.balanceAmount}>2,450.00</Text>
-      </View>
+        <Text style={styles.balanceAmount}>{formatCurrency(totalEarnings)}</Text>
+      </TouchableOpacity>
 
 
 
@@ -690,27 +844,47 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
-      {/* Numerical Value Display */}
-      <View style={styles.metricValueContainer}>
-        <View style={styles.metricValueCard}>
-          <Text style={styles.metricValueLabel}>{getMetricShortLabel()}</Text>
-          <View style={styles.metricValueRow}>
-            <Text style={styles.metricValueNumber}>
-              {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
-            </Text>
-            {getMetricUnit() && (
-              <Text style={styles.metricValueUnit}> {getMetricUnit()}</Text>
-            )}
+      {/* Circular Gauge Display */}
+      <View style={styles.gaugeContainer}>
+        <View style={styles.gaugeCard}>
+          <Text style={styles.gaugeTitle}>{getMetricShortLabel().toUpperCase()}</Text>
+          
+          {/* Circular Progress */}
+          <View style={styles.circularGaugeWrapper}>
+            <Svg width={220} height={220} style={styles.circularGauge}>
+              {/* Background Circle */}
+              <Circle
+                cx="110"
+                cy="110"
+                r="90"
+                stroke="#9CA3AF"
+                strokeWidth="14"
+                fill="none"
+              />
+              {/* Progress Circle */}
+              <Circle
+                cx="110"
+                cy="110"
+                r="90"
+                stroke="#2563EB"
+                strokeWidth="14"
+                fill="none"
+                strokeDasharray={`${Math.min((getCurrentMetricValue() / (selectedMetric === 'distance' ? 100 : 10)) * 565, 565)} 565`}
+                strokeLinecap="round"
+                rotation="-90"
+                origin="110, 110"
+              />
+            </Svg>
+            
+            {/* Value in Center */}
+            <View style={styles.gaugeValueContainer}>
+              <Text style={styles.gaugeValue}>
+                {getCurrentMetricValue().toFixed(selectedMetric === 'distance' ? 1 : 0)}
+              </Text>
+              <Text style={styles.gaugeUnit}>{getMetricUnit()}</Text>
+            </View>
           </View>
-          <Text style={styles.metricValuePeriod}>
-            {selectedDataPoint 
-              ? `${selectedDataPoint.label}` 
-              : selectedDate.toLocaleDateString('en-US', { 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}
-          </Text>
+          
           {selectedDataPoint && !isSelectedDateToday() && (
             <TouchableOpacity 
               onPress={() => setSelectedDataPoint(null)}
@@ -722,32 +896,28 @@ const Dashboard: React.FC = () => {
         </View>
       </View>
 
-      {/* Chart */}
-      {chartData && chartData.datasets && chartData.datasets.length > 0 && (
-        <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>
-            {isSelectedDateToday() ? 'Last 7 Days' : selectedDate.toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
-            })} {getMetricLabel()}
-          </Text>
+      {/* Last 7 Days Chart */}
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>
+          Last 7 Days {getMetricShortLabel()} ({getMetricUnit()})
+        </Text>
+        {chartData && chartData.datasets && chartData.datasets.length > 0 && chartData.datasets[0].data.some((val: number) => val > 0) ? (
           <LineChart
             data={chartData}
-            width={screenWidth - 40}
-            height={220}
+            width={screenWidth - 80}
+            height={180}
             chartConfig={{
               backgroundColor: '#ffffff',
               backgroundGradientFrom: '#ffffff',
               backgroundGradientTo: '#ffffff',
               decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+              color: (opacity = 1) => `rgba(54, 116, 181, ${opacity})`,
               labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
               style: {
                 borderRadius: 16
               },
               propsForDots: {
-                r: '6',
+                r: '5',
                 strokeWidth: '2',
                 stroke: '#3674B5'
               }
@@ -756,12 +926,18 @@ const Dashboard: React.FC = () => {
             style={styles.chart}
             onDataPointClick={handleDataPointClick}
           />
-        </View>
-      )}
+        ) : (
+          <>
+            <View style={styles.noDataIndicator}>
+              <View style={styles.noDataDot} />
+              <Text style={styles.noDataText}>No Data</Text>
+            </View>
+          </>
+        )}
+      </View>
 
-
-        {/* Bottom Spacing */}
-        <View style={styles.bottomSpacing} />
+      {/* Bottom Spacing */}
+      <View style={styles.bottomSpacing} />
       </ScrollView>
     </View>
   );
@@ -770,11 +946,11 @@ const Dashboard: React.FC = () => {
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f3f4f6',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f3f4f6',
   },
   loadingContainer: {
     flex: 1,
@@ -898,8 +1074,9 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    paddingVertical: 15,
+    paddingVertical: 20,
     paddingHorizontal: 20,
+    backgroundColor: '#f3f4f6',
   },
   headerContent: {
     flexDirection: 'row',
@@ -908,8 +1085,11 @@ const styles = StyleSheet.create({
   profileContainer: {
     marginRight: 12,
   },
-  headerSubtitle: {
-    fontSize: 18,
+  welcomeTextContainer: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#111827',
   },
@@ -935,48 +1115,46 @@ const styles = StyleSheet.create({
 
   // Balance Container
   cardContainer: {
-    backgroundColor: '#3674B5', // elegant blue tone
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#5B8EC5',
+    borderRadius: 16,
+    padding: 24,
     marginHorizontal: 20,
     marginTop: 10,
-    marginBottom: 10,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
   },
   
-  cardHeader: {
+  balanceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
   },
   
   balanceLabel: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  
-  cardLogo: {
-    width: 40,
-    height: 30,
-    resizeMode: 'contain',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '400',
+    opacity: 0.9,
   },
   
   balanceCurrency: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    marginTop: 10,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    opacity: 0.9,
   },
   
   balanceAmount: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    color: '#FFFFFF',
+    fontSize: 48,
+    fontWeight: '700',
+    letterSpacing: -1,
+    textAlign: 'right',
   },
   
   cardNumber: {
@@ -1238,12 +1416,12 @@ const styles = StyleSheet.create({
   // Chart Controls
   chartControls: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   datePickerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
     gap: 8,
   },
   datePickerButton: {
@@ -1252,21 +1430,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   datePickerText: {
     flex: 1,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#1f2937',
     marginLeft: 8,
   },
@@ -1287,71 +1465,77 @@ const styles = StyleSheet.create({
   metricSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 8,
   },
   metricButton: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   metricButtonActive: {
-    backgroundColor: '#3674B5',
+    borderBottomColor: '#3B82F6',
   },
   metricButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     color: '#6b7280',
+    textAlign: 'center',
   },
   metricButtonTextActive: {
-    color: '#ffffff',
+    color: '#3B82F6',
+    fontWeight: '600',
   },
-  // Numerical Value Display
-  metricValueContainer: {
+  // Circular Gauge Display
+  gaugeContainer: {
     marginHorizontal: 20,
     marginBottom: 16,
   },
-  metricValueCard: {
-    backgroundColor: '#ffffff',
+  gaugeCard: {
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
     alignItems: 'center',
-    borderLeftWidth: 4,
-    borderLeftColor: '#3674B5',
   },
-  metricValueLabel: {
+  gaugeTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
+    marginBottom: 20,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+    letterSpacing: 1,
   },
-  metricValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 4,
+  circularGaugeWrapper: {
+    position: 'relative',
+    width: 220,
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  metricValueNumber: {
-    fontSize: 48,
+  circularGauge: {
+    position: 'absolute',
+  },
+  gaugeValueContainer: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gaugeValue: {
+    fontSize: 56,
     fontWeight: '700',
-    color: '#3674B5',
+    color: '#1f2937',
   },
-  metricValueUnit: {
-    fontSize: 24,
-    fontWeight: '600',
+  gaugeUnit: {
+    fontSize: 20,
+    fontWeight: '500',
     color: '#6b7280',
-    marginLeft: 4,
+    marginTop: 4,
   },
-  metricValuePeriod: {
+  gaugePeriod: {
     fontSize: 12,
     fontWeight: '500',
     color: '#9ca3af',
@@ -1359,25 +1543,49 @@ const styles = StyleSheet.create({
   chartContainer: {
     marginHorizontal: 20,
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
-    
+    marginBottom: 16,
   },
   chartTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-    textAlign: 'center',
-   
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'left',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  chartSubtitle: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#9ca3af',
+    marginBottom: 8,
   },
   chart: {
     borderRadius: 16,
+  },
+  noDataIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  noDataDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#3674B5',
+    marginRight: 8,
+  },
+  noDataText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
   },
   resetButton: {
     marginTop: 12,
@@ -1393,7 +1601,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bottomSpacing: {
-    height: 20,
+    height: 40,
   },
 });
 

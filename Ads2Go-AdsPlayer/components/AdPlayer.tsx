@@ -27,15 +27,18 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Ad } from '../services/tabletRegistration';
+import { log } from '../utils/logger';
 
 interface AdPlayerProps {
   materialId: string;
   slotNumber: number;
   onAdError?: (error: string) => void;
   isOffline?: boolean;
+  isLocked?: boolean;
+  onLockStateChange?: (isLocked: boolean) => void;
 }
 
-const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false }) => {
+const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, isOffline = false, isLocked = false, onLockStateChange }) => {
   const [ads, setAds] = useState<Ad[]>([]);
   const [companyAds, setCompanyAds] = useState<CompanyAd[]>([]);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -60,7 +63,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncData, setSyncData] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -371,12 +373,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const handleLockdown = (message: any) => {
     try {
       console.log('🔒 [AdPlayer] Received lockdown command:', message);
+      console.log('🔒 [AdPlayer] Current isLocked state:', isLocked);
       
       // Lock the screen - prevent user interaction but keep ads playing
-      setIsLocked(true);
+      onLockStateChange?.(true);
       // Note: We don't pause the video - ads should continue playing
       
       console.log('🔒 [AdPlayer] Screen locked - user interaction disabled, ads continue playing');
+      console.log('🔒 [AdPlayer] New isLocked state:', true);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling lockdown:', error);
     }
@@ -386,12 +390,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const handleUnlock = (message: any) => {
     try {
       console.log('🔓 [AdPlayer] Received unlock command:', message);
+      console.log('🔓 [AdPlayer] Current isLocked state:', isLocked);
       
       // Unlock the screen - allow user interaction again
-      setIsLocked(false);
+      onLockStateChange?.(false);
       // Note: Video continues playing normally - no need to resume
       
       console.log('🔓 [AdPlayer] Screen unlocked - user interaction enabled');
+      console.log('🔓 [AdPlayer] New isLocked state:', false);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling unlock:', error);
     }
@@ -542,7 +548,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         try {
           const success = await tabletRegistrationService.trackAdPlayback(adId, adTitle, adDuration, 0);
           if (success) {
-            console.log(`✅ Ad playback tracked successfully: ${adTitle}`);
+            log.adAnalytics(`Ad playback tracked successfully: ${adTitle}`);
           } else {
             console.log(`❌ Failed to track ad playback: ${adTitle}`);
           }
@@ -857,7 +863,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   useEffect(() => {
     if (currentAd && currentAdIndex >= 0 && !isOffline && !trackedAds.has(currentAd.adId)) {
       // Note: QR display tracking is now handled by the tracking page when users scan
-      console.log(`📱 QR code displayed for ad: ${currentAd.adTitle}`);
+      // Only log QR display occasionally to reduce noise
+      if (Math.random() < 0.4) { // Log ~40% of QR displays
+        log.deviceTracking('QR code displayed', { adTitle: currentAd.adTitle });
+      }
       setTrackedAds(prev => new Set(prev).add(currentAd.adId));
     }
   }, [currentAd?.adId, currentAdIndex, isOffline, trackedAds]);
@@ -932,15 +941,14 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Use advertiser website if available, otherwise use fallback
       const redirectUrl = advertiserWebsite || fallbackUrl;
       
-      console.log('🔍 Generating QR data for ad:', {
-        adId: currentAd.adId,
-        adTitle: currentAd.adTitle,
-        website: advertiserWebsite,
-        hasWebsite: !!advertiserWebsite,
-        redirectUrl: redirectUrl,
-        adSlotNumber: adSlotNumber,
-        currentAdIndex: currentAdIndex
-      });
+      // Only log QR generation occasionally to reduce noise
+      if (Math.random() < 0.3) { // Log ~30% of QR generations
+        log.deviceTracking('QR code generated', {
+          adTitle: currentAd.adTitle,
+          hasWebsite: !!advertiserWebsite,
+          adSlotNumber: adSlotNumber
+        });
+      }
       
       const trackingUrl = `${API_BASE_URL}/qr-track.html?` + new URLSearchParams({
         ad_id: currentAd.adId,
@@ -952,7 +960,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         scan_time: Date.now().toString()
       }).toString();
       
-      console.log('🔍 Using tracking URL:', trackingUrl);
+      // Only log tracking URL occasionally to reduce noise
+      if (Math.random() < 0.2) { // Log ~20% of tracking URLs
+        log.deviceTracking('Tracking URL created', { 
+          adTitle: currentAd.adTitle,
+          adId: currentAd.adId 
+        });
+      }
       
       // Set QR data and mark as ready
       setQrData(trackingUrl);
@@ -1097,7 +1111,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Fetch company ads
   const fetchCompanyAds = async () => {
     try {
-      console.log('🏢 Fetching company ads...');
+      log.adPlayback('Fetching company ads...');
       const result = await companyAdService.fetchActiveCompanyAds();
       
       if (result.success && result.ads.length > 0) {
@@ -1123,7 +1137,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       // Check network status first
       const isConnected = await checkNetworkStatus();
       if (!isConnected) {
-        console.log('Network is offline, loading cached ads');
+        log.adPlayback('Network is offline, loading cached ads');
         const hasCached = await loadCachedAds();
         if (hasCached) {
           setIsDeviceOffline(true);
@@ -1257,7 +1271,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Track ad playback when current ad changes
   useEffect(() => {
     if (currentAd && currentAd.adTitle && currentAd.adTitle !== 'No Ad') {
-      console.log(`🎬 Starting ad playback tracking: ${currentAd.adTitle}`);
+      // Only log ad tracking occasionally to reduce noise
+      if (Math.random() < 0.5) { // Log ~50% of ad tracking
+        log.adPlayback('Starting ad tracking', { 
+          adTitle: currentAd.adTitle,
+          duration: currentAd.duration
+        });
+      }
       setAdStartTime(new Date());
       trackAdPlayback(currentAd.adId, currentAd.adTitle, currentAd.duration, 0); // Start of ad playback
       
@@ -1270,7 +1290,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       
       // DON'T send any WebSocket updates yet - wait for video to actually load
       // The onLoadStart, onLoad, and onReadyForDisplay will handle the buffering states
-      console.log(`🎬 [AdPlayer] New ad loaded: ${currentAd.adTitle} - waiting for video to load before sending WebSocket updates`);
+      // Only log ad loading occasionally to reduce noise
+      if (Math.random() < 0.3) { // Log ~30% of ad loading
+        log.adPlayback('New ad loaded', { adTitle: currentAd.adTitle });
+      }
     }
   }, [currentAdIndex, currentAd?.adTitle, currentAd?.adId]);
 
@@ -1283,19 +1306,13 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     }
   }, [isOffline]);
 
-  // Debug logging
-  console.log('Current ad:', {
-    currentAdIndex,
-    isCompanyAd: currentAdIndex === -1,
-    adTitle: currentAd?.adTitle || 'No ad',
-    adId: currentAd?.adId || 'No ID',
-    duration: currentAd?.duration || 0,
-    mediaFile: currentAd?.mediaFile || 'No media',
-    totalAds: ads.length,
-    isOffline,
-    networkStatus,
-    adStartTime: adStartTime ? 'Set' : 'Not set'
-  });
+  // Debug logging - only log occasionally to reduce noise
+  if (Math.random() < 0.05) { // Log ~5% of renders
+    log.adPlayback('Ad state', {
+      adTitle: currentAd?.adTitle || 'No ad',
+      duration: currentAd?.duration || 0
+    });
+  }
 
   const handleVideoEnd = async () => {
     // End tracking for current ad
@@ -1537,19 +1554,23 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
         </View>
       )}
       
-      <TouchableOpacity 
-        style={styles.videoContainer}
-        onPress={isLocked ? undefined : handleScreenTap}
-        activeOpacity={isLocked ? 1 : 1}
-        disabled={isLocked}
-      >
+        <View 
+          style={[styles.videoContainer, isLocked && styles.fullscreenVideoContainer]}
+          pointerEvents={isLocked ? 'none' : 'auto'}
+        >
+          <TouchableOpacity 
+            onPress={isLocked ? undefined : handleScreenTap}
+            activeOpacity={isLocked ? 1 : 1}
+            disabled={isLocked}
+            style={{ flex: 1 }}
+          >
         <Video
           key={`${currentAd?.adId || 'no-ad'}-${retryCount}`} // Force re-render when switching ads or retrying
           ref={videoRef}
           source={{ uri: currentAd?.mediaFile || '' }}
-          style={styles.video}
+          style={isLocked ? styles.fullscreenVideo : styles.video}
           useNativeControls={false}
-          resizeMode={ResizeMode.COVER}
+          resizeMode={isLocked ? ResizeMode.CONTAIN : ResizeMode.COVER}
           shouldPlay={!isPaused}
           isLooping={false}
           onPlaybackStatusUpdate={(status) => {
@@ -1777,7 +1798,10 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
           onLoad={() => {
-            console.log('Video loaded successfully:', currentAd?.mediaFile);
+            // Only log video events occasionally to reduce noise
+            if (Math.random() < 0.3) { // Log ~30% of video events
+              log.adPlayback('Video loaded', { adTitle: currentAd?.adTitle });
+            }
             if (currentAd) {
               playbackWebSocketService.updatePlaybackDataAndSend({
                 adId: currentAd.adId,
@@ -1805,9 +1829,15 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
           onReadyForDisplay={() => {
-            console.log('Video ready for display:', currentAd?.mediaFile);
+            // Only log video events occasionally to reduce noise
+            if (Math.random() < 0.3) { // Log ~30% of video events
+              log.adPlayback('Video ready', { adTitle: currentAd?.adTitle });
+            }
             if (currentAd && !websocketUpdatesStarted) {
-              console.log('🎬 [AdPlayer] Video ready for display - but NOT starting progress yet, waiting for actual playback');
+              // Only log debug info occasionally
+              if (Math.random() < 0.1) { // Log ~10% of debug info
+                log.adPlayback('Video ready - waiting for playback');
+              }
               
               // Clear transitioning state - video is ready
               setIsTransitioning(false);
@@ -1842,6 +1872,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             }
           }}
         />
+          </TouchableOpacity>
+        </View>
         
         {/* Minimal Ad Info Overlay - Always visible */}
         <View style={styles.adInfoOverlay}>
@@ -1885,56 +1917,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                 Execute at: {new Date(syncData.executeAt).toLocaleTimeString()}
               </Text>
             )}
-          </View>
-        )}
-        
-        {isLocked && (
-          <View style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 9999,
-            elevation: 9999,
-          }}>
-            <View style={{ alignItems: 'center', padding: 20 }}>
-              <Text style={{
-                color: '#ff4444',
-                fontSize: 24,
-                fontWeight: 'bold',
-                marginBottom: 20,
-                textAlign: 'center'
-              }}>
-                🔒 SCREEN LOCKED
-              </Text>
-              <Text style={{
-                color: '#ffffff',
-                fontSize: 16,
-                textAlign: 'center',
-                marginBottom: 10
-              }}>
-                Screen locked by admin for safety
-              </Text>
-              <Text style={{
-                color: '#cccccc',
-                fontSize: 14,
-                textAlign: 'center',
-                marginBottom: 5
-              }}>
-                Ads continue playing - no user interaction allowed
-              </Text>
-              <Text style={{
-                color: '#cccccc',
-                fontSize: 12,
-                textAlign: 'center'
-              }}>
-                Contact administrator to unlock
-              </Text>
-            </View>
           </View>
         )}
         </View>
@@ -2005,8 +1987,6 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
             </View>
           </View>
         )}
-
-      </TouchableOpacity>
 
       {/* Controls */}
       {showControls && (
@@ -2099,8 +2079,23 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
+  fullscreenVideoContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 1000,
+  },
   video: {
     flex: 1,
+    backgroundColor: '#000',
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
     backgroundColor: '#000',
   },
   adInfoOverlay: {

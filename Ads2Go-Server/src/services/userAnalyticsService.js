@@ -108,15 +108,20 @@ class UserAnalyticsService {
   // Get user analytics data - formatted for GraphQL
   static async getUserAnalytics(userId, startDate, endDate, period) {
     try {
+      console.log('📊 getUserAnalytics called with:', { userId, startDate, endDate, period });
+      
       // Check cache first
       const cacheKey = this.getCacheKey(userId, startDate, endDate, period);
       const cachedData = this.getCachedData(cacheKey);
       if (cachedData) {
+        console.log('📊 Returning cached data');
         return cachedData;
       }
       
       // Check if we should return cumulative totals (for "All Devices" view)
-      const shouldReturnCumulative = !period || period === 'all' || period === 'cumulative';
+      // For 'all' period, we want to use the same logic as other periods but with wide date range
+      const shouldReturnCumulative = !period || period === 'cumulative';
+      const isAllPeriod = period === 'all';
       console.log('🔍 Period analysis:', {
         period: period,
         shouldReturnCumulative: shouldReturnCumulative,
@@ -132,6 +137,10 @@ class UserAnalyticsService {
         // For cumulative data, use a very wide date range to get all data
         defaultStartDate = new Date('2020-01-01'); // Very early date
         defaultEndDate = now;
+      } else if (isAllPeriod) {
+        // For 'all' period, use a very wide date range to get all data
+        defaultStartDate = new Date('2020-01-01'); // Very early date
+        defaultEndDate = new Date('2030-12-31'); // Very far future date
       } else if (startDate && !isNaN(new Date(startDate).getTime()) && endDate && !isNaN(new Date(endDate).getTime())) {
         // Use provided dates
         defaultStartDate = new Date(startDate);
@@ -170,11 +179,34 @@ class UserAnalyticsService {
       let filteredTotals = null;
       
       if (shouldReturnCumulative) {
-        // For "All Devices" view, use ONLY UserAnalytics collection data
-        console.log('📊 Using UserAnalytics collection data for "All Devices" view');
-        console.log('📊 Data source: UserAnalytics collection ONLY (no DeviceDataHistoryV2 queries)');
+        // For "All Devices" view, use fresh data from DeviceDataHistoryV2 to ensure accuracy
+        console.log('📊 Using fresh DeviceDataHistoryV2 data for "All Devices" view');
+        console.log('📊 Data source: DeviceDataHistoryV2 (fresh data, not cached UserAnalytics)');
         
-        // Use the cumulative totals directly from UserAnalytics collection
+        // Always sync with fresh data from DeviceDataHistoryV2 for accuracy
+        const syncResult = await this.syncUserAnalyticsFromHistory(userId, defaultStartDate, defaultEndDate);
+        console.log('🔍 Fresh sync result for "All Devices":', {
+          success: syncResult.success,
+          hasData: !!syncResult.data,
+          message: syncResult.message
+        });
+        
+        if (syncResult.success && syncResult.data) {
+          // Use fresh synced totals
+          filteredTotals = {
+            totalAdImpressions: syncResult.data.totalAdImpressions || 0,
+            totalAdPlays: syncResult.data.totalAdPlays || 0,
+            totalAdPlayTime: syncResult.data.totalAdPlayTime || 0,
+            totalQRScans: syncResult.data.totalQRScans || 0,
+            totalMaterials: syncResult.data.totalMaterials || 0,
+            totalDevices: syncResult.data.totalDevices || 0
+          };
+          
+          console.log('📊 Fresh DeviceDataHistoryV2 totals (ALL DEVICES):', filteredTotals);
+          console.log('📊 Fresh Completion Rate:', syncResult.data.averageAdCompletionRate || 0);
+          console.log('📊 Fresh QR Conversion Rate:', syncResult.data.qrScanConversionRate || 0);
+        } else {
+          // Fallback to UserAnalytics if sync fails
         filteredTotals = {
           totalAdImpressions: userAnalytics.totalAdImpressions || 0,
           totalAdPlays: userAnalytics.totalAdPlays || 0,
@@ -183,10 +215,8 @@ class UserAnalyticsService {
           totalMaterials: userAnalytics.totalMaterials || 0,
           totalDevices: userAnalytics.totalDevices || 0
         };
-        
-        console.log('📊 UserAnalytics cumulative totals (ALL DEVICES):', filteredTotals);
-        console.log('📊 Completion Rate from UserAnalytics:', userAnalytics.averageAdCompletionRate || 0);
-        console.log('📊 QR Conversion Rate from UserAnalytics:', userAnalytics.qrScanConversionRate || 0);
+          console.log('⚠️ Fallback to UserAnalytics data:', filteredTotals);
+        }
       } else {
         // Sync with fresh data from DeviceDataHistoryV2 to ensure accuracy
         console.log('🔄 Syncing UserAnalytics with fresh data from DeviceDataHistoryV2...');
@@ -237,7 +267,20 @@ class UserAnalyticsService {
         }
       }
 
-      // Filter ads by date range if provided
+      // For "all" period, sync with fresh data to get accurate QR scans
+      if (isAllPeriod) {
+        console.log('📊 Syncing data for "all" period');
+        const syncResult = await this.syncUserAnalyticsFromHistory(userId, defaultStartDate, defaultEndDate);
+        if (syncResult.success) {
+          // Refresh the userAnalytics with synced data - fetch directly from DB
+          const UserAnalytics = require('../models/userAnalytics');
+          userAnalytics = await UserAnalytics.findOne({ userId });
+          console.log('✅ UserAnalytics synced successfully for "all" period');
+          console.log('🔍 UserAnalytics ads:', userAnalytics.ads.map(ad => ({ adId: ad.adId, totalQRScans: ad.totalQRScans })));
+        }
+      }
+
+      // Filter ads by date range if provided, and filter out ads with no data
       let filteredAds = userAnalytics.ads;
       if (defaultStartDate && defaultEndDate) {
         filteredAds = userAnalytics.ads.filter(ad => {
@@ -245,29 +288,46 @@ class UserAnalyticsService {
           return adDate >= defaultStartDate && adDate <= defaultEndDate;
         });
       }
+      
+      // Filter out ads with no meaningful data (QR scans, impressions, etc.)
+      console.log('📊 Original filteredAds count:', filteredAds.length);
+      console.log('📊 Original filteredAds:', filteredAds.map(ad => ({ adId: ad.adId, totalQRScans: ad.totalQRScans, totalAdImpressions: ad.totalAdImpressions })));
+      
+      filteredAds = filteredAds.filter(ad => {
+        return (ad.totalQRScans > 0) || (ad.totalAdImpressions > 0) || (ad.totalAdPlayTime > 0);
+      });
+      
+      console.log('📊 After filtering, filteredAds count:', filteredAds.length);
+      console.log('📊 After filtering, filteredAds:', filteredAds.map(ad => ({ adId: ad.adId, totalQRScans: ad.totalQRScans, totalAdImpressions: ad.totalAdImpressions })));
 
       // Format data for GraphQL schema
       const data = {
         summary: {
-          // For "All Devices" view, use only UserAnalytics collection data
-          totalAdImpressions: shouldReturnCumulative ? (userAnalytics.totalAdImpressions || 0) : 
-            ((filteredTotals && filteredTotals.totalAdImpressions > 0) ? filteredTotals.totalAdImpressions : (userAnalytics.totalAdImpressions || 0)),
-          totalAdsPlayed: shouldReturnCumulative ? (userAnalytics.totalAdPlays || 0) : 
-            ((filteredTotals && filteredTotals.totalAdPlays > 0) ? filteredTotals.totalAdPlays : (userAnalytics.totalAdPlays || 0)),
-          totalDisplayTime: shouldReturnCumulative ? (userAnalytics.totalAdPlayTime || 0) : 
-            ((filteredTotals && filteredTotals.totalAdPlayTime > 0) ? filteredTotals.totalAdPlayTime : (userAnalytics.totalAdPlayTime || 0)),
+          // Always prefer fresh filteredTotals data when available, fallback to UserAnalytics
+          totalAdImpressions: (filteredTotals && filteredTotals.totalAdImpressions > 0)
+            ? filteredTotals.totalAdImpressions
+            : ((userAnalytics.summary && userAnalytics.summary.totalAdImpressions) || userAnalytics.totalAdImpressions || 0),
+          totalAdsPlayed: (filteredTotals && filteredTotals.totalAdPlays > 0)
+            ? filteredTotals.totalAdPlays
+            : ((userAnalytics.summary && userAnalytics.summary.totalAdPlays) || userAnalytics.totalAdPlays || 0),
+          totalDisplayTime: (filteredTotals && filteredTotals.totalAdPlayTime > 0)
+            ? filteredTotals.totalAdPlayTime
+            : ((userAnalytics.summary && userAnalytics.summary.totalAdPlayTime) || userAnalytics.totalAdPlayTime || 0),
           averageCompletionRate: userAnalytics.averageAdCompletionRate || 0,
           totalAds: filteredAds ? filteredAds.length : 0,
           activeAds: filteredAds ? filteredAds.filter(ad => ad.isActive).length : 0,
-          totalMaterials: shouldReturnCumulative ? (userAnalytics.totalMaterials || 0) : 
-            ((filteredTotals && filteredTotals.totalMaterials > 0) ? filteredTotals.totalMaterials : (userAnalytics.totalMaterials || 0)),
-          totalDevices: shouldReturnCumulative ? (userAnalytics.totalDevices || 0) : 
-            ((filteredTotals && filteredTotals.totalDevices > 0) ? filteredTotals.totalDevices : (userAnalytics.totalDevices || 0)),
-          totalQRScans: shouldReturnCumulative ? (userAnalytics.totalQRScans || 0) : 
-            ((filteredTotals && filteredTotals.totalQRScans > 0) ? filteredTotals.totalQRScans : (userAnalytics.totalQRScans || 0)),
+          totalMaterials: (filteredTotals && filteredTotals.totalMaterials > 0)
+            ? filteredTotals.totalMaterials
+            : (userAnalytics.totalMaterials || 0),
+          totalDevices: (filteredTotals && filteredTotals.totalDevices > 0)
+            ? filteredTotals.totalDevices
+            : ((userAnalytics.summary && userAnalytics.summary.totalDevices) || userAnalytics.totalDevices || 0),
+          totalQRScans: (filteredTotals && filteredTotals.totalQRScans > 0)
+            ? filteredTotals.totalQRScans
+            : ((userAnalytics.summary && userAnalytics.summary.totalQRScans) || userAnalytics.totalQRScans || 0),
           qrScanConversionRate: userAnalytics.qrScanConversionRate || 0
         },
-        adPerformance: (filteredAds || []).map(ad => ({
+        adPerformance: (filteredAds && filteredAds.length > 0) ? filteredAds.map(ad => ({
           adId: ad.adId ? ad.adId.toString() : '',
           adTitle: ad.adTitle || '',
           totalMaterials: ad.totalMaterials || 0,
@@ -288,19 +348,65 @@ class UserAnalyticsService {
             averageCompletionRate: material.averageAdCompletionRate || 0,
             lastActivity: material.lastActivity || null
           }))
-        })),
-        dailyStats: [], // Will be populated from DeviceDataHistoryV2
+        })) : [], // Always use userAnalytics.ads for consistency
+        dailyStats: Array.isArray(userAnalytics.dailyStats) && shouldReturnCumulative ? userAnalytics.dailyStats : [],
         deviceStats: [], // Will be populated from DeviceDataHistoryV2
-        period: shouldReturnCumulative ? 'all' : (period || '7d'),
+        period: shouldReturnCumulative ? 'all' : (isAllPeriod ? 'all' : (period || '7d')),
         startDate: defaultStartDate,
         endDate: defaultEndDate,
         lastUpdated: userAnalytics.lastUpdated || new Date().toISOString(),
         isActive: userAnalytics.isActive !== undefined ? userAnalytics.isActive : true
       };
 
-      // For "All Devices" view, use only UserAnalytics data - skip DeviceDataHistoryV2 queries
+      // Always get device stats for the dropdown, regardless of period
+      if (defaultStartDate && defaultEndDate) {
+        const deviceStats = await this.getDeviceStatsFromHistory(userId, defaultStartDate, defaultEndDate);
+        data.deviceStats = deviceStats;
+        console.log('📊 Device stats populated:', deviceStats.length, 'devices found');
+        
+        // Note: Summary calculation will be done after adPerformance is populated
+      }
+
+      // Calculate summary from deviceStats for accuracy (after deviceStats is populated)
+      if (data.deviceStats && data.deviceStats.length > 0) {
+        const calculatedSummary = {
+          totalAdImpressions: data.deviceStats.reduce((sum, device) => sum + (device.impressions || 0), 0),
+          totalAdsPlayed: data.deviceStats.reduce((sum, device) => sum + (device.adsPlayed || 0), 0),
+          totalDisplayTime: data.deviceStats.reduce((sum, device) => sum + (device.displayTime || 0), 0),
+          totalQRScans: data.deviceStats.reduce((sum, device) => sum + (device.qrScans || 0), 0),
+          totalDevices: data.deviceStats.length,
+          totalMaterials: data.deviceStats.length,
+          totalAds: data.adPerformance ? data.adPerformance.length : 0,
+          activeAds: data.adPerformance ? data.adPerformance.length : 0
+        };
+        
+        console.log('📊 Calculated summary from device stats:', calculatedSummary);
+        
+        // Update summary with calculated values from deviceStats for accuracy
+        data.summary.totalAdImpressions = calculatedSummary.totalAdImpressions;
+        data.summary.totalAdsPlayed = calculatedSummary.totalAdsPlayed;
+        data.summary.totalDisplayTime = calculatedSummary.totalDisplayTime;
+        data.summary.totalQRScans = calculatedSummary.totalQRScans;
+        data.summary.totalDevices = calculatedSummary.totalDevices;
+        data.summary.totalMaterials = calculatedSummary.totalMaterials;
+        data.summary.totalAds = calculatedSummary.totalAds;
+        data.summary.activeAds = calculatedSummary.activeAds;
+        
+        // Calculate average completion rate
+        const totalPlayTime = calculatedSummary.totalDisplayTime;
+        const totalPlays = calculatedSummary.totalAdsPlayed;
+        data.summary.averageCompletionRate = totalPlays > 0 ? (totalPlayTime / (totalPlays * 30)) * 100 : 0; // Assuming 30s average ad duration
+        
+        // Calculate QR scan conversion rate
+        data.summary.qrScanConversionRate = calculatedSummary.totalAdImpressions > 0 ? 
+          (calculatedSummary.totalQRScans / calculatedSummary.totalAdImpressions) * 100 : 0;
+        
+        console.log('📊 Updated summary with calculated values from device stats:', data.summary);
+      }
+
+      // For "All Devices" view, use only UserAnalytics data for summary - but still get device stats
       if (shouldReturnCumulative) {
-        console.log('📊 Skipping DeviceDataHistoryV2 queries for "All Devices" view');
+        console.log('📊 Using UserAnalytics collection data for "All Devices" view');
         console.log('📊 Summary data source: UserAnalytics collection ONLY');
         console.log('📊 Final summary for ALL DEVICES:', {
           totalAdImpressions: data.summary.totalAdImpressions,
@@ -313,17 +419,22 @@ class UserAnalyticsService {
           qrScanConversionRate: data.summary.qrScanConversionRate
         });
         data.dailyStats = [];
-        data.deviceStats = [];
+        // deviceStats already populated above
+      } else if (isAllPeriod) {
+        // For "all" period, use the same logic as other periods (30d, 7d, etc.) but with wide date range
+        // This ensures we get the same data structure and QR scan calculations
+        if (defaultStartDate && defaultEndDate) {
+          const dailyStats = await this.getDailyStatsFromHistory(userId, defaultStartDate, defaultEndDate);
+          data.dailyStats = dailyStats;
+        }
+        // deviceStats already populated above
       } else {
         // Get daily stats from DeviceDataHistoryV2 for filtered periods
         if (defaultStartDate && defaultEndDate) {
           const dailyStats = await this.getDailyStatsFromHistory(userId, defaultStartDate, defaultEndDate);
           data.dailyStats = dailyStats;
         }
-
-        // Get device stats from DeviceDataHistoryV2 for filtered periods
-        const deviceStats = await this.getDeviceStatsFromHistory(userId, defaultStartDate, defaultEndDate);
-        data.deviceStats = deviceStats;
+        // deviceStats already populated above
       }
 
       // Debug logging to track data flow
@@ -350,97 +461,81 @@ class UserAnalyticsService {
     }
   }
 
-  // Get daily stats from DeviceDataHistoryV2 - optimized version
+  // Get daily stats from DeviceDataHistoryV2 filtered by userId
   static async getDailyStatsFromHistory(userId, startDate, endDate) {
     try {
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const Ad = require('../models/Ad');
-      
-      // Get user's PAID, DEPLOYED ads only - optimized query
-      const userAds = await Ad.find({ 
-        userId: userId,
-        paymentStatus: 'PAID',
-        adStatus: 'ACTIVE',
-        status: { $in: ['RUNNING', 'APPROVED'] }
-      }).select('_id');
-      
-      if (!userAds || userAds.length === 0) {
-        return [];
-      }
 
-      const userAdIds = userAds.map(ad => ad._id.toString());
-
-      // Use aggregation pipeline for better performance
-      const historicalData = await DeviceDataHistoryV2.aggregate([
-        {
-          $match: {
-            'dailyData.date': {
-              $gte: startDate,
-              $lte: endDate
-            }
-          }
-        },
-        {
-          $project: {
+      // Use a facet to gather user-scoped ad performance and qr scans per day
+      const [result] = await DeviceDataHistoryV2.aggregate([
+        { $match: { 'dailyData.date': { $gte: startDate, $lte: endDate } } },
+        { $project: {
             dailyData: {
               $filter: {
                 input: '$dailyData',
-                cond: {
-                  $and: [
-                    { $gte: ['$$this.date', startDate] },
-                    { $lte: ['$$this.date', endDate] }
-                  ]
-                }
+                cond: { $and: [ { $gte: ['$$this.date', startDate] }, { $lte: ['$$this.date', endDate] } ] }
               }
             }
           }
         },
-        {
-          $unwind: '$dailyData'
-        },
-        {
-          $group: {
-            _id: {
-              $dateToString: {
-                format: '%Y-%m-%d',
-                date: '$dailyData.date'
-              }
-            },
-            impressions: { $sum: '$dailyData.totalAdImpressions' },
-            adsPlayed: { $sum: '$dailyData.totalAdPlays' },
-            displayTime: { $sum: '$dailyData.totalAdPlayTime' },
-            qrScans: { $sum: '$dailyData.totalQRScans' },
-            avgCompletionRate: { $avg: '$dailyData.averageCompletionRate' }
+        { $facet: {
+            adPerf: [
+              { $unwind: '$dailyData' },
+              { $unwind: '$dailyData.adPerformance' },
+              { $match: { 'dailyData.adPerformance.userId': userId } },
+              { $group: {
+                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.date' } },
+                  impressions: { $sum: '$dailyData.adPerformance.impressions' },
+                  adsPlayed: { $sum: '$dailyData.adPerformance.playCount' },
+                  displayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                  completionRate: { $avg: '$dailyData.adPerformance.completionRate' }
+                }
+              },
+              { $sort: { _id: 1 } }
+            ],
+            qr: [
+              { $unwind: '$dailyData' },
+              { $unwind: { path: '$dailyData.qrScans', preserveNullAndEmptyArrays: true } },
+              { $match: { 'dailyData.qrScans.userId': userId } },
+              { $group: {
+                  _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.qrScans.scanTimestamp' } },
+                  qrScans: { $sum: 1 }
+                }
+              },
+              { $sort: { _id: 1 } }
+            ]
           }
-        },
-        {
-          $sort: { '_id': 1 }
         }
       ]);
 
-      // Convert aggregation result to expected format
-      return historicalData.map(stat => ({
-        date: stat._id,
-        impressions: stat.impressions || 0,
-        adsPlayed: stat.adsPlayed || 0,
-        displayTime: stat.displayTime || 0,
-        qrScans: stat.qrScans || 0,
-        completionRate: stat.avgCompletionRate || 0
-      }));
+      const adPerfByDate = new Map((result?.adPerf || []).map(d => [d._id, d]));
+      const qrByDate = new Map((result?.qr || []).map(d => [d._id, d.qrScans]));
 
+      const dates = Array.from(new Set([ ...adPerfByDate.keys(), ...qrByDate.keys() ])).sort();
+      return dates.map(dateStr => {
+        const ap = adPerfByDate.get(dateStr) || {};
+        return {
+          date: dateStr,
+          impressions: ap.impressions || 0,
+          adsPlayed: ap.adsPlayed || 0,
+          displayTime: ap.displayTime || 0,
+          qrScans: qrByDate.get(dateStr) || 0,
+          completionRate: ap.completionRate || 0
+        };
+      });
     } catch (error) {
       console.error('Error getting daily stats from history:', error);
       return [];
     }
   }
 
-  // Get device stats from DeviceDataHistoryV2
-  static async getDeviceStatsFromHistory(userId, startDate, endDate) {
+  // Get ad performance data from device stats when ads array is empty
+  static async getAdPerformanceFromDeviceStats(userId, startDate, endDate) {
     try {
-      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
-      const Ad = require('../models/Ad');
+      console.log('📊 getAdPerformanceFromDeviceStats called for user:', userId, 'with date range:', startDate, 'to', endDate);
       
-      // Get user's PAID, DEPLOYED ads only
+      // Get user's ads
+      const Ad = require('../models/Ad');
       const userAds = await Ad.find({ 
         userId: userId,
         paymentStatus: 'PAID',
@@ -448,87 +543,271 @@ class UserAnalyticsService {
         status: { $in: ['RUNNING', 'APPROVED'] }
       });
       
-      console.log('📊 Found user ads:', userAds.length);
-      
-      if (!userAds || userAds.length === 0) {
-        console.log('❌ No user ads found');
+      if (userAds.length === 0) {
+        console.log('📊 No active ads found for user');
         return [];
       }
 
-      // Get all materials associated with user's ads using targetDevices
-      const materialIds = [];
-      for (const ad of userAds) {
-        console.log(`📊 Processing ad: ${ad._id}, materialId: ${ad.materialId?.length || 0}, targetDevices: ${ad.targetDevices?.length || 0}`);
-        if (ad.targetDevices && ad.targetDevices.length > 0) {
-          // Multi-device ad: use all target devices
-          ad.targetDevices.forEach(materialId => {
-            if (!materialIds.includes(materialId.toString())) {
-              materialIds.push(materialId.toString());
-              console.log(`   ➕ Added target device: ${materialId}`);
+      // Get all devices that have data (don't filter by date range for device discovery)
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const devicesWithData = await DeviceDataHistoryV2.find({
+        // Find devices that have any data for this user, regardless of date
+        'dailyData.adPerformance.userId': userId
+      });
+
+      console.log('📊 Found devices with data:', devicesWithData.length);
+      console.log('📊 Device IDs:', devicesWithData.map(d => d.materialId));
+
+      const adPerformanceMap = new Map();
+
+      // Initialize ad performance for each user ad
+      userAds.forEach(ad => {
+        adPerformanceMap.set(ad._id.toString(), {
+          adId: ad._id.toString(),
+          adTitle: ad.title || ad.adTitle || 'Unknown Ad',
+          totalMaterials: 0,
+          totalDevices: 0,
+          totalAdPlayTime: 0,
+          totalAdImpressions: 0,
+          totalQRScans: 0,
+          averageAdCompletionRate: 0,
+          qrScanConversionRate: 0,
+          lastUpdated: new Date().toISOString(),
+          materials: []
+        });
+      });
+
+      // Aggregate data from each device
+      for (const device of devicesWithData) {
+        try {
+          // For "All Time" data, don't pass date parameters to getDeviceSpecificAnalytics
+          const deviceAnalytics = await this.getDeviceSpecificAnalytics(userId, device.materialId);
+          
+          if (deviceAnalytics.success && deviceAnalytics.deviceAnalytics) {
+            const deviceData = deviceAnalytics.deviceAnalytics;
+            
+            // Process ad performance data from this device
+            if (deviceData.adPerformance && deviceData.adPerformance.length > 0) {
+              deviceData.adPerformance.forEach(deviceAd => {
+                const adId = deviceAd.adId;
+                if (adPerformanceMap.has(adId)) {
+                  const adPerf = adPerformanceMap.get(adId);
+                  
+                  // Aggregate totals
+                  adPerf.totalMaterials += 1; // Each device counts as one material
+                  adPerf.totalDevices += 1;
+                  adPerf.totalAdPlayTime += deviceAd.totalViewTime || 0;
+                  adPerf.totalAdImpressions += deviceAd.totalImpressions || 0;
+                  
+                  // Calculate QR scans from qrScanBreakdown
+                  if (deviceData.qrScanBreakdown && deviceData.qrScanBreakdown.length > 0) {
+                    const qrBreakdown = deviceData.qrScanBreakdown.find(qr => qr.adId === adId);
+                    if (qrBreakdown) {
+                      adPerf.totalQRScans += qrBreakdown.totalScans || 0;
+                    }
+                  }
+                  
+                  // Add material info
+                  adPerf.materials.push({
+                    materialId: device.materialId,
+                    materialName: device.materialId,
+                    carGroupId: device.carGroupId || null,
+                    totalAdPlayTime: deviceAd.totalViewTime || 0,
+                    totalAdImpressions: deviceAd.totalImpressions || 0,
+                    totalQRScans: deviceData.qrScanBreakdown?.find(qr => qr.adId === adId)?.totalScans || 0,
+                    averageCompletionRate: deviceAd.averageCompletionRate || 0,
+                    lastActivity: deviceAd.lastPlayed || null
+                  });
+                }
+              });
             }
-          });
-        } else if (ad.materialId && ad.materialId.length > 0) {
-          // Multi-device ad: use all materials from materialId array
-          ad.materialId.forEach(materialId => {
-            if (!materialIds.includes(materialId.toString())) {
-              materialIds.push(materialId.toString());
-              console.log(`   ➕ Added material from materialId array: ${materialId}`);
-            }
-          });
+          }
+        } catch (error) {
+          console.error(`Error processing device ${device.materialId}:`, error);
+          // Continue with other devices
         }
       }
 
-      // TEMPORARY FIX: Get all devices since there's a mismatch between ad materialIds and DeviceDataHistoryV2 materialIds
-      // TODO: Implement proper mapping between ad materialIds (ObjectIds) and DeviceDataHistoryV2 materialIds (strings)
-      const historicalData = await DeviceDataHistoryV2.find({
-        'dailyData.date': {
-          $gte: startDate,
-          $lte: endDate
+      // Calculate averages and finalize data
+      const result = Array.from(adPerformanceMap.values()).map(adPerf => {
+        // Calculate average completion rate
+        if (adPerf.totalAdPlayTime > 0 && adPerf.totalAdImpressions > 0) {
+          adPerf.averageAdCompletionRate = (adPerf.totalAdPlayTime / (adPerf.totalAdImpressions * 30)) * 100; // Assuming 30s average ad duration
         }
+        
+        // Calculate QR scan conversion rate
+        if (adPerf.totalAdImpressions > 0) {
+          adPerf.qrScanConversionRate = (adPerf.totalQRScans / adPerf.totalAdImpressions) * 100;
+        }
+        
+        return adPerf;
       });
 
-      // Aggregate device stats - group by materialId to get unique devices
-      const deviceStatsMap = new Map();
+      console.log('📊 Ad performance from device stats result:', result.length, 'ads');
+      return result;
+    } catch (error) {
+      console.error('Error getting ad performance from device stats:', error);
+      return [];
+    }
+  }
+
+  // Get device status information using real-time WebSocket status (same as admin)
+  static async getDeviceStatusInfo(materialIds) {
+    try {
+      // Import the real-time device status service singleton (same as admin system)
+      const deviceStatusService = require('./deviceStatusService');
+      const DeviceTracking = require('../models/deviceTracking');
+      const Tablet = require('../models/Tablet');
       
-      historicalData.forEach(materialData => {
-        const materialId = materialData.materialId;
-        
-        if (!deviceStatsMap.has(materialId)) {
-          deviceStatsMap.set(materialId, {
-            deviceId: materialId,
-            materialId: materialId,
-            impressions: 0,
-            adsPlayed: 0,
-            displayTime: 0,
-            lastActivity: null,
-            isOnline: false,
-            qrScans: 0
-          });
-        }
-        
-        const stats = deviceStatsMap.get(materialId);
-        
-        if (materialData.dailyData && materialData.dailyData.length > 0) {
-          materialData.dailyData.forEach(dailyData => {
-            stats.impressions += dailyData.totalAdImpressions || 0;
-            stats.adsPlayed += dailyData.totalAdPlays || 0;
-            stats.displayTime += dailyData.totalAdPlayTime || 0;
-            stats.qrScans += dailyData.totalQRScans || 0;
-            
-            // Update last activity to the most recent date
-            if (!stats.lastActivity || new Date(dailyData.date) > new Date(stats.lastActivity)) {
-              stats.lastActivity = dailyData.date;
-            }
-            
-            // Device is online if it has recent activity
-            if (dailyData.isDisplaying || dailyData.totalAdPlays > 0) {
-              stats.isOnline = true;
+      // Get registered devices from tablet system
+      const registeredDevices = new Map();
+      const tablets = await Tablet.find({});
+      tablets.forEach(tablet => {
+        tablet.tablets.forEach(tabletDevice => {
+          if (tabletDevice.deviceId) {
+            registeredDevices.set(tabletDevice.deviceId, {
+              materialId: tablet.materialId,
+              carGroupId: tablet.carGroupId,
+              slotNumber: tabletDevice.tabletNumber,
+              status: tabletDevice.status,
+              lastSeen: tabletDevice.lastSeen
+            });
+          }
+        });
+      });
+
+      // Get device tracking records for the material IDs
+      const allDevices = await DeviceTracking.find({ 
+        materialId: { $in: materialIds }
+      });
+
+      // Create status map using real-time WebSocket status
+      const statusMap = new Map();
+      
+      allDevices.forEach(device => {
+        if (device.slots && device.slots.length > 0) {
+          // Process each slot with real-time status
+          device.slots.forEach(slot => {
+            const deviceInfo = registeredDevices.get(slot.deviceId);
+            if (deviceInfo && materialIds.includes(device.materialId)) {
+              // Use real-time WebSocket status (same as admin system)
+              console.log(`🔍 [UserAnalytics] Checking status for deviceId: ${slot.deviceId}, materialId: ${device.materialId}`);
+              const realTimeStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+              let isOnline = realTimeStatus.isOnline || false;
+              
+              // Apply same timeout logic as admin system (120 seconds)
+              const now = new Date();
+              const lastSeen = new Date(slot.lastSeen || device.lastSeen);
+              const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
+              
+              // Override online status if timeout threshold is exceeded (same as admin)
+              if (timeSinceLastSeen > 120) {
+                isOnline = false;
+                console.log(`🔍 [UserAnalytics] Overriding ${slot.deviceId} to OFFLINE due to timeout: ${timeSinceLastSeen}s > 120s`);
+              }
+              
+              console.log(`🔍 [UserAnalytics] Real-time status for ${slot.deviceId}:`, {
+                isOnline: isOnline,
+                originalStatus: realTimeStatus.isOnline,
+                source: realTimeStatus.source,
+                confidence: realTimeStatus.confidence,
+                lastSeen: realTimeStatus.lastSeen,
+                timeSinceLastSeen: timeSinceLastSeen
+              });
+              
+              const slotStatus = {
+                deviceId: slot.deviceId,
+                materialId: device.materialId,
+                slotNumber: slot.slotNumber,
+                isOnline: isOnline,
+                lastSeen: realTimeStatus.lastSeen || device.lastSeen,
+                displayStatus: isOnline ? 'ONLINE' : 'OFFLINE',
+                statusSource: realTimeStatus.source || 'database' // Track where status came from
+              };
+              
+              if (!statusMap.has(device.materialId)) {
+                statusMap.set(device.materialId, {
+                  materialId: device.materialId,
+                  slots: []
+                });
+              }
+              
+              statusMap.get(device.materialId).slots.push(slotStatus);
+              
+              console.log(`📊 [UserAnalytics] Device ${slot.deviceId} (${device.materialId}): ${isOnline ? 'ONLINE' : 'OFFLINE'} (source: ${realTimeStatus.source})`);
             }
           });
         }
       });
 
-      return Array.from(deviceStatsMap.values());
+      return statusMap;
+    } catch (error) {
+      console.error('Error getting device status info:', error);
+      return new Map();
+    }
+  }
+
+  // Get device stats from DeviceDataHistoryV2 filtered by userId
+  static async getDeviceStatsFromHistory(userId, startDate, endDate) {
+    try {
+      console.log('📊 getDeviceStatsFromHistory - Using individual device API approach for 100% consistency');
+      
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+
+      // Get all devices that have data in the date range
+      const devicesWithData = await DeviceDataHistoryV2.find({
+        'dailyData.date': { $gte: startDate, $lte: endDate }
+      });
+
+      console.log('📊 Found devices with data:', devicesWithData.length);
+      console.log('📊 Device IDs:', devicesWithData.map(d => d.materialId));
+
+      // Get device status information for all devices
+      const materialIds = devicesWithData.map(d => d.materialId);
+      const deviceStatusMap = await this.getDeviceStatusInfo(materialIds);
+
+      const result = [];
+
+      // For each device, call getDeviceSpecificAnalytics to get consistent data
+      for (const device of devicesWithData) {
+        try {
+          console.log(`📊 Getting analytics for device: ${device.materialId}`);
+          
+          // Use the same method as individual device API for 100% consistency
+          const deviceAnalytics = await this.getDeviceSpecificAnalytics(userId, device.materialId, startDate, endDate);
+          
+          if (deviceAnalytics.success && deviceAnalytics.deviceAnalytics) {
+            const totals = deviceAnalytics.deviceAnalytics.totals;
+            
+            // Only include devices that have actual data
+            if (totals.totalAdPlays > 0 || totals.totalQRScans > 0) {
+              // Get device status information
+              const deviceStatus = deviceStatusMap.get(device.materialId);
+              
+              result.push({
+                deviceId: device.materialId,
+                materialId: device.materialId,
+                impressions: totals.totalAdImpressions,
+                adsPlayed: totals.totalAdPlays,
+                displayTime: totals.totalAdPlayTime,
+                lastActivity: deviceAnalytics.deviceAnalytics.dailyBreakdown?.length > 0 ? 
+                  new Date(Math.max(...deviceAnalytics.deviceAnalytics.dailyBreakdown.map(d => new Date(d.date)))) : null,
+                isOnline: deviceStatus ? deviceStatus.slots.some(slot => slot.isOnline) : false, // Check if any slot is online
+                deviceStatus: deviceStatus || null, // Add device status information
+                qrScans: totals.totalQRScans
+              });
+
+              console.log(`📊 Device ${device.materialId}: ${totals.totalAdPlays} plays, ${totals.totalQRScans} QR scans, Status: ${deviceStatus ? 'Available' : 'Unknown'}`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error getting analytics for device ${device.materialId}:`, error);
+          // Continue with other devices
+        }
+      }
+
+      console.log('📊 Final device stats result:', result.length, 'devices');
+      return result;
     } catch (error) {
       console.error('Error getting device stats from history:', error);
       return [];
@@ -1127,6 +1406,13 @@ class UserAnalyticsService {
       // Fetch fresh data from history
       const freshData = await this.fetchAndUpdateUserAnalyticsFromHistory(userId, defaultStartDate, defaultEndDate);
       
+      console.log('🔍 Fresh Data from History:', {
+        success: freshData.success,
+        adsCount: freshData.ads?.length || 0,
+        totalQRScans: freshData.totalQRScans,
+        dateRange: freshData.dateRange
+      });
+      
       if (!freshData.success) {
         return freshData;
       }
@@ -1164,29 +1450,51 @@ class UserAnalyticsService {
       // userAnalytics.averageAdCompletionRate = freshData.averageAdCompletionRate;
       // userAnalytics.qrScanConversionRate = freshData.qrScanConversionRate;
       
+      // Update the ads array with fresh ad performance data
+      if (freshData.ads && freshData.ads.length > 0) {
+        // Calculate QR scans for each ad
+        const adIds = freshData.ads.map(ad => ad.adId);
+        const qrScanData = await this.getTotalQRScans(userId, defaultStartDate, defaultEndDate);
+        
+        console.log('🔍 QR Scan Data:', {
+          success: qrScanData.success,
+          totalScans: qrScanData.totalScans,
+          adsCount: qrScanData.ads?.length,
+          ads: qrScanData.ads
+        });
+        
+        userAnalytics.ads = freshData.ads.map(ad => {
+          // Find QR scan data for this ad
+          const adQRScans = qrScanData.success && qrScanData.ads ? 
+            qrScanData.ads.find(qr => qr.adId === ad.adId) : null;
+          
+          console.log(`🔍 Ad ${ad.adId} QR Scan data:`, {
+            found: !!adQRScans,
+            totalScans: adQRScans?.totalScans
+          });
+          
+          return {
+            adId: ad.adId,
+            adTitle: ad.adTitle,
+            totalMaterials: 1, // Each ad has at least one material
+            totalDevices: 1, // Each ad has at least one device
+            totalAdPlayTime: ad.totalViewTime || 0,
+            totalAdImpressions: ad.impressions || 0,
+            totalQRScans: adQRScans ? adQRScans.totalScans : 0,
+            averageAdCompletionRate: ad.completionRate || 0,
+            qrScanConversionRate: (ad.impressions > 0 && adQRScans) ? (adQRScans.totalScans / ad.impressions) * 100 : 0,
+            lastUpdated: new Date().toISOString(),
+            materials: [] // Will be populated separately
+          };
+        });
+      }
+      
       // Only update the timestamp to indicate when the sync happened
       userAnalytics.lastUpdated = new Date();
       userAnalytics.updatedAt = new Date();
 
-      // Update ads array
-      userAnalytics.ads = freshData.ads.map(ad => ({
-        adId: ad.adId,
-        adTitle: ad.adTitle,
-        totalMaterials: ad.totalMaterials,
-        totalDevices: 0, // This would need to be calculated from materials
-        totalAdPlayTime: ad.totalViewTime,
-        totalAdImpressions: ad.totalImpressions,
-        totalQRScans: 0, // This would need to be calculated from materials
-        averageAdCompletionRate: ad.completionRate,
-        qrScanConversionRate: 0, // This would need to be calculated
-        materials: [], // This would need to be populated from materials data
-        materialPerformance: [],
-        errorLogs: [],
-        isActive: true,
-        lastUpdated: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }));
+      // Save the updated userAnalytics document
+      await userAnalytics.save();
 
       userAnalytics.totalAds = userAnalytics.ads.length;
 
@@ -1335,14 +1643,14 @@ class UserAnalyticsService {
           totalDays: filteredDailyData.length
         },
 
-        // Aggregated metrics from filtered data
+        // Aggregated metrics from filtered data (will be calculated from user-specific data only)
         totals: {
-          totalAdPlays: filteredDailyData.reduce((sum, day) => sum + (day.totalAdPlays || 0), 0),
-          totalQRScans: filteredDailyData.reduce((sum, day) => sum + (day.totalQRScans || 0), 0),
+          totalAdPlays: 0, // Will be calculated from adPerformanceMap (user's ads only)
+          totalQRScans: 0, // Will be calculated from qrScanMap (user's ads only)
           totalDistanceTraveled: filteredDailyData.reduce((sum, day) => sum + (day.totalDistanceTraveled || 0), 0),
           totalHoursOnline: filteredDailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0),
-          totalAdImpressions: filteredDailyData.reduce((sum, day) => sum + (day.totalAdImpressions || 0), 0),
-          totalAdPlayTime: filteredDailyData.reduce((sum, day) => sum + (day.totalAdPlayTime || 0), 0)
+          totalAdImpressions: 0, // Will be calculated from adPerformanceMap (user's ads only)
+          totalAdPlayTime: 0 // Will be calculated from adPerformanceMap (user's ads only)
         },
 
         // Averages
@@ -1382,8 +1690,8 @@ class UserAnalyticsService {
       filteredDailyData.forEach(day => {
         if (day.adPerformance && day.adPerformance.length > 0) {
           day.adPerformance.forEach(ad => {
-            // Only process ads that belong to the user
-            if (userAdIds.includes(ad.adId)) {
+            // Only process ads that belong to the current user (check both userId and adId)
+            if (ad.userId === userId || userAdIds.includes(ad.adId)) {
               if (!adPerformanceMap[ad.adId]) {
                 adPerformanceMap[ad.adId] = {
                   adId: ad.adId,
@@ -1421,11 +1729,12 @@ class UserAnalyticsService {
 
       // Get QR scan breakdown by ad
       const qrScanMap = {};
+      
       filteredDailyData.forEach(day => {
         if (day.qrScans && day.qrScans.length > 0) {
           day.qrScans.forEach(scan => {
-            // Only process QR scans for ads that belong to the user
-            if (userAdIds.includes(scan.adId)) {
+            // Only process QR scans for the current user (check both userId and adId)
+            if (scan.userId === userId || (scan.adId && userAdIds.includes(scan.adId))) {
               if (!qrScanMap[scan.adId]) {
                 qrScanMap[scan.adId] = {
                   adId: scan.adId,
@@ -1440,6 +1749,19 @@ class UserAnalyticsService {
           });
         }
       });
+      
+
+      // Calculate totals from user-specific data only
+      deviceMetrics.totals.totalQRScans = Object.values(qrScanMap).reduce((sum, qr) => sum + (qr.totalScans || 0), 0);
+      deviceMetrics.totals.totalAdPlays = Object.values(adPerformanceMap).reduce((sum, ad) => sum + (ad.totalPlays || 0), 0);
+      deviceMetrics.totals.totalAdImpressions = Object.values(adPerformanceMap).reduce((sum, ad) => sum + (ad.totalImpressions || 0), 0);
+      deviceMetrics.totals.totalAdPlayTime = Object.values(adPerformanceMap).reduce((sum, ad) => sum + (ad.totalViewTime || 0), 0);
+      
+      // Update averages with user-specific totals
+      deviceMetrics.averages.averageDailyPlays = filteredDailyData.length > 0 ? 
+        deviceMetrics.totals.totalAdPlays / filteredDailyData.length : 0;
+      deviceMetrics.averages.averageDailyQRScans = filteredDailyData.length > 0 ? 
+        deviceMetrics.totals.totalQRScans / filteredDailyData.length : 0;
 
       // Get hourly activity pattern
       const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({

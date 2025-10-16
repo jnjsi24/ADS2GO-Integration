@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
 const hoursUpdateService = require('../services/hoursUpdateService');
 const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
+const driverSalaryJob = require('./driverSalaryJob');
 
 class CronJobs {
   constructor() {
@@ -23,6 +24,9 @@ class CronJobs {
 
     // Start the user analytics sync job (every 3 minutes)
     userAnalyticsSyncJob.start();
+
+    // Start the driver salary job (monthly generation and daily updates)
+    driverSalaryJob.start();
 
     // Frequent archive job - runs every 3 minutes to capture real-time updates
     const frequentArchiveTask = cron.schedule('*/3 * * * *', async () => {
@@ -160,6 +164,10 @@ class CronJobs {
     // Start the hours update service
     hoursUpdateService.start();
     console.log('✅ Started hours update service');
+
+    // Start the driver salary job
+    driverSalaryJob.start();
+    console.log('✅ Started driver salary job');
 
     this.isRunning = true;
     console.log('🎉 All cron jobs started successfully');

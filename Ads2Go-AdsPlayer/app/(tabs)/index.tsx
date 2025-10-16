@@ -3,15 +3,16 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert, Scr
 import * as Location from "expo-location";
 import QRCode from "react-native-qrcode-svg";
 import { router } from "expo-router/build/imperative-api";
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import tabletRegistrationService, { TabletRegistration } from '../../services/tabletRegistration';
 import deviceStatusService from '../../services/deviceStatusService';
 import offlineQueueService from '../../services/offlineQueueService';
 import AdPlayer from '../../components/AdPlayer';
-import DebugMaterialId from '../../debug-material-id';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDeviceStatus } from '../../contexts/DeviceStatusContext';
+import { configureCleanLogging } from '../../utils/loggerConfig';
 
 export default function HomeScreen() {
   const { status: deviceStatus } = useDeviceStatus();
@@ -25,8 +26,13 @@ export default function HomeScreen() {
   const [trackingStatus, setTrackingStatus] = useState<string>('Not Started');
   const [isSimulatingOffline, setIsSimulatingOffline] = useState(false);
   const [showFullInterface, setShowFullInterface] = useState(true); // Start in full interface mode for debugging
+  const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state
+  const [isFullscreen, setIsFullscreen] = useState(false); // Track fullscreen state
+  const [originalOrientation, setOriginalOrientation] = useState<ScreenOrientation.Orientation | null>(null);
 
   useEffect(() => {
+    // Configure clean logging for better console output
+    configureCleanLogging();
     initializeApp();
     
     // Cleanup function to stop tracking when component unmounts
@@ -44,6 +50,11 @@ export default function HomeScreen() {
       
       // Cleanup device status service
       deviceStatusService.cleanup();
+      
+      // Unlock orientation on cleanup
+      ScreenOrientation.unlockAsync().catch((error) => {
+        console.error('❌ [Orientation] Error during cleanup unlock:', error);
+      });
     };
   }, []);
 
@@ -378,6 +389,70 @@ export default function HomeScreen() {
     router.push('/registration');
   };
 
+  // Handle orientation changes for lock functionality
+  const lockToLandscape = async () => {
+    try {
+      // Store current orientation
+      const currentOrientation = await ScreenOrientation.getOrientationAsync();
+      setOriginalOrientation(currentOrientation);
+      
+      // Force landscape orientation - use specific landscape lock instead of general LANDSCAPE
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
+      console.log('🔒 [Orientation] Locked to landscape mode');
+    } catch (error) {
+      console.error('❌ [Orientation] Error locking to landscape:', error);
+      // Fallback: try the other landscape orientation
+      try {
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
+        console.log('🔒 [Orientation] Fallback: Locked to landscape right mode');
+      } catch (fallbackError) {
+        console.error('❌ [Orientation] Fallback also failed:', fallbackError);
+        // If both fail, just unlock to prevent the error
+        await ScreenOrientation.unlockAsync();
+      }
+    }
+  };
+
+  const unlockOrientation = async () => {
+    try {
+      // Restore original orientation or unlock completely
+      if (originalOrientation) {
+        // Convert Orientation to OrientationLock
+        let orientationLock: ScreenOrientation.OrientationLock;
+        switch (originalOrientation) {
+          case ScreenOrientation.Orientation.PORTRAIT_UP:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
+            break;
+          case ScreenOrientation.Orientation.PORTRAIT_DOWN:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_DOWN;
+            break;
+          case ScreenOrientation.Orientation.LANDSCAPE_LEFT:
+            orientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_LEFT;
+            break;
+          case ScreenOrientation.Orientation.LANDSCAPE_RIGHT:
+            orientationLock = ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT;
+            break;
+          default:
+            orientationLock = ScreenOrientation.OrientationLock.PORTRAIT_UP;
+        }
+        await ScreenOrientation.lockAsync(orientationLock);
+        console.log('🔓 [Orientation] Restored to original orientation');
+      } else {
+        await ScreenOrientation.unlockAsync();
+        console.log('🔓 [Orientation] Unlocked orientation');
+      }
+    } catch (error) {
+      console.error('❌ [Orientation] Error unlocking orientation:', error);
+      // Fallback: try to unlock completely if restoring fails
+      try {
+        await ScreenOrientation.unlockAsync();
+        console.log('🔓 [Orientation] Fallback: Unlocked orientation completely');
+      } catch (unlockError) {
+        console.error('❌ [Orientation] Fallback unlock also failed:', unlockError);
+      }
+    }
+  };
+
   // Toggle between video-only and full interface mode
   const toggleInterfaceMode = () => {
     setShowFullInterface(prev => !prev);
@@ -463,14 +538,25 @@ export default function HomeScreen() {
   }
 
   // If not showing full interface, show only the video player
-  if (!showFullInterface) {
+  if (!showFullInterface || isFullscreen) {
     return (
-      <View style={styles.videoOnlyContainer}>
+      <View style={[styles.videoOnlyContainer, isFullscreen && styles.fullscreenContainer]}>
         {registrationData ? (
           <AdPlayer
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
             isOffline={isSimulatingOffline}
+            isLocked={isLocked}
+            onLockStateChange={async (locked) => {
+              setIsLocked(locked);
+              if (locked) {
+                setIsFullscreen(true); // Go fullscreen when locked
+                await lockToLandscape(); // Force landscape orientation
+              } else {
+                setIsFullscreen(false); // Exit fullscreen when unlocked
+                await unlockOrientation(); // Restore orientation
+              }
+            }}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -497,12 +583,36 @@ export default function HomeScreen() {
         >
           <Text style={styles.showInterfaceText}>⚙️ Settings</Text>
         </TouchableOpacity>
+
+        {/* Lock indicator for video mode - subtle overlay */}
+        {isLocked && (
+          <View style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+            borderRadius: 8,
+            zIndex: 1000,
+          }}>
+            <Text style={{
+              color: '#ff4444',
+              fontSize: 16,
+              fontWeight: 'bold',
+            }}>
+              🔒 LOCKED
+            </Text>
+          </View>
+        )}
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      {!isFullscreen && (
+        <ScrollView contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Advertisement Player</Text>
@@ -635,6 +745,17 @@ export default function HomeScreen() {
             materialId={registrationData.materialId}
             slotNumber={registrationData.slotNumber}
             isOffline={isSimulatingOffline}
+            isLocked={isLocked}
+            onLockStateChange={async (locked) => {
+              setIsLocked(locked);
+              if (locked) {
+                setIsFullscreen(true); // Go fullscreen when locked
+                await lockToLandscape(); // Force landscape orientation
+              } else {
+                setIsFullscreen(false); // Exit fullscreen when unlocked
+                await unlockOrientation(); // Restore orientation
+              }
+            }}
             onAdError={(error) => {
               console.log('Ad Player Error:', error);
             }}
@@ -689,7 +810,52 @@ export default function HomeScreen() {
            <Text style={styles.actionButtonText}>🚨 Emergency Unregister</Text>
          </TouchableOpacity>
        </View>
-    </ScrollView>
+        </ScrollView>
+      )}
+
+      {/* Fullscreen AdPlayer when locked */}
+      {isFullscreen && registrationData && (
+        <AdPlayer
+          materialId={registrationData.materialId}
+          slotNumber={registrationData.slotNumber}
+          isOffline={isSimulatingOffline}
+          isLocked={isLocked}
+          onLockStateChange={(locked) => {
+            setIsLocked(locked);
+            if (locked) {
+              setIsFullscreen(true);
+            } else {
+              setIsFullscreen(false);
+            }
+          }}
+          onAdError={(error) => {
+            console.log('Ad Player Error:', error);
+          }}
+        />
+      )}
+
+      {/* Lock indicator for fullscreen mode */}
+      {isLocked && isFullscreen && (
+        <View style={{
+          position: 'absolute',
+          top: 20,
+          right: 20,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 8,
+          zIndex: 1000,
+        }}>
+          <Text style={{
+            color: '#ff4444',
+            fontSize: 16,
+            fontWeight: 'bold',
+          }}>
+            🔒 LOCKED
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -784,6 +950,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
     position: 'relative',
+  },
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    elevation: 9999,
   },
   showInterfaceButton: {
     position: 'absolute',

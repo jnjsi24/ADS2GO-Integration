@@ -3,6 +3,7 @@ import { Bell, AlertTriangle, CheckCircle, Clock, Users, FileText, DollarSign, P
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, DELETE_NOTIFICATION, DELETE_ALL_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
 import { motion, AnimatePresence } from "framer-motion";
+import SubtleLoader from "../../../components/SubtleLoader";
 
 
 interface Notification {
@@ -57,21 +58,22 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
   
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
   });
 
   // Fetch pending ads
   const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError, refetch: refetchPendingAds } = useQuery(GET_PENDING_ADS, {
-    pollInterval: 30000,
+    pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
   });
 
   // Fetch pending materials
   const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError, refetch: refetchPendingMaterials } = useQuery(GET_PENDING_MATERIALS, {
-    pollInterval: 30000,
+    pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
   });
 
   // Handle query errors
@@ -336,6 +338,13 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       <div className="flex justify-between items-center">
         <div>
           <h3 className="text-lg font-semibold text-gray-800">Admin Notifications</h3>
+          {/* Show subtle loader during auto-refresh */}
+          {(notificationsLoading || pendingAdsLoading || pendingMaterialsLoading) && (
+            <div className="flex items-center text-xs text-gray-400 mt-1">
+              <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
+              <span>Updating notifications...</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

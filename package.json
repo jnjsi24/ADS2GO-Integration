@@ -4,12 +4,8 @@
   "description": "Ads2Go Full-Stack Application",
   "main": "index.js",
   "scripts": {
-    "start": "concurrently \"cross-env PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
-<<<<<<< Updated upstream
+    "start": "npx concurrently \"cross-env PORT=3000 npm start --prefix Ads2Go-Client\" \"npm run dev --prefix Ads2Go-Server\"",
     "start:client": "cross-env PORT=3000 npm start --prefix Ads2Go-Client",
-=======
-    "start:client": "PORT=3000 npm start --prefix Ads2Go-Client",
->>>>>>> Stashed changes
     "start:server": "npm run dev --prefix Ads2Go-Server",
     "start:mobile": "expo start --prefix Ads2Go-MobileAppExpo",
     "install:all": "npm install && npm install --prefix Ads2Go-Client && npm install --prefix Ads2Go-Server && npm install --prefix Ads2Go-MobileAppExpo && npm install --prefix androidPlayerExpo",

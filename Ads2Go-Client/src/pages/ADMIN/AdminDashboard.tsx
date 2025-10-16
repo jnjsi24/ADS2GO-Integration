@@ -1,36 +1,20 @@
 import React, { useState, useEffect } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { useQuery } from "@apollo/client";
 import { GET_OWN_ADMIN_DETAILS } from "../../graphql/admin";
 import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS } from "../../graphql/admin/queries";
 import DeviceStatus from "../../components/DeviceStatus";
-import AirtimeAvailability from "../../components/AirtimeAvailability";
 import DynamicNotificationList from "./tabs/dashboard/DynamicNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
+import SubtleLoader from "../../components/SubtleLoader";
 
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
 
-const adPerformanceData = [
-  { month: "Jan", impressions: 7000, qrScans: 4000 },
-  { month: "Feb", impressions: 8000, qrScans: 5000 },
-  { month: "Mar", impressions: 10000, qrScans: 7000 },
-  { month: "Apr", impressions: 9000, qrScans: 6000 },
-  { month: "May", impressions: 7500, qrScans: 4500 },
-  { month: "Jun", impressions: 5000, qrScans: 3000 },
-  { month: "Jul", impressions: 6000, qrScans: 3500 },
-];
 
 const Dashboard = () => {
   const [adminName, setAdminName] = useState("Admin");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
   // Auto detect sidebar collapse based on window width
   useEffect(() => {
@@ -47,11 +31,11 @@ const Dashboard = () => {
   const { loading, error, data } = useQuery(GET_ADMIN_DETAILS);
 
   const { data: statsData, loading: statsLoading, error: statsError } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
-    pollInterval: 5000,
+    pollInterval: 30000, // Increased from 5s to 30s for more discreet refresh
   });
 
   const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
-    pollInterval: 30000,
+    pollInterval: 60000, // Increased from 30s to 60s for more discreet refresh
   });
 
   // Handle admin details data
@@ -61,6 +45,13 @@ const Dashboard = () => {
       setAdminName(`${admin.firstName} ${admin.lastName}`);
     }
   }, [data]);
+
+  // Track initial load completion
+  useEffect(() => {
+    if (!loading && !statsLoading && !pendingAdsLoading && !hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true);
+    }
+  }, [loading, statsLoading, pendingAdsLoading, hasInitiallyLoaded]);
 
   // Handle errors
   useEffect(() => {
@@ -81,7 +72,10 @@ const Dashboard = () => {
     }
   }, [pendingAdsError]);
 
-  if (loading || statsLoading || pendingAdsLoading) return <AdminLoader />;
+  // Only show AdminLoader on initial load, not during auto-refresh
+  if (!hasInitiallyLoaded && (loading || statsLoading || pendingAdsLoading)) {
+    return <AdminLoader />;
+  }
 
   if (error)
     return (
@@ -110,6 +104,17 @@ const Dashboard = () => {
             It is the best time to manage your finances
           </p>
         </div>
+        {/* Subtle refresh indicator */}
+        <div className="flex items-center text-xs text-gray-400">
+          <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+          <span>Auto-refreshing every 30s</span>
+        </div>
+        {/* Show subtle loader during auto-refresh */}
+        {hasInitiallyLoaded && (statsLoading || pendingAdsLoading) && (
+          <div className="mt-2">
+            <SubtleLoader message="Updating data..." />
+          </div>
+        )}
       </div>
 
       {/* Stats & Notifications */}
@@ -166,7 +171,18 @@ const Dashboard = () => {
 
         {/* Right column */}
         <div className="lg:col-span-8">
-          <AirtimeAvailability />
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vehicle Airtime Availability</h3>
+            <div className="text-center py-12 text-gray-500">
+              <div className="text-gray-400 mb-4">
+                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">No Vehicle Data Available</h3>
+              <p className="text-sm text-gray-500">Vehicle airtime data will appear here once vehicles are registered and active.</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -175,19 +191,17 @@ const Dashboard = () => {
         <DeviceStatus />
       </div>
 
-      {/* Chart Section (Optional example) */}
+      {/* Analytics Section */}
       <div className="bg-white p-6 mt-8 rounded-md shadow">
-        <h3 className="text-lg font-semibold mb-4">Ad Impressions & QR Scans</h3>
-        <div className="w-full h-64">
-          <ResponsiveContainer>
-            <BarChart data={adPerformanceData}>
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="impressions" fill="#3674B5" />
-              <Bar dataKey="qrScans" fill="#FF9D3D" />
-            </BarChart>
-          </ResponsiveContainer>
+        <h3 className="text-lg font-semibold mb-4">Ad Performance Analytics</h3>
+        <div className="text-center py-12 text-gray-500">
+          <div className="text-gray-400 mb-4">
+            <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-medium text-gray-900 mb-1">No Analytics Data Available</h3>
+          <p className="text-sm text-gray-500">Performance analytics will appear here once ads start running and generating data.</p>
         </div>
       </div>
     </div>

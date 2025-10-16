@@ -807,12 +807,12 @@ router.get('/compliance', async (req, res) => {
               carRecord: device
             });
             
-            // Update slot status - use activeConnections directly for real-time status
-            const connection = deviceStatusService.activeConnections.get(slot.deviceId);
-            const deviceStatusOnline = !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
+            // Update slot status - use DeviceStatusManager for real-time status
+            const deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+            const deviceStatusOnline = !!(deviceStatus && deviceStatus.isOnline);
             
             // Debug logging
-            console.log(`🔍 [compliance] Slot ${slot.deviceId}: connection=`, !!connection, 'readyState=', connection?.readyState, 'deviceStatusOnline=', deviceStatusOnline);
+            console.log(`🔍 [compliance] Slot ${slot.deviceId}: deviceStatus=`, deviceStatus, 'deviceStatusOnline=', deviceStatusOnline);
             
             // Check if tablet registration status is recent (within last 30 seconds)
             const now = new Date();
@@ -878,8 +878,8 @@ router.get('/compliance', async (req, res) => {
       if (device.slots && device.slots.length > 0) {
         const hasOnlineSlot = device.slots.some(slot => {
           if (!slot.deviceId) return false;
-          const connection = deviceStatusService.activeConnections.get(slot.deviceId);
-          return !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
+          const deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+          return !!(deviceStatus && deviceStatus.isOnline);
         });
         if (hasOnlineSlot) {
           group.isOnline = true;
@@ -966,8 +966,43 @@ router.get('/compliance', async (req, res) => {
         combinedStatus = 'BOTH SLOTS OFFLINE';
       }
 
+      // Determine which device ID to use based on online status
+      let primaryDeviceId = group.devices[0].device.deviceId; // Default to first device
+      
+      // Debug logging
+      console.log(`🔍 [compliance] Material ${materialId} - Slot status:`, {
+        slot1: group.slotStatus.slot1,
+        slot2: group.slotStatus.slot2,
+        devices: group.devices.map(d => ({ deviceId: d.device.deviceId, slotNumber: d.device.slotNumber }))
+      });
+      
+      if (group.slotStatus.slot2.online && !group.slotStatus.slot1.online) {
+        // If only slot 2 is online, use slot 2 device ID
+        const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
+        if (slot2Device) {
+          primaryDeviceId = slot2Device.device.deviceId;
+          console.log(`🔍 [compliance] Using slot 2 device: ${primaryDeviceId}`);
+        }
+      } else if (group.slotStatus.slot1.online && !group.slotStatus.slot2.online) {
+        // If only slot 1 is online, use slot 1 device ID
+        const slot1Device = group.devices.find(d => d.device.slotNumber === 1);
+        if (slot1Device) {
+          primaryDeviceId = slot1Device.device.deviceId;
+          console.log(`🔍 [compliance] Using slot 1 device: ${primaryDeviceId}`);
+        }
+      } else if (group.slotStatus.slot1.online && group.slotStatus.slot2.online) {
+        // If both slots are online, prefer slot 2 (the connected one)
+        const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
+        if (slot2Device) {
+          primaryDeviceId = slot2Device.device.deviceId;
+          console.log(`🔍 [compliance] Using slot 2 device (both online): ${primaryDeviceId}`);
+        }
+      } else {
+        console.log(`🔍 [compliance] Using default device: ${primaryDeviceId}`);
+      }
+
       individualScreens.push({
-        deviceId: group.devices[0].device.deviceId, // Use first device as primary
+        deviceId: primaryDeviceId, // Use the appropriate device ID based on online status
         displayId: displayId, // Just material ID, no slot suffix
         materialId: materialId, // Use the materialId from tablet registration
         screenType: 'HEADDRESS',
@@ -1408,38 +1443,91 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
     // Use authenticated user's ID if no userId is provided in query
     const effectiveUserId = userId || req.user.id;
 
-    let query = { isActive: true };
+    let query = {};
     if (materialId) {
       query.materialId = materialId;
     }
+    // Only add isActive filter if it exists in the schema, otherwise get all devices
+    // This ensures we get all devices regardless of the isActive field
 
-    const allDevices = await DeviceTracking.find(query);
+    const allDevices = await DeviceTracking.find(query).lean();
+    
+    // Debug: Check what we're getting from the database
+    console.log(`🔍 [adAnalytics] Found ${allDevices.length} devices from database`);
+    console.log(`🔍 [adAnalytics] First device structure:`, allDevices[0] ? Object.keys(allDevices[0]) : 'No devices');
     
     // Get real-time device status service
     const deviceStatusService = require('../services/deviceStatusService');
     
-    let analytics = allDevices.map(device => {
-      // Use activeConnections directly for real-time status (more reliable)
-      const connection = deviceStatusService.activeConnections.get(device.deviceId);
-      const isOnline = !!(connection && connection.readyState === 1); // WebSocket.OPEN = 1
-      const lastSeen = connection?.lastSeen || device.lastSeen;
-      
-      // Debug logging
-      console.log(`🔍 [adAnalytics] Device ${device.deviceId}: connection=`, !!connection, 'readyState=', connection?.readyState, 'isOnline=', isOnline);
-      
-      return {
-        deviceId: device.deviceId,
-        materialId: device.materialId,
-        screenType: device.screenType,
-        currentAd: device.currentAd,
-        dailyStats: device.dailySummary || {},
-        totalAdsPlayed: device.totalAdPlays,
-        totalAdImpressions: device.totalAdImpressions,
-        totalAdPlayTime: device.totalAdPlayTime,
-        adPerformance: device.adPerformance || [],
-        isOnline: isOnline, // Use real-time status
-        lastSeen: lastSeen // Use real-time lastSeen
-      };
+    let analytics = [];
+    
+    // Process each device and its slots
+    allDevices.forEach(device => {
+      if (device.slots && device.slots.length > 0) {
+        // Multi-slot device: create analytics for each slot
+        device.slots.forEach(slot => {
+          // Use DeviceStatusManager as the source of truth for device status
+          const deviceStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
+          let isOnline = false;
+          
+          if (deviceStatus && deviceStatus.isOnline) {
+            isOnline = true;
+          } else {
+            // Fallback to slot status
+            isOnline = slot.isOnline;
+          }
+          
+          const lastSeen = deviceStatus?.lastSeen || slot.lastSeen || device.lastSeen;
+          
+          // Debug logging
+          console.log(`🔍 [adAnalytics] Device ${slot.deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
+          
+          analytics.push({
+            deviceId: slot.deviceId,
+            materialId: device.materialId,
+            screenType: device.screenType,
+            currentAd: device.currentAd,
+            dailyStats: device.dailySummary || {},
+            totalAdsPlayed: device.totalAdPlays,
+            totalAdImpressions: device.totalAdImpressions,
+            totalAdPlayTime: device.totalAdPlayTime,
+            adPerformance: device.adPerformance || [],
+            isOnline: isOnline, // Use real-time status
+            lastSeen: lastSeen // Use real-time lastSeen
+          });
+        });
+      } else {
+        // Legacy single-device structure (fallback)
+        const deviceId = device.deviceId || 'unknown';
+        const deviceStatus = deviceStatusService.getDeviceStatus(deviceId);
+        let isOnline = false;
+        
+        if (deviceStatus && deviceStatus.isOnline) {
+          isOnline = true;
+        } else {
+          // Fallback to database status
+          isOnline = device.isOnline;
+        }
+        
+        const lastSeen = deviceStatus?.lastSeen || device.lastSeen;
+        
+        // Debug logging
+        console.log(`🔍 [adAnalytics] Device ${deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
+        
+        analytics.push({
+          deviceId: deviceId,
+          materialId: device.materialId,
+          screenType: device.screenType,
+          currentAd: device.currentAd,
+          dailyStats: device.dailySummary || {},
+          totalAdsPlayed: device.totalAdPlays,
+          totalAdImpressions: device.totalAdImpressions,
+          totalAdPlayTime: device.totalAdPlayTime,
+          adPerformance: device.adPerformance || [],
+          isOnline: isOnline, // Use real-time status
+          lastSeen: lastSeen // Use real-time lastSeen
+        });
+      }
     });
 
     // Filter by user (always filter by authenticated user unless admin specifies different user)
@@ -1843,10 +1931,17 @@ router.get('/screens', async (req, res) => {
     const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
     
     // Mark devices as offline if lastSeen is older than 2 minutes (less aggressive)
+    // BUT only if they don't have an active websocket connection
+    const allStatuses = deviceStatusService.getAllDeviceStatuses();
+    const activeWebSocketDevices = allStatuses
+      .filter(status => status.isOnline && status.source === 'websocket')
+      .map(status => status.deviceId);
+    
     await DeviceTracking.updateMany(
       { 
         isOnline: true,
-        lastSeen: { $lt: twoMinutesAgo }
+        lastSeen: { $lt: twoMinutesAgo },
+        deviceId: { $nin: activeWebSocketDevices } // Exclude devices with active websocket
       },
       { 
         $set: { 

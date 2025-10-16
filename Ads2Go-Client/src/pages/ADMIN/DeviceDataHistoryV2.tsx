@@ -186,13 +186,18 @@ const DeviceDataHistoryV2: React.FC = () => {
       const dateStr = new Date(editingData.date).toISOString().split('T')[0];
       const url = `${API_URL}/api/deviceDataHistoryV2/materials/${editingData.materialId}/daily-data/${dateStr}`;
       
+      // Check if the date is today
+      const today = new Date().toISOString().split('T')[0];
+      const isToday = dateStr === today;
+      
       console.log('3. PUT request to:', url);
       console.log('4. Data being sent:', editingData.data);
+      console.log('5. Date check - Today:', today, 'Editing:', dateStr, 'Is Today:', isToday);
 
       const response = await axios.put(url, editingData.data);
 
-      console.log('5. Response status:', response.status);
-      console.log('6. Response data:', response.data);
+      console.log('6. Response status:', response.status);
+      console.log('7. Response data:', response.data);
 
       if (response.data.success) {
         // Update local state
@@ -214,8 +219,18 @@ const DeviceDataHistoryV2: React.FC = () => {
           })
         );
         
-        console.log('7. ✅ Update successful! Closing modal...');
-        showToast('✅ Data updated successfully!');
+        console.log('8. ✅ Update successful! Closing modal...');
+        
+        // Show appropriate success message based on update type
+        const updateType = response.data.data?.updateType;
+        if (updateType === 'current_date') {
+          showToast('✅ Current date data updated! (DeviceTracking + DeviceDataHistoryV2)');
+        } else if (updateType === 'past_date') {
+          showToast('✅ Past date data updated! (DeviceDataHistoryV2)');
+        } else {
+          showToast('✅ Data updated successfully!');
+        }
+        
         setShowEditModal(false);
         setEditingData(null);
         
@@ -224,11 +239,11 @@ const DeviceDataHistoryV2: React.FC = () => {
           fetchMaterials(true);
         }, 1000);
       } else {
-        console.error('8. ❌ Server returned success: false');
+        console.error('9. ❌ Server returned success: false');
         showToast('❌ Failed: ' + (response.data.error || 'Unknown error'));
       }
     } catch (error: any) {
-      console.error('9. ❌ ERROR updating daily data:', error);
+      console.error('10. ❌ ERROR updating daily data:', error);
       console.error('Error response:', error.response);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update data';
       showToast(`❌ Error: ${errorMessage}`);
@@ -643,6 +658,29 @@ const DeviceDataHistoryV2: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-1">
                   Material: {editingData?.materialId || 'N/A'} | Date: {editingData?.date ? formatDate(editingData.date) : 'N/A'}
                 </p>
+                {editingData && (() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  const dateStr = new Date(editingData.date).toISOString().split('T')[0];
+                  const isToday = dateStr === today;
+                  
+                  return (
+                    <div className={`mt-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                      isToday 
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                        : 'bg-orange-100 text-orange-800 border border-orange-200'
+                    }`}>
+                      {isToday ? (
+                        <>
+                          📊 <strong>Current Date:</strong> Will update DeviceTracking (real-time) + DeviceDataHistoryV2
+                        </>
+                      ) : (
+                        <>
+                          📚 <strong>Past Date:</strong> Will update DeviceDataHistoryV2 (historical data only)
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="p-6 space-y-4">

@@ -33,15 +33,14 @@ import { createGraphQLService } from '../../services/graphQLService';
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
 import ScreenControl from './tabs/adminAdsControl/ScreenControl';
-import ContentManagement from './tabs/manageAds/ContentManagement';
 import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import Alerts from './tabs/adminAdsControl/Alerts';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import SubtleLoader from "../../components/SubtleLoader";
 
 const AdminAdsControl: React.FC = () => {
-  // Cache busting - force component reload
-  console.log('🔄 AdminAdsControl NEW VERSION loaded - Cache busted at:', new Date().toISOString());
+  // Component loaded
   
   // Initialize GraphQL service
   const apolloClient = useApolloClient();
@@ -55,11 +54,9 @@ const AdminAdsControl: React.FC = () => {
   const [screens, setScreens] = useState<ScreenData[]>([]);
   const [adAnalytics, setAdAnalytics] = useState<AdAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Debug loading state changes
-  useEffect(() => {
-    console.log('🔄 Loading state changed to:', loading);
-  }, [loading]);
+  // Removed excessive debug logging
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(true); // Default to true since ads play automatically
@@ -69,7 +66,6 @@ const AdminAdsControl: React.FC = () => {
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
   const [selectedDeviceForModal, setSelectedDeviceForModal] = useState<ScreenData | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
   // Responsive state
@@ -226,6 +222,7 @@ const AdminAdsControl: React.FC = () => {
   // Auto-refresh function that never shows loading
   const autoRefreshData = useCallback(async () => {
     try {
+      setIsRefreshing(true);
       console.log('🔄 Auto-refresh - fetching data silently...');
       
       // Fetch screens data using compliance endpoint for real-time status
@@ -313,6 +310,8 @@ const AdminAdsControl: React.FC = () => {
       setLastRefresh(new Date());
     } catch (err) {
       console.error('Error during auto-refresh:', err);
+    } finally {
+      setIsRefreshing(false);
     }
   }, [apiService]);
 
@@ -320,8 +319,8 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // Set up auto-refresh every 5 seconds (reduced to not override WebSocket updates)
-    const interval = setInterval(autoRefreshData, 5000);
+    // Removed aggressive auto-refresh - rely on WebSocket updates for real-time data
+    // Users can manually refresh using the refresh button if needed
     
     // Subscribe to real-time WebSocket updates for immediate processing
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
@@ -379,7 +378,7 @@ const AdminAdsControl: React.FC = () => {
     });
     
     return () => {
-      clearInterval(interval);
+      // clearInterval(interval); // No longer needed
       unsubscribe();
     };
   }, [fetchData, autoRefreshData]);
@@ -558,20 +557,7 @@ const AdminAdsControl: React.FC = () => {
 
   // Real data will be loaded from the API via the fetchData function
 
-  // Mock data for analytics and alerts (fallback)
-  const mockAnalytics = {
-    totalViewTime: '2h 45m',
-    avgCompletionRate: 87,
-    totalImpressions: 1250,
-    totalRevenue: 3125
-  };
-
-  const mockAlerts = [
-    { id: 1, type: 'critical' as const, message: 'Device ABC123 offline for 2+ hours', timestamp: '2 minutes ago' },
-    { id: 2, type: 'high' as const, message: 'Low battery on device XYZ789', timestamp: '15 minutes ago' },
-    { id: 3, type: 'medium' as const, message: 'Ad playback error on device DEF456', timestamp: '1 hour ago' },
-    { id: 4, type: 'low' as const, message: 'Scheduled maintenance completed', timestamp: '2 hours ago' }
-  ];
+  // Real data will be loaded from the API via the fetchData function
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -666,6 +652,13 @@ const AdminAdsControl: React.FC = () => {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">AdsPanel - LCD Control Center</h1>
+            {/* Show subtle loader during auto-refresh */}
+            {isRefreshing && (
+              <div className="flex items-center text-xs text-gray-400 mt-1">
+                <div className="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
+                <span>Refreshing data...</span>
+              </div>
+            )}
           </div>
           <button 
             onClick={() => fetchData(true)}
@@ -813,7 +806,6 @@ const AdminAdsControl: React.FC = () => {
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'screens', label: 'Screen Control', icon: Monitor },
-              { id: 'content', label: 'Content Management', icon: Upload },
               { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
               { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
               { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
@@ -868,14 +860,6 @@ const AdminAdsControl: React.FC = () => {
             />
           )}
 
-          {activeTab === 'content' && (
-            <ContentManagement
-              onDeployAd={(adId, targetScreens, schedule) => {
-                console.log('Deploying ad:', { adId, targetScreens, schedule });
-                // Handle ad deployment logic here
-              }}
-            />
-          )}
 
           {activeTab === 'company-ads' && (
             <CompanyAdsManagement />
@@ -887,7 +871,7 @@ const AdminAdsControl: React.FC = () => {
 
           {activeTab === 'alerts' && (
             <Alerts
-              alerts={mockAlerts}
+              alerts={[]}
               onResolveAlert={(alertId) => {
                 console.log('Resolving alert:', alertId);
                 // Handle alert resolution logic here

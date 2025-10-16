@@ -70,9 +70,8 @@ class UserAnalyticsSyncJob {
         try {
           console.log(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
           
-          // For now, we'll use a simple approach - sync with all available materials
-          // In a real implementation, you'd need to link users to their materials
-          const result = await this.syncUserWithAllMaterials(user._id, startDate, endDate);
+          // New: Sync using userId-based aggregations (no material mapping)
+          const result = await this.syncUserByUserId(user._id.toString(), startDate, endDate);
           
           if (result.success) {
             successCount++;
@@ -536,6 +535,149 @@ class UserAnalyticsSyncJob {
         success: false,
         message: error.message
       };
+    }
+  }
+
+  // New: Sync a specific user by aggregating directly via userId
+  async syncUserByUserId(userId, startDate, endDate) {
+    try {
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const UserAnalytics = require('../models/userAnalytics');
+
+      // Aggregate daily stats (user-scoped)
+      const [dailyFacet] = await DeviceDataHistoryV2.aggregate([
+        { $match: { 'dailyData.date': { $gte: startDate, $lte: endDate } } },
+        { $project: {
+            materialId: 1,
+            dailyData: {
+              $filter: { input: '$dailyData', cond: { $and: [ { $gte: ['$$this.date', startDate] }, { $lte: ['$$this.date', endDate] } ] } }
+            }
+          }
+        },
+        { $facet: {
+            adPerf: [
+              { $unwind: '$dailyData' },
+              { $unwind: '$dailyData.adPerformance' },
+              { $match: { 'dailyData.adPerformance.userId': userId } },
+              { $group: {
+                  _id: null,
+                  totalImpressions: { $sum: '$dailyData.adPerformance.impressions' },
+                  totalPlayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                  totalAdsPlayed: { $sum: '$dailyData.adPerformance.playCount' }
+                }
+              }
+            ],
+            deviceStats: [
+              { $unwind: '$dailyData' },
+              { $unwind: '$dailyData.adPerformance' },
+              { $match: { 'dailyData.adPerformance.userId': userId } },
+              { $group: {
+                  _id: '$materialId',
+                  impressions: { $sum: '$dailyData.adPerformance.impressions' },
+                  adsPlayed: { $sum: '$dailyData.adPerformance.playCount' },
+                  displayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                  lastActivity: { $max: '$dailyData.date' }
+                }
+              }
+            ],
+            qr: [
+              { $unwind: '$dailyData' },
+              { $unwind: { path: '$dailyData.qrScans', preserveNullAndEmptyArrays: true } },
+              { $match: { 'dailyData.qrScans.userId': userId } },
+              { $group: { _id: null, totalQRScans: { $sum: 1 } } }
+            ],
+           dailyPerf: [
+             { $unwind: '$dailyData' },
+             { $unwind: '$dailyData.adPerformance' },
+             { $match: { 'dailyData.adPerformance.userId': userId } },
+             { $group: {
+                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.date' } },
+                 impressions: { $sum: '$dailyData.adPerformance.impressions' },
+                 adsPlayed: { $sum: '$dailyData.adPerformance.playCount' },
+                 displayTime: { $sum: '$dailyData.adPerformance.totalViewTime' },
+                 completionRate: { $avg: '$dailyData.adPerformance.completionRate' }
+               }
+             },
+             { $sort: { _id: 1 } }
+           ],
+           dailyQR: [
+             { $unwind: '$dailyData' },
+             { $unwind: { path: '$dailyData.qrScans', preserveNullAndEmptyArrays: true } },
+             { $match: { 'dailyData.qrScans.userId': userId } },
+             { $group: {
+                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$dailyData.qrScans.scanTimestamp' } },
+                 qrScans: { $sum: 1 }
+               }
+             },
+             { $sort: { _id: 1 } }
+           ]
+         }
+        }
+      ]);
+
+      const adPerf = dailyFacet?.adPerf?.[0] || { totalImpressions: 0, totalPlayTime: 0, totalAdsPlayed: 0 };
+      const totalQRScans = dailyFacet?.qr?.[0]?.totalQRScans || 0;
+      const deviceStats = dailyFacet?.deviceStats || [];
+
+      // Merge daily performance with daily QR into dailyStats
+      const dailyPerfMap = new Map((dailyFacet?.dailyPerf || []).map(d => [d._id, d]));
+      const dailyQRMap = new Map((dailyFacet?.dailyQR || []).map(d => [d._id, d.qrScans]));
+      const allDates = Array.from(new Set([ ...dailyPerfMap.keys(), ...dailyQRMap.keys() ])).sort();
+      const dailyStats = allDates.map(dateStr => {
+        const perf = dailyPerfMap.get(dateStr) || {};
+        return {
+          date: dateStr,
+          impressions: perf.impressions || 0,
+          adsPlayed: perf.adsPlayed || 0,
+          displayTime: perf.displayTime || 0,
+          qrScans: dailyQRMap.get(dateStr) || 0,
+          completionRate: perf.completionRate || 0
+        };
+      });
+
+      // Upsert summary into UserAnalytics (lean summary only)
+      const summaryUpdate = {
+        $set: {
+          summary: {
+            totalAdImpressions: adPerf.totalImpressions || 0,
+            totalAdPlays: adPerf.totalAdsPlayed || 0,
+            totalAdPlayTime: adPerf.totalPlayTime || 0,
+            totalQRScans: totalQRScans || 0,
+            totalDevices: deviceStats.length
+          },
+          dailyStats: dailyStats,
+          lastUpdated: new Date(),
+          updatedAt: new Date(),
+          isActive: true
+        },
+        $setOnInsert: {
+          ads: [],
+          totalAds: 0,
+          totalMaterials: 0,
+          averageAdCompletionRate: 0,
+          qrScanConversionRate: 0,
+          adPerformance: [],
+          errorLogs: []
+        }
+      };
+
+      await UserAnalytics.updateOne({ userId }, summaryUpdate, { upsert: true });
+
+      return {
+        success: true,
+        message: 'User analytics summary synced by userId',
+        data: {
+          userId,
+          totalAdImpressions: adPerf.totalImpressions || 0,
+          totalAdPlayTime: adPerf.totalPlayTime || 0,
+          totalAdPlays: adPerf.totalAdsPlayed || 0,
+          totalQRScans: totalQRScans || 0,
+          totalDevices: deviceStats.length
+        }
+      };
+    } catch (error) {
+      console.error('Error syncing user by userId:', error);
+      return { success: false, message: error.message };
     }
   }
 

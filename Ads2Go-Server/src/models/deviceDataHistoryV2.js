@@ -302,6 +302,10 @@ DeviceDataHistoryV2Schema.index({ updatedAt: -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': -1 });
 DeviceDataHistoryV2Schema.index({ 'dailyData.date': 1, materialId: 1 });
 DeviceDataHistoryV2Schema.index({ materialId: 1, carGroupId: 1 }); // Composite for search
+// Indexes to support userId-scoped analytics queries
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPerformance.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.qrScans.userId': 1, 'dailyData.date': 1 });
+DeviceDataHistoryV2Schema.index({ 'dailyData.adPlaybacks.userId': 1, 'dailyData.date': 1 });
 
 // Virtual field: Get latest daily data
 DeviceDataHistoryV2Schema.virtual('latestDailyData').get(function() {
@@ -401,5 +405,35 @@ DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
   
   return this;
 };
+
+// Post-save hook to trigger real-time salary updates when tracking data changes
+DeviceDataHistoryV2Schema.post('save', async function(doc) {
+  try {
+    // Only trigger salary updates for significant data changes
+    if (this.isModified('dailyData') || this.isModified('lifetimeTotals')) {
+      console.log(`💰 DeviceDataHistoryV2 data changed for ${this.materialId}, triggering salary update...`);
+      
+      // Import and trigger salary update (use setTimeout to avoid blocking the save operation)
+      setTimeout(async () => {
+        try {
+          const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
+          
+          // Get the latest daily data date
+          if (this.dailyData && this.dailyData.length > 0) {
+            const latestDailyData = this.dailyData.sort((a, b) => b.date - a.date)[0];
+            const dateStr = latestDailyData.date.toISOString().split('T')[0];
+            
+            await realTimeSalaryUpdateService.updateSalaryCalculations(this.materialId, dateStr);
+            console.log(`✅ Real-time salary update triggered for ${this.materialId} on ${dateStr}`);
+          }
+        } catch (error) {
+          console.error(`❌ Real-time salary update failed for ${this.materialId}:`, error.message);
+        }
+      }, 2000); // 2 second delay to ensure save is complete
+    }
+  } catch (error) {
+    console.error('❌ Error in DeviceDataHistoryV2 post-save hook:', error.message);
+  }
+});
 
 module.exports = mongoose.model('DeviceDataHistoryV2', DeviceDataHistoryV2Schema);

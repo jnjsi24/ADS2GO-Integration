@@ -396,11 +396,17 @@ router.post('/ad-playback', async (req, res) => {
       await deviceTracking.save();
     } else {
       // Update existing car record with new slot if needed
-      await deviceTracking.updateSlot(parseInt(deviceSlot), {
-        deviceId,
-        isOnline: true,
-        deviceInfo: {}
-      });
+      try {
+        await deviceTracking.updateSlot(parseInt(deviceSlot), {
+          deviceId,
+          isOnline: true,
+          deviceInfo: {}
+        });
+      } catch (error) {
+        console.error(`Error updating slot ${deviceSlot} for device ${deviceId}:`, error);
+        // Continue with the request even if slot update fails
+        console.warn(`Continuing with ad playback tracking despite slot update failure`);
+      }
     }
 
     // Get userId from Ad collection

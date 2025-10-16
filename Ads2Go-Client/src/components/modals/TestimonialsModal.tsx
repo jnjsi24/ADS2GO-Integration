@@ -20,74 +20,7 @@ interface Testimonial {
 const TestimonialsModal: React.FC<TestimonialsModalProps> = ({ isOpen, onClose }) => {
   const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
 
-  const testimonials: Testimonial[] = [
-    {
-      id: 1,
-      name: 'Rajesh Kumar',
-      title: 'Business Owner',
-      company: 'Kumar Electronics',
-      image: '/image/client1.jpg',
-      quote: 'Increased my sales by 30% with mobile ads! The targeted approach helped me reach exactly the customers I needed. The ROI was incredible.',
-      rating: 5,
-      campaign: 'Motorcycle Plan - 3 months',
-      results: '30% increase in sales, 150% ROI'
-    },
-    {
-      id: 2,
-      name: 'Priya Sharma',
-      title: 'Marketing Manager',
-      company: 'Sharma Restaurants',
-      image: '/image/client1.jpg',
-      quote: 'Amazing reach and easy to manage campaigns. The real-time analytics helped us optimize our messaging and timing perfectly.',
-      rating: 5,
-      campaign: 'Car Plan - 6 months',
-      results: '45% increase in foot traffic, 200% ROI'
-    },
-    {
-      id: 3,
-      name: 'Amit Singh',
-      title: 'Driver',
-      company: 'Independent Driver',
-      image: '/image/client1.jpg',
-      quote: 'I earned extra income by displaying digital ads on my vehicle while doing my regular driving routes. It was a great way to make passive money without changing my routine—I just drove like I normally do, and the ads ran automatically.',
-      rating: 5,
-      campaign: 'Motorcycle Plan - 12 months',
-      results: '₱15,000 additional monthly income'
-    },
-    {
-      id: 4,
-      name: 'Maria Santos',
-      title: 'Marketing Director',
-      company: 'Santos Real Estate',
-      image: '/image/client1.jpg',
-      quote: 'The bus plan gave us incredible visibility for our property launches. We saw a 60% increase in inquiries and several successful sales directly attributed to the mobile ads.',
-      rating: 5,
-      campaign: 'Bus Plan - 4 months',
-      results: '60% increase in inquiries, 8 direct sales'
-    },
-    {
-      id: 5,
-      name: 'John Chen',
-      title: 'CEO',
-      company: 'Chen Tech Solutions',
-      image: '/image/client1.jpg',
-      quote: 'Professional service, excellent results. The team helped us create compelling ad content and the jeepney routes were perfect for reaching our target demographic.',
-      rating: 5,
-      campaign: 'Jeepney Plan - 6 months',
-      results: '40% increase in brand awareness, 180% ROI'
-    },
-    {
-      id: 6,
-      name: 'Sarah Johnson',
-      title: 'Event Coordinator',
-      company: 'Johnson Events',
-      image: '/image/client1.jpg',
-      quote: 'Perfect for promoting our events! The mobile ads helped us reach people on their daily commutes and significantly increased our event attendance.',
-      rating: 5,
-      campaign: 'Car Plan - 2 months',
-      results: '50% increase in event attendance'
-    }
-  ];
+  const testimonials: Testimonial[] = [];
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (

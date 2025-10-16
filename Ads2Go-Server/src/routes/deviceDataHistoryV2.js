@@ -206,7 +206,127 @@ router.put('/materials/:materialId/daily-data/:date', async (req, res) => {
     const targetDate = new Date(date);
     targetDate.setHours(0, 0, 0, 0);
 
-    // Find the material
+    // Check if the date is today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isToday = targetDate.getTime() === today.getTime();
+
+    console.log(`🔄 Updating data for ${materialId} on ${date} (${isToday ? 'TODAY' : 'PAST DATE'})`);
+    console.log(`📊 Update data received:`, updateData);
+
+    if (isToday) {
+      // Update DeviceTracking collection for current date
+      const DeviceTracking = require('../models/deviceTracking');
+      
+      let deviceTracking = await DeviceTracking.findOne({ materialId });
+      
+      if (!deviceTracking) {
+        // Create new DeviceTracking record if it doesn't exist
+        deviceTracking = new DeviceTracking({
+          materialId,
+          carGroupId: req.body.carGroupId || 'UNKNOWN',
+          screenType: 'HEADDRESS',
+          date: today,
+          isOnline: true,
+          lastSeen: new Date(),
+          currentSession: {
+            date: today,
+            startTime: new Date(),
+            lastOnlineUpdate: new Date(),
+            totalHoursOnline: updateData.totalHoursOnline || 0,
+            totalDistanceTraveled: updateData.totalDistanceTraveled || 0,
+            targetHours: 8,
+            complianceStatus: 'NON_COMPLIANT',
+            isActive: true
+          }
+        });
+      } else {
+        // Update existing DeviceTracking record
+        if (updateData.totalDistanceTraveled !== undefined) {
+          deviceTracking.totalDistanceTraveled = updateData.totalDistanceTraveled;
+        }
+        if (updateData.totalHoursOnline !== undefined) {
+          deviceTracking.totalHoursOnline = updateData.totalHoursOnline;
+        }
+        if (updateData.totalAdPlays !== undefined) {
+          deviceTracking.totalAdPlays = updateData.totalAdPlays;
+        }
+        if (updateData.totalQRScans !== undefined) {
+          deviceTracking.totalQRScans = updateData.totalQRScans;
+        }
+        
+        // Update current session
+        if (deviceTracking.currentSession) {
+          if (updateData.totalDistanceTraveled !== undefined) {
+            deviceTracking.currentSession.totalDistanceTraveled = updateData.totalDistanceTraveled;
+          }
+          if (updateData.totalHoursOnline !== undefined) {
+            deviceTracking.currentSession.totalHoursOnline = updateData.totalHoursOnline;
+          }
+        }
+        
+        deviceTracking.updatedAt = new Date();
+      }
+
+      // Mark the document as modified to ensure post-save hooks are triggered
+      deviceTracking.markModified('totalDistanceTraveled');
+      deviceTracking.markModified('totalHoursOnline');
+      deviceTracking.markModified('currentSession');
+
+      await deviceTracking.save();
+      console.log(`✅ Updated DeviceTracking for ${materialId} (current date)`);
+
+      // Also update DeviceDataHistoryV2 for consistency
+      const material = await DeviceDataHistoryV2.findOne({ materialId });
+      if (material) {
+        const dailyDataIndex = material.dailyData.findIndex(day => {
+          const dayDate = new Date(day.date);
+          dayDate.setHours(0, 0, 0, 0);
+          return dayDate.getTime() === targetDate.getTime();
+        });
+
+        if (dailyDataIndex !== -1) {
+          Object.keys(updateData).forEach(key => {
+            if (key !== '_id' && key !== 'date') {
+              material.dailyData[dailyDataIndex][key] = updateData[key];
+            }
+          });
+          material.dailyData[dailyDataIndex].lastDataUpdate = new Date();
+          material.dailyData[dailyDataIndex].lastUpdateType = 'manual_edit_current';
+          material.dailyData[dailyDataIndex].updateCount = (material.dailyData[dailyDataIndex].updateCount || 0) + 1;
+          material.updatedAt = new Date();
+          
+          // Mark the document as modified to ensure post-save hooks are triggered
+          material.markModified('dailyData');
+          material.markModified('lifetimeTotals');
+          
+          await material.save();
+        }
+      }
+
+      // Manually trigger salary update for current date changes
+      try {
+        console.log(`💰 Triggering manual salary update for ${materialId} on ${date}...`);
+        const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
+        await realTimeSalaryUpdateService.updateSalaryCalculations(materialId, date);
+        console.log(`✅ Manual salary update completed for ${materialId} on ${date}`);
+      } catch (salaryError) {
+        console.error(`❌ Manual salary update failed for ${materialId}:`, salaryError.message);
+      }
+
+      res.json({
+        success: true,
+        message: 'Current date data updated successfully (DeviceTracking + DeviceDataHistoryV2)',
+        data: {
+          materialId,
+          date: targetDate,
+          updateType: 'current_date',
+          updatedFields: Object.keys(updateData)
+        }
+      });
+
+    } else {
+      // Update DeviceDataHistoryV2 collection for past dates
     const material = await DeviceDataHistoryV2.findOne({ materialId });
 
     if (!material) {
@@ -230,26 +350,49 @@ router.put('/materials/:materialId/daily-data/:date', async (req, res) => {
       });
     }
 
-    // Update the daily data entry
-    Object.keys(updateData).forEach(key => {
-      if (key !== '_id' && key !== 'date') {
-        material.dailyData[dailyDataIndex][key] = updateData[key];
+      // Update the daily data entry
+      Object.keys(updateData).forEach(key => {
+        if (key !== '_id' && key !== 'date') {
+          material.dailyData[dailyDataIndex][key] = updateData[key];
+        }
+      });
+
+      // Update metadata
+      material.dailyData[dailyDataIndex].lastDataUpdate = new Date();
+      material.dailyData[dailyDataIndex].lastUpdateType = 'manual_edit_past';
+      material.dailyData[dailyDataIndex].updateCount = (material.dailyData[dailyDataIndex].updateCount || 0) + 1;
+      material.updatedAt = new Date();
+
+      // Mark the document as modified to ensure post-save hooks are triggered
+      material.markModified('dailyData');
+      material.markModified('lifetimeTotals');
+
+      await material.save();
+      console.log(`✅ Updated DeviceDataHistoryV2 for ${materialId} (past date: ${date})`);
+
+      // Manually trigger salary update for past date changes
+      try {
+        console.log(`💰 Triggering manual salary update for ${materialId} on ${date}...`);
+        const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
+        await realTimeSalaryUpdateService.updateSalaryCalculations(materialId, date);
+        console.log(`✅ Manual salary update completed for ${materialId} on ${date}`);
+      } catch (salaryError) {
+        console.error(`❌ Manual salary update failed for ${materialId}:`, salaryError.message);
       }
-    });
-
-    // Update metadata
-    material.dailyData[dailyDataIndex].lastDataUpdate = new Date();
-    material.dailyData[dailyDataIndex].lastUpdateType = 'manual_edit';
-    material.dailyData[dailyDataIndex].updateCount = (material.dailyData[dailyDataIndex].updateCount || 0) + 1;
-    material.updatedAt = new Date();
-
-    await material.save();
 
     res.json({
       success: true,
-      message: 'Daily data updated successfully',
-      data: material.dailyData[dailyDataIndex]
-    });
+        message: 'Past date data updated successfully (DeviceDataHistoryV2)',
+        data: {
+          materialId,
+          date: targetDate,
+          updateType: 'past_date',
+          updatedFields: Object.keys(updateData),
+          dailyData: material.dailyData[dailyDataIndex]
+        }
+      });
+    }
+
   } catch (error) {
     console.error('Error updating daily data:', error);
     res.status(500).json({
