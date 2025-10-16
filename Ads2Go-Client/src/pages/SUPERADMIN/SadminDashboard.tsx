@@ -82,12 +82,12 @@ const Dashboard = () => {
   return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center pt-3 mb-8">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800">
             Welcome back, {adminName}!
           </h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-black/70">
             It is the best time to manage your finances
           </p>
         </div>
@@ -99,11 +99,6 @@ const Dashboard = () => {
           >
             <Bell className="h-5 w-5 mr-2 text-gray-500" />
             <span>Notifications</span>
-            {unreadCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
           </Link>
           
           {/* Calendar icon and 'This month' button */}

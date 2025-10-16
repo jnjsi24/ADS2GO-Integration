@@ -133,7 +133,7 @@ const SuperAdminLogin: React.FC = () => {
 
           {/* Error */}
           {errorMsg && (
-            <div className="text-center text-red-600 font-semibold text-sm">
+            <div className="text-center text-red-300 font-semibold text-sm">
               {errorMsg}
             </div>
           )}

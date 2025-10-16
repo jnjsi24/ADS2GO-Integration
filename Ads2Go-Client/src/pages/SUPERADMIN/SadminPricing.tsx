@@ -256,7 +256,7 @@ const SadminPricing: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen ml-64 bg-gray-50">
+    <div className="min-h-screen ml-60 bg-gray-50">
       {/* Header */}
       <div>
         <div className="px-8 py-6">

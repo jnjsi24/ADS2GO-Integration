@@ -151,68 +151,70 @@ const SadminAnalytics: React.FC = () => {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-blue-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Stats */}
-          <div className="flex flex-col items-start">
-            <Users className="h-10 w-10 text-white bg-blue-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Users</p>
+          {/* Left side: icon */}
+          <div>
+            <Users className="h-12 w-12 text-white rounded-full bg-blue-500 p-2" />
           </div>
-          {/* Right side: Icon + Label */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalUsers || 0} Users</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+12.5%</span>
-            </div>
+
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold text-blue-600">
+              {stats?.totalUsers?.toLocaleString() || 0} Users
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Users</h3>
           </div>
         </div>
 
 
+
+        {/* Total Drivers */}
         <div className="bg-green-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <UserCheck className="h-10 w-10 text-white bg-green-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Drivers</p>
+          {/* Left side: icon */}
+          <div>
+            <UserCheck className="h-12 w-12 text-white rounded-full bg-green-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalDrivers || 0} Drivers</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+8.3%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold text-green-600">
+              {stats?.totalDrivers?.toLocaleString() || 0} Drivers
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Drivers</h3>
           </div>
         </div>
 
+        {/* Total Ads */}
         <div className="bg-purple-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <TrendingUp className="h-10 w-10 text-white bg-purple-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Ads</p>
+          {/* Left side: icon */}
+          <div>
+            <TrendingUp className="h-12 w-12 text-white rounded-full bg-purple-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalAds || 0} Ads</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+15.2%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold text-purple-600">
+              {stats?.totalAds?.toLocaleString() || 0} Ads
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Ads</h3>
           </div>
         </div>
 
+        {/* Total Revenue */}
         <div className="bg-yellow-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <DollarSign className="h-10 w-10 text-white bg-yellow-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+          {/* Left side: icon */}
+          <div>
+            <DollarSign className="h-12 w-12 text-white rounded-full bg-yellow-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">₱{stats?.totalRevenue?.toLocaleString() || 0}</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+22.1%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold text-yellow-600">
+              ₱{stats?.totalRevenue?.toLocaleString() || 0}
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
           </div>
         </div>
+
       </div>
 
       {/* Growth + Locations Section */}
@@ -814,7 +816,7 @@ const SadminAnalytics: React.FC = () => {
 
   return (
     <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
-      <div className="mb-8">
+      <div className="pt-5 mb-8">
         <Link
           to="/sadmin-dashboard"
           className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"

@@ -17,9 +17,10 @@ import {
   Legend,
   ComposedChart
 } from 'recharts';
+import { ImagePlay, ScanQrCode, Images, MonitorSmartphone, Smartphone, QrCode, Megaphone } from 'lucide-react';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
-import { ArrowLeft, Download, RefreshCw, TrendingUp, Eye, Play, Clock, Target, Users, MapPin, Calendar, BarChart3, Monitor, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, TrendingUp, Eye, Play, Clock, Target, Users, MapPin, Calendar, BarChart3, Monitor, ChevronDown, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -693,93 +694,112 @@ const DetailedAnalytics: React.FC = () => {
     <div className="space-y-6">
       {/* Key Metrics Overview - Updated for UserAnalytics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white/60 p-6 shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Plays</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                From history
-              </p>
+        <div className="bg-white/50 p-6 shadow-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+             <div
+              className="p-2 mr-2 rounded-full bg-gradient-to-br from-yellow-300/60 via-yellow-300/40 to-white/40 border 
+              border-white/30 backdrop-blur-md shadow-md flex items-center justify-center">
+              <Play className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
+              </div>
+                <p className="text-sm text-black/70 font-medium ml-1">Total Plays</p>
             </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <Play className="w-6 h-6 text-green-600" />
-            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.totalAdsPlayed.toLocaleString()}
+            </p>
           </div>
         </div>
 
-        <div className="bg-white/60 p-6 shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">QR Scans</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : analyticsSummary.totalQRScans.toLocaleString()}
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                {analyticsSummary.qrScanConversionRate.toFixed(1)}% conversion
-              </p>
+        <div className="bg-white/50 p-6 shadow-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-purple-300/60 via-purple-300/40 to-white/40 
+                          border border-white/30 
+                          backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <ScanQrCode className="w-5 h-5 text-purple-700 drop-shadow-sm" />
+              </div>
+
+              <p className="text-sm text-black/70 font-medium ml-1">QR Scans</p>
             </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <Target className="w-6 h-6 text-purple-600" />
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.totalQRScans.toLocaleString()}
+            </p>
+          </div>
+
+        </div>
+
+        <div className="bg-white/50 p-6 shadow-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                           bg-gradient-to-br from-blue-300/60 via-blue-300/40 to-white/40 
+                           border border-white/30 
+                           backdrop-blur-md shadow-md 
+                           flex items-center justify-center"
+              >
+                <MonitorSmartphone className="w-5 h-5 text-blue-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Devices</p>
             </div>
+
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.totalMaterials.toLocaleString()}
+            </p>
           </div>
         </div>
 
-        <div className="bg-white/60 p-6 shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Materials</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : analyticsSummary.totalMaterials.toLocaleString()}
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                Active devices
-              </p>
+        <div className="bg-white/50 p-6 shadow-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+                          border border-white/30 
+                          backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <Target className="w-5 h-5 text-green-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Completion Rate</p>
             </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Users className="w-6 h-6 text-orange-600" />
-            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.averageCompletionRate.toFixed(1)}%
+            </p>
           </div>
         </div>
 
-        <div className="bg-white/60 p-6 shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Completion Rate</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : analyticsSummary.averageCompletionRate.toFixed(1)}%
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                Average
-              </p>
+        <div className="bg-white/50 p-6 shadow-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-orange-300/60 via-orange-300/40 to-white/40 
+                          border border-white/30 
+                          backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <Clock className="w-5 h-5 text-orange-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Display Time</p>
             </div>
-            <div className="p-3 bg-indigo-100 rounded-full">
-              <Target className="w-6 h-6 text-indigo-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/60 p-6 shadow-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Display Time</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {analyticsLoading ? '...' : formatDisplayTime(analyticsSummary.totalDisplayTime)}
-              </p>
-              <p className="text-sm text-green-600 flex items-center mt-1">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                Total hours
-              </p>
-            </div>
-            <div className="p-3 bg-yellow-100 rounded-full">
-              <Clock className="w-6 h-6 text-yellow-600" />
-            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : formatDisplayTime(analyticsSummary.totalDisplayTime)}
+            </p>
           </div>
         </div>
       </div>
@@ -929,10 +949,9 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderDisplayTimeSection = () => (
     <div className="space-y-6">
-      <div className="bg-white/20 p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Display Time Analysis</h3>
+      <div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-lg border border-blue-100">
+          <div className="bg-white/20 shadow-md p-4">
             <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Clock className="w-5 h-5 text-[#1b5087]" />
               Daily Display Time
@@ -946,11 +965,11 @@ const DetailedAnalytics: React.FC = () => {
                   formatter={(value) => [formatDisplayTime(Number(value)), 'Display Time']}
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                 />
-                <Bar dataKey="completion" fill="#1b5087" radius={[8, 8, 0, 0]} name="Display Time (hours)" />
+                <Bar dataKey="completion" fill="rgba(27, 80, 135, 0.8)" radius={[8, 8, 0, 0]} name="Display Time (hours)" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="bg-gradient-to-br from-green-50 to-white p-4 rounded-lg border border-green-100">
+          <div className="bg-white/20 shadow-md p-4">
             <h4 className="text-md font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-green-600" />
               Device Completion Rate
@@ -963,7 +982,7 @@ const DetailedAnalytics: React.FC = () => {
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                 />
-                <Bar dataKey="completion" fill="#10b981" radius={[8, 8, 0, 0]} name="Completion Rate %" />
+                <Bar dataKey="completion" fill="rgba(16, 185, 129, 0.7)" radius={[8, 8, 0, 0]} name="Completion Rate %" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -974,35 +993,32 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderQRSection = () => (
     <div className="space-y-6">
-      <div className="bg-white/20 p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">QR Scans Analysis - Real Data from UserAnalytics</h3>
-        
-        {/* QR Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600">Total QR Scans</p>
-                <p className="text-2xl font-bold text-blue-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalQRScans.toLocaleString()}
-                </p>
+      {/* QR Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-blue-300/60 via-blue-200/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <QrCode className="w-5 h-5 text-blue-700 drop-shadow-sm" />
               </div>
-              <div className="text-blue-500">📱</div>
+              <p className="text-sm text-black/70 font-medium ml-1">Total QR Scans</p>
             </div>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600">Conversion Rate</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {analyticsLoading ? '...' : analyticsSummary.qrScanConversionRate.toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-green-500">🎯</div>
-            </div>
+
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-11">
+              {analyticsLoading ? '...' : analyticsSummary.totalQRScans.toLocaleString()}
+            </p>
           </div>
         </div>
+      </div>
 
+      <div className="bg-white/20 p-6 shadow-md">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h4 className="text-md font-medium text-gray-700 mb-3">QR Scans Over Time</h4>
@@ -1066,50 +1082,103 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderTabletActivitySection = () => (
     <div className="space-y-6">
-      <div className="bg-white/20 p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Activity Overview - Real Data from UserAnalytics</h3>
-        
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-green-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600">Total Materials</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalMaterials.toLocaleString()}
-                </p>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {/* Total Materials */}
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-yellow-400/60 via-yellow-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <Smartphone className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
               </div>
-              <div className="text-green-500">📱</div>
+              <p className="text-sm text-black/70 font-medium ml-1">Total LCD</p>
             </div>
-          </div>
-          <div className="bg-blue-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600">Total Devices</p>
-                <p className="text-2xl font-bold text-blue-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalDevices.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-blue-500">💻</div>
-            </div>
-          </div>
-          <div className="bg-orange-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-600">Avg. Completion</p>
-                <p className="text-2xl font-bold text-orange-700">
-                  {analyticsLoading ? '...' : analyticsSummary.averageCompletionRate.toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-orange-500">🎯</div>
-            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              1
+            </p>
           </div>
         </div>
 
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-orange-400/60 via-orange-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <Monitor className="w-5 h-5 text-orange-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Total Headdress</p>
+            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              1
+            </p>
+          </div>
+        </div>
+
+        {/* Total Devices */}
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-blue-400/60 via-blue-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+              <MonitorSmartphone className="w-5 h-5 text-blue-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Total Devices</p>
+            </div>
+
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.totalDevices.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Avg. Completion */}
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-red-400/60 via-red-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+              <Target className="w-5 h-5 text-red-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Avgerage Completion</p>
+            </div>
+
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-12">
+              {analyticsLoading ? '...' : analyticsSummary.averageCompletionRate.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white/20 shadow-md">
         {/* Device Activity Table - Real Data from UserAnalytics */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+            <thead className="bg-white/20">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
@@ -1120,7 +1189,7 @@ const DetailedAnalytics: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Display Time</th>
               </tr>
             </thead>
-            <tbody className="bg-white/60 divide-y divide-gray-200">
+            <tbody className="bg-white/20 divide-y divide-gray-200">
               {selectedDevice === 'all' ? (
                 // For "All Devices" - use only UserAnalytics data from direct API
                 directAnalyticsData?.deviceStats?.length > 0 ? 
@@ -1217,49 +1286,57 @@ const DetailedAnalytics: React.FC = () => {
 
   const renderDetailedAdsSection = () => (
     <div className="space-y-6">
-      <div className="bg-white/20 p-6 shadow-md">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Detailed Ads Analytics - Real Data from UserAnalytics</h3>
-        
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-blue-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600">Total Ads</p>
-                <p className="text-2xl font-bold text-blue-700">
-                  {analyticsLoading ? '...' : analyticsSummary.totalAds}
-                </p>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* Total Ads */}
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-yellow-300/60 via-yellow-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+              <Images className="w-5 h-5 text-yellow-700 drop-shadow-sm" />
               </div>
-              <div className="text-blue-500">📺</div>
+              <p className="text-sm text-black/70 font-medium ml-1">Total Ads</p>
             </div>
-          </div>
-          <div className="bg-green-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600">Active Ads</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {analyticsLoading ? '...' : analyticsSummary.activeAds}
-                </p>
-              </div>
-              <div className="text-green-500">▶️</div>
-            </div>
-          </div>
-          <div className="bg-orange-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-600">QR Conversion</p>
-                <p className="text-2xl font-bold text-orange-700">
-                  {analyticsLoading ? '...' : analyticsSummary.qrScanConversionRate.toFixed(1)}%
-                </p>
-              </div>
-              <div className="text-orange-500">🎯</div>
-            </div>
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-11">
+              {analyticsLoading ? '...' : analyticsSummary.totalAds.toLocaleString()}
+            </p>
           </div>
         </div>
+        {/* Active Ads */}
+        <div className="bg-white/50 p-6 shadow-md backdrop-blur-md">
+          <div className="flex flex-col">
+            {/* Row 1: Icon + Label */}
+            <div className="flex items-center">
+              <div
+                className="p-2 mr-2 rounded-full 
+                          bg-gradient-to-br from-green-300/60 via-green-300/40 to-white/40 
+                          border border-white/30 backdrop-blur-md shadow-md 
+                          flex items-center justify-center"
+              >
+                <ImagePlay className="w-5 h-5 text-green-700 drop-shadow-sm" />
+              </div>
+              <p className="text-sm text-black/70 font-medium ml-1">Active Ads</p>
+            </div>
 
+            {/* Row 2: Value */}
+            <p className="text-3xl font-semibold text-gray-900 mt-1 ml-11">
+              {analyticsLoading ? '...' : analyticsSummary.activeAds.toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white/20 p-6 shadow-md">
         {/* Detailed Ads Table - Real Data from UserAnalytics */}
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-gray-200">
             <thead className="">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-black/80 uppercase tracking-wider">Ad Title</th>
@@ -1376,7 +1453,7 @@ const DetailedAnalytics: React.FC = () => {
     {/* Foreground content */}
     <div className="relative min-h-screen bg-transparent pl-72 pr-5 p-10 flex flex-col">
       {/* Header Section */}
-      <div className="flex flex-col gap-4 mb-6">
+      <div className="flex flex-col mt-4 gap-4 mb-6">
         {/* Row 1: Back to Dashboard */}
         <div className="flex justify-between items-center">
           <Link
@@ -1395,8 +1472,137 @@ const DetailedAnalytics: React.FC = () => {
             <h1 className="text-3xl font-semibold text-gray-800">Detailed Analytics</h1>
           </div>
 
-          {/* Right: Filters */}
+          {/* Right: Action Buttons */}
           <div className="flex items-center gap-3">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRefresh}
+                  onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    setPos({ x, y });
+                  }}
+                  className={`relative group inline-flex items-center justify-center overflow-hidden
+                              px-4 py-2 text-sm font-semibold text-white
+                              transition-all duration-300 hover:scale-105`}
+                  style={{
+                    backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
+                                      radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
+                  }}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    Refresh
+                  </span>
+
+                  {/* Light-blue shine effect following mouse */}
+                  <span
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+                    style={{
+                      background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
+                    }}
+                  />
+                </button>
+                <button
+                  onClick={exportData}
+                  className="flex items-center gap-2 px-4 py-2 text-sm border border-green-500 text-green-600 hover:text-green-600 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Export
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3: Refresh + Export Buttons */}
+        
+      </div>
+
+
+      {/* Device Information Banner */}
+      {selectedDevice !== 'all' && deviceAnalytics && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Monitor className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900">
+                  {deviceAnalytics.deviceInfo?.deviceName || 'Selected Device'}
+                </h3>
+                <p className="text-sm text-blue-700">
+                  Material ID: {deviceAnalytics.deviceInfo?.materialId} • 
+                  Car Group: {deviceAnalytics.deviceInfo?.carGroupId} • 
+                  Platform: {deviceAnalytics.deviceInfo?.platform} • 
+                  OS: {deviceAnalytics.deviceInfo?.osName} {deviceAnalytics.deviceInfo?.osVersion}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-blue-600">Showing device-specific analytics</p>
+              <p className="text-xs text-blue-500">
+                {deviceAnalytics.dateRange?.totalDays || 0} days of data
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Analytics Data Message */}
+      {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                No Analytics Data Yet
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>You don't have any analytics data yet. This is normal for new users or users without deployed ads.</p>
+                <p className="mt-1">Once you create and deploy ads, your detailed analytics will appear here.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation Tabs */}
+      <div className="">
+        <div className="flex overflow-x-auto">
+          {[
+            { id: 'overview', label: 'Overview', icon: BarChart3 },
+            { id: 'display', label: 'Display Time', icon: Clock },
+            { id: 'qr', label: 'QR Impressions', icon: QrCode },
+            { id: 'tablets', label: 'Tablet Activity', icon: MonitorSmartphone },
+            { id: 'ads', label: 'Detailed Ads', icon: Megaphone },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setSelectedView(id as any)}
+              className={`relative flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors group
+                ${selectedView === id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              <Icon className={`w-5 h-5 transition-transform duration-200 ${selectedView === id ? 'scale-110' : 'group-hover:scale-105'}`} />
+              {label}
+              {/* Animated underline */}
+              <span
+                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                  ${selectedView === id ? 'w-full' : 'w-0 group-hover:w-full'}`}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end mb-10 gap-3">
             {/* Device Selection Dropdown */}
             <div className="relative w-32">
               <button
@@ -1483,135 +1689,6 @@ const DetailedAnalytics: React.FC = () => {
               </AnimatePresence>
             </div>
           </div>
-        </div>
-
-        {/* Row 3: Refresh + Export Buttons */}
-        <div className="flex justify-between items-center">
-          {/* Empty space on left to align with title */}
-          <div></div>
-          
-          {/* Right: Action Buttons */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRefresh}
-              onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / rect.width) * 100;
-                const y = ((e.clientY - rect.top) / rect.height) * 100;
-                setPos({ x, y });
-              }}
-              className={`relative group inline-flex items-center justify-center overflow-hidden
-                          px-4 py-2 text-sm font-semibold text-white
-                          transition-all duration-300 hover:scale-105`}
-              style={{
-                backgroundImage: `linear-gradient(to right, #1B5087 0%, #3674B5 100%),
-                                  radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(173,216,230,0), rgba(173,216,230,0))`,
-              }}
-            >
-              <span className="inline-flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" />
-                Refresh
-              </span>
-
-              {/* Light-blue shine effect following mouse */}
-              <span
-                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle at ${pos.x}% ${pos.y}%, rgba(255,255,255,0.25), transparent 60%)`,
-                }}
-              />
-            </button>
-            <button
-              onClick={exportData}
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-green-500 text-green-600 hover:text-green-600 transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-          </div>
-        </div>
-      </div>
-
-
-      {/* Device Information Banner */}
-      {selectedDevice !== 'all' && deviceAnalytics && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Monitor className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-blue-900">
-                  {deviceAnalytics.deviceInfo?.deviceName || 'Selected Device'}
-                </h3>
-                <p className="text-sm text-blue-700">
-                  Material ID: {deviceAnalytics.deviceInfo?.materialId} • 
-                  Car Group: {deviceAnalytics.deviceInfo?.carGroupId} • 
-                  Platform: {deviceAnalytics.deviceInfo?.platform} • 
-                  OS: {deviceAnalytics.deviceInfo?.osName} {deviceAnalytics.deviceInfo?.osVersion}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-blue-600">Showing device-specific analytics</p>
-              <p className="text-xs text-blue-500">
-                {deviceAnalytics.dateRange?.totalDays || 0} days of data
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* No Analytics Data Message */}
-      {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">
-                No Analytics Data Yet
-              </h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <p>You don't have any analytics data yet. This is normal for new users or users without deployed ads.</p>
-                <p className="mt-1">Once you create and deploy ads, your detailed analytics will appear here.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Navigation Tabs */}
-      <div className="mb-6">
-        <div className="flex overflow-x-auto">
-          {[
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'display', label: 'Display Time', icon: Clock },
-            { id: 'qr', label: 'QR Impressions', icon: Target },
-            { id: 'tablets', label: 'Tablet Activity', icon: Users },
-            { id: 'ads', label: 'Detailed Ads', icon: BarChart3 },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setSelectedView(id as any)}
-              className={`relative flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors group
-                ${selectedView === id ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'}`}
-            >
-              <Icon className={`w-5 h-5 transition-transform duration-200 ${selectedView === id ? 'scale-110' : 'group-hover:scale-105'}`} />
-              {label}
-              {/* Animated underline */}
-              <span
-                className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
-                  ${selectedView === id ? 'w-full' : 'w-0 group-hover:w-full'}`}
-              />
-            </button>
-          ))}
-        </div>
-      </div>
 
 
       {/* Content based on selected view */}

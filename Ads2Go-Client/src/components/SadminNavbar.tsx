@@ -51,27 +51,25 @@ const SadminNavbar: React.FC = () => {
     { label: 'Analytics', path: '/sadmin-analytics', icon: <BarChart3 size={20} /> },
     { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
     { label: 'Pricing', path: '/sadmin-pricing', icon: <DollarSign size={20} /> },
-    { label: 'Settings', path: '/sadmin-settings', icon: <Settings size={20} /> },
   ];
 
   return (
-    <div className="w-64 h-full bg-[#0E2A47] fixed shadow-2xl text-white flex flex-col justify-between pt-10 p-4"> {/* Distinct color for SadminNavbar */}
+    <div className="w-60 h-full fixed border-r border-black/10 text-black flex flex-col justify-between pt-10 p-4"> {/* Distinct color for SadminNavbar */}
       <div>
         {/* Logo */}
-        <div className="flex space-x-3 mb-10">
+        <div className="flex items-center justify-center space-x-3">
           {/* Placeholder for SuperAdmin Logo */}
-          <img alt="Ads2Go SAdmin Logo" className="w-8 h-8 " src="https://placehold.co/32x32/0E2A47/FFFFFF?text=S" />
-          <span className="text-2xl mr-20 text-white font-bold">SuperAdmin</span>
+          <img src="/image/Ads2GoLogoText.png" alt="Logo" className="w-32 h-12" />
         </div>
 
         {/* Menu Items */}
-        <nav className="flex flex-col space-y-2 pt-5 text-white text-lg">
+        <nav className="flex flex-col space-y-2 pt-5 text-black text-md">
           {menuItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#1b5087] hover:text-white transition hover:scale-105 duration-300 ${
-                location.pathname === item.path ? 'bg-[#1b5087] font-semibold' : ''
+              className={`flex items-center gap-3 px-4 py-3 rounded-md hover:bg-[#1b5087] hover:text-white transition hover:scale-105 duration-300 ${
+                location.pathname === item.path ? 'bg-[#1b5087] text-white font-semibold' : ''
               }`}
             >
               {item.icon}
@@ -86,7 +84,7 @@ const SadminNavbar: React.FC = () => {
         {/* Profile Bar */}
         <button
           onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-          className="w-full flex items-center justify-between rounded-lg p-3 mb-2 transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between rounded-md p-3 mb-2 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
             {admin?.profilePicture ? (
@@ -100,17 +98,17 @@ const SadminNavbar: React.FC = () => {
                 <div className="rounded-full w-10 h-10 bg-[#FF9D3D] flex items-center justify-center text-white font-semibold">
                   {admin ? getInitials(admin.firstName, admin.lastName) : '?'}
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0E2A47]"></div>
+                <div className="absolute top-7 left-7 w-3 h-3 bg-green-500 rounded-full"></div>
               </div>
             )}
-            <div className="font-semibold text-left ml-1 text-white">
+            <div className="font-semibold text-left ml-1 text-black">
               {admin ? `${admin.firstName || ''} ${admin.lastName || ''}` : 'SuperAdmin User'}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/sadmin-notifications" className="relative text-gray-300 hover:text-gray-500 transition-colors">
+            <Link to="/sadmin-notifications" className="relative text-black/70 hover:text-gray-500 transition-colors">
               <Bell size={18} />
-              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+              <div className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                 <span className="text-xs text-white font-bold">7</span>
               </div>
             </Link>
@@ -119,7 +117,7 @@ const SadminNavbar: React.FC = () => {
 
         {/* Dropdown Menu */}
         {showProfileDropdown && (
-          <div className="absolute bottom-16 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+          <div className="absolute bottom-16 w-56 bg-white rounded-md shadow-xl border border-gray-200 z-50">
             <div className="py-2">
               {/* Profile Option */}
               <button
