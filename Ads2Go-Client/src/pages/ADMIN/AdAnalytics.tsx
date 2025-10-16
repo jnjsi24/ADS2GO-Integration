@@ -168,8 +168,8 @@ const AdAnalytics: React.FC = () => {
   useEffect(() => {
     fetchAnalytics();
     
-    // Auto-refresh every 5 seconds for faster updates
-    const interval = setInterval(fetchAnalytics, 5000);
+    // Auto-refresh every 30 seconds for more discreet updates
+    const interval = setInterval(fetchAnalytics, 30000);
     return () => clearInterval(interval);
   }, []);
 

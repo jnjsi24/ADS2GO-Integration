@@ -24,15 +24,7 @@ const Alerts: React.FC<AlertsProps> = ({
   onResolveAlert, 
   onViewAlert 
 }) => {
-  // Mock data for demonstration
-  const mockAlerts: Alert[] = [
-    { id: 1, type: 'critical', message: 'Device ABC123 offline for 2+ hours', timestamp: '2 minutes ago' },
-    { id: 2, type: 'high', message: 'Low battery on device XYZ789', timestamp: '15 minutes ago' },
-    { id: 3, type: 'medium', message: 'Ad playback error on device DEF456', timestamp: '1 hour ago' },
-    { id: 4, type: 'low', message: 'Scheduled maintenance completed', timestamp: '2 hours ago' }
-  ];
-
-  const displayAlerts = alerts.length > 0 ? alerts : mockAlerts;
+  const displayAlerts = alerts;
 
   const getAlertIcon = (type: string) => {
     switch (type) {

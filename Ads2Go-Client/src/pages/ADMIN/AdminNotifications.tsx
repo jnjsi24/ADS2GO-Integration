@@ -53,7 +53,7 @@ const AdminNotifications: React.FC = () => {
 
   // Fetch notifications
   const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
-    pollInterval: 30000, // Refresh every 30 seconds
+    pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
   });
 
   // Handle query errors
