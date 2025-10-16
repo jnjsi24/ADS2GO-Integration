@@ -59,6 +59,7 @@ import SadminDashboard from './pages/SUPERADMIN/SadminDashboard';
 import SadminSettings from './pages/SUPERADMIN/SadminSettings';
 import SadminAccount from './pages/SUPERADMIN/SadminAccount';
 import SadminPricing from './pages/SUPERADMIN/SadminPricing';
+import SadminDriverSalary from './pages/SUPERADMIN/SadminDriverSalary';
 import SadminAdmin from 'pages/SUPERADMIN/SadminAdmin';
 import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
 import SadminAnalytics from './pages/SUPERADMIN/SadminAnalytics';
@@ -238,6 +239,14 @@ const AdminAppContent: React.FC = () => {
           element={
             <ProtectedRoute>
               <SadminPricing />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sadmin-driver-salary"
+          element={
+            <ProtectedRoute>
+              <SadminDriverSalary />
             </ProtectedRoute>
           }
         />

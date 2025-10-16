@@ -165,7 +165,7 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
 
   return (
-    <div className="relative min-h-screen overflow-hidden pl-72 pr-5 flex items-center justify-center">
+    <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 flex items-center justify-center">
   {/* Background Image */}
   <div
     className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
@@ -178,10 +178,10 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
   <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
   {/* Main Content */}
-  <div className="relative z-10 w-full flex items-center justify-center min-h-screen bg-transparent">
-    <div className="rounded-xl shadow-2xl flex flex-col sm:flex-row w-full max-w-5xl overflow-hidden min-h-[600px]">
+  <div className="relative z-10 w-full flex items-center justify-center min-h-screen bg-transparent py-20 lg:py-10">
+    <div className="rounded-xl shadow-2xl flex flex-col lg:flex-row w-full max-w-5xl overflow-hidden min-h-[600px] bg-white/20 backdrop-blur-md">
       {/* Left Section: Profile Card */}
-        <div className="flex flex-col items-center justify-center p-8 bg-white/10 bg-opacity-70 sm:w-1/3">
+        <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-white/10 bg-opacity-70 lg:w-1/3">
           <div className="relative w-36 h-36 rounded-full overflow-hidden mb-4 flex items-center justify-center bg-gray-400 text-black text-3xl font-bold">
             {formData.profilePicture ? (
               <img
@@ -279,11 +279,11 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
 
 
         {/* Right Section */}
-        <div className="flex-grow p-8 space-y-8 relative">
-          <h3 className="text-lg font-bold text-black mb-6">Personal Information</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+        <div className="flex-grow p-6 sm:p-8 space-y-6 sm:space-y-8 relative">
+          <h3 className="text-base sm:text-lg font-bold text-black mb-4 sm:mb-6">Personal Information</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-4 sm:gap-y-6">
             {/* First Name & Middle Name */}
-            <div className="flex gap-4 col-span-2 sm:col-span-2">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 col-span-1 sm:col-span-2">
               <div className="flex-1 space-y-1">
                 <label className="block text-sm font-medium text-black/80">First Name</label>
                 <input
@@ -309,7 +309,7 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
             </div>
 
             {/* Last Name Full Width */}
-            <div className="flex gap-4 col-span-2 sm:col-span-2">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 col-span-1 sm:col-span-2">
               <div className="flex-1 space-y-1">
                 <label className="block text-sm font-medium text-black/80">Last Name</label>
                 <input
@@ -322,11 +322,11 @@ const handleImageChange = async (e: ChangeEvent<HTMLInputElement>) => {
                 />
               </div>
               {/* Empty space to align with Middle Name */}
-              <div className="flex-1"></div>
+              <div className="flex-1 hidden sm:block"></div>
             </div>
 
             {/* Contact Number & Email */}
-            <div className="flex gap-4 col-span-2 sm:col-span-2">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 col-span-1 sm:col-span-2">
               <div className="flex-1 space-y-1">
                 <label className="block text-sm font-medium text-black/80">Contact Number</label>
                 <input

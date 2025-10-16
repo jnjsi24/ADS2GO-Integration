@@ -535,11 +535,19 @@ const notificationResolvers = {
     },
 
     // Admin-specific mutations
-    markNotificationRead: async (_, { notificationId }, { user }) => {
-      checkAuth(user);
+    markNotificationRead: async (_, { notificationId }, { user, driver }) => {
+      // Support both user and driver authentication
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
       
       try {
-        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        // Get the correct user ID based on authentication type
+        const userId = user ? user.id : driver._id;
+        const userType = user ? 'user' : 'driver';
+        
+        console.log(`🔔 Marking notification as read for ${userType}:`, userId, 'notificationId:', notificationId);
+        const userNotifications = await UserNotifications.findOne({ userId });
         
         if (!userNotifications) {
           return {
@@ -573,6 +581,7 @@ const notificationResolvers = {
         userNotifications.unreadCount = Math.max(0, userNotifications.unreadCount - 1);
         
         await userNotifications.save();
+        console.log(`✅ Notification marked as read for ${userType}`);
         
         return {
           success: true,
@@ -587,11 +596,19 @@ const notificationResolvers = {
       }
     },
 
-    markAllNotificationsRead: async (_, __, { user }) => {
-      checkAuth(user);
+    markAllNotificationsRead: async (_, __, { user, driver }) => {
+      // Support both user and driver authentication
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
       
       try {
-        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        // Get the correct user ID based on authentication type
+        const userId = user ? user.id : driver._id;
+        const userType = user ? 'user' : 'driver';
+        
+        console.log(`🔔 Marking all notifications as read for ${userType}:`, userId);
+        const userNotifications = await UserNotifications.findOne({ userId });
         
         if (!userNotifications) {
           return {
@@ -614,6 +631,7 @@ const notificationResolvers = {
         userNotifications.unreadCount = 0;
         
         await userNotifications.save();
+        console.log(`✅ Marked ${markedCount} notifications as read for ${userType}`);
         
         return {
           success: true,
@@ -628,15 +646,22 @@ const notificationResolvers = {
       }
     },
 
-    deleteNotification: async (_, { notificationId }, { user }) => {
-      checkAuth(user);
+    deleteNotification: async (_, { notificationId }, { user, driver }) => {
+      // Support both user and driver authentication
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
       
       try {
-        console.log('🗑️ Deleting notification:', notificationId, 'for user:', user.id);
-        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        // Get the correct user ID based on authentication type
+        const userId = user ? user.id : driver._id;
+        const userType = user ? 'user' : 'driver';
+        
+        console.log(`🗑️ Deleting notification: ${notificationId} for ${userType}:`, userId);
+        const userNotifications = await UserNotifications.findOne({ userId });
         
         if (!userNotifications) {
-          console.log('❌ User notifications not found for user:', user.id);
+          console.log(`❌ Notifications not found for ${userType}:`, userId);
           return {
             success: false,
             message: 'User notifications not found'
@@ -683,11 +708,19 @@ const notificationResolvers = {
       }
     },
 
-    markAllNotificationsAsRead: async (_, __, { user }) => {
-      checkAuth(user);
+    markAllNotificationsAsRead: async (_, __, { user, driver }) => {
+      // Support both user and driver authentication
+      if (!user && !driver) {
+        throw new Error('Authentication required');
+      }
       
       try {
-        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        // Get the correct user ID based on authentication type
+        const userId = user ? user.id : driver._id;
+        const userType = user ? 'user' : 'driver';
+        
+        console.log(`🔔 Marking all notifications as read for ${userType}:`, userId);
+        const userNotifications = await UserNotifications.findOne({ userId });
         
         if (!userNotifications) {
           return {
@@ -708,6 +741,7 @@ const notificationResolvers = {
         userNotifications.unreadCount = 0;
         
         await userNotifications.save();
+        console.log(`✅ All notifications marked as read for ${userType}`);
         
         return {
           success: true,

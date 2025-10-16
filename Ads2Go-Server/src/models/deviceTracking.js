@@ -749,8 +749,13 @@ DeviceTrackingSchema.post('save', async function(doc) {
           const dateStr = this.date.toISOString().split('T')[0];
           await dailyArchiveJobV2.archiveMaterialDataV2(this, dateStr);
           console.log(`✅ Auto-archived updated data for ${this.materialId}`);
+          
+          // Also trigger real-time salary update
+          const realTimeSalaryUpdateService = require('../services/realTimeSalaryUpdateService');
+          await realTimeSalaryUpdateService.updateSalaryCalculations(this.materialId, dateStr);
+          console.log(`✅ Real-time salary update triggered for ${this.materialId}`);
         } catch (error) {
-          console.error(`❌ Auto-archive failed for ${this.materialId}:`, error.message);
+          console.error(`❌ Auto-archive/salary update failed for ${this.materialId}:`, error.message);
         }
       }, 1000); // 1 second delay to ensure save is complete
     }

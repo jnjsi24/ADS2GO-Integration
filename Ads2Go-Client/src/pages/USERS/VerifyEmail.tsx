@@ -108,7 +108,7 @@ const VerifyEmail: React.FC = () => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-lg" />
 
       {/* Centered Form */}
-      <div className="relative z-10 w-full max-w-md px-8 py-10 bg-white/40 rounded-md shadow-2xl">
+      <div className="relative z-10 w-full max-w-md px-6 sm:px-8 py-8 sm:py-10 bg-white/40 rounded-md shadow-2xl mx-4">
         <form onSubmit={handleVerification}>
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold text-white">Email Verification</h2>
