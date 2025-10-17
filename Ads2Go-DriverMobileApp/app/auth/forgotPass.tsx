@@ -322,7 +322,7 @@ const ForgotPasswordScreen = () => {
             <Text style={styles.subchanged}>
               Your password has been changed successfully
             </Text>
-            <TouchableOpacity style={[styles.button, { alignSelf: 'stretch' }]} onPress={() => router.push('/(auth)/login')}>
+            <TouchableOpacity style={[styles.button, { alignSelf: 'stretch' }]} onPress={() => router.push('/auth/login')}>
               <Text style={styles.buttonText}>Back to login</Text>
             </TouchableOpacity>
           </>
@@ -364,7 +364,7 @@ const ForgotPasswordScreen = () => {
         </View>
         <View style={styles.linkContainer}>
           {(currentStep === 0 || currentStep === 1) && (
-            <TouchableOpacity style={styles.link} onPress={() => router.push('/(auth)/login')}>
+            <TouchableOpacity style={styles.link} onPress={() => router.push('/auth/login')}>
               <Text style={styles.linkText}>
                 Remember password? <Text style={styles.linkBold}>Log in</Text>
               </Text>

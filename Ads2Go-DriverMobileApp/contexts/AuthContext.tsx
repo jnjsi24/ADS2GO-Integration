@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       // Reset navigation stack to prevent back button issues
-      router.replace('/(auth)/login');
+      router.replace('/auth/login');
     } catch (error) {
       console.error('Failed to sign out', error);
     }

@@ -199,12 +199,12 @@ export default function Login() {
         
           // Type assertion to handle Expo Router's navigation params
           router.push({
-            pathname: "/(auth)/verificationProgress",
+            pathname: "/auth/verificationProgress",
             params: navParams as Record<string, string>,
           });
         } else {
           // Navigate to dashboard if no verification needed
-          router.replace("/(tabs)/dashboard");
+          router.replace("/tabs/dashboard");
         }
       } else {
         // Show error message if login failed
@@ -277,7 +277,7 @@ export default function Login() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.tab}
-          onPress={() => router.push("/(auth)/register")}
+          onPress={() => router.push("/auth/register")}
         >
           <Text style={styles.tabTextInactive}>Register</Text>
         </TouchableOpacity>
@@ -330,7 +330,7 @@ export default function Login() {
         </TouchableOpacity>
 
           {/* Forgot Password Link */}
-          <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/(auth)/forgotPass")}>
+          <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/auth/forgotPass")}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
         </View>

@@ -634,7 +634,7 @@ const RegisterForm = () => {
                   <Ionicons name="logo-apple" size={22} color="#000" />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+              <TouchableOpacity onPress={() => router.push('/auth/login')}>
                 <Text style={styles.loginLink}>Already have an account? <Text style={styles.loginLinkBold}>Log in</Text></Text>
               </TouchableOpacity>
             </View>
@@ -829,7 +829,7 @@ const RegisterForm = () => {
         <View style={styles.tabContainer}>
           <TouchableOpacity 
             style={[styles.tab, styles.tabInactive]}
-            onPress={() => router.push('/(auth)/login')} 
+            onPress={() => router.push('/auth/login')} 
           >
             <Text style={styles.tabTextInactive}>Log In</Text>
           </TouchableOpacity>

@@ -141,14 +141,14 @@ export default function PhotoSubmission() {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         Alert.alert('Error', 'Authentication token not found. Please login again.');
-        router.replace('/(auth)/login');
+        router.replace('/auth/login');
         return;
       }
 
       const driverInfo = await AsyncStorage.getItem('driverInfo');
       if (!driverInfo) {
         Alert.alert('Error', 'Driver information not found. Please login again.');
-        router.replace('/(auth)/login');
+        router.replace('/auth/login');
         return;
       }
 
