@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, ChevronDown, Edit, CalendarClock, CalendarCheck, FileText, Users, Car } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
+import { useSearchParams } from 'react-router-dom';
 import { GET_ALL_USER_REPORTS } from '../../graphql/admin/queries/userReports';
 import { UPDATE_USER_REPORT_ADMIN } from '../../graphql/admin/mutations/userReports';
 import { GET_ALL_DRIVER_REPORTS } from '../../graphql/admin/queries/driverReports';
@@ -46,6 +47,7 @@ type ReportSource = 'users' | 'drivers';
 
 const Reports: React.FC = () => {
   const { admin, isLoading: authLoading, isInitialized } = useAdminAuth();
+  const [searchParams] = useSearchParams();
   const [isMobile, setIsMobile] = useState(false);
   const [reportSource, setReportSource] = useState<ReportSource>('users');
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +72,23 @@ const Reports: React.FC = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Read URL parameter to set the correct tab and filter
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const status = searchParams.get('status');
+    
+    if (tab === 'driver') {
+      setReportSource('drivers');
+    } else if (tab === 'user') {
+      setReportSource('users');
+    }
+    
+    // Set status filter if specified in URL
+    if (status === 'pending') {
+      setSelectedStatusFilter('Pending');
+    }
+  }, [searchParams]);
 
   // Fetch user reports
   const { data: userData, loading: userLoading, error: userError } = useQuery(GET_ALL_USER_REPORTS, {

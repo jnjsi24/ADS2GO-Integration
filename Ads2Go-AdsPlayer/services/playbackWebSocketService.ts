@@ -46,6 +46,8 @@ class PlaybackWebSocketService {
   private onSlotSync: ((message: any) => void) | null = null;
   private onPauseAll: ((message: any) => void) | null = null;
   private onResumeAll: ((message: any) => void) | null = null;
+  private onStopAll: ((message: any) => void) | null = null;
+  private onDisplayData: ((message: any) => void) | null = null;
   private onLockdown: ((message: any) => void) | null = null;
   private onUnlock: ((message: any) => void) | null = null;
   private onFullscreen: ((message: any) => void) | null = null;
@@ -151,7 +153,7 @@ class PlaybackWebSocketService {
           if (message.type === 'pong') {
             console.log('🔌 [WebSocket] Received pong');
           } else if (message.type === 'slotSync') {
-            console.log('🔄 [WebSocket] Received slot sync message:', message);
+            console.log('🔄 [WebSocket] Received slot sync command:', message);
             this.handleSlotSync(message);
           } else if (message.type === 'stateRequest') {
             console.log('🔄 [WebSocket] Received state request:', message);
@@ -165,6 +167,12 @@ class PlaybackWebSocketService {
           } else if (message.type === 'resumeAll') {
             console.log('▶️ [WebSocket] Received resume all command:', message);
             this.handleResumeAll(message);
+          } else if (message.type === 'stopAll') {
+            console.log('⏹️ [WebSocket] Received stop all command:', message);
+            this.handleStopAll(message);
+          } else if (message.type === 'displayData') {
+            console.log('📺 [WebSocket] Received display data for duplication:', message);
+            this.handleDisplayData(message);
           } else if (message.type === 'lockdown') {
             console.log('🔒 [WebSocket] Received lockdown command:', message);
             this.handleLockdown(message);
@@ -386,12 +394,6 @@ class PlaybackWebSocketService {
   }
 
   // Handle slot synchronization messages
-  private handleSlotSync(message: any) {
-    // This will be called by the AdPlayer component to handle synchronization
-    if (this.onSlotSync) {
-      this.onSlotSync(message);
-    }
-  }
 
   // Handle state request messages
   private handleStateRequest(message: any) {
@@ -454,6 +456,69 @@ class PlaybackWebSocketService {
       }
     } catch (error) {
       console.error('❌ [WebSocket] Error handling resume all command:', error);
+    }
+  }
+
+  // Handle stop all command from server
+  private handleStopAll(message: any) {
+    try {
+      console.log('⏹️ [WebSocket] Handling stop all command:', message);
+      
+      // Emit stop event to the AdPlayer component
+      if (this.onStopAll) {
+        this.onStopAll(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling stop all command:', error);
+    }
+  }
+
+  // Handle slot synchronization command from server
+  private handleSlotSync(message: any) {
+    try {
+      console.log('🔄 [WebSocket] Handling slot sync command:', message);
+      
+      // Emit slot sync event to the AdPlayer component
+      if (this.onSlotSync) {
+        this.onSlotSync(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling slot sync command:', error);
+    }
+  }
+
+  // Handle display data for duplication
+  private handleDisplayData(message: any) {
+    try {
+      console.log('📺 [WebSocket] Handling display data for duplication:', message);
+      
+      // Emit display data event to the AdPlayer component
+      if (this.onDisplayData) {
+        this.onDisplayData(message);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling display data:', error);
+    }
+  }
+
+  // Send display data to other slots for duplication
+  sendDisplayData(displayData: any) {
+    try {
+      if (this.ws && this.ws.readyState === 1) {
+        const message = {
+          type: 'displayData',
+          timestamp: new Date().toISOString(),
+          data: displayData,
+          deviceId: this.deviceId,
+          materialId: this.materialId,
+          slotNumber: this.slotNumber
+        };
+        
+        this.ws.send(JSON.stringify(message));
+        console.log('📺 [WebSocket] Sent display data to other slots:', displayData);
+      }
+    } catch (error) {
+      console.error('❌ [WebSocket] Error sending display data:', error);
     }
   }
 
@@ -584,6 +649,21 @@ class PlaybackWebSocketService {
   // Set callback for resume all handling
   setResumeAllCallback(callback: (message: any) => void) {
     this.onResumeAll = callback;
+  }
+
+  // Set callback for stop all handling
+  setStopAllCallback(callback: (message: any) => void) {
+    this.onStopAll = callback;
+  }
+
+  // Set callback for slot sync handling
+  setSlotSyncCallback(callback: (message: any) => void) {
+    this.onSlotSync = callback;
+  }
+
+  // Set callback for display data handling
+  setDisplayDataCallback(callback: (message: any) => void) {
+    this.onDisplayData = callback;
   }
 
   setLockdownCallback(callback: (message: any) => void) {

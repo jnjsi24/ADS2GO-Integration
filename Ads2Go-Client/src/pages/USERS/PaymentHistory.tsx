@@ -294,6 +294,7 @@ const PaymentHistory: React.FC = () => {
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
+              key={item.id || item._id || `${item.userId}-${item.createdAt}`}
               className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >

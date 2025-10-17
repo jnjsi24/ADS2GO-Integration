@@ -7,8 +7,15 @@ import {
   LOCKDOWN_ALL_SCREENS,
   UNLOCK_ALL_SCREENS,
   FULLSCREEN_ALL_SCREENS,
-  EXIT_FULLSCREEN_ALL_SCREENS
+  EXIT_FULLSCREEN_ALL_SCREENS,
+  PLAY_SCREEN,
+  PAUSE_SCREEN,
+  STOP_SCREEN,
+  LOCK_SCREEN,
+  UNLOCK_SCREEN,
+  SYNC_SLOTS
 } from './graphql';
+import playbackWebSocketService from './playbackWebSocketService';
 
 class GraphQLService {
   private client: any;
@@ -161,6 +168,93 @@ class GraphQLService {
   async updateDriverActivity(deviceId: string, value: any): Promise<{ success: boolean; message: string }> {
     // This would need to be implemented
     return { success: true, message: 'Update driver activity not implemented yet' };
+  }
+
+  // Individual Device Control Methods (using GraphQL mutations with device filter)
+  async playScreen(deviceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: PLAY_ALL_SCREENS,
+        variables: { targetDeviceId: deviceId }
+      });
+      return { success: data.playAllScreens.success, message: data.playAllScreens.message };
+    } catch (error) {
+      console.error('Error playing screen:', error);
+      throw error;
+    }
+  }
+
+  async pauseScreen(deviceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: PAUSE_ALL_SCREENS,
+        variables: { targetDeviceId: deviceId }
+      });
+      return { success: data.pauseAllScreens.success, message: data.pauseAllScreens.message };
+    } catch (error) {
+      console.error('Error pausing screen:', error);
+      throw error;
+    }
+  }
+
+  async stopScreen(deviceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: STOP_ALL_SCREENS,
+        variables: { targetDeviceId: deviceId }
+      });
+      return { success: data.stopAllScreens.success, message: data.stopAllScreens.message };
+    } catch (error) {
+      console.error('Error stopping screen:', error);
+      throw error;
+    }
+  }
+
+  async lockScreen(deviceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: LOCK_SCREEN,
+        variables: { deviceId }
+      });
+      return { success: true, message: data.lockScreen };
+    } catch (error) {
+      console.error('Error locking screen:', error);
+      throw error;
+    }
+  }
+
+  async unlockScreen(deviceId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: UNLOCK_SCREEN,
+        variables: { deviceId }
+      });
+      return { success: true, message: data.unlockScreen };
+    } catch (error) {
+      console.error('Error unlocking screen:', error);
+      throw error;
+    }
+  }
+
+  async syncSlots(materialId: string, action: string, syncData?: any): Promise<{ success: boolean; message: string; pausedCount: number }> {
+    try {
+      const { data } = await this.client.mutate({
+        mutation: SYNC_SLOTS,
+        variables: { 
+          materialId,
+          action,
+          syncData: syncData ? JSON.stringify(syncData) : null
+        }
+      });
+      return { 
+        success: data.syncSlots.success, 
+        message: data.syncSlots.message,
+        pausedCount: data.syncSlots.pausedCount
+      };
+    } catch (error) {
+      console.error('Error syncing slots:', error);
+      throw error;
+    }
   }
 }
 

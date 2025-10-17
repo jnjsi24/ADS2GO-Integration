@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../graphql/admin/queries/notificationQueries';
+import { GET_ADMIN_GENERAL_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../graphql/admin/queries/notificationQueries';
 import { GET_ADMIN_NOTIFICATION_PREFERENCES } from '../graphql/admin/queries/getAdminNotificationPreferences';
 import { useAdminAuth } from './AdminAuthContext';
 
@@ -70,8 +70,8 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
     }
   }, [preferencesError]);
 
-  // Fetch admin notifications
-  const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  // Fetch general admin notifications
+  const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     fetchPolicy: 'cache-and-network',
     skip: !isAuthenticated || !admin,
     pollInterval: 60000, // Refresh every 60 seconds (reduced frequency)
@@ -80,12 +80,12 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Handle notifications data loading with useEffect instead of onCompleted
   useEffect(() => {
     if (data) {
-      if (data?.getAdminNotifications) {
-        const notificationsArray = data.getAdminNotifications.notifications || [];
-        setNotifications(notificationsArray);
-      } else {
-        setNotifications([]);
-      }
+        if (data?.getAdminGeneralNotifications) {
+          const notificationsArray = data.getAdminGeneralNotifications.notifications || [];
+          setNotifications(notificationsArray);
+        } else {
+          setNotifications([]);
+        }
       setIsLoading(false);
     }
   }, [data]);

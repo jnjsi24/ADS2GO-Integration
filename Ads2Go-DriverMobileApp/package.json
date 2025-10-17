@@ -24,6 +24,7 @@
     "dotenv": "^17.2.3",
     "eslint-config-expo": "~10.0.0",
     "expo": "54.0.12",
+    "expo-av": "^16.0.7",
     "expo-blur": "~15.0.7",
     "expo-camera": "~17.0.8",
     "expo-constants": "~18.0.8",

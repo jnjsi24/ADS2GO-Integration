@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Trash, 
@@ -20,6 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -41,6 +42,7 @@ import { AdminLoader } from "../../components/ProtectedRoute";
 
 const ManageAds: React.FC = () => {
   const { admin, isLoading, isInitialized } = useAdminAuth();
+  const location = useLocation();
   
   // Tab management
   const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'availability'>('ads');
@@ -90,6 +92,16 @@ const ManageAds: React.FC = () => {
 
   const [adsStatusFilter, setAdsStatusFilter] = useState('All Status');
   const [scheduleStatusFilter, setScheduleStatusFilter] = useState('All Status');
+
+  // Check URL parameters for status filter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const statusParam = urlParams.get('status');
+    if (statusParam === 'pending') {
+      setAdsStatusFilter('Pending');
+      setSelectedStatusFilter('Pending');
+    }
+  }, [location.search]);
   const [deploymentStatusFilter, setDeploymentStatusFilter] = useState('All Status');
   
   // Date filter state for schedule tab

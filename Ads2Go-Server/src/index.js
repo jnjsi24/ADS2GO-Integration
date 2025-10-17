@@ -7,6 +7,9 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Import centralized logger
+const logger = require('./utils/logger');
+
 // WebSocket service for real-time device status
 const deviceStatusService = require('./services/deviceStatusService');
 
@@ -81,6 +84,8 @@ const materialPhotoUploadRoutes = require('./routes/materialPhotoUpload');
 const analyticsRoutes = require('./routes/analytics');
 const newsletterRoutes = require('./routes/newsletter');
 const cleanupRoutes = require('./routes/cleanup');
+const deviceHoursNotificationRoutes = require('./routes/deviceHoursNotification');
+const deviceOfflineNotificationRoutes = require('./routes/deviceOfflineNotification');
 
 // Import services
 // const syncService = require('./services/syncService'); // No longer needed - using MongoDB only
@@ -96,23 +101,23 @@ mongoose.connect(process.env.MONGODB_URI, {
   serverSelectionTimeoutMS: 10000,
   socketTimeoutMS: 45000,
 })
-  .then(() => console.log('\n💾 MongoDB: Connected to Atlas'))
+  .then(() => logger.info('\n💾 MongoDB: Connected to Atlas'))
   .catch(err => {
     console.error('\n❌ MongoDB connection error:', err);
     process.exit(1);
   });
 
 // ✅ Initialize Email Service
-console.log('\n📧 Initializing Email Service...');
+logger.info('\n📧 Initializing Email Service...');
 EmailService.initializeTransporter();
 EmailService.verifyConfiguration()
   .then(isConfigured => {
     if (isConfigured) {
-      console.log('✅ Email Service: Ready and configured');
+      logger.info('✅ Email Service: Ready and configured');
     } else {
-      console.log('⚠️  Email Service: Configuration issues detected');
-      console.log('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
-      console.log('   Run: node verify-gmail-setup.js to test email configuration');
+      logger.warn('⚠️  Email Service: Configuration issues detected');
+      logger.warn('   Check your .env file for EMAIL_USER and EMAIL_PASSWORD');
+      logger.warn('   Run: node verify-gmail-setup.js to test email configuration');
     }
   })
   .catch(err => {
@@ -195,7 +200,7 @@ async function startServer() {
 
       // In development, allow all origins for easier debugging
       if (process.env.NODE_ENV === 'development') {
-        console.log(`🔓 Development mode: Allowing origin ${origin}`);
+        logger.debug(`🔓 Development mode: Allowing origin ${origin}`);
         return callback(null, true);
       }
 
@@ -236,8 +241,8 @@ async function startServer() {
       if (allowedOrigins.has(origin) || isRailwayApp || isLocalNetwork) {
         callback(null, true);
       } else {
-        console.log(`🚫 CORS blocked origin: ${origin}`);
-        console.log(`📋 Allowed origins:`, Array.from(allowedOrigins));
+        logger.warn(`🚫 CORS blocked origin: ${origin}`);
+        logger.debug(`📋 Allowed origins:`, Array.from(allowedOrigins));
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -283,6 +288,9 @@ app.use('/cron-test', require('./routes/cronTest'));
 app.use('/updateTracking', require('./routes/updateTracking'));
 app.use('/api/deviceDataHistoryV2', require('./routes/deviceDataHistoryV2'));
 app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
+app.use('/api/device-hours', deviceHoursNotificationRoutes);
+app.use('/api/device-offline', deviceOfflineNotificationRoutes);
+app.use('/api/cleanup-notifications', require('./routes/cleanupNotifications'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));
@@ -349,6 +357,10 @@ app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
     cronJobs.start();
     console.log('📅 Cron jobs started for daily data archiving');
   });
+  
+  // Start scheduled ad service
+  const scheduledAdService = require('./services/scheduledAdService');
+  scheduledAdService.start();
   
   // Handle server shutdown gracefully
   process.on('SIGTERM', () => {

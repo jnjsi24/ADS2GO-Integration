@@ -52,14 +52,13 @@ const companyAdResolvers = {
     getActiveCompanyAds: async (_, __, { user }) => {
       // Allow unauthenticated access for active company ads (used by mobile app)
       // These are public fallback content
-      return await CompanyAd.getActiveAds();
+      return await CompanyAd.getCurrentlyActiveAds();
     },
 
     getRandomCompanyAd: async (_, __, { user }) => {
       // Allow unauthenticated access for random company ads (used by mobile app)
       // These are public fallback content
-      const ads = await CompanyAd.getRandomAd();
-      return ads.length > 0 ? ads[0] : null;
+      return await CompanyAd.getRandomScheduledAd();
     }
   },
 

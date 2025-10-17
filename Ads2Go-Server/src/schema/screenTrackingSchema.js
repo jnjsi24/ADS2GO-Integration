@@ -242,17 +242,17 @@ const typeDefs = gql`
     """
     Play all screens
     """
-    playAllScreens: ScreenControlResponse
+    playAllScreens(targetDeviceId: String): ScreenControlResponse
 
     """
     Pause all screens
     """
-    pauseAllScreens: ScreenControlResponse
+    pauseAllScreens(targetDeviceId: String): ScreenControlResponse
 
     """
     Stop all screens
     """
-    stopAllScreens: ScreenControlResponse
+    stopAllScreens(targetDeviceId: String): ScreenControlResponse
 
     """
     Restart all screens
@@ -363,6 +363,21 @@ const typeDefs = gql`
     Skip to next ad
     """
     skipToNextAd(deviceId: String!): String
+
+    """
+    Synchronize slots for perfect sync
+    """
+    syncSlots(materialId: String!, action: String!, syncData: String): ScreenControlResponse
+
+    """
+    Lock specific screen
+    """
+    lockScreen(deviceId: String!): String
+
+    """
+    Unlock specific screen
+    """
+    unlockScreen(deviceId: String!): String
   }
 `;
 

@@ -4,6 +4,7 @@
 
 const DeviceTracking = require('../models/deviceTracking');
 const TimezoneUtils = require('../utils/timezoneUtils');
+const deviceHoursNotificationService = require('./deviceHoursNotificationService');
 
 class HoursUpdateService {
   constructor() {
@@ -123,6 +124,38 @@ class HoursUpdateService {
         
         // Save the device
         await device.save();
+        
+        // Check for 8-hour milestone and send notification if needed
+        // Only check the master slot (slot 1) to avoid duplicate notifications
+        const masterSlot = device.slots.find(slot => slot.slotNumber === 1 && slot.deviceId);
+        
+        if (masterSlot) {
+          console.log(`🎯 [HoursUpdate] Checking master slot for 8-hour milestone: ${device.materialId}, deviceId: ${masterSlot.deviceId}`);
+          if (masterSlot.deviceId) {
+            await deviceHoursNotificationService.checkAndNotify8HourMilestone(
+              masterSlot.deviceId, 
+              device.currentSession.totalHoursOnline
+            );
+          } else {
+            console.log(`❌ [HoursUpdate] Master slot deviceId is undefined for ${device.materialId}`);
+          }
+        } else {
+          // Fallback: if no slot 1, use the first available slot
+          const firstSlot = device.slots.find(slot => slot.deviceId);
+          if (firstSlot) {
+            console.log(`🎯 [HoursUpdate] Using fallback slot ${firstSlot.slotNumber} for 8-hour milestone: ${device.materialId}, deviceId: ${firstSlot.deviceId}`);
+            if (firstSlot.deviceId) {
+              await deviceHoursNotificationService.checkAndNotify8HourMilestone(
+                firstSlot.deviceId, 
+                device.currentSession.totalHoursOnline
+              );
+            } else {
+              console.log(`❌ [HoursUpdate] Fallback slot deviceId is undefined for ${device.materialId}`);
+            }
+          } else {
+            console.log(`❌ [HoursUpdate] No slots with deviceId found for ${device.materialId}`);
+          }
+        }
         
         console.log(`✅ [HoursUpdate] Updated ${device.materialId}: ${device.currentSession.totalHoursOnline.toFixed(2)} hours`);
       }

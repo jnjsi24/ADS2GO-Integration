@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
-export const GET_ADMIN_NOTIFICATIONS = gql`
-  query GetAdminNotifications {
-    getAdminNotifications {
+export const GET_DEVICE_NOTIFICATIONS = gql`
+  query GetDeviceNotifications {
+    getDeviceNotifications {
       notifications {
         id
         title
@@ -46,8 +46,8 @@ export const GET_ADMIN_GENERAL_NOTIFICATIONS = gql`
   }
 `;
 
-export const MARK_NOTIFICATION_READ = gql`
-  mutation MarkNotificationRead($notificationId: ID!) {
+export const MARK_DEVICE_NOTIFICATION_READ = gql`
+  mutation MarkDeviceNotificationRead($notificationId: ID!) {
     markNotificationRead(notificationId: $notificationId) {
       success
       message
@@ -55,8 +55,8 @@ export const MARK_NOTIFICATION_READ = gql`
   }
 `;
 
-export const MARK_ALL_NOTIFICATIONS_READ = gql`
-  mutation MarkAllNotificationsRead {
+export const MARK_ALL_DEVICE_NOTIFICATIONS_READ = gql`
+  mutation MarkAllDeviceNotificationsRead {
     markAllNotificationsRead {
       success
       message
@@ -64,8 +64,8 @@ export const MARK_ALL_NOTIFICATIONS_READ = gql`
   }
 `;
 
-export const DELETE_NOTIFICATION = gql`
-  mutation DeleteNotification($notificationId: ID!) {
+export const DELETE_DEVICE_NOTIFICATION = gql`
+  mutation DeleteDeviceNotification($notificationId: ID!) {
     deleteNotification(notificationId: $notificationId) {
       success
       message
@@ -73,8 +73,8 @@ export const DELETE_NOTIFICATION = gql`
   }
 `;
 
-export const DELETE_ALL_ADMIN_NOTIFICATIONS = gql`
-  mutation DeleteAllAdminNotifications {
+export const DELETE_ALL_DEVICE_NOTIFICATIONS = gql`
+  mutation DeleteAllDeviceNotifications {
     deleteAllNotifications {
       success
       message
@@ -112,25 +112,6 @@ export const GET_PENDING_MATERIALS = gql`
         firstName
         lastName
       }
-    }
-  }
-`;
-
-export const GET_ADMIN_DASHBOARD_STATS = gql`
-  query GetAdminDashboardStats {
-    getAdminDashboardStats {
-      totalAds
-      pendingAds
-      activeAds
-      totalUsers
-      newUsersToday
-      totalDrivers
-      newDriversToday
-      pendingDrivers
-      totalRevenue
-      revenueToday
-      unreadNotifications
-      highPriorityNotifications
     }
   }
 `;

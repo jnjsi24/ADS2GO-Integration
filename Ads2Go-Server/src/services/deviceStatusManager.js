@@ -1,3 +1,5 @@
+const logger = require('../utils/logger');
+
 /**
  * DeviceStatusManager - Centralized source of truth for device online/offline status
  * Implements Option 3: Hybrid with Clear Priority
@@ -24,7 +26,7 @@ class DeviceStatusManager {
    * @param {Date} lastSeen - Last seen timestamp
    */
   setWebSocketStatus(deviceId, isConnected, lastSeen = new Date()) {
-    console.log(`🔌 [DeviceStatusManager] WebSocket status for ${deviceId}: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
+    logger.deviceStatus(`🔌 [DeviceStatusManager] WebSocket status for ${deviceId}: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
     
     if (isConnected) {
       this.webSocketConnections.set(deviceId, { 
@@ -32,10 +34,10 @@ class DeviceStatusManager {
         lastSeen,
         source: 'websocket'
       });
-      console.log(`✅ [DeviceStatusManager] Added WebSocket connection for ${deviceId}`);
+      logger.deviceStatus(`✅ [DeviceStatusManager] Added WebSocket connection for ${deviceId}`);
     } else {
       this.webSocketConnections.delete(deviceId);
-      console.log(`❌ [DeviceStatusManager] Removed WebSocket connection for ${deviceId}`);
+      logger.deviceStatus(`❌ [DeviceStatusManager] Removed WebSocket connection for ${deviceId}`);
     }
     
     this.updateCachedStatus(deviceId);
@@ -48,7 +50,7 @@ class DeviceStatusManager {
    * @param {Date} lastSeen - Last seen timestamp
    */
   setDatabaseStatus(deviceId, isOnline, lastSeen = new Date()) {
-    console.log(`💾 [DeviceStatusManager] Database status for ${deviceId}: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    logger.deviceStatus(`💾 [DeviceStatusManager] Database status for ${deviceId}: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
     
     this.databaseStatus.set(deviceId, { 
       isOnline, 
@@ -110,7 +112,7 @@ class DeviceStatusManager {
         confidence: 'high'
       };
       this.statusCache.set(deviceId, { ...status, timestamp: now });
-      console.log(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (WebSocket, high confidence)`);
+      logger.deviceStatus(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (WebSocket, high confidence)`);
       return status;
     }
 
@@ -131,10 +133,10 @@ class DeviceStatusManager {
             confidence: 'medium'
           };
           this.statusCache.set(deviceId, { ...status, timestamp: now });
-          console.log(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (Database, medium confidence, ${timeSinceLastSeen.toFixed(1)}s ago)`);
+          logger.deviceStatus(`✅ [DeviceStatusManager] ${deviceId}: ONLINE (Database, medium confidence, ${timeSinceLastSeen.toFixed(1)}s ago)`);
           return status;
         } else {
-          console.log(`⏰ [DeviceStatusManager] ${deviceId}: Database status too old (${timeSinceLastSeen.toFixed(1)}s ago)`);
+          logger.deviceStatus(`⏰ [DeviceStatusManager] ${deviceId}: Database status too old (${timeSinceLastSeen.toFixed(1)}s ago)`);
         }
       }
     }
@@ -147,7 +149,7 @@ class DeviceStatusManager {
       confidence: 'low'
     };
     this.statusCache.set(deviceId, { ...status, timestamp: now });
-    console.log(`❌ [DeviceStatusManager] ${deviceId}: OFFLINE (Timeout, low confidence)`);
+    logger.deviceStatus(`❌ [DeviceStatusManager] ${deviceId}: OFFLINE (Timeout, low confidence)`);
     return status;
   }
 

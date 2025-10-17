@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const UserAnalyticsService = require('../services/userAnalyticsService');
 const UserAnalytics = require('../models/userAnalytics');
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 class UserAnalyticsSyncJob {
   constructor() {
@@ -50,7 +51,7 @@ class UserAnalyticsSyncJob {
       
       // Get all users
       const users = await User.find({}).select('_id firstName lastName');
-      console.log(`👥 Found ${users.length} users to sync`);
+      logger.database(`👥 Found ${users.length} users to sync`);
 
       if (users.length === 0) {
         console.log('❌ No users found for sync');
@@ -68,14 +69,14 @@ class UserAnalyticsSyncJob {
       // Sync each user
       for (const user of users) {
         try {
-          console.log(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
+          logger.database(`🔄 Syncing user: ${user.firstName} ${user.lastName} (${user._id})`);
           
           // New: Sync using userId-based aggregations (no material mapping)
           const result = await this.syncUserByUserId(user._id.toString(), startDate, endDate);
           
           if (result.success) {
             successCount++;
-            console.log(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
+            logger.database(`✅ Synced user ${user.firstName}: ${result.data?.totalAdPlays || 0} ad plays, ${result.data?.totalQRScans || 0} QR scans`);
           } else {
             errorCount++;
             console.log(`❌ Failed to sync user ${user.firstName}: ${result.message}`);
@@ -89,9 +90,9 @@ class UserAnalyticsSyncJob {
       const endTime = new Date();
       const duration = (endTime - startTime) / 1000;
 
-      console.log(`🎉 UserAnalytics sync completed in ${duration.toFixed(2)}s`);
-      console.log(`   ✅ Success: ${successCount} users`);
-      console.log(`   ❌ Errors: ${errorCount} users`);
+      logger.database(`🎉 UserAnalytics sync completed in ${duration.toFixed(2)}s`);
+      logger.database(`   ✅ Success: ${successCount} users`);
+      logger.database(`   ❌ Errors: ${errorCount} users`);
       
       this.lastSync = endTime;
 

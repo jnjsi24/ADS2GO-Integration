@@ -13,8 +13,6 @@ import {
   MoreVertical,
   AlertCircle,
   CheckCircle,
-  Clock,
-  BarChart3,
   Tag,
   FileVideo,
   Image as ImageIcon,
@@ -41,10 +39,13 @@ interface CompanyAd {
   duration: number;
   isActive: boolean;
   priority: number;
-  playCount: number;
-  lastPlayed?: string;
-  tags: string[];
+  tags?: string[];
   notes?: string;
+  // Scheduling fields
+  isScheduled: boolean;
+  startDate?: string;
+  endDate?: string;
+  scheduleType: 'IMMEDIATE' | 'SCHEDULED';
   createdBy: {
     id: string;
     firstName: string;
@@ -66,16 +67,18 @@ interface CreateCompanyAdInput {
   description?: string;
   mediaFile: string;
   adFormat: 'VIDEO' | 'IMAGE';
-  duration: number;
   isActive?: boolean;
   priority?: number;
-  tags?: string[];
-  notes?: string;
+  // Scheduling fields
+  isScheduled?: boolean;
+  startDate?: string;
+  endDate?: string;
+  scheduleType?: 'IMMEDIATE' | 'SCHEDULED';
 }
 
 const CompanyAdsManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'scheduled'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState<CompanyAd | null>(null);
@@ -87,7 +90,6 @@ const CompanyAdsManagement: React.FC = () => {
   
   const [validationErrors, setValidationErrors] = useState<{
     title?: string;
-    duration?: string;
     mediaFile?: string;
   }>({});
 
@@ -97,11 +99,13 @@ const CompanyAdsManagement: React.FC = () => {
     description: '',
     mediaFile: '',
     adFormat: 'VIDEO',
-    duration: 15,
-    isActive: true,
-    priority: 0,
-    tags: [],
-    notes: ''
+    isActive: true, // Default to active for Deploy Now
+    priority: 5, // Default to medium priority
+    // Scheduling fields
+    isScheduled: false,
+    startDate: '',
+    endDate: '',
+    scheduleType: 'IMMEDIATE'
   });
 
   // GraphQL queries and mutations
@@ -113,24 +117,33 @@ const CompanyAdsManagement: React.FC = () => {
 
   const companyAds: CompanyAd[] = data?.getAllCompanyAds || [];
 
-  const statusFilterOptions = ['All Status', 'Active', 'Inactive'];
+  const statusFilterOptions = ['All Status', 'Active', 'Inactive', 'Scheduled'];
 
   const handleStatusFilterChange = (status: string) => {
-    setStatusFilter(status.toLowerCase() as 'all' | 'active' | 'inactive');
+    const normalizedStatus = status.toLowerCase();
+    if (normalizedStatus === 'all status') {
+      setStatusFilter('all');
+    } else if (normalizedStatus === 'active') {
+      setStatusFilter('active');
+    } else if (normalizedStatus === 'inactive') {
+      setStatusFilter('inactive');
+    } else if (normalizedStatus === 'scheduled') {
+      setStatusFilter('scheduled');
+    }
     setShowStatusDropdown(false);
   };
 
   // Filter ads based on search and status
   const filteredAds = companyAds.filter(ad => {
     const matchesSearch = ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ad.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ad.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+                         ad.description?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || 
                          (statusFilter === 'active' && ad.isActive) ||
-                         (statusFilter === 'inactive' && !ad.isActive);
+                         (statusFilter === 'inactive' && !ad.isActive) ||
+                         (statusFilter === 'scheduled' && ad.isScheduled);
     
-    console.log(`Filtering ads: statusFilter=${statusFilter}, ad.isActive=${ad.isActive}, matchesStatus=${matchesStatus}, matchesSearch=${matchesSearch}`);
+    console.log(`Filtering ads: statusFilter=${statusFilter}, ad.isActive=${ad.isActive}, ad.isScheduled=${ad.isScheduled}, matchesStatus=${matchesStatus}, matchesSearch=${matchesSearch}`);
     return matchesSearch && matchesStatus;
   });
 
@@ -214,15 +227,12 @@ const CompanyAdsManagement: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const errors: { title?: string; duration?: string; mediaFile?: string } = {};
+    const errors: { title?: string; mediaFile?: string } = {};
     if (!formData.title.trim()) {
       errors.title = 'Title is required';
     }
     if (!formData.mediaFile) {
       errors.mediaFile = 'Media file is required';
-    }
-    if (!formData.duration || formData.duration < 1 || formData.duration > 300) {
-      errors.duration = 'Duration must be between 1 and 300 seconds';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -257,11 +267,13 @@ const CompanyAdsManagement: React.FC = () => {
         description: '',
         mediaFile: '',
         adFormat: 'VIDEO',
-        duration: 15,
-        isActive: true,
-        priority: 0,
-        tags: [],
-        notes: ''
+        isActive: true, // Default to active for Deploy Now
+        priority: 5, // Default to medium priority
+        // Scheduling fields
+        isScheduled: false,
+        startDate: '',
+        endDate: '',
+        scheduleType: 'IMMEDIATE'
       });
       
       refetch();
@@ -300,11 +312,13 @@ const CompanyAdsManagement: React.FC = () => {
       description: ad.description || '',
       mediaFile: ad.mediaFile,
       adFormat: ad.adFormat,
-      duration: ad.duration,
       isActive: ad.isActive,
       priority: ad.priority,
-      tags: ad.tags,
-      notes: ad.notes || ''
+      // Scheduling fields
+      isScheduled: ad.isScheduled || false,
+      startDate: ad.startDate || '',
+      endDate: ad.endDate || '',
+      scheduleType: ad.scheduleType || 'IMMEDIATE'
     });
     setShowEditModal(true);
   };
@@ -421,7 +435,7 @@ const CompanyAdsManagement: React.FC = () => {
 
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center">
             <FileVideo className="h-8 w-8 text-blue-600" />
@@ -438,31 +452,6 @@ const CompanyAdsManagement: React.FC = () => {
               <p className="text-sm font-medium text-gray-600">Active</p>
               <p className="text-2xl font-semibold text-gray-900">
                 {companyAds.filter(ad => ad.isActive).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="flex items-center">
-            <BarChart3 className="h-8 w-8 text-purple-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Total Plays</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {companyAds.reduce((sum, ad) => sum + ad.playCount, 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="flex items-center">
-            <Clock className="h-8 w-8 text-orange-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Avg Duration</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {companyAds.length > 0 
-                  ? formatDuration(Math.round(companyAds.reduce((sum, ad) => sum + ad.duration, 0) / companyAds.length))
-                  : '0:00'
-                }
               </p>
             </div>
           </div>
@@ -507,12 +496,13 @@ const CompanyAdsManagement: React.FC = () => {
               
               {/* Status Badge */}
               <div className="absolute top-2 right-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${
                   ad.isActive 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-800'
+                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                    : 'bg-gray-100 text-gray-800 border border-gray-200'
                 }`}>
-                  {ad.isActive ? 'Active' : 'Inactive'}
+                  <div className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-600' : 'bg-gray-600'}`}></div>
+                  <span>{ad.isActive ? 'Active' : 'Inactive'}</span>
                 </span>
               </div>
 
@@ -522,6 +512,35 @@ const CompanyAdsManagement: React.FC = () => {
                   {ad.adFormat}
                 </span>
               </div>
+
+              {/* Priority Badge */}
+              <div className="absolute bottom-2 right-2">
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  ad.priority >= 8 
+                    ? 'bg-red-100 text-red-800' 
+                    : ad.priority >= 5 
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {ad.priority >= 8 ? 'High' : ad.priority >= 5 ? 'Medium' : 'Low'}
+                </span>
+              </div>
+
+              {/* Scheduling Badge */}
+              {ad.isScheduled && (
+                <div className="absolute bottom-2 left-2">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${
+                    ad.scheduleType === 'SCHEDULED' 
+                      ? 'bg-purple-100 text-purple-800' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    <span>{ad.scheduleType === 'SCHEDULED' ? 'Scheduled' : 'Scheduled'}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Content */}
@@ -561,39 +580,50 @@ const CompanyAdsManagement: React.FC = () => {
                 <p className="text-sm text-gray-600 mb-3 line-clamp-2">{ad.description}</p>
               )}
 
-              {/* Tags */}
-              {ad.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {ad.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                 <div>
-                  <p className="font-medium">Duration</p>
-                  <p>{formatDuration(ad.duration)}</p>
-                </div>
-                <div>
-                  <p className="font-medium">Plays</p>
-                  <p>{ad.playCount}</p>
+                  <p className="font-medium">Status</p>
+                  <p className={`font-semibold flex items-center space-x-1 ${
+                    ad.isActive ? 'text-green-600' : 'text-gray-600'
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-600' : 'bg-gray-600'}`}></div>
+                    <span>{ad.isActive ? 'Active' : 'Inactive'}</span>
+                  </p>
                 </div>
                 <div>
                   <p className="font-medium">Priority</p>
-                  <p>{ad.priority}</p>
-                </div>
-                <div>
-                  <p className="font-medium">Created</p>
-                  <p>{formatDate(ad.createdAt)}</p>
+                  <p className={`font-semibold ${
+                    ad.priority >= 8 ? 'text-red-600' : 
+                    ad.priority >= 5 ? 'text-yellow-600' : 'text-gray-600'
+                  }`}>
+                    {ad.priority >= 8 ? 'High' : ad.priority >= 5 ? 'Medium' : 'Low'}
+                  </p>
                 </div>
               </div>
+
+              {/* Scheduling Info */}
+              {ad.isScheduled && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">
+                      {ad.scheduleType === 'SCHEDULED' ? 'Scheduled' : 'Scheduled'}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    {ad.startDate && (
+                      <p>• <strong>Starts:</strong> {new Date(ad.startDate).toLocaleDateString()}</p>
+                    )}
+                    {ad.endDate && (
+                      <p>• <strong>Ends:</strong> {new Date(ad.endDate).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -650,11 +680,8 @@ const CompanyAdsManagement: React.FC = () => {
                     description: '',
                     mediaFile: '',
                     adFormat: 'VIDEO',
-                    duration: 15,
                     isActive: true,
-                    priority: 0,
-                    tags: [],
-                    notes: ''
+                    priority: 0
                   });
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -838,105 +865,230 @@ const CompanyAdsManagement: React.FC = () => {
                 )}
               </div>
 
-              {/* Duration and Priority */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative">
-                  <input
-                    type="number"
-                    id="duration"
-                    required
-                    min="1"
-                    max="300"
-                    value={formData.duration}
-                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
-                    className={`peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition ${validationErrors.duration ? 'border-red-400' : 'border-gray-300'}`}
-                    placeholder=""
-                  />
-                  <label
-                    htmlFor="duration"
-                    className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.duration ? '-top-2 text-sm text-black/70 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
-                  >
-                    Duration (seconds)
-                  </label>
-                  {validationErrors.duration && (
-                    <p className="text-red-500 text-xs mt-1">{validationErrors.duration}</p>
+              {/* Priority Slider */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-4">
+                  Priority Level
+                </label>
+                <div className="space-y-4">
+                  {/* Priority Options */}
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      { value: 2, label: 'Low', color: 'bg-gray-100 text-gray-800', selectedColor: 'bg-gray-500 text-white' },
+                      { value: 5, label: 'Medium', color: 'bg-yellow-100 text-yellow-800', selectedColor: 'bg-yellow-500 text-white' },
+                      { value: 8, label: 'High', color: 'bg-red-100 text-red-800', selectedColor: 'bg-red-500 text-white' }
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, priority: option.value }))}
+                        className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                          formData.priority === option.value
+                            ? option.selectedColor
+                            : option.color
+                        } ${
+                          formData.priority === option.value
+                            ? 'ring-2 ring-offset-2 ring-blue-500 shadow-md'
+                            : 'hover:shadow-sm'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Visual Priority Indicator */}
+                  <div className="flex items-center justify-center space-x-2">
+                    <span className="text-sm text-gray-600">Priority:</span>
+                    <div className="flex space-x-1">
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
+                        <div
+                          key={level}
+                          className={`w-3 h-3 rounded-full transition-colors duration-200 ${
+                            level <= (formData.priority || 5)
+                              ? (formData.priority || 5) <= 3
+                                ? 'bg-gray-400'
+                                : (formData.priority || 5) <= 7
+                                ? 'bg-yellow-400'
+                                : 'bg-red-400'
+                              : 'bg-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">{formData.priority || 5}/10</span>
+                  </div>
+
+                  {/* Priority Guide */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-blue-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="text-sm text-blue-800">
+                        <p className="font-semibold mb-2">How Priority Works:</p>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <span><strong>High (8-10):</strong> Plays very frequently as filler content</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                            <span><strong>Medium (4-7):</strong> Plays moderately as filler content</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                            <span><strong>Low (1-3):</strong> Plays rarely as filler content</span>
+                          </div>
+                          <div className="mt-2 p-2 bg-blue-100 rounded text-xs">
+                            <p><strong>💡 Tip:</strong> Higher priority = more chances to be selected when there are fewer than 5 user ads playing</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+
+
+
+              {/* Scheduling Section */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-4">
+                  Scheduling
+                </label>
+                <div className="space-y-4">
+                  {/* Schedule Type Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Deployment Option
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { value: 'IMMEDIATE', label: 'Deploy Now', description: 'Start playing immediately', icon: '🚀' },
+                        { value: 'SCHEDULED', label: 'Scheduled', description: 'Play during specific dates', icon: '📅' }
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ 
+                            ...prev, 
+                            scheduleType: option.value as any,
+                            isScheduled: option.value !== 'IMMEDIATE',
+                            isActive: option.value === 'IMMEDIATE' // Deploy Now = Active, Scheduled = Inactive initially
+                          }))}
+                          className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
+                            formData.scheduleType === option.value
+                              ? 'bg-blue-500 text-white ring-2 ring-offset-2 ring-blue-500 shadow-md'
+                              : 'bg-gray-100 text-gray-800 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg">{option.icon}</span>
+                            <div className="text-left">
+                              <div className="text-sm font-medium">{option.label}</div>
+                              <div className="text-xs opacity-80">{option.description}</div>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Date Range Selection (for SCHEDULED only) */}
+                  {formData.scheduleType === 'SCHEDULED' && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Start Date
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={formData.startDate || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          End Date
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={formData.endDate || ''}
+                          onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+
+                  {/* Status Preview */}
+                  <div className={`border rounded-lg p-3 ${
+                    formData.scheduleType === 'IMMEDIATE' 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-yellow-50 border-yellow-200'
+                  }`}>
+                    <div className="flex items-start space-x-2">
+                      <div className="flex-shrink-0">
+                        <svg className={`h-5 w-5 mt-0.5 ${
+                          formData.scheduleType === 'IMMEDIATE' ? 'text-green-600' : 'text-yellow-600'
+                        }`} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className={`text-sm ${
+                        formData.scheduleType === 'IMMEDIATE' ? 'text-green-800' : 'text-yellow-800'
+                      }`}>
+                        <p className="font-medium">
+                          {formData.scheduleType === 'IMMEDIATE' ? 'Deploy Now Status:' : 'Scheduled Status:'}
+                        </p>
+                        <div className="mt-1 space-y-1 text-xs">
+                          {formData.scheduleType === 'IMMEDIATE' ? (
+                            <>
+                              <p>• <strong>Status:</strong> <span className="text-green-600 font-semibold">Active</span> (starts playing immediately)</p>
+                              <p>• <strong>Control:</strong> Only stops when you manually set to inactive</p>
+                            </>
+                          ) : (
+                            <>
+                              <p>• <strong>Status:</strong> <span className="text-yellow-600 font-semibold">Inactive</span> (waits for start date)</p>
+                              <p>• <strong>Auto-activation:</strong> Will become active when start date is reached</p>
+                              <p>• <strong>Auto-deactivation:</strong> Will become inactive when end date is reached</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Schedule Preview for Scheduled ads */}
+                  {formData.scheduleType === 'SCHEDULED' && (formData.startDate || formData.endDate) && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="flex items-start space-x-2">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-blue-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="text-sm text-blue-800">
+                          <p className="font-medium">Schedule Details:</p>
+                          <div className="mt-1 space-y-1 text-xs">
+                            {formData.startDate && (
+                              <p>• <strong>Starts:</strong> {new Date(formData.startDate).toLocaleString()}</p>
+                            )}
+                            {formData.endDate && (
+                              <p>• <strong>Ends:</strong> {new Date(formData.endDate).toLocaleString()}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <div className="relative">
-                  <input
-                    type="number"
-                    id="priority"
-                    min="0"
-                    max="10"
-                    value={formData.priority}
-                    onChange={(e) => setFormData(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
-                    className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
-                    placeholder=""
-                  />
-                  <label
-                    htmlFor="priority"
-                    className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.priority ? '-top-2 text-sm text-black/70 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
-                  >
-                    Priority
-                  </label>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="relative">
-                <input
-                  type="text"
-                  id="tags"
-                  value={formData.tags?.join(', ') || ''}
-                  onChange={(e) => setFormData(prev => ({ 
-                    ...prev, 
-                    tags: e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag)
-                  }))}
-                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
-                  placeholder=""
-                />
-                <label
-                  htmlFor="tags"
-                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.tags?.length ? '-top-2 text-sm text-black/70 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
-                >
-                  Enter tags separated by commas
-                </label>
-              </div>
-
-              {/* Notes */}
-              <div className="relative">
-                <textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={3}
-                  className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
-                  placeholder=""
-                />
-                <label
-                  htmlFor="notes"
-                  className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.notes ? '-top-2 text-sm text-black/70 font-bold'
-                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
-                >
-                  Enter any additional notes
-                </label>
-              </div>
-
-              {/* Active Status */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                  Active (will be shown in rotation)
-                </label>
               </div>
 
               {/* Submit Buttons */}

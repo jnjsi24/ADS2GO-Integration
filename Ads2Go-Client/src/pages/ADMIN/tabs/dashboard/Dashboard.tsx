@@ -3,10 +3,12 @@ import {
   Play, 
   Pause, 
   Square, 
-  RefreshCw,
+  Lock,
+  Unlock,
   Eye,
   Settings,
-  WifiOff
+  WifiOff,
+  Monitor
 } from 'lucide-react';
 import { ScreenData } from '../../../../types/screenTypes';
 import AdProgressBar from '../../../../components/AdProgressBar';
@@ -16,16 +18,19 @@ interface DashboardProps {
   selectedScreens: string[];
   lastRefresh: Date;
   isRefreshing: boolean;
-  onRefresh: () => void;
+  isCurrentlyPlaying: boolean;
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onScreenSelect: (screenId: string) => void;
   onScreenClick: (screen: ScreenData) => void;
+  onScreenAction: (deviceId: string, action: string, value?: any) => void;
   onMaterialClick: (screen: ScreenData) => void;
   onBulkAction: (action: string) => void;
   getStatusIcon: (status: string) => JSX.Element;
   getStatusText: (status: string) => string;
   formatTime: (seconds: number | undefined) => string;
+  devicePlayStates: Record<string, boolean>;
+  deviceLockStates: Record<string, boolean>;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -33,17 +38,34 @@ const Dashboard: React.FC<DashboardProps> = ({
   selectedScreens,
   lastRefresh,
   isRefreshing,
-  onRefresh,
+  isCurrentlyPlaying,
   onSelectAll,
   onDeselectAll,
   onScreenSelect,
   onScreenClick,
+  onScreenAction,
   onMaterialClick,
   onBulkAction,
   getStatusIcon,
   getStatusText,
-  formatTime
+  formatTime,
+  devicePlayStates,
+  deviceLockStates
 }) => {
+  // Close all dropdowns when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const dropdowns = document.querySelectorAll('.dropdown-menu');
+      dropdowns.forEach(dropdown => {
+        if (!dropdown.contains(event.target as Node)) {
+          dropdown.classList.add('opacity-0', 'invisible');
+        }
+      });
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   return (
     <div className="space-y-6">
       {/* Screen Status Grid */}
@@ -56,13 +78,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             </p>
           </div>
           <div className="flex items-center space-x-2">
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="px-3 py-1 text-sm bg-green-100 text-green-600 rounded-md hover:bg-green-200 disabled:opacity-50"
-            >
-              Refresh
-            </button>
             <button
               onClick={onSelectAll}
               className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200"
@@ -195,19 +210,106 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => onScreenClick(screen)}
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="p-1 text-gray-400 hover:text-gray-600"
-                        title="Settings"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
+                      <div className="relative group">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Toggle dropdown by adding/removing a class
+                            const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (dropdown) {
+                              dropdown.classList.toggle('opacity-0');
+                              dropdown.classList.toggle('invisible');
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-gray-600"
+                          title="Device Controls"
+                        >
+                          <Settings className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Dropdown Menu */}
+                        <div className="dropdown-menu absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                          <div className="py-1">
+                            {(() => {
+                              // Use master control state instead of individual device state
+                              // This ensures individual controls show the opposite of master control
+                              const isOnline = screen.isOnline;
+                              const hasCurrentAd = screen.screenMetrics?.currentAd;
+                              
+                              // Debug logging
+                              console.log(`🎬 [Dashboard] Screen ${screen.deviceId} state:`, {
+                                isOnline,
+                                hasCurrentAd: !!hasCurrentAd,
+                                masterControlState: isCurrentlyPlaying,
+                                devicePlayState: devicePlayStates[screen.deviceId]
+                              });
+                              
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => onScreenAction(screen.deviceId, 'play')}
+                                    disabled={!isOnline || isCurrentlyPlaying}
+                                    className={`flex items-center w-full px-4 py-2 text-sm ${
+                                      !isOnline || isCurrentlyPlaying
+                                        ? 'text-gray-400 cursor-not-allowed'
+                                        : 'text-gray-700 hover:bg-green-50 hover:text-green-600'
+                                    }`}
+                                    title={!isOnline ? 'Device offline' : isCurrentlyPlaying ? 'Already playing' : 'Play ads'}
+                                  >
+                                    <Play className="w-4 h-4 mr-2" />
+                                    Play
+                                  </button>
+                                  <button
+                                    onClick={() => onScreenAction(screen.deviceId, 'pause')}
+                                    disabled={!isOnline || !isCurrentlyPlaying}
+                                    className={`flex items-center w-full px-4 py-2 text-sm ${
+                                      !isOnline || !isCurrentlyPlaying
+                                        ? 'text-gray-400 cursor-not-allowed'
+                                        : 'text-gray-700 hover:bg-yellow-50 hover:text-yellow-600'
+                                    }`}
+                                    title={!isOnline ? 'Device offline' : !isCurrentlyPlaying ? 'Not currently playing' : 'Pause ads'}
+                                  >
+                                    <Pause className="w-4 h-4 mr-2" />
+                                    Pause
+                                  </button>
+                                  {(() => {
+                                    const isLocked = deviceLockStates[screen.deviceId] ?? false;
+                                    return (
+                                      <button
+                                        onClick={() => onScreenAction(screen.deviceId, isLocked ? 'unlock' : 'lock')}
+                                        disabled={!isOnline}
+                                        className={`flex items-center w-full px-4 py-2 text-sm ${
+                                          !isOnline
+                                            ? 'text-gray-400 cursor-not-allowed'
+                                            : isLocked
+                                            ? 'text-gray-700 hover:bg-green-50 hover:text-green-600'
+                                            : 'text-gray-700 hover:bg-orange-50 hover:text-orange-600'
+                                        }`}
+                                        title={!isOnline ? 'Device offline' : isLocked ? 'Unlock device' : 'Lock device'}
+                                      >
+                                        {isLocked ? (
+                                          <Unlock className="w-4 h-4 mr-2" />
+                                        ) : (
+                                          <Lock className="w-4 h-4 mr-2" />
+                                        )}
+                                        {isLocked ? 'Unlock' : 'Lock'}
+                                      </button>
+                                    );
+                                  })()}
+                                </>
+                              );
+                            })()}
+                            <div className="border-t border-gray-100"></div>
+                            <button
+                              onClick={() => onScreenClick(screen)}
+                              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -238,17 +340,24 @@ const Dashboard: React.FC<DashboardProps> = ({
               Pause Selected
             </button>
             <button 
-              onClick={() => onBulkAction('stop')}
-              className="px-3 py-1 bg-red-100 text-red-600 rounded-md text-sm hover:bg-red-200"
+              onClick={() => onBulkAction('lock')}
+              className="px-3 py-1 bg-orange-100 text-orange-600 rounded-md text-sm hover:bg-orange-200"
             >
-              <Square className="w-4 h-4 inline mr-1" />
-              Stop Selected
+              <Lock className="w-4 h-4 inline mr-1" />
+              Lock Selected
+            </button>
+            <button 
+              onClick={() => onBulkAction('unlock')}
+              className="px-3 py-1 bg-green-100 text-green-600 rounded-md text-sm hover:bg-green-200"
+            >
+              <Unlock className="w-4 h-4 inline mr-1" />
+              Unlock Selected
             </button>
             <button 
               onClick={() => onBulkAction('sync')}
               className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-sm hover:bg-blue-200"
             >
-              <RefreshCw className="w-4 h-4 inline mr-1" />
+              <Monitor className="w-4 h-4 inline mr-1" />
               Sync Selected
             </button>
           </div>

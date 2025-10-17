@@ -26,12 +26,14 @@ const NotificationItemSchema = new mongoose.Schema({
       'AD_APPROVAL', 'AD_REJECTION', 'PAYMENT_CONFIRMATION', 'AD_PERFORMANCE', 'PROFILE_CHANGE',
       // Driver categories
       'MATERIAL_ASSIGNMENT', 'ROUTE_UPDATE', 'DEVICE_ISSUE', 'DRIVER_STATUS_CHANGE',
-      // Admin categories
+      // Admin categories (general admin notifications)
       'NEW_AD_SUBMISSION', 'NEW_USER_REGISTRATION', 'NEW_DRIVER_APPLICATION', 'NEW_MATERIAL_CREATED', 'PAYMENT_SUCCESS', 'PAYMENT_FAILURE', 'PAYMENT_ISSUE', 'SYSTEM_ALERT',
       // SuperAdmin categories
       'ADMIN_ACTIVITY', 'ADMIN_ACTION', 'ADMIN_APPROVAL_REJECTION', 'CRITICAL_ISSUE', 'SYSTEM_REPORT', 'SECURITY_ALERT', 'DATABASE_ISSUE',
       // Additional categories
-      'REPORT_STATUS_UPDATE', 'NEW_USER_REPORT'
+      'REPORT_STATUS_UPDATE', 'NEW_USER_REPORT',
+      // Device/Material specific categories (for screen control)
+      'DEVICE_OFFLINE', 'DEVICE_ONLINE', 'DEVICE_MILESTONE', 'MATERIAL_PERFORMANCE', 'DEVICE_STATUS_CHANGE'
     ]
   },
   priority: {
