@@ -11,6 +11,7 @@ import {
   DollarSign,
   User,
   Bell,
+  Calculator,
 } from 'lucide-react';
 
 const SadminNavbar: React.FC = () => {
@@ -51,6 +52,7 @@ const SadminNavbar: React.FC = () => {
     { label: 'Analytics', path: '/sadmin-analytics', icon: <BarChart3 size={20} /> },
     { label: 'Manage Admin', path: '/sadmin-admin', icon: <Users size={20} /> },
     { label: 'Pricing', path: '/sadmin-pricing', icon: <DollarSign size={20} /> },
+    { label: 'Driver Salary', path: '/sadmin-driver-salary', icon: <Calculator size={20} /> },
   ];
 
   return (

@@ -514,10 +514,10 @@ const AdDetailsPage: React.FC = () => {
 
           {/* Tab Content */}
           {activeTab === 'Details' && (
-            <div className="grid grid-cols-2 bg-white/60 p-3 rounded-lg shadow-md">
+            <div className="grid grid-cols-2 bg-white/60 p-3 shadow-md">
               {/* Left: Table-style info */}
               <div>
-                <table className="w-full text-sm mt-5 text-black/80">
+                <table className="w-full text-sm text-black/80">
                   <tbody>
                     <tr>
                       <td className="py-2">Start Date:</td>

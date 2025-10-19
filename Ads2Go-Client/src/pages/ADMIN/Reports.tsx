@@ -292,7 +292,7 @@ const Reports: React.FC = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-52'}`}>
+    <div className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${isMobile ? 'px-10 pl-28' : 'ml-60'}`}>
   
       {/* Mobile Header */}
       {isMobile && (
@@ -306,60 +306,21 @@ const Reports: React.FC = () => {
         {!isMobile && (
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Reports Management</h1>
         )}
-      </div>
-
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="flex space-x-1 bg-white p-1 rounded-lg shadow-md w-fit">
-          <button
-            onClick={() => {
-              setReportSource('users');
-              setCurrentPage(1);
-              setSelectedTypeFilter('All Types');
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-              reportSource === 'users'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Users size={18} />
-            <span className="font-medium">User Reports</span>
-          </button>
-          <button
-            onClick={() => {
-              setReportSource('drivers');
-              setCurrentPage(1);
-              setSelectedTypeFilter('All Types');
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-all ${
-              reportSource === 'drivers'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <Car size={18} />
-            <span className="font-medium">Driver Reports</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-6">
+        {/* Filters */}
         <div className="flex flex-col items-end gap-3">
-          <div className="flex flex-col sm:flex-row gap-2 w-full">
+          <div className="flex flex-col sm:flex-row gap-1 w-full">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-md pl-4 lg:pl-5 py-3 w-full lg:w-80 shadow-md focus:outline-none bg-white"
               placeholder={reportSource === 'users' ? "Search by title, user name, or email" : "Search by title, driver name, ID, or vehicle"}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <div className="flex gap-2">
+            <div className="flex gap-1">
               <div className="relative w-full sm:w-32">
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   <span className="truncate">{selectedStatusFilter}</span>
                   <ChevronDown
@@ -374,7 +335,7 @@ const Reports: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {statusFilterOptions.map((status) => (
                         <button
@@ -392,7 +353,7 @@ const Reports: React.FC = () => {
               <div className="relative w-full sm:w-40">
                 <button
                   onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   <span className="truncate">{selectedTypeFilter}</span>
                   <ChevronDown
@@ -425,6 +386,62 @@ const Reports: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+      
+      <div className="flex flex-col lg:flex-row lg:justify-end lg:items-center gap-4 mb-2 mt-5">
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="flex space-x-1 w-fit">
+            {/* USER REPORTS BUTTON */}
+            <button
+              onClick={() => {
+                setReportSource('users');
+                setCurrentPage(1);
+                setSelectedTypeFilter('All Types');
+              }}
+              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+                reportSource === 'users'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Users size={18} />
+              <span>User Reports</span>
+
+              {/* Animated underline */}
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                  reportSource === 'users' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`}
+              />
+            </button>
+
+            {/* DRIVER REPORTS BUTTON */}
+            <button
+              onClick={() => {
+                setReportSource('drivers');
+                setCurrentPage(1);
+                setSelectedTypeFilter('All Types');
+              }}
+              className={`relative group flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all duration-300 ${
+                reportSource === 'drivers'
+                  ? 'text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Car size={18} />
+              <span>Driver Reports</span>
+
+              {/* Animated underline */}
+              <span
+                className={`absolute bottom-0 left-0 h-0.5 w-full bg-blue-500 transform origin-left transition-transform duration-300 ease-out ${
+                  reportSource === 'drivers' ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* Bulk Actions Bar */}
@@ -507,7 +524,7 @@ const Reports: React.FC = () => {
       {/* Rows */}
       <div className="flex-1">
         {filteredReports.length === 0 ? (
-          <div className="text-center py-7 text-gray-500 bg-white rounded-lg shadow-sm">No reports found.</div>
+          <div></div>
         ) : (
           paginatedReports.map((report: Report) => (
             <div key={report.id} className="bg-white mb-3 rounded-lg shadow-md">

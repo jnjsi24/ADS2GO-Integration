@@ -199,7 +199,7 @@ const SideNavbar: React.FC = () => {
         </div>
 
         {/* Navigation - Completely Static */}
-        <ul className="space-y-5 mt-16">
+        <ul className="space-y-5">
           {navLinks.map(link => {
             const isActive = window.location.pathname === link.path;
             console.log(`Nav item ${link.label}: path=${link.path}, current=${window.location.pathname}, isActive=${isActive}`);

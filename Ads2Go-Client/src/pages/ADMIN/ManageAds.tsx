@@ -452,7 +452,7 @@ const ManageAds: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 pl-64 pr-5 p-10">
+    <div className="min-h-screen bg-gray-100 pl-72 pr-5 p-10">
       {/* Header with Title and Filters */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Advertisements Management</h1>
@@ -593,29 +593,29 @@ const ManageAds: React.FC = () => {
           <div className="">
             {/* Stats Summary */}
             <div className="grid grid-cols-5 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md shadow-md">
                 <p className="text-3xl text-center font-bold text-gray-900">{data?.getAllAds?.length || 0}</p>
                 <h3 className="text-s text-center font-medium text-gray-500">Total Advertisement</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md shadow-md">
                 <p className="text-3xl text-center font-bold text-blue-500">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'RUNNING').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Running</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md shadow-md">
                 <p className="text-3xl text-center font-bold text-green-600">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'APPROVED').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Approved</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md shadow-md">
                 <p className="text-3xl text-center font-bold text-yellow-500">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'PENDING').length || 0}
                 </p>
                 <h3 className="text-sm text-center font-medium text-gray-500">Pending</h3>
               </div>
-              <div className="bg-white p-4 rounded-lg">
+              <div className="bg-white p-4 rounded-md shadow-md">
                 <p className="text-3xl text-center font-bold text-red-600">
                   {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
                 </p>

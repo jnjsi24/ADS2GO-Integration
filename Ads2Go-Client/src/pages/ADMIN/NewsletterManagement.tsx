@@ -330,31 +330,31 @@ const NewsletterManagement: React.FC = () => {
 
   return (
     <div
-  className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-    isMobile ? 'px-10 pl-28' : 'ml-52'
-  }`}
->
-  <div className="max-w-7xl mx-auto w-full">
-    {/* Mobile Header */}
-    {isMobile && (
-      <div className="flex items-center mb-4">
-        <h1 className="text-xl pt-7 font-bold text-gray-800">
-          Newsletter Management
-        </h1>
-      </div>
-    )}
+      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
+        isMobile ? 'px-10 pl-28' : 'ml-60'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto w-full">
+        {/* Mobile Header */}
+        {isMobile && (
+          <div className="flex items-center mb-4">
+            <h1 className="text-xl pt-7 font-bold text-gray-800">
+              Newsletter Management
+            </h1>
+          </div>
+        )}
 
-    {/* Header with Title and Filters */}
-    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
-      {!isMobile && (
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
-          Newsletter Management
-        </h1>
-      )}
-            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-2'}`}>
+        {/* Header with Title and Filters */}
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+          {!isMobile && (
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+              Newsletter Management
+            </h1>
+          )}
+            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-1'}`}>
               <input
                 type="text"
-                className={`text-xs text-black rounded-lg pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
+                className={`text-xs text-black rounded-md pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
                 placeholder="Search Subscribers"
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
@@ -362,7 +362,7 @@ const NewsletterManagement: React.FC = () => {
               <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
                 <button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                  className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
+                  className={`flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
                 >
                   {selectedFilter}
                   <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
@@ -374,7 +374,7 @@ const NewsletterManagement: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {filterOptions.map((filter) => (
                         <button

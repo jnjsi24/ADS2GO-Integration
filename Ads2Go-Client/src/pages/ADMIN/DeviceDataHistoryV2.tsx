@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Database, 
   Search, 
@@ -14,7 +14,7 @@ import {
   MapPin,
   TrendingUp,
   Clock,
-  Monitor
+  Monitor, ChevronDown
 } from 'lucide-react';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -61,10 +61,19 @@ const DeviceDataHistoryV2: React.FC = () => {
   // Set default date to today
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [allMaterials, setAllMaterials] = useState<Material[]>([]);
+
+  // Device filter state
+  const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
+  const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('All Device');
+  const [deviceFilterOptions, setDeviceFilterOptions] = useState<string[]>(['All Device']);
+
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const itemsPerPage = 9;
+
   const [editingData, setEditingData] = useState<{ materialId: string; date: string; data: DailyData } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<{ materialId: string; date: string } | null>(null);
@@ -72,8 +81,15 @@ const DeviceDataHistoryV2: React.FC = () => {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const itemsPerPage = 50; // Server-side pagination
   const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleButtonClick = () => {
+    inputRef.current?.showPicker(); // Opens the native date picker
+  };
+
+
 
   // Get base API URL without /graphql
   const API_URL = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
@@ -117,7 +133,7 @@ const DeviceDataHistoryV2: React.FC = () => {
   const fetchMaterials = async (forceRefresh = false) => {
     // Check cache validity (skip for filters/pagination changes)
     if (!forceRefresh && lastFetch && (Date.now() - lastFetch.getTime() < CACHE_DURATION)) {
-      if (currentPage === 1 && !debouncedSearch && !selectedDate) {
+      if (currentPage === 1 && !debouncedSearch && !selectedDate && selectedDeviceFilter === 'All Device') {
         return; // Use cached data for default view
       }
     }
@@ -138,15 +154,20 @@ const DeviceDataHistoryV2: React.FC = () => {
         params.append('endDate', selectedDate);
       }
 
+      if (selectedDeviceFilter !== 'All Device') {
+        params.append('materialId', selectedDeviceFilter);
+      }
+
       const response = await axios.get(
         `${API_URL}/api/deviceDataHistoryV2/materials?${params.toString()}`
       );
-      
+
+      console.log('Fetched materials response:', response.data); // Add this log
       if (response.data.success) {
         setMaterials(response.data.materials);
         setTotalPages(response.data.totalPages || 1);
         setTotalCount(response.data.totalCount || 0);
-        setLastFetch(new Date());
+          setLastFetch(new Date());
       }
     } catch (error) {
       console.error('Error fetching materials:', error);
@@ -158,7 +179,20 @@ const DeviceDataHistoryV2: React.FC = () => {
   // Fetch data when dependencies change
   useEffect(() => {
     fetchMaterials();
-  }, [currentPage, debouncedSearch, selectedDate]);
+  }, [currentPage, debouncedSearch, selectedDate, selectedDeviceFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, selectedDate, selectedDeviceFilter]);
+
+  useEffect(() => {
+    if (materials.length > 0) {
+      const deviceIds = [...new Set(materials.map(material => material.materialId))];
+      console.log('📱 Extracted devices from materials:', deviceIds);
+      setDeviceFilterOptions(['All Device', ...deviceIds]);
+      console.log('Updated deviceFilterOptions:', ['All Device', ...deviceIds]); // Add this log
+    }
+  }, [materials]);
 
   // Handle edit
   const handleEdit = (materialId: string, date: string | Date, data: DailyData) => {
@@ -297,7 +331,7 @@ const DeviceDataHistoryV2: React.FC = () => {
   const currentItems = allDailyDataItems;
 
   // Calculate margin based on screen size
-  const contentMargin = isMobile ? 'ml-0' : 'ml-64';
+  const contentMargin = isMobile ? 'ml-0' : 'pl-72';
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -315,21 +349,115 @@ const DeviceDataHistoryV2: React.FC = () => {
 
   return (
     <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen text-gray-800 font-sans transition-all duration-300`}>
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-              <Database className="w-8 h-8 text-[#3674B5]" />
-              Device Data History V2
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              View, edit, and manage device tracking data by date
-            </p>
+      {/* Header & Filters Combined Layout */}
+      <div className="pt-3">
+        {/* Row 1: Title + Filters */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+          {/* Left: Title */}
+          <h1 className="text-3xl mt-2 font-bold text-gray-800">
+            Device Data History
+          </h1>
+
+          {/* Right: Search + Date Picker */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            {/* Search */}
+            <div className="relative w-full sm:w-64">
+              <input
+                type="text"
+                placeholder="Search by Material ID or Car Group ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
+              />
+              {searchTerm !== debouncedSearch && (
+                <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 animate-spin" />
+              )}
+            </div>
+
+            <div className="relative flex-1 sm:flex-none sm:w-40">
+              <button
+                onClick={() => setShowDeviceDropdown(!showDeviceDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{selectedDeviceFilter}</span>
+                <ChevronDown
+                  size={16}
+                  className={`flex-shrink-0 transform transition-transform duration-200 ${showDeviceDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              <AnimatePresence>
+                {showDeviceDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                  >
+                    {deviceFilterOptions.map((device) => (
+                      <button
+                        key={device}
+                        onClick={() => {
+                          setSelectedDeviceFilter(device);
+                          setShowDeviceDropdown(false);
+                          setCurrentPage(1);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {device}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Date Picker */}
+            <div className="relative w-full sm:w-40">
+              <button
+                onClick={handleButtonClick}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <div className="flex items-center">
+                  <span className="text-sm text-gray-700">
+                    {selectedDate
+                      ? new Date(selectedDate).toLocaleDateString()
+                      : "Select Date"}
+                  </span>
+                </div>
+
+                {selectedDate && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedDate("");
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                    title="Clear date filter"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </button>
+
+              {/* Hidden native date input */}
+              <input
+                ref={inputRef}
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="absolute opacity-0 left-6 pointer-events-none"
+              />
+            </div>
           </div>
+        </div>
+
+        {/* Row 2: Refresh Button (Right aligned) */}
+        <div className="flex justify-end">
           <button
             onClick={() => fetchMaterials(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#2563A0] transition-colors"
+            className="px-4 py-2 bg-[#3674B5] text-white rounded-md shadow-lg hover:bg-[#3674B5]/80 disabled:opacity-50 flex items-center gap-2"
             title={lastFetch ? `Last updated: ${lastFetch.toLocaleTimeString()}` : 'Refresh data'}
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -338,125 +466,10 @@ const DeviceDataHistoryV2: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Total Materials</p>
-              <p className="text-2xl font-bold text-gray-800">{totalCount}</p>
-            </div>
-            <Monitor className="w-10 h-10 text-blue-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Current Page Records</p>
-              <p className="text-2xl font-bold text-gray-800">{allDailyDataItems.length}</p>
-            </div>
-            <Activity className="w-10 h-10 text-green-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Page {currentPage} of {totalPages}</p>
-              <p className="text-2xl font-bold text-gray-800">{materials.length} items</p>
-            </div>
-            <TrendingUp className="w-10 h-10 text-purple-500" />
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Date Filter</p>
-              <p className="text-sm font-semibold text-gray-800">
-                {selectedDate === new Date().toISOString().split('T')[0] 
-                  ? 'Today' 
-                  : selectedDate 
-                    ? formatDate(selectedDate) 
-                    : 'All Dates'}
-              </p>
-            </div>
-            <Calendar className="w-10 h-10 text-orange-500" />
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by Material ID or Car Group ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
-            />
-            {searchTerm !== debouncedSearch && (
-              <RefreshCw className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 animate-spin" />
-            )}
-          </div>
-
-          {/* Date Picker */}
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className={`w-full pl-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent ${
-                selectedDate ? 'pr-16' : 'pr-4'
-              }`}
-            />
-            {selectedDate && (
-              <button
-                onClick={() => setSelectedDate('')}
-                className="absolute right-10 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-10"
-                title="Clear date filter"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Date Filters */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
-            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-              selectedDate === new Date().toISOString().split('T')[0]
-                ? 'bg-[#3674B5] text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Today
-          </button>
-          <button
-            onClick={() => setSelectedDate('')}
-            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-              !selectedDate
-                ? 'bg-[#3674B5] text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All Dates
-          </button>
-        </div>
-      </div>
-
       {/* Data Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full border-separate border-spacing-y-3"> {/* adds spacing between rows */}
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -485,7 +498,8 @@ const DeviceDataHistoryV2: React.FC = () => {
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+
+            <tbody>
               {loading ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center">
@@ -502,65 +516,83 @@ const DeviceDataHistoryV2: React.FC = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: index * 0.05 }}
-                    className="hover:bg-gray-50 transition-colors"
+                    className="bg-white rounded-lg shadow-md hover:bg-gray-50 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Monitor className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm font-medium text-gray-900">
-                          {item.material.materialId}
-                        </span>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap rounded-l-lg">
+                      <span className="text-sm font-medium text-gray-900">
+                        {item.material.materialId}
+                      </span>
                     </td>
+
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-600">{item.material.carGroupId}</span>
                     </td>
+
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">{formatDate(item.dailyData.date)}</span>
-                      </div>
+                      <span className="text-sm text-gray-900">{formatDate(item.dailyData.date)}</span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">{item.dailyData.totalAdPlays || 0}</span>
+
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.dailyData.totalAdPlays || 0}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">{item.dailyData.totalQRScans || 0}</span>
+
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.dailyData.totalQRScans || 0}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">
-                        {(item.dailyData.totalDistanceTraveled || 0).toFixed(2)}
-                      </span>
+
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {(item.dailyData.totalDistanceTraveled || 0).toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">
-                          {(item.dailyData.totalHoursOnline || 0).toFixed(2)}
-                        </span>
+                        {(item.dailyData.totalHoursOnline || 0).toFixed(2)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+
+                    <td className="px-6 py-4 whitespace-nowrap rounded-r-lg">
+                    <div className="flex items-center gap-3">
+                      {/* Edit Button */}
+                      <div className="relative w-8 h-8 flex items-center justify-center">
                         <button
-                          onClick={() => handleEdit(item.material.materialId, item.dailyData.date, item.dailyData)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit"
+                          onClick={() =>
+                            handleEdit(item.material.materialId, item.dailyData.date, item.dailyData)
+                          }
+                          className="group flex items-center text-gray-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
                         >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm({ 
-                            materialId: item.material.materialId, 
-                            date: item.dailyData.date 
-                          })}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
+                          <Edit2
+                            size={16}
+                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          />
+                          <span className="absolute left-6 opacity-0 group-hover:opacity-100 text-xs transition-opacity duration-300 whitespace-nowrap">
+                            Edit
+                          </span>
                         </button>
                       </div>
-                    </td>
+
+                      {/* Delete Button */}
+                      <div className="relative w-8 h-8 flex items-center justify-center">
+                        <button
+                          onClick={() =>
+                            setShowDeleteConfirm({
+                              materialId: item.material.materialId,
+                              date: item.dailyData.date,
+                            })
+                          }
+                          className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        >
+                          <Trash2
+                            size={16}
+                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                          />
+                          <span className="absolute left-6 opacity-0 group-hover:opacity-100 text-xs transition-opacity duration-300 whitespace-nowrap">
+                            Delete
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </td>
                   </motion.tr>
                 ))
               ) : (
@@ -577,62 +609,59 @@ const DeviceDataHistoryV2: React.FC = () => {
             </tbody>
           </table>
         </div>
+              </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages} - Total: {totalCount} materials
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  
-                  return (
+      {/* Pagination */}
+      {materials.length > 0 && (
+        <div className="mt-auto flex justify-center py-4">
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Previous</span>
+            </button>
+            <div className="flex space-x-1">
+              {(() => {
+                const pages = [];
+                const maxVisiblePages = isMobile ? 1 : 3;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                  startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(
                     <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`px-3 py-1 rounded-lg transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-[#3674B5] text-white'
-                          : 'border border-gray-300 hover:bg-gray-50'
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      className={`px-2 sm:px-3 py-1 text-sm rounded ${
+                        currentPage === i ? 'border border-gray-300 text-black' : 'text-gray-700 hover:border border-gray-300'
                       }`}
                     >
-                      {pageNum}
+                      {i}
                     </button>
                   );
-                })}
-              </div>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+                }
+                if (endPage < totalPages && !isMobile) {
+                  pages.push(<span key="ellipsis" className="px-2 text-gray-500">…</span>);
+                }
+                return pages;
+              })()}
             </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       <AnimatePresence>
@@ -650,10 +679,10 @@ const DeviceDataHistoryV2: React.FC = () => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-md shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-gray-200">
+              <div className="p-6">
                 <h2 className="text-2xl font-bold text-gray-800">Edit Daily Data</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Material: {editingData?.materialId || 'N/A'} | Date: {editingData?.date ? formatDate(editingData.date) : 'N/A'}
@@ -664,18 +693,18 @@ const DeviceDataHistoryV2: React.FC = () => {
                   const isToday = dateStr === today;
                   
                   return (
-                    <div className={`mt-2 px-3 py-2 rounded-lg text-sm font-medium ${
+                    <div className={` rounded-lg text-sm font-medium ${
                       isToday 
-                        ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                        : 'bg-orange-100 text-orange-800 border border-orange-200'
+                        ? ' text-blue-800' 
+                        : ' text-orange-800'
                     }`}>
                       {isToday ? (
                         <>
-                          📊 <strong>Current Date:</strong> Will update DeviceTracking (real-time) + DeviceDataHistoryV2
+                          <strong>Current Date:</strong> Will update DeviceTracking (real-time) + DeviceDataHistoryV2
                         </>
                       ) : (
                         <>
-                          📚 <strong>Past Date:</strong> Will update DeviceDataHistoryV2 (historical data only)
+                          <strong>Past Date:</strong> Will update DeviceDataHistoryV2 (historical data only)
                         </>
                       )}
                     </div>
@@ -696,7 +725,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalAdPlays: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
 
@@ -711,7 +740,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalQRScans: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
 
@@ -727,7 +756,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalDistanceTraveled: parseFloat(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
 
@@ -743,7 +772,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalHoursOnline: parseFloat(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
 
@@ -758,7 +787,7 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalAdImpressions: parseInt(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
 
@@ -774,26 +803,26 @@ const DeviceDataHistoryV2: React.FC = () => {
                         ...editingData,
                         data: { ...editingData.data, totalAdPlayTime: parseFloat(e.target.value) || 0 }
                       })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3674B5] focus:border-transparent"
+                      className="w-full px-4 py-2 border-b border-gray-300 focus:outline-none focus:border-[#3674B5]"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <div className="p-6 flex justify-between gap-3">
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setEditingData(null);
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveEdit}
                   disabled={isSaving}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
                     isSaving 
                       ? 'bg-gray-400 cursor-not-allowed' 
                       : 'bg-[#3674B5] text-white hover:bg-[#2563A0]'
@@ -806,7 +835,6 @@ const DeviceDataHistoryV2: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" />
                       Save Changes
                     </>
                   )}
@@ -910,4 +938,3 @@ const DeviceDataHistoryV2: React.FC = () => {
 };
 
 export default DeviceDataHistoryV2;
-

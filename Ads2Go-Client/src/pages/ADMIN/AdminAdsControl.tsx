@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Play, 
   Pause, 
@@ -68,9 +68,28 @@ const AdminAdsControl: React.FC = () => {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
 
+  const [screen, setScreen] = useState<ScreenData | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+
   // Responsive state
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        setScreen(null);
+      }
+    }
+
+    if (screen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [screen]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -649,7 +668,7 @@ const AdminAdsControl: React.FC = () => {
     <div className={`p-6 ${contentMargin} bg-[#f9f9fc] min-h-screen transition-all duration-300`}>
       {/* Header */}
       <div className="mb-8">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between mt-4 items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">AdsPanel - LCD Control Center</h1>
             {/* Show subtle loader during auto-refresh */}
@@ -660,144 +679,140 @@ const AdminAdsControl: React.FC = () => {
               </div>
             )}
           </div>
-          <button 
-            onClick={() => fetchData(true)}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </div>
       </div>
  
-      {/* Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-2">
-        {/* Total Screens */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-16">
-            <Monitor className="w-8 h-8 text-blue-500" />
-            <div className="flex flex-col items-center">
-              <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
-              <p className="text-sm text-gray-600">Total Screens</p>
-            </div>
+      {/* Wrapper for Status Overview + Master Controls */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+  
+  {/* Status Overview (Left Side) */}
+  <div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Total Screens */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <Monitor className="h-5 w-5 text-blue-600" />
           </div>
+          <p className="text-sm font-medium text-gray-600">Total Screens</p>
         </div>
-        {/* Online Screens */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-green-600">
-                {screens.filter(s => s.isOnline).length}
-              </p>
-              <p className="text-sm text-gray-600">Online Screens</p>
-            </div>
-            <Wifi className="w-8 h-8 text-green-500" />
-          </div>
-        </div>
-
-        {/* Playing Ads */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-blue-600">
-                {screens.filter(s => s.screenMetrics?.isDisplaying).length}
-              </p>
-              <p className="text-sm text-gray-600">Playing Ads</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-
-        {/* Total Impressions */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-purple-600">
-                {adAnalytics?.summary.totalAdsPlayed || 0}
-              </p>
-              <p className="text-sm text-gray-600">Total Impressions</p>
-            </div>
-            <Eye className="w-8 h-8 text-purple-500" />
-          </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
         </div>
       </div>
 
-      
-      {/* Master Controls */}
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-3">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <Monitor className="w-5 h-5 mr-2" />
-          Master Controls
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-          <button 
-            onClick={() => handleBulkAction('sync')}
-            disabled={actionLoading === 'sync'}
-            className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {actionLoading === 'sync' ? <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" /> : <RefreshCw className="w-6 h-6 text-blue-600 mb-2" />}
-            <span className="text-sm font-medium text-blue-600">Sync All</span>
-          </button>
-          <button 
-            onClick={handleTogglePlayPause}
-            disabled={actionLoading === 'play' || actionLoading === 'pause'}
-            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
-              isCurrentlyPlaying 
-                ? 'bg-yellow-50 hover:bg-yellow-100' 
-                : 'bg-green-50 hover:bg-green-100'
-            }`}
-          >
-            {actionLoading === 'play' || actionLoading === 'pause' ? (
-              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
-                isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-              }`} />
-            ) : isCurrentlyPlaying ? (
-              <Pause className="w-6 h-6 text-yellow-600 mb-2" />
-            ) : (
-              <Play className="w-6 h-6 text-green-600 mb-2" />
-            )}
-            <span className={`text-sm font-medium ${
+      {/* Online Screens */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-green-100 rounded-full">
+            <Wifi className="h-5 w-5 text-green-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Online Screens</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-green-600">
+            {screens.filter(s => s.isOnline).length}
+          </p>
+        </div>
+      </div>
+
+      {/* Playing Ads */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <PlayCircle className="h-5 w-5 text-blue-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Playing Ads</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-blue-600">
+            {screens.filter(s => s.screenMetrics?.isDisplaying).length}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* Master Controls (Right Side) */}
+  <div>
+    <h2 className="text-xl font-semibold mb-3 flex items-center">
+      Master Controls 
+      <span className="text-sm text-gray-600 ml-2 font-medium">for AdsPlayer</span>
+    </h2>
+    <div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <button 
+          onClick={() => handleBulkAction('sync')}
+          disabled={actionLoading === 'sync'}
+          className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {actionLoading === 'sync' ? <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" /> : <RefreshCw className="w-6 h-6 text-blue-600 mb-2" />}
+          <span className="text-sm font-medium text-blue-600">Sync All</span>
+        </button>
+
+        <button 
+          onClick={handleTogglePlayPause}
+          disabled={actionLoading === 'play' || actionLoading === 'pause'}
+          className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+            isCurrentlyPlaying 
+              ? 'bg-yellow-50 hover:bg-yellow-100' 
+              : 'bg-green-50 hover:bg-green-100'
+          }`}
+        >
+          {actionLoading === 'play' || actionLoading === 'pause' ? (
+            <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
               isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
-            }`}>
-              {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
-            </span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
-            <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
-            <span className="text-sm font-medium text-purple-600">Restart All</span>
-          </button>
-          <button className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
-            <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
-            <span className="text-sm font-medium text-orange-600">Emergency</span>
-          </button>
-          <button 
-            onClick={handleToggleLock}
-            disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
-            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
-              isLocked 
-                ? 'bg-green-50 hover:bg-green-100' 
-                : 'bg-gray-50 hover:bg-gray-100'
-            }`}
-          >
-            {actionLoading === 'lock' || actionLoading === 'unlock' ? (
-              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
-                isLocked ? 'text-green-600' : 'text-gray-600'
-              }`} />
-            ) : isLocked ? (
-              <Unlock className="w-6 h-6 text-green-600 mb-2" />
-            ) : (
-              <Lock className="w-6 h-6 text-gray-600 mb-2" />
-            )}
-            <span className={`text-sm font-medium ${
-              isLocked ? 'text-green-600' : 'text-gray-600'
-            }`}>
-              {isLocked ? 'Unlock All' : 'Lock All'}
-            </span>
-          </button>
-        </div>
-      </div>
+            }`} />
+          ) : isCurrentlyPlaying ? (
+            <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+          ) : (
+            <Play className="w-6 h-6 text-green-600 mb-2" />
+          )}
+          <span className={`text-sm font-medium ${
+            isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+          }`}>
+            {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+          </span>
+        </button>
 
+        <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors">
+          <RotateCcw className="w-6 h-6 text-purple-600 mb-2" />
+          <span className="text-sm font-medium text-purple-600">Restart All</span>
+        </button>
+
+        <button className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
+          <AlertTriangle className="w-6 h-6 text-orange-600 mb-2" />
+          <span className="text-sm font-medium text-orange-600">Emergency</span>
+        </button>
+
+        <button 
+          onClick={handleToggleLock}
+          disabled={actionLoading === 'lock' || actionLoading === 'unlock'}
+          className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+            isLocked 
+              ? 'bg-green-50 hover:bg-green-100' 
+              : 'bg-gray-50 hover:bg-gray-100'
+          }`}
+        >
+          {actionLoading === 'lock' || actionLoading === 'unlock' ? (
+            <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
+              isLocked ? 'text-green-600' : 'text-gray-600'
+            }`} />
+          ) : isLocked ? (
+            <Unlock className="w-6 h-6 text-green-600 mb-2" />
+          ) : (
+            <Lock className="w-6 h-6 text-gray-600 mb-2" />
+          )}
+          <span className={`text-sm font-medium ${
+            isLocked ? 'text-green-600' : 'text-gray-600'
+          }`}>
+            {isLocked ? 'Unlock All' : 'Lock All'}
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* Tabs */}
       <div className="mb-8">
@@ -805,10 +820,8 @@ const AdminAdsControl: React.FC = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-              { id: 'screens', label: 'Screen Control', icon: Monitor },
               { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
               { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
-              { id: 'alerts', label: 'Alerts', icon: AlertTriangle }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -887,16 +900,16 @@ const AdminAdsControl: React.FC = () => {
 
       {/* Screen Details Modal */}
       {showScreenDetails && selectedScreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setShowScreenDetails(false)} // Add this click handler
+        >
+          <div 
+            className="bg-white rounded-md p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()} // Prevent click inside from closing
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold">Screen Details - {selectedScreen}</h3>
-              <button
-                onClick={() => setShowScreenDetails(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <XCircle className="w-6 h-6" />
-              </button>
+              <h3 className="text-xl font-semibold">{selectedScreen}</h3>
             </div>
             
             {(() => {
@@ -906,27 +919,29 @@ const AdminAdsControl: React.FC = () => {
               return (
                 <div className="space-y-6">
                   {/* Basic Info */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Device ID</label>
-                      <p className="text-lg font-medium">{screen.deviceId}</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center border-b border-gray-100 py-2">
+                      <span className="text-sm font-medium text-gray-600">Device ID</span>
+                      <span className="text-sm font-semibold text-gray-900">{screen.deviceId}</span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Material ID</label>
-                      <p className="text-lg font-medium">{screen.materialId}</p>
+
+                    <div className="flex justify-between items-center border-b border-gray-100 py-2">
+                      <span className="text-sm font-medium text-gray-600">Material ID</span>
+                      <span className="text-sm font-semibold text-gray-900">{screen.materialId}</span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Slot</label>
-                      <p className="text-lg font-medium">{screen.slotNumber}</p>
+
+                    <div className="flex justify-between items-center border-b border-gray-100 py-2">
+                      <span className="text-sm font-medium text-gray-600">Slot</span>
+                      <span className="text-sm font-semibold text-gray-900">{screen.slotNumber}</span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Location</label>
-                      <p className="text-lg font-medium">
+
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm font-medium text-gray-600">Location</span>
+                      <span className="text-sm font-semibold text-gray-900 text-right">
                         {screen.currentLocation?.address || 'Location not available'}
-                      </p>
+                      </span>
                     </div>
                   </div>
-
                   {/* Current Ad */}
                   {screen.screenMetrics?.currentAd && (
                     <div className="bg-gray-50 p-4 rounded-lg">
@@ -965,9 +980,9 @@ const AdminAdsControl: React.FC = () => {
                   )}
 
                   {/* Controls */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="font-medium mb-3">Screen Controls</h4>
-                    <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-medium mb-3 mt-9">Screen Controls</h4>
+                    <div className="flex flex-col gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-600 mb-2">Brightness</label>
                         <div className="flex items-center space-x-2">
@@ -998,20 +1013,20 @@ const AdminAdsControl: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-center space-x-4 mt-4">
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200">
+                    <div className="flex items-center justify-center space-x-2 mt-4">
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-md hover:bg-green-200">
                         <Play className="w-4 h-4" />
                         <span>Play</span>
                       </button>
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-600 rounded-lg hover:bg-yellow-200">
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-yellow-100 text-yellow-600 rounded-md hover:bg-yellow-200">
                         <Pause className="w-4 h-4" />
                         <span>Pause</span>
                       </button>
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200">
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-md hover:bg-red-200">
                         <Square className="w-4 h-4" />
                         <span>Stop</span>
                       </button>
-                      <button className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
+                      <button className="flex items-center space-x-2 px-4 py-2 bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200">
                         <SkipForward className="w-4 h-4" />
                         <span>Next</span>
                       </button>
@@ -1019,14 +1034,14 @@ const AdminAdsControl: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex justify-end space-x-2">
+                  <div className="flex justify-between space-x-2">
                     <button
                       onClick={() => setShowScreenDetails(false)}
-                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                      className="px-4 py-2 border text-gray-700 rounded-md hover:bg-gray-100"
                     >
                       Close
                     </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <button className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#3674B5]/80">
                       Save Changes
                     </button>
                   </div>

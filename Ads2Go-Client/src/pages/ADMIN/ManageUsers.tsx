@@ -182,7 +182,7 @@ const ManageUsers: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   // Dynamic margin based on sidebar state and screen size
-  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "ml-60";
+  const contentMargin = isMobile ? "ml-0 pt-16" : sidebarCollapsed ? "ml-16" : "pl-72";
  
   // Fetch users using useQuery hook
   const { data: usersData, loading: usersLoading, error: usersError } = useQuery(GET_ALL_USERS, {
@@ -485,24 +485,24 @@ const ManageUsers: React.FC = () => {
             <h1 className="text-2xl pt-4 lg:text-3xl font-bold text-gray-800">Advertisers Management</h1>
           )}
         
-        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+        <div className="flex flex-col sm:flex-row gap-1 w-full lg:w-auto">
           {/* Search Input */}
           <div className="w-full lg:w-80">
             <input
               type="text"
-              className="w-full text-xs text-black rounded-lg pl-4 py-3 shadow-md focus:outline-none bg-white"
+              className="w-full text-xs text-black rounded-md pl-4 py-3 shadow-md focus:outline-none bg-white"
               placeholder="Search advertisers by name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             {/* STATUS Filter */}
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedStatusFilter}</span>
                 <ChevronDown
@@ -518,7 +518,7 @@ const ManageUsers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map((status) => (
                       <button
@@ -538,7 +538,7 @@ const ManageUsers: React.FC = () => {
             <div className="relative flex-1 sm:flex-none sm:w-32">
               <button
                 onClick={() => setShowCityDropdown(!showCityDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 <span className="truncate">{selectedCityFilter}</span>
                 <ChevronDown
@@ -554,7 +554,7 @@ const ManageUsers: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
                   >
                     {cityFilterOptions.map((city) => (
                       <button

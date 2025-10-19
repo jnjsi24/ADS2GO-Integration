@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Clock, Users, FileText, DollarSign, Play, Pause, Eye, TrendingUp, X, RefreshCw, CheckSquare, Square, Trash2, ChevronDown } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle, Check, Users, FileText, DollarSign, Play, Pause, Eye, TrendingUp, X, RefreshCw, CheckSquare, Square, Trash2, ChevronDown } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, DELETE_NOTIFICATION, DELETE_ALL_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
 import { motion, AnimatePresence } from "framer-motion";
-import SubtleLoader from "../../../components/SubtleLoader";
 
 
 interface Notification {
@@ -337,7 +336,6 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h3 className="text-lg font-semibold text-gray-800">Admin Notifications</h3>
           {/* Show subtle loader during auto-refresh */}
           {(notificationsLoading || pendingAdsLoading || pendingMaterialsLoading) && (
             <div className="flex items-center text-xs text-gray-400 mt-1">
@@ -392,7 +390,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center text-sm gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+            className="flex items-center px-4 gap-2 py-2 text-white text-sm shadow-lg rounded-md bg-[#3674B5] hover:bg-[#3674B5]/80 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -402,21 +400,20 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
 
       {/* Pending Actions Section */}
       {(pendingAds.length > 0 || pendingMaterials.length > 0) && (
-        <div className="bg-white rounded-lg shadow-sm">
+        <div className="">
           <div className="p-4 border-b border-gray-200">
-            <h4 className="text-lg font-semibold text-gray-800">Pending Actions Required</h4>
+            <h4 className="text-lg font-bold text-gray-800">Pending Actions Required</h4>
           </div>
           <div className="p-4 space-y-4">
             {/* Pending Ads */}
             {pendingAds.length > 0 && (
               <div>
                 <h5 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
                   Ads Awaiting Review ({pendingAds.length})
                 </h5>
                 <div className="space-y-2">
                   {pendingAds.slice(0, 3).map(ad => (
-                    <div key={ad.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <div key={ad.id} className="flex items-center justify-between p-3 bg-orange-50 mb-3 rounded-lg shadow-md">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                         <div>
@@ -426,7 +423,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           </p>
                         </div>
                       </div>
-                      <button className="px-3 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600">
+                      <button className="px-3 py-1 bg-orange-400 text-white text-sm shadow-md rounded hover:bg-orange-600">
                         Review
                       </button>
                     </div>
@@ -477,8 +474,8 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       )}
 
       {/* Notifications List */}
-      <div className="bg-white rounded-lg shadow-sm">
-        <div className="p-4 border-b border-gray-200">
+      <div>
+        <div className="p-4">
           <div className="flex items-center justify-between">
             <h4 className="text-lg font-bold text-gray-800">Recent Notifications</h4>
             {filteredNotifications.length > 0 && (
@@ -486,24 +483,50 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                 {!isSelectMode ? (
                   <button
                     onClick={() => setIsSelectMode(true)}
-                    className="flex items-center space-x-2 px-3 py-1 text-black rounded-lg hover:text-black/80 text-sm font-semibold"
+                    className="space-x- px-3 py-1 text-black rounded-md shadow-md hover:bg-gray-200 disabled:opacity-50 flex items-center gap-3"
                   >
-                    <CheckSquare className="w-4 h-4" />
                     <span>Select</span>
                   </button>
                 ) : (
                   <div className="flex items-center space-x-2">
-                    <button
+                    <motion.button
                       onClick={toggleSelectAll}
-                      className="flex items-center space-x-2 px-3 py-1 bg-gray-100 text-black font-semibold rounded-lg hover:bg-gray-200 text-sm transition-colors"
+                      className="flex items-center space-x-2 px-3 py-1 rounded-md text-sm shadow-md disabled:opacity-50"
+                      initial={false}
+                      animate={{
+                        scale:
+                          selectedNotifications.size === filteredNotifications.length ? 1.05 : 1,
+                      }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
                     >
-                      {selectedNotifications.size === filteredNotifications.length ? (
-                        <CheckSquare className="w-4 h-4" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                      <span>{selectedNotifications.size === filteredNotifications.length ? 'Deselect All' : 'Select All'}</span>
-                    </button>
+                      <div
+                        className={`w-4 h-4 border-2 rounded flex items-center justify-center transition-colors duration-200 ${
+                          selectedNotifications.size === filteredNotifications.length
+                            ? "border-[#3674B5] bg-[#3674B5]"
+                            : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                        }`}
+                      >
+                        <AnimatePresence>
+                          {selectedNotifications.size === filteredNotifications.length && (
+                            <motion.div
+                              key="check"
+                              initial={{ opacity: 0, scale: 0.6 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.6 }}
+                              transition={{ duration: 0.15 }}
+                            >
+                              <Check className="w-3 h-3 text-white" />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                      <span>
+                        {selectedNotifications.size === filteredNotifications.length
+                          ? "Deselect All"
+                          : "Select All"}
+                      </span>
+                    </motion.button>
+
                     <button
                       onClick={() => {
                         if (selectedNotifications.size === 0) {
@@ -512,7 +535,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                           handleDeleteSelected(); // selection → delete selected
                         }
                       }}
-                      className="flex items-center space-x-2 px-3 py-1 bg-red-200 text-red-500 font-semibold rounded-lg hover:bg-red-300 text-sm transition-colors"
+                      className="flex items-center space-x-2 px-3 py-1 bg-red-200 shadow-lg text-red-600 font-semibold rounded-md hover:bg-red-300 text-sm transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       <span>
@@ -525,7 +548,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         setIsSelectMode(false);
                         setSelectedNotifications(new Set());
                       }}
-                      className="flex items-center space-x-2 px-3 py-1 border text-black/80 font-semibold rounded-lg hover:text-black/60 text-sm transition-colors"
+                      className="flex items-center space-x-2 px-3 py-1 shadow-md border text-black/80 font-semibold rounded-md hover:text-black/60 text-sm transition-colors"
                     >
                       <span>Cancel</span>
                     </button>
@@ -545,23 +568,44 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
             filteredNotifications.map(notification => (
               <div
                 key={notification.id}
-                className={`p-4 border-l-4 ${getPriorityColor(notification.priority)} ${
+                className={`p-4 mb-3 shadow-md rounded-md ${getPriorityColor(notification.priority)} ${
                   !notification.read ? 'bg-blue-50' : 'bg-white'
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
                     {isSelectMode && (
-                      <button
+                      <motion.button
                         onClick={() => toggleSelectNotification(notification.id)}
-                        className="mt-1 p-1 hover:bg-gray-100 rounded transition-colors"
+                        className="rounded transition-colors flex items-center justify-center"
+                        initial={false}
+                        animate={{
+                          scale: selectedNotifications.has(notification.id) ? 1.05 : 1,
+                        }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
                       >
-                        {selectedNotifications.has(notification.id) ? (
-                          <CheckSquare size={20} className="text-blue-600" />
-                        ) : (
-                          <Square size={20} className="text-gray-400" />
-                        )}
-                      </button>
+                        <div
+                          className={`w-4 h-4 border-2 rounded flex items-center justify-center transition-colors duration-200 ${
+                            selectedNotifications.has(notification.id)
+                              ? "border-[#3674B5] bg-[#3674B5]"
+                              : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                          }`}
+                        >
+                          <AnimatePresence>
+                            {selectedNotifications.has(notification.id) && (
+                              <motion.div
+                                key="check"
+                                initial={{ opacity: 0, scale: 0.6 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.6 }}
+                                transition={{ duration: 0.15 }}
+                              >
+                                <Check className="w-3 h-3 text-white" />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </motion.button>
                     )}
                     {getNotificationIcon(notification.category, notification.type)}
                     <div className="flex-1">
