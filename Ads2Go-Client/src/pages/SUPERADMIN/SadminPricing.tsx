@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { useAdminAuth } from '../../contexts/AdminAuthContext';
-import { Plus, Edit, X, Trash2, ChevronDown, ToggleLeft, ToggleRight, DollarSign, Settings } from 'lucide-react';
+import { Plus, Edit, X, Trash2, ChevronDown, PowerOff, Power, DollarSign, Settings } from 'lucide-react';
 import { 
   GET_ALL_PRICING_CONFIGS, 
   PricingConfig, 
@@ -268,46 +268,9 @@ const SadminPricing: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="px-8 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{configs.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <Settings className="w-6 h-6 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{configs.filter(c => c.isActive).length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
-            <div className="flex items-center">
-              <div className="p-3 bg-gray-100 rounded-lg">
-                <ToggleLeft className="w-6 h-6 text-gray-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Inactive Configurations</p>
-                <p className="text-2xl font-bold text-gray-900">{configs.filter(c => !c.isActive).length}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className="px-8 ">
         {/* Tabs */}
-        <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
+        <div className="flex items-center justify-between p-1 w-full mb-6">
           {/* Tabs on the left */}
           <div className="flex space-x-1 rounded-lg p-1">
             {["active", "inactive"].map((tab) => {
@@ -344,7 +307,7 @@ const SadminPricing: React.FC = () => {
           {/* Create button on the right */}
           <button
             onClick={handleCreateConfig}
-            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center gap-2"
+            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-md transition-all duration-200 flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
             Create Pricing Config
@@ -386,9 +349,9 @@ const SadminPricing: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {filteredConfigs.map((config) => (
-              <div key={config.id} className="bg-white rounded-xl p-6 shadow-sm border hover:shadow-md transition-shadow">
+              <div key={config.id} className="bg-white rounded-md p-6 shadow-md">
                 {/* Header */}
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
@@ -406,16 +369,16 @@ const SadminPricing: React.FC = () => {
                     </div>
                     <p className="text-gray-600 text-sm">{config.category}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center">
                     <button
                       onClick={() => handleToggleStatus(config)}
                       className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                       title={config.isActive ? 'Deactivate' : 'Activate'}
                     >
                       {config.isActive ? (
-                        <ToggleRight className="w-4 h-4 text-green-600" />
+                        <Power className="w-4 h-4 text-green-600" />
                       ) : (
-                        <ToggleLeft className="w-4 h-4 text-gray-400" />
+                        <PowerOff className="w-4 h-4 text-gray-400" />
                       )}
                     </button>
                     <button
@@ -478,7 +441,7 @@ const SadminPricing: React.FC = () => {
       {/* Create/Edit Modal */}
       {isModalOpen && (
       <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-md shadow-md w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-900">
               {editingConfig ? 'Edit Pricing Configuration' : 'Create Pricing Configuration'}
@@ -600,7 +563,7 @@ const SadminPricing: React.FC = () => {
                     {formData.category || 'Will be determined automatically'}
                   </div>
                 </div>
-                <label className="absolute left-0 -top-2 text-sm text-gray-700/70 font-semibold">
+                <label className="absolute left-0 -top-2 text-sm text-gray-700 font-semibold">
                   Category
                 </label>
                 {validationErrors.category && (
@@ -623,7 +586,7 @@ const SadminPricing: React.FC = () => {
                 />
                 <label
                   htmlFor="maxDevices"
-                  className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                  className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.maxDevices ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                 >
                   Max Devices
                 </label>
@@ -717,9 +680,9 @@ const SadminPricing: React.FC = () => {
                       />
                       <label
                         htmlFor={`pricePerPlay_${index}`}
-                        className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${tier.pricePerPlay ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                        className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${tier.pricePerPlay ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                       >
-                        Price per Play (₱)
+                        Price per Play
                       </label>
                       {validationErrors[`pricePerPlay_${index}`] && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors[`pricePerPlay_${index}`]}</p>
@@ -739,7 +702,7 @@ const SadminPricing: React.FC = () => {
                       />
                       <label
                         htmlFor={`adLengthMultiplier_${index}`}
-                        className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${tier.adLengthMultiplier ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                        className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${tier.adLengthMultiplier ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                       >
                         Ad Length Multiplier
                       </label>
@@ -765,8 +728,7 @@ const SadminPricing: React.FC = () => {
                 <label className="block text-sm mt-6 font-medium text-gray-700 mb-2">
                   Ad Length Range
                 </label>
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-sm text-gray-600 mb-2">Allowed ad lengths:</p>
+                <div className="bg-gray-50 rounded-md p-4">
                   <div className="flex gap-4">
                     <div className="flex items-center">
                       <input
