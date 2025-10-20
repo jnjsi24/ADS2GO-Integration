@@ -236,13 +236,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                               const isOnline = screen.isOnline;
                               const hasCurrentAd = screen.screenMetrics?.currentAd;
                               
-                              // Debug logging
-                              console.log(`🎬 [Dashboard] Screen ${screen.deviceId} state:`, {
-                                isOnline,
-                                hasCurrentAd: !!hasCurrentAd,
-                                masterControlState: isCurrentlyPlaying,
-                                devicePlayState: devicePlayStates[screen.deviceId]
-                              });
+                              // Debug logging (only in verbose mode)
+                              if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_DASHBOARD === 'true') {
+                                console.log(`🎬 [Dashboard] Screen ${screen.deviceId} state:`, {
+                                  isOnline,
+                                  hasCurrentAd: !!hasCurrentAd,
+                                  masterControlState: isCurrentlyPlaying,
+                                  devicePlayState: devicePlayStates[screen.deviceId]
+                                });
+                              }
                               
                               return (
                                 <>

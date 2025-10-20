@@ -113,7 +113,22 @@ const PaymentHistory: React.FC = () => {
           default:
             plan = `${durationDays} Days`;
         }
-        const status = mapStatus(payment?.paymentStatus);
+        // Determine the display status based on ad approval and payment status
+        let displayStatus: Status;
+        if (ad.status === 'RUNNING' && payment?.paymentStatus === 'PAID') {
+          displayStatus = 'PAID';
+        } else if (ad.status === 'APPROVED' && payment?.paymentStatus === 'PAID') {
+          displayStatus = 'PAID';
+        } else if ((ad.status === 'RUNNING' || ad.status === 'APPROVED') && (!payment || payment?.paymentStatus === 'PENDING')) {
+          displayStatus = 'PENDING'; // Ad approved/running but payment pending
+        } else if (ad.status === 'PENDING') {
+          displayStatus = 'PENDING'; // Ad not yet approved
+        } else if (payment?.paymentStatus === 'FAILED') {
+          displayStatus = 'FAILED';
+        } else {
+          displayStatus = 'PENDING'; // Default fallback
+        }
+
         const amount = `$${(payment?.amount || ad.totalPrice || 0).toFixed(2)}`;
         const totalPrice = `$${ad.totalPrice.toFixed(2)}`;
 
@@ -123,7 +138,7 @@ const PaymentHistory: React.FC = () => {
           imageUrl: ad.mediaFile || "https://via.placeholder.com/80",
           plan,
           amount,
-          status,
+          status: displayStatus,
           userName: "",
           companyName: "",
           bankNumber: "",
@@ -135,7 +150,7 @@ const PaymentHistory: React.FC = () => {
           adLengthSeconds: ad.adLengthSeconds || 0,
           totalPrice,
           receiptId: payment?.receiptId || "",
-          adStatus: ad.status || "PENDING", // Include ad approval status
+          adStatus: ad.status || "PENDING", // Include ad approval status (this is the actual status from database)
         };
       });
       setPayments(mappedPayments);
@@ -160,7 +175,17 @@ const PaymentHistory: React.FC = () => {
     const matchesPlan = selectedPlanFilter === 'All Plans' || item.plan === selectedPlanFilter;
     const matchesStatus = selectedStatusFilter === 'All Status' || item.status === selectedStatusFilter;
 
-    return matchesSearchTerm && matchesStatus && matchesPlan;
+    const matches = matchesSearchTerm && matchesStatus && matchesPlan;
+    console.log('PaymentHistory - Filtering item:', item.productName, 'matches:', matches, {
+      matchesSearchTerm,
+      matchesPlan,
+      matchesStatus,
+      searchTerm,
+      selectedPlanFilter,
+      selectedStatusFilter
+    });
+
+    return matches;
   });
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -294,7 +319,7 @@ const PaymentHistory: React.FC = () => {
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
-              key={item.id || item._id || `${item.userId}-${item.createdAt}`}
+              key={item.id || `${item.productName}-${item.totalPrice}`}
               className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >
@@ -352,22 +377,32 @@ const PaymentHistory: React.FC = () => {
                     <p className="text-sm text-gray-600 mt-1">
                       {item.status === "PAID"
                         ? "Transaction completed successfully. Your advertisements are now available for viewing."
+                        : item.adStatus === "APPROVED"
+                        ? "Ad approved! Awaiting payment confirmation. Your ad will be activated once the transaction is complete."
+                        : item.adStatus === "PENDING"
+                        ? "Ad pending approval. Payment will be available once your ad is approved by admin."
                         : "Awaiting payment confirmation. Your ad will be activated once the transaction is complete."}
                     </p>
                   </div>
 
                   <div className="flex justify-end mt-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedPayment(item);
-                        setSelectedPaymentType(item.paymentType || "");
-                        setIsModalOpen(true);
-                      }}
-                      className="text-[#3674B5] hover:text-[#3674B5]/80 font-bold hover:underline text-xs px-4 py-2 transition-all duration-300 hover:underline-offset-4"
-                    >
-                      View Details
-                    </button>
+                    {(item.adStatus === 'APPROVED' || item.adStatus === 'RUNNING') ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPayment(item);
+                          setSelectedPaymentType(item.paymentType || "");
+                          setIsModalOpen(true);
+                        }}
+                        className="text-[#3674B5] hover:text-[#3674B5]/80 font-bold hover:underline text-xs px-4 py-2 transition-all duration-300 hover:underline-offset-4"
+                      >
+                        {item.status === 'PAID' ? 'View Details' : 'Make Payment'}
+                      </button>
+                    ) : (
+                      <div className="text-xs text-gray-500 px-4 py-2">
+                        {item.adStatus === 'PENDING' ? 'Awaiting Admin Approval' : 'Ad Not Approved'}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

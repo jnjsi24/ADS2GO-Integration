@@ -127,7 +127,9 @@ class AdsPanelServiceV4 {
       throw new Error(`API request failed: ${response.statusText}`);
     }
 
-    console.log('✅ API request successful:', url);
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_ADS === 'true') {
+      console.log('✅ API request successful:', url);
+    }
     return response.json();
   }
 
@@ -139,7 +141,9 @@ class AdsPanelServiceV4 {
   }): Promise<{ screens: ScreenData[]; totalScreens: number; onlineScreens: number; displayingScreens: number; maintenanceScreens: number }> {
     try {
       // Use the screens endpoint to get real-time screen data
-      console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
+      if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_ADS === 'true') {
+        console.log('🔍 [getScreens] Using screens endpoint: /screenTracking/screens');
+      }
       // Add cache-busting parameter to ensure fresh data
       const cacheBuster = `?t=${Date.now()}`;
       const response = await this.makeRequest(`/screenTracking/screens${cacheBuster}`);

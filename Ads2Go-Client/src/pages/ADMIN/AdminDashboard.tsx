@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@apollo/client";
 import { GET_OWN_ADMIN_DETAILS } from "../../graphql/admin";
 import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS } from "../../graphql/admin/queries";
@@ -10,7 +10,72 @@ import { AdminLoader } from "../../components/ProtectedRoute";
 import SubtleLoader from "../../components/SubtleLoader";
 import { Monitor, PlayCircle, Users, Car, FileText, AlertCircle, ArrowUpRight } from "lucide-react";
 import { motion, Transition } from "framer-motion";
-import { adsPanelService, ScreenData } from "../../services/adsPanelService";
+// Import ScreenStatus interface from ScreenTracking for consistency
+interface ScreenStatus {
+  deviceId: string;
+  displayId?: string;
+  materialId: string;
+  screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
+  carGroupId?: string;
+  slotNumber?: number;
+  isOnline: boolean;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
+  lastSeen: string;
+  currentHours?: number;
+  hoursRemaining?: number;
+  isCompliant: boolean;
+  totalDistanceToday?: number;
+  averageDailyHours?: number;
+  complianceRate?: number;
+  totalHoursOnline?: number;
+  totalDistanceTraveled?: number;
+  displayStatus: 'ACTIVE' | 'OFFLINE' | 'MAINTENANCE' | 'DISPLAY_OFF';
+  statusText?: string;
+  slot1Status?: string;
+  slot2Status?: string;
+  slot1DeviceId?: string;
+  slot2DeviceId?: string;
+  masterDeviceId?: string;
+  slot1LastSeen?: string;
+  slot2LastSeen?: string;
+  screenMetrics?: {
+    displayHours: number;
+    adPlayCount: number;
+    lastAdPlayed: string;
+    brightness: number;
+    volume: number;
+    isDisplaying: boolean;
+    maintenanceMode: boolean;
+    currentAd?: {
+      adId: string;
+      adTitle: string;
+      adDuration: number;
+      startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
+    };
+  };
+  alerts: Array<{
+    type: string;
+    message: string;
+    timestamp: string;
+    isResolved: boolean;
+    severity: string;
+  }>;
+  totalDevices?: number;
+  onlineDevices?: number;
+  totalHours?: number;
+  totalDistance?: number;
+}
 
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
 
@@ -55,7 +120,7 @@ const Dashboard = () => {
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   
   // Screen data states
-  const [screens, setScreens] = useState<ScreenData[]>([]);
+  const [screens, setScreens] = useState<ScreenStatus[]>([]);
   const [screenLoading, setScreenLoading] = useState(true);
   const [screenError, setScreenError] = useState<string | null>(null);
 
@@ -73,32 +138,32 @@ const Dashboard = () => {
 
   const { loading, error, data } = useQuery(GET_ADMIN_DETAILS);
 
-  const { data: statsData, loading: statsLoading, error: statsError } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
-    pollInterval: 30000, // Increased from 5s to 30s for more discreet refresh
+  const { data: statsData, loading: statsLoading, error: statsError, refetch: refetchStats } = useQuery(GET_ADMIN_DASHBOARD_STATS, {
+    // Removed pollInterval - will use centralized refresh
   });
 
-  const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
-    pollInterval: 60000, // Increased from 30s to 60s for more discreet refresh
+  const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError, refetch: refetchPendingAds } = useQuery(GET_PENDING_ADS, {
+    // Removed pollInterval - will use centralized refresh
   });
 
   // Fetch pending user reports
-  const { data: userReportsData, loading: userReportsLoading, error: userReportsError } = useQuery(GET_ALL_USER_REPORTS, {
+  const { data: userReportsData, loading: userReportsLoading, error: userReportsError, refetch: refetchUserReports } = useQuery(GET_ALL_USER_REPORTS, {
     variables: {
       filters: { status: 'PENDING' },
       limit: 5,
       offset: 0
     },
-    pollInterval: 30000, // Refresh every 30 seconds
+    // Removed pollInterval - will use centralized refresh
   });
 
   // Fetch pending driver reports
-  const { data: driverReportsData, loading: driverReportsLoading, error: driverReportsError } = useQuery(GET_ALL_DRIVER_REPORTS, {
+  const { data: driverReportsData, loading: driverReportsLoading, error: driverReportsError, refetch: refetchDriverReports } = useQuery(GET_ALL_DRIVER_REPORTS, {
     variables: {
       filters: { status: 'PENDING' },
       limit: 5,
       offset: 0
     },
-    pollInterval: 30000, // Refresh every 30 seconds
+    // Removed pollInterval - will use centralized refresh
   });
 
   // Handle admin details data
@@ -109,25 +174,79 @@ const Dashboard = () => {
     }
   }, [data]);
 
-  // Fetch screen data
-  const fetchScreenData = async () => {
+  // Fetch screen data with useCallback to prevent unnecessary re-renders
+  const fetchScreenData = useCallback(async () => {
     try {
       setScreenLoading(true);
       setScreenError(null);
-      const response = await adsPanelService.getScreens();
-      setScreens(response.screens);
+      
+      // Use compliance endpoint for consistent data with ScreenTracking page
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      
+      console.log('🔍 [AdminDashboard] Fetching screen data from compliance endpoint:', complianceUrl);
+      
+      const response = await fetch(complianceUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const complianceData = await response.json();
+        console.log('✅ [AdminDashboard] Compliance data received:', complianceData);
+        
+        if (complianceData.success && complianceData.data?.screens) {
+          setScreens(complianceData.data.screens);
+          console.log('📊 [AdminDashboard] Screens loaded:', complianceData.data.screens.length);
+        } else {
+          console.error('❌ [AdminDashboard] Invalid compliance data format:', complianceData);
+          setScreenError("Invalid data format received");
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ [AdminDashboard] API Error:', errorData);
+        setScreenError("Failed to load screen data");
+      }
     } catch (error) {
-      console.error("Error fetching screen data:", error);
+      console.error("❌ [AdminDashboard] Error fetching screen data:", error);
       setScreenError("Failed to load screen data");
     } finally {
       setScreenLoading(false);
     }
-  };
-
-  // Fetch screen data on component mount
-  useEffect(() => {
-    fetchScreenData();
   }, []);
+
+  // Centralized refresh system - refreshes all data every 15 seconds
+  const refreshAllData = useCallback(async () => {
+    console.log('🔄 [AdminDashboard] Centralized refresh triggered');
+    
+    // Refresh all GraphQL queries
+    try {
+      await Promise.all([
+        refetchStats(),
+        refetchPendingAds(),
+        refetchUserReports(),
+        refetchDriverReports(),
+        fetchScreenData()
+      ]);
+      console.log('✅ [AdminDashboard] All data refreshed successfully');
+    } catch (error) {
+      console.error('❌ [AdminDashboard] Error during centralized refresh:', error);
+    }
+  }, [refetchStats, refetchPendingAds, refetchUserReports, refetchDriverReports, fetchScreenData]);
+
+  // Initial data fetch and setup centralized refresh
+  useEffect(() => {
+    // Initial fetch
+    refreshAllData();
+    
+    // Set up centralized auto-refresh every 15 seconds
+    const refreshInterval = setInterval(refreshAllData, 15000);
+    
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [refreshAllData]);
 
   // Track initial load completion
   useEffect(() => {
@@ -192,7 +311,7 @@ const Dashboard = () => {
         {/* Subtle refresh indicator */}
         <div className="flex items-center text-xs text-gray-400">
           <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
-          <span>Auto-refreshing every 30s</span>
+          <span>Auto-refreshing every 15s</span>
         </div>
         {/* Show subtle loader during auto-refresh */}
         {hasInitiallyLoaded && (statsLoading || pendingAdsLoading) && (

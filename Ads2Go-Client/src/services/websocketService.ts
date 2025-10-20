@@ -25,8 +25,8 @@ class WebSocketService {
     const serverUrl = process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL;
     const actualServerUrl = serverUrl ? serverUrl.replace('/graphql', '') : 'http://localhost:5000';
     
-    // WebSocket configuration logging (development only)
-    if (process.env.NODE_ENV === 'development') {
+    // WebSocket configuration logging (only in verbose mode)
+    if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
       console.log('🔧 WebSocket Service Configuration:', {
         envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
         finalUrl: actualServerUrl,

@@ -200,7 +200,8 @@ async function startServer() {
 
       // In development, allow all origins for easier debugging
       if (process.env.NODE_ENV === 'development') {
-        logger.debug(`🔓 Development mode: Allowing origin ${origin}`);
+        // Only log CORS in verbose mode to reduce spam
+        logger.verbose(`🔓 Development mode: Allowing origin ${origin}`);
         return callback(null, true);
       }
 

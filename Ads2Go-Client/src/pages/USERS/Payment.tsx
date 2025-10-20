@@ -508,16 +508,28 @@ const Payment: React.FC<PaymentProps> = ({
             
             {/* Approval Status Warning */}
             {paymentItem.adStatus !== 'APPROVED' && isPending && (
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800 flex items-center gap-2">
-                  <span className="text-yellow-500">⚠️</span>
-                  <span><strong>Ad pending approval:</strong> Your ad must be approved by an admin before payment can be processed.</span>
-                </p>
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className="text-red-500 text-xl">🚫</span>
+                  <div>
+                    <p className="text-sm font-semibold text-red-800">
+                      Payment Not Available
+                    </p>
+                    <p className="text-sm text-red-700 mt-1">
+                      Your ad must be approved by an admin before you can proceed with payment.
+                    </p>
+                    <p className="text-xs text-red-600 mt-2">
+                      Status: {paymentItem.adStatus === 'PENDING' ? 'Awaiting Admin Approval' : 
+                              paymentItem.adStatus === 'RUNNING' ? 'Already Paid and Running' : 
+                              'Ad Not Approved'}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
             
-            {/* Pay Now Button (Only show for Pending status and non-CASH) */}
-            {isPending && selectedMethod !== "CASH" && (
+            {/* Pay Now Button (Only show for Pending status, non-CASH, and approved ads) */}
+            {isPending && selectedMethod !== "CASH" && paymentItem.adStatus === 'APPROVED' && (
               <div className="flex justify-end">
                 <button
                   onClick={handlePayNow}

@@ -670,4 +670,65 @@ router.get('/qr-redirect', async (req, res) => {
   }
 });
 
+// GET /ads/:adId/devices - Get devices that have a specific ad deployed
+router.get('/:adId/devices', async (req, res) => {
+  try {
+    const { adId } = req.params;
+    
+    console.log(`🔍 Fetching devices for ad: ${adId}`);
+    
+    // Find all devices that have this ad in their deployedAds array
+    const DeviceTracking = require('../models/deviceTracking');
+    const devices = await DeviceTracking.find({
+      'deployedAds.adId': adId
+    }).lean();
+    
+    console.log(`📱 Found ${devices.length} devices with ad ${adId}`);
+    
+    // Transform the data to include device info and current status
+    const deviceStatusService = require('../services/deviceStatusService');
+    
+    const deviceList = devices.map(device => {
+      const deviceStatus = deviceStatusService.getDeviceStatus(device.materialId);
+      const isOnline = deviceStatus?.isOnline || device.isOnline || false;
+      const lastSeen = deviceStatus?.lastSeen || device.lastSeen;
+      
+      // Find the specific ad deployment info
+      const adDeployment = device.deployedAds.find(ad => ad.adId === adId);
+      
+      return {
+        deviceId: device.materialId,
+        materialId: device.materialId,
+        isOnline,
+        lastSeen,
+        currentLocation: device.currentLocation,
+        totalDistance: device.totalDistanceToday || 0,
+        currentHours: device.currentHours || 0,
+        adDeployment: adDeployment ? {
+          slotNumber: adDeployment.slotNumber,
+          status: adDeployment.status,
+          startTime: adDeployment.startTime,
+          endTime: adDeployment.endTime
+        } : null,
+        deviceInfo: device.deviceInfo || {}
+      };
+    });
+    
+    res.json({
+      success: true,
+      devices: deviceList,
+      totalDevices: deviceList.length,
+      onlineDevices: deviceList.filter(d => d.isOnline).length
+    });
+    
+  } catch (error) {
+    console.error('Error fetching devices for ad:', error);
+    res.status(500).json({
+      success: false,
+      devices: [],
+      message: 'Internal server error'
+    });
+  }
+});
+
 module.exports = router;

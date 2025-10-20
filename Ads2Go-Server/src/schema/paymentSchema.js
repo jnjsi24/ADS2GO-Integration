@@ -16,7 +16,7 @@ const paymentTypeDefs = gql`
     CASH
   }
 
-  type Ad {
+  type PaymentAd {
     id: ID
     title: String
     price: Float
@@ -26,6 +26,7 @@ const paymentTypeDefs = gql`
     materialType: String
     vehicleType: String
     description: String
+    status: String
     adStatus: String
     paymentStatus: String
   }
@@ -72,7 +73,7 @@ const paymentTypeDefs = gql`
   }
 
   type AdPaymentInfo {
-    ad: Ad!
+    ad: PaymentAd!
     payment: Payment
   }
 

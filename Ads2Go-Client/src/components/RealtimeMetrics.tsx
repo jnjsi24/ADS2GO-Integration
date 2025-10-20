@@ -1,0 +1,358 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Monitor, PlayCircle, Activity } from 'lucide-react';
+import playbackWebSocketService from '../services/playbackWebSocketService';
+
+interface ScreenStatus {
+  deviceId: string;
+  displayId?: string;
+  materialId: string;
+  screenType: 'HEADDRESS' | 'LCD' | 'BILLBOARD' | 'DIGITAL_DISPLAY';
+  carGroupId?: string;
+  slotNumber?: number;
+  isOnline: boolean;
+  currentLocation?: {
+    lat: number;
+    lng: number;
+    timestamp: string;
+    speed: number;
+    heading: number;
+    accuracy: number;
+    address: string;
+  };
+  lastSeen: string;
+  currentHours?: number;
+  hoursRemaining?: number;
+  isCompliant: boolean;
+  totalDistanceToday?: number;
+  averageDailyHours?: number;
+  complianceRate?: number;
+  totalHoursOnline?: number;
+  totalDistanceTraveled?: number;
+  displayStatus: 'ACTIVE' | 'OFFLINE' | 'MAINTENANCE' | 'DISPLAY_OFF';
+  statusText?: string;
+  slot1Status?: string;
+  slot2Status?: string;
+  slot1DeviceId?: string;
+  slot2DeviceId?: string;
+  masterDeviceId?: string;
+  slot1LastSeen?: string;
+  slot2LastSeen?: string;
+  screenMetrics?: {
+    displayHours: number;
+    adPlayCount: number;
+    lastAdPlayed: string;
+    brightness: number;
+    volume: number;
+    isDisplaying: boolean;
+    maintenanceMode: boolean;
+    currentAd?: {
+      adId: string;
+      adTitle: string;
+      adDuration: number;
+      startTime: string;
+      currentTime?: number;
+      state?: string;
+      progress?: number;
+    };
+  };
+  alerts: Array<{
+    type: string;
+    message: string;
+    timestamp: string;
+    isResolved: boolean;
+    severity: string;
+  }>;
+  totalDevices?: number;
+  onlineDevices?: number;
+  totalHours?: number;
+  totalDistance?: number;
+}
+
+interface RealtimeMetricsProps {
+  className?: string;
+}
+
+const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => {
+  const [screens, setScreens] = useState<ScreenStatus[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  // Fetch initial screen data
+  const fetchScreenData = useCallback(async () => {
+    try {
+      const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
+      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      
+      const response = await fetch(complianceUrl, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const complianceData = await response.json();
+        if (complianceData.success && complianceData.data?.screens) {
+          setScreens(complianceData.data.screens);
+          setLastUpdate(new Date());
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching screen data:', error);
+    }
+  }, []);
+
+  // WebSocket integration for real-time updates
+  useEffect(() => {
+    console.log('🔌 [RealtimeMetrics] Setting up WebSocket connection');
+    
+    // Check initial WebSocket connection status
+    if (playbackWebSocketService.isWebSocketConnected()) {
+      setConnectionStatus('connected');
+      console.log('🔌 [RealtimeMetrics] WebSocket already connected');
+    } else {
+      setConnectionStatus('connecting');
+      console.log('🔌 [RealtimeMetrics] WebSocket connecting...');
+    }
+    
+    // Subscribe to real-time device updates
+    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      console.log('🔌 [RealtimeMetrics] Received WebSocket update:', update);
+      
+      // Update connection status to connected when we receive any update
+      if (connectionStatus !== 'connected') {
+        setConnectionStatus('connected');
+      }
+      
+      if (update.type === 'deviceUpdate') {
+        // Update specific device status in real-time
+        updateDeviceStatus(update.deviceId, update.isOnline ?? false, update.lastSeen);
+      } else if (update.type === 'deviceList') {
+        // Update all devices at once
+        updateAllDevices(update.devices ?? []);
+      } else if (update.type === 'locationUpdate') {
+        // Handle real-time location updates
+        updateDeviceLocation(update.deviceId, update.location);
+      }
+    });
+
+    // Set up periodic connection status check
+    const statusCheckInterval = setInterval(() => {
+      const isConnected = playbackWebSocketService.isWebSocketConnected();
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+    }, 5000); // Check every 5 seconds
+
+    // Initial data fetch
+    fetchScreenData();
+
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('🔌 [RealtimeMetrics] Cleaning up WebSocket subscription');
+      clearInterval(statusCheckInterval);
+      unsubscribe();
+    };
+  }, [connectionStatus, fetchScreenData]);
+
+  // Helper function to update device status in real-time
+  const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
+    setScreens(prevScreens => {
+      const updatedScreens = prevScreens.map(screen => {
+        // Check if this device matches either slot or the main device ID
+        const isSlot1Device = screen.slot1DeviceId === deviceId;
+        const isSlot2Device = screen.slot2DeviceId === deviceId;
+        const isMainDevice = screen.deviceId === deviceId;
+        
+        if (isSlot1Device || isSlot2Device || isMainDevice) {
+          const updatedScreen = { ...screen };
+          
+          if (isSlot1Device) {
+            updatedScreen.slot1Status = isOnline ? 'ONLINE' : 'OFFLINE';
+            if (lastSeen) {
+              updatedScreen.slot1LastSeen = lastSeen;
+            }
+          }
+          
+          if (isSlot2Device) {
+            updatedScreen.slot2Status = isOnline ? 'ONLINE' : 'OFFLINE';
+            if (lastSeen) {
+              updatedScreen.slot2LastSeen = lastSeen;
+            }
+          }
+          
+          // If it's the main device ID, update the overall online status directly
+          if (isMainDevice) {
+            updatedScreen.isOnline = isOnline;
+            updatedScreen.lastSeen = lastSeen || updatedScreen.lastSeen;
+          }
+          
+          // Update overall online status based on master/slave logic
+          const slot1Online = updatedScreen.slot1Status?.toLowerCase() === 'online';
+          const slot2Online = updatedScreen.slot2Status?.toLowerCase() === 'online';
+          updatedScreen.isOnline = slot1Online || slot2Online;
+          
+          return updatedScreen;
+        }
+        
+        return screen;
+      });
+      
+      setLastUpdate(new Date());
+      return updatedScreens;
+    });
+  }, []);
+
+  // Helper function to update all devices at once
+  const updateAllDevices = useCallback((devices: any[]) => {
+    if (!devices || devices.length === 0) return;
+    
+    setScreens(prevScreens => {
+      return prevScreens.map(screen => {
+        const updatedScreen = { ...screen };
+        
+        // Find matching devices for this screen
+        const slot1Device = devices.find(device => device.deviceId === screen.slot1DeviceId);
+        const slot2Device = devices.find(device => device.deviceId === screen.slot2DeviceId);
+        const mainDevice = devices.find(device => device.deviceId === screen.deviceId);
+        
+        if (slot1Device) {
+          updatedScreen.slot1Status = slot1Device.isOnline ? 'ONLINE' : 'OFFLINE';
+          updatedScreen.slot1LastSeen = slot1Device.lastSeen;
+        }
+        
+        if (slot2Device) {
+          updatedScreen.slot2Status = slot2Device.isOnline ? 'ONLINE' : 'OFFLINE';
+          updatedScreen.slot2LastSeen = slot2Device.lastSeen;
+        }
+        
+        // If it's the main device, update overall status directly
+        if (mainDevice) {
+          updatedScreen.isOnline = mainDevice.isOnline;
+          updatedScreen.lastSeen = mainDevice.lastSeen || updatedScreen.lastSeen;
+        }
+        
+        // Update overall online status based on slot status
+        const slot1Online = updatedScreen.slot1Status?.toLowerCase() === 'online';
+        const slot2Online = updatedScreen.slot2Status?.toLowerCase() === 'online';
+        updatedScreen.isOnline = slot1Online || slot2Online;
+        
+        return updatedScreen;
+      });
+    });
+    setLastUpdate(new Date());
+  }, []);
+
+  // Helper function to update device location in real-time
+  const updateDeviceLocation = useCallback((deviceId: string, locationData: any) => {
+    if (!locationData || !locationData.lat || !locationData.lng) {
+      return;
+    }
+    
+    setScreens(prevScreens => {
+      return prevScreens.map(screen => {
+        // Check if this device matches any of the screen's device IDs
+        const isMatchingDevice = screen.deviceId === deviceId || 
+                                screen.slot1DeviceId === deviceId || 
+                                screen.slot2DeviceId === deviceId;
+        
+        if (isMatchingDevice) {
+          const updatedScreen = {
+            ...screen,
+            currentLocation: {
+              lat: locationData.lat,
+              lng: locationData.lng,
+              speed: locationData.speed || 0,
+              heading: locationData.heading || 0,
+              accuracy: locationData.accuracy || 0,
+              address: locationData.address || screen.currentLocation?.address || 'Location not available',
+              timestamp: locationData.timestamp || new Date().toISOString()
+            },
+            // Update online status if provided
+            isOnline: locationData.isOnline !== undefined ? locationData.isOnline : screen.isOnline,
+            lastSeen: locationData.timestamp || screen.lastSeen
+          };
+          
+          return updatedScreen;
+        }
+        
+        return screen;
+      });
+    });
+    setLastUpdate(new Date());
+  }, []);
+
+  // Calculate metrics
+  const totalAds = screens.length;
+  const onlineAds = screens.filter(s => s.isOnline).length;
+  const totalAdPlayed = screens.reduce((total, screen) => {
+    return total + (screen.screenMetrics?.adPlayCount || 0);
+  }, 0);
+
+  return (
+    <div className={`bg-white rounded-lg shadow-lg p-6 ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Real-Time Ad Metrics</h3>
+          <p className="text-sm text-gray-500">
+            Last updated: {lastUpdate.toLocaleTimeString()}
+          </p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className={`w-3 h-3 rounded-full ${
+            connectionStatus === 'connected' ? 'bg-green-500' : 
+            connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+          }`}></div>
+          <span className="text-sm text-gray-600">
+            {connectionStatus === 'connected' ? 'Live' : 
+             connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+          </span>
+        </div>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Total Ads */}
+        <div className="bg-blue-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-600">Total Ads</p>
+              <p className="text-2xl font-bold text-blue-900">{totalAds}</p>
+              <p className="text-xs text-blue-500">All ad campaigns</p>
+            </div>
+            <Monitor className="w-8 h-8 text-blue-500" />
+          </div>
+        </div>
+
+        {/* Online Ads */}
+        <div className="bg-green-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-green-600">Online Ads</p>
+              <p className="text-2xl font-bold text-green-900">{onlineAds}</p>
+              <p className="text-xs text-green-500">Currently active</p>
+            </div>
+            <Activity className="w-8 h-8 text-green-500" />
+          </div>
+        </div>
+
+        {/* Total Ad Played */}
+        <div className="bg-purple-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-purple-600">Total Ad Played</p>
+              <p className="text-2xl font-bold text-purple-900">{totalAdPlayed.toLocaleString()}</p>
+              <p className="text-xs text-purple-500">Total plays today</p>
+            </div>
+            <PlayCircle className="w-8 h-8 text-purple-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Additional Info */}
+      <div className="mt-4 text-xs text-gray-500 text-center">
+        Data updates automatically via WebSocket connection
+      </div>
+    </div>
+  );
+};
+
+export default RealtimeMetrics;

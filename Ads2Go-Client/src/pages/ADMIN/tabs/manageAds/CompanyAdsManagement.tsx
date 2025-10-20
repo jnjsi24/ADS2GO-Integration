@@ -585,12 +585,12 @@ const CompanyAdsManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                 <div>
                   <p className="font-medium">Status</p>
-                  <p className={`font-semibold flex items-center space-x-1 ${
+                  <div className={`font-semibold flex items-center space-x-1 ${
                     ad.isActive ? 'text-green-600' : 'text-gray-600'
                   }`}>
                     <div className={`w-2 h-2 rounded-full ${ad.isActive ? 'bg-green-600' : 'bg-gray-600'}`}></div>
                     <span>{ad.isActive ? 'Active' : 'Inactive'}</span>
-                  </p>
+                  </div>
                 </div>
                 <div>
                   <p className="font-medium">Priority</p>
