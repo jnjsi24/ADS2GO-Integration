@@ -16,7 +16,9 @@ import {
   PlayCircle,
   Sun,
   Loader2,
-  FileVideo
+  FileVideo,
+  Wifi,
+  RefreshCw
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
@@ -1030,36 +1032,45 @@ const AdminAdsControl: React.FC = () => {
           </div>
           <p className="text-sm font-medium text-gray-600">Total Screens</p>
         </div>
-        {/* Online Screens */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-green-600">
-                {screens.filter(s => s.isOnline).length}
-              </p>
-              <p className="text-sm text-gray-600">Online Screens</p>
-            </div>
-            <Monitor className="w-8 h-8 text-green-500" />
-          </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
         </div>
-
-        {/* Playing Ads */}
-        <div className="bg-white p-6 rounded-lg shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="flex flex-col items-center">
-              <p className="text-2xl font-bold text-blue-600">
-                {screens.filter(s => {
-                  const currentAd = s.screenMetrics?.currentAd;
-                  return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
-                }).length}
-              </p>
-              <p className="text-sm text-gray-600">Playing Ads</p>
-            </div>
-            <PlayCircle className="w-8 h-8 text-blue-500" />
-          </div>
-        </div>
-
       </div>
+
+      {/* Online Screens */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-green-100 rounded-full">
+            <Wifi className="h-5 w-5 text-green-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Online Screens</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-green-600">
+            {screens.filter(s => s.isOnline).length}
+          </p>
+        </div>
+      </div>
+
+      {/* Playing Ads */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <PlayCircle className="h-5 w-5 text-blue-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Playing Ads</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-blue-600">
+            {screens.filter(s => {
+              const currentAd = s.screenMetrics?.currentAd;
+              return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
+            }).length}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
 
       
       {/* Master Controls */}
@@ -1096,10 +1107,25 @@ const AdminAdsControl: React.FC = () => {
               <Play className="w-6 h-6 text-green-600 mb-2" />
             )}
             <span className={`text-sm font-medium ${
-        <div className="pl-10 mt-1">
-          <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
+              isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+            }`}>
+              {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+            </span>
+          </button>
         </div>
-      </div>
+
+        {/* Total Screens */}
+        <div className="bg-white p-4 rounded-md shadow-md">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gray-100 rounded-full">
+              <Monitor className="h-5 w-5 text-gray-600" />
+            </div>
+            <p className="text-sm font-medium text-gray-600">Total Screens</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
+          </div>
+        </div>
 
       {/* Online Screens */}
       <div className="bg-white p-4 rounded-md shadow-md">
@@ -1212,7 +1238,6 @@ const AdminAdsControl: React.FC = () => {
       </div>
     </div>
   </div>
-</div>
 
       {/* Tabs */}
       <div className="mb-8">
@@ -1222,7 +1247,6 @@ const AdminAdsControl: React.FC = () => {
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
               { id: 'notifications', label: 'Notifications', icon: AlertTriangle }
-              { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1254,6 +1278,7 @@ const AdminAdsControl: React.FC = () => {
               isCurrentlyPlaying={isCurrentlyPlaying}
               onSelectAll={handleSelectAll}
               onDeselectAll={handleDeselectAll}
+              onRefresh={() => fetchData(true)}
               onScreenSelect={handleScreenSelect}
               onScreenClick={handleScreenClick}
               onScreenAction={handleScreenAction}
@@ -1298,14 +1323,6 @@ const AdminAdsControl: React.FC = () => {
               return (
                 <div className="space-y-6">
                   {/* Basic Info */}
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Device ID</label>
-                      <p className="text-lg font-medium">{screen.deviceId}</p>
-                    </div>
-                    
-                    {/* Slot Information */}
-                    <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <div className="flex justify-between items-center border-b border-gray-100 py-2">
                       <span className="text-sm font-medium text-gray-600">Device ID</span>
@@ -1412,6 +1429,9 @@ const AdminAdsControl: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-600">Display Hours</label>
                       <p className="text-lg font-medium">{screen.screenMetrics?.displayHours?.toFixed(1) || '0.0'}h</p>
+                    </div>
+                    
+                    {/* Controls */}
                     <div className="flex items-center justify-center space-x-2 mt-4">
                       <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-md hover:bg-green-200">
                         <Play className="w-4 h-4" />
@@ -1443,13 +1463,6 @@ const AdminAdsControl: React.FC = () => {
 
 
                   {/* Actions */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={() => setShowScreenDetails(false)}
-                      className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                    >
-                      Close
-                    </button>
                   <div className="flex justify-between space-x-2">
                     <button
                       onClick={() => setShowScreenDetails(false)}

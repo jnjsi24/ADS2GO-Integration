@@ -706,9 +706,13 @@ const Reports: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-gray-600" />
-                  <strong className="text-sm font-medium text-gray-700">User Email</strong>
+                  <strong className="text-sm font-medium text-gray-700">
+                    {selectedReport.user ? 'User Email' : selectedReport.driver ? 'Driver Email' : 'Email'}
+                  </strong>
                 </div>
-                <p className="mt-1 font-semibold text-black">{selectedReport.user.email}</p>
+                <p className="mt-1 font-semibold text-black">
+                  {selectedReport.user?.email || selectedReport.driver?.email || 'No email available'}
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-2">
