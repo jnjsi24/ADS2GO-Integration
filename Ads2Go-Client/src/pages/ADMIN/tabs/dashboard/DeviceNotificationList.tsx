@@ -1,11 +1,22 @@
-'use client';
 import React, { useState, useEffect } from 'react';
-import { Bell, ArrowUpRight, RefreshCw, CheckSquare, Square, AlertTriangle, DollarSign, Users, FileText } from 'lucide-react';
-import { motion, type Transition } from 'framer-motion';
+import { motion, Transition } from 'framer-motion';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_GENERAL_NOTIFICATIONS, MARK_NOTIFICATION_READ } from '../../../../graphql/admin/queries';
+import { 
+  Bell, 
+  CheckSquare, 
+  Square, 
+  ArrowUpRight, 
+  Wifi, 
+  WifiOff, 
+  Target, 
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  Smartphone
+} from 'lucide-react';
+import { GET_DEVICE_NOTIFICATIONS, MARK_DEVICE_NOTIFICATION_READ, DELETE_DEVICE_NOTIFICATION } from '../../../../graphql/admin/queries/deviceNotificationQueries';
 
-interface Notification {
+interface DeviceNotification {
   id: string;
   title: string;
   message: string;
@@ -14,20 +25,12 @@ interface Notification {
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   read: boolean;
   createdAt: string;
-  adId?: string;
-  adTitle?: string;
   data?: any;
 }
 
-interface DynamicNotificationListProps {
-  pendingAdsCount?: number;
+interface DeviceNotificationListProps {
+  maxNotifications?: number;
 }
-
-const transition: Transition = {
-  type: 'spring',
-  stiffness: 300,
-  damping: 26,
-};
 
 const getCardVariants = (i: number) => ({
   collapsed: {
@@ -39,6 +42,12 @@ const getCardVariants = (i: number) => ({
     scaleX: 1,
   },
 });
+
+const transition: Transition = {
+  type: 'spring',
+  stiffness: 300,
+  damping: 26,
+};
 
 const textSwitchTransition: Transition = {
   duration: 0.22,
@@ -55,31 +64,31 @@ const viewAllTextVariants = {
   expanded: { opacity: 1, y: 0, pointerEvents: 'auto' },
 };
 
-const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendingAdsCount }) => {
+const DeviceNotificationList: React.FC<DeviceNotificationListProps> = ({ maxNotifications = 3 }) => {
   const [selectedFilter] = useState<'all' | 'unread' | 'high'>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedNotifications, setSelectedNotifications] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
 
-  // Fetch general admin notifications (excluding device-specific notifications)
-  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
+  // Fetch device notifications
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_DEVICE_NOTIFICATIONS, {
     pollInterval: 30000,
   });
 
   // Handle query errors
   useEffect(() => {
     if (notificationsError) {
-      console.error('Error fetching notifications:', notificationsError);
+      console.error('Error fetching device notifications:', notificationsError);
     }
   }, [notificationsError]);
 
   // Mark notification as read
-  const [markAsRead] = useMutation(MARK_NOTIFICATION_READ, {
+  const [markAsRead] = useMutation(MARK_DEVICE_NOTIFICATION_READ, {
     onCompleted: () => {
       refetchNotifications();
     },
     onError: (error) => {
-      console.error('Error marking notification as read:', error);
+      console.error('Error marking device notification as read:', error);
     }
   });
 
@@ -87,7 +96,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
     try {
       await markAsRead({ variables: { notificationId } });
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error('Error marking device notification as read:', error);
     }
   };
 
@@ -114,13 +123,13 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
     try {
       await refetchNotifications();
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      console.error('Error refreshing device notifications:', error);
     } finally {
       setRefreshing(false);
     }
   };
 
-  const notifications: Notification[] = notificationsData?.getAdminGeneralNotifications?.notifications || [];
+  const notifications: DeviceNotification[] = notificationsData?.getDeviceNotifications?.notifications || [];
 
   const filteredNotifications = notifications.filter(notification => {
     if (selectedFilter === 'unread') return !notification.read;
@@ -128,35 +137,59 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
     return true;
   });
 
-  const getNotificationIcon = (category: string) => {
+  const getDeviceNotificationIcon = (category: string, type: string) => {
     switch (category) {
-      case 'NEW_AD_SUBMISSION':
-        return <FileText className="w-5 h-5 text-blue-500" />;
-      case 'NEW_USER_REGISTRATION':
-        return <Users className="w-5 h-5 text-green-500" />;
-      case 'NEW_DRIVER_APPLICATION':
-        return <Users className="w-5 h-5 text-purple-500" />;
-      case 'PAYMENT_SUCCESS':
-        return <DollarSign className="w-6 h-6 text-green-600" />;
-      case 'PAYMENT_FAILURE':
-        return <DollarSign className="w-5 h-5 text-red-600" />;
-      case 'PAYMENT_ISSUE':
-        return <DollarSign className="w-5 h-5 text-red-500" />;
-      case 'SYSTEM_ALERT':
+      case 'DEVICE_ONLINE':
+        return <Wifi className="w-5 h-5 text-green-500" />;
+      case 'DEVICE_OFFLINE':
+        return <WifiOff className="w-5 h-5 text-red-500" />;
+      case 'MILESTONE_ACHIEVED':
+        return <Target className="w-5 h-5 text-blue-500" />;
+      case 'DEVICE_ERROR':
         return <AlertTriangle className="w-5 h-5 text-orange-500" />;
+      case 'DEVICE_SYNC':
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case 'DEVICE_STATUS':
+        return <Smartphone className="w-5 h-5 text-purple-500" />;
       default:
         return <Bell className="w-5 h-5 text-gray-500" />;
     }
   };
 
   const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
+    if (!dateString) return 'Unknown time';
+    
+    let date;
+    if (typeof dateString === 'string' && /^\d+$/.test(dateString)) {
+      date = new Date(parseInt(dateString));
+    } else {
+      date = new Date(dateString);
+    }
+    
+    if (isNaN(date.getTime())) {
+      return 'Invalid date';
+    }
+    
     const now = new Date();
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'HIGH':
+        return 'text-red-600';
+      case 'MEDIUM':
+        return 'text-yellow-600';
+      case 'LOW':
+        return 'text-green-600';
+      default:
+        return 'text-gray-600';
+    }
   };
 
   if (notificationsLoading) {
@@ -169,7 +202,7 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
 
   return (
     <div className="space-y-6">
-      {/* Notifications List */}
+      {/* Device Notifications List */}
       <motion.div
         className="bg-white dark:bg-neutral-900 p-3 rounded-xl w-full h-full space-y-3 shadow-md flex flex-col"
         initial="collapsed"
@@ -179,10 +212,10 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
           {filteredNotifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <Bell className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p>No notifications found</p>
+              <p>No device notifications found</p>
             </div>
           ) : (
-            filteredNotifications.slice(0, 3).map((notification, i) => (
+            filteredNotifications.slice(0, maxNotifications).map((notification, i) => (
               <motion.div
                 key={notification.id}
                 className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-4 py-2 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-16"
@@ -204,27 +237,42 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
                         )}
                       </button>
                     )}
-                    {getNotificationIcon(notification.category)}
-                    <div>
+                    {getDeviceNotificationIcon(notification.category, notification.type)}
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h1 className="text-sm font-medium">{notification.title}</h1>
+                        <h1 className="text-sm font-medium truncate">{notification.title}</h1>
                         {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
                         )}
+                        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${
+                          notification.priority === 'HIGH' ? 'bg-red-100 text-red-600' :
+                          notification.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-600' :
+                          'bg-green-100 text-green-600'
+                        }`}>
+                          {notification.priority}
+                        </span>
                       </div>
-                      <div className="text-xs text-neutral-500 font-medium">
+                      <div className="text-xs text-neutral-500 font-medium truncate">
                         <span>{formatTimeAgo(notification.createdAt)}</span>
                         &nbsp;•&nbsp;
-                        <span>{notification.message}</span>
-                        {notification.adTitle && (
-                          <>
-                            &nbsp;|&nbsp;
-                            <span>Ad: {notification.adTitle}</span>
-                          </>
-                        )}
+                        <span>
+                          {notification.message.length > 25 
+                            ? `${notification.message.substring(0, 25)}...` 
+                            : notification.message
+                          }
+                        </span>
                       </div>
                     </div>
                   </div>
+                  {!notification.read && (
+                    <button
+                      onClick={() => handleMarkAsRead(notification.id)}
+                      className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                      title="Mark as read"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </motion.div>
             ))
@@ -241,10 +289,10 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
                 variants={notificationTextVariants}
                 transition={textSwitchTransition}
               >
-                Notifications
+                Device Notifications
               </motion.span>
               <motion.a
-                href="/admin/notifications"
+                href="/admin/ads?tab=notifications"
                 className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
                 variants={viewAllTextVariants}
                 transition={textSwitchTransition}
@@ -259,4 +307,4 @@ const DynamicNotificationList: React.FC<DynamicNotificationListProps> = ({ pendi
   );
 };
 
-export default DynamicNotificationList;
+export default DeviceNotificationList;

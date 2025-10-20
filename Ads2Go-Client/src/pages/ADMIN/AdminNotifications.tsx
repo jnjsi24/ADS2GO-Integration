@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { formatDistanceToNow } from 'date-fns';
 import { 
   Bell, 
   Check, 
@@ -20,8 +19,9 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import DeviceNotificationList from './tabs/dashboard/DeviceNotificationList';
 import { 
-  GET_ADMIN_NOTIFICATIONS, 
+  GET_ADMIN_GENERAL_NOTIFICATIONS, 
   MARK_NOTIFICATION_READ, 
   MARK_ALL_NOTIFICATIONS_READ,
   DELETE_NOTIFICATION,
@@ -53,10 +53,12 @@ const AdminNotifications: React.FC = () => {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
-  // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  // Fetch general admin notifications (excluding device-specific notifications)
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
+    fetchPolicy: 'cache-and-network', // Ensure we get fresh data
   });
+
 
   // Handle query errors
   useEffect(() => {
@@ -130,8 +132,8 @@ const AdminNotifications: React.FC = () => {
     }
   };
 
-  const notifications: Notification[] = notificationsData?.getAdminNotifications?.notifications || [];
-  const unreadCount = notificationsData?.getAdminNotifications?.unreadCount || 0;
+  const notifications: Notification[] = notificationsData?.getAdminGeneralNotifications?.notifications || [];
+  const unreadCount = notificationsData?.getAdminGeneralNotifications?.unreadCount || 0;
 
   const filteredNotifications = notifications.filter(notification => {
     if (selectedFilter === 'unread') return !notification.read;
@@ -214,9 +216,9 @@ const AdminNotifications: React.FC = () => {
     if (selectedNotifications.size === filteredNotifications.length) {
       await handleDeleteAll();
     } else {
-      for (const notificationId of selectedNotifications) {
-        await handleDeleteNotification(notificationId);
-      }
+       for (const notificationId of Array.from(selectedNotifications)) {
+         await handleDeleteNotification(notificationId);
+       }
     }
     
     setSelectedNotifications(new Set());
@@ -249,6 +251,9 @@ const AdminNotifications: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               Notifications
             </h1>
+            <p className="text-gray-600 mt-2">
+              {notifications.length} total notifications • {unreadCount} unread
+            </p>
           </div>
 
           {/* Right: Filter Dropdown + Refresh */}
@@ -525,23 +530,6 @@ const AdminNotifications: React.FC = () => {
                       </p>
                       
                       <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>
-                            {(() => {
-                              try {
-                                const date = new Date(notification.createdAt);
-                                if (isNaN(date.getTime())) {
-                                  return 'Unknown time';
-                                }
-                                return formatDistanceToNow(date, { addSuffix: true });
-                              } catch (error) {
-                                console.error('Error formatting date:', error, notification.createdAt);
-                                return 'Unknown time';
-                              }
-                            })()}
-                          </span>
-                        </div>
                         {notification.adTitle && (
                           <div className="flex items-center gap-1">
                             <span>Ad: {notification.adTitle}</span>
@@ -551,46 +539,92 @@ const AdminNotifications: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* Action buttons */}
-                  <div className="flex items-center gap- ml-">
-                    {!notification.read && (
+                  {/* Action buttons and timestamp */}
+                  <div className="flex items-center gap-4 ml-4">
+                    {/* Timestamp */}
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <Clock className="w-4 h-4" />
+                      <span>
+                        {(() => {
+                          // For general admin notifications, use createdAt (not data.timestamp)
+                          const dateString = notification.createdAt;
+                          
+                          if (!dateString) return 'Unknown time';
+                          
+                          // Handle both timestamp strings and ISO strings
+                          let date;
+                          if (typeof dateString === 'string' && /^\d+$/.test(dateString)) {
+                            // It's a timestamp string, convert to number
+                            date = new Date(parseInt(dateString));
+                          } else {
+                            // It's an ISO string or other format
+                            date = new Date(dateString);
+                          }
+                          
+                          const now = new Date();
+                          
+                          // Check if date is valid
+                          if (isNaN(date.getTime())) {
+                            return 'Invalid date';
+                          }
+                          
+                          const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+                          
+                          if (diffInMinutes < 1) return 'Just now';
+                          if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+                          if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+                          return `${Math.floor(diffInMinutes / 1440)}d ago`;
+                        })()}
+                      </span>
+                    </div>
+                    
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2">
+                      {!notification.read && (
+                        <button
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="group flex items-center text-green-700 overflow-hidden h-8 w-8 hover:w-28 transition-[width] duration-300"
+                          title="Mark as read"
+                        >
+                          <Check
+                            className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
+                            size={16}
+                          />
+                          <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-3 whitespace-nowrap transition-all duration-300">
+                            Mark as Read
+                          </span>
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => handleMarkAsRead(notification.id)}
-                        className="group flex items-center text-green-700 overflow-hidden h-8 w-8 hover:w-28 transition-[width] duration-300"
-                        title="Mark as read"
+                        onClick={() => {
+                          setNotificationToDelete(notification);
+                          setShowDeleteModal(true);
+                        }}
+                        className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
+                        title="Delete notification"
                       >
-                        <Check
+                        <Trash2
                           className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
                           size={16}
                         />
-                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-3 whitespace-nowrap transition-all duration-300">
-                          Mark as Read
+                        <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
+                          Delete
                         </span>
                       </button>
-                    )}
-
-                    <button
-                      onClick={() => {
-                        setNotificationToDelete(notification);
-                        setShowDeleteModal(true);
-                      }}
-                      className="group flex items-center text-red-700 overflow-hidden h-8 w-7 hover:w-20 transition-[width] duration-300"
-                      title="Delete notification"
-                    >
-                      <Trash2
-                        className="flex-shrink-0 mx-auto mr-1 group-hover:ml-1.5 transition-all duration-300"
-                        size={16}
-                      />
-                      <span className="opacity-0 group-hover:opacity-100 text-xs group-hover:mr-4 whitespace-nowrap transition-all duration-300">
-                        Delete
-                      </span>
-                    </button>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      {/* Device Notifications Section */}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Device Notifications</h2>
+        <DeviceNotificationList maxNotifications={10} />
       </div>
 
       {/* Delete Confirmation Modal */}

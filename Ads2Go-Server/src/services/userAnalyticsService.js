@@ -695,16 +695,8 @@ class UserAnalyticsService {
               const realTimeStatus = deviceStatusService.getDeviceStatus(slot.deviceId);
               let isOnline = realTimeStatus.isOnline || false;
               
-              // Apply same timeout logic as admin system (120 seconds)
-              const now = new Date();
-              const lastSeen = new Date(slot.lastSeen || device.lastSeen);
-              const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
-              
-              // Override online status if timeout threshold is exceeded (same as admin)
-              if (timeSinceLastSeen > 120) {
-                isOnline = false;
-                console.log(`🔍 [UserAnalytics] Overriding ${slot.deviceId} to OFFLINE due to timeout: ${timeSinceLastSeen}s > 120s`);
-              }
+              // Trust DeviceStatusManager output - no timeout override
+              // DeviceStatusManager already handles WebSocket priority correctly
               
               console.log(`🔍 [UserAnalytics] Real-time status for ${slot.deviceId}:`, {
                 isOnline: isOnline,

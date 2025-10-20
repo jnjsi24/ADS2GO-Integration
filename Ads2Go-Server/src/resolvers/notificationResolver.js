@@ -8,6 +8,7 @@ const AdsPlan = require('../models/AdsPlan');
 const Payment = require('../models/Payment');
 const { checkAuth } = require('../middleware/auth');
 const NotificationService = require('../services/notifications/NotificationService');
+const logger = require('../utils/logger');
 
 const notificationResolvers = {
   Query: {
@@ -15,19 +16,19 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching notifications for user:', user.id);
+        logger.notification('🔔 Backend: Fetching notifications for user:', user.id);
         const userNotifications = await UserNotifications.findOne({ userId: user.id });
         
         if (!userNotifications) {
-          console.log('🔔 Backend: No notifications found for user');
+          logger.notification('🔔 Backend: No notifications found for user');
           return [];
         }
         
         // Return notifications array sorted by creation date (newest first)
         const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         
-        console.log('🔔 Backend: Found notifications:', notifications.length);
-        console.log('🔔 Backend: Notifications data:', notifications);
+        logger.notification('🔔 Backend: Found notifications:', notifications.length);
+        logger.notification('🔔 Backend: Notifications data:', notifications);
         return notifications;
       } catch (error) {
         console.error('Error fetching user notifications:', error);
@@ -77,11 +78,11 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching admin notifications for user:', user.id);
+        logger.notification('🔔 Backend: Fetching admin notifications for user:', user.id);
         const userNotifications = await UserNotifications.findOne({ userId: user.id });
         
         if (!userNotifications) {
-          console.log('🔔 Backend: No notifications found for admin');
+          logger.notification('🔔 Backend: No notifications found for admin');
           return {
             notifications: [],
             unreadCount: 0
@@ -89,9 +90,14 @@ const notificationResolvers = {
         }
         
         // Return notifications array sorted by creation date (newest first)
-        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(notification => ({
+          ...notification.toObject(),
+          createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+          updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString()
+        }));
         
-        console.log('🔔 Backend: Found admin notifications:', notifications.length);
+        logger.notification('🔔 Backend: Found admin notifications:', notifications.length);
         return {
           notifications,
           unreadCount: userNotifications.unreadCount
@@ -102,16 +108,115 @@ const notificationResolvers = {
       }
     },
 
+    // Device-specific notifications (for screen control page)
+    getDeviceNotifications: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        logger.notification('🔔 Backend: Fetching device notifications for user:', user.id);
+        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        
+        if (!userNotifications) {
+          logger.notification('🔔 Backend: No notifications found for admin');
+          return {
+            notifications: [],
+            unreadCount: 0
+          };
+        }
+        
+        // Filter for device/material specific notifications
+        const deviceCategories = [
+          'DEVICE_OFFLINE', 
+          'DEVICE_ONLINE', 
+          'DEVICE_MILESTONE', 
+          'MATERIAL_PERFORMANCE', 
+          'DEVICE_STATUS_CHANGE'
+        ];
+        
+        const deviceNotifications = userNotifications.notifications.filter(notification => 
+          deviceCategories.includes(notification.category)
+        ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(notification => ({
+          ...notification.toObject(),
+          createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+          updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString()
+        }));
+        
+        const unreadCount = deviceNotifications.filter(n => !n.read).length;
+        
+        logger.notification('🔔 Backend: Found device notifications:', deviceNotifications.length);
+        return {
+          notifications: deviceNotifications,
+          unreadCount: unreadCount
+        };
+      } catch (error) {
+        console.error('Error fetching device notifications:', error);
+        throw new Error('Failed to fetch device notifications');
+      }
+    },
+
+    // General admin notifications (for main admin notifications page)
+    getAdminGeneralNotifications: async (_, __, { user }) => {
+      checkAuth(user);
+      
+      try {
+        logger.notification('🔔 Backend: Fetching general admin notifications for user:', user.id);
+        const userNotifications = await UserNotifications.findOne({ userId: user.id });
+        
+        if (!userNotifications) {
+          logger.notification('🔔 Backend: No notifications found for admin');
+          return {
+            notifications: [],
+            unreadCount: 0
+          };
+        }
+        
+        // Filter for general admin notifications (exclude device-specific)
+        const generalCategories = [
+          'NEW_AD_SUBMISSION', 
+          'NEW_USER_REGISTRATION', 
+          'NEW_DRIVER_APPLICATION', 
+          'NEW_MATERIAL_CREATED', 
+          'PAYMENT_SUCCESS', 
+          'PAYMENT_FAILURE', 
+          'PAYMENT_ISSUE', 
+          'SYSTEM_ALERT',
+          'REPORT_STATUS_UPDATE', 
+          'NEW_USER_REPORT'
+        ];
+        
+        const generalNotifications = userNotifications.notifications.filter(notification => 
+          generalCategories.includes(notification.category)
+        ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(notification => ({
+          ...notification.toObject(),
+          createdAt: notification.createdAt ? notification.createdAt.toISOString() : new Date().toISOString(),
+          updatedAt: notification.updatedAt ? notification.updatedAt.toISOString() : new Date().toISOString()
+        }));
+        
+        const unreadCount = generalNotifications.filter(n => !n.read).length;
+        
+        logger.notification('🔔 Backend: Found general admin notifications:', generalNotifications.length);
+        return {
+          notifications: generalNotifications,
+          unreadCount: unreadCount
+        };
+      } catch (error) {
+        console.error('Error fetching general admin notifications:', error);
+        throw new Error('Failed to fetch general admin notifications');
+      }
+    },
+
     getPendingAds: async (_, __, { user }) => {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching pending ads for user:', user.id);
+        logger.notification('🔔 Backend: Fetching pending ads for user:', user.id);
         const pendingAds = await Ad.find({ status: 'PENDING' })
           .populate('userId', 'firstName lastName')
           .sort({ createdAt: -1 });
         
-        console.log('🔔 Backend: Found pending ads:', pendingAds.length);
+        logger.notification('🔔 Backend: Found pending ads:', pendingAds.length);
         
         // Transform the data to match PendingAd schema
         const transformedAds = pendingAds.map(ad => ({
@@ -124,7 +229,7 @@ const notificationResolvers = {
           planId: ad.planId
         }));
         
-        console.log('🔔 Backend: Pending ads details:', transformedAds.map(ad => ({
+        logger.notification('🔔 Backend: Pending ads details:', transformedAds.map(ad => ({
           id: ad.id,
           title: ad.title,
           status: ad.status,
@@ -142,7 +247,7 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching pending materials');
+        logger.notification('🔔 Backend: Fetching pending materials');
         // Find materials that are created but not yet assigned to any plan
         const pendingMaterials = await Material.find({ 
           status: 'PENDING' 
@@ -150,7 +255,7 @@ const notificationResolvers = {
           .populate('driverId', 'firstName lastName')
           .sort({ createdAt: -1 });
         
-        console.log('🔔 Backend: Found pending materials:', pendingMaterials.length);
+        logger.notification('🔔 Backend: Found pending materials:', pendingMaterials.length);
         return pendingMaterials;
       } catch (error) {
         console.error('Error fetching pending materials:', error);
@@ -162,7 +267,7 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching admin dashboard stats');
+        logger.notification('🔔 Backend: Fetching admin dashboard stats');
         
         const [
           totalAds,
@@ -217,8 +322,8 @@ const notificationResolvers = {
           highPriorityNotifications
         };
 
-        console.log('🔔 Backend: Admin dashboard stats:', stats);
-        console.log('🔔 Backend: Pending ads count in stats:', pendingAds);
+        logger.notification('🔔 Backend: Admin dashboard stats:', stats);
+        logger.notification('🔔 Backend: Pending ads count in stats:', pendingAds);
         return stats;
       } catch (error) {
         console.error('Error fetching admin dashboard stats:', error);
@@ -230,7 +335,7 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching super admin notifications for user:', user.id);
+        logger.notification('🔔 Backend: Fetching super admin notifications for user:', user.id);
         
         // Check if user is super admin
         if (user.role !== 'SUPERADMIN') {
@@ -240,7 +345,7 @@ const notificationResolvers = {
         const userNotifications = await UserNotifications.findOne({ userId: user.id });
         
         if (!userNotifications) {
-          console.log('🔔 Backend: No notifications found for super admin');
+          logger.notification('🔔 Backend: No notifications found for super admin');
           return {
             notifications: [],
             unreadCount: 0
@@ -250,7 +355,7 @@ const notificationResolvers = {
         // Return notifications array sorted by creation date (newest first)
         const notifications = userNotifications.notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         
-        console.log('🔔 Backend: Found super admin notifications:', notifications.length);
+        logger.notification('🔔 Backend: Found super admin notifications:', notifications.length);
         return {
           notifications,
           unreadCount: userNotifications.unreadCount
@@ -265,7 +370,7 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching super admin dashboard stats');
+        logger.notification('🔔 Backend: Fetching super admin dashboard stats');
         
         // Check if user is super admin
         if (user.role !== 'SUPERADMIN') {
@@ -340,7 +445,7 @@ const notificationResolvers = {
           planUsageStats
         };
 
-        console.log('🔔 Backend: Super admin dashboard stats:', stats);
+        logger.notification('🔔 Backend: Super admin dashboard stats:', stats);
         return stats;
       } catch (error) {
         console.error('Error fetching super admin dashboard stats:', error);
@@ -352,7 +457,7 @@ const notificationResolvers = {
       checkAuth(user);
       
       try {
-        console.log('🔔 Backend: Fetching user counts by plan');
+        logger.notification('🔔 Backend: Fetching user counts by plan');
         
         // Check if user is super admin
         if (user.role !== 'SUPERADMIN') {
@@ -395,7 +500,7 @@ const notificationResolvers = {
           }
         ]);
 
-        console.log('🔔 Backend: User counts by plan:', planCounts);
+        logger.notification('🔔 Backend: User counts by plan:', planCounts);
         return planCounts;
       } catch (error) {
         console.error('Error fetching user counts by plan:', error);

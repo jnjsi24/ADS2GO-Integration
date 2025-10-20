@@ -14,12 +14,12 @@ console.log('🔧 Environment Configuration:', {
 
 export default {
   expo: {
-    name: "androidPlayereExpo",
-    slug: "androidPlayereExpo",
+    name: "Ads2Go-AdsPlayer",
+    slug: "Ads2Go-AdsPlayer",
     version: "1.0.0",
     orientation: "default", // Allow both portrait and landscape
     icon: "./assets/images/icon.png",
-    scheme: "androidplayereexpo",
+    scheme: "ads2godadsplayer",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {

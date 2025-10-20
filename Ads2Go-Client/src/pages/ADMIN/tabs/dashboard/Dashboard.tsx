@@ -3,10 +3,15 @@ import {
   Play, 
   Pause, 
   Square, 
-  RefreshCw,
+  Lock,
+  Unlock,
   Eye,
+  Settings,
   WifiOff,
-  SkipForward, Check
+  Monitor,
+  SkipForward, 
+  Check,
+  RefreshCw
 } from 'lucide-react';
 import { ScreenData } from '../../../../types/screenTypes';
 import AdProgressBar from '../../../../components/AdProgressBar';
@@ -17,16 +22,20 @@ interface DashboardProps {
   selectedScreens: string[];
   lastRefresh: Date;
   isRefreshing: boolean;
-  onRefresh: () => void;
+  isCurrentlyPlaying: boolean;
   onSelectAll: () => void;
   onDeselectAll: () => void;
+  onRefresh: () => void;
   onScreenSelect: (screenId: string) => void;
   onScreenClick: (screen: ScreenData) => void;
+  onScreenAction: (deviceId: string, action: string, value?: any) => void;
   onMaterialClick: (screen: ScreenData) => void;
   onBulkAction: (action: string) => void;
   getStatusIcon: (status: string) => JSX.Element;
   getStatusText: (status: string) => string;
   formatTime: (seconds: number | undefined) => string;
+  devicePlayStates: Record<string, boolean>;
+  deviceLockStates: Record<string, boolean>;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -34,17 +43,35 @@ const Dashboard: React.FC<DashboardProps> = ({
   selectedScreens,
   lastRefresh,
   isRefreshing,
-  onRefresh,
+  isCurrentlyPlaying,
   onSelectAll,
   onDeselectAll,
+  onRefresh,
   onScreenSelect,
   onScreenClick,
+  onScreenAction,
   onMaterialClick,
   onBulkAction,
   getStatusIcon,
   getStatusText,
-  formatTime
+  formatTime,
+  devicePlayStates,
+  deviceLockStates
 }) => {
+  // Close all dropdowns when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const dropdowns = document.querySelectorAll('.dropdown-menu');
+      dropdowns.forEach(dropdown => {
+        if (!dropdown.contains(event.target as Node)) {
+          dropdown.classList.add('opacity-0', 'invisible');
+        }
+      });
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   return (
     <div className="space-y-6">
       {/* Screen Status Grid */}
@@ -286,7 +313,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                               ? {
                                   currentTime: screen.screenMetrics.currentAd.currentTime,
                                   progress: screen.screenMetrics.currentAd.progress || 0,
-                                  state: screen.screenMetrics.currentAd.state || "playing",
+                                  state: (screen.screenMetrics.currentAd.state || "playing") as "ended" | "playing" | "paused" | "buffering" | "loading",
                                 }
                               : undefined
                           }

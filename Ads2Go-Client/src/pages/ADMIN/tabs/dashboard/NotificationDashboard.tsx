@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Check, Users, FileText, DollarSign, Play, Pause, Eye, TrendingUp, X, RefreshCw, CheckSquare, Square, Trash2, ChevronDown } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle, Check, Users, FileText, DollarSign, Play, Pause, Eye, TrendingUp, X, RefreshCw, CheckSquare, Square, Trash2, ChevronDown, AlertCircle } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_ADMIN_NOTIFICATIONS, MARK_NOTIFICATION_READ, DELETE_NOTIFICATION, DELETE_ALL_ADMIN_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries';
+import { GET_DEVICE_NOTIFICATIONS, MARK_DEVICE_NOTIFICATION_READ, DELETE_DEVICE_NOTIFICATION, DELETE_ALL_DEVICE_NOTIFICATIONS, GET_PENDING_ADS, GET_PENDING_MATERIALS } from '../../../../graphql/admin/queries/deviceNotificationQueries';
 import { motion, AnimatePresence } from "framer-motion";
 
 
@@ -60,8 +60,8 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
 
   
-  // Fetch notifications
-  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_ADMIN_NOTIFICATIONS, {
+  // Fetch device notifications
+  const { data: notificationsData, loading: notificationsLoading, error: notificationsError, refetch: refetchNotifications } = useQuery(GET_DEVICE_NOTIFICATIONS, {
     pollInterval: 120000, // Refresh every 2 minutes for more discreet updates
   });
 
@@ -101,7 +101,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   }, [pendingMaterialsError]);
 
   // Mark notification as read
-  const [markAsRead] = useMutation(MARK_NOTIFICATION_READ, {
+  const [markAsRead] = useMutation(MARK_DEVICE_NOTIFICATION_READ, {
     onCompleted: () => {
       refetchNotifications();
     },
@@ -111,7 +111,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   });
 
   // Delete notification
-  const [deleteNotification] = useMutation(DELETE_NOTIFICATION, {
+  const [deleteNotification] = useMutation(DELETE_DEVICE_NOTIFICATION, {
     onCompleted: () => {
       refetchNotifications();
       setShowDeleteModal(false);
@@ -124,7 +124,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   });
 
   // Delete all notifications
-  const [deleteAllNotifications] = useMutation(DELETE_ALL_ADMIN_NOTIFICATIONS, {
+  const [deleteAllNotifications] = useMutation(DELETE_ALL_DEVICE_NOTIFICATIONS, {
     onCompleted: () => {
       refetchNotifications();
       setSelectedNotifications(new Set());
@@ -229,7 +229,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     }
   };
 
-  const notifications: Notification[] = notificationsData?.getAdminNotifications?.notifications || [];
+  const notifications: Notification[] = notificationsData?.getDeviceNotifications?.notifications || [];
   const pendingAds: PendingAd[] = pendingAdsData?.getPendingAds || [];
   const pendingMaterials: PendingMaterial[] = pendingMaterialsData?.getPendingMaterials || [];
 
@@ -256,7 +256,25 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     return true;
   });
 
-  const getNotificationIcon = (category: string, type: string) => {
+  const getNotificationIcon = (category: string, type: string, data?: any) => {
+    // Special handling for 8-hour milestone notifications
+    if (data?.achievementType === '8_HOUR_MILESTONE') {
+      return <CheckCircle className="w-5 h-5 text-green-600" />;
+    }
+    
+    // Special handling for device offline/online notifications
+    if (category === 'DEVICE_OFFLINE' || data?.eventType === 'DEVICE_OFFLINE') {
+      return <AlertCircle className="w-5 h-5 text-red-600" />;
+    }
+    
+    if (category === 'DEVICE_ONLINE' || data?.eventType === 'DEVICE_ONLINE') {
+      return <CheckCircle className="w-5 h-5 text-green-600" />;
+    }
+    
+    if (category === 'DEVICE_MILESTONE' || data?.achievementType === '8_HOUR_MILESTONE') {
+      return <CheckCircle className="w-5 h-5 text-green-600" />;
+    }
+    
     switch (category) {
       case 'NEW_AD_SUBMISSION':
         return <FileText className="w-5 h-5 text-blue-500" />;
@@ -277,7 +295,27 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const getPriorityColor = (priority: string, data?: any, category?: string) => {
+    // Special styling for 8-hour milestone notifications
+    if (data?.achievementType === '8_HOUR_MILESTONE') {
+      return 'border-l-green-600 bg-green-100';
+    }
+    
+    // Special styling for device offline notifications
+    if (category === 'DEVICE_OFFLINE' || data?.eventType === 'DEVICE_OFFLINE') {
+      return 'border-l-red-600 bg-red-100';
+    }
+    
+    // Special styling for device online notifications
+    if (category === 'DEVICE_ONLINE' || data?.eventType === 'DEVICE_ONLINE') {
+      return 'border-l-green-600 bg-green-100';
+    }
+    
+    // Special styling for device milestone notifications
+    if (category === 'DEVICE_MILESTONE' || data?.achievementType === '8_HOUR_MILESTONE') {
+      return 'border-l-green-600 bg-green-100';
+    }
+    
     switch (priority) {
       case 'HIGH':
         return 'border-l-red-500 bg-red-50';
@@ -306,8 +344,14 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
   };
 
   const formatTimeAgo = (dateString: string) => {
+    if (!dateString) return 'Unknown time';
+    
     const date = new Date(dateString);
     const now = new Date();
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid date';
+    
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
     
     if (diffInMinutes < 1) return 'Just now';
@@ -477,7 +521,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
       <div>
         <div className="p-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-lg font-bold text-gray-800">Recent Notifications</h4>
+            <h4 className="text-lg font-bold text-gray-800">Device Notification Center</h4>
             {filteredNotifications.length > 0 && (
               <div className="flex items-center space-x-2">
                 {!isSelectMode ? (
@@ -568,7 +612,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
             filteredNotifications.map(notification => (
               <div
                 key={notification.id}
-                className={`p-4 mb-3 shadow-md rounded-md ${getPriorityColor(notification.priority)} ${
+                className={`p-4 border-l-4 ${getPriorityColor(notification.priority, notification.data, notification.category)} ${
                   !notification.read ? 'bg-blue-50' : 'bg-white'
                 }`}
               >
@@ -607,7 +651,7 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                         </div>
                       </motion.button>
                     )}
-                    {getNotificationIcon(notification.category, notification.type)}
+                    {getNotificationIcon(notification.category, notification.type, notification.data)}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h5 className={`font-medium ${getTypeColor(notification.type)}`}>
@@ -626,15 +670,77 @@ const NotificationDashboard: React.FC<NotificationDashboardProps> = ({ pendingAd
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>{formatTimeAgo(notification.createdAt)}</span>
+                        <span>{formatTimeAgo(notification.data?.timestamp || notification.createdAt)}</span>
                         {notification.adTitle && (
                           <span>Ad: {notification.adTitle}</span>
+                        )}
+                        {(notification.category === 'DEVICE_OFFLINE' || notification.data?.eventType === 'DEVICE_OFFLINE') && (
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                              🔌 Device Offline
+                            </span>
+                            {notification.data?.materialId && (
+                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                            )}
+                            {notification.data?.slotNumber && (
+                              <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
+                            )}
+                            {notification.data?.driverName && (
+                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                            )}
+                            {notification.data?.reason && (
+                              <span className="text-gray-600">Reason: {notification.data.reason}</span>
+                            )}
+                            {notification.data?.timeSinceLastSeen && (
+                              <span className="text-gray-600">Last seen: {notification.data.timeSinceLastSeen}s ago</span>
+                            )}
+                          </div>
+                        )}
+                        {(notification.category === 'DEVICE_ONLINE' || notification.data?.eventType === 'DEVICE_ONLINE') && (
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              ✅ Device Online
+                            </span>
+                            {notification.data?.materialId && (
+                              <span className="text-gray-600">Device: {notification.data.materialId}</span>
+                            )}
+                            {notification.data?.slotNumber && (
+                              <span className="text-gray-600">Slot: {notification.data.slotNumber}</span>
+                            )}
+                            {notification.data?.driverName && (
+                              <span className="text-gray-600">Driver: {notification.data.driverName}</span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
                   </div>
                   {!isSelectMode && (
                     <div className="flex items-center gap-2">
+                      {/* DEVICE_MILESTONE tags on the right side */}
+                      {(notification.category === 'DEVICE_MILESTONE' || notification.data?.achievementType === '8_HOUR_MILESTONE') && (
+                        <div className="flex items-center gap-2 mr-2">
+                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            🎯 8-Hour Milestone
+                          </span>
+                          {notification.data?.materialId && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                              Device: {notification.data.materialId}
+                            </span>
+                          )}
+                          {notification.data?.slotNumber && (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
+                              Slot: {notification.data.slotNumber}
+                            </span>
+                          )}
+                          {notification.data?.driverName && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs">
+                              Driver: {notification.data.driverName}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      
                       {!notification.read && (
                         <button
                           onClick={() => handleMarkAsRead(notification.id)}

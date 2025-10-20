@@ -1,6 +1,8 @@
 const WebSocket = require('ws');
 const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusManager = require('./deviceStatusManager');
+const deviceOfflineNotificationService = require('./deviceOfflineNotificationService');
+const logger = require('../utils/logger');
 
 class DeviceStatusService {
   constructor() {
@@ -8,6 +10,7 @@ class DeviceStatusService {
     this.activeConnections = new Map();
     this.pingInterval = null;
     this.adEndTimers = new Map(); // Track timers for clearing ended ads
+    this.offlineCheckInterval = null; // Check for offline devices
   }
 
   initializeWebSocketServer(server) {
@@ -37,17 +40,17 @@ class DeviceStatusService {
     });
     
     // Log when the WebSocket server is ready
-    console.log('WebSocket server created, waiting for upgrade requests');
+    logger.info('WebSocket server created, waiting for upgrade requests');
     
     // Handle WebSocket upgrade
     server.on('upgrade', (request, socket, head) => {
-      console.log(`🔌 WebSocket upgrade request received: ${request.url}`);
-      console.log(`🔌 Headers:`, request.headers);
+      logger.websocket(`🔌 WebSocket upgrade request received: ${request.url}`);
+      logger.websocket(`🔌 Headers:`, request.headers);
       
       const url = new URL(request.url, `http://${request.headers.host}`);
       const pathname = url.pathname;
       
-      console.log(`🔌 Parsed URL - Pathname: ${pathname}, Search: ${url.search}`);
+      logger.websocket(`🔌 Parsed URL - Pathname: ${pathname}, Search: ${url.search}`);
       
       if (pathname === '/ws/status') {
         // Get device ID from query params or headers
@@ -103,7 +106,7 @@ class DeviceStatusService {
         }
         
         if (isAdmin) {
-          console.log(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
+          logger.websocket(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
         } else {
           console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
         }
@@ -140,6 +143,7 @@ class DeviceStatusService {
     });
     
     this.startPingInterval();
+    this.startOfflineCheckInterval();
     console.log('WebSocket server initialized');
   }
 
@@ -194,7 +198,7 @@ class DeviceStatusService {
     });
     
     // Immediately broadcast status update for real-time response
-    this.broadcastDeviceUpdate(deviceId, true);
+    this.broadcastDeviceUpdate(deviceId, true, 'websocket');
     
     // Also update with the full device ID if they're different
     if (deviceId !== materialId) {
@@ -226,7 +230,7 @@ class DeviceStatusService {
       deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       
       // Immediately broadcast status update for real-time response
-      this.broadcastDeviceUpdate(deviceId, false);
+      this.broadcastDeviceUpdate(deviceId, false, 'websocket');
       
       // Also update with the full device ID if they're different
       if (deviceId !== ws.materialId) {
@@ -262,7 +266,7 @@ class DeviceStatusService {
           ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
-          console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
+          logger.websocket(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
             adId: message.adId,
             adTitle: message.adTitle,
             state: message.state,
@@ -282,7 +286,7 @@ class DeviceStatusService {
     let deviceId, materialId, slotNumber;
     
     if (ws.isAdmin) {
-      console.log(`🔧 Admin WebSocket Connection Established for Real-Time Monitoring`);
+      logger.websocket(`🔧 Admin WebSocket Connection Established for Real-Time Monitoring`);
       // For admin connections, use 'ADMIN' as the key
       deviceId = 'ADMIN';
       materialId = null;
@@ -291,7 +295,7 @@ class DeviceStatusService {
       deviceId = ws.deviceId || request.headers['device-id'];
       materialId = ws.materialId || request.headers['material-id'];
       slotNumber = ws.slotNumber || request.headers['slot-number'];
-      console.log(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId}, slot: ${slotNumber})` : ''}`);
+      logger.websocket(`🎬 New WebSocket Playback Connection from Device: ${deviceId}${materialId ? ` (material: ${materialId}, slot: ${slotNumber})` : ''}`);
     }
 
     // Store the connection with its device ID, material ID, and slot number
@@ -305,6 +309,13 @@ class DeviceStatusService {
       const deviceStatusManager = require('./deviceStatusManager');
       deviceStatusManager.setWebSocketStatus(deviceId, true, new Date());
       console.log(`🔌 [DeviceStatusManager] Registered playback connection for ${deviceId} as online`);
+      
+      // Trigger online notification
+      deviceOfflineNotificationService.checkDeviceStatusChange(
+        deviceId, 
+        true, 
+        'websocket_connect'
+      );
     }
     
     // Store slot-specific connections for synchronization
@@ -346,7 +357,7 @@ class DeviceStatusService {
           ws.lastPong = Date.now();
         } else if (message.type === 'adPlaybackUpdate') {
           // Handle real-time ad playback updates
-          console.log(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
+          logger.websocket(`🎬 [WebSocket] Received adPlaybackUpdate from ${deviceId}:`, {
             adId: message.adId,
             adTitle: message.adTitle,
             state: message.state,
@@ -370,7 +381,7 @@ class DeviceStatusService {
     });
 
     ws.on('close', (code, reason) => {
-      console.log(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
+      logger.websocket(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
         // Clean up slot connections before removing the main connection
         this.cleanupSlotConnections(deviceId, materialId, slotNumber);
@@ -381,6 +392,13 @@ class DeviceStatusService {
           const deviceStatusManager = require('./deviceStatusManager');
           deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
           console.log(`🔌 [DeviceStatusManager] Marked playback connection for ${deviceId} as offline`);
+          
+          // Trigger offline notification
+          deviceOfflineNotificationService.checkDeviceStatusChange(
+            deviceId, 
+            false, 
+            'websocket_disconnect'
+          );
         }
       }
     });
@@ -696,7 +714,7 @@ class DeviceStatusService {
       }
       
       // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(deviceTracking);
+      this.broadcastDeviceUpdate(deviceTracking.deviceId, deviceTracking.isOnline, 'database');
       
       // Also update the device list
       this.broadcastDeviceList();
@@ -742,7 +760,7 @@ class DeviceStatusService {
       deviceStatusManager.setDatabaseStatus(deviceId, status, now);
       
       // Broadcast the status update to all connected clients
-      this.broadcastDeviceUpdate(deviceTracking);
+      this.broadcastDeviceUpdate(deviceTracking.deviceId, deviceTracking.isOnline, 'database');
       
       // Also update the device list
       this.broadcastDeviceList();
@@ -956,12 +974,12 @@ class DeviceStatusService {
     });
   }
 
-  broadcastDeviceUpdate(deviceId, isOnline) {
+  broadcastDeviceUpdate(deviceId, isOnline, source = 'websocket') {
     const device = {
       deviceId,
       isOnline,
       lastSeen: new Date(),
-      source: 'websocket'
+      source: source
     };
     
     this.broadcast({
@@ -969,7 +987,14 @@ class DeviceStatusService {
       device: device
     });
     
-    console.log(`📡 [Broadcast] Device ${deviceId} status: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    console.log(`📡 [Broadcast] Device ${deviceId} status: ${isOnline ? 'ONLINE' : 'OFFLINE'} (source: ${source})`);
+    
+    // Trigger notification for status changes from any source
+    deviceOfflineNotificationService.checkDeviceStatusChange(
+      deviceId, 
+      isOnline, 
+      source === 'websocket' ? 'websocket_update' : 'database_update'
+    );
   }
 
   startPingInterval() {
@@ -1017,20 +1042,46 @@ class DeviceStatusService {
         this.updateDeviceStatus(deviceId, false);
         
         // Immediately broadcast status update for real-time response
-        this.broadcastDeviceUpdate(deviceId, false);
+        this.broadcastDeviceUpdate(deviceId, false, 'timeout');
         
         // Update DeviceStatusManager
         deviceStatusManager.setWebSocketStatus(deviceId, false, new Date());
       });
 
-      console.log(`🔄 Real-Time Connection Check: ${this.activeConnections.size}`);
+      logger.websocket(`🔄 Real-Time Connection Check: ${this.activeConnections.size}`);
     }, 10000); // 10 seconds for faster real-time checking
+  }
+
+  startOfflineCheckInterval() {
+    // Clear any existing interval
+    if (this.offlineCheckInterval) {
+      clearInterval(this.offlineCheckInterval);
+    }
+
+    // Set up offline check interval (every 5 minutes)
+    this.offlineCheckInterval = setInterval(() => {
+      try {
+        // Clean up old notification history
+        deviceOfflineNotificationService.cleanupOldHistory();
+        
+        // Log statistics
+        const stats = deviceOfflineNotificationService.getNotificationStats();
+        console.log(`📊 [DeviceOfflineNotification] Stats: ${JSON.stringify(stats)}`);
+      } catch (error) {
+        console.error('❌ Error in offline check interval:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
   }
 
   async cleanup() {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
+    }
+    
+    if (this.offlineCheckInterval) {
+      clearInterval(this.offlineCheckInterval);
+      this.offlineCheckInterval = null;
     }
     
     // Close all active connections

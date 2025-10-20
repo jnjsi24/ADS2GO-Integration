@@ -4,6 +4,20 @@ const DeviceTracking = require('../models/deviceTracking');
 const deviceStatusService = require('../services/deviceStatusService');
 const OSMService = require('../services/osmService');
 const { checkDriver } = require('../middleware/driverAuth');
+const logger = require('../utils/logger');
+
+// Simple in-memory cache for geocoded addresses
+const geocodingCache = new Map();
+
+// Clear cache for coordinates that failed geocoding (so they can be retried)
+const clearFailedGeocodingCache = () => {
+  for (const [key, value] of geocodingCache.entries()) {
+    if (value.startsWith('Location: ')) {
+      geocodingCache.delete(key);
+      logger.debug(`🗺️ Cleared failed geocoding cache for: ${key}`);
+    }
+  }
+};
 const { checkAdminMiddleware } = require('../middleware/auth');
 const Material = require('../models/Material');
 const Driver = require('../models/Driver');
@@ -696,6 +710,9 @@ router.get('/compliance', async (req, res) => {
   try {
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
+    
+    // Clear failed geocoding cache to retry with improved logic
+    clearFailedGeocodingCache();
 
     // First, get all registered devices from tablet system
     const Tablet = require('../models/Tablet');
@@ -716,9 +733,9 @@ router.get('/compliance', async (req, res) => {
       });
     });
     
-    console.log('📱 Registered devices from tablet system:', registeredDevices.size);
+    logger.database('📱 Registered devices from tablet system:', registeredDevices.size);
     registeredDevices.forEach((info, deviceId) => {
-      console.log(`   - ${deviceId} -> ${info.materialId} (Slot ${info.slotNumber})`);
+      logger.database(`   - ${deviceId} -> ${info.materialId} (Slot ${info.slotNumber})`);
     });
 
     // Get all device tracking records for registered devices
@@ -748,6 +765,34 @@ router.get('/compliance', async (req, res) => {
     // Group devices by material ID to consolidate display
     const materialGroups = new Map();
     
+    // Fetch driver information for all materials
+    const materialDriverMap = new Map();
+    try {
+      const materialIds = Array.from(new Set(Array.from(registeredDevices.values()).map(info => info.materialId)));
+      logger.database(`👥 [compliance] Looking for drivers for materials:`, materialIds);
+      
+      const materials = await Material.find({ 
+        materialId: { $in: materialIds }
+      }).populate('driver', 'driverId firstName lastName fullName email contactNumber vehiclePlateNumber');
+      
+      materials.forEach(material => {
+        logger.database(`👥 [compliance] Material ${material.materialId}: driverId=${material.driverId}, driver=${material.driver ? 'populated' : 'null'}`);
+        if (material.driverId && material.driver) {
+          materialDriverMap.set(material.materialId, {
+            driverId: material.driver.driverId,
+            driverName: material.driver.fullName || `${material.driver.firstName} ${material.driver.lastName}`,
+            vehiclePlateNumber: material.driver.vehiclePlateNumber
+          });
+        }
+      });
+      
+      logger.database(`👥 [compliance] Found ${materialDriverMap.size} materials with drivers`);
+      materialDriverMap.forEach((driverInfo, materialId) => {
+        logger.database(`   - ${materialId}: ${driverInfo.driverName} (${driverInfo.vehiclePlateNumber})`);
+      });
+    } catch (error) {
+      console.error('Error fetching driver information:', error);
+    }
     
     // First, group all devices by material
     allDevices.forEach(device => {
@@ -812,16 +857,11 @@ router.get('/compliance', async (req, res) => {
             const deviceStatusOnline = !!(deviceStatus && deviceStatus.isOnline);
             
             // Debug logging
-            console.log(`🔍 [compliance] Slot ${slot.deviceId}: deviceStatus=`, deviceStatus, 'deviceStatusOnline=', deviceStatusOnline);
+            logger.screenTracking(`🔍 [compliance] Slot ${slot.deviceId}: deviceStatus=`, deviceStatus, 'deviceStatusOnline=', deviceStatusOnline);
             
-            // Check if tablet registration status is recent (within last 30 seconds)
-            const now = new Date();
-            const lastSeen = new Date(slot.lastSeen);
-            const timeSinceLastSeen = (now - lastSeen) / 1000; // seconds
-            const isRecentActivity = timeSinceLastSeen <= 30; // 30 seconds timeout
-            
-            // Use tablet registration status if recent, otherwise use device status
-            const isDeviceOnline = isRecentActivity ? deviceStatusOnline : false;
+            // Use real-time WebSocket status from DeviceStatusManager
+            // This is the single source of truth for device online status
+            const isDeviceOnline = deviceStatusOnline;
             
             // Update slot status based on the actual slot number
             const slotNumber = slot.slotNumber;
@@ -874,6 +914,12 @@ router.get('/compliance', async (req, res) => {
         group.screenMetrics = { ...group.screenMetrics, ...device.screenMetrics };
       }
       
+      // Use the most recent current ad
+      if (device.currentAd && (!group.currentAd || 
+          (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
+        group.currentAd = device.currentAd;
+      }
+      
       // If any device is online, mark the group as online (use real-time status)
       if (device.slots && device.slots.length > 0) {
         const hasOnlineSlot = device.slots.some(slot => {
@@ -891,7 +937,7 @@ router.get('/compliance', async (req, res) => {
     });
     
     // Process each material group and create consolidated display
-    materialGroups.forEach((group, materialId) => {
+    for (const [materialId, group] of materialGroups) {
       // Skip groups with no devices
       if (!group.devices || group.devices.length === 0) {
         console.log(`⚠️ Skipping material ${materialId} - no devices found`);
@@ -926,18 +972,90 @@ router.get('/compliance', async (req, res) => {
       
       if (deviceLocation) {
         if (deviceLocation.coordinates && Array.isArray(deviceLocation.coordinates)) {
+          const lat = deviceLocation.coordinates[1];
+          const lng = deviceLocation.coordinates[0];
+          
+          // Get address from coordinates if not already available
+          let address = deviceLocation.address;
+          logger.debug(`🗺️ [${materialId}] Location data:`, {
+            hasAddress: !!address,
+            address: address,
+            lat: lat,
+            lng: lng,
+            coordinates: deviceLocation.coordinates
+          });
+          
+          if (!address && lat && lng) {
+            // Check cache first
+            const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+            if (geocodingCache.has(cacheKey)) {
+              address = geocodingCache.get(cacheKey);
+              logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+            } else {
+              try {
+                logger.debug(`🗺️ [${materialId}] Geocoding coordinates: ${lat}, ${lng}`);
+                address = await OSMService.reverseGeocode(lat, lng);
+                // Cache the result
+                geocodingCache.set(cacheKey, address);
+                logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+              } catch (error) {
+                console.warn(`🗺️ [${materialId}] Geocoding failed for ${lat}, ${lng}:`, error.message);
+                address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                // Cache the fallback too
+                geocodingCache.set(cacheKey, address);
+              }
+            }
+          } else if (!address) {
+            // No coordinates available
+            address = 'Location not available';
+            console.log(`🗺️ [${materialId}] No coordinates available, using fallback`);
+          }
+          
           frontendDeviceLocation = {
-            lat: deviceLocation.coordinates[1],
-            lng: deviceLocation.coordinates[0],
+            lat: lat,
+            lng: lng,
             timestamp: deviceLocation.timestamp,
             speed: deviceLocation.speed,
             heading: deviceLocation.heading,
             accuracy: deviceLocation.accuracy,
-            address: deviceLocation.address
+            address: address || `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`
           };
         } else if (deviceLocation.lat !== undefined && deviceLocation.lng !== undefined) {
-          // Already in correct format
-          frontendDeviceLocation = deviceLocation;
+          // Already in correct format, but ensure address is available
+          let address = deviceLocation.address;
+          console.log(`🗺️ [${materialId}] Location data (direct format):`, {
+            hasAddress: !!address,
+            address: address,
+            lat: deviceLocation.lat,
+            lng: deviceLocation.lng
+          });
+          
+          if (!address) {
+            // Check cache first
+            const cacheKey = `${deviceLocation.lat.toFixed(6)},${deviceLocation.lng.toFixed(6)}`;
+            if (geocodingCache.has(cacheKey)) {
+              address = geocodingCache.get(cacheKey);
+              logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+            } else {
+              try {
+                console.log(`🗺️ [${materialId}] Geocoding coordinates: ${deviceLocation.lat}, ${deviceLocation.lng}`);
+                address = await OSMService.reverseGeocode(deviceLocation.lat, deviceLocation.lng);
+                // Cache the result
+                geocodingCache.set(cacheKey, address);
+                logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+              } catch (error) {
+                console.warn(`🗺️ [${materialId}] Geocoding failed for ${deviceLocation.lat}, ${deviceLocation.lng}:`, error.message);
+                address = `Location: ${deviceLocation.lat.toFixed(6)}, ${deviceLocation.lng.toFixed(6)}`;
+                // Cache the fallback too
+                geocodingCache.set(cacheKey, address);
+              }
+            }
+          }
+          
+          frontendDeviceLocation = {
+            ...deviceLocation,
+            address: address || `Location: ${deviceLocation.lat.toFixed(6)}, ${deviceLocation.lng.toFixed(6)}`
+          };
         }
       } else {
         // If no location data, create a default location
@@ -970,7 +1088,7 @@ router.get('/compliance', async (req, res) => {
       let primaryDeviceId = group.devices[0].device.deviceId; // Default to first device
       
       // Debug logging
-      console.log(`🔍 [compliance] Material ${materialId} - Slot status:`, {
+      logger.screenTracking(`🔍 [compliance] Material ${materialId} - Slot status:`, {
         slot1: group.slotStatus.slot1,
         slot2: group.slotStatus.slot2,
         devices: group.devices.map(d => ({ deviceId: d.device.deviceId, slotNumber: d.device.slotNumber }))
@@ -981,25 +1099,33 @@ router.get('/compliance', async (req, res) => {
         const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
         if (slot2Device) {
           primaryDeviceId = slot2Device.device.deviceId;
-          console.log(`🔍 [compliance] Using slot 2 device: ${primaryDeviceId}`);
+          logger.screenTracking(`🔍 [compliance] Using slot 2 device: ${primaryDeviceId}`);
         }
       } else if (group.slotStatus.slot1.online && !group.slotStatus.slot2.online) {
         // If only slot 1 is online, use slot 1 device ID
         const slot1Device = group.devices.find(d => d.device.slotNumber === 1);
         if (slot1Device) {
           primaryDeviceId = slot1Device.device.deviceId;
-          console.log(`🔍 [compliance] Using slot 1 device: ${primaryDeviceId}`);
+          logger.screenTracking(`🔍 [compliance] Using slot 1 device: ${primaryDeviceId}`);
         }
       } else if (group.slotStatus.slot1.online && group.slotStatus.slot2.online) {
         // If both slots are online, prefer slot 2 (the connected one)
         const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
         if (slot2Device) {
           primaryDeviceId = slot2Device.device.deviceId;
-          console.log(`🔍 [compliance] Using slot 2 device (both online): ${primaryDeviceId}`);
+          logger.screenTracking(`🔍 [compliance] Using slot 2 device (both online): ${primaryDeviceId}`);
         }
       } else {
-        console.log(`🔍 [compliance] Using default device: ${primaryDeviceId}`);
+        logger.screenTracking(`🔍 [compliance] Using default device: ${primaryDeviceId}`);
       }
+
+      // Get driver information for this material
+      const driverInfo = materialDriverMap.get(materialId);
+      
+      // Determine which device is the master (for analytics tracking)
+      const masterDeviceId = group.slotStatus.slot1?.online ? group.slotStatus.slot1.deviceId : 
+                            group.slotStatus.slot2?.online ? group.slotStatus.slot2.deviceId : 
+                            group.slotStatus.slot1?.deviceId || group.slotStatus.slot2?.deviceId;
 
       individualScreens.push({
         deviceId: primaryDeviceId, // Use the appropriate device ID based on online status
@@ -1026,6 +1152,13 @@ router.get('/compliance', async (req, res) => {
         slot1Status: slot1Status, // Individual slot 1 status
         slot2Status: slot2Status, // Individual slot 2 status
         slotStatus: group.slotStatus, // Include detailed slot status
+        // Store actual deviceIds for control commands
+        slot1DeviceId: group.slotStatus.slot1?.deviceId || null,
+        slot2DeviceId: group.slotStatus.slot2?.deviceId || null,
+        // Driver information
+        driverInfo: driverInfo || null,
+        // Master device for analytics tracking
+        masterDeviceId: masterDeviceId,
         screenMetrics: {
           ...group.screenMetrics,
           displayHours: deviceHours,
@@ -1035,7 +1168,7 @@ router.get('/compliance', async (req, res) => {
           volume: group.volume || 50,
           isDisplaying: isDeviceOnline,
           maintenanceMode: group.maintenanceMode || false,
-          currentAd: group.currentAd || null
+          currentAd: isDeviceOnline ? (group.currentAd || null) : null
         },
         alerts: group.alerts,
         // Add consolidated totals for display
@@ -1044,7 +1177,7 @@ router.get('/compliance', async (req, res) => {
         totalAdImpressions: group.totalAdImpressions,
         totalAdPlayTime: group.totalAdPlayTime
       });
-    });
+    }
 
     // Create material-level records for map display (one per material)
     const materialScreens = [];
@@ -1453,8 +1586,8 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
     const allDevices = await DeviceTracking.find(query).lean();
     
     // Debug: Check what we're getting from the database
-    console.log(`🔍 [adAnalytics] Found ${allDevices.length} devices from database`);
-    console.log(`🔍 [adAnalytics] First device structure:`, allDevices[0] ? Object.keys(allDevices[0]) : 'No devices');
+    logger.database(`🔍 [adAnalytics] Found ${allDevices.length} devices from database`);
+    logger.database(`🔍 [adAnalytics] First device structure:`, allDevices[0] ? Object.keys(allDevices[0]) : 'No devices');
     
     // Get real-time device status service
     const deviceStatusService = require('../services/deviceStatusService');
@@ -1480,7 +1613,7 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
           const lastSeen = deviceStatus?.lastSeen || slot.lastSeen || device.lastSeen;
           
           // Debug logging
-          console.log(`🔍 [adAnalytics] Device ${slot.deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
+          logger.database(`🔍 [adAnalytics] Device ${slot.deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
           
           analytics.push({
             deviceId: slot.deviceId,
@@ -1512,7 +1645,7 @@ router.get('/adAnalytics', checkAdminMiddleware, async (req, res) => {
         const lastSeen = deviceStatus?.lastSeen || device.lastSeen;
         
         // Debug logging
-        console.log(`🔍 [adAnalytics] Device ${deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
+        logger.database(`🔍 [adAnalytics] Device ${deviceId}: deviceStatus=`, deviceStatus, 'isOnline=', isOnline);
         
         analytics.push({
           deviceId: deviceId,
@@ -1930,26 +2063,8 @@ router.get('/screens', async (req, res) => {
     const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
     const twoMinutesAgo = new Date(now - 2 * 60 * 1000);
     
-    // Mark devices as offline if lastSeen is older than 2 minutes (less aggressive)
-    // BUT only if they don't have an active websocket connection
-    const allStatuses = deviceStatusService.getAllDeviceStatuses();
-    const activeWebSocketDevices = allStatuses
-      .filter(status => status.isOnline && status.source === 'websocket')
-      .map(status => status.deviceId);
-    
-    await DeviceTracking.updateMany(
-      { 
-        isOnline: true,
-        lastSeen: { $lt: twoMinutesAgo },
-        deviceId: { $nin: activeWebSocketDevices } // Exclude devices with active websocket
-      },
-      { 
-        $set: { 
-          isOnline: false
-        } 
-      },
-      { multi: true }
-    );
+    // Trust DeviceStatusManager for real-time status - no batch updates needed
+    // DeviceStatusManager handles WebSocket priority and timeout logic correctly
     
     // Clean up any stale sessions (older than 5 minutes)
     await DeviceTracking.updateMany(
@@ -2024,13 +2139,13 @@ router.get('/screens', async (req, res) => {
     }
     
     // Log the raw data for debugging
-    console.log('📋 Raw screens data from database:');
+    logger.verbose('📋 Raw screens data from database:');
     screens.forEach(screen => {
       const lastSeen = new Date(screen.lastSeen);
       const secondsAgo = (now - lastSeen) / 1000;
-      console.log(`  - ${screen.deviceId} (${screen.materialId}):`);
-      console.log(`    isOnline: ${screen.isOnline}`);
-      console.log(`    lastSeen: ${lastSeen} (${secondsAgo}s ago)`);
+      logger.verbose(`  - ${screen.deviceId} (${screen.materialId}):`);
+      logger.verbose(`    isOnline: ${screen.isOnline}`);
+      logger.verbose(`    lastSeen: ${lastSeen} (${secondsAgo}s ago)`);
     });
     
     // Update the isOnline status based on lastSeen
@@ -2055,25 +2170,22 @@ router.get('/screens', async (req, res) => {
             isActuallyOnline = deviceStatus.isOnline;
           }
           
-          // Log the status source for debugging
-          console.log(`🎯 [SCREEN TRACKING] Slot ${slot.slotNumber} (${slot.deviceId}) in ${screen.materialId}:`);
-          console.log(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
-          console.log(`  - Source: ${deviceStatus.source}`);
-          console.log(`  - Confidence: ${deviceStatus.confidence}`);
-          console.log(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
+          // Log the status source for debugging (only in verbose mode)
+          logger.screenTracking(`🎯 [SCREEN TRACKING] Slot ${slot.slotNumber} (${slot.deviceId}) in ${screen.materialId}:`);
+          logger.screenTracking(`  - Status: ${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`);
+          logger.screenTracking(`  - Source: ${deviceStatus.source}`);
+          logger.screenTracking(`  - Confidence: ${deviceStatus.confidence}`);
+          logger.screenTracking(`  - Last Seen: ${deviceStatus.lastSeen ? deviceStatus.lastSeen.toISOString() : 'Never'}`);
           
           const lastSeen = new Date(slot.lastSeen);
           const timeSinceLastSeen = (now - lastSeen) / 1000; // in seconds
           
-          // Override online status if timeout threshold is exceeded
-          if (timeSinceLastSeen > 120) {
-            isActuallyOnline = false;
-            console.log(`  - Overriding to OFFLINE due to timeout: ${timeSinceLastSeen}s > 120s`);
-          }
+          // Trust DeviceStatusManager output - no timeout override
+          // DeviceStatusManager already handles WebSocket priority correctly
           
           // Check device status based on last seen time
-          console.log(`  - Final isOnline: ${isActuallyOnline}`);
-          console.log(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
+          logger.screenTracking(`  - Final isOnline: ${isActuallyOnline}`);
+          logger.screenTracking(`  - Timeout check: ${timeSinceLastSeen} <= 120 = ${timeSinceLastSeen <= 120}`);
           
           // Determine display status based on actual online status
           let displayStatus;
@@ -2121,11 +2233,11 @@ router.get('/screens', async (req, res) => {
       return carData;
     }).flat(); // Flatten the array of arrays
     
-    console.log('Screens data mapping result:', screensData);
-    console.log('Screens data mapping result length:', screensData.length);
+    logger.verbose('Screens data mapping result:', screensData);
+    logger.verbose('Screens data mapping result length:', screensData.length);
     
     // Debug: Log the processed screens data
-    console.log('Processed screens data:', JSON.stringify(screensData, null, 2));
+    logger.verbose('Processed screens data:', JSON.stringify(screensData, null, 2));
 
     res.json({
       success: true,

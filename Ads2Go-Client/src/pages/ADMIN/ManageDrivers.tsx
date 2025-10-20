@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { useLocation } from 'react-router-dom';
 import { X, Trash, Eye, ChevronLeft, ChevronDown, Car, Bike, User, IdCard, CalendarClock, Mail, CalendarCheck2, Phone, MapPin, Check, CheckCircle, AlertCircle, XCircle, ChevronRight } from 'lucide-react';
 import { GET_ALL_DRIVERS } from '../../graphql/admin/queries/manageDrivers';
 import { APPROVE_DRIVER, REJECT_DRIVER, DELETE_DRIVER } from '../../graphql/admin/mutations/manageDrivers';
@@ -152,6 +153,7 @@ const generateYearOptions = () => {
 const yearOptions = generateYearOptions();
 
 const ManageDrivers: React.FC = () => {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
@@ -190,6 +192,15 @@ const ManageDrivers: React.FC = () => {
     handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Check URL parameters for status filter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const statusParam = urlParams.get('status');
+    if (statusParam === 'pending') {
+      setSelectedStatusFilter('Pending');
+    }
+  }, [location.search]);
 
   // Toast notification state
   const [toasts, setToasts] = useState<Array<{

@@ -3,6 +3,8 @@ const dailyArchiveJobV2 = require('./dailyArchiveJobV2');
 const hoursUpdateService = require('../services/hoursUpdateService');
 const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
 const driverSalaryJob = require('./driverSalaryJob');
+const deviceHoursNotificationService = require('../services/deviceHoursNotificationService');
+const logger = require('../utils/logger');
 
 class CronJobs {
   constructor() {
@@ -30,10 +32,10 @@ class CronJobs {
 
     // Frequent archive job - runs every 3 minutes to capture real-time updates
     const frequentArchiveTask = cron.schedule('*/3 * * * *', async () => {
-      console.log('⏰ Frequent archive job triggered (every 3 minutes)');
+      logger.database('⏰ Frequent archive job triggered (every 3 minutes)');
       try {
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Frequent archive job completed successfully');
+        logger.database('✅ Frequent archive job completed successfully');
       } catch (error) {
         console.error('❌ Frequent archive job failed:', error);
       }
@@ -47,7 +49,7 @@ class CronJobs {
       console.log('⏰ Hourly archive job triggered');
       try {
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Hourly archive job completed successfully');
+        logger.database('✅ Hourly archive job completed successfully');
       } catch (error) {
         console.error('❌ Hourly archive job failed:', error);
       }
@@ -62,7 +64,7 @@ class CronJobs {
       try {
         // Archive the current day's data before reset
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Daily archive job (V2) completed successfully');
+        logger.database('✅ Daily archive job (V2) completed successfully');
       } catch (error) {
         console.error('❌ Daily archive job (V2) failed:', error);
       }
@@ -76,6 +78,8 @@ class CronJobs {
       console.log('🔄 Daily reset job triggered at midnight (Philippines time)');
       try {
         await this.resetAllDeviceTracking();
+        // Reset daily notification tracking
+        deviceHoursNotificationService.resetDailyTracking();
         console.log('✅ Daily reset job completed successfully');
       } catch (error) {
         console.error('❌ Daily reset job failed:', error);
@@ -91,7 +95,7 @@ class CronJobs {
       try {
         // Archive the fresh reset data for the new day
         await dailyArchiveJobV2.archiveDailyData();
-        console.log('✅ Daily fresh data archive job completed successfully');
+        logger.database('✅ Daily fresh data archive job completed successfully');
       } catch (error) {
         console.error('❌ Daily fresh data archive job failed:', error);
       }
@@ -153,7 +157,22 @@ class CronJobs {
       timezone: 'UTC'
     });
 
+    // 8-hour milestone check job - runs every 30 minutes to check for 8-hour achievements
+    const eightHourCheckTask = cron.schedule('*/30 * * * *', async () => {
+      console.log('🎯 8-hour milestone check job triggered');
+      try {
+        await deviceHoursNotificationService.checkAllDevicesFor8HourMilestone();
+        console.log('✅ 8-hour milestone check completed');
+      } catch (error) {
+        console.error('❌ 8-hour milestone check job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
     this.jobs.set('onlineHours', onlineHoursTask);
+    this.jobs.set('eightHourCheck', eightHourCheckTask);
 
     // Start all cron jobs
     this.jobs.forEach((job, name) => {
@@ -271,7 +290,7 @@ class CronJobs {
       
       // Find all DeviceTracking records
       const devices = await DeviceTracking.find({});
-      console.log(`📱 Found ${devices.length} DeviceTracking records to reset`);
+      logger.database(`📱 Found ${devices.length} DeviceTracking records to reset`);
       
       let resetCount = 0;
       

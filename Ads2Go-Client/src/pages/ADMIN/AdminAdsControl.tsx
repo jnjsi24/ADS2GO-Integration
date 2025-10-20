@@ -4,24 +4,21 @@ import {
   Pause, 
   Square, 
   RotateCcw, 
-  RefreshCw, 
   AlertTriangle, 
   Lock, 
   Unlock,
   BarChart3,
-  Eye,
   Volume2,
   SkipForward,
   Monitor,
-  TrendingUp,
   AlertCircle,
   XCircle,
   PlayCircle,
-  Wifi,
   Sun,
-  Upload,
   Loader2,
-  FileVideo
+  FileVideo,
+  Wifi,
+  RefreshCw
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
@@ -32,12 +29,9 @@ import { createGraphQLService } from '../../services/graphQLService';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
-import ScreenControl from './tabs/adminAdsControl/ScreenControl';
 import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
 import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
-import Alerts from './tabs/adminAdsControl/Alerts';
 import { AdminLoader } from "../../components/ProtectedRoute";
-import SubtleLoader from "../../components/SubtleLoader";
 
 const AdminAdsControl: React.FC = () => {
   // Component loaded
@@ -50,6 +44,16 @@ const AdminAdsControl: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedScreen, setSelectedScreen] = useState<string | null>(null);
   
+  // Read URL parameters to set initial tab
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam && ['dashboard', 'company-ads', 'notifications'].includes(tabParam)) {
+      setActiveTab(tabParam);
+      console.log('🔗 URL tab parameter detected:', tabParam, 'Switching to tab:', tabParam);
+    }
+  }, []);
+  
   // Real data states
   const [screens, setScreens] = useState<ScreenData[]>([]);
   const [adAnalytics, setAdAnalytics] = useState<AdAnalytics | null>(null);
@@ -61,6 +65,9 @@ const AdminAdsControl: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isCurrentlyPlaying, setIsCurrentlyPlaying] = useState(true); // Default to true since ads play automatically
   const [isLocked, setIsLocked] = useState(false); // Track lock/unlock state
+  const [devicePlayStates, setDevicePlayStates] = useState<Record<string, boolean>>({}); // Track individual device play states - default to true (playing) since ads auto-play
+  const [deviceLockStates, setDeviceLockStates] = useState<Record<string, boolean>>({}); // Track individual device lock states
+  const [isUserControlling, setIsUserControlling] = useState(false); // Track if user is actively controlling devices
   const [showScreenDetails, setShowScreenDetails] = useState(false);
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [isDeviceModalOpen, setIsDeviceModalOpen] = useState(false);
@@ -161,7 +168,10 @@ const AdminAdsControl: React.FC = () => {
                   statusText: statusText,
                   slot1Status: slot1Status,
                   slot2Status: slot2Status,
-                  slotStatus: screen.slotStatus // Keep original slot status for reference
+                  slotStatus: screen.slotStatus, // Keep original slot status for reference
+                  // Store actual deviceIds for control commands
+                  slot1DeviceId: screen.slotStatus.slot1?.deviceId,
+                  slot2DeviceId: screen.slotStatus.slot2?.deviceId
                 };
               } else {
                 // Single device without slots
@@ -280,7 +290,10 @@ const AdminAdsControl: React.FC = () => {
                   statusText: statusText,
                   slot1Status: slot1Status,
                   slot2Status: slot2Status,
-                  slotStatus: screen.slotStatus // Keep original slot status for reference
+                  slotStatus: screen.slotStatus, // Keep original slot status for reference
+                  // Store actual deviceIds for control commands
+                  slot1DeviceId: screen.slotStatus.slot1?.deviceId,
+                  slot2DeviceId: screen.slotStatus.slot2?.deviceId
                 };
               } else {
                 // Single device without slots
@@ -338,75 +351,172 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     fetchData();
     
-    // Removed aggressive auto-refresh - rely on WebSocket updates for real-time data
-    // Users can manually refresh using the refresh button if needed
+    // Check WebSocket connection status
+    console.log('🔌 [AdminAdsControl] WebSocket connected:', playbackWebSocketService.isWebSocketConnected());
+    
+    // Add a test to see if we can receive WebSocket messages
+    setTimeout(() => {
+      console.log('🔌 [AdminAdsControl] WebSocket status after 5 seconds:', playbackWebSocketService.isWebSocketConnected());
+    }, 5000);
+    
+    // Add smart auto-refresh every 10 seconds that pauses during user control
+    const autoRefreshInterval = setInterval(() => {
+      if (!isUserControlling) {
+        console.log('🔄 [AdminAdsControl] Auto-refresh triggered');
+        autoRefreshData();
+      } else {
+        console.log('🔄 [AdminAdsControl] Auto-refresh skipped - user is controlling devices');
+      }
+    }, 10000); // 10 seconds
     
     // Subscribe to real-time WebSocket updates for immediate processing
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
-      console.log('🎬 [AdminAdsControl] Received real-time playback update:', {
+      console.log('🎬 [AdminAdsControl] Received real-time update:', {
+        type: update.type,
         deviceId: update.deviceId,
         adTitle: update.adTitle,
         state: update.state,
         currentTime: update.currentTime,
         progress: update.progress,
-        timestamp: update.timestamp
+        timestamp: update.timestamp,
+        isOnline: (update as any).isOnline,
+        lastSeen: (update as any).lastSeen,
+        devices: (update as any).devices
       });
       
-      // Process updates immediately for perfect real-time sync
-      // Update the screens state with real-time data immediately
-      setScreens(prevScreens => {
-        return prevScreens.map(screen => {
-          if (screen.deviceId === update.deviceId) {
-            console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} with real-time data:`, {
-              currentTime: update.currentTime,
-              progress: update.progress,
-              state: update.state,
-              timestamp: update.timestamp
-            });
-            
-            const updatedScreen: ScreenData = {
-              ...screen,
-              screenMetrics: {
-                isDisplaying: screen.screenMetrics?.isDisplaying ?? true,
-                brightness: screen.screenMetrics?.brightness ?? 100,
-                volume: screen.screenMetrics?.volume ?? 100,
-                adPlayCount: screen.screenMetrics?.adPlayCount ?? 0,
-                maintenanceMode: screen.screenMetrics?.maintenanceMode ?? false,
-                displayHours: screen.screenMetrics?.displayHours ?? 0,
-                adPerformance: screen.screenMetrics?.adPerformance ?? [],
-                lastAdPlayed: screen.screenMetrics?.lastAdPlayed ?? '',
-                ...screen.screenMetrics,
-                currentAd: {
-                  adId: update.adId,
-                  adTitle: update.adTitle,
-                  adDuration: update.duration,
-                  startTime: update.timestamp,
-                  currentTime: update.currentTime,
-                  state: update.state,
-                  progress: update.progress
+      // Handle different types of WebSocket updates
+      if (update.type === 'adPlaybackUpdate') {
+        // Process ad playback updates
+        setScreens(prevScreens => {
+          return prevScreens.map(screen => {
+            // Check if the device ID matches either slot1 or slot2 device ID
+            const isMatchingDevice = screen.slot1DeviceId === update.deviceId || screen.slot2DeviceId === update.deviceId;
+            if (isMatchingDevice) {
+              console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} with playback data:`, {
+                currentTime: update.currentTime,
+                progress: update.progress,
+                state: update.state,
+                timestamp: update.timestamp
+              });
+              
+              const updatedScreen: ScreenData = {
+                ...screen,
+                screenMetrics: {
+                  isDisplaying: screen.screenMetrics?.isDisplaying ?? true,
+                  brightness: screen.screenMetrics?.brightness ?? 100,
+                  volume: screen.screenMetrics?.volume ?? 100,
+                  adPlayCount: screen.screenMetrics?.adPlayCount ?? 0,
+                  maintenanceMode: screen.screenMetrics?.maintenanceMode ?? false,
+                  displayHours: screen.screenMetrics?.displayHours ?? 0,
+                  adPerformance: screen.screenMetrics?.adPerformance ?? [],
+                  lastAdPlayed: screen.screenMetrics?.lastAdPlayed ?? '',
+                  ...screen.screenMetrics,
+                  currentAd: {
+                    adId: update.adId || '',
+                    adTitle: update.adTitle || '',
+                    adDuration: update.duration || 0,
+                    startTime: update.timestamp || new Date().toISOString(),
+                    currentTime: update.currentTime || 0,
+                    state: update.state || 'playing',
+                    progress: update.progress || 0
+                  }
                 }
-              }
-            };
-            
-            // Force immediate re-render by creating new object reference
-            return updatedScreen;
-          }
-          return screen;
+              };
+              
+              return updatedScreen;
+            }
+            return screen;
+          });
         });
-      });
+      } else if (update.type === 'deviceUpdate') {
+        // Process device status updates (online/offline)
+        console.log(`📱 [AdminAdsControl] Device status update:`, {
+          deviceId: update.deviceId,
+          isOnline: update.isOnline,
+          lastSeen: update.lastSeen
+        });
+        
+        setScreens(prevScreens => {
+          return prevScreens.map(screen => {
+            // Match by deviceId, materialId, or slot device IDs
+            const matchesDevice = screen.deviceId === update.deviceId || 
+                                 screen.materialId === update.deviceId ||
+                                 screen.displayId === update.deviceId ||
+                                 screen.slot1DeviceId === update.deviceId ||
+                                 screen.slot2DeviceId === update.deviceId;
+            
+            if (matchesDevice) {
+              console.log(`🔄 [AdminAdsControl] Updating screen ${screen.deviceId} (materialId: ${screen.materialId}) status to:`, update.isOnline ? 'ONLINE' : 'OFFLINE');
+              
+              // Determine which slot this device belongs to
+              const isSlot1Device = screen.slot1DeviceId === update.deviceId;
+              const isSlot2Device = screen.slot2DeviceId === update.deviceId;
+              
+              const updatedScreen: ScreenData = {
+                ...screen,
+                isOnline: update.isOnline || screen.isOnline, // Keep online if any slot is online
+                lastSeen: update.lastSeen ? new Date(update.lastSeen).toISOString() : screen.lastSeen,
+                // Update specific slot status
+                slot1Status: isSlot1Device ? (update.isOnline ? 'ONLINE' : 'OFFLINE') : screen.slot1Status,
+                slot2Status: isSlot2Device ? (update.isOnline ? 'ONLINE' : 'OFFLINE') : screen.slot2Status,
+                statusText: screen.slot1Status && screen.slot2Status ? 
+                  `• Slot 1: ${isSlot1Device ? (update.isOnline ? 'ONLINE' : 'OFFLINE') : screen.slot1Status} | • Slot 2: ${isSlot2Device ? (update.isOnline ? 'ONLINE' : 'OFFLINE') : screen.slot2Status}` :
+                  screen.statusText
+              };
+              
+              return updatedScreen;
+            }
+            return screen;
+          });
+        });
+      } else if (update.type === 'deviceList') {
+        // Process device list updates
+        console.log(`📋 [AdminAdsControl] Device list update:`, update.devices);
+        
+        if (update.devices && Array.isArray(update.devices)) {
+          setScreens(prevScreens => {
+            const updatedScreens = [...prevScreens];
+
+            update.devices?.forEach(device => {
+              // Match by deviceId, materialId, or displayId
+              const screenIndex = updatedScreens.findIndex(screen => 
+                screen.deviceId === device.deviceId || 
+                screen.materialId === device.deviceId ||
+                screen.displayId === device.deviceId
+              );
+              
+              if (screenIndex >= 0) {
+                console.log(`🔄 [AdminAdsControl] Updating screen ${device.deviceId} from device list:`, {
+                  isOnline: device.isConnected,
+                  materialId: device.materialId
+                });
+
+                updatedScreens[screenIndex] = {
+                  ...updatedScreens[screenIndex],
+                  isOnline: device.isConnected,
+                  lastSeen: new Date().toISOString()
+                };
+              }
+            });
+
+            return updatedScreens;
+          });
+        }
+      }
     });
     
     return () => {
-      // clearInterval(interval); // No longer needed
+      clearInterval(autoRefreshInterval);
       unsubscribe();
     };
-  }, [fetchData, autoRefreshData]);
+  }, [fetchData, autoRefreshData, isUserControlling]);
 
   // Toggle play/pause handler
   const handleTogglePlayPause = async () => {
     try {
       const action = isCurrentlyPlaying ? 'pause' : 'play';
       setActionLoading(action);
+      setIsUserControlling(true); // Mark that user is controlling devices
       
       let result;
       if (isCurrentlyPlaying) {
@@ -428,6 +538,7 @@ const AdminAdsControl: React.FC = () => {
       setError(`Failed to ${isCurrentlyPlaying ? 'pause' : 'play'} all screens`);
     } finally {
       setActionLoading(null);
+      setIsUserControlling(false); // Clear control state
     }
   };
 
@@ -436,6 +547,7 @@ const AdminAdsControl: React.FC = () => {
     try {
       const action = isLocked ? 'unlock' : 'lock';
       setActionLoading(action);
+      setIsUserControlling(true); // Mark that user is controlling devices
       
       let result;
       if (isLocked) {
@@ -457,6 +569,7 @@ const AdminAdsControl: React.FC = () => {
       setError(`Failed to ${isLocked ? 'unlock' : 'lock'} all screens`);
     } finally {
       setActionLoading(null);
+      setIsUserControlling(false); // Clear control state
     }
   };
 
@@ -471,27 +584,50 @@ const AdminAdsControl: React.FC = () => {
           console.log(`🔄 [AdminAdsControl] Received ${message.type} message, updating state`);
           setIsCurrentlyPlaying(message.type === 'resumeAll');
         }
+        
+        // Listen for individual device play/pause messages
+        if (message.type === 'adPlaybackUpdate' && message.deviceId) {
+          const isPlaying = message.state === 'playing';
+          console.log(`🎬 [AdminAdsControl] Device ${message.deviceId} state: ${message.state} (playing: ${isPlaying})`);
+          
+          // Find the material ID for this device
+          const materialId = screens.find(screen => 
+            screen.slot1DeviceId === message.deviceId || screen.slot2DeviceId === message.deviceId
+          )?.materialId; // Use materialId field
+          
+          if (materialId) {
+            console.log(`🎬 [AdminAdsControl] Updating material ${materialId} play state: ${isPlaying}`);
+            setDevicePlayStates(prev => {
+              const newStates = {
+                ...prev,
+                [materialId]: isPlaying
+              };
+              
+              // Update master control state based on overall playing status
+              const hasAnyPlaying = Object.values(newStates).some(playing => playing === true);
+              setIsCurrentlyPlaying(hasAnyPlaying);
+              console.log(`🎬 [AdminAdsControl] Master control state updated: ${hasAnyPlaying ? 'Playing' : 'Paused'}`);
+              
+              return newStates;
+            });
+          } else {
+            console.warn(`🎬 [AdminAdsControl] Could not find material ID for device ${message.deviceId}`);
+          }
+        }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
     };
 
-    // Add WebSocket listener if available
-    if (playbackWebSocketService && playbackWebSocketService.ws) {
-      playbackWebSocketService.ws.addEventListener('message', handleWebSocketMessage);
-      
-      return () => {
-        if (playbackWebSocketService.ws) {
-          playbackWebSocketService.ws.removeEventListener('message', handleWebSocketMessage);
-        }
-      };
-    }
+    // WebSocket messages are handled through the subscribe callback above
+    // No need for additional event listeners
   }, []);
 
   // Action handlers
   const handleBulkAction = async (action: string) => {
     try {
       setActionLoading(action);
+      setIsUserControlling(true); // Mark that user is controlling devices
       let result;
       
       // Use API service for bulk actions
@@ -520,6 +656,62 @@ const AdminAdsControl: React.FC = () => {
         case 'unlock':
           result = await apiService.unlockAllScreens();
           break;
+        case 'lock':
+          // Lock all selected devices using individual device lock (same as master control logic)
+          let lockedCount = 0;
+          for (const deviceId of selectedScreens) {
+            try {
+              const screen = screens.find(s => s.deviceId === deviceId);
+              if (screen) {
+                // Get both slot devices
+                const slot1DeviceId = screen.slot1DeviceId;
+                const slot2DeviceId = screen.slot2DeviceId;
+                
+                if (slot1DeviceId) {
+                  const lockResult = await graphQLService.lockScreen(slot1DeviceId);
+                  if (lockResult.success) lockedCount++;
+                }
+                if (slot2DeviceId) {
+                  const lockResult = await graphQLService.lockScreen(slot2DeviceId);
+                  if (lockResult.success) lockedCount++;
+                }
+                
+                setDeviceLockStates(prev => ({ ...prev, [deviceId]: true }));
+              }
+            } catch (error) {
+              console.error(`Error locking device ${deviceId}:`, error);
+            }
+          }
+          result = { success: true, message: `Lock commands sent to ${lockedCount} devices` };
+          break;
+        case 'unlock':
+          // Unlock all selected devices using individual device unlock (same as master control logic)
+          let unlockedCount = 0;
+          for (const deviceId of selectedScreens) {
+            try {
+              const screen = screens.find(s => s.deviceId === deviceId);
+              if (screen) {
+                // Get both slot devices
+                const slot1DeviceId = screen.slot1DeviceId;
+                const slot2DeviceId = screen.slot2DeviceId;
+                
+                if (slot1DeviceId) {
+                  const unlockResult = await graphQLService.unlockScreen(slot1DeviceId);
+                  if (unlockResult.success) unlockedCount++;
+                }
+                if (slot2DeviceId) {
+                  const unlockResult = await graphQLService.unlockScreen(slot2DeviceId);
+                  if (unlockResult.success) unlockedCount++;
+                }
+                
+                setDeviceLockStates(prev => ({ ...prev, [deviceId]: false }));
+              }
+            } catch (error) {
+              console.error(`Error unlocking device ${deviceId}:`, error);
+            }
+          }
+          result = { success: true, message: `Unlock commands sent to ${unlockedCount} devices` };
+          break;
         default:
           throw new Error('Unknown action');
       }
@@ -532,45 +724,182 @@ const AdminAdsControl: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Action failed');
     } finally {
       setActionLoading(null);
+      setIsUserControlling(false); // Clear control state
     }
   };
 
   const handleScreenAction = async (deviceId: string, action: string, value?: any) => {
     try {
       setActionLoading(`${deviceId}-${action}`);
-      let result;
+      setIsUserControlling(true); // Mark that user is controlling devices
       
-      switch (action) {
-        case 'metrics':
-          result = await apiService.updateScreenMetrics(deviceId, value);
-          break;
-        case 'start-session':
-          result = await apiService.startScreenSession(deviceId);
-          break;
-        case 'end-session':
-          result = await apiService.endScreenSession(deviceId);
-          break;
-        case 'track-ad':
-          result = await apiService.trackAdPlayback(deviceId, value.adId, value.adTitle, value.adDuration);
-          break;
-        case 'end-ad':
-          result = await apiService.endAdPlayback(deviceId);
-          break;
-        case 'driver-activity':
-          result = await apiService.updateDriverActivity(deviceId, value);
-          break;
-        default:
-          throw new Error('Unknown action');
+      // Find the screen data to get slot information
+      const screen = screens.find(s => s.deviceId === deviceId);
+      if (!screen) {
+        throw new Error(`Screen ${deviceId} not found`);
       }
       
-      if (result.success) {
+      // Get actual deviceIds for both slots
+      const slot1DeviceId = screen.slot1DeviceId;
+      const slot2DeviceId = screen.slot2DeviceId;
+      
+      console.log(`🎯 [ScreenAction] ${action} for material ${deviceId}:`, {
+        slot1DeviceId,
+        slot2DeviceId,
+        slot1Online: screen.slot1Status === 'ONLINE',
+        slot2Online: screen.slot2Status === 'ONLINE'
+      });
+      
+      let results = [];
+      
+      // Control both slots if they have deviceIds
+      const deviceIdsToControl = [];
+      if (slot1DeviceId) deviceIdsToControl.push(slot1DeviceId);
+      if (slot2DeviceId) deviceIdsToControl.push(slot2DeviceId);
+      
+      if (deviceIdsToControl.length === 0) {
+        throw new Error('No registered devices found for this material');
+      }
+      
+      // Use direct device control for play/pause/stop/lock/unlock actions (same as master control)
+      if (['play', 'pause', 'stop', 'lock', 'unlock'].includes(action)) {
+        try {
+          console.log(`🎯 [ScreenAction] Using direct device control for ${action} on material ${deviceId}`);
+          
+          // Send control command to each device individually (same logic as master control)
+          for (const actualDeviceId of deviceIdsToControl) {
+            try {
+              let result;
+              
+              switch (action) {
+                case 'play':
+                  result = await graphQLService.playScreen(actualDeviceId);
+                  break;
+                case 'pause':
+                  result = await graphQLService.pauseScreen(actualDeviceId);
+                  break;
+                case 'stop':
+                  result = await graphQLService.stopScreen(actualDeviceId);
+                  break;
+                case 'lock':
+                  result = await graphQLService.lockScreen(actualDeviceId);
+                  if (result.success) {
+                    setDeviceLockStates(prev => ({ ...prev, [deviceId]: true }));
+                  }
+                  break;
+                case 'unlock':
+                  result = await graphQLService.unlockScreen(actualDeviceId);
+                  if (result.success) {
+                    setDeviceLockStates(prev => ({ ...prev, [deviceId]: false }));
+                  }
+                  break;
+                default:
+                  throw new Error('Unknown action');
+              }
+              
+              results.push({ deviceId: actualDeviceId, result });
+              
+              if (result.success) {
+                console.log(`✅ [ScreenAction] ${action} successful for device ${actualDeviceId}:`, result.message);
+              } else {
+                console.error(`❌ [ScreenAction] ${action} failed for device ${actualDeviceId}:`, result.message);
+              }
+            } catch (err) {
+              console.error(`❌ [ScreenAction] Error ${action} device ${actualDeviceId}:`, err);
+              results.push({ deviceId: actualDeviceId, error: err instanceof Error ? err.message : 'Unknown error' });
+            }
+          }
+        } catch (err) {
+          console.error(`❌ [ScreenAction] Error with direct device control ${action} for material ${deviceId}:`, err);
+          results.push({ deviceId: 'all', error: err instanceof Error ? err.message : 'Unknown error' });
+        }
+      } else {
+        // Execute action on all available slots for non-sync actions
+        for (const actualDeviceId of deviceIdsToControl) {
+          try {
+            let result;
+            
+            switch (action) {
+              case 'metrics':
+                result = await apiService.updateScreenMetrics(actualDeviceId, value);
+                break;
+              case 'start-session':
+                result = await apiService.startScreenSession(actualDeviceId);
+                break;
+              case 'end-session':
+                result = await apiService.endScreenSession(actualDeviceId);
+                break;
+              case 'track-ad':
+                result = await apiService.trackAdPlayback(actualDeviceId, value.adId, value.adTitle, value.adDuration);
+                break;
+              case 'end-ad':
+                result = await apiService.endAdPlayback(actualDeviceId);
+                break;
+              case 'driver-activity':
+                result = await apiService.updateDriverActivity(actualDeviceId, value);
+                break;
+              default:
+                throw new Error('Unknown action');
+            }
+            
+            results.push({ deviceId: actualDeviceId, result });
+            
+            if (result.success) {
+              console.log(`✅ [ScreenAction] ${action} successful for device ${actualDeviceId}:`, result.message);
+            } else {
+              console.error(`❌ [ScreenAction] ${action} failed for device ${actualDeviceId}:`, result.message);
+            }
+          } catch (err) {
+            console.error(`❌ [ScreenAction] Error ${action} device ${actualDeviceId}:`, err);
+            results.push({ deviceId: actualDeviceId, error: err instanceof Error ? err.message : 'Unknown error' });
+          }
+        }
+      }
+      
+      // Check if any action succeeded
+      const successCount = results.filter(r => r.result?.success).length;
+      const totalCount = results.length;
+      
+      if (successCount > 0) {
+        console.log(`✅ [ScreenAction] ${action} completed: ${successCount}/${totalCount} devices successful`);
+        
+        // Update device play states for the material (not individual devices)
+        if (action === 'play') {
+          setDevicePlayStates(prev => {
+            const newStates = { ...prev, [deviceId]: true };
+            // Update master control state - if any device is playing, master should show "pause"
+            const hasAnyPlaying = Object.values(newStates).some(playing => playing === true);
+            setIsCurrentlyPlaying(hasAnyPlaying);
+            return newStates;
+          });
+        } else if (action === 'pause' || action === 'stop') {
+          setDevicePlayStates(prev => {
+            const newStates = { ...prev, [deviceId]: false };
+            // Update master control state - if all devices are paused, master should show "play"
+            const hasAnyPlaying = Object.values(newStates).some(playing => playing === true);
+            setIsCurrentlyPlaying(hasAnyPlaying);
+            return newStates;
+          });
+        }
+        
         // Refresh data after successful action
         await fetchData();
+        
+        if (successCount < totalCount) {
+          // This is actually a success with some devices offline - show as info, not error
+          console.log(`✅ [ScreenAction] Partial success: ${action} worked on ${successCount}/${totalCount} devices (${totalCount - successCount} devices offline)`);
+        }
+      } else {
+        const errorMessages = results.map(r => r.error || r.result?.message).filter(Boolean);
+        throw new Error(`Failed to ${action} all devices: ${errorMessages.join(', ')}`);
       }
+      
     } catch (err) {
+      console.error(`Error ${action} material ${deviceId}:`, err);
       setError(err instanceof Error ? err.message : 'Action failed');
     } finally {
       setActionLoading(null);
+      setIsUserControlling(false); // Clear control state
     }
   };
 
@@ -678,6 +1007,13 @@ const AdminAdsControl: React.FC = () => {
                 <span>Refreshing data...</span>
               </div>
             )}
+            {/* Show when auto-refresh is paused due to user control */}
+            {isUserControlling && (
+              <div className="flex items-center text-xs text-orange-500 mt-1">
+                <div className="w-2 h-2 bg-orange-400 rounded-full mr-2"></div>
+                <span>Auto-refresh paused - user controlling devices</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -700,6 +1036,96 @@ const AdminAdsControl: React.FC = () => {
           <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
         </div>
       </div>
+
+      {/* Online Screens */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-green-100 rounded-full">
+            <Wifi className="h-5 w-5 text-green-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Online Screens</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-green-600">
+            {screens.filter(s => s.isOnline).length}
+          </p>
+        </div>
+      </div>
+
+      {/* Playing Ads */}
+      <div className="bg-white p-4 rounded-md shadow-md">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-blue-100 rounded-full">
+            <PlayCircle className="h-5 w-5 text-blue-600" />
+          </div>
+          <p className="text-sm font-medium text-gray-600">Playing Ads</p>
+        </div>
+        <div className="pl-10 mt-1">
+          <p className="text-2xl font-semibold text-blue-600">
+            {screens.filter(s => {
+              const currentAd = s.screenMetrics?.currentAd;
+              return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
+            }).length}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+      
+      {/* Master Controls */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-3">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Monitor className="w-5 h-5 mr-2" />
+          Master Controls
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <button 
+            onClick={() => handleBulkAction('sync')}
+            disabled={actionLoading === 'sync'}
+            className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {actionLoading === 'sync' ? <Loader2 className="w-6 h-6 text-blue-600 mb-2 animate-spin" /> : <Monitor className="w-6 h-6 text-blue-600 mb-2" />}
+            <span className="text-sm font-medium text-blue-600">Sync All</span>
+          </button>
+          <button 
+            onClick={handleTogglePlayPause}
+            disabled={actionLoading === 'play' || actionLoading === 'pause'}
+            className={`flex flex-col items-center p-4 rounded-lg transition-colors disabled:opacity-50 ${
+              isCurrentlyPlaying 
+                ? 'bg-yellow-50 hover:bg-yellow-100' 
+                : 'bg-green-50 hover:bg-green-100'
+            }`}
+          >
+            {actionLoading === 'play' || actionLoading === 'pause' ? (
+              <Loader2 className={`w-6 h-6 mb-2 animate-spin ${
+                isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+              }`} />
+            ) : isCurrentlyPlaying ? (
+              <Pause className="w-6 h-6 text-yellow-600 mb-2" />
+            ) : (
+              <Play className="w-6 h-6 text-green-600 mb-2" />
+            )}
+            <span className={`text-sm font-medium ${
+              isCurrentlyPlaying ? 'text-yellow-600' : 'text-green-600'
+            }`}>
+              {isCurrentlyPlaying ? 'Pause All' : 'Play All'}
+            </span>
+          </button>
+        </div>
+
+        {/* Total Screens */}
+        <div className="bg-white p-4 rounded-md shadow-md">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gray-100 rounded-full">
+              <Monitor className="h-5 w-5 text-gray-600" />
+            </div>
+            <p className="text-sm font-medium text-gray-600">Total Screens</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">{screens.length}</p>
+          </div>
+        </div>
 
       {/* Online Screens */}
       <div className="bg-white p-4 rounded-md shadow-md">
@@ -812,7 +1238,6 @@ const AdminAdsControl: React.FC = () => {
       </div>
     </div>
   </div>
-</div>
 
       {/* Tabs */}
       <div className="mb-8">
@@ -821,7 +1246,7 @@ const AdminAdsControl: React.FC = () => {
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
               { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
-              { id: 'notifications', label: 'Notifications', icon: AlertTriangle },
+              { id: 'notifications', label: 'Notifications', icon: AlertTriangle }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -850,29 +1275,22 @@ const AdminAdsControl: React.FC = () => {
               selectedScreens={selectedScreens}
               lastRefresh={lastRefresh}
               isRefreshing={isRefreshing}
-              onRefresh={() => fetchData(true)}
+              isCurrentlyPlaying={isCurrentlyPlaying}
               onSelectAll={handleSelectAll}
               onDeselectAll={handleDeselectAll}
+              onRefresh={() => fetchData(true)}
               onScreenSelect={handleScreenSelect}
               onScreenClick={handleScreenClick}
+              onScreenAction={handleScreenAction}
               onMaterialClick={handleMaterialClick}
               onBulkAction={handleBulkAction}
               getStatusIcon={getStatusIcon}
               getStatusText={getStatusText}
               formatTime={formatTime}
+              devicePlayStates={devicePlayStates}
+              deviceLockStates={deviceLockStates}
             />
           )}
-
-          {activeTab === 'screens' && (
-            <ScreenControl
-              screens={screens}
-              onScreenAction={handleScreenAction}
-              getStatusIcon={getStatusIcon}
-              getStatusText={getStatusText}
-              formatTime={formatTime}
-            />
-          )}
-
 
           {activeTab === 'company-ads' && (
             <CompanyAdsManagement />
@@ -880,20 +1298,6 @@ const AdminAdsControl: React.FC = () => {
 
           {activeTab === 'notifications' && (
             <NotificationDashboard />
-          )}
-
-          {activeTab === 'alerts' && (
-            <Alerts
-              alerts={[]}
-              onResolveAlert={(alertId) => {
-                console.log('Resolving alert:', alertId);
-                // Handle alert resolution logic here
-              }}
-              onViewAlert={(alertId) => {
-                console.log('Viewing alert:', alertId);
-                // Handle alert viewing logic here
-              }}
-            />
           )}
         </div>
       </div>
@@ -984,35 +1388,50 @@ const AdminAdsControl: React.FC = () => {
                     <h4 className="font-medium mb-3 mt-9">Screen Controls</h4>
                     <div className="flex flex-col gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-2">Brightness</label>
-                        <div className="flex items-center space-x-2">
-                          <Sun className="w-4 h-4 text-yellow-500" />
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={screen.screenMetrics?.brightness || 0}
-                            className="flex-1"
-                          />
-                          <span className="text-sm font-medium">{screen.screenMetrics?.brightness || 0}%</span>
+                        <div className="flex items-center gap-2 mb-2">
+                          <label className="text-sm font-medium text-gray-600">Slot 1 Material ID</label>
+                          {screen.slot1DeviceId === screen.masterDeviceId && (
+                            <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                              <BarChart3 className="w-3 h-3" />
+                              <span>Analytics</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-lg font-medium mb-2">{screen.slot1DeviceId || 'Not connected'}</p>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${(screen.slot1Status || '').toLowerCase() === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <p className="text-sm font-medium" style={{ color: (screen.slot1Status || '').toLowerCase() === 'online' ? '#10b981' : '#ef4444' }}>
+                            {screen.slot1Status || 'Unknown'}
+                          </p>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-2">Volume</label>
-                        <div className="flex items-center space-x-2">
-                          <Volume2 className="w-4 h-4 text-green-500" />
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={screen.screenMetrics?.volume || 0}
-                            className="flex-1"
-                          />
-                          <span className="text-sm font-medium">{screen.screenMetrics?.volume || 0}%</span>
+                        <div className="flex items-center gap-2 mb-2">
+                          <label className="text-sm font-medium text-gray-600">Slot 2 Material ID</label>
+                          {screen.slot2DeviceId === screen.masterDeviceId && (
+                            <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                              <BarChart3 className="w-3 h-3" />
+                              <span>Analytics</span>
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-lg font-medium mb-2">{screen.slot2DeviceId || 'Not connected'}</p>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-3 h-3 rounded-full ${(screen.slot2Status || '').toLowerCase() === 'online' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <p className="text-sm font-medium" style={{ color: (screen.slot2Status || '').toLowerCase() === 'online' ? '#10b981' : '#ef4444' }}>
+                            {screen.slot2Status || 'Unknown'}
+                          </p>
                         </div>
                       </div>
                     </div>
                     
+                    {/* Display Hours */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Display Hours</label>
+                      <p className="text-lg font-medium">{screen.screenMetrics?.displayHours?.toFixed(1) || '0.0'}h</p>
+                    </div>
+                    
+                    {/* Controls */}
                     <div className="flex items-center justify-center space-x-2 mt-4">
                       <button className="flex items-center space-x-2 px-4 py-2 bg-green-100 text-green-600 rounded-md hover:bg-green-200">
                         <Play className="w-4 h-4" />
@@ -1031,7 +1450,17 @@ const AdminAdsControl: React.FC = () => {
                         <span>Next</span>
                       </button>
                     </div>
+                    
+                    {/* Driver Information */}
+                    {screen.driverInfo && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600">Driver</label>
+                        <p className="text-lg font-medium">{screen.driverInfo.driverName}</p>
+                        <p className="text-sm text-gray-500">Vehicle: {screen.driverInfo.vehiclePlateNumber}</p>
+                      </div>
+                    )}
                   </div>
+
 
                   {/* Actions */}
                   <div className="flex justify-between space-x-2">

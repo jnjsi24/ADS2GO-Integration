@@ -1,13 +1,16 @@
 interface PlaybackUpdate {
-  type: 'adPlaybackUpdate';
+  type: 'adPlaybackUpdate' | 'deviceUpdate' | 'deviceList';
   deviceId: string;
-  adId: string;
-  adTitle: string;
-  state: 'playing' | 'paused' | 'buffering' | 'loading' | 'ended';
-  currentTime: number;
-  duration: number;
-  progress: number;
-  timestamp: string;
+  adId?: string;
+  adTitle?: string;
+  state?: 'playing' | 'paused' | 'buffering' | 'loading' | 'ended';
+  currentTime?: number;
+  duration?: number;
+  progress?: number;
+  timestamp?: string;
+  isOnline?: boolean;
+  lastSeen?: string;
+  devices?: any[];
 }
 
 type PlaybackUpdateCallback = (update: PlaybackUpdate) => void;
@@ -38,12 +41,16 @@ class PlaybackWebSocketService {
         envUrl: process.env.REACT_APP_WS_URL || process.env.REACT_APP_API_URL,
         finalUrl: actualServerUrl,
         usingFallback: !serverUrl,
-        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback'
+        reason: serverUrl ? 'Using environment variable' : 'Using localhost fallback',
+        currentNetwork: process.env.CURRENT_NETWORK || 'not set'
       });
     }
     
     const host = actualServerUrl.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return `${protocol}//${host}/ws/playback?admin=true`;
+    const wsUrl = `${protocol}//${host}/ws/playback?admin=true`;
+    
+    console.log('🔌 [WebSocket] Final WebSocket URL:', wsUrl);
+    return wsUrl;
   }
 
   private connect(): void {
@@ -59,7 +66,7 @@ class PlaybackWebSocketService {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('🔌 [Admin WebSocket] Connected successfully');
+        console.log('🔌 [Admin WebSocket] Connected successfully to:', wsUrl);
         this.isConnected = true;
         this.reconnectAttempts = 0;
         this.clearReconnectInterval();
@@ -90,8 +97,54 @@ class PlaybackWebSocketService {
             });
           } else if (message.type === 'deviceUpdate') {
             console.log('📱 [Admin WebSocket] Received device update:', message.device);
+            
+            // Forward device update to callbacks
+            this.callbacks.forEach(callback => {
+              try {
+                callback({
+                  type: 'deviceUpdate',
+                  deviceId: message.device.deviceId,
+                  isOnline: message.device.isOnline,
+                  lastSeen: message.device.lastSeen
+                });
+              } catch (error) {
+                console.error('Error in device update callback:', error);
+              }
+            });
           } else if (message.type === 'deviceList') {
             console.log('📋 [Admin WebSocket] Received device list:', message.devices);
+            
+            // Forward device list to callbacks
+            this.callbacks.forEach(callback => {
+              try {
+                callback({
+                  type: 'deviceList',
+                  devices: message.devices
+                });
+              } catch (error) {
+                console.error('Error in device list callback:', error);
+              }
+            });
+          } else if (message.type === 'adPlaybackUpdate') {
+            console.log('🎬 [Admin WebSocket] Received playback update:', message);
+            
+            // Forward playback update to callbacks
+            this.callbacks.forEach(callback => {
+              try {
+                callback({
+                  type: 'adPlaybackUpdate',
+                  deviceId: message.deviceId,
+                  adId: message.adId,
+                  adTitle: message.adTitle,
+                  state: message.state,
+                  currentTime: message.currentTime,
+                  duration: message.duration,
+                  progress: message.progress
+                });
+              } catch (error) {
+                console.error('Error in playback update callback:', error);
+              }
+            });
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -113,6 +166,8 @@ class PlaybackWebSocketService {
 
       this.ws.onerror = (error) => {
         console.error('🔌 [Admin WebSocket] Connection error:', error);
+        console.error('🔌 [Admin WebSocket] WebSocket state:', this.ws?.readyState);
+        console.error('🔌 [Admin WebSocket] WebSocket URL:', wsUrl);
         this.isConnected = false;
       };
 

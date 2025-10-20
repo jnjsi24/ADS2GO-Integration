@@ -13,35 +13,49 @@ class OSMService {
    * @param {number} lng - Longitude
    * @returns {Promise<string>} - Formatted address
    */
-  static async reverseGeocode(lat, lng) {
-    try {
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Geocoding timeout')), 5000);
-      });
+  static async reverseGeocode(lat, lng, retries = 2) {
+    for (let attempt = 1; attempt <= retries + 1; attempt++) {
+      try {
+        console.log(`🗺️ [OSMService] Attempt ${attempt}/${retries + 1} for ${lat}, ${lng}`);
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Geocoding timeout')), 8000); // Increased timeout
+        });
 
-      const geocodingPromise = geocoder.reverse({ lat, lon: lng });
-      
-      const results = await Promise.race([geocodingPromise, timeoutPromise]);
-      
-      if (results && results.length > 0) {
-        const result = results[0];
-        const addressParts = [];
+        const geocodingPromise = geocoder.reverse({ lat, lon: lng });
         
-        if (result.streetNumber) addressParts.push(result.streetNumber);
-        if (result.streetName) addressParts.push(result.streetName);
-        if (result.city) addressParts.push(result.city);
-        if (result.state) addressParts.push(result.state);
-        if (result.country) addressParts.push(result.country);
+        const results = await Promise.race([geocodingPromise, timeoutPromise]);
         
-        return addressParts.join(', ') || 'Unknown location';
+        if (results && results.length > 0) {
+          const result = results[0];
+          const addressParts = [];
+          
+          if (result.streetNumber) addressParts.push(result.streetNumber);
+          if (result.streetName) addressParts.push(result.streetName);
+          if (result.city) addressParts.push(result.city);
+          if (result.state) addressParts.push(result.state);
+          if (result.country) addressParts.push(result.country);
+          
+          const address = addressParts.join(', ') || 'Unknown location';
+          console.log(`🗺️ [OSMService] Success on attempt ${attempt}: ${address}`);
+          return address;
+        }
+        
+        console.log(`🗺️ [OSMService] No results on attempt ${attempt}`);
+        if (attempt <= retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+        }
+      } catch (error) {
+        console.warn(`🗺️ [OSMService] Attempt ${attempt} failed:`, error.message);
+        if (attempt <= retries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+        }
       }
-      
-      return 'Unknown location';
-    } catch (error) {
-      console.warn('Geocoding failed:', error.message);
-      return `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
     }
+    
+    console.warn(`🗺️ [OSMService] All attempts failed for ${lat}, ${lng}`);
+    return `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   }
 
   /**

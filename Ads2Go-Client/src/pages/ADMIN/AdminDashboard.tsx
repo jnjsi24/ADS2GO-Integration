@@ -2,12 +2,50 @@ import React, { useState, useEffect } from "react";
 import { useQuery } from "@apollo/client";
 import { GET_OWN_ADMIN_DETAILS } from "../../graphql/admin";
 import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS } from "../../graphql/admin/queries";
-import DeviceStatus from "../../components/DeviceStatus";
+import { GET_ALL_USER_REPORTS } from "../../graphql/admin/queries/userReports";
+import { GET_ALL_DRIVER_REPORTS } from "../../graphql/admin/queries/driverReports";
 import DynamicNotificationList from "./tabs/dashboard/DynamicNotificationList";
+import DeviceNotificationList from "./tabs/dashboard/DeviceNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
 import SubtleLoader from "../../components/SubtleLoader";
+import { Monitor, PlayCircle, Users, Car, FileText, AlertCircle, ArrowUpRight } from "lucide-react";
+import { motion, Transition } from "framer-motion";
+import { adsPanelService, ScreenData } from "../../services/adsPanelService";
 
 const GET_ADMIN_DETAILS = GET_OWN_ADMIN_DETAILS;
+
+// Animation variants for pending reports (matching notification containers)
+const getCardVariants = (i: number) => ({
+  collapsed: {
+    marginTop: i === 0 ? 0 : -44,
+    scaleX: 1 - i * 0.05,
+  },
+  expanded: {
+    marginTop: i === 0 ? 0 : 4,
+    scaleX: 1,
+  },
+});
+
+const transition: Transition = {
+  type: 'spring',
+  stiffness: 300,
+  damping: 26,
+};
+
+const textSwitchTransition: Transition = {
+  duration: 0.22,
+  ease: 'easeInOut',
+};
+
+const notificationTextVariants = {
+  collapsed: { opacity: 1, y: 0, pointerEvents: 'auto' },
+  expanded: { opacity: 0, y: -16, pointerEvents: 'none' },
+};
+
+const viewAllTextVariants = {
+  collapsed: { opacity: 0, y: 16, pointerEvents: 'none' },
+  expanded: { opacity: 1, y: 0, pointerEvents: 'auto' },
+};
 
 
 const Dashboard = () => {
@@ -15,6 +53,11 @@ const Dashboard = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+  
+  // Screen data states
+  const [screens, setScreens] = useState<ScreenData[]>([]);
+  const [screenLoading, setScreenLoading] = useState(true);
+  const [screenError, setScreenError] = useState<string | null>(null);
 
   // Auto detect sidebar collapse based on window width
   useEffect(() => {
@@ -38,6 +81,26 @@ const Dashboard = () => {
     pollInterval: 60000, // Increased from 30s to 60s for more discreet refresh
   });
 
+  // Fetch pending user reports
+  const { data: userReportsData, loading: userReportsLoading, error: userReportsError } = useQuery(GET_ALL_USER_REPORTS, {
+    variables: {
+      filters: { status: 'PENDING' },
+      limit: 5,
+      offset: 0
+    },
+    pollInterval: 30000, // Refresh every 30 seconds
+  });
+
+  // Fetch pending driver reports
+  const { data: driverReportsData, loading: driverReportsLoading, error: driverReportsError } = useQuery(GET_ALL_DRIVER_REPORTS, {
+    variables: {
+      filters: { status: 'PENDING' },
+      limit: 5,
+      offset: 0
+    },
+    pollInterval: 30000, // Refresh every 30 seconds
+  });
+
   // Handle admin details data
   useEffect(() => {
     if (data?.getOwnAdminDetails) {
@@ -46,12 +109,32 @@ const Dashboard = () => {
     }
   }, [data]);
 
+  // Fetch screen data
+  const fetchScreenData = async () => {
+    try {
+      setScreenLoading(true);
+      setScreenError(null);
+      const response = await adsPanelService.getScreens();
+      setScreens(response.screens);
+    } catch (error) {
+      console.error("Error fetching screen data:", error);
+      setScreenError("Failed to load screen data");
+    } finally {
+      setScreenLoading(false);
+    }
+  };
+
+  // Fetch screen data on component mount
+  useEffect(() => {
+    fetchScreenData();
+  }, []);
+
   // Track initial load completion
   useEffect(() => {
-    if (!loading && !statsLoading && !pendingAdsLoading && !hasInitiallyLoaded) {
+    if (!loading && !statsLoading && !pendingAdsLoading && !screenLoading && !userReportsLoading && !driverReportsLoading && !hasInitiallyLoaded) {
       setHasInitiallyLoaded(true);
     }
-  }, [loading, statsLoading, pendingAdsLoading, hasInitiallyLoaded]);
+  }, [loading, statsLoading, pendingAdsLoading, screenLoading, userReportsLoading, driverReportsLoading, hasInitiallyLoaded]);
 
   // Handle errors
   useEffect(() => {
@@ -73,7 +156,7 @@ const Dashboard = () => {
   }, [pendingAdsError]);
 
   // Only show AdminLoader on initial load, not during auto-refresh
-  if (!hasInitiallyLoaded && (loading || statsLoading || pendingAdsLoading)) {
+  if (!hasInitiallyLoaded && (loading || statsLoading || pendingAdsLoading || screenLoading || userReportsLoading || driverReportsLoading)) {
     return <AdminLoader />;
   }
 
@@ -86,6 +169,8 @@ const Dashboard = () => {
 
   const stats = statsData?.getAdminDashboardStats;
   const pendingAdsCount = pendingAdsData?.getPendingAds?.length || 0;
+  const pendingUserReports = userReportsData?.getAllUserReports?.reports || [];
+  const pendingDriverReports = driverReportsData?.getAllDriverReports?.reports || [];
 
   // Adjust margin/padding depending on sidebar width and screen size
   const contentMargin = isMobile ? "ml-0" : sidebarCollapsed ? "ml-16" : "ml-60";
@@ -101,7 +186,7 @@ const Dashboard = () => {
             Welcome back, {adminName}!
           </h2>
           <p className="text-sm text-gray-500">
-            It is the best time to manage your finances
+            Monitor and control your advertising campaigns across all devices
           </p>
         </div>
         {/* Subtle refresh indicator */}
@@ -134,74 +219,272 @@ const Dashboard = () => {
               change: "Awaiting review",
               up: false,
             },
-          ].map((stat, i) => (
-            <div
-              key={i}
-              className="bg-white p-5 rounded-md shadow-md flex flex-col justify-between transition-all duration-200 hover:shadow-md"
-            >
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-5 w-5 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-              <p className="text-2xl font-bold text-gray-800 mb-1">{stat.value}</p>
-              <p
-                className={`text-sm font-medium ${
-                  stat.up ? "text-green-600" : "text-red-600"
+            {
+              label: "Total Ads",
+              value: stats?.totalAds || 0,
+              change: `${stats?.activeAds || 0} active`,
+              up: true,
+            },
+            {
+              label: "Pending Ads",
+              value: stats?.pendingAds || 0,
+              change: "Awaiting approval",
+              up: false,
+            },
+          ].map((stat, i) => {
+            const shouldShowArrow = stat.label === "Pending Drivers" || stat.label === "Pending Ads";
+            const navigationPath = stat.label === "Pending Drivers" ? "/admin/drivers?status=pending" : 
+                                 stat.label === "Pending Ads" ? "/admin/manage-ads?status=pending" : "";
+            
+            return (
+              <div
+                key={i}
+                className={`bg-white p-5 rounded-md shadow-md flex flex-col justify-between transition-all duration-200 hover:shadow-md ${
+                  shouldShowArrow ? 'cursor-pointer' : ''
                 }`}
+                onClick={shouldShowArrow ? () => window.location.href = navigationPath : undefined}
               >
-                {stat.up ? "▲" : "▼"} {stat.change}
-              </p>
-            </div>
-          ))}
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-sm text-gray-500">{stat.label}</p>
+                  {shouldShowArrow && (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-5 w-5 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-gray-800 mb-1">{stat.value}</p>
+                <p
+                  className={`text-sm font-medium ${
+                    stat.up ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {stat.up ? "▲" : "▼"} {stat.change}
+                </p>
+              </div>
+            );
+          })}
 
-          {/* Dynamic Notification List */}
-          <div>
+        </div>
+
+        {/* Right column - Screen Status Cards and Notifications */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Screen Status Overview */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Total Screens */}
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="flex items-center justify-center gap-16">
+                <Monitor className="w-8 h-8 text-blue-500" />
+                <div className="flex flex-col items-center">
+                  <p className="text-3xl font-bold text-gray-900">{screens.length}</p>
+                  <p className="text-sm text-gray-600">Total Screens</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Online Screens */}
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {screens.filter(s => s.isOnline).length}
+                  </p>
+                  <p className="text-sm text-gray-600">Online Screens</p>
+                </div>
+                <Monitor className="w-8 h-8 text-green-500" />
+              </div>
+            </div>
+
+            {/* Playing Ads */}
+            <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {screens.filter(s => {
+                      const currentAd = s.screenMetrics?.currentAd;
+                      return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
+                    }).length}
+                  </p>
+                  <p className="text-sm text-gray-600">Playing Ads</p>
+                </div>
+                <PlayCircle className="w-8 h-8 text-blue-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Notifications (split into 2 parts) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left part - Admin Main Notifications */}
+          <div className="h-80">
             <DynamicNotificationList pendingAdsCount={pendingAdsCount} />
           </div>
+
+          {/* Right part - Device Notifications */}
+          <div className="h-80">
+            <DeviceNotificationList />
+          </div>
         </div>
 
-        {/* Right column */}
-        <div className="lg:col-span-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vehicle Airtime Availability</h3>
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-gray-400 mb-4">
-                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No Vehicle Data Available</h3>
-              <p className="text-sm text-gray-500">Vehicle airtime data will appear here once vehicles are registered and active.</p>
+          {/* Pending Reports (split into 2 parts) */}
+          <div className="mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left part - Pending User Reports */}
+            <div className="h-56">
+              <motion.div
+                className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-full space-y-1.5 shadow-md flex flex-col"
+                initial="collapsed"
+                whileHover="expanded"
+              >
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {pendingUserReports.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <p>No pending reports found</p>
+                    </div>
+                  ) : (
+                    pendingUserReports.slice(0, 3).map((report: any, i: number) => (
+                      <motion.div
+                        key={report.id}
+                        className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-3 py-1.5 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-14"
+                        variants={getCardVariants(i)}
+                        transition={transition}
+                        style={{ zIndex: Math.min(3, pendingUserReports.length) - i }}
+                      >
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex items-start gap-3">
+                            <Users className="w-5 h-5 text-blue-500" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-medium truncate">{report.title}</h1>
+                                <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                              </div>
+                              <div className="text-xs text-neutral-500 font-medium truncate">
+                                <span>{new Date(report.createdAt).toLocaleDateString()}</span>
+                                &nbsp;•&nbsp;
+                                <span>
+                                  {report.user ? `${report.user.firstName} ${report.user.lastName}` : 'Unknown User'}
+                                </span>
+                                &nbsp;|&nbsp;
+                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                  {report.reportType.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+                {pendingUserReports.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
+                      {pendingUserReports.length}
+                    </div>
+                    <span className="grid">
+                      <motion.span
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
+                        variants={notificationTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        Advertiser Reports
+                      </motion.span>
+                      <motion.a
+                        href="/admin/reports?tab=user&status=pending"
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
+                        variants={viewAllTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        View all <ArrowUpRight className="size-4" />
+                      </motion.a>
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+      </div>
+
+            {/* Right part - Pending Driver Reports */}
+            <div className="h-56">
+              <motion.div
+                className="bg-white dark:bg-neutral-900 p-1.5 rounded-xl w-full h-full space-y-1.5 shadow-md flex flex-col"
+                initial="collapsed"
+                whileHover="expanded"
+              >
+                <div className="flex-1 overflow-hidden min-h-0">
+                  {pendingDriverReports.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <p>No pending reports found</p>
+                    </div>
+                  ) : (
+                    pendingDriverReports.slice(0, 3).map((report: any, i: number) => (
+                      <motion.div
+                        key={report.id}
+                        className="bg-gray-100 dark:bg-neutral-800 rounded-xl px-3 py-1.5 shadow-sm hover:shadow-lg transition-shadow duration-200 relative h-14"
+                        variants={getCardVariants(i)}
+                        transition={transition}
+                        style={{ zIndex: Math.min(3, pendingDriverReports.length) - i }}
+                      >
+                        <div className="flex items-center justify-between h-full">
+                          <div className="flex items-start gap-3">
+                            <Car className="w-5 h-5 text-green-500" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h1 className="text-sm font-medium truncate">{report.title}</h1>
+                                <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0"></div>
+                              </div>
+                              <div className="text-xs text-neutral-500 font-medium truncate">
+                                <span>{new Date(report.createdAt).toLocaleDateString()}</span>
+                                &nbsp;•&nbsp;
+                                <span>
+                                  {report.driver ? `${report.driver.firstName} ${report.driver.lastName}` : 'Unknown Driver'}
+                                </span>
+                                &nbsp;|&nbsp;
+                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
+                                  {report.reportType.replace('_', ' ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+                {pendingDriverReports.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="size-5 rounded-full bg-neutral-400 text-white text-xs flex items-center justify-center font-medium">
+                      {pendingDriverReports.length}
+                    </div>
+                    <span className="grid">
+                      <motion.span
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 row-start-1 col-start-1"
+                        variants={notificationTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        Driver Reports
+                      </motion.span>
+                      <motion.a
+                        href="/admin/reports?tab=driver&status=pending"
+                        className="text-sm font-medium text-neutral-600 dark:text-neutral-300 flex items-center gap-1 cursor-pointer select-none row-start-1 col-start-1"
+                        variants={viewAllTextVariants}
+                        transition={textSwitchTransition}
+                      >
+                        View all <ArrowUpRight className="size-4" />
+                      </motion.a>
+                    </span>
+                  </div>
+                )}
+              </motion.div>
             </div>
-          </div>
-        </div>
       </div>
-
-      {/* Device Status Section */}
-      <div className="bg-white p-6 rounded-md shadow">
-        <DeviceStatus />
-      </div>
-
-      {/* Analytics Section */}
-      <div className="bg-white p-6 mt-8 rounded-md shadow">
-        <h3 className="text-lg font-semibold mb-4">Ad Performance Analytics</h3>
-        <div className="text-center py-12 text-gray-500">
-          <div className="text-gray-400 mb-4">
-            <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
           </div>
-          <h3 className="text-sm font-medium text-gray-900 mb-1">No Analytics Data Available</h3>
-          <p className="text-sm text-gray-500">Performance analytics will appear here once ads start running and generating data.</p>
         </div>
       </div>
     </div>

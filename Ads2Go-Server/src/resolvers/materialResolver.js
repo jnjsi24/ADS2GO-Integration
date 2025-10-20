@@ -92,7 +92,9 @@ const materialResolvers = {
     getAllMaterials: async (_, __, { user }) => {
       checkAdmin(user); // only admin can access
       try {
-        const materials = await Material.find().sort({ createdAt: -1 });
+        const materials = await Material.find()
+          .populate('driver', 'driverId firstName lastName fullName email contactNumber vehiclePlateNumber')
+          .sort({ createdAt: -1 });
         console.log(`Found ${materials.length} materials`);
         return materials;
       } catch (error) {
