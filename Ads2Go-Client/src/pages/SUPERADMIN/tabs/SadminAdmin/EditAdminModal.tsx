@@ -78,9 +78,9 @@ const EditAdminModal: React.FC<EditAdminModalProps> = ({
         onClick={onClose}
       />
       {/* Centered Modal */}
-      <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-xl p-8 animate-slideIn">
+      <div className="relative w-full max-w-2xl bg-white rounded-md shadow-xl p-8 animate-slideIn">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#3674B5]">Edit Admin</h2>
+          <h2 className="text-2xl font-bold">Edit Admin</h2>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 text-xl font-bold"
@@ -215,14 +215,14 @@ const EditAdminModal: React.FC<EditAdminModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-1 rounded-lg hover:bg-gray-100 text-gray-700 text-sm"
+              className="px-3 py-3 rounded-md border hover:bg-gray-100 text-gray-700 text-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={Object.values(errors).some((error) => error !== '')}
-              className="bg-[#3674B5] text-white px-4 py-3 rounded-lg font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="bg-[#3674B5] text-white px-3 py-3 rounded-md font-semibold hover:bg-[#1b5087] transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               Update Admin
             </button>

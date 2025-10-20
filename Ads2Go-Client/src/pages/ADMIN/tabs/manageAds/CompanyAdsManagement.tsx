@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
-  Edit, 
   Trash2, 
   Play, 
   Pause, 
@@ -17,13 +16,14 @@ import {
   FileVideo,
   Image as ImageIcon,
   X, ChevronDown,
-  CloudUpload
+  CloudUpload,
+  BarChart3,
+  Clock
 } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
 import { 
   GET_COMPANY_ADS,
   CREATE_COMPANY_AD, 
-  UPDATE_COMPANY_AD, 
   DELETE_COMPANY_AD, 
   TOGGLE_COMPANY_AD_STATUS 
 } from '../../../../graphql/admin';
@@ -80,8 +80,6 @@ const CompanyAdsManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'scheduled'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedAd, setSelectedAd] = useState<CompanyAd | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -93,7 +91,11 @@ const CompanyAdsManagement: React.FC = () => {
     mediaFile?: string;
   }>({});
 
-  // Form state for create/edit
+  // Edit modal state
+  const [selectedAd, setSelectedAd] = useState<CompanyAd | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+
+  // Form state for create
   const [formData, setFormData] = useState<CreateCompanyAdInput>({
     title: '',
     description: '',
@@ -111,7 +113,6 @@ const CompanyAdsManagement: React.FC = () => {
   // GraphQL queries and mutations
   const { data, loading, error, refetch } = useQuery(GET_COMPANY_ADS);
   const [createCompanyAd] = useMutation(CREATE_COMPANY_AD);
-  const [updateCompanyAd] = useMutation(UPDATE_COMPANY_AD);
   const [deleteCompanyAd] = useMutation(DELETE_COMPANY_AD);
   const [toggleStatus] = useMutation(TOGGLE_COMPANY_AD_STATUS);
 
@@ -244,22 +245,11 @@ const CompanyAdsManagement: React.FC = () => {
     setValidationErrors({});
     
     try {
-      if (selectedAd) {
-        // Update existing ad
-        await updateCompanyAd({
-          variables: {
-            id: selectedAd.id,
-            input: formData
-          }
-        });
-        setShowEditModal(false);
-      } else {
-        // Create new ad
-        await createCompanyAd({
-          variables: { input: formData }
-        });
-        setShowCreateModal(false);
-      }
+      // Create new ad
+      await createCompanyAd({
+        variables: { input: formData }
+      });
+      setShowCreateModal(false);
       
       // Reset form
       setFormData({
@@ -322,7 +312,6 @@ const CompanyAdsManagement: React.FC = () => {
     });
     setShowEditModal(true);
   };
-
   // Format duration
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -351,7 +340,7 @@ const CompanyAdsManagement: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-50 border border-red-200 rounded-md p-4">
         <div className="flex items-center">
           <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
           <p className="text-red-800">Error loading company ads: {error.message}</p>
@@ -375,7 +364,7 @@ const CompanyAdsManagement: React.FC = () => {
             <input
               type="text"
               placeholder="Search company ads..."
-              className="text-xs text-black rounded-lg pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
+              className="text-xs text-black rounded-md pl-5 py-3 w-80 shadow-md focus:outline-none bg-white"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -384,7 +373,7 @@ const CompanyAdsManagement: React.FC = () => {
             <div className="relative w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
               >
                 {statusFilter === "all"
                   ? "All Status"
@@ -403,7 +392,7 @@ const CompanyAdsManagement: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map((status) => (
                       <button
@@ -425,7 +414,7 @@ const CompanyAdsManagement: React.FC = () => {
         <div className="flex justify-end">
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center px-4 py-2 text-white text-sm rounded-md shadow-lg bg-[#3674B5] hover:bg-[#3674B5]/80 transition-colors"
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Company Ad
@@ -435,25 +424,63 @@ const CompanyAdsManagement: React.FC = () => {
 
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="flex items-center">
-            <FileVideo className="h-8 w-8 text-blue-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Total Ads</p>
-              <p className="text-2xl font-semibold text-gray-900">{companyAds.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-md shadow-md">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-blue-100 rounded-full">
+              <FileVideo className="h-5 w-5 text-blue-600" />
             </div>
+            <p className="text-sm font-medium text-gray-600">Total Ads</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">{companyAds.length}</p>
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border">
-          <div className="flex items-center">
-            <CheckCircle className="h-8 w-8 text-green-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-gray-600">Active</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {companyAds.filter(ad => ad.isActive).length}
-              </p>
+
+        <div className="bg-white p-4 rounded-md shadow-md">
+          {/* Active */}
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-green-100 rounded-full">
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
+            <p className="text-sm font-medium text-gray-600">Active</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">
+              {companyAds.filter(ad => ad.isActive).length}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-md shadow-md">
+          {/* Total Plays */}
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-purple-100 rounded-full">
+              <BarChart3 className="h-5 w-5 text-purple-600" />
+            </div>
+            <p className="text-sm font-medium text-gray-600">Total Plays</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">
+              {companyAds.reduce((sum, ad) => sum + (ad.playCount || 0), 0)}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-md shadow-md">
+          {/* Avg Duration */}
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-orange-100 rounded-full">
+              <Clock className="h-5 w-5 text-orange-600" />
+            </div>
+            <p className="text-sm font-medium text-gray-600">Avg Duration</p>
+          </div>
+          <div className="pl-10 mt-1">
+            <p className="text-2xl font-semibold text-gray-900">
+              {companyAds.length > 0 
+                ? formatDuration(Math.round(companyAds.reduce((sum, ad) => sum + ad.duration, 0) / companyAds.length))
+                : '0:00'}
+            </p>
           </div>
         </div>
       </div>
@@ -467,7 +494,7 @@ const CompanyAdsManagement: React.FC = () => {
       {/* Company Ads Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAds.map((ad) => (
-          <div key={ad.id} className="bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow">
+          <div key={ad.id} className="bg-white rounded-md border shadow-sm hover:shadow-md transition-shadow">
             {/* Media Preview */}
             <div className="aspect-video bg-gray-100 rounded-t-lg relative overflow-hidden">
               {ad.mediaFile ? (
@@ -560,13 +587,6 @@ const CompanyAdsManagement: React.FC = () => {
                     )}
                   </button>
                   <button
-                    onClick={() => handleEdit(ad)}
-                    className="p-1 hover:bg-gray-100 rounded"
-                    title="Edit"
-                  >
-                    <Edit className="h-4 w-4 text-blue-600" />
-                  </button>
-                  <button
                     onClick={() => handleDelete(ad.id)}
                     className="p-1 hover:bg-gray-100 rounded"
                     title="Delete"
@@ -632,8 +652,10 @@ const CompanyAdsManagement: React.FC = () => {
       {/* Empty State */}
       {filteredAds.length === 0 && (
         <div className="text-center py-12">
-          <FileVideo className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No company ads found</h3>
+          <div className="flex items-center justify-center gap-2 text-gray-500">
+            <FileVideo className="h-7 w-7 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900">No company ads found</h3>
+          </div>
           <p className="mt-1 text-sm text-gray-500">
             {searchTerm || statusFilter !== 'all' 
               ? 'Try adjusting your search or filter criteria.'
@@ -654,8 +676,8 @@ const CompanyAdsManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
-      {(showCreateModal || showEditModal) && (
+      {/* Create Modal */}
+      {showCreateModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50">
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50"></div>
           <motion.div
@@ -668,13 +690,11 @@ const CompanyAdsManagement: React.FC = () => {
           <div className="p-6 sm:p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-gray-900">
-                {selectedAd ? 'Edit Company Ad' : 'Create Company Ad'}
+                Create Company Ad
               </h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
-                  setShowEditModal(false);
-                  setSelectedAd(null);
                   setFormData({
                     title: '',
                     description: '',
@@ -739,7 +759,7 @@ const CompanyAdsManagement: React.FC = () => {
                   Media File
                 </label>
                 <div
-                  className={`border-2 border-dashed rounded-lg p-6 transition-colors flex flex-col items-center justify-center text-center
+                  className={`border-2 border-dashed rounded-md p-6 transition-colors flex flex-col items-center justify-center text-center
                     ${isDragging
                       ? 'border-blue-500 bg-blue-50'
                       : mediaFileError
@@ -1089,6 +1109,40 @@ const CompanyAdsManagement: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="priority"
+                    min="0"
+                    max="10"
+                    value={formData.priority}
+                    onChange={(e) => setFormData(prev => ({ ...prev, priority: parseInt(e.target.value) }))}
+                    className="peer w-full px-0 pt-5 pb-2 text-gray-900 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300"
+                    placeholder=""
+                  />
+                  <label
+                    htmlFor="priority"
+                    className={`absolute left-0 text-black bg-transparent transition-all duration-200 ${formData.priority ? '-top-2 text-sm text-black/70 font-bold'
+                : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-black'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-black/70 peer-focus:font-bold`}
+                  >
+                    Priority
+                  </label>
+                </div>
+              </div>
+
+              {/* Active Status */}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={formData.isActive}
+                  onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+                  Active (will be shown in rotation)
+                </label>
               </div>
 
               {/* Submit Buttons */}
@@ -1097,18 +1151,16 @@ const CompanyAdsManagement: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setShowEditModal(false);
-                    setSelectedAd(null);
                   }}
-                  className="px-4 py-2 text-gray-700 rounded-lg border hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                  className="px-4 py-2 text-gray-700 rounded-md border hover:bg-gray-50 hover:text-gray-900 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+                  className="px-4 py-2 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors"
                 >
-                  {selectedAd ? 'Update Ad' : 'Create Ad'}
+                  Create Ad
                 </button>
               </div>
             </form>

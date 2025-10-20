@@ -161,7 +161,7 @@ class UserNotificationService extends BaseNotificationService {
       console.log('🔔 UserNotificationService: Creating in-app notification...');
       const notification = await this.createNotification(
         userId,
-        '💳 Payment Confirmed',
+        'Payment Confirmed',
         `Your payment of ₱${amount} for "${adTitle}" has been confirmed.`,
         'SUCCESS',
         {
@@ -214,7 +214,7 @@ class UserNotificationService extends BaseNotificationService {
     try {
       const notification = await this.createNotification(
         userId,
-        '📊 Ad Performance Update',
+        'Ad Performance Update',
         `Your ad "${adTitle}" has reached ${impressions} impressions and ${plays} plays!`,
         'INFO',
         {
@@ -305,7 +305,7 @@ class UserNotificationService extends BaseNotificationService {
       console.log('🔔 UserNotificationService: Creating in-app notification...');
       const notification = await this.createNotification(
         userId,
-        '👤 Profile Updated',
+        'Profile Updated',
         notificationMessage,
         'SUCCESS',
         {
@@ -356,7 +356,7 @@ class UserNotificationService extends BaseNotificationService {
    */
   static async getAdApprovalEmailData(firstName, adTitle, adId) {
     return {
-      subject: '🎉 Your Ad Has Been Approved!',
+      subject: 'Your Ad Has Been Approved!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -399,7 +399,7 @@ class UserNotificationService extends BaseNotificationService {
    */
   static async getAdRejectionEmailData(firstName, adTitle, reason, adId) {
     return {
-      subject: '❌ Ad Rejected - Action Required',
+      subject: 'Ad Rejected - Action Required',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -495,7 +495,7 @@ class UserNotificationService extends BaseNotificationService {
    */
   static async getAdminResponseEmailData(firstName, reportTitle, adminNotes) {
     return {
-      subject: '💬 Admin Response - Your Report',
+      subject: 'Admin Response - Your Report',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -542,7 +542,7 @@ class UserNotificationService extends BaseNotificationService {
    */
   static async getProfileChangeEmailData(firstName, changeMessages, changedFields) {
     return {
-      subject: '👤 Profile Updated - Security Alert',
+      subject: 'Profile Updated - Security Alert',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -585,7 +585,7 @@ class UserNotificationService extends BaseNotificationService {
    */
   static async getPaymentConfirmationEmailData(firstName, amount, adTitle) {
     return {
-      subject: '💳 Payment Confirmed - Thank You!',
+      subject: 'Payment Confirmed - Thank You!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -633,7 +633,7 @@ class UserNotificationService extends BaseNotificationService {
       const mailOptions = {
         from: `Ads2Go <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: '🎉 Your Ad Has Been Approved!',
+        subject: 'Your Ad Has Been Approved!',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
             <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -688,7 +688,7 @@ class UserNotificationService extends BaseNotificationService {
       const mailOptions = {
         from: `Ads2Go <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: '❌ Ad Rejection - Action Required',
+        subject: 'Ad Rejection - Action Required',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
             <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -748,7 +748,7 @@ class UserNotificationService extends BaseNotificationService {
       const mailOptions = {
         from: `Ads2Go <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: '💳 Payment Confirmed - Thank You!',
+        subject: 'Payment Confirmed - Thank You!',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f4;">
             <div style="background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
@@ -817,32 +817,32 @@ class UserNotificationService extends BaseNotificationService {
         throw new Error('User not found');
       }
 
-      console.log('👤 UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
+      console.log('UserNotificationService: Found user:', user.firstName, user.lastName, user.email);
 
       // Create status-specific messages
       let title, message, type, priority;
       
       switch (newStatus) {
         case 'IN_PROGRESS':
-          title = '🔧 Report Update';
+          title = 'Report Update';
           message = `Your report "${reportTitle}" is now being reviewed by our team.`;
           type = 'INFO';
           priority = 'MEDIUM';
           break;
         case 'RESOLVED':
-          title = '✅ Report Resolved';
+          title = 'Report Resolved';
           message = `Great news! Your report "${reportTitle}" has been resolved.`;
           type = 'SUCCESS';
           priority = 'HIGH';
           break;
         case 'CLOSED':
-          title = '📋 Report Closed';
+          title = 'Report Closed';
           message = `Your report "${reportTitle}" has been closed.`;
           type = 'INFO';
           priority = 'MEDIUM';
           break;
         default:
-          title = '📋 Report Status Update';
+          title = 'Report Status Update';
           message = `Your report "${reportTitle}" status has been updated to ${newStatus.replace('_', ' ').toLowerCase()}.`;
           type = 'INFO';
           priority = 'MEDIUM';

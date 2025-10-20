@@ -40,8 +40,6 @@ const NewsletterManagement: React.FC = () => {
     'All Subscribers',
     'Active Subscribers',
     'User Subscribers',
-    'Non-User Subscribers',
-    'Unsubscribed'
   ];
 
   // Pagination calculations
@@ -330,39 +328,39 @@ const NewsletterManagement: React.FC = () => {
 
   return (
     <div
-  className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
-    isMobile ? 'px-10 pl-28' : 'ml-52'
-  }`}
->
-  <div className="max-w-7xl mx-auto w-full">
-    {/* Mobile Header */}
-    {isMobile && (
-      <div className="flex items-center mb-4">
-        <h1 className="text-xl pt-7 font-bold text-gray-800">
-          Newsletter Management
-        </h1>
-      </div>
-    )}
+      className={`min-h-screen bg-gray-100 p-4 md:p-10 flex flex-col ${
+        isMobile ? 'px-10 pl-28' : 'ml-60'
+      }`}
+    >
+      <div className="max-w-7xl mx-auto w-full">
+        {/* Mobile Header */}
+        {isMobile && (
+          <div className="flex items-center mb-4">
+            <h1 className="text-xl pt-7 font-bold text-gray-800">
+              Newsletter Management
+            </h1>
+          </div>
+        )}
 
-    {/* Header with Title and Filters */}
-    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
-      {!isMobile && (
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
-          Newsletter Management
-        </h1>
-      )}
-            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-2'}`}>
+        {/* Header with Title and Filters */}
+        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+          {!isMobile && (
+            <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+              Newsletter Management
+            </h1>
+          )}
+            <div className={`flex ${isMobile ? 'flex-col gap-3 w-full' : 'gap-1'}`}>
               <input
                 type="text"
-                className={`text-xs text-black rounded-lg pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
+                className={`text-xs text-black rounded-md pl-5 py-3 ${isMobile ? 'w-full' : 'w-80'} shadow-md focus:outline-none bg-white`}
                 placeholder="Search Subscribers"
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
               />
-              <div className={`relative ${isMobile ? 'w-full' : 'w-48'}`}>
+              <div className={`relative ${isMobile ? 'w-full' : 'w-44'}`}>
                 <button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                  className={`flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
+                  className={`flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2`}
                 >
                   {selectedFilter}
                   <ChevronDown size={16} className={`transform transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : 'rotate-0'}`} />
@@ -374,7 +372,7 @@ const NewsletterManagement: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {filterOptions.map((filter) => (
                         <button
@@ -430,68 +428,6 @@ const NewsletterManagement: React.FC = () => {
               Email All Active Subscribers
             </button>
           </div>
-
-
-          {!isMobile && (
-            <div className="grid md:grid-cols-5 gap-4 mb-8">
-              {/* Total Subscribers */}
-              <div className="bg-blue-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
-                  <div className="text-3xl font-bold text-blue-600">{stats.total}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Total</div>
-                    <div className="text-xs text-gray-500">All time</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Subscribers */}
-              <div className="bg-green-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
-                  <div className="text-3xl font-bold text-green-600">{stats.active}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Active</div>
-                    <div className="text-xs text-gray-500">Currently subscribed</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* User Subscribers */}
-              <div className="bg-purple-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
-                  <div className="text-3xl font-bold text-purple-600">{stats.userSubscribers}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Users</div>
-                    <div className="text-xs text-gray-500">Website users</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Non-User Subscribers */}
-              <div className="bg-orange-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
-                  <div className="text-3xl font-bold text-orange-600">{stats.nonUserSubscribers}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Non-Users</div>
-                    <div className="text-xs text-gray-500">Landing page only</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Inactive Subscribers */}
-              <div className="bg-red-50 shadow-md rounded-lg p-6">
-                <div className="flex items-center">
-                  <div className="text-3xl font-bold text-red-600">{stats.inactive}</div>
-                  <div className="ml-4">
-                    <div className="text-sm text-gray-600">Unsubscribed</div>
-                    <div className="text-xs text-gray-500">No longer active</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-
         </div>
 
         <div className="rounded-lg overflow-hidden">

@@ -18,7 +18,7 @@ const AdminList: React.FC<AdminListProps> = ({
   return (
     <div className="mx-6 mt-4 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-3 text-sm font-semibold text-[#3674B5] bg-gray-100">
+      <div className="grid grid-cols-[1.5fr_1fr_1fr_1.5fr_1fr_120px] gap-4 px-6 py-3 text-sm font-semibold text-black/80">
         <span>Name</span>
         <span>Company</span>
         <span>Contact</span>

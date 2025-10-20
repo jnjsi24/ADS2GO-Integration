@@ -119,7 +119,7 @@ const Notifications: React.FC = () => {
     <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-semibold text-gray-800">Notifications</h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-black text-sm">
             {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
           </p>
           {error && (
@@ -132,7 +132,7 @@ const Notifications: React.FC = () => {
               {!isSelectMode ? (
                 <button
                   onClick={() => setIsSelectMode(true)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="relative group gap-2 w-28 inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-white transition-all duration-300 hover:scale-105 rounded-md bg-[#3674B5]"
                 >
                   <CheckSquare size={16} />
                   <span>Select</span>
@@ -141,7 +141,7 @@ const Notifications: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={toggleSelectAll}
-                    className="flex items-center space-x-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                    className="relative group w-28 inline-flex items-center justify-center overflow-hidden px-6 py-2 text-sm font-medium text-white transition-all duration-300 hover:scale-105 rounded-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
                   >
                     {selectedNotifications.size === notifications.length ? (
                       <CheckSquare size={16} />
@@ -153,7 +153,7 @@ const Notifications: React.FC = () => {
                   {selectedNotifications.size > 0 && (
                     <button
                       onClick={handleDeleteSelected}
-                      className="flex items-center space-x-2 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      className="flex items-center space-x-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                     >
                       <Trash2 size={16} />
                       <span>Delete Selected ({selectedNotifications.size})</span>
@@ -191,7 +191,7 @@ const Notifications: React.FC = () => {
           >
             <span className="inline-flex items-center gap-2">
               <RefreshCw size={16} />
-              Edit
+              Refresh
             </span>
 
             {/* Hover Light Effect */}
@@ -205,7 +205,7 @@ const Notifications: React.FC = () => {
           {unreadCount > 0 && (
             <button
               onClick={markAllAsRead}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 text-black rounded-lg hover:text-black/60 transition-colors"
             >
               <CheckCheck size={16} />
               <span>Mark all as read</span>
@@ -226,8 +226,8 @@ const Notifications: React.FC = () => {
           notifications.map((notification) => (
             <div
               key={notification.id}
-              className={`p-6 rounded-lg border-l-4 ${getNotificationColor(notification.type)} ${
-                !notification.read ? 'bg-white shadow-sm' : 'bg-gray-50'
+              className={`p-6 ${getNotificationColor(notification.type)} ${
+                !notification.read ? 'bg-white/70 shadow-sm' : 'bg-gray-50'
               } hover:shadow-md transition-shadow`}
             >
               <div className="flex items-start justify-between">

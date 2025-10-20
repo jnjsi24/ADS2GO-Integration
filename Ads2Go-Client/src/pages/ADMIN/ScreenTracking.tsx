@@ -6,6 +6,7 @@ import { LatLngTuple, Map, Icon } from 'leaflet';
 import * as L from 'leaflet';
 import 'leaflet-defaulticon-compatibility';
 import { AdminLoader } from "../../components/ProtectedRoute";
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Import MapView directly since we're not using Next.js
 import MapView from '../../components/MapView';
@@ -19,7 +20,9 @@ import {
   XCircle,
   RefreshCw,
   Users,
-  Activity
+  Activity, ChevronDown,
+  MapPin,
+  X
 } from 'lucide-react';
 
 
@@ -147,13 +150,19 @@ const ScreenTracking: React.FC = () => {
   const [materialsLoading, setMaterialsLoading] = useState(true);
   const [selectedMaterial, setSelectedMaterial] = useState<string>('all');
   const [filteredScreens, setFilteredScreens] = useState<ScreenStatus[]>([]);
+  const [activeDetailTab, setActiveDetailTab] = useState<'device' | 'progress'>('device');
   
   // Enhanced route map controls
   const [showSpeedColors, setShowSpeedColors] = useState(true);
   const [showWaypoints, setShowWaypoints] = useState(false);
   const [showMetrics, setShowMetrics] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const toggleDropdown = () => setIsOpen((prev) => !prev);
 
   const mapRef = useRef<Map | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+
 
   // Fetch historical route data
   const fetchHistoricalRoute = async (deviceId: string, date: string) => {
@@ -215,6 +224,15 @@ const ScreenTracking: React.FC = () => {
     // Note: For material-only selection (no screens), the StravaStyleRouteMap component
     // will fetch its own data directly from the API
   }, [activeTab, selectedScreen, selectedMaterial, selectedDate]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: any) => {
+      if (!e.target.closest('.material-dropdown')) setIsDropdownOpen(false);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
 
   // Debug: Log when historicalRouteData changes
   useEffect(() => {
@@ -509,210 +527,238 @@ const ScreenTracking: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 ml-60">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Device Tracking Dashboard</h1>
-              <p className="text-gray-600">Real-time monitoring of all screens (HEADDRESS, LCD, Billboards) and compliance</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-green-500' : 
-                  connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                }`}></div>
-                <span className="text-sm text-gray-600">
-                  {connectionStatus === 'connected' ? 'Connected' : 
-                   connectionStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                </span>
-              </div>
-              <select
-                value={selectedMaterial}
-                onChange={(e) => setSelectedMaterial(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 bg-white"
-                disabled={materialsLoading}
-              >
-                <option value="all">
-                  {materialsLoading ? 'Loading Materials...' : `All Materials (${materials?.length || 0})`}
-                </option>
-                {materials?.map((material) => (
-                  <option key={material._id} value={material.materialId}>
-                    {material.title} - {material.materialId} ({material.materialType})
-                  </option>
-                ))}
-              </select>
-              {activeTab === 'historical' && (
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-2"
-                />
-              )}
-              <button
-                onClick={fetchData}
-                disabled={refreshing}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
-            </div>
-          </div>
-        </div>
+      <div>
+        
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('live')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'live'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Activity className="w-4 h-4" />
-                <span>Live Tracking</span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('historical')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'historical'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <Clock className="w-4 h-4" />
-                <span>Historical Routes</span>
-              </div>
-            </button>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col lg:flex-row items-center justify-between py-4">
+          {/* Left: Tabs */}
+
+          {/* Right: Connection Status + Refresh */}
+          
         </div>
       </div>
-
-             {/* Debug Info */}
-       {process.env.NODE_ENV === 'development' && (
-         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                            <p className="text-xs text-yellow-800">
-                 Debug: Materials loaded: {materials?.length || 0} | Selected: {selectedMaterial}
-               </p>
-           </div>
-         </div>
-       )}
-
-       {/* Material Summary */}
-       {selectedMaterial !== 'all' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                                 <h3 className="text-lg font-semibold text-blue-900">
-                   Material: {materials?.find(m => m.materialId === selectedMaterial)?.title || selectedMaterial}
-                 </h3>
-                <p className="text-sm text-blue-700">
-                  {filteredScreens?.length || 0} screen(s) found for this material
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedMaterial('all')}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                View All Materials
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Compliance Summary */}
-      {complianceReport && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-6 h-6 text-blue-600" />
-                </div>
-                               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Total Screens</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <Activity className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Online</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isOnline).length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-           <div className="bg-white rounded-lg shadow p-6">
-             <div className="flex items-center">
-               <div className="p-2 bg-green-100 rounded-lg">
-                 <CheckCircle className="w-6 h-6 text-green-600" />
-               </div>
-               <div className="ml-4">
-                 <p className="text-sm font-medium text-gray-600">Compliant (8h)</p>
-                 <p className="text-2xl font-bold text-gray-900">{filteredScreens?.filter(s => s.isCompliant).length || 0}</p>
-               </div>
-             </div>
-           </div>
-
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Clock className="w-6 h-6 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Hours</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                   {filteredScreens && filteredScreens.length > 0 
-                     ? (filteredScreens.reduce((sum, s) => sum + (s.currentHours || 0), 0) / filteredScreens.length).toFixed(1)
-                     : '0.0'
-                   }h
-                 </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8 pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3">
+          {/* Screen List */}
+          <div className="lg:col-span-1">
+            <div>
+              <div>
+                <div className="max-w-7xl p-3 space-y-3">
+                  {/* Row 1: Title + Connection Status */}
+                  <div className="flex items-center justify-between gap-3">
+                    <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">Device Tracking</h1>
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className={`w-3 h-3 rounded-full ${
+                          connectionStatus === 'connected'
+                            ? 'bg-green-500'
+                            : connectionStatus === 'connecting'
+                            ? 'bg-yellow-500'
+                            : 'bg-red-500'
+                        }`}
+                      ></div>
+                      <span className="text-sm text-gray-600">
+                        {connectionStatus === 'connected'
+                          ? 'Connected'
+                          : connectionStatus === 'connecting'
+                          ? 'Connecting...'
+                          : 'Disconnected'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Filters and Actions */}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Left Side: Materials Dropdown */}
+                    <div className="relative w-72 material-dropdown">
+                      <div
+                        className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2 cursor-pointer"
+                        onClick={() => setIsDropdownOpen((prev) => !prev)}
+                      >
+                        <span className="text-gray-700 text-sm">
+                          {materialsLoading
+                            ? 'Loading Materials...'
+                            : selectedMaterial === 'all'
+                            ? `All Materials (${materials?.length || 0})`
+                            : (() => {
+                                const mat = materials?.find((m) => m.materialId === selectedMaterial);
+                                return mat ? `${mat.materialId}` : 'Select Material';
+                              })()}
+                        </span>
+
+                        <motion.div
+                          animate={{ rotate: isDropdownOpen ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="ml-2"
+                        >
+                          <ChevronDown className="w-4 h-4 text-gray-600" />
+                        </motion.div>
+                      </div>
+
+                      <AnimatePresence>
+                        {isDropdownOpen && (
+                          <motion.ul
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.15 }}
+                            className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto"
+                          >
+                            <li
+                              onClick={() => {
+                                setSelectedMaterial('all');
+                                setIsDropdownOpen(false);
+                              }}
+                              className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                            >
+                              All Materials ({materials?.length || 0})
+                            </li>
+                            {materials?.map((material) => (
+                              <li
+                                key={material._id}
+                                onClick={() => {
+                                  setSelectedMaterial(material.materialId);
+                                  setIsDropdownOpen(false);
+                                }}
+                                className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                              >
+                                {material.materialId}
+                              </li>
+                            ))}
+                          </motion.ul>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Right Side: Conditional Buttons */}
+                    <div className="flex items-center gap-2">
+                      {activeTab === 'historical' ? (
+                        <input
+                          type="date"
+                          value={selectedDate}
+                          onChange={(e) => setSelectedDate(e.target.value)}
+                          className="flex items-center justify-between w-auto text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white"
+                        />
+                      ) : (
+                        activeTab === 'live' && (
+                          <button
+                            onClick={fetchData}
+                            disabled={refreshing}
+                            className="px-4 py-2 bg-[#3674B5] text-white rounded-md shadow-lg hover:bg-[#3674B5]/80 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Screen List */}
+              <div className="h-[610px] bg-white overflow-y-auto">
+                {filteredScreens?.map((screen) => (
+                  <div
+                    key={screen.deviceId}
+                    onClick={() => handleScreenSelect(screen)}
+                    className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
+                      selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium">{screen.displayId || screen.materialId}</span>
+                      </div>
+                      {/* Alerts */}
+                    {screen.alerts?.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex items-center space-x-1 text-red-600">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
+                        </div>
+                      </div>
+                    )}
+                    </div>
+                    
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Hours Today:</span>
+                        <span className="font-medium">{formatTime(screen.currentHours)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Remaining:</span>
+                        <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Distance:</span>
+                        <span className="font-medium">
+                          {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
+                            ? `${historicalRouteData.metrics.totalDistance} km`
+                            : formatDistance(screen.totalDistanceToday)
+                          }
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Seen:</span>
+                        <span className="font-medium">
+                          {screen.lastSeen ? new Date(screen.lastSeen).toLocaleTimeString() : 'Unknown'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`flex items-center justify-end space-x-1 pt-2 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
+                        {getStatusIcon(screen.isOnline, screen.isCompliant)}
+                        <span className="text-xs">
+                          {screen.statusText || screen.displayStatus}
+                        </span>
+                      </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
           {/* Map */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow">
+            <div className="">
               <div className="p-4 border-b">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {activeTab === 'historical' ? 'Historical Routes' : 'Live Map'}
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      {activeTab === 'historical' 
-                        ? `Historical routes for ${selectedDate}` 
-                        : 'Real-time tablet locations and routes'
-                      }
-                    </p>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setActiveTab('live')}
+                      className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                        activeTab === 'live' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Activity className="w-4 h-4 mr-2" />
+                      <span>Live Tracking</span>
+                      <span
+                        className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                          ${activeTab === 'live' ? 'w-full' : 'w-0 group-hover:w-full'}
+                        `}
+                      />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('historical')}
+                      className={`relative flex items-center py-4 px-1 font-medium text-sm transition-colors group ${
+                        activeTab === 'historical' ? 'text-[#3674B5]' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Clock className="w-4 h-4 mr-2" />
+                      <span>Historical Routes</span>
+                      <span
+                        className={`absolute bottom-0 left-0 h-[2px] bg-[#3674B5] transition-all duration-300
+                          ${activeTab === 'historical' ? 'w-full' : 'w-0 group-hover:w-full'}
+                        `}
+                      />
+                    </button>
                   </div>
                   {activeTab === 'historical' && (
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
                       <button
                         onClick={() => {
                           if (selectedScreen) {
@@ -723,53 +769,171 @@ const ScreenTracking: React.FC = () => {
                           }
                         }}
                         disabled={loadingHistorical || !selectedScreen}
-                        className="flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm"
+                        className="flex items-center space-x-2 px-3 py-2 bg-[#3674B5] text-white rounded-md shadow-lg hover:bg-[#3674B5]/80 disabled:opacity-50 text-sm"
                       >
                         <RefreshCw className={`w-4 h-4 ${loadingHistorical ? 'animate-spin' : ''}`} />
                         <span>{loadingHistorical ? 'Loading...' : 'Load Route'}</span>
                       </button>
                       
                       {/* Enhanced Route Controls */}
-                      <div className="flex items-center space-x-4 text-sm">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={showSpeedColors}
-                            onChange={(e) => setShowSpeedColors(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-gray-700">Speed Colors</span>
-                        </label>
-                        
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={showWaypoints}
-                            onChange={(e) => setShowWaypoints(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-gray-700">Waypoints</span>
-                        </label>
-                        
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={showMetrics}
-                            onChange={(e) => setShowMetrics(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-gray-700">Metrics</span>
-                        </label>
-                      </div>
-                      
-                      <div className="text-xs text-gray-500">
-                        {selectedScreen ? `Device: ${selectedScreen.deviceId}` : 'No device selected'}
+                      <div className="relative w-36 inline-block text-sm z-[9999]">
+                        {/* Dropdown Button */}
+                        <div
+                          onClick={toggleDropdown}
+                          className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+                        >
+                          <span className="text-gray-700">Map Settings</span>
+                          <motion.div
+                            animate={{ rotate: isOpen ? 180 : 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <ChevronDown className="w-4 h-4 text-gray-600" />
+                          </motion.div>
+                        </div>
+
+                        {/* Dropdown Menu */}
+                        <AnimatePresence>
+                          {isOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -8 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute mt-1 w-36 bg-white px-2 py-2 text-xs border border-gray-200 rounded-md shadow-lg z-10"
+                            >
+                              <div className="p-2 space-y-2">
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Speed Colors</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showSpeedColors}
+                                      onChange={(e) => setShowSpeedColors(e.target.checked)}
+                                      className="sr-only" // Hide the native checkbox
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showSpeedColors
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showSpeedColors ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showSpeedColors && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Waypoints</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showWaypoints}
+                                      onChange={(e) => setShowWaypoints(e.target.checked)}
+                                      className="sr-only"
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showWaypoints
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showWaypoints ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showWaypoints && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+
+                                <label className="flex items-center justify-between cursor-pointer group">
+                                  <span className="text-gray-700">Metrics</span>
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={showMetrics}
+                                      onChange={(e) => setShowMetrics(e.target.checked)}
+                                      className="sr-only"
+                                    />
+                                    <motion.div
+                                      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors duration-200 ${
+                                        showMetrics
+                                          ? "border-[#3674B5] bg-[#3674B5]"
+                                          : "border-gray-300 bg-white group-hover:border-[#3674B5]/70"
+                                      }`}
+                                      animate={{
+                                        scale: showMetrics ? [1, 1.1, 1] : 1,
+                                      }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      <AnimatePresence>
+                                        {showMetrics && (
+                                          <motion.svg
+                                            initial={{ opacity: 0, scale: 0 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0 }}
+                                            transition={{ duration: 0.15 }}
+                                            className="w-3 h-3 text-white"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            strokeWidth={3}
+                                          >
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                          </motion.svg>
+                                        )}
+                                      </AnimatePresence>
+                                    </motion.div>
+                                  </div>
+                                </label>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="h-96 relative">
+              <div className="h-[630px] relative">
                 {!showMap && (
                   <div className="flex items-center justify-center h-full bg-gray-100 rounded-lg">
                     <div className="text-center">
@@ -803,13 +967,6 @@ const ScreenTracking: React.FC = () => {
                           setHistoricalRouteData(data);
                         }}
                       />
-                      {/* Debug info */}
-                      <div className="absolute top-4 left-4 bg-white p-2 rounded shadow text-xs z-[1000]">
-                        <div>Selected Screen: {selectedScreen?.deviceId || 'N/A'}</div>
-                        <div>Material ID: {mapMaterialId}</div>
-                        <div>Date: {selectedDate}</div>
-                        <div>Filtered Screens: {filteredScreens?.length || 0}</div>
-                      </div>
                     </div>
                   ) : (
                     <MapView 
@@ -867,52 +1024,33 @@ const ScreenTracking: React.FC = () => {
                                 click: () => handleScreenSelect(screen),
                               }}
                             >
-                              <Popup maxWidth={300} maxHeight={400}>
-                                <div className="p-3 space-y-3 max-w-xs">
+                              <Popup maxWidth={290} maxHeight={400}>
+                                <div className="space-y-4 max-w-xs">
                                   {/* Header */}
-                                  <div className="border-b pb-2">
-                                    <h3 className="text-base font-semibold text-gray-900">Screen Details</h3>
+                                  <div className="pb-2">
+                                    <h3 className="text-base font-semibold text-gray-900">{screen.deviceId}</h3>
                                   </div>
 
-                                  {/* Device Info */}
-                                  <div>
-                                    <h4 className="font-medium text-gray-900 text-sm">Device Info</h4>
-                                    <div className="mt-1 space-y-1 text-xs text-gray-600">
-                                      <p>Device ID: {screen.deviceId}</p>
-                                      <p>Material: {screen.materialId}</p>
-                                      <p>Screen Type: {screen.screenType}</p>
-                                      {screen.carGroupId && <p>Car Group: {screen.carGroupId}</p>}
-                                      {screen.slotNumber && <p>Slot: {screen.slotNumber}</p>}
-                                      {screen.statusText && <p className="text-sm text-gray-600">Status: {screen.statusText}</p>}
-                                    </div>
+                                  {/* Address */}
+                                  <div className="flex items-center text-xs text-gray-600">
+                                      <MapPin className="w-3.5 h-3.5 mr-1 text-gray-400" />
+                                    <span>{selectedScreen?.currentLocation?.address || 'N/A'}</span>
                                   </div>
 
-                                  {/* Today's Progress */}
-                                  <div>
-                                    <h4 className="font-medium text-gray-900 text-sm">Today's Progress</h4>
-                                    <div className="mt-1 space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-gray-600">Hours Online:</span>
-                                        <span className="font-medium text-xs">{formatTime(screen.currentHours)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-gray-600">Hours Remaining:</span>
-                                        <span className="font-medium text-xs">{formatTime(screen.hoursRemaining)}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-gray-600">Distance Traveled:</span>
-                                        <span className="font-medium text-xs">
-                                          {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
-                                            ? `${historicalRouteData.metrics.totalDistance} km`
-                                            : formatDistance(screen.totalDistanceToday)
-                                          }
-                                        </span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-xs text-gray-600">Compliance Rate:</span>
-                                        <span className="font-medium text-xs">{screen.complianceRate}%</span>
-                                      </div>
-                                    </div>
+                                  {/* Group ID and Status */}
+                                  <div className="flex flex-col items-start space-y-2">
+                                    <span className="px-3 py-1 bg-gray-100 text-xs text-gray-700 rounded-full border border-gray-200">
+                                      {screen.carGroupId || 'N/A'}
+                                    </span>
+                                    <span
+                                      className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                                        screen.statusText === 'ONLINE'
+                                          ? 'text-green-700 bg-green-100 border-green-200'
+                                          : 'text-red-700 bg-red-100 border-red-200'
+                                      }`}
+                                    >
+                                      {screen.slotNumber ? `Slot ${screen.slotNumber}` : screen.statusText || 'OFFLINE'}
+                                    </span>
                                   </div>
                                 </div>
                               </Popup>
@@ -1128,149 +1266,141 @@ const ScreenTracking: React.FC = () => {
                     </div>
                   </div>
                 )}
+                {/* Selected Screen Details with Tabs */}
+                {selectedScreen && (
+                  <div className="absolute bottom-4 left-4 right-4 z-[1000]">
+                    <div className="bg-white rounded-lg shadow-lg border border-gray-200 max-w-3xl mx-auto">
+                      {/* Tabs Header */}
+                      <div className="flex border-b gap-2 border-gray-200">
+                        <button
+                          onClick={() => setActiveDetailTab('device')}
+                          className={`relative flex-1 py-3 px-4 text-sm font-medium text-center transition-colors group ${
+                            activeDetailTab === 'device'
+                              ? 'text-blue-600'
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Device Information
+                          <span
+                            className={`absolute bottom-0 left-0 h-[2px] bg-blue-600 transition-all duration-300
+                              ${activeDetailTab === 'device' ? 'w-full' : 'w-0 group-hover:w-full'}
+                            `}
+                          />
+                        </button>
+                        <button
+                          onClick={() => setActiveDetailTab('progress')}
+                          className={`relative flex-1 py-3 px-4 text-sm font-medium text-center transition-colors group ${
+                            activeDetailTab === 'progress'
+                              ? 'text-blue-600'
+                              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          Today's Progress
+                          <span
+                            className={`absolute bottom-0 left-0 h-[2px] bg-blue-600 transition-all duration-300
+                              ${activeDetailTab === 'progress' ? 'w-full' : 'w-0 group-hover:w-full'}
+                            `}
+                          />
+                        </button>
+                      </div>
+                      {/* Tab Content - Fixed Height */}
+                      <div className="h-36 overflow-y-auto"> {/* Fixed height */}
+                        {activeDetailTab === 'device' && (
+                          <div className="p-4 space-y-4">
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                              <div className="space-y-3 pr-4 col-span-2">
+                                {/* Left column - Device ID, Material, Screen Type */}
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Device ID</label>
+                                  <p className="font-medium text-gray-900 text-sm break-all">{selectedScreen.deviceId}</p>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Material</label>
+                                  <p className="font-medium text-gray-900 text-sm">{selectedScreen.materialId}</p>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Screen Type</label>
+                                  <p className="font-medium text-gray-900 text-sm">{selectedScreen.screenType}</p>
+                                </div>
+                                {selectedScreen.currentLocation && (
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Current Address</label>
+                                    <p className="font-medium text-gray-900 text-sm break-words">
+                                      {selectedScreen.currentLocation.address}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-3 pl-4 col-span-1">
+                                {/* Right column - Car Group, Slot, Status */}
+                                {selectedScreen.carGroupId && (
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Car Group</label>
+                                    <p className="font-medium text-gray-900 text-sm">{selectedScreen.carGroupId}</p>
+                                  </div>
+                                )}
+                                {selectedScreen.slotNumber && (
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Slot</label>
+                                    <p className="font-medium text-gray-900 text-sm">{selectedScreen.slotNumber}</p>
+                                  </div>
+                                )}
+                                {selectedScreen.statusText && (
+                                  <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Status</label>
+                                    <p className="font-medium text-gray-900 text-sm">{selectedScreen.statusText}</p>
+                                  </div>
+                                )}
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Date:</label>
+                                  <p className="font-medium text-gray-900 text-sm">{selectedDate}</p>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 block mb-1">Filtered Screens:</label>
+                                  <p className="font-medium text-gray-900 text-sm">{filteredScreens?.length || 0}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {activeDetailTab === 'progress' && (
+                          <div className="p-4 h-full flex items-center justify-center"> {/* Added h-full and centering */}
+                            <div className="grid grid-cols-2 gap-6 text-sm w-full">
+                              <div className="space-y-4">
+                                <div className="text-center">
+                                  <label className="text-xs text-gray-500 block mb-1">Hours Online</label>
+                                  <p className="text-2xl font-bold">{formatTime(selectedScreen.currentHours)}</p>
+                                </div>
+                                <div className="text-center">
+                                  <label className="text-xs text-gray-500 block mb-1">Hours Remaining</label>
+                                  <p className="text-2xl font-bold">{formatTime(selectedScreen.hoursRemaining)}</p>
+                                </div>
+                              </div>
+                              <div className="space-y-4">
+                                <div className="text-center">
+                                  <label className="text-xs text-gray-500 block mb-1">Distance Traveled</label>
+                                  <p className="text-2xl font-bold">
+                                    {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
+                                      ? `${historicalRouteData.metrics.totalDistance} km`
+                                      : formatDistance(selectedScreen.totalDistanceToday)
+                                    }
+                                  </p>
+                                </div>
+                                <div className="text-center">
+                                  <label className="text-xs text-gray-500 block mb-1">Compliance Rate</label>
+                                  <p className="text-2xl font-bold">{selectedScreen.complianceRate}%</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-                       {/* Screen List */}
-             <div className="lg:col-span-1">
-               <div className="bg-white rounded-lg shadow">
-                 <div className="p-4 border-b">
-                   <h2 className="text-lg font-semibold text-gray-900">Screens</h2>
-                   <p className="text-sm text-gray-600">Click to view details</p>
-                 </div>
-                 <div className="max-h-96 overflow-y-auto">
-                   {filteredScreens?.map((screen) => (
-                     <div
-                       key={screen.deviceId}
-                       onClick={() => handleScreenSelect(screen)}
-                       className={`p-4 border-b cursor-pointer hover:bg-gray-50 transition-colors ${
-                         selectedScreen?.deviceId === screen.deviceId ? 'bg-blue-50 border-blue-200' : ''
-                       }`}
-                     >
-                       <div className="flex items-center justify-between mb-2">
-                         <div className="flex items-center space-x-2">
-                           <Car className="w-4 h-4 text-gray-500" />
-                           <span className="font-medium">{screen.displayId || screen.materialId}</span>
-                         </div>
-                         <div className={`flex items-center space-x-1 ${getStatusColor(screen.isOnline, screen.isCompliant)}`}>
-                           {getStatusIcon(screen.isOnline, screen.isCompliant)}
-                           <span className="text-xs">
-                             {screen.statusText || screen.displayStatus}
-                           </span>
-                         </div>
-                       </div>
-                       
-                       <div className="space-y-1 text-sm text-gray-600">
-                         <div className="flex justify-between">
-                           <span>Hours Today:</span>
-                           <span className="font-medium">{formatTime(screen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Remaining:</span>
-                           <span className="font-medium">{formatTime(screen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Distance:</span>
-                           <span className="font-medium">
-                             {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
-                               ? `${historicalRouteData.metrics.totalDistance} km`
-                               : formatDistance(screen.totalDistanceToday)
-                             }
-                           </span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span>Last Seen:</span>
-                           <span className="font-medium">
-                             {screen.lastSeen ? new Date(screen.lastSeen).toLocaleTimeString() : 'Unknown'}
-                           </span>
-                         </div>
-                       </div>
-
-                       {/* Alerts */}
-                       {screen.alerts?.length > 0 && (
-                         <div className="mt-2">
-                           <div className="flex items-center space-x-1 text-red-600">
-                             <AlertTriangle className="w-3 h-3" />
-                             <span className="text-xs">{screen.alerts?.length || 0} alert(s)</span>
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   ))}
-                 </div>
-               </div>
-
-               {/* Selected Screen Details */}
-               {selectedScreen && (
-                 <div className="mt-6 bg-white rounded-lg shadow">
-                   <div className="p-4 border-b">
-                     <h3 className="text-lg font-semibold text-gray-900">Screen Details</h3>
-                   </div>
-                   <div className="p-4 space-y-4">
-                     <div>
-                       <h4 className="font-medium text-gray-900">Device Info</h4>
-                       <div className="mt-2 space-y-1 text-sm text-gray-600">
-                         <p>Device ID: {selectedScreen.deviceId}</p>
-                         <p>Material: {selectedScreen.materialId}</p>
-                         <p>Screen Type: {selectedScreen.screenType}</p>
-                         {selectedScreen.carGroupId && <p>Car Group: {selectedScreen.carGroupId}</p>}
-                         {selectedScreen.slotNumber && <p>Slot: {selectedScreen.slotNumber}</p>}
-                         {selectedScreen.statusText && <p className="text-sm text-gray-600">Status: {selectedScreen.statusText}</p>}
-                       </div>
-                     </div>
-
-                     <div>
-                       <h4 className="font-medium text-gray-900">Today's Progress</h4>
-                       <div className="mt-2 space-y-2">
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Online:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.currentHours)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Hours Remaining:</span>
-                           <span className="font-medium">{formatTime(selectedScreen.hoursRemaining)}</span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Distance Traveled:</span>
-                           <span className="font-medium">
-                             {activeTab === 'historical' && historicalRouteData && historicalRouteData.metrics 
-                               ? `${historicalRouteData.metrics.totalDistance} km`
-                               : formatDistance(selectedScreen.totalDistanceToday)
-                             }
-                           </span>
-                         </div>
-                         <div className="flex justify-between">
-                           <span className="text-sm text-gray-600">Compliance Rate:</span>
-                           <span className="font-medium">{selectedScreen.complianceRate}%</span>
-                         </div>
-                       </div>
-                     </div>
-
-
-                     {selectedScreen.currentLocation && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Current Location</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Address: {selectedScreen.currentLocation.address}</p>
-                           <p>Speed: {selectedScreen.currentLocation.speed} km/h</p>
-                           <p>Heading: {selectedScreen.currentLocation.heading}°</p>
-                           <p>Accuracy: {selectedScreen.currentLocation.accuracy}m</p>
-                         </div>
-                       </div>
-                     )}
-
-                     {pathData && (
-                       <div>
-                         <h4 className="font-medium text-gray-900">Path Information</h4>
-                         <div className="mt-2 space-y-1 text-sm text-gray-600">
-                           <p>Total Points: {pathData.totalPoints}</p>
-                           <p>Total Distance: {formatDistance(pathData.totalDistance)}</p>
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 </div>
-               )}
           </div>
         </div>
       </div>

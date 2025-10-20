@@ -406,7 +406,7 @@ const FAQManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:pl-64 lg:pr-5">
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-6 md:p-10 lg:pl-72 lg:pr-5">
       <div className="max-w-8xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -416,11 +416,11 @@ const FAQManagement: React.FC = () => {
                 <h1 className="text-3xl font-bold text-gray-800">FAQ Management</h1>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-1">
               <div className="relative w-40">
                 <button
                   onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {getCategoryLabel(selectedCategory)}
                   <ChevronDown
@@ -435,7 +435,7 @@ const FAQManagement: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {categoryFilterOptions.map((category) => (
                         <button
@@ -453,7 +453,7 @@ const FAQManagement: React.FC = () => {
               <div className="relative w-32">
                 <button
                   onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                  className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
                 >
                   {selectedStatus === 'all' ? 'All Status' : selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
                   <ChevronDown
@@ -468,7 +468,7 @@ const FAQManagement: React.FC = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                      className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                     >
                       {statusFilterOptions.map((status) => (
                         <button
@@ -488,7 +488,7 @@ const FAQManagement: React.FC = () => {
           <div className="flex justify-end sm:justify-end mt-2 sm:mt-0">
             <button
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-lg hover:bg-[#578FCA] transition-colors"
+              className="flex text-sm items-center gap-2 px-4 py-3 w-32 bg-[#3674B5] text-white rounded-md hover:bg-[#578FCA] transition-colors"
             >
               <Plus className="w-5 h-5" />
               Add FAQ

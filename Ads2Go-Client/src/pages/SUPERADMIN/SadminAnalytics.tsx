@@ -150,75 +150,77 @@ const SadminAnalytics: React.FC = () => {
     <div className="space-y-6">
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-blue-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Stats */}
-          <div className="flex flex-col items-start">
-            <Users className="h-10 w-10 text-white bg-blue-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Users</p>
+        <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
+          {/* Left side: icon */}
+          <div>
+            <Users className="h-12 w-12 text-white rounded-full bg-blue-500 p-2" />
           </div>
-          {/* Right side: Icon + Label */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalUsers || 0} Users</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+12.5%</span>
-            </div>
+
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold">
+              {stats?.totalUsers?.toLocaleString() || 0} Users
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Users</h3>
           </div>
         </div>
 
 
-        <div className="bg-green-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <UserCheck className="h-10 w-10 text-white bg-green-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Drivers</p>
+
+        {/* Total Drivers */}
+        <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
+          {/* Left side: icon */}
+          <div>
+            <UserCheck className="h-12 w-12 text-white rounded-full bg-green-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalDrivers || 0} Drivers</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+8.3%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold">
+              {stats?.totalDrivers?.toLocaleString() || 0} Drivers
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Drivers</h3>
           </div>
         </div>
 
-        <div className="bg-purple-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <TrendingUp className="h-10 w-10 text-white bg-purple-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Ads</p>
+        {/* Total Ads */}
+        <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
+          {/* Left side: icon */}
+          <div>
+            <TrendingUp className="h-12 w-12 text-white rounded-full bg-purple-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">{stats?.totalAds || 0} Ads</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+15.2%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold">
+              {stats?.totalAds?.toLocaleString() || 0} Ads
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Ads</h3>
           </div>
         </div>
 
-        <div className="bg-yellow-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
-          {/* Left side: Icon + Label */}
-          <div className="flex flex-col items-start">
-            <DollarSign className="h-10 w-10 text-white bg-yellow-400 p-2 rounded-full mb-1" />
-            <p className="text-sm font-medium text-gray-600">Total Revenue</p>
+        {/* Total Revenue */}
+        <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
+          {/* Left side: icon */}
+          <div>
+            <DollarSign className="h-12 w-12 text-white rounded-full bg-yellow-500 p-2" />
           </div>
 
-          {/* Right side: Stats */}
-          <div className="flex flex-col text-right">
-            <p className="text-2xl font-bold text-gray-900">₱{stats?.totalRevenue?.toLocaleString() || 0}</p>
-            <div className="mt-1 text-right">
-              <span className="text-sm text-green-600 font-medium">+22.1%</span>
-            </div>
+          {/* Right side: label + value */}
+          <div className="flex flex-col items-end text-right">
+            <p className="text-2xl font-bold">
+              ₱{stats?.totalRevenue?.toLocaleString() || 0}
+            </p>
+            <h3 className="text-sm font-medium text-gray-600">Total Revenue</h3>
           </div>
         </div>
+
       </div>
 
       {/* Growth + Locations Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Growth Chart (takes 8/12 on large screens) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-xl shadow-sm border">
+        <div className="lg:col-span-8">
           <h3 className="text-lg font-bold text-gray-900 mb-4">Growth Overview</h3>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={userGrowthData}>
@@ -292,7 +294,7 @@ const SadminAnalytics: React.FC = () => {
           {/* Top Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* Active Users */}
-            <div className="bg-green-100 text-green-800 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <UserCheck className="h-12 w-12 text-white rounded-full bg-green-400 p-2" />
@@ -300,7 +302,7 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold text-green-700">
+                <p className="text-3xl font-bold">
                   {Math.floor((stats?.totalUsers || 0) * 0.85)}
                 </p>
                 <h4 className="text-sm font-medium">Active Users</h4>
@@ -308,7 +310,7 @@ const SadminAnalytics: React.FC = () => {
             </div>
 
             {/* New Users */}
-            <div className="bg-yellow-100 text-yellow-800 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <UserPlus className="h-12 w-12 text-white rounded-full bg-yellow-400 p-2" />
@@ -316,7 +318,7 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold text-yellow-700">
+                <p className="text-3xl font-bold">
                   {Math.floor((stats?.totalUsers || 0) * 0.12)}
                 </p>
                 <h4 className="text-sm font-medium">New Users</h4>
@@ -324,7 +326,7 @@ const SadminAnalytics: React.FC = () => {
             </div>
 
             {/* Inactive Users */}
-            <div className="bg-gray-100 text-gray-800 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <UserX className="h-12 w-12 text-white rounded-full bg-gray-400 p-2" />
@@ -332,18 +334,16 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-3xl font-bold text-gray-700">
+                <p className="text-3xl font-bold">
                   {Math.floor((stats?.totalUsers || 0) * 0.15)}
                 </p>
                 <h4 className="text-sm font-medium">Inactive Users</h4>
               </div>
             </div>
           </div>
-
-
   
           {/* User Growth Chart */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border">
+          <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               User Growth
             </h3>
@@ -410,7 +410,7 @@ const SadminAnalytics: React.FC = () => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Driver Growth (left, wider) */}
-        <div className="lg:col-span-8 bg-white p-6 rounded-xl shadow-sm border">
+        <div className="lg:col-span-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Driver Growth</h3>
           <ResponsiveContainer width="100%" height={350}>
             <LineChart data={userGrowthData}>
@@ -427,12 +427,12 @@ const SadminAnalytics: React.FC = () => {
         {/* Right side stat cards (2 per row) */}
         <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 gap-6">
           {/* Avg Ads per Driver */}
-          <div className="bg-blue-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-blue-400 text-white rounded-full">
                 <BarChart className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-blue-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalAds || 0) / (stats?.totalDrivers || 1))}
               </p>
             </div>
@@ -440,12 +440,12 @@ const SadminAnalytics: React.FC = () => {
           </div> 
 
           {/* Pending Approval */}
-          <div className="bg-yellow-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-yellow-400 text-white rounded-full">
                 <Clock className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-yellow-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalDrivers || 0) * 0.15)}
               </p>
             </div>
@@ -453,12 +453,12 @@ const SadminAnalytics: React.FC = () => {
           </div>
 
           {/* Top Performers */}
-          <div className="bg-purple-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-purple-400 text-white rounded-full">
                 <Trophy className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-purple-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalDrivers || 0) * 0.2)}
               </p>
             </div>
@@ -466,12 +466,12 @@ const SadminAnalytics: React.FC = () => {
           </div>
 
           {/* Active Drivers */}
-          <div className="bg-green-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-green-400 text-white rounded-full">
                 <UserCheck className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-green-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalDrivers || 0) * 0.78)}
               </p>
             </div>
@@ -479,12 +479,12 @@ const SadminAnalytics: React.FC = () => {
           </div>
 
           {/* New This Month */}
-          <div className="bg-orange-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-orange-400 text-white rounded-full">
                 <UserPlus className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-orange-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalDrivers || 0) * 0.12)}
               </p>
             </div>
@@ -492,12 +492,12 @@ const SadminAnalytics: React.FC = () => {
           </div>
 
           {/* Suspended */}
-          <div className="bg-red-100 p-4 rounded-xl shadow-md border relative">
+          <div className="bg-white p-4 rounded-md shadow-md border relative">
             <div className="flex justify-between items-start">
               <div className="p-2 bg-red-400 text-white rounded-full">
                 <UserX className="w-5 h-5" />
               </div>
-              <p className="text-3xl font-bold text-red-700">
+              <p className="text-3xl font-bold">
                 {Math.floor((stats?.totalDrivers || 0) * 0.07)}
               </p>
             </div>
@@ -511,7 +511,7 @@ const SadminAnalytics: React.FC = () => {
   const renderAdsTab = () => (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Left - Ad Performance (Chart) */}
-      <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border">
+      <div className="lg:col-span-2">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Ad Performance</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={adPerformanceData}>
@@ -528,90 +528,90 @@ const SadminAnalytics: React.FC = () => {
   
       {/* Right - Status + Metrics in 2 per row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-  {/* Active Ads */}
-  <div className="bg-green-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-green-400 text-white rounded-full">
-        <PlayCircle className="w-5 h-5" />
-      </div>
-      <span className="text-3xl font-bold text-green-700">
-        {Math.floor((stats?.totalAds || 0) * 0.72)}
-      </span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Active Ads
-    </h4>
-  </div>
+        {/* Active Ads */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-green-400 text-white rounded-full">
+              <PlayCircle className="w-5 h-5" />
+            </div>
+            <span className="text-3xl font-bold">
+              {Math.floor((stats?.totalAds || 0) * 0.72)}
+            </span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Active Ads
+          </h4>
+        </div>
 
-  {/* Pending Review */}
-  <div className="bg-yellow-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-yellow-400 text-white rounded-full">
-        <Clock className="w-5 h-5" />
-      </div>
-      <span className="text-3xl font-bold text-yellow-700">
-        {Math.floor((stats?.totalAds || 0) * 0.18)}
-      </span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Pending Ads
-    </h4>
-  </div>
+        {/* Pending Review */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-yellow-400 text-white rounded-full">
+              <Clock className="w-5 h-5" />
+            </div>
+            <span className="text-3xl font-bold">
+              {Math.floor((stats?.totalAds || 0) * 0.18)}
+            </span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Pending Ads
+          </h4>
+        </div>
 
-  {/* Rejected */}
-  <div className="bg-red-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-red-400 text-white rounded-full">
-        <XCircle className="w-5 h-5" />
-      </div>
-      <span className="text-3xl font-bold text-red-700">
-        {Math.floor((stats?.totalAds || 0) * 0.1)}
-      </span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Rejected Ads
-    </h4>
-  </div>
+        {/* Rejected */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-red-400 text-white rounded-full">
+              <XCircle className="w-5 h-5" />
+            </div>
+            <span className="text-3xl font-bold">
+              {Math.floor((stats?.totalAds || 0) * 0.1)}
+            </span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Rejected Ads
+          </h4>
+        </div>
 
-  {/* Avg. CTR */}
-  <div className="bg-blue-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-blue-400 text-white rounded-full">
-        <Percent className="w-5 h-5" />
-      </div>
-      <span className="text-2xl font-bold text-blue-700">7.2%</span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Average CTR
-    </h4>
-  </div>
+        {/* Avg. CTR */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-blue-400 text-white rounded-full">
+              <Percent className="w-5 h-5" />
+            </div>
+            <span className="text-2xl font-bold">7.2%</span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Average CTR
+          </h4>
+        </div>
 
-  {/* Avg. Impressions */}
-  <div className="bg-orange-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-orange-400 text-white rounded-full">
-        <Eye className="w-5 h-5" />
-      </div>
-      <span className="text-2xl font-bold text-orange-700">2,450</span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Avg. Impressions
-    </h4>
-  </div>
+        {/* Avg. Impressions */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-orange-400 text-white rounded-full">
+              <Eye className="w-5 h-5" />
+            </div>
+            <span className="text-2xl font-bold">2,450</span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Avg. Impressions
+          </h4>
+        </div>
 
-  {/* Top Performing Ad */}
-  <div className="bg-purple-100 p-4 rounded-xl shadow-md border relative">
-    <div className="flex justify-between items-start">
-      <div className="p-2 bg-purple-400 text-white rounded-full">
-        <Star className="w-5 h-5" />
+        {/* Top Performing Ad */}
+        <div className="bg-white p-4 rounded-md shadow-md border relative">
+          <div className="flex justify-between items-start">
+            <div className="p-2 bg-purple-400 text-white rounded-full">
+              <Star className="w-5 h-5" />
+            </div>
+            <span className="text-md text-right truncate font-bold">Video Ad #123</span>
+          </div>
+          <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
+            Top Performing Ad
+          </h4>
+        </div>
       </div>
-      <span className="text-md text-right truncate font-bold text-purple-700">Video Ad #123</span>
-    </div>
-    <h4 className="text-sm font-medium text-right text-gray-700 mt-4">
-      Top Performing Ad
-    </h4>
-  </div>
-</div>
 
     </div>
   );
@@ -625,7 +625,7 @@ const SadminAnalytics: React.FC = () => {
           {/* --- Top Stat Cards --- */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* Monthly Revenue */}
-            <div className="bg-green-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <Wallet className="h-12 w-12 text-white rounded-full bg-green-500 p-2" />
@@ -633,7 +633,7 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold">
                   ₱{stats?.totalRevenue?.toLocaleString() || 0}
                 </p>
                 <h3 className="text-sm font-medium text-gray-600">Monthly Revenue</h3>
@@ -641,7 +641,7 @@ const SadminAnalytics: React.FC = () => {
             </div>
 
             {/* Avg. Revenue per Ad */}
-            <div className="bg-blue-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <BarChart3 className="h-12 w-12 text-white rounded-full bg-blue-500 p-2" />
@@ -649,7 +649,7 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold">
                   ₱
                   {Math.floor(
                     (stats?.totalRevenue || 0) / (stats?.totalAds || 1)
@@ -660,7 +660,7 @@ const SadminAnalytics: React.FC = () => {
             </div>
 
             {/* Growth Rate */}
-            <div className="bg-purple-100 p-6 rounded-xl shadow-md border flex items-center justify-between">
+            <div className="bg-white p-6 rounded-md shadow-md border flex items-center justify-between">
               {/* Left side: icon */}
               <div>
                 <TrendingUp className="h-12 w-12 text-white rounded-full bg-purple-500 p-2" />
@@ -668,15 +668,14 @@ const SadminAnalytics: React.FC = () => {
 
               {/* Right side: label + value */}
               <div className="flex flex-col items-end text-right">
-                <p className="text-2xl font-bold text-purple-600">+22.1%</p>
+                <p className="text-2xl font-bold">+22.1%</p>
                 <h3 className="text-sm font-medium text-gray-600">Growth Rate</h3>
               </div>
             </div>
           </div>
-
   
           {/* --- Revenue Growth Chart --- */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border">
+          <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Revenue Growth
             </h3>
@@ -772,7 +771,7 @@ const SadminAnalytics: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border">
+      <div>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Plan Performance</h3>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={plans}>
@@ -813,8 +812,8 @@ const SadminAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="p-8 pl-72 bg-[#f9f9fc] min-h-screen text-gray-800 font-sans">
-      <div className="mb-8">
+    <div className="p-8 ml-60 bg-gray-50 min-h-screen text-gray-800 font-sans">
+      <div className="pt-5 mb-8">
         <Link
           to="/sadmin-dashboard"
           className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
@@ -830,7 +829,7 @@ const SadminAnalytics: React.FC = () => {
           <h2 className="text-2xl font-semibold text-gray-800">Analytics Dashboard</h2>
 
           {/* Filters */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {/* Date Filter */}
             <div className="relative w-36">
               <button
@@ -867,6 +866,15 @@ const SadminAnalytics: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="py-3 bg-[#feb011] text-xs font-semibold text-white rounded-md w-28 hover:bg-[#FF9B45] transition-colors flex items-center justify-center"
+                >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
           </div>
         </div>
 
@@ -899,16 +907,6 @@ const SadminAnalytics: React.FC = () => {
               );
             })}
           </nav>
-
-          {/* Refresh Button */}
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="py-3 bg-[#feb011] text-xs font-semibold text-black/70 rounded-lg w-28 hover:bg-[#FF9B45] transition-colors flex items-center justify-center"
-              >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
         </div>
       </div>
 

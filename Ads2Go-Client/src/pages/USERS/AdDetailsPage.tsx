@@ -284,11 +284,18 @@ const AdDetailsPage: React.FC = () => {
   // Show loading state
   if (loading && !ad) {
     return (
-      <div className="flex-1 ml-60 p-6 bg-gray-100 h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-black/90">Loading ad details...</p>
-        </div>
+      <div className="relative flex-1 h-screen flex items-center justify-center overflow-hidden">
+        {/* === Background Image === */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+          style={{
+            backgroundImage: "url('/image/bg.jpg')",
+          }}
+        ></div>
+
+        {/* === Overlay Tint === */}
+        <div className="absolute inset-0 bg-white/30 backdrop-blur-lg"></div>
+
       </div>
     );
   }
@@ -507,10 +514,10 @@ const AdDetailsPage: React.FC = () => {
 
           {/* Tab Content */}
           {activeTab === 'Details' && (
-            <div className="grid grid-cols-2 bg-white/60 p-3 rounded-lg shadow-md">
+            <div className="grid grid-cols-2 bg-white/60 p-3 shadow-md">
               {/* Left: Table-style info */}
               <div>
-                <table className="w-full text-sm mt-5 text-black/80">
+                <table className="w-full text-sm text-black/80">
                   <tbody>
                     <tr>
                       <td className="py-2">Start Date:</td>

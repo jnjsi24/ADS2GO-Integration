@@ -213,14 +213,13 @@ const SadminDriverSalary: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen ml-64 bg-gray-50">
+    <div className="min-h-screen ml-60 bg-gray-50">
       {/* Header */}
       <div>
         <div className="px-8 py-6">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mt-4">Driver Salary Management</h1>
-              <p className="text-gray-600 mt-2">Configure salary rates for drivers based on vehicle type, category, and material type</p>
             </div>
           </div>
         </div>
@@ -229,9 +228,9 @@ const SadminDriverSalary: React.FC = () => {
       {/* Stats */}
       <div className="px-8 py-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
+          <div className="bg-white rounded-md p-6 shadow-md">
             <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-lg">
+              <div className="p-3 bg-green-100 rounded-full">
                 <DollarSign className="w-6 h-6 text-green-600" />
               </div>
               <div className="ml-4">
@@ -240,9 +239,9 @@ const SadminDriverSalary: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
+          <div className="bg-white rounded-md p-6 shadow-md">
             <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-lg">
+              <div className="p-3 bg-blue-100 rounded-full">
                 <Calculator className="w-6 h-6 text-blue-600" />
               </div>
               <div className="ml-4">
@@ -251,9 +250,9 @@ const SadminDriverSalary: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
+          <div className="bg-white rounded-md p-6 shadow-md">
             <div className="flex items-center">
-              <div className="p-3 bg-purple-100 rounded-lg">
+              <div className="p-3 bg-purple-100 rounded-full">
                 <Users className="w-6 h-6 text-purple-600" />
               </div>
               <div className="ml-4">
@@ -262,9 +261,9 @@ const SadminDriverSalary: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border">
+          <div className="bg-white rounded-md p-6 shadow-md">
             <div className="flex items-center">
-              <div className="p-3 bg-orange-100 rounded-lg">
+              <div className="p-3 bg-orange-100 rounded-full">
                 <Clock className="w-6 h-6 text-orange-600" />
               </div>
               <div className="ml-4">
@@ -278,7 +277,7 @@ const SadminDriverSalary: React.FC = () => {
         {/* Tabs */}
         <div className="flex items-center justify-between p-1 rounded-lg w-full mb-6">
           {/* Tabs on the left */}
-          <div className="flex space-x-1 rounded-lg p-1">
+          <div className="flex space-x-1 p-1">
             {["active", "inactive"].map((tab) => {
               const isActive = activeTab === tab;
               const count =
@@ -313,7 +312,7 @@ const SadminDriverSalary: React.FC = () => {
           {/* Create button on the right */}
           <button
             onClick={handleCreatePricing}
-            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-xl transition-all duration-200 flex items-center gap-2"
+            className="bg-[#3674B5] hover:bg-[#1B5087] text-sm text-white px-6 py-3 rounded-md transition-all duration-200 flex items-center gap-2"
           >
             <Plus className="w-5 h-5" />
             Create Salary Pricing
@@ -354,83 +353,92 @@ const SadminDriverSalary: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {filteredPricing.map((pricing) => (
-              <div key={pricing.id} className="bg-white rounded-xl p-6 shadow-sm border hover:shadow-md transition-shadow">
-                {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {pricing.materialType} {pricing.vehicleType}
-                      </h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${
-                        pricing.isActive 
-                          ? 'bg-green-100 text-green-800 border-green-200'
-                          : 'bg-gray-100 text-gray-800 border-gray-200'
-                      }`}>
-                        {pricing.isActive ? 'Active' : 'Inactive'}
+              <div
+                key={pricing.id}
+                className="bg-white rounded-md p-6 shadow-md flex flex-col justify-between"
+              >
+                {/* Content wrapper */}
+                <div className="flex-1">
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {pricing.materialType} {pricing.vehicleType}
+                        </h3>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                            pricing.isActive
+                              ? "bg-green-100 text-green-800 border-green-200"
+                              : "bg-gray-100 text-gray-800 border-gray-200"
+                          }`}
+                        >
+                          {pricing.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <p className="text-gray-600 text-sm">{pricing.category}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleEditPricing(pricing)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit Pricing"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeletePricing(pricing)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Pricing"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Pricing Details */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        Distance Rate:
+                      </span>
+                      <span className="font-medium text-green-600">
+                        {formatCurrency(pricing.distanceRate)}/km
                       </span>
                     </div>
-                    <p className="text-gray-600 text-sm">{pricing.category}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEditPricing(pricing)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit Pricing"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeletePricing(pricing)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete Pricing"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        Hours Rate:
+                      </span>
+                      <span className="font-medium text-blue-600">
+                        {formatCurrency(pricing.hoursRate)}/hour
+                      </span>
+                    </div>
+
+                    {pricing.notes && (
+                      <div className="pt-3">
+                        <p className="text-sm text-black">
+                          <span className="font-medium">Notes: {pricing.notes}</span> 
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Pricing Details */}
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      Distance Rate:
-                    </span>
-                    <span className="font-medium text-green-600">
-                      {formatCurrency(pricing.distanceRate)}/km
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      Hours Rate:
-                    </span>
-                    <span className="font-medium text-blue-600">
-                      {formatCurrency(pricing.hoursRate)}/hour
-                    </span>
-                  </div>
-                  
-                  {pricing.notes && (
-                    <div className="border-t pt-3">
-                      <p className="text-sm text-gray-600">
-                        <span className="font-medium">Notes:</span> {pricing.notes}
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="border-t pt-3">
-                    <p className="text-xs text-gray-500">
-                      Created: {new Date(pricing.createdAt).toLocaleDateString()}
+                {/* Footer — sticks to bottom */}
+                <div className="border-t pt-3 mt-4">
+                  <p className="text-xs text-black">
+                    Created: <span className="font-medium">{new Date(pricing.createdAt).toLocaleDateString()}</span>
+                  </p>
+                  {pricing.updatedBy && (
+                    <p className="text-xs text-black">
+                      Updated: <span className="font-medium">{new Date(pricing.updatedAt).toLocaleDateString()}</span>
                     </p>
-                    {pricing.updatedBy && (
-                      <p className="text-xs text-gray-500">
-                        Updated: {new Date(pricing.updatedAt).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -441,7 +449,7 @@ const SadminDriverSalary: React.FC = () => {
       {/* Create/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 p-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-md shadow-2xl w-full max-w-lg mx-4 p-8 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
                 {editingPricing ? 'Edit Salary Pricing' : 'Create Salary Pricing'}
@@ -618,7 +626,7 @@ const SadminDriverSalary: React.FC = () => {
                   />
                   <label
                     htmlFor="distanceRate"
-                    className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${formData.distanceRate ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.distanceRate ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                   >
                     Distance Rate (₱/km)
                   </label>
@@ -642,7 +650,7 @@ const SadminDriverSalary: React.FC = () => {
                   />
                   <label
                     htmlFor="hoursRate"
-                    className={`absolute left-0 text-gray-700/80 bg-transparent transition-all duration-200 ${formData.hoursRate ? '-top-2 text-sm text-gray-700/70 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700/80'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700/70 peer-focus:font-semibold`}
+                    className={`absolute left-0 text-gray-700 bg-transparent transition-all duration-200 ${formData.hoursRate ? '-top-2 text-sm text-gray-700 font-semibold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-700'} peer-focus:-top-2 peer-focus:text-sm peer-focus:text-gray-700 peer-focus:font-semibold`}
                   >
                     Hours Rate (₱/hour)
                   </label>
@@ -661,7 +669,7 @@ const SadminDriverSalary: React.FC = () => {
                   value={formData.notes}
                   onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 rounded-lg focus:outline-none shadow-md"
                   placeholder="Add any additional notes about this pricing configuration..."
                 />
               </div>
