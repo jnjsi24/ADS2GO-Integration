@@ -29,6 +29,7 @@ const Register: React.FC = () => {
   
   const isSubmittingRef = useRef(false);
   const submissionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   
   const navigate = useNavigate();
   const { register } = useUserAuth();
@@ -477,7 +478,7 @@ const Register: React.FC = () => {
                 disabled={!isCurrentStepValid()}
                 className={`w-full py-3 px-4 transition-colors mt-6 ${
                   isCurrentStepValid()
-                    ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                    ? 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
                     : 'bg-blue-400 cursor-not-allowed'
                 } text-white font-semibold`}
               >
@@ -519,7 +520,7 @@ const Register: React.FC = () => {
                 <button
                   type="button"
                   onClick={handlePrevious}
-                  className="w-40 text-white font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
+                  className="w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
                 >
                   Back
                 </button>
@@ -529,7 +530,7 @@ const Register: React.FC = () => {
                   disabled={!isCurrentStepValid()}
                   className={`flex-1 py-3 px-4 text-white font-semibold transition-colors ${
                     isCurrentStepValid()
-                      ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                      ? 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
                       : 'bg-blue-400 cursor-not-allowed'
                   }`}
                 >
@@ -587,11 +588,9 @@ const Register: React.FC = () => {
               <div className="flex items-center text-sm mt-6">
                 <div
                   className="flex items-center space-x-2 cursor-pointer"
-                  onClick={() => setChecked((prev) => !prev)}
+                  onClick={() => setShowTermsModal(true)} // 🔹 Opens modal instead of toggling
                 >
-                  <div
-                    className="relative w-5 h-5 border-2 border-gray-400 flex items-center justify-center transition-colors duration-200 hover:border-blue-500"
-                  >
+                  <div className="relative w-5 h-5 border-2 border-white/30 hover:border-white/50 flex items-center justify-center transition-colors duration-200">
                     <AnimatePresence>
                       {checked && (
                         <motion.div
@@ -600,9 +599,9 @@ const Register: React.FC = () => {
                           animate={{ scale: 1, opacity: 1 }}
                           exit={{ scale: 0, opacity: 0 }}
                           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                          className="absolute text-blue-600"
+                          className="absolute text-white"
                         >
-                          <Check size={16} strokeWidth={3} />
+                          <Check size={12} strokeWidth={3} />
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -611,12 +610,121 @@ const Register: React.FC = () => {
                 </div>
               </div>
 
+              {/* 🔹 Terms Modal */}
+              {showTermsModal && (
+                <div className="fixed inset-0 flex -top-6 items-center justify-center bg-black/60 z-50">
+                  <div className="bg-white/90 shadow-2xl w-11/12 sm:w-2/3 lg:w-[28rem] max-h-[85vh] overflow-y-auto p-6">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 text-center">
+                      Terms and Conditions
+                    </h2>
+
+                    <div className="text-sm text-gray-700 space-y-5 text-justify">
+                      <p><strong>Last Updated:</strong> October 20, 2025</p>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">1. Acceptance of Terms</h3>
+                        <p>
+                          By accessing or using the <strong>Ads2Go</strong> website, application, or services
+                          (collectively, the “Service”), you agree to comply with and be bound by these Terms and
+                          Conditions. If you do not agree with any part of these terms, you must not use the Service.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">2. Use of the Service</h3>
+                        <p>
+                          You agree to use Ads2Go only for lawful purposes and in a manner that does not infringe
+                          upon the rights of others or interfere with the normal operation of the Service. You are
+                          prohibited from posting, uploading, or distributing any unlawful, harmful, or misleading
+                          content through Ads2Go.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">3. User Accounts</h3>
+                        <p>
+                          Certain features of Ads2Go may require you to register for an account. You are responsible
+                          for maintaining the confidentiality of your account credentials and for all activities
+                          conducted under your account. Ads2Go reserves the right to suspend or terminate accounts
+                          involved in any unauthorized or fraudulent activities.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">4. Privacy Policy</h3>
+                        <p>
+                          Your use of the Service is governed by our <strong>Privacy Policy</strong>, which outlines how
+                          we collect, use, and protect your personal information. By using Ads2Go, you consent to the
+                          collection and use of your data in accordance with that policy.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">5. Intellectual Property</h3>
+                        <p>
+                          All content, trademarks, logos, graphics, and other materials provided through Ads2Go are
+                          owned by or licensed to <strong>Ads2Go</strong>. You may not reproduce, distribute, modify,
+                          or exploit any part of the Service without prior written consent from Ads2Go.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">6. Advertising Content and Responsibility</h3>
+                        <p>
+                          Users submitting advertisements are solely responsible for ensuring that all ad materials
+                          comply with applicable laws and do not infringe upon third-party rights. Ads2Go reserves the
+                          right to review, modify, or reject any advertisement that violates our standards or legal
+                          requirements.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">7. Limitation of Liability</h3>
+                        <p>
+                          Ads2Go will not be held liable for any direct, indirect, incidental, or consequential
+                          damages resulting from your use or inability to use the Service. All use of the Service is
+                          at your own risk.
+                        </p>
+                      </section>
+
+                      <section>
+                        <h3 className="font-semibold text-gray-900 mb-1">8. Changes to Terms</h3>
+                        <p>
+                          Ads2Go reserves the right to update or modify these Terms and Conditions at any time. Any
+                          changes will be effective immediately upon posting, and the updated “Last Updated” date
+                          will reflect the revision. Continued use of the Service after changes indicates your
+                          acceptance of the new Terms.
+                        </p>
+                      </section>
+                    </div>
+
+                    <div className="flex justify-between gap-3 mt-6">
+                      <button
+                        onClick={() => setShowTermsModal(false)}
+                        className="w-40 text-black/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => {
+                          setChecked(true);
+                          setShowTermsModal(false);
+                        }}
+                        className="w-full px-6 py-2 bg-[#3674B5] hover:bg-[#3674B5]/80 text-white font-semibold transition"
+                      >
+                        Agree
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-4 mt-6">
                 <button
                   type="button"
                   onClick={handlePrevious}
                   disabled={isSubmitting}
-                  className={`flex-1 py-3 px-4 border border-white text-white font-semibold transition-colors ${
+                  className={`w-40 text-white/80 font-semibold bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center ${
                     isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
                   }`}
                 >
@@ -628,7 +736,7 @@ const Register: React.FC = () => {
                   className={`flex-1 py-3 px-4 transition-colors ${
                     isSubmitting || !checked
                       ? 'bg-blue-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+                      : 'bg-[#3674B5] hover:bg-[#3674B5]/80 cursor-pointer'
                   } text-white font-semibold`}
                 >
                   {isSubmitting ? (

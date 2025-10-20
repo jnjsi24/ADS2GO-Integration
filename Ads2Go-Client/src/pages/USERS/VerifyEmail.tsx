@@ -157,7 +157,7 @@ const VerifyEmail: React.FC = () => {
             disabled={code.join('').length !== 6 || verifyLoading}
             className={`w-full py-2 px-4 font-semibold focus:outline-none transition-colors ${
               code.join('').length === 6 && !verifyLoading
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                ? 'bg-[#3674B5] hover:bg-[#3674B5]/80 text-white'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
@@ -174,7 +174,7 @@ const VerifyEmail: React.FC = () => {
                 disabled={!canResend || resendLoading}
                 className={`font-semibold ${
                   canResend && !resendLoading
-                    ? 'text-white hover:text-blue-500'
+                    ? 'text-white hover:text-[#3674B5]'
                     : 'text-white/70 cursor-not-allowed'
                 }`}
               >

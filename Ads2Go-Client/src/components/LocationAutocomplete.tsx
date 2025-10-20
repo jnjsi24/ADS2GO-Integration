@@ -431,13 +431,13 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
               value={userAddress}
               onChange={handleAddressChange}
               placeholder=""
-              className="peer w-full px-0 pt-5 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
+              className="peer w-full px-0 pt-10 pb-2 border-b bg-transparent focus:outline-none focus:border-blue-500 focus:ring-0 placeholder-transparent transition border-gray-300 text-white"
               style={{ backgroundColor: 'transparent' }}
             />
             <label
               className={`absolute left-0 text-white bg-transparent transition-all duration-200 ${
-                userAddress ? '-top-2 text-sm font-bold' : 'peer-placeholder-shown:top-4 peer-placeholder-shown:text-base'
-              } peer-focus:-top-2 peer-focus:text-sm peer-focus:font-bold`}
+                userAddress ? 'top-3 text-sm font-bold' : 'peer-placeholder-shown:top-10 peer-placeholder-shown:text-base'
+              } peer-focus:top-3 peer-focus:text-sm peer-focus:font-bold`}
             >
               Enter your house number and street...
             </label>

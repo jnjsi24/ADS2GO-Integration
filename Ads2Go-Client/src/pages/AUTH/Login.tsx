@@ -375,7 +375,7 @@ const Login: React.FC = () => {
             className={`w-full py-2 px-4 shadow-sm transition-colors ${
               isLoggingIn
                 ? 'bg-blue-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
+                : 'bg-[#3674B5] hover:bg-[#3674B5]/80'
             } text-white font-semibold`}
           >
             {isLoggingIn ? (

@@ -368,18 +368,75 @@ const Advertisements: React.FC = () => {
   const isMobile = window.innerWidth <= 640;
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-        style={{
-          backgroundImage: "url('/image/bg.jpg')",
-        }}
-      ></div>
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
-      <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 flex flex-col">
-        <div className="bg-transparent w-full flex-1 flex flex-col">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-16 lg:pt-10 gap-4">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Advertisements</h1>
+  <div className="relative min-h-screen overflow-hidden">
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg.jpg')",
+      }}
+    ></div>
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+    <div className="relative min-h-screen bg-transparent lg:pl-64 px-4 sm:px-5 lg:pr-5 flex flex-col">
+      <div className="bg-transparent w-full flex-1 flex flex-col">
+        
+        {/* Header Section - Common for both */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 pt-5 lg:pt-10 gap-4">
+          {/* ================= MOBILE VIEW ================= */}
+          <div className="block lg:hidden w-full space-y-4">
+            {/* Row 1: Search and Status Filter */}
+            <div className="flex gap-2 w-full px-4">
+              <input
+                type="text"
+                className="text-xs text-black rounded-md ml-8 pl-5 py-3 w-64 shadow-md focus:outline-none bg-white/70"
+                placeholder="Search Advertisements"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <div className="relative w-32">
+                <button
+                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                >
+                  {selectedStatusFilter}
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${
+                      showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                    }`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showStatusDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {statusFilterOptions.map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => handleStatusFilterChange(status)}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Row 2: Advertisements Title */}
+            <h1 className="text-2xl font-bold text-gray-800">Advertisements</h1>
+          </div>
+
+          {/* ================= DESKTOP VIEW ================= */}
+          <div className="hidden lg:flex flex-col lg:flex-row justify-between items-start lg:items-center w-full gap-4">
+            <h1 className="text-2xl sm:text-3xl pl-6 font-bold text-gray-800">Advertisements</h1>
+
             <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
                 <input
@@ -389,14 +446,21 @@ const Advertisements: React.FC = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
+
                 <div className="relative w-full sm:w-32">
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                     className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
                   >
                     {selectedStatusFilter}
-                    <ChevronDown size={16} className={`transform transition-transform duration-200 ${showStatusDropdown ? 'rotate-180' : 'rotate-0'}`} />
+                    <ChevronDown
+                      size={16}
+                      className={`transform transition-transform duration-200 ${
+                        showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                      }`}
+                    />
                   </button>
+
                   <AnimatePresence>
                     {showStatusDropdown && (
                       <motion.div
@@ -422,32 +486,224 @@ const Advertisements: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="flex justify-start lg:justify-end mb-6">
-            <button
-              onClick={() => navigate('/create-advertisement')}
-              className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-full sm:w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
-              onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
-                const button = e.currentTarget;
-                const rect = button.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                button.style.setProperty('--x', `${x}px`);
-                button.style.setProperty('--y', `${y}px`);
+        </div>
+
+
+        {/* Add New Ads Button - Common for both */}
+        <div className="flex justify-end lg:justify-end mb-6">
+          <button
+            onClick={() => navigate('/create-advertisement')}
+            className="relative py-3 bg-gradient-to-r from-[#1B5087] to-[#3674B5] text-xs text-white w-40 sm:w-40 transition-all duration-300 flex items-center justify-center gap-2 overflow-hidden group hover:scale-105 shadow-md"
+            onMouseMove={(e: MouseEvent<HTMLButtonElement>) => {
+              const button = e.currentTarget;
+              const rect = button.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              button.style.setProperty('--x', `${x}px`);
+              button.style.setProperty('--y', `${y}px`);
+            }}
+          >
+            <span
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              style={{
+                background: 'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.2) 0%, transparent 50%)',
               }}
-            >
-              <span
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                style={{
-                  background: 'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.2) 0%, transparent 50%)',
-                }}
-              />
-              <span className="relative z-10 flex items-center gap-2">
-                <Plus size={16} />
-                Add New Ads
-              </span>
-            </button>
+            />
+            <span className="relative z-10 flex items-center gap-2">
+              <Plus size={16} />
+              Add New Ads
+            </span>
+          </button>
+        </div>
+
+        {/* Mobile View */}
+        <div className="block lg:hidden">
+          <div className="flex-1 p-6 grid grid-cols-1 gap-6">
+            {currentAds.length > 0 ? (
+              currentAds.map((ad) => (
+                <div
+                  key={ad.id}
+                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:scale-105 transition-transform duration-300"
+                >
+                  <div className="w-full h-44 flex-shrink-0 relative">
+                    {ad.mediaFile ? (
+                      ad.adFormat === "IMAGE" ? (
+                        <img
+                          src={ad.mediaFile}
+                          alt={`${ad.title} image`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.src =
+                              "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+";
+                          }}
+                        />
+                      ) : ad.adFormat === "VIDEO" ? (
+                        <video
+                          className="w-full h-full object-cover"
+                          controls
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const errorDiv = document.createElement("div");
+                            errorDiv.className =
+                              "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                            errorDiv.innerHTML = "Video not available";
+                            e.currentTarget.parentNode?.appendChild(errorDiv);
+                          }}
+                        >
+                          <source src={ad.mediaFile} />
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : (
+                        <div className="w-full h-full bg-gray-500 flex items-center justify-center">
+                          <a
+                            href={ad.mediaFile}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white hover:text-gray-300 underline"
+                          >
+                            View Media File
+                          </a>
+                        </div>
+                      )
+                    ) : (
+                      <div className="w-full h-full bg-gray-400 flex items-center justify-center text-black/70">
+                        No Media
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-4 flex flex-col flex-grow overflow-hidden h-full">
+                    {/* Upper content - takes available space */}
+                    <div
+                      className="cursor-pointer overflow-hidden flex flex-col h-full"
+                      onClick={() => navigate(`/ad-details/${ad.id}`)}
+                    >
+                      <h3 className="text-xl font-semibold text-black/80 truncate mb-2">
+                        {ad.title}
+                      </h3>
+                      <div className="flex-1 min-h-0">
+                        <p className="text-sm text-gray-600 h-full overflow-hidden text-ellipsis" 
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 4,
+                            WebkitBoxOrient: 'vertical'
+                          }}>
+                          {ad.description || "No description available"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom section (sticky at bottom) */}
+                    <div className="mt-auto pt-4">
+                      <div className="text-sm text-[#1B5087] font-medium">
+                        {ad.startTime && ad.endTime ? (
+                          formatDateRange(ad.startTime, ad.endTime)
+                        ) : (
+                          <span className="text-gray-400">Campaign dates not available</span>
+                        )}
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-300">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/ad-details/${ad.id}`);
+                          }}
+                          className="w-full text-black/70 hover:underline hover:text-black text-xs font-medium py-2 transition-all duration-300"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="absolute top-2 left-2">
+                    <span
+                      className={`inline-block px-2 py-1 text-xs font-semibold ${
+                        ad.status === "PENDING"
+                          ? "bg-yellow-200 text-yellow-800"
+                          : ad.status === "APPROVED"
+                          ? "bg-blue-200 text-blue-800"
+                          : ad.status === "REJECTED"
+                          ? "bg-red-200 text-red-800"
+                          : ad.status === "RUNNING"
+                          ? "bg-green-200 text-green-800"
+                          : "bg-gray-200 text-gray-800"
+                      }`}
+                    >
+                      {formatStatus(ad.status)}
+                    </span>
+                    {ad.status === "REJECTED" && ad.reasonForReject && (
+                      <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
+                        {ad.reasonForReject}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center text-gray-500">
+                No advertisements found for the selected filters.
+              </div>
+            )}
           </div>
 
+          {/* Pagination - Mobile */}
+          {filteredAds.length > 0 && (
+            <div className="mt-auto flex justify-center py-4">
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  <span>Previous</span>
+                </button>
+                <div className="flex space-x-1">
+                  {(() => {
+                    const pages = [];
+                    const maxVisiblePages = 1;
+                    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => handlePageChange(i)}
+                          className={`px-2 py-1 text-sm rounded ${
+                            currentPage === i
+                              ? "bg-[#3674B5] text-white"
+                              : "text-gray-700 hover:border border-gray-300"
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+                <button
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center px-2 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden lg:block">
           <div className="flex-1 p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {currentAds.length > 0 ? (
               currentAds.map((ad) => (
@@ -577,23 +833,22 @@ const Advertisements: React.FC = () => {
             )}
           </div>
 
-
-          {/*Pagination*/}
+          {/* Pagination - Desktop */}
           {filteredAds.length > 0 && (
             <div className="mt-auto flex justify-center py-4">
-              <div className="flex items-center space-x-1 sm:space-x-2">
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={handlePreviousPage}
                   disabled={currentPage === 1}
-                  className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" />
-                  <span className="hidden sm:inline">Previous</span>
+                  <span>Previous</span>
                 </button>
                 <div className="flex space-x-1">
                   {(() => {
                     const pages = [];
-                    const maxVisiblePages = isMobile ? 1 : 3;
+                    const maxVisiblePages = 3;
                     let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
                     let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
@@ -606,7 +861,7 @@ const Advertisements: React.FC = () => {
                         <button
                           key={i}
                           onClick={() => handlePageChange(i)}
-                          className={`px-2 sm:px-3 py-1 text-sm rounded ${
+                          className={`px-3 py-1 text-sm rounded ${
                             currentPage === i
                               ? "bg-[#3674B5] text-white"
                               : "text-gray-700 hover:border border-gray-300"
@@ -617,7 +872,7 @@ const Advertisements: React.FC = () => {
                       );
                     }
 
-                    if (endPage < totalPages && !isMobile) {
+                    if (endPage < totalPages) {
                       pages.push(
                         <span key="ellipsis" className="px-2 text-gray-500">
                           …
@@ -631,15 +886,17 @@ const Advertisements: React.FC = () => {
                 <button
                   onClick={handleNextPage}
                   disabled={currentPage === totalPages}
-                  className="flex items-center px-2 sm:px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center px-3 py-1 text-sm rounded font-semibold hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span className="hidden sm:inline">Next</span>
+                  <span>Next</span>
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </button>
               </div>
             </div>
           )}
         </div>
+
+        {/* Common Components (outside mobile/desktop sections) */}
         <ToastContainer toasts={toasts} onRemove={removeToast} />
         {showCreateAdPopup && (
           <div className="fixed inset-0 z-50 flex justify-end pr-2">
@@ -813,7 +1070,8 @@ const Advertisements: React.FC = () => {
         </style>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default Advertisements;
