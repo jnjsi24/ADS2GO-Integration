@@ -174,15 +174,15 @@ async function triggerAdDeployment(ad) {
 const paymentResolvers = {
   Query: {
     getAllPayments: async (_, { paymentStatus }, { user }) => {
-    checkAdmin(user);
+      checkAdmin(user);
 
-    const filter = {};
-    if (paymentStatus) {
-      filter.paymentStatus = paymentStatus; // filter by status if provided
-    }
+      const filter = {};
+      if (paymentStatus) {
+        filter.paymentStatus = paymentStatus; // filter by status if provided
+      }
 
-    return await Payment.find(filter).sort({ createdAt: -1 });
-  },
+      return await Payment.find(filter).sort({ createdAt: -1 });
+    },
 
   
 
@@ -220,7 +220,6 @@ const paymentResolvers = {
       return results;
     },
 
-
     getPaymentById: async (_, { id }, { user }) => {
       checkAuth(user);
       const payment = await Payment.findById(id);
@@ -233,16 +232,29 @@ const paymentResolvers = {
     },
 
     getUserAdsWithPayments: async (_, __, { user }) => {
-      checkAuth(user);
-      const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
-      const payments = await Payment.find({
-        adsId: { $in: ads.map(ad => ad._id) },
-      });
+      try {
+        checkAuth(user);
+        console.log('🔍 getUserAdsWithPayments - User ID:', user.id);
+        
+        const ads = await Ad.find({ userId: user.id }).sort({ createdAt: -1 });
+        console.log('🔍 getUserAdsWithPayments - Found ads:', ads.length);
+        
+        const payments = await Payment.find({
+          adsId: { $in: ads.map(ad => ad._id) },
+        });
+        console.log('🔍 getUserAdsWithPayments - Found payments:', payments.length);
 
-      return ads.map(ad => ({
-        ad,
-        payment: payments.find(p => p.adsId.toString() === ad._id.toString()) || null,
-      }));
+        const result = ads.map(ad => ({
+          ad,
+          payment: payments.find(p => p.adsId.toString() === ad._id.toString()) || null,
+        }));
+        
+        console.log('🔍 getUserAdsWithPayments - Returning result:', result.length);
+        return result;
+      } catch (error) {
+        console.error('❌ Error in getUserAdsWithPayments:', error);
+        throw error;
+      }
     },
   },
 
@@ -265,9 +277,9 @@ const paymentResolvers = {
       const ad = await Ad.findById(adsId);
       if (!ad) throw new Error('Ad not found');
       
-      // Check if ad is approved - ALL ads must be approved before payment
-      if (ad.status !== 'APPROVED') {
-        throw new Error('Ad must be approved first before you can make a payment');
+      // Check if ad is approved AND paymentStatus is PENDING
+      if (ad.status !== 'APPROVED' || ad.paymentStatus !== 'PENDING') {
+        throw new Error('Ad must be approved and payment must be pending before you can make a payment');
       }
 
       const existingPayment = await Payment.findOne({ adsId });

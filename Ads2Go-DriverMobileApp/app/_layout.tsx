@@ -21,7 +21,16 @@ function RootLayoutNav() {
           <Stack.Screen name="tabs" />
           <Stack.Screen name="materials" options={{ title: 'Materials' }} />
           <Stack.Screen name="documents" options={{ title: 'Documents' }} />
-          <Stack.Screen name="photo-submission" options={{ title: 'Photo Submission' }} />
+          <Stack.Screen 
+            name="photo-submission" 
+            options={{ 
+              title: 'Photo Submission',
+              // Lock this screen: disable swipe/back gesture globally for this route
+              gestureEnabled: false,
+              fullScreenGestureEnabled: false,
+              animation: 'slide_from_right'
+            }} 
+          />
           <Stack.Screen name="salary" options={{ title: 'Salary' }} />
           <Stack.Screen name="+not-found" />
         </Stack>

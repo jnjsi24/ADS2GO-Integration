@@ -77,6 +77,10 @@ export const UPDATE_MATERIAL = gql`
       }
       mountedAt
       dismountedAt
+      materialCondition
+      photoComplianceStatus
+      lastInspectionDate
+      nextInspectionDue
       createdAt
       updatedAt
     }

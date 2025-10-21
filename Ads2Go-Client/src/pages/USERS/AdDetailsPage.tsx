@@ -46,6 +46,7 @@ const GET_MY_ADS = gql`
       vehicleType
       price
       status
+      paymentStatus
       reasonForReject
       createdAt
       startTime
@@ -129,6 +130,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  paymentStatus?: string | null;
   reasonForReject?: string;
   createdAt: string;
   startTime: string;  // Campaign start date
@@ -143,14 +145,16 @@ type Ad = {
     pricePerPlay: number;
     totalPrice: number;
   };
-  materialId: {
-    id: string;
-    materialType: string;
-    category: string;
-    description: string;
-    mountedAt: string;
-    dismountedAt: string;
-  };
+  // Server returns an array of materials; keep type aligned with actual data shape
+  materialId: Array<{
+  id: string;
+  materialId: string;
+  materialType: string;
+  category: string;
+  description: string;
+  mountedAt: string;
+  dismountedAt: string;
+  }>;
   // Additional fields for display
   drivers?: number;
   plan?: string;
@@ -338,7 +342,7 @@ const AdDetailsPage: React.FC = () => {
   const ad = ads.find((ad: any) => ad.id === id);
   
   // Get payment status directly from the ad model
-  const paymentStatus = ad?.paymentStatus || 'PENDING';
+  const paymentStatus = ad?.paymentStatus || null;
   const adStatus = ad?.status || 'PENDING';
   
   // Determine if payment button should show based on your requirements:
@@ -348,6 +352,9 @@ const AdDetailsPage: React.FC = () => {
   // - REJECTED: Admin rejected (no payment button)
   const shouldShowPaymentButton = adStatus === 'APPROVED' && paymentStatus === 'PENDING';
   
+  // Strict requirements: Both PAID and APPROVED/RUNNING to show detailed information
+  const isFullyPaidAndApproved = paymentStatus === 'PAID' && (adStatus === 'APPROVED' || adStatus === 'RUNNING');
+  
   // Debug payment status (only log once per ad)
   if (ad?.id && ad?.title && !debugLogged) {
     console.log('🔍 Payment Status Debug:', {
@@ -355,7 +362,12 @@ const AdDetailsPage: React.FC = () => {
       adTitle: ad.title,
       adStatus: adStatus,
       paymentStatus: paymentStatus,
-      shouldShowButton: shouldShowPaymentButton
+      shouldShowButton: shouldShowPaymentButton,
+      isFullyPaidAndApproved: isFullyPaidAndApproved,
+      rawAdData: {
+        status: ad.status,
+        paymentStatus: ad.paymentStatus
+      }
     });
     setDebugLogged(true);
   }
@@ -1014,46 +1026,68 @@ const AdDetailsPage: React.FC = () => {
           <div className="flex items-center justify-between mb-4 ">
             {/* Tabs */}
             <div className="flex space-x-4 relative">
-              {['Details', 'AdActivity'].map((tab) => (
-                <div key={tab} className="relative">
+              {/* Always show Details tab */}
+              <div className="relative">
+                <button
+                  onClick={() => setActiveTab('Details')}
+                  className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                    activeTab === 'Details' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+                  }`}
+                >
+                  Details
+
+                  {/* Hover underline with framer-motion */}
+                  <motion.div
+                    className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: activeTab === 'Details' ? '100%' : 0 }}
+                    whileHover={{ width: '100%' }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  />
+                </button>
+              </div>
+              
+              {/* Only show Ad Activity tab if fully paid and approved */}
+              {isFullyPaidAndApproved && (
+                <div className="relative">
                   <button
-                    onClick={() =>
-                      setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
-                    }
+                    onClick={() => setActiveTab('AdActivity')}
                     className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
-                      activeTab === tab ? 'text-black/80' : 'text-black/60 hover:text-black/90'
+                      activeTab === 'AdActivity' ? 'text-black/80' : 'text-black/60 hover:text-black/90'
                     }`}
                   >
-                    {tab === 'AdActivity' ? 'Ad Activity' : tab}
+                    Ad Activity
 
                     {/* Hover underline with framer-motion */}
                     <motion.div
                       className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
                       initial={{ width: 0 }}
-                      animate={{ width: activeTab === tab ? '100%' : 0 }}
+                      animate={{ width: activeTab === 'AdActivity' ? '100%' : 0 }}
                       whileHover={{ width: '100%' }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
                   </button>
                 </div>
-              ))}
+              )}
             </div>
 
-            {/* Delete Button */}
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              disabled={deleteLoading || ad?.status !== 'PENDING'}
-              className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
-            >
-              {deleteLoading ? 'Deleting...' : 'Delete Ad'}
-            </button>
+            {/* Delete Button - Only show if not fully paid and approved */}
+            {!isFullyPaidAndApproved && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                disabled={deleteLoading || ad?.status !== 'PENDING'}
+                className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Ad'}
+              </button>
+            )}
           </div>
 
           {/* Tab Content */}
           {activeTab === 'Details' && (
-            <div className="grid grid-cols-2 bg-white/60 p-3 rounded-lg shadow-md">
+            <div className="grid grid-cols-2 bg-white/60 p-4 rounded-lg shadow-md min-h-[200px]">
               {/* Left: Table-style info */}
-              <div>
+              <div className="flex flex-col justify-start">
                 <table className="w-full text-sm mt-5 text-black/80">
                   <tbody>
                     <tr>
@@ -1072,18 +1106,32 @@ const AdDetailsPage: React.FC = () => {
                 </table>
               </div>
 
-              <div className="flex flex-col mt-5 items-end space-y-2">
-                <p className="text-sm font-semibold text-center text-black/90">
-                  {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 
-                    ? ad.materialId[0].materialId 
-                    : 'N/A'}
-                </p>
+              {/* Right: Devices (upper right), Plan, Duration, Format (lower right) */}
+              <div className="flex flex-col justify-between h-full">
+                {/* Upper right: Devices section */}
+                <div className="flex justify-end">
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-black/90 mb-2">Devices:</p>
+                    {ad.materialId && Array.isArray(ad.materialId) && ad.materialId.length > 0 ? (
+                      <div className="space-y-1">
+                        {ad.materialId.map((material: any, index: number) => (
+                          <div key={material.id || index} className="text-sm text-black/70">
+                            🚗 - {material.materialId || 'N/A'}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-black/70">No devices assigned</p>
+                    )}
+                  </div>
+                </div>
 
-                <p className="text-sm font-semibold text-center text-black/90">{ad.planId?.name}</p>
-
-                <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
-
-                <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
+                {/* Lower right: Plan, Duration, Format */}
+                <div className="flex flex-col items-end space-y-2 mt-4">
+                  <p className="text-sm font-semibold text-center text-black/90">{ad.planId?.name}</p>
+                  <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
+                  <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
+                </div>
               </div>
             </div>
           )}
@@ -1168,12 +1216,11 @@ const AdDetailsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right: Tablet Activity */}
-        <div className="space-y-4">
-
-
-          {/* Map + Activity List */}
-          <div className="flex items-start space-x-6">
+        {/* Right: Tablet Activity - Only show if fully paid and approved */}
+        {isFullyPaidAndApproved && (
+          <div className="space-y-4">
+            {/* Map + Activity List */}
+            <div className="flex items-start space-x-6">
             {/* Live Map */}
             <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
               {deviceLocations.length > 0 ? (
@@ -1339,6 +1386,7 @@ const AdDetailsPage: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Confirmation Modal */}

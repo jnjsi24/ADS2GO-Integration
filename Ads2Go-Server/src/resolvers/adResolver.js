@@ -276,6 +276,9 @@ const adResolvers = {
             ad.rejectTime = null;
             ad.reasonForReject = null;
             
+            // Set paymentStatus to PENDING when admin approves
+            ad.paymentStatus = 'PENDING';
+            
             // Send approval notification to user
             try {
               console.log('🔔 AdResolver: Sending approval notification for ad:', ad._id);

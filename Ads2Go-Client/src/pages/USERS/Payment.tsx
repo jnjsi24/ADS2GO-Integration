@@ -112,9 +112,9 @@ const Payment: React.FC<PaymentProps> = ({
   const handlePayNow = async () => {
   if (isProcessing || loading) return;
   
-  // Check if ad is approved
-  if (paymentItem.adStatus !== 'APPROVED') {
-    showError("⚠️ Ad must be approved first before you can make a payment.");
+  // Check if ad is approved and payment status is pending
+  if (paymentItem.adStatus !== 'APPROVED' || paymentItem.status !== 'PENDING') {
+    showError("⚠️ Ad must be approved and payment must be pending before you can make a payment.");
     return;
   }
   

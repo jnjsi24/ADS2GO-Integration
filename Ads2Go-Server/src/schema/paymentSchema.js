@@ -73,7 +73,7 @@ const paymentTypeDefs = gql`
   }
 
   type AdPaymentInfo {
-    ad: PaymentAd!
+    ad: Ad!
     payment: Payment
   }
 

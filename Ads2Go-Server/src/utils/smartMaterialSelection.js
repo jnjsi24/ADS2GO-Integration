@@ -75,7 +75,7 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       availableMaterials.push(material);
     }
 
-    // Sort available materials by occupied slots (descending) to fill materials ASAP, then by specific priority order
+    // Sort available materials by fill-in-order strategy (001, 002, 003...), then by occupied slots
     const sortedMaterials = availableMaterials.sort((a, b) => {
       const availA = availabilityMap.get(a._id.toString());
       const availB = availabilityMap.get(b._id.toString());
@@ -83,25 +83,25 @@ const getMaterialsSortedByAvailability = async (materialType, vehicleType, categ
       const occupiedA = availA ? availA.occupiedSlots : 0; // Default to 0 if no availability record
       const occupiedB = availB ? availB.occupiedSlots : 0;
       
-      // Primary sort: by occupied slots (descending) - fill materials that are closest to full first
-      if (occupiedA !== occupiedB) {
-        return occupiedB - occupiedA;
-      }
-      
-      // Secondary sort: by specific priority order (002, 003, 001)
-      const priorityOrder = {
-        'DGL-HEADDRESS-CAR-002': 1,
-        'DGL-HEADDRESS-CAR-003': 2,
-        'DGL-HEADDRESS-CAR-001': 3
+      // Primary sort: by material ID number (ascending) - fill materials in order 001, 002, 003, 004, 005, 006...
+      const getMaterialNumber = (materialId) => {
+        const match = materialId.match(/-(\d+)$/);
+        return match ? parseInt(match[1], 10) : 999;
       };
       
-      const priorityA = priorityOrder[a.materialId] || 999;
-      const priorityB = priorityOrder[b.materialId] || 999;
+      const numberA = getMaterialNumber(a.materialId);
+      const numberB = getMaterialNumber(b.materialId);
       
-      return priorityA - priorityB;
+      // Primary sort: by material number (ascending - 001, 002, 003...)
+      if (numberA !== numberB) {
+        return numberA - numberB;
+      }
+      
+      // Secondary sort: among materials with same number, prefer those with more occupied slots
+      return occupiedB - occupiedA;
     });
 
-    console.log(`📊 Materials sorted by occupied slots (fill ASAP):`);
+    console.log(`📊 Materials sorted by fill-in-order strategy (001, 002, 003...):`);
     sortedMaterials.forEach((material, index) => {
       const avail = availabilityMap.get(material._id.toString());
       const slots = avail ? avail.availableSlots : 5;
