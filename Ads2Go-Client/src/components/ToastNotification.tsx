@@ -100,7 +100,7 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 300, scale: 0.9 }}
       transition={{ duration: 0.3, ease: "easeOut" }}
-      className={`relative bg-white shadow-md border-l-4 ${styles.leftBorderColor} p-4 w-80 mb-3`}
+      className={`relative bg-white shadow-md border-l-4 ${styles.leftBorderColor} p-3 sm:p-4 w-[50vw] max-w-[20rem] sm:w-80 mb-3 rounded-md`}
     >
       {/* Close Button */}
       <button
@@ -119,10 +119,10 @@ const ToastNotification: React.FC<ToastNotificationProps> = ({ toast, onRemove }
 
         {/* Text Content */}
         <div className="flex-1 min-w-0">
-          <h4 className={`text-sm font-bold ${styles.titleColor} mb-1`}>
+          <h4 className={`text-xs sm:text-sm font-bold ${styles.titleColor} mb-1`}>
             {toast.title || (toast.type === 'success' ? 'Success!' : toast.type === 'error' ? 'Error!' : toast.type === 'warning' ? 'Warning' : 'Info')}
           </h4>
-          <p className={`text-sm ${styles.messageColor}`}>
+          <p className={`text-xs sm:text-sm ${styles.messageColor}`}>
             {toast.message}
           </p>
         </div>
@@ -146,7 +146,7 @@ interface ToastContainerProps {
 
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onRemove }) => {
   return (
-    <div className="fixed top-4 right-4 z-[60] space-y-2">
+    <div className="fixed top-2 right-2 sm:top-4 sm:right-4 z-[60] space-y-2">
       <AnimatePresence>
         {toasts.map((toast) => (
           <ToastNotification

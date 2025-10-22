@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Clock, Calendar, MonitorSmartphone } from "lucide-react";
 import { useQuery, gql } from "@apollo/client";
 import { useUserAuth } from '../../contexts/UserAuthContext';
 import Payment from "./Payment";
@@ -223,21 +223,21 @@ const PaymentHistory: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Background Image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
-        style={{
-          backgroundImage: "url('/image/bg2.jpg')",
-        }}
-      ></div>
+  <div className="relative min-h-screen overflow-hidden">
+    {/* Background Image */}
+    <div
+      className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
+      style={{
+        backgroundImage: "url('/image/bg2.jpg')",
+      }}
+    ></div>
 
-      {/* Overlay (optional subtle tint) */}
-      <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
+    {/* Overlay */}
+    <div className="absolute inset-0 bg-white/40 backdrop-blur-xl"></div>
 
-  {/* Main Content */}
-  <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:pt-10 lg:p-8">
-    {/* Header */}
+    {/* ======= DESKTOP VIEW ======= */}
+    <div className="hidden lg:block relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:pt-10 lg:p-8">
+      {/* Header */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 pt-12 lg:pt-0">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Payment History</h1>
 
@@ -246,7 +246,7 @@ const PaymentHistory: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <input
               type="text"
-              className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
+              className="text-xs text-black rounded-md pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
               placeholder="Search Advertisements"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -255,7 +255,7 @@ const PaymentHistory: React.FC = () => {
             <div className="relative w-full sm:w-32">
               <button
                 onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
               >
                 {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All Status'}
                 <ChevronDown
@@ -270,7 +270,7 @@ const PaymentHistory: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                   >
                     {statusFilterOptions.map((option) => (
                       <button
@@ -294,15 +294,15 @@ const PaymentHistory: React.FC = () => {
         {currentPayments.length > 0 ? (
           currentPayments.map((item) => (
             <div
-              key={item.id || item._id || `${item.userId}-${item.createdAt}`}
+              key={item.id}
               className="shadow-md bg-white/50 overflow-hidden relative flex flex-col cursor-pointer w-full transition-transform duration-300 hover:scale-[1.02]"
               onClick={() => setSelectedPayment(item)}
             >
               <div className="flex items-start">
-                {/* Media Section (image/video) */}
+                {/* Media Section */}
                 <div className="w-1/4 relative h-44 flex-shrink-0">
                   {item.imageUrl ? (
-                    item.adFormat && item.adFormat.toLowerCase() === "video" ? (
+                    item.adFormat?.toLowerCase() === "video" ? (
                       <video
                         src={item.imageUrl}
                         className="w-full h-full object-cover"
@@ -311,12 +311,7 @@ const PaymentHistory: React.FC = () => {
                         muted
                         controls
                         onError={(e) => console.error("Video load error:", e)}
-                      >
-                        <source src={item.imageUrl} type="video/mp4" />
-                        <source src={item.imageUrl} type="video/webm" />
-                        <source src={item.imageUrl} type="video/ogg" />
-                        Your browser does not support the video tag.
-                      </video>
+                      />
                     ) : (
                       <img
                         src={item.imageUrl}
@@ -330,19 +325,16 @@ const PaymentHistory: React.FC = () => {
                       No Media
                     </div>
                   )}
-                  {/* Overlay Title */}
                   <div className="absolute -bottom-1 left-0 w-full bg-black/40 backdrop-blur-sm text-white text-center py-1 px-2">
                     <p className="text-sm font-semibold truncate">{item.productName}</p>
                   </div>
                 </div>
 
-                {/* Details Section */}
+                {/* Details */}
                 <div className="w-3/4 pl-4 flex flex-col justify-between p-3">
                   <div>
                     <span
-                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(
-                        item.status
-                      )}`}
+                      className={`inline-flex items-center justify-center rounded-full px-3 py-1 text-xs font-medium ${getStatusStyle(item.status)}`}
                     >
                       {item.status}
                     </span>
@@ -355,7 +347,6 @@ const PaymentHistory: React.FC = () => {
                         : "Awaiting payment confirmation. Your ad will be activated once the transaction is complete."}
                     </p>
                   </div>
-
                   <div className="flex justify-end mt-3">
                     <button
                       onClick={(e) => {
@@ -413,19 +404,189 @@ const PaymentHistory: React.FC = () => {
           </button>
         </div>
       </div>
+    </div>
 
-      {/* Payment modal */}
-      {isModalOpen && selectedPayment && (
-        <Payment
-          paymentItem={selectedPayment}
-          paymentType={selectedPaymentType}
-          onClose={closeModal}
-          onSuccess={handlePaymentSuccess} // Added to refresh UI after payment
-        />
-      )}
+    {/* ======= MOBILE VIEW ======= */}
+    <div className="block lg:hidden relative z-10 min-h-screen bg-transparent px-4 py-6">
+      {/* You can freely adjust mobile layout here */}
+      {/* For example, stack filters on top and make cards single-column */}
+
+      {/* Search + Filter in one row */}
+      <div className="block lg:hidden w-full space-y-4">
+          {/* Row 1: Search and Status Filter */}
+          <div className="flex gap-2 w-full">
+            <input
+              type="text"
+              className="text-xs text-black rounded-md pl-4 py-3 flex-1 min-w-0 shadow-md focus:outline-none bg-white/70"
+              placeholder="Search Payments"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="relative min-w-[120px]">
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-md pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+              >
+                {statusFilterOptions.find(opt => opt.value === selectedStatusFilter)?.label || 'All'}
+                <ChevronDown
+                  size={16}
+                  className={`transform transition-transform duration-200 ${
+                    showStatusDropdown ? 'rotate-180' : 'rotate-0'
+                  }`}
+                />
+              </button>
+              <AnimatePresence>
+                {showStatusDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
+                  >
+                    {statusFilterOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleStatusFilterChange(option.value)}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+        {/* Title */}
+        <h1 className="text-xl font-bold text-gray-800 mt-2">
+          Payment History
+        </h1>
+      </div>
+
+      {/* Payment Cards (1 per row) */}
+      <div className="grid grid-cols-1 mt-4 gap-4">
+        {currentPayments.map((item) => (
+          <div
+            key={item.id}
+            className="bg-white/90 rounded-md shadow-md p-3 relative"
+            onClick={() => {
+              setSelectedPayment(item);
+              setSelectedPaymentType(item.paymentType || "");
+              setIsModalOpen(true);
+            }}
+          >
+            {item.status === 'PAID' && item.receiptId && (
+              <div className="absolute top-2 right-2 px-2 py-1 text-[10px] text-black">
+                {item.receiptId}
+              </div>
+            )}
+            {/* Top row: thumbnail + details */}
+            <div className="flex gap-3">
+              <div className="w-28 h-28 rounded-md overflow-hidden bg-gray-200 flex-shrink-0">
+                {item.imageUrl ? (
+                  item.adFormat?.toLowerCase() === 'video' ? (
+                    <video
+                      src={item.imageUrl}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      loop
+                    />
+                  ) : (
+                    <img src={item.imageUrl} alt={item.productName} className="w-full h-full object-cover" />
+                  )
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">No Media</div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {/* Status badge */}
+                <span
+                  className={`inline-block text-[10px] px-2 py-1 rounded border ${
+                    item.status === 'PAID'
+                      ? 'border-green-500 text-green-700'
+                      : item.status === 'FAILED'
+                      ? 'border-red-500 text-red-700'
+                      : 'border-yellow-400 text-yellow-700'
+                  }`}
+                >
+                  {item.status === 'PENDING' ? 'Pending' : item.status === 'PAID' ? 'Paid' : 'Failed'}
+                </span>
+                <h3 className="text-lg font-semibold text-black mt-1 truncate">{item.productName}</h3>
+                <p className="text-[15px] font-bold text-black mt-1">{item.amount}</p>
+                <p className="text-xs text-black/70 mt-1 truncate">
+                  {item.status === 'PAID'
+                    ? 'Transaction completed successfully.'
+                    : 'Awaiting payment confirmation. Your ad will be activated once the transaction is complete.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Chips row */}
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="flex items-center gap-2 text-[11px] text-black/80">
+                <Clock size={14} className="text-black/80" />
+                <span>{item.adLengthSeconds || 'N/A'} seconds</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-black/80">
+                <MonitorSmartphone size={14} className="text-black/80" />
+                <span>{item.adType || 'N/A'}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-black/80">
+                <Calendar size={14} className="text-black/80" />
+                <span>{item.durationDays} days</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      <div className="mt-6 flex justify-center items-center text-sm">
+        <div className="flex space-x-1">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+          >
+            «
+          </button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            <button
+              key={page}
+              onClick={() => handlePageChange(page)}
+              className={`px-2 py-1 ${
+                currentPage === page ? "text-black" : ""
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border border-gray-300 rounded disabled:opacity-50"
+          >
+            »
+          </button>
+        </div>
+      </div>
     </div>
-    </div>
-  );
+
+    {/* Payment modal */}
+    {isModalOpen && selectedPayment && (
+      <Payment
+        paymentItem={selectedPayment}
+        paymentType={selectedPaymentType}
+        onClose={closeModal}
+        onSuccess={handlePaymentSuccess}
+      />
+    )}
+  </div>
+);
+
 };
 
 export default PaymentHistory;

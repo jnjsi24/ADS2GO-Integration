@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@apollo/client';
-import { ChevronLeft, QrCode, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, QrCode, ChevronDown, CheckCircle, Truck, Trophy, XCircle, Loader2, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { GET_MY_ADS } from '../../graphql/admin/queries/getAd';
 import { DELETE_AD } from '../../graphql/user';
@@ -363,57 +363,53 @@ const AdDetailsPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-5 pt-20 lg:pt-5">
+  <div className="relative min-h-screen overflow-hidden lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-5 pt-20 lg:pt-5">
     {/* Background Image */}
     <div
       className="absolute inset-0 bg-cover bg-center bg-fixed blur-sm brightness-90"
       style={{
         backgroundImage: "url('/image/bg.jpg')",
       }}
-    >
-    </div>
+    ></div>
 
-    {/* Overlay (adds soft tint and readability over the image) */}
+    {/* Overlay */}
     <div className="absolute inset-0 bg-white/30 backdrop-blur-lg"></div>
 
+    {/* Rejection Toast */}
     <AnimatePresence>
-        {shouldShowRejectionToast && (
-          <motion.div
-            initial={{ opacity: 0, x: 300, scale: 0.8 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 300, scale: 0.8 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="fixed top-6 right-6 z-50 max-w-sm"
-          >
-            <div className="bg-white/70 shadow-lg p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
-                    <XCircle size={20} className="text-red-500 mt-0.5" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-black mb-1">
-                      Advertisement Rejected
-                    </h4>
-                    <p className="text-sm text-black">
-                      {ad.reasonForReject}
-                    </p>
-                  </div>
+      {shouldShowRejectionToast && (
+        <motion.div
+          initial={{ opacity: 0, x: 300, scale: 0.8 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 300, scale: 0.8 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+          className="fixed top-6 right-6 z-50 max-w-sm"
+        >
+          <div className="bg-white/70 shadow-lg p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-3">
+                <XCircle size={20} className="text-red-500 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-semibold text-black mb-1">
+                    Advertisement Rejected
+                  </h4>
+                  <p className="text-sm text-black">{ad.reasonForReject}</p>
                 </div>
-                <button
-                  onClick={closeRejectionToast}
-                  className="flex-shrink-0 ml-4 text-black/60 hover:text-red-600 transition-colors"
-                >
-                  <X size={16} />
-                </button>
               </div>
+              <button
+                onClick={closeRejectionToast}
+                className="ml-4 text-black/60 hover:text-red-600 transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
 
-    {/* Content Layer */}
-    <div className="relative z-10 min-h-screen rounded-xl p-3 sm:p-5">
+    {/* --------------------- DESKTOP VIEW --------------------- */}
+    <div className="relative z-10 hidden lg:block min-h-screen rounded-xl p-3 sm:p-5">
       <button
         onClick={() => navigate('/advertisements')}
         className="py-2 text-black/90 rounded-lg hover:text-black/90 transition-colors flex items-center mb-4"
@@ -421,9 +417,9 @@ const AdDetailsPage: React.FC = () => {
         <ChevronLeft size={20} className="mr-2" /> Back to Advertisements
       </button>
 
-      {/* Top Row: Media (Left) + Info (Right) */}
+      {/* Top Row: Media + Info */}
       <div className="grid grid-cols-2 gap-8">
-        {/* Left: Media */}
+        {/* Media */}
         <div className="overflow-hidden bg-white/60 flex items-center justify-center h-96">
           {ad.mediaFile ? (
             ad.adFormat === 'IMAGE' ? (
@@ -439,7 +435,6 @@ const AdDetailsPage: React.FC = () => {
             ) : (
               <video controls className="w-full h-full object-contain">
                 <source src={ad.mediaFile} />
-                Your browser does not support the video tag.
               </video>
             )
           ) : (
@@ -447,11 +442,10 @@ const AdDetailsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Right: Status, Title, Description, Price, Properties */}
+        {/* Info */}
         <div className="flex flex-col space-y-4">
           <span
-              className={`inline-block w-fit items-center justify-center text-sm font-semibold rounded-md px-3 py-1 ${
-
+            className={`inline-block w-fit text-sm font-semibold rounded-md px-3 py-1 ${
               ad.status === 'PENDING'
                 ? 'bg-yellow-100 text-yellow-800'
                 : ad.status === 'APPROVED'
@@ -463,19 +457,17 @@ const AdDetailsPage: React.FC = () => {
           >
             {ad.status}
           </span>
-
           <h2 className="text-4xl text-black/90 font-bold">{ad.title}</h2>
           <p className="text-2xl text-black/90 font-semibold mb-5">${ad.price.toFixed(2)}</p>
           <p className="text-black/70">{ad.description}</p>
         </div>
       </div>
 
-      {/* Bottom Row: Left (Tabs + Delete) + Right (Tablet Activity) */}
+      {/* Bottom Row */}
       <div className="grid grid-cols-2 gap-8 pt-10">
-        {/* Left: Tabs + Delete */}
+        {/* Left Tabs */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between mb-4 ">
-            {/* Tabs */}
+          <div className="flex justify-between mb-4">
             <div className="flex space-x-4 relative">
               {['Details', 'AdActivity'].map((tab) => (
                 <div key={tab} className="relative">
@@ -483,18 +475,15 @@ const AdDetailsPage: React.FC = () => {
                     onClick={() =>
                       setActiveTab(tab === 'AdActivity' ? 'AdActivity' : 'Details')
                     }
-                    className={`whitespace-nowrap py-2 px-4 font-medium relative overflow-hidden ${
+                    className={`whitespace-nowrap py-2 px-4 font-medium relative ${
                       activeTab === tab ? 'text-black/80' : 'text-black/60 hover:text-black/90'
                     }`}
                   >
                     {tab === 'AdActivity' ? 'Ad Activity' : tab}
-
-                    {/* Hover underline with framer-motion */}
                     <motion.div
                       className="absolute left-0 bottom-0 h-1 bg-gradient-to-r from-orange-400 to-orange-700 rounded-full"
                       initial={{ width: 0 }}
                       animate={{ width: activeTab === tab ? '100%' : 0 }}
-                      whileHover={{ width: '100%' }}
                       transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                     />
                   </button>
@@ -502,86 +491,65 @@ const AdDetailsPage: React.FC = () => {
               ))}
             </div>
 
-            {/* Delete Button */}
             <button
               onClick={() => setShowDeleteModal(true)}
               disabled={deleteLoading || ad?.status !== 'PENDING'}
-              className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold rounded hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-red-200 text-red-600 rounded-lg font-semibold hover:bg-red-300 hover:text-white/80 disabled:cursor-not-allowed"
             >
               {deleteLoading ? 'Deleting...' : 'Delete Ad'}
             </button>
           </div>
 
-          {/* Tab Content */}
           {activeTab === 'Details' && (
             <div className="grid grid-cols-2 bg-white/60 p-3 shadow-md">
-              {/* Left: Table-style info */}
               <div>
                 <table className="w-full text-sm text-black/80">
                   <tbody>
-                    <tr>
-                      <td className="py-2">Start Date:</td>
-                      <td className="py-2 font-semibold text-right">{formatDate(ad.startTime)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2">End Date:</td>
-                      <td className="py-2 font-semibold text-right">{formatDate(ad.endTime)}</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2">Duration:</td>
-                      <td className="py-2 font-semibold text-right">{ad.planId?.durationDays || 'N/A'} days</td>
-                    </tr>
+                    <tr><td>Start Date:</td><td className="font-semibold text-right">{formatDate(ad.startTime)}</td></tr>
+                    <tr><td>End Date:</td><td className="font-semibold text-right">{formatDate(ad.endTime)}</td></tr>
+                    <tr><td>Duration:</td><td className="font-semibold text-right">{ad.planId?.durationDays || 'N/A'} days</td></tr>
                   </tbody>
                 </table>
               </div>
-
               <div className="flex flex-col mt-5 items-end space-y-2">
-                <p className="text-sm font-semibold text-center text-black/90">{ad.materialId?.materialId || 'N/A'}</p>
-
-                <p className="text-sm font-semibold text-center text-black/90">{ad.planId?.name}</p>
-
-                <p className="text-sm font-semibold text-center text-black/90">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
-
-                <p className="text-sm font-semibold text-center text-black/90">{ad.adFormat || 'N/A'}</p>
+                <p className="text-sm font-semibold">{ad.materialId?.materialId || 'N/A'}</p>
+                <p className="text-sm font-semibold">{ad.planId?.name}</p>
+                <p className="text-sm font-semibold">{ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}</p>
+                <p className="text-sm font-semibold">{ad.adFormat || 'N/A'}</p>
               </div>
             </div>
           )}
-          
+
           {activeTab === 'AdActivity' && (
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {/* Replace sampleNotifications with sampleQrImpressions */}
-              {sampleQrImpressions.map((impression) => (
-                <div key={impression.id} className="flex items-start bg-white/60 space-x-3 p-3 mr-3 hadow-md">
-                  {/* You can use an icon to represent a QR code, e.g., QrCode from lucide-react */}
-                  <QrCode size={20} className="text-green-500 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    {/* Display the impression details */}
-                    <p className="text-black/90 text-sm font-medium">QR code scanned {impression.scans} times.</p>
-                    <p className="text-black/70 text-xs">{impression.timestamp}</p>
+              {sampleQrImpressions.length > 0 ? (
+                sampleQrImpressions.map((imp) => (
+                  <div key={imp.id} className="flex items-start bg-white/60 space-x-3 p-3 shadow-md">
+                    <QrCode size={20} className="text-green-500 mt-0.5" />
+                    <div>
+                      <p className="text-black/90 text-sm font-medium">QR code scanned {imp.scans} times.</p>
+                      <p className="text-black/70 text-xs">{imp.timestamp}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-              {/* Update the empty state message */}
-              {sampleQrImpressions.length === 0 && (
+                ))
+              ) : (
                 <p className="text-center bg-white/60 rounded-lg text-black/90 py-5">No QR impressions found for this ad.</p>
               )}
             </div>
           )}
         </div>
 
-        {/* Right: Tablet Activity */}
+        {/* Right Map & Activity */}
         <div className="space-y-4">
-          {/* Filter Dropdown */}
           <div className="relative mb-4 w-60">
             <button
               onClick={() => setShowAdDropdown(!showAdDropdown)}
-              className="flex items-center rounded-md justify-between w-full text-xs text-black pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/60 backdrop-blur-md gap-2"          >
+              className="flex items-center justify-between w-full text-xs text-black pl-6 pr-4 py-3 bg-white/60 shadow-md rounded-md"
+            >
               {selectedAd}
               <ChevronDown
                 size={16}
-                className={`transform transition-transform duration-200 ${
-                  showAdDropdown ? 'rotate-180' : 'rotate-0'
-                }`}
+                className={`transition-transform ${showAdDropdown ? 'rotate-180' : 'rotate-0'}`}
               />
             </button>
 
@@ -592,7 +560,7 @@ const AdDetailsPage: React.FC = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white/60 rounded-md backdrop-blur-md overflow-hidden"
+                  className="absolute z-10 top-full mt-2 w-full bg-white/60 rounded-md shadow-lg overflow-hidden"
                 >
                   {adOptions.map((adOption) => (
                     <button
@@ -601,7 +569,7 @@ const AdDetailsPage: React.FC = () => {
                         setSelectedAd(adOption);
                         setShowAdDropdown(false);
                       }}
-                      className="block w-full text-left px-4 py-2 ml-2 text-xs text-gray-700 hover:bg-white/60 transition-colors duration-150"
+                      className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-white/70"
                     >
                       {adOption}
                     </button>
@@ -611,45 +579,35 @@ const AdDetailsPage: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* Map + Activity List */}
           <div className="flex items-start space-x-6">
-            {/* Map */}
             <div className="w-96 h-64 rounded-lg overflow-hidden shadow border border-gray-200">
               {deviceId ? (
-                <RouteMap 
-                  deviceId={deviceId} 
-                  style={{ height: '100%', width: '100%' }}
-                  showMetrics={false}
-                />
+                <RouteMap deviceId={deviceId} style={{ height: '100%', width: '100%' }} showMetrics={false} />
               ) : (
                 <div className="flex items-center justify-center h-full bg-gray-100">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                    <p className="text-xs text-gray-600">Loading device...</p>
-                  </div>
+                  <p className="text-xs text-gray-600">Loading device...</p>
                 </div>
               )}
             </div>
 
-            {/* Activity List */}
             <div className="flex flex-col space-y-4 flex-1 max-h-64 overflow-y-auto">
               {tabletActivities
                 .filter((activity) => activity.ad === selectedAd)
                 .map((activity, index) => (
                   <div key={activity.id} className="flex items-start space-x-2">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#3674B5]/70 text-white flex items-center justify-center font-bold text-xs">
+                    <div className="w-6 h-6 rounded-full bg-[#3674B5]/70 text-white flex items-center justify-center font-bold text-xs">
                       {index + 1}
                     </div>
-                    <div className="flex flex-col">
-                      <p className="text-sm font-semibold text-black/90">{activity.gps}</p>
-                      <p className="text-xs text-black/90">
+                    <div>
+                      <p className="text-sm font-semibold">{activity.gps}</p>
+                      <p className="text-xs">
                         {activity.lastSeen} | {activity.kmTraveled} km
                       </p>
-                      <p className="text-xs text-black/90">{activity.timestamp}</p>
+                      <p className="text-xs">{activity.timestamp}</p>
                     </div>
                   </div>
                 ))}
-              {tabletActivities.filter((activity) => activity.ad === selectedAd).length === 0 && (
+              {tabletActivities.filter((a) => a.ad === selectedAd).length === 0 && (
                 <p className="text-center text-black/90 py-10">No activity found for this ad.</p>
               )}
             </div>
@@ -669,8 +627,243 @@ const AdDetailsPage: React.FC = () => {
         confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
     </div>
+
+    {/* --------------------- MOBILE VIEW --------------------- */}
+    <div className="relative z-10 block lg:hidden min-h-screen">
+      {/* Main Card Container */}
+      <div className="overflow-hidden">
+        {/* Media Section */}
+        <div className="relative h-64 bg-gradient-to-br from-orange-100 to-blue-100">
+          {ad.mediaFile ? (
+            ad.adFormat === 'IMAGE' ? (
+              <img
+                src={ad.mediaFile}
+                alt={ad.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
+                }}
+              />
+            ) : (
+              <video controls className="w-full h-full object-cover">
+                <source src={ad.mediaFile} />
+              </video>
+            )
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">No Media Available</div>
+          )}
+          
+          {/* Chevron Right Icon */}
+          <button 
+            onClick={() => navigate('/advertisements')}
+            className="absolute top-4 right-4 w-8 h-8 bg-white/90 hover:bg-white rounded-full flex items-center justify-center shadow-lg transition-colors"
+          >
+            <ChevronRight size={20} className="text-gray-700" />
+          </button>
+        </div>
+
+        {/* Content Section */}
+        <div className="pt-4 space-y-4">
+          {/* Status Badges Row */}
+          <div className="flex flex-wrap gap-2">
+            <span
+              className={`px-3 py-1 rounded-md text-xs font-semibold ${
+                ad.status === 'PENDING'
+                  ? ' text-yellow-700 border-2 border-yellow-500'
+                  : ad.status === 'APPROVED'
+                  ? 'text-green-700 border-2 border-green-500'
+                  : ad.status === 'REJECTED'
+                  ? 'text-red-700 border-2 border-red-500'
+                  : 'text-gray-700 border-2 border-gray-500'
+              }`}
+            >
+              {ad.status}
+            </span>
+            <span className="px-3 py-1 rounded-md text-xs font-semibold text-blue-700 bg-white/60">
+              {ad.adLengthSeconds ? `${ad.adLengthSeconds} seconds` : 'N/A'}
+            </span>
+            <span className="px-3 py-1 rounded-md text-xs font-semibold text-purple-700 bg-white/60">
+              {ad.materialId?.materialId || 'N/A'}
+            </span>
+            <span className="px-3 py-1 rounded-md text-xs font-semibold text-orange-700 bg-white/60">
+              {ad.planId?.durationDays || 'N/A'} days
+            </span>
+          </div>
+
+          {/* Title and Price */}
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">{ad.title}</h2>
+            <p className="text-xl font-semibold text-gray-900 mt-1">${ad.price.toFixed(2)}</p>
+          </div>
+
+          {/* Tab Navigation */}
+          <div>
+            <div className="flex space-x-7">
+              {[
+                { key: 'Details', label: 'About' },
+                { key: 'AdActivity', label: 'Ad Activity' },
+                { key: 'TabletActivity', label: 'Map Activity' }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as 'Details' | 'AdActivity' | 'TabletActivity')}
+                  className={`pb-3 px-1 pt-2 text-sm font-medium transition-colors relative ${
+                    activeTab === tab.key
+                      ? 'text-[#3674B5]'
+                      : 'text-black/70 hover:text-black/90'
+                  }`}
+                >
+                  {tab.label}
+                  {activeTab === tab.key && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3674B5]"
+                      initial={false}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <div className="min-h-[300px] max-h-[400px] overflow-y-auto">
+            {activeTab === 'Details' && (
+              <div className="space-y-3 text-sm">
+                <p className="text-black">{ad.description || 'No description available.'}</p>
+                <div className="pt-3 space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Start Date:</span>
+                    <span className="font-medium text-gray-900">{formatDate(ad.startTime)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">End Date:</span>
+                    <span className="font-medium text-gray-900">{formatDate(ad.endTime)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'AdActivity' && (
+              <div className="space-y-3">
+                {sampleQrImpressions.length > 0 ? (
+                  sampleQrImpressions.map((imp) => (
+                    <div key={imp.id} className="flex items-start space-x-3">
+                      <QrCode size={20} className="text-green-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          QR code scanned {imp.scans} times.
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{imp.timestamp}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-gray-500">
+                    <QrCode size={48} className="mx-auto mb-3 text-gray-300" />
+                    <p>No QR scans yet</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'TabletActivity' && (
+              <div className="space-y-4">
+                {/* Material Selector */}
+                <div className="relative">
+                  <select
+                    value={selectedAd}
+                    onChange={(e) => setSelectedAd(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {adOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Map */}
+                <div className="w-full h-48 rounded-lg overflow-hidden border border-gray-200">
+                  {deviceId ? (
+                    <RouteMap deviceId={deviceId} style={{ height: '100%', width: '100%' }} showMetrics={false} />
+                  ) : (
+                    <div className="flex items-center justify-center h-full bg-gray-50">
+                      <Loader2 className="animate-spin text-gray-400" size={24} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Activity List */}
+                <div className="space-y-2">
+                  {tabletActivities
+                    .filter((activity) => activity.ad === selectedAd)
+                    .map((activity, index) => (
+                      <div key={activity.id} className="flex items-start space-x-3">
+                        <div className="w-6 h-6 rounded-full bg-[#3674B5] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 text-sm">
+                          <p className="font-medium text-black/90">{activity.gps}</p>
+                          <p className="text-xs text-black/70 mt-1">
+                            {activity.lastSeen} • {activity.kmTraveled} km
+                          </p>
+                          <p className="text-xs text-black/70">{activity.timestamp}</p>
+                        </div>
+                      </div>
+                    ))}
+                  {tabletActivities.filter((a) => a.ad === selectedAd).length === 0 && (
+                    <div className="text-center py-10 text-black/70">
+                      <Truck size={48} className="mx-auto mb-3 text-black/70" />
+                      <p>No activity found</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2 pt-4">
+            {ad.status === 'APPROVED' && (
+              <button
+                onClick={() => navigate('/payment')}
+                className="w-full py-3 bg-[#3674B5] hover:bg-[#3674B5]/80 text-white font-semibold rounded-lg transition-colors shadow-sm"
+              >
+                Pay Now
+              </button>
+            )}
+            {ad.status === 'PENDING' && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                disabled={deleteLoading}
+                className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Advertisement'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        title="Delete Advertisement"
+        message="Are you sure you want to delete this advertisement? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+    </div>
   </div>
 );
+
 };
 
 export default AdDetailsPage;

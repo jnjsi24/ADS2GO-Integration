@@ -441,7 +441,7 @@ const Advertisements: React.FC = () => {
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-1 w-full lg:w-auto">
                 <input
                   type="text"
-                  className="text-xs text-black rounded-lg pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
+                  className="text-xs text-black rounded-md pl-5 py-3 w-full sm:w-80 shadow-md focus:outline-none bg-white/70"
                   placeholder="Search Advertisements"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -450,7 +450,7 @@ const Advertisements: React.FC = () => {
                 <div className="relative w-full sm:w-32">
                   <button
                     onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                    className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
+                    className="flex items-center justify-between w-full text-xs text-black rounded-md pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white/70 gap-2"
                   >
                     {selectedStatusFilter}
                     <ChevronDown
@@ -468,7 +468,7 @@ const Advertisements: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -10 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                        className="absolute z-10 top-full mt-2 w-full rounded-md shadow-lg bg-white overflow-hidden"
                       >
                         {statusFilterOptions.map((status) => (
                           <button
@@ -518,134 +518,118 @@ const Advertisements: React.FC = () => {
 
         {/* Mobile View */}
         <div className="block lg:hidden">
-          <div className="flex-1 p-6 grid grid-cols-1 gap-6">
-            {currentAds.length > 0 ? (
-              currentAds.map((ad) => (
-                <div
-                  key={ad.id}
-                  className="overflow-hidden shadow-md cursor-pointer relative flex flex-col bg-white/50 h-[395px] hover:scale-105 transition-transform duration-300"
-                >
-                  <div className="w-full h-44 flex-shrink-0 relative">
-                    {ad.mediaFile ? (
-                      ad.adFormat === "IMAGE" ? (
-                        <img
-                          src={ad.mediaFile}
-                          alt={`${ad.title} image`}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+";
-                          }}
-                        />
-                      ) : ad.adFormat === "VIDEO" ? (
-                        <video
-                          className="w-full h-full object-cover"
-                          controls
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            const errorDiv = document.createElement("div");
-                            errorDiv.className =
-                              "w-full h-full bg-gray-500 flex items-center justify-center text-white";
-                            errorDiv.innerHTML = "Video not available";
-                            e.currentTarget.parentNode?.appendChild(errorDiv);
-                          }}
-                        >
-                          <source src={ad.mediaFile} />
-                          Your browser does not support the video tag.
-                        </video>
-                      ) : (
-                        <div className="w-full h-full bg-gray-500 flex items-center justify-center">
-                          <a
-                            href={ad.mediaFile}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-white hover:text-gray-300 underline"
-                          >
-                            View Media File
-                          </a>
-                        </div>
-                      )
-                    ) : (
-                      <div className="w-full h-full bg-gray-400 flex items-center justify-center text-black/70">
-                        No Media
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="p-4 flex flex-col flex-grow overflow-hidden h-full">
-                    {/* Upper content - takes available space */}
-                    <div
-                      className="cursor-pointer overflow-hidden flex flex-col h-full"
-                      onClick={() => navigate(`/ad-details/${ad.id}`)}
-                    >
-                      <h3 className="text-xl font-semibold text-black/80 truncate mb-2">
-                        {ad.title}
-                      </h3>
-                      <div className="flex-1 min-h-0">
-                        <p className="text-sm text-gray-600 h-full overflow-hidden text-ellipsis" 
-                          style={{
-                            display: '-webkit-box',
-                            WebkitLineClamp: 4,
-                            WebkitBoxOrient: 'vertical'
-                          }}>
-                          {ad.description || "No description available"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Bottom section (sticky at bottom) */}
-                    <div className="mt-auto pt-4">
-                      <div className="text-sm text-[#1B5087] font-medium">
-                        {ad.startTime && ad.endTime ? (
-                          formatDateRange(ad.startTime, ad.endTime)
-                        ) : (
-                          <span className="text-gray-400">Campaign dates not available</span>
-                        )}
-                      </div>
-                      <div className="mt-3 pt-2 border-t border-gray-300">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/ad-details/${ad.id}`);
-                          }}
-                          className="w-full text-black/70 hover:underline hover:text-black text-xs font-medium py-2 transition-all duration-300"
-                        >
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="absolute top-2 left-2">
-                    <span
-                      className={`inline-block px-2 py-1 text-xs font-semibold ${
-                        ad.status === "PENDING"
-                          ? "bg-yellow-200 text-yellow-800"
-                          : ad.status === "APPROVED"
-                          ? "bg-blue-200 text-blue-800"
-                          : ad.status === "REJECTED"
-                          ? "bg-red-200 text-red-800"
-                          : ad.status === "RUNNING"
-                          ? "bg-green-200 text-green-800"
-                          : "bg-gray-200 text-gray-800"
-                      }`}
-                    >
-                      {formatStatus(ad.status)}
-                    </span>
-                    {ad.status === "REJECTED" && ad.reasonForReject && (
-                      <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
-                        {ad.reasonForReject}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
+        <div className="flex-1 grid grid-cols-2 gap-2">
+  {currentAds.length > 0 ? (
+    currentAds.map((ad) => (
+      <div
+        key={ad.id}
+        className="overflow-hidden backdrop-blur-sm cursor-pointer flex flex-col hover:scale-[1.02] transition-transform duration-300"
+      >
+        {/* Media Section */}
+        <div className="w-full h-48 relative flex-shrink-0">
+          {ad.mediaFile ? (
+            ad.adFormat === "IMAGE" ? (
+              <img
+                src={ad.mediaFile}
+                alt={`${ad.title} image`}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src =
+                    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+";
+                }}
+              />
+            ) : ad.adFormat === "VIDEO" ? (
+              <video
+                className="w-full h-full object-cover"
+                controls
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  const errorDiv = document.createElement("div");
+                  errorDiv.className =
+                    "w-full h-full bg-gray-500 flex items-center justify-center text-white";
+                  errorDiv.innerHTML = "Video not available";
+                  e.currentTarget.parentNode?.appendChild(errorDiv);
+                }}
+              >
+                <source src={ad.mediaFile} />
+                Your browser does not support the video tag.
+              </video>
             ) : (
-              <div className="col-span-full text-center text-gray-500">
-                No advertisements found for the selected filters.
+              <div className="w-full h-full bg-gray-500 flex items-center justify-center">
+                <a
+                  href={ad.mediaFile}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white hover:text-gray-300 underline"
+                >
+                  View Media File
+                </a>
               </div>
+            )
+          ) : (
+            <div className="w-full h-full bg-gray-300 flex items-center justify-center text-black/70">
+              No Media
+            </div>
+          )}
+        </div>
+
+        {/* Content Section */}
+        <div className="flex flex-col flex-grow p-4">
+          {/* Title */}
+          <div
+            onClick={() => navigate(`/ad-details/${ad.id}`)}
+            className="flex-grow cursor-pointer overflow-hidden"
+          >
+            <h3 className="text-lg font-semibold text-gray-800">
+              {ad.title}
+            </h3>
+          </div>
+
+          {/* Date */}
+          <div className="mt-3 text-sm font-medium text-[#1B5087]">
+            {ad.startTime && ad.endTime ? (
+              formatDateRange(ad.startTime, ad.endTime)
+            ) : (
+              <span className="text-gray-400">
+                Campaign dates not available
+              </span>
             )}
           </div>
+        </div>
+
+        {/* Status Tag */}
+        <div className="absolute top-2 left-2">
+          <span
+            className={`inline-block px-2 py-1 text-xs font-semibold rounded ${
+              ad.status === "PENDING"
+                ? "bg-yellow-200 text-yellow-800"
+                : ad.status === "APPROVED"
+                ? "bg-blue-200 text-blue-800"
+                : ad.status === "REJECTED"
+                ? "bg-red-200 text-red-800"
+                : ad.status === "RUNNING"
+                ? "bg-green-200 text-green-800"
+                : "bg-gray-200 text-gray-800"
+            }`}
+          >
+            {formatStatus(ad.status)}
+          </span>
+
+          {ad.status === "REJECTED" && ad.reasonForReject && (
+            <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
+              {ad.reasonForReject}
+            </div>
+          )}
+        </div>
+      </div>
+    ))
+  ) : (
+    <div className="col-span-full text-center text-gray-500 py-10">
+      No advertisements found for the selected filters.
+    </div>
+  )}
+</div>
+
 
           {/* Pagination - Mobile */}
           {filteredAds.length > 0 && (
@@ -804,7 +788,7 @@ const Advertisements: React.FC = () => {
 
                   <div className="absolute top-2 left-2">
                     <span
-                      className={`inline-block px-2 py-1 text-xs font-semibold ${
+                      className={`inline-block rounded-md px-2 py-1 text-xs font-semibold ${
                         ad.status === "PENDING"
                           ? "bg-yellow-200 text-yellow-800"
                           : ad.status === "APPROVED"

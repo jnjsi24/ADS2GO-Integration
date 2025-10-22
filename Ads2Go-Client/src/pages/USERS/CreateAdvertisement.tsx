@@ -1,7 +1,7 @@
-import { useState, useEffect,  MouseEvent } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useLazyQuery } from '@apollo/client';
-import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ClockFading, CalendarPlus, Upload, Calendar, DollarSign, Play, ChevronDown, CloudUpload, FileImage } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CREATE_FLEXIBLE_AD } from '../../graphql/mutations/flexibleAdMutations';
 import { 
@@ -9,7 +9,7 @@ import {
   CALCULATE_FLEXIBLE_PRICING,
   FlexiblePricingCalculation 
 } from '../../graphql/queries/flexibleAdQueries';
-import { uploadFileToFirebase } from '../../utils/fileUpload';
+import { uploadFileToFirebase, uploadFileToFirebaseWithProgress } from '../../utils/fileUpload';
 import { useToast, ToastContainer } from '../../components/ToastNotification';
 import CalendarWidget from '../../components/CalendarWidget';
 
@@ -38,6 +38,8 @@ const CreateAdvertisement: React.FC = () => {
   const [pricingCalculation, setPricingCalculation] = useState<FlexiblePricingCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [showVehicleTypeDropdown, setShowVehicleTypeDropdown] = useState(false);
   const [showMaterialTypeDropdown, setShowMaterialTypeDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
@@ -243,7 +245,7 @@ const CreateAdvertisement: React.FC = () => {
 
   // Close calendar when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (showCalendar) {
         const target = event.target as Element;
         if (!target.closest('.calendar-container')) {
@@ -314,89 +316,71 @@ const CreateAdvertisement: React.FC = () => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  // Prepares payload and uploads media; returns payload or null if validation fails
+  const prepareAdPayload = async (): Promise<any | null> => {
     // Ensure category is set before validation
     if (!ensureCategoryIsSet()) {
-      console.log('Category was missing, waiting for state update...');
-      setTimeout(() => handleSubmit(e), 100);
-      return;
+      return null;
     }
-    
     if (!validateStep(2) || !validateStep(1)) {
-      addToast({ 
-        title: 'Error!', 
-        message: 'Please fix the errors before submitting.', 
-        type: 'error' 
-      });
-      return;
+      addToast({ title: 'Error!', message: 'Please fix the errors before submitting.', type: 'error' });
+      return null;
     }
     if (!pricingCalculation) {
-      addToast({ 
-        title: 'Error!', 
-        message: 'Please wait for pricing calculation to complete.', 
-        type: 'error' 
-      });
-      return;
+      addToast({ title: 'Error!', message: 'Please wait for pricing calculation to complete.', type: 'error' });
+      return null;
     }
+    // Upload media file to Firebase with progress
+    setIsUploading(true);
+    const mediaFileURL = await uploadFileToFirebaseWithProgress(
+      formData.mediaFile!,
+      'advertisements',
+      (p) => setUploadProgress(p)
+    );
+    setIsUploading(false);
 
+    // Parse start date
+    const [year, month, day] = formData.startDate.split('-').map(Number);
+    const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const startTime = startDate.toISOString();
+
+    // Calculate end date
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + formData.durationDays);
+    endDate.setUTCHours(23, 59, 59, 999);
+    const endTime = endDate.toISOString();
+
+    const input = {
+      title: formData.title,
+      description: formData.description,
+      website: formData.website || null,
+      materialType: formData.materialType,
+      vehicleType: formData.vehicleType,
+      category: formData.category || 'DIGITAL',
+      durationDays: formData.durationDays,
+      adLengthSeconds: formData.adLengthSeconds,
+      numberOfDevices: formData.numberOfDevices,
+      price: pricingCalculation.totalPrice,
+      adType: formData.category || 'DIGITAL',
+      adFormat: formData.mediaFile?.type.startsWith('video/') ? 'VIDEO' : 'IMAGE',
+      status: 'PENDING',
+      startTime,
+      endTime,
+      mediaFile: mediaFileURL
+    };
+    return input;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsSubmissionInProgress(true);
-
     try {
-      // Upload media file to Firebase
-      setIsUploading(true);
-      const mediaFileURL = await uploadMediaFile(formData.mediaFile!);
-      setIsUploading(false);
-      
-      // Parse start date
-      const [year, month, day] = formData.startDate.split('-').map(Number);
-      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const startTime = startDate.toISOString();
-      
-      // Calculate end date
-      const endDate = new Date(startDate);
-      endDate.setUTCDate(endDate.getUTCDate() + formData.durationDays);
-      endDate.setUTCHours(23, 59, 59, 999);
-      const endTime = endDate.toISOString();
-      
-      // Create ad with ensured category
-      const input = {
-        title: formData.title,
-        description: formData.description,
-        website: formData.website || null,
-        materialType: formData.materialType,
-        vehicleType: formData.vehicleType,
-        category: formData.category || 'DIGITAL',
-        durationDays: formData.durationDays,
-        adLengthSeconds: formData.adLengthSeconds,
-        numberOfDevices: formData.numberOfDevices,
-        price: pricingCalculation.totalPrice,
-        adType: formData.category || 'DIGITAL',
-        adFormat: formData.mediaFile?.type.startsWith('video/') ? 'VIDEO' : 'IMAGE',
-        status: 'PENDING',
-        startTime: startTime,
-        endTime: endTime,
-        mediaFile: mediaFileURL
-      };
-      
-      console.log('Submitting ad with configuration:', {
-        materialType: input.materialType,
-        vehicleType: input.vehicleType,
-        category: input.category
-      });
-      
-      await createAd({ variables: { input } });
-    } catch (error) {
-      console.error('Error creating ad:', error);
-      addToast({ 
-        title: 'Error!', 
-        message: 'Failed to create advertisement. Please try again.', 
-        type: 'error' 
-      });
+      const payload = await prepareAdPayload();
+      if (payload) {
+        (window as any).__adsCreatePayload = payload;
+      }
     } finally {
       setIsSubmissionInProgress(false);
-      setIsUploading(false);
     }
   };
 
@@ -458,6 +442,10 @@ const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     }
   } else {
     handleInputChange('mediaFile', null);
+  }
+  // Reset input value so selecting the same file again triggers change
+  if (fileInputRef.current) {
+    fileInputRef.current.value = '';
   }
 };
 
@@ -610,7 +598,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 type="button"
                 onClick={() => {
                   setMediaFileError('');
-                  document.getElementById('media-upload')?.click();
+                  fileInputRef.current?.click();
                 }}
                 onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
                   const button = e.currentTarget;
@@ -639,26 +627,44 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               </button>
             </div>
 
-            {/* File feedback */}
-            <p
-              className={`text-sm mt-2 ${
-                mediaFileError ? 'text-red-500' : 'text-gray-500'
-              }`}
-            ></p>
+            {/* Selected file item: icon + name + progress + remove */}
+            {formData.mediaFile && (
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-black pt-5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 flex items-center justify-center">
+                      <FileImage className="w-5 h-5 text-black/70" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm truncate max-w-[220px]">{formData.mediaFile.name}</p>
+                      <div className="h-1 bg-black/10 rounded mt-2 w-56">
+                        <div className={`h-1 rounded ${uploadProgress >= 100 ? 'bg-green-600' : 'bg-[#3674B5]'}`} style={{ width: `${uploadProgress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { handleInputChange('mediaFile', null); setUploadProgress(0); }}
+                    className="text-red-400 hover:text-red-300 text-lg"
+                    aria-label="Remove file"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
 
             <input
               type="file"
               accept=".jpg,.jpeg,.png,.gif,.webp,.mp4,.mpeg,.ogg,.webm,.mov,image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/ogg,video/webm,video/quicktime"
               onChange={handleFileInputChange}
               className="hidden"
-              id="media-upload"
+              ref={fileInputRef}
               required
             />
 
-            {formData.mediaFile && !mediaFileError && (
-              <p className="text-sm text-green-600 mt-2">
-                Selected: {formData.mediaFile.name}
-              </p>
+            {!formData.mediaFile && (
+              <p className={`text-sm mt-2 ${mediaFileError ? 'text-red-500' : 'text-gray-500'}`}></p>
             )}
           </div>
 
@@ -685,7 +691,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
               <button
                 type="button"
                 onClick={() => setShowVehicleTypeDropdown(!showVehicleTypeDropdown)}
-                className="flex items-center bg-white/70 justify-between w-full text-sm text-black rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none gap-2"
+                className="flex items-center bg-white/70 justify-between w-full text-sm text-black rounded pl-6 pr-4 py-4 shadow-md focus:outline-none gap-2"
               >
                 {formData.vehicleType ? formData.vehicleType : 'Select Vehicle Type'}
                 <ChevronDown
@@ -702,7 +708,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full shadow-lg bg-white overflow-hidden"
                   >
                     <button
                       key="select-vehicle-type"
@@ -744,7 +750,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                 onClick={() =>
                   formData.vehicleType && setShowMaterialTypeDropdown(!showMaterialTypeDropdown)
                 }
-                className={`flex items-center justify-between w-full text-sm rounded-lg pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 ${
+                className={`flex items-center justify-between w-full text-sm rounded pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 ${
                   formData.vehicleType
                     ? 'text-black cursor-pointer'
                     : 'text-gray-400 cursor-not-allowed'
@@ -766,7 +772,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
-                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    className="absolute z-10 top-full mt-2 w-full rounded shadow-lg bg-white overflow-hidden"
                   >
                     {getAvailableMaterialTypes().map((materialType, index) => (
                       <button
@@ -805,7 +811,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowDurationDropdown(!showDurationDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
+            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 rounded shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.durationDays
               ? `${
@@ -882,7 +888,7 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <button
             type="button"
             onClick={() => setShowAdLengthDropdown(!showAdLengthDropdown)}
-            className="flex items-center justify-between w-full text-sm text-black pl-6 pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
+            className="flex items-center justify-between w-full text-sm text-black pl-6 rounded pr-4 py-4 shadow-md focus:outline-none bg-white/70 gap-2 cursor-pointer"
           >
             {formData.adLengthSeconds
               ? `${formData.adLengthSeconds} seconds`
@@ -994,17 +1000,17 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
             {/* Calendar Dropdown */}
             {showCalendar && (
               <div 
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
                 onClick={() => setShowCalendar(false)}
               >
                 <div 
-                  className="bg-white rounded-lg shadow-2xl border border-gray-200 calendar-container ml-16"
+                  className="bg-white rounded-lg shadow-2xl border border-gray-200 calendar-container w-full max-w-sm"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <CalendarWidget
                     selectedDate={selectedDate}
                     onDateSelect={handleCalendarDateSelect}
-                    className="w-80"
+                    className="w-full"
                     minDate={new Date()}
                     showActionButtons={false}
                   />
@@ -1083,10 +1089,8 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
           <div className="flex flex-col justify-between h-full text-sm">
             {/* Top Section */}
             <div className="space-y-4">
-              <div className="flex justify-between">
-                <span className="font-bold text-2xl">
-                  {formData.title || "Not specified"}
-                </span>
+              <div className="flex gap-4 items-center">
+                <span className="font-bold text-2xl truncate">{formData.title || 'Not specified'}</span>
               </div>
 
               {/* Description */}
@@ -1196,9 +1200,20 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
 
     {/* Content */}
     <div className="relative z-10 min-h-screen bg-transparent lg:pl-72 px-4 sm:px-5 lg:pr-5 py-6 lg:p-10">
+      {/* Mobile: Chevron Right at top-right aligned with burger menu spacing */}
+      <div className="lg:hidden fixed top-4 right-4 z-[55]">
+        <button
+          onClick={() => navigate('/advertisements')}
+          className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-md active:scale-95"
+          aria-label="Back to Advertisements"
+        >
+          <ChevronRight className="w-5 h-5 text-gray-700" />
+        </button>
+      </div>
+      {/* Desktop: Back link inline */}
       <button
         onClick={() => navigate('/advertisements')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-12 lg:pt-3"
+        className="hidden lg:flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 pt-12 lg:pt-3"
       >
         <ChevronLeft className="w-5 h-5" />
         <span className="text-sm sm:text-base">Back to Advertisement</span>
@@ -1211,8 +1226,8 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
         </div>
       </div>
       <div>
-        <div className="max-w-md mx-auto px-2 sm:px-4 py-4">
-          <div className="flex items-center justify-between overflow-x-auto">
+      <div className="max-w-md mx-auto px-2 sm:px-4 py-4">
+          <div className="flex items-center justify-center gap-3 overflow-x-auto no-scrollbar">
             {steps.map((step, index) => {
               const StepIcon = step.icon;
               const isActive = currentStep === step.number;
@@ -1220,40 +1235,33 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
 
               return (
                 <div key={step.number} className="flex items-center">
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                      isActive
-                        ? "border-[#3674B5] bg-[#3674B5] text-white"
-                        : isCompleted
-                        ? "border-green-500 bg-green-500 text-white"
-                        : "border-black/70 text-black/70"
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <span className="text-sm font-bold">✓</span>
-                    ) : (
-                      <StepIcon className="w-5 h-5" />
-                    )}
+                  {/* Mobile: text only with green on completed, blue on active */}
+                  <div className="lg:hidden flex items-center">
+                    <p className={`text-sm font-medium ${isCompleted ? 'text-green-600' : isActive ? 'text-[#3674B5]' : 'text-gray-500'}`}>{step.title}</p>
                   </div>
-                  <div className="ml-2">
-                    <p
-                      className={`text-sm font-medium ${
+                  {/* Desktop: keep circular indicators */}
+                  <div className="hidden lg:flex items-center">
+                    <div
+                      className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
                         isActive
-                          ? "text-[#3674B5]"
+                          ? 'border-[#3674B5] bg-[#3674B5] text-white'
                           : isCompleted
-                          ? "text-green-600"
-                          : "text-gray-500"
+                          ? 'border-green-500 text-green-600'
+                          : 'border-black/70 text-black/70'
                       }`}
                     >
-                      {step.title}
-                    </p>
+                      {isCompleted ? (
+                        <span className="text-sm font-bold">✓</span>
+                      ) : (
+                        <StepIcon className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div className="ml-2">
+                      <p className={`text-sm font-medium ${isActive ? 'text-[#3674B5]' : isCompleted ? 'text-green-600' : 'text-gray-500'}`}>{step.title}</p>
+                    </div>
                   </div>
                   {index < steps.length - 1 && (
-                    <div
-                      className={`w-10 h-0.5 mx-2 ${
-                        isCompleted ? "bg-green-500" : "bg-gray-300"
-                      }`}
-                    />
+                    <div className={`w-8 h-px mx-2 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'} self-center`} />
                   )}
                 </div>
               );
@@ -1263,18 +1271,21 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
       </div>
       <div className="max-w-3xl mx-auto px-2 sm:px-4 py-6 sm:py-8">
         <form onSubmit={handleSubmit}>
-          {currentStep === 1 && renderStep1()}
-          {currentStep === 2 && renderStep2()}
-          {currentStep === 3 && renderStep3()}
-          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 mt-8">
+          {/* Make sections not scrollable themselves on mobile; allow page to scroll */}
+          <div className="[&_*]:max-h-none">
+            {currentStep === 1 && renderStep1()}
+            {currentStep === 2 && renderStep2()}
+            {currentStep === 3 && renderStep3()}
+          </div>
+          <div className="flex flex-row justify-between items-center gap-4 mt-8">
             <button
               type="button"
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
               disabled={currentStep === 1}
-              className="flex items-center justify-center gap-2 px-6 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed order-2 sm:order-1"
+              className="flex items-center justify-center gap-2 sm:px-8 py-3 text-gray-600 hover:text-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft className="w-5 h-5" />
-              Previous
+              <span className="text-xs sm:text-sm">Previous</span>
             </button>
             {currentStep < 3 ? (
               <button
@@ -1288,9 +1299,8 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                   button.style.setProperty('--x', `${x}px`);
                   button.style.setProperty('--y', `${y}px`);
                 }}
-                className="relative flex items-center justify-center gap-2 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] order-1 sm:order-2 w-full sm:w-auto"
+                className="relative flex items-center justify-center gap-2 px-6 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5]"
               >
-                {/* Shiny Hover Effect */}
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                   style={{
@@ -1298,38 +1308,51 @@ const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
                       'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
                   }}
                 />
-                <span className="relative z-10">Next</span>
-                <ChevronRight className="w-5 h-5 relative z-10" />
+                <span className="relative z-10 text-xs sm:text-sm">Next</span>
               </button>
             ) : (
-              <div className="flex flex-col items-stretch sm:items-end space-y-2 w-full sm:w-auto order-1 sm:order-2">
-                
-                <button
-                  type="submit"
-                  disabled={isSubmissionInProgress}
-                  onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    const button = e.currentTarget;
-                    const rect = button.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    button.style.setProperty('--x', `${x}px`);
-                    button.style.setProperty('--y', `${y}px`);
+              <button
+                type="button"
+                disabled={isSubmissionInProgress}
+                onMouseMove={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  const button = e.currentTarget;
+                  const rect = button.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const y = e.clientY - rect.top;
+                  button.style.setProperty('--x', `${x}px`);
+                  button.style.setProperty('--y', `${y}px`);
+                }}
+                className="relative px-8 sm:text-sm text-xs py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                onClick={async () => {
+                  try {
+                    setIsSubmissionInProgress(true);
+                    let payload = (window as any).__adsCreatePayload;
+                    if (!payload) {
+                      payload = await prepareAdPayload();
+                    }
+                    if (!payload) {
+                      addToast({ title: 'Missing Data', message: 'Please complete previous steps before creating.', type: 'warning' });
+                      return;
+                    }
+                    await createAd({ variables: { input: payload } });
+                  } catch (err) {
+                    console.error(err);
+                  } finally {
+                    setIsSubmissionInProgress(false);
+                  }
+                }}
+              >
+                <span
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 disabled:opacity-0"
+                  style={{
+                    background:
+                      'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
                   }}
-                  className="relative px-8 py-3 text-white transition-all duration-300 overflow-hidden group hover:scale-105 shadow-md bg-gradient-to-r from-[#1B5087] to-[#3674B5] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 w-full sm:w-auto"
-                >
-                  {/* Shiny Hover Effect */}
-                  <span
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 disabled:opacity-0"
-                    style={{
-                      background:
-                        'radial-gradient(circle at var(--x, 20%) var(--y, 80%), rgba(255, 255, 255, 0.15) 0%, transparent 50%)',
-                    }}
-                  />
-                  <span className="relative z-10">
-                    {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
-                  </span>
-                </button>
-              </div>
+                />
+                <span className="relative z-10">
+                  {isUploading ? 'Uploading...' : isSubmissionInProgress ? 'Creating...' : 'Create Advertisement'}
+                </span>
+              </button>
             )}
           </div>
         </form>
