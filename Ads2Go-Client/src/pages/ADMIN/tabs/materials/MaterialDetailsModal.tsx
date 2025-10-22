@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
 import { X, Check, Calendar, UserPlus, UserX, QrCode, History, Edit3 } from 'lucide-react';
 import MaterialUsageHistoryModal from './MaterialUsageHistoryModal';
-import { GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING, GET_MATERIAL_USAGE_HISTORY, GET_ALL_MATERIALS } from '../../../../graphql/admin/queries/materials';
+import { GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING, GET_MATERIAL_USAGE_HISTORY } from '../../../../graphql/admin/queries/materials';
 import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../../../graphql/admin/mutations/compliance';
 import { UPDATE_MATERIAL } from '../../../../graphql/admin/mutations/materials';
 
@@ -91,78 +91,15 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
 
   const handleApproveMonth = async (month: string) => {
     if (!material) return;
-    
-    // Show confirmation dialog
-    const shouldProceed = window.confirm(`Approve photo for ${month}?`);
-    if (!shouldProceed) return;
-    
     setReviewLoading(month);
-    
     try {
-      // Default to GOOD condition if not set
-      const condition = material.materialCondition || 'GOOD';
-      const adminNotes = `Approved by admin on ${new Date().toISOString()}`;
-      
-      console.log('Approving photo with:', {
-        materialId: material.id,
-        month,
-        condition,
-        adminNotes
+      await approveMonthlyPhoto({
+        variables: { materialId: material.id, month },
+        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
       });
-      
-      const { data, errors } = await approveMonthlyPhoto({
-        variables: { 
-          materialId: material.id, 
-          month,
-          condition,
-          adminNotes
-        },
-        context: { 
-          headers: { 
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          } 
-        },
-        refetchQueries: [
-          { 
-            query: GET_ALL_MATERIALS,
-          },
-          'GetAllMaterials'
-        ]
-      });
-      
-      console.log('Approval response:', { data, errors });
-      
-      if (errors) {
-        throw new Error(errors.map(e => e.message).join('\n'));
-      }
-      
-      if (data?.approveMonthlyPhoto?.success) {
-        alert(`✅ Successfully approved photo for ${month}`);
-        
-        // Refresh the material data by closing and reopening the modal
-        if (onClose) {
-          const currentMaterial = material;
-          onClose();
-          // Reopen the modal after a short delay to allow the cache to update
-          setTimeout(() => {
-            if (onClose) onClose();
-            // Re-fetch the material data
-            if (currentMaterial) {
-              // This will trigger a refetch when the modal reopens
-              setTimeout(() => {
-                if (onClose) onClose();
-              }, 100);
-            }
-          }, 300);
-        }
-      } else {
-        throw new Error(data?.approveMonthlyPhoto?.message || 'Approval failed: No success response');
-      }
-    } catch (error) {
-      console.error('Approve failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`❌ Failed to approve photo: ${errorMessage}`);
+    } catch (e) {
+      console.error('Approve failed:', e);
+      alert('Failed to approve photo.');
     } finally {
       setReviewLoading(null);
     }
@@ -170,75 +107,15 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
 
   const handleRejectMonth = async (month: string) => {
     if (!material) return;
-    
-    // Get rejection reason from user
-    const reason = window.prompt('Please enter the reason for rejection:');
-    if (!reason) {
-      return; // User cancelled
-    }
-    
     setReviewLoading(month);
-    
     try {
-      const adminNotes = `Rejected by admin: ${reason} - ${new Date().toISOString()}`;
-      
-      console.log('Rejecting photo with:', {
-        materialId: material.id,
-        month,
-        adminNotes
+      await rejectMonthlyPhoto({
+        variables: { materialId: material.id, month },
+        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
       });
-      
-      const { data, errors } = await rejectMonthlyPhoto({
-        variables: { 
-          materialId: material.id, 
-          month,
-          adminNotes
-        },
-        context: { 
-          headers: { 
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          } 
-        },
-        refetchQueries: [
-          { 
-            query: GET_ALL_MATERIALS,
-          },
-          'GetAllMaterials'
-        ]
-      });
-      
-      console.log('Rejection response:', { data, errors });
-      
-      if (errors) {
-        throw new Error(errors.map(e => e.message).join('\n'));
-      }
-      
-      if (data?.rejectMonthlyPhoto?.success) {
-        alert(`✅ Successfully rejected photo for ${month}`);
-        
-        // Refresh the material data by closing and reopening the modal
-        if (onClose) {
-          const currentMaterial = material;
-          onClose();
-          // Reopen the modal after a short delay to allow the cache to update
-          setTimeout(() => {
-            if (onClose) onClose();
-            // Re-fetch the material data
-            if (currentMaterial) {
-              // This will trigger a refetch when the modal reopens
-              setTimeout(() => {
-                if (onClose) onClose();
-              }, 100);
-            }
-          }, 300);
-        }
-      } else {
-        throw new Error(data?.rejectMonthlyPhoto?.message || 'Rejection failed: No success response');
-      }
-    } catch (error) {
-      console.error('Reject failed:', error);
-      alert(`Failed to reject photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (e) {
+      console.error('Reject failed:', e);
+      alert('Failed to reject photo.');
     } finally {
       setReviewLoading(null);
     }
