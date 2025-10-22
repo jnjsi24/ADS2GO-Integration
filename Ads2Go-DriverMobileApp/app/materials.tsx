@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,12 +45,24 @@ const GET_DRIVER_MATERIALS = gql`
             month
             status
             photoUrls
+            uploadedAt
+            uploadedBy
+            adminNotes
           }
         }
       }
     }
   }
 `;
+
+interface MonthlyPhoto {
+  month: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  photoUrls: string[];
+  uploadedAt?: string;
+  uploadedBy?: string;
+  adminNotes?: string;
+}
 
 interface Material {
   id: string;
@@ -68,11 +81,7 @@ interface Material {
     photoComplianceStatus: string;
     nextPhotoDue: string;
     lastPhotoUpload: string;
-    monthlyPhotos: Array<{
-      month: string;
-      status: string;
-      photoUrls: string[];
-    }>;
+    monthlyPhotos: MonthlyPhoto[];
   };
 }
 
@@ -100,14 +109,19 @@ export default function MaterialsScreen() {
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadDriverData();
   }, []);
 
-  const loadDriverData = async () => {
+  const loadDriverData = async (isRefreshing = false) => {
     try {
-      setLoading(true);
+      if (!isRefreshing) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
       
       // Load driver info from AsyncStorage
       const driverInfo = await AsyncStorage.getItem('driverInfo');
@@ -134,6 +148,7 @@ export default function MaterialsScreen() {
       Alert.alert('Error', 'Failed to load driver data');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -222,7 +237,26 @@ export default function MaterialsScreen() {
       case 'COMPLIANT': return '#4CAF50';
       case 'NON_COMPLIANT': return '#F44336';
       case 'OVERDUE': return '#FF9800';
+      case 'PENDING': return '#FFC107';
       default: return '#757575';
+    }
+  };
+
+  const getPhotoStatusText = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return 'Approved';
+      case 'REJECTED': return 'Rejected';
+      case 'PENDING': return 'Waiting for review';
+      default: return 'Status unknown';
+    }
+  };
+
+  const getPhotoStatusIcon = (status: string) => {
+    switch (status) {
+      case 'APPROVED': return 'checkmark-circle';
+      case 'REJECTED': return 'close-circle';
+      case 'PENDING': return 'time';
+      default: return 'help-circle';
     }
   };
 
@@ -290,7 +324,17 @@ export default function MaterialsScreen() {
       </View>
 
       {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadDriverData(true)}
+            colors={['#3674B5']}
+            tintColor="#3674B5"
+          />
+        }>
         {/* Device Information Card */}
         {!analytics && (
           <View style={styles.noDeviceCard}>
@@ -418,7 +462,10 @@ export default function MaterialsScreen() {
                   <View style={styles.trackingSection}>
                     <View style={styles.trackingHeader}>
                       <Text style={styles.trackingTitle}>Photo Compliance</Text>
-                      <View style={styles.complianceBadge}>
+                      <View style={[
+                        styles.complianceBadge,
+                        { backgroundColor: getComplianceColor(material.materialTracking.photoComplianceStatus) + '22' }
+                      ]}>
                         <Text style={[
                           styles.complianceBadgeText, 
                           { color: getComplianceColor(material.materialTracking.photoComplianceStatus) }
@@ -429,6 +476,43 @@ export default function MaterialsScreen() {
                     </View>
 
                     <View style={styles.trackingDetails}>
+                      {material.materialTracking.monthlyPhotos && material.materialTracking.monthlyPhotos.length > 0 && (
+                        <View style={styles.photoStatusContainer}>
+                          <Text style={styles.photoStatusTitle}>Latest Photo Status:</Text>
+                          {material.materialTracking.monthlyPhotos.map((photo, index) => (
+                            <View key={index} style={styles.photoStatusItem}>
+                              <View style={styles.photoStatusHeader}>
+                                <Ionicons 
+                                  name={getPhotoStatusIcon(photo.status)} 
+                                  size={20} 
+                                  color={getComplianceColor(photo.status)} 
+                                />
+                                <Text style={[
+                                  styles.photoStatusText,
+                                  { color: getComplianceColor(photo.status) }
+                                ]}>
+                                  {getPhotoStatusText(photo.status)}
+                                </Text>
+                                <Text style={styles.photoMonth}>({photo.month})</Text>
+                              </View>
+                              
+                              {photo.status === 'REJECTED' && photo.adminNotes && (
+                                <View style={styles.adminNotesContainer}>
+                                  <Text style={styles.adminNotesLabel}>Admin Notes:</Text>
+                                  <Text style={styles.adminNotesText}>{photo.adminNotes}</Text>
+                                </View>
+                              )}
+                              
+                              {photo.uploadedAt && (
+                                <Text style={styles.photoUploadedAt}>
+                                  Uploaded: {formatDate(photo.uploadedAt)}
+                                </Text>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      
                       <View style={styles.trackingItem}>
                         <Ionicons name="camera-outline" size={16} color="#666" />
                         <Text style={styles.trackingText}>
@@ -445,6 +529,22 @@ export default function MaterialsScreen() {
                         </View>
                       )}
                     </View>
+                    
+                    <TouchableOpacity 
+                      style={styles.refreshButton}
+                      onPress={() => loadDriverData(true)}
+                      disabled={refreshing}
+                    >
+                      <Ionicons 
+                        name="refresh" 
+                        size={16} 
+                        color="#3674B5" 
+                        style={refreshing ? styles.refreshingIcon : null}
+                      />
+                      <Text style={styles.refreshText}>
+                        {refreshing ? 'Refreshing...' : 'Refresh Status'}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -789,15 +889,94 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   trackingSection: {
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingTop: 12,
+    borderTopColor: '#E5E7EB',
+  },
+  photoStatusContainer: {
+    marginBottom: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 12,
+  },
+  photoStatusTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4B5563',
+    marginBottom: 8,
+  },
+  photoStatusItem: {
+    backgroundColor: 'white',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  photoStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  photoStatusText: {
+    marginLeft: 8,
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  photoMonth: {
+    marginLeft: 8,
+    color: '#6B7280',
+    fontSize: 12,
+  },
+  photoUploadedAt: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  adminNotesContainer: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F87171',
+  },
+  adminNotesLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#B91C1C',
+    marginBottom: 4,
+  },
+  adminNotesText: {
+    fontSize: 12,
+    color: '#7F1D1D',
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  refreshText: {
+    color: '#2563EB',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  refreshingIcon: {
+    transform: [{ rotate: '360deg' }],
+    animationKey: 'spin',
+    animationDuration: '1s',
+    animationIterationCount: 'infinite',
+    animationTimingFunction: 'linear',
   },
   trackingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   trackingTitle: {
     fontSize: 14,

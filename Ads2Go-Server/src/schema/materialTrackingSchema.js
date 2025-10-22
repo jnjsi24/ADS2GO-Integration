@@ -27,7 +27,6 @@ const typeDefs = gql`
     id: ID!
     materialId: ID!
     driverId: ID
-    materialCondition: MaterialCondition
     inspectionPhotos: [String]
     lastInspectionDate: String
     monthlyPhotos: [MonthlyPhoto]
@@ -70,7 +69,6 @@ const typeDefs = gql`
   input DeviceComplianceInput {
     materialId: ID!
     driverId: ID
-    materialCondition: MaterialCondition
     inspectionPhotos: [String]
     lastInspectionDate: String
     lastMaintenanceDate: String

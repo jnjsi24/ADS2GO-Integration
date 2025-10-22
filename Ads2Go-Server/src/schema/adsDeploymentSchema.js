@@ -21,6 +21,8 @@ const adsDeploymentTypeDefs = gql`
     adId: ID!
     slotNumber: Int!
     status: DeploymentStatus!
+    startTime: String
+    endTime: String
     deployedAt: String
     completedAt: String
     removedAt: String
@@ -118,6 +120,9 @@ const adsDeploymentTypeDefs = gql`
     
     # Get available LCD slot numbers for material
     getAvailableLCDSlots(materialId: ID!): [Int!]!
+
+    # Get deployments by STRING materialId (e.g., "DGL-HEADDRESS-CAR-007")
+    getDeploymentsByMaterialIdString(materialId: String!): AdsDeployment
   }
 
   # Extend existing Mutation type

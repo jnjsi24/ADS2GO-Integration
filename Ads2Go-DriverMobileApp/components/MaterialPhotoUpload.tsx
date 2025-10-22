@@ -16,6 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedView } from './ThemedView';
 import { ThemedText } from './ThemedText';
 import { Colors } from '../constants/Colors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { gql, request } from 'graphql-request';
+import API_CONFIG from '../config/api';
 
 interface MaterialPhotoUploadProps {
   materialId: string;
@@ -115,35 +118,38 @@ export const MaterialPhotoUpload: React.FC<MaterialPhotoUploadProps> = ({
     setUploading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('materialId', materialId);
-      formData.append('month', currentMonth);
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error('Missing auth token');
+      }
 
-      photos.forEach((photo, index) => {
-        formData.append('photos', {
-          uri: photo.uri,
-          type: photo.type,
-          name: photo.name,
-        } as any);
-      });
+      // NOTE: In production, upload photos to cloud storage first and use the hosted URLs.
+      // For now we send local URIs as placeholders, same as photo-submission screen.
+      const photoUrls = photos.map(p => p.uri);
 
-      const response = await fetch((process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000') + '/material-photos/upload', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${driverId}`, // You'll need to implement proper auth
-        },
-        body: formData,
-      });
+      const UPLOAD_MONTHLY_PHOTO = gql`
+        mutation UploadMonthlyPhoto($materialId: ID!, $photoUrls: [String!]!, $month: String!, $description: String) {
+          uploadMonthlyPhoto(materialId: $materialId, photoUrls: $photoUrls, month: $month, description: $description) {
+            success
+            message
+            materialTracking { id }
+          }
+        }
+      `;
 
-      const result = await response.json();
+      const res: any = await request(API_CONFIG.API_URL, UPLOAD_MONTHLY_PHOTO, {
+        materialId,
+        photoUrls,
+        month: currentMonth,
+        description: ''
+      }, { Authorization: `Bearer ${token}` });
 
-      if (result.success) {
+      if (res?.uploadMonthlyPhoto?.success) {
         Alert.alert('Success', 'Photos uploaded successfully!');
         setPhotos([]);
-        onUploadSuccess?.(result.data);
+        onUploadSuccess?.(res.uploadMonthlyPhoto);
       } else {
-        throw new Error(result.message || 'Upload failed');
+        throw new Error(res?.uploadMonthlyPhoto?.message || 'Upload failed');
       }
     } catch (error) {
       console.error('Upload error:', error);

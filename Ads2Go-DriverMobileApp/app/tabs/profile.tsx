@@ -43,6 +43,16 @@ interface Material {
   status: string;
   assignedDate: string;
   deviceId?: string;
+  materialTracking?: {
+    monthlyPhotos: Array<{
+      month: string;
+      status: string;
+      photoUrls: string[];
+      uploadedAt: string;
+      uploadedBy: string;
+      adminNotes?: string;
+    }>;
+  };
 }
 
 type TabType = 'profile' | 'vehicle' | 'material';
@@ -92,6 +102,16 @@ const GET_DRIVER_MATERIALS = gql`
         location {
           address
           coordinates
+        }
+        materialTracking {
+          monthlyPhotos {
+            month
+            status
+            photoUrls
+            uploadedAt
+            uploadedBy
+            adminNotes
+          }
         }
       }
     }
@@ -253,6 +273,17 @@ export default function ProfileScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     loadProfile();
+  };
+
+  const hasPendingPhoto = (material: Material) => {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    return material.materialTracking?.monthlyPhotos?.some(photo => 
+      photo.month === currentMonth && photo.status === 'PENDING'
+    );
+  };
+
+  const hasAnyPendingPhotos = () => {
+    return materials.some(material => hasPendingPhoto(material));
   };
 
   const handleSignOut = () => {
@@ -418,6 +449,43 @@ export default function ProfileScreen() {
                     <Ionicons name="cube-outline" size={20} color="#ffffff" />
                     <Text style={styles.materialsActionText}>View All Materials</Text>
                     <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                  </TouchableOpacity>
+
+                  {/* Compliance Upload Button */}
+                  <TouchableOpacity 
+                    style={[
+                      styles.complianceActionButton,
+                      hasAnyPendingPhotos() && styles.disabledButton
+                    ]}
+                    onPress={() => {
+                      if (hasAnyPendingPhotos()) {
+                        Alert.alert(
+                          'Upload Disabled',
+                          'You have photos pending admin approval. Please wait for approval before uploading new photos.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
+                      router.push('/photo-submission');
+                    }}
+                    disabled={hasAnyPendingPhotos()}
+                  >
+                    <Ionicons 
+                      name="cloud-upload" 
+                      size={20} 
+                      color={hasAnyPendingPhotos() ? "#999" : "#ffffff"} 
+                    />
+                    <Text style={[
+                      styles.materialsActionText,
+                      hasAnyPendingPhotos() && styles.disabledText
+                    ]}>
+                      {hasAnyPendingPhotos() ? 'Waiting for Admin Result' : 'Upload Compliance Photos'}
+                    </Text>
+                    <Ionicons 
+                      name="chevron-forward" 
+                      size={20} 
+                      color={hasAnyPendingPhotos() ? "#999" : "#ffffff"} 
+                    />
                   </TouchableOpacity>
                 </View>
               ))
@@ -722,6 +790,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  complianceActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0077CC',
+    paddingVertical: 14,
+    borderRadius: 8,
+    marginTop: 10,
+    gap: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+  },
+  disabledText: {
+    color: '#999',
   },
   emptyStateContainer: {
     alignItems: 'center',

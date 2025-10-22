@@ -131,6 +131,25 @@ router.post('/updateLocation', async (req, res) => {
       // Continue processing even if update fails
     }
 
+    // Broadcast location update to admin WebSocket clients
+    try {
+      const deviceStatusService = require('../services/deviceStatusService');
+      deviceStatusService.broadcastLocationUpdate(deviceId, {
+        lat,
+        lng,
+        speed,
+        heading,
+        accuracy,
+        address,
+        timestamp: new Date(),
+        isOnline: hasWebSocketConnection
+      });
+      console.log(`📍 [LOCATION BROADCAST] Sent location update for ${deviceId} to admin clients`);
+    } catch (error) {
+      console.warn('Error broadcasting location update:', error.message);
+      // Continue processing even if broadcast fails
+    }
+
     // Check for alerts (optional - don't fail if alerts fail)
     try {
       const currentHours = deviceTracking.currentHoursToday;
@@ -977,27 +996,39 @@ router.get('/compliance', async (req, res) => {
           
           // Get address from coordinates if not already available
           let address = deviceLocation.address;
-          logger.debug(`🗺️ [${materialId}] Location data:`, {
-            hasAddress: !!address,
-            address: address,
-            lat: lat,
-            lng: lng,
-            coordinates: deviceLocation.coordinates
-          });
+          // Only log location data in verbose mode
+          if (process.env.VERBOSE_LOGS === 'true') {
+            logger.debug(`🗺️ [${materialId}] Location data:`, {
+              hasAddress: !!address,
+              address: address,
+              lat: lat,
+              lng: lng,
+              coordinates: deviceLocation.coordinates
+            });
+          }
           
           if (!address && lat && lng) {
             // Check cache first
             const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
             if (geocodingCache.has(cacheKey)) {
               address = geocodingCache.get(cacheKey);
-              logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+              // Only log cached address in verbose mode
+              if (process.env.VERBOSE_LOGS === 'true') {
+                logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+              }
             } else {
               try {
-                logger.debug(`🗺️ [${materialId}] Geocoding coordinates: ${lat}, ${lng}`);
+                // Only log geocoding in verbose mode
+                if (process.env.VERBOSE_LOGS === 'true') {
+                  logger.debug(`🗺️ [${materialId}] Geocoding coordinates: ${lat}, ${lng}`);
+                }
                 address = await OSMService.reverseGeocode(lat, lng);
                 // Cache the result
                 geocodingCache.set(cacheKey, address);
-                logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+                // Only log geocoded result in verbose mode
+                if (process.env.VERBOSE_LOGS === 'true') {
+                  logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+                }
               } catch (error) {
                 console.warn(`🗺️ [${materialId}] Geocoding failed for ${lat}, ${lng}:`, error.message);
                 address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;

@@ -106,13 +106,22 @@ class DeviceStatusService {
         }
         
         if (isAdmin) {
-          logger.websocket(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
+          // Only log admin WebSocket connection in verbose mode
+          if (process.env.VERBOSE_LOGS === 'true') {
+            logger.websocket(`🔧 Admin WebSocket Connection for Real-Time Monitoring`);
+          }
         } else {
-          console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+          // Only log device WebSocket requests in verbose mode
+          if (process.env.VERBOSE_LOGS === 'true') {
+            console.log(`WebSocket Playback Upgrade Request for Device: ${deviceId}${materialId ? `, material: ${materialId}` : ''}`);
+          }
         }
         
         this.wss.handleUpgrade(request, socket, head, (ws) => {
-          console.log(`✅ WebSocket playback upgrade successful for device: ${deviceId || 'ADMIN'}`);
+          // Only log WebSocket upgrade in verbose mode
+          if (process.env.VERBOSE_LOGS === 'true') {
+            console.log(`✅ WebSocket playback upgrade successful for device: ${deviceId || 'ADMIN'}`);
+          }
           
           // Store the device and material IDs with the connection
           ws.deviceId = deviceId || 'ADMIN';
@@ -291,6 +300,21 @@ class DeviceStatusService {
       deviceId = 'ADMIN';
       materialId = null;
       slotNumber = null;
+      
+      // Send initial device status to admin connection
+      this.sendInitialDeviceStatusToAdmin(ws);
+      
+      // Set up periodic status updates for admin connection
+      const adminUpdateInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          this.sendPeriodicStatusUpdateToAdmin(ws);
+        } else {
+          clearInterval(adminUpdateInterval);
+        }
+      }, 10000); // Send updates every 10 seconds
+      
+      // Store the interval ID for cleanup
+      ws.adminUpdateInterval = adminUpdateInterval;
     } else {
       deviceId = ws.deviceId || request.headers['device-id'];
       materialId = ws.materialId || request.headers['material-id'];
@@ -383,6 +407,12 @@ class DeviceStatusService {
     ws.on('close', (code, reason) => {
       logger.websocket(`🎬 [WebSocket] Playback Connection Closed: ${deviceId} - Code: ${code}, Reason: ${reason}`);
       if (this.activeConnections.get(deviceId) === ws) {
+        // Clean up admin update interval if this is an admin connection
+        if (ws.isAdmin && ws.adminUpdateInterval) {
+          clearInterval(ws.adminUpdateInterval);
+          console.log('🔧 [Admin WebSocket] Cleared admin update interval');
+        }
+        
         // Clean up slot connections before removing the main connection
         this.cleanupSlotConnections(deviceId, materialId, slotNumber);
         this.removeConnection(deviceId);
@@ -931,6 +961,81 @@ class DeviceStatusService {
   }
 
   /**
+   * Send initial device status to admin connection
+   * @param {WebSocket} ws - Admin WebSocket connection
+   */
+  async sendInitialDeviceStatusToAdmin(ws) {
+    try {
+      console.log('🔧 [Admin WebSocket] Sending initial device status...');
+      
+      // Get all device statuses from DeviceStatusManager
+      const deviceStatusManager = require('./deviceStatusManager');
+      const allStatuses = deviceStatusManager.getAllDeviceStatuses();
+      
+      console.log(`📊 [Admin WebSocket] Found ${allStatuses.length} device statuses to send`);
+      
+      // Send device list first
+      const deviceList = allStatuses.map(status => ({
+        deviceId: status.deviceId,
+        isOnline: status.isOnline,
+        lastSeen: status.lastSeen,
+        source: status.source
+      }));
+      
+      ws.send(JSON.stringify({
+        type: 'deviceList',
+        devices: deviceList
+      }));
+      
+      console.log(`📋 [Admin WebSocket] Sent device list with ${deviceList.length} devices`);
+      
+      // Send individual device updates
+      for (const status of allStatuses) {
+        ws.send(JSON.stringify({
+          type: 'deviceUpdate',
+          deviceId: status.deviceId,
+          isOnline: status.isOnline,
+          lastSeen: status.lastSeen,
+          source: status.source
+        }));
+      }
+      
+      console.log(`📡 [Admin WebSocket] Sent ${allStatuses.length} individual device updates`);
+      
+    } catch (error) {
+      console.error('❌ [Admin WebSocket] Error sending initial device status:', error);
+    }
+  }
+
+  /**
+   * Send periodic status update to admin connection
+   * @param {WebSocket} ws - Admin WebSocket connection
+   */
+  async sendPeriodicStatusUpdateToAdmin(ws) {
+    try {
+      // Get all device statuses from DeviceStatusManager
+      const deviceStatusManager = require('./deviceStatusManager');
+      const allStatuses = deviceStatusManager.getAllDeviceStatuses();
+      
+      // Send device list update
+      const deviceList = allStatuses.map(status => ({
+        deviceId: status.deviceId,
+        isOnline: status.isOnline,
+        lastSeen: status.lastSeen,
+        source: status.source
+      }));
+      
+      ws.send(JSON.stringify({
+        type: 'deviceList',
+        devices: deviceList
+      }));
+      
+    } catch (error) {
+      console.error('❌ [Admin WebSocket] Error sending periodic status update:', error);
+    }
+  }
+
+  /**
    * Send unregister notification to a specific device
    * @param {string} deviceId - Device identifier
    */
@@ -982,9 +1087,23 @@ class DeviceStatusService {
       source: source
     };
     
+    // Send to all connections (including admin)
     this.broadcast({
       type: 'deviceUpdate',
       device: device
+    });
+    
+    // Also send individual device update format for admin connections
+    this.activeConnections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN && ws.isAdmin) {
+        ws.send(JSON.stringify({
+          type: 'deviceUpdate',
+          deviceId: deviceId,
+          isOnline: isOnline,
+          lastSeen: device.lastSeen,
+          source: source
+        }));
+      }
     });
     
     console.log(`📡 [Broadcast] Device ${deviceId} status: ${isOnline ? 'ONLINE' : 'OFFLINE'} (source: ${source})`);
@@ -995,6 +1114,30 @@ class DeviceStatusService {
       isOnline, 
       source === 'websocket' ? 'websocket_update' : 'database_update'
     );
+  }
+
+  broadcastLocationUpdate(deviceId, locationData) {
+    // Send location update to admin connections only
+    this.activeConnections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN && ws.isAdmin) {
+        ws.send(JSON.stringify({
+          type: 'locationUpdate',
+          deviceId: deviceId,
+          location: {
+            lat: locationData.lat,
+            lng: locationData.lng,
+            speed: locationData.speed,
+            heading: locationData.heading,
+            accuracy: locationData.accuracy,
+            address: locationData.address,
+            timestamp: locationData.timestamp,
+            isOnline: locationData.isOnline
+          }
+        }));
+      }
+    });
+    
+    console.log(`📍 [Broadcast] Location update for ${deviceId}: ${locationData.lat}, ${locationData.lng} (online: ${locationData.isOnline})`);
   }
 
   startPingInterval() {

@@ -10,8 +10,8 @@ import { onError } from '@apollo/client/link/error';
 // Get server configuration from environment variables
 const serverUrl = process.env.REACT_APP_API_URL;
 
-// Environment debug logging (development only)
-if (process.env.NODE_ENV === 'development') {
+// Environment debug logging (only in verbose mode)
+if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_APOLLO === 'true') {
   console.log('🔍 Environment Debug:', {
     REACT_APP_API_URL: process.env.REACT_APP_API_URL,
     NODE_ENV: process.env.NODE_ENV,
@@ -25,8 +25,8 @@ let actualServerUrl = serverUrl || 'http://localhost:5000';
 // Remove trailing slash to prevent double slashes in the URL
 actualServerUrl = actualServerUrl.replace(/\/$/, '');
 
-// Apollo Client configuration logging (development only)
-if (process.env.NODE_ENV === 'development') {
+// Apollo Client configuration logging (only in verbose mode)
+if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_APOLLO === 'true') {
   console.log('🔧 Apollo Client Configuration:', {
     envUrl: serverUrl,
     finalUrl: actualServerUrl,
@@ -52,17 +52,19 @@ const httpLink = createHttpLink({
 });
 
 const authLink = setContext((_, { headers }) => {
-  // Check for admin token first, then user token
+  // Check for admin token first, then user token, then generic token
   const adminToken = localStorage.getItem('adminToken');
   const userToken = localStorage.getItem('userToken');
-  const token = adminToken || userToken;
+  const token = localStorage.getItem('token');
+  const finalToken = adminToken || userToken || token;
   
-  // Debug logging only in development
-  if (process.env.NODE_ENV === 'development') {
+  // Debug logging only in development and only when token changes
+  if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_APOLLO === 'true') {
     console.log('🔐 Apollo Client authLink:', { 
       adminToken: adminToken ? `${adminToken.substring(0, 20)}...` : null,
       userToken: userToken ? `${userToken.substring(0, 20)}...` : null,
-      finalToken: token ? `${token.substring(0, 20)}...` : null
+      token: token ? `${token.substring(0, 20)}...` : null,
+      finalToken: finalToken ? `${finalToken.substring(0, 20)}...` : null
     });
   }
   
@@ -71,7 +73,7 @@ const authLink = setContext((_, { headers }) => {
       ...headers,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      authorization: token ? `Bearer ${token}` : "",
+      authorization: finalToken ? `Bearer ${finalToken}` : "",
     }
   }
 });

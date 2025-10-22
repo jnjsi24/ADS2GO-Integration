@@ -53,12 +53,7 @@ const DeviceComplianceSchema = new mongoose.Schema({
     index: true 
   },
 
-  // 2. Material Condition Tracking (for non-digital materials)
-  materialCondition: { 
-    type: String, 
-    enum: ['GOOD', 'FADED', 'DAMAGED', 'REMOVED'],
-    default: 'GOOD' 
-  },
+  // 2. Inspection metadata (condition now tracked on Material, not here)
   inspectionPhotos: [{ type: String, trim: true }],
   lastInspectionDate: Date,
   
@@ -68,8 +63,8 @@ const DeviceComplianceSchema = new mongoose.Schema({
   nextPhotoDue: { type: Date },
   photoComplianceStatus: { 
     type: String, 
-    enum: ['COMPLIANT', 'NON_COMPLIANT', 'OVERDUE'], 
-    default: 'COMPLIANT' 
+    enum: ['COMPLIANT', 'NON_COMPLIANT', 'OVERDUE', 'PENDING'], 
+    default: 'PENDING' 
   },
   
   // 4. Operational Management
@@ -93,7 +88,7 @@ DeviceComplianceSchema.index({ driverId: 1, lastInspectionDate: -1 });
 DeviceComplianceSchema.index({ 'monthlyPhotos.month': 1 });
 DeviceComplianceSchema.index({ photoComplianceStatus: 1 });
 DeviceComplianceSchema.index({ nextPhotoDue: 1 });
-DeviceComplianceSchema.index({ materialCondition: 1 });
+// materialCondition index removed; condition is stored on Material
 
 // Virtual for current month photo status
 DeviceComplianceSchema.virtual('currentMonthPhotoStatus').get(function() {
@@ -147,16 +142,13 @@ DeviceComplianceSchema.methods.calculatePhotoComplianceStatus = function() {
   const now = new Date();
   const currentMonth = now.toISOString().slice(0, 7);
   
-  // Check if current month photo exists
-  const hasCurrentMonthPhoto = this.monthlyPhotos?.some(photo => 
-    photo.month === currentMonth && photo.status !== 'REJECTED'
-  );
-  
-  if (hasCurrentMonthPhoto) {
-    return 'COMPLIANT';
+  const currentEntry = this.monthlyPhotos?.find(photo => photo.month === currentMonth);
+  if (currentEntry) {
+    if (currentEntry.status === 'APPROVED') return 'COMPLIANT';
+    if (currentEntry.status === 'PENDING') return 'PENDING';
+    // REJECTED will fall through to NON_COMPLIANT/OVERDUE logic
   }
   
-  // Check if overdue
   if (this.nextPhotoDue && now > this.nextPhotoDue) {
     return 'OVERDUE';
   }
@@ -209,8 +201,6 @@ DeviceComplianceSchema.statics.findOverdueInspections = function() {
   });
 };
 
-DeviceComplianceSchema.statics.findByCondition = function(condition) {
-  return this.find({ materialCondition: condition });
-};
+// Removed findByCondition; condition is tracked on Material model
 
 module.exports = mongoose.models.DeviceCompliance || mongoose.model('DeviceCompliance', DeviceComplianceSchema);

@@ -154,7 +154,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </AnimatePresence>
                       </motion.div>
 
-                      <button className="text-black font-medium text-sm">
+                      <button 
+                        onClick={() => onMaterialClick(screen)}
+                        className="text-black font-medium text-sm hover:text-blue-600 hover:underline cursor-pointer"
+                        title="Click to view device details"
+                      >
                         {screen.displayId || `${screen.materialId}-SLOT-${screen.slotNumber}`}
                       </button>
                     </div>
@@ -195,37 +199,109 @@ const Dashboard: React.FC<DashboardProps> = ({
 
                     ) : (
                       <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                        {/* Play */}
-                        <button className="group flex items-center bg-green-100 text-green-700 rounded-md overflow-hidden h-8 w-7 hover:w-14 transition-[width] duration-300 border border-green-200">
-                          <Play className="flex-shrink-0 ml-1 transition-all duration-300" size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs ml-1 font-medium whitespace-nowrap transition-all duration-300">
-                            Play
-                          </span>
-                        </button>
-
-                        {/* Pause */}
-                        <button className="group flex items-center bg-yellow-100 text-yellow-700 rounded-md overflow-hidden h-8 w-8 hover:w-16 transition-[width] duration-300 border border-yellow-200">
-                          <Pause className="flex-shrink-0 ml-1.5 transition-all duration-300" size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs font-medium ml-1 whitespace-nowrap transition-all duration-300">
-                            Pause
-                          </span>
-                        </button>
-
-                        {/* Stop */}
-                        <button className="group flex items-center bg-red-100 text-red-700 rounded-md overflow-hidden h-8 w-8 hover:w-14 transition-[width] duration-300 border border-red-200">
-                          <Square className="flex-shrink-0 ml-1.5 transition-all duration-300" size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs font-medium ml-1 whitespace-nowrap transition-all duration-300">
-                            Stop
-                          </span>
-                        </button>
-
-                        {/* Next */}
-                        <button className="group flex items-center bg-blue-100 text-blue-700 rounded-md overflow-hidden h-8 w-7 hover:w-14 transition-[width] duration-300 border border-blue-200">
-                          <SkipForward className="flex-shrink-0 ml-1 transition-all duration-300" size={16} />
-                          <span className="opacity-0 group-hover:opacity-100 text-xs font-medium ml-1 whitespace-nowrap transition-all duration-300">
-                            Next
-                          </span>
-                        </button>
+                        {/* Individual Device Controls */}
+                        <div className="relative group">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Toggle dropdown by adding/removing a class
+                              const dropdown = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (dropdown) {
+                                dropdown.classList.toggle('opacity-0');
+                                dropdown.classList.toggle('invisible');
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600"
+                            title="Device Controls"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
+                          
+                          {/* Dropdown Menu */}
+                          <div className="dropdown-menu absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                            <div className="py-1">
+                              {(() => {
+                                // Use master control state instead of individual device state
+                                // This ensures individual controls show the opposite of master control
+                                const isOnline = screen.isOnline;
+                                const hasCurrentAd = screen.screenMetrics?.currentAd;
+                                
+                                // Debug logging (only in verbose mode)
+                                if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_DASHBOARD === 'true') {
+                                  console.log(`🎬 [Dashboard] Screen ${screen.deviceId} state:`, {
+                                    isOnline,
+                                    hasCurrentAd: !!hasCurrentAd,
+                                    masterControlState: isCurrentlyPlaying,
+                                    devicePlayState: devicePlayStates[screen.deviceId]
+                                  });
+                                }
+                                
+                                return (
+                                  <>
+                                    <button
+                                      onClick={() => onScreenAction(screen.deviceId, 'play')}
+                                      disabled={!isOnline || isCurrentlyPlaying}
+                                      className={`flex items-center w-full px-4 py-2 text-sm ${
+                                        !isOnline || isCurrentlyPlaying
+                                          ? 'text-gray-400 cursor-not-allowed'
+                                          : 'text-gray-700 hover:bg-green-50 hover:text-green-600'
+                                      }`}
+                                      title={!isOnline ? 'Device offline' : isCurrentlyPlaying ? 'Already playing' : 'Play ads'}
+                                    >
+                                      <Play className="w-4 h-4 mr-2" />
+                                      Play
+                                    </button>
+                                    <button
+                                      onClick={() => onScreenAction(screen.deviceId, 'pause')}
+                                      disabled={!isOnline || !isCurrentlyPlaying}
+                                      className={`flex items-center w-full px-4 py-2 text-sm ${
+                                        !isOnline || !isCurrentlyPlaying
+                                          ? 'text-gray-400 cursor-not-allowed'
+                                          : 'text-gray-700 hover:bg-yellow-50 hover:text-yellow-600'
+                                      }`}
+                                      title={!isOnline ? 'Device offline' : !isCurrentlyPlaying ? 'Not currently playing' : 'Pause ads'}
+                                    >
+                                      <Pause className="w-4 h-4 mr-2" />
+                                      Pause
+                                    </button>
+                                    {(() => {
+                                      const isLocked = deviceLockStates[screen.deviceId] ?? false;
+                                      return (
+                                        <button
+                                          onClick={() => onScreenAction(screen.deviceId, isLocked ? 'unlock' : 'lock')}
+                                          disabled={!isOnline}
+                                          className={`flex items-center w-full px-4 py-2 text-sm ${
+                                            !isOnline
+                                              ? 'text-gray-400 cursor-not-allowed'
+                                              : isLocked
+                                              ? 'text-gray-700 hover:bg-green-50 hover:text-green-600'
+                                              : 'text-gray-700 hover:bg-orange-50 hover:text-orange-600'
+                                          }`}
+                                          title={!isOnline ? 'Device offline' : isLocked ? 'Unlock device' : 'Lock device'}
+                                        >
+                                          {isLocked ? (
+                                            <Unlock className="w-4 h-4 mr-2" />
+                                          ) : (
+                                            <Lock className="w-4 h-4 mr-2" />
+                                          )}
+                                          {isLocked ? 'Unlock' : 'Lock'}
+                                        </button>
+                                      );
+                                    })()}
+                                  </>
+                                );
+                              })()}
+                              <div className="border-t border-gray-100"></div>
+                              <button
+                                onClick={() => onScreenClick(screen)}
+                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Details
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -235,91 +311,75 @@ const Dashboard: React.FC<DashboardProps> = ({
                     {/* Status */}
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 mb-1">Status</h4>
-                      {screen.slot1Status && screen.slot2Status ? (
-                        <div className="flex items-center gap-4 flex-wrap">
-                          {/* Slot 1 */}
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                screen.slot1Status === "ONLINE" ? "bg-green-500" : "bg-red-500"
-                              }`}
-                            ></div>
-                            <span
-                              className={`text-sm font-medium ${
-                                screen.slot1Status === "ONLINE" ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              Slot 1: {screen.slot1Status}
+                      <div className="flex items-center space-x-2">
+                        {screen.slot1Status && screen.slot2Status ? (
+                          // For consolidated view, show status based on overall online status
+                          getStatusIcon(screen.isOnline ? 'online' : 'offline')
+                        ) : (
+                          // For single device view, show normal status
+                          getStatusIcon(screen.isOnline ? 'online' : 'offline')
+                        )}
+                        <div className="flex flex-col">
+                          {screen.slot1Status && screen.slot2Status ? (
+                            // Show individual slot statuses for consolidated view
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full ${screen.slot1Status === 'ONLINE' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                <span className={`text-sm font-medium ${screen.slot1Status === 'ONLINE' ? 'text-green-600' : 'text-red-600'}`}>
+                                  Slot 1: {screen.slot1Status}
+                                </span>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full ${screen.slot2Status === 'ONLINE' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                <span className={`text-sm font-medium ${screen.slot2Status === 'ONLINE' ? 'text-green-600' : 'text-red-600'}`}>
+                                  Slot 2: {screen.slot2Status}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            // Show single status for non-consolidated view
+                            <span className={`text-sm font-medium ${
+                              screen.isOnline ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {screen.statusText || getStatusText(screen.isOnline ? 'online' : 'offline')}
                             </span>
-                          </div>
-
-                          {/* Slot 2 */}
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${
-                                screen.slot2Status === "ONLINE" ? "bg-green-500" : "bg-red-500"
-                              }`}
-                            ></div>
-                            <span
-                              className={`text-sm font-medium ${
-                                screen.slot2Status === "ONLINE" ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              Slot 2: {screen.slot2Status}
-                            </span>
-                          </div>
+                          )}
                         </div>
-                      ) : (
-                        <span
-                          className={`text-sm font-medium ${
-                            screen.isOnline ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {screen.statusText || getStatusText(screen.isOnline ? "online" : "offline")}
-                        </span>
-                      )}
+                      </div>
                     </div>
+                    
                     {/* Current Ad */}
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 mb-1">Current Ad</h4>
-                      {screen.screenMetrics?.currentAd?.adTitle ? (
+                      {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adTitle ? (
                         <div>
-                          <p className="text-sm font-medium text-gray-800">
-                            {screen.screenMetrics.currentAd.adTitle}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Duration:{" "}
-                            {screen.screenMetrics.currentAd.adDuration
-                              ? `${screen.screenMetrics.currentAd.adDuration}s`
-                              : "Unknown"}
-                          </p>
+                          <div className="font-medium text-sm">{screen.screenMetrics.currentAd.adTitle}</div>
+                          <div className="text-xs text-gray-500">
+                            Duration: {screen.screenMetrics.currentAd.adDuration ? `${screen.screenMetrics.currentAd.adDuration}s` : 'Unknown'}
+                          </div>
                         </div>
                       ) : (
-                        <p className="text-gray-400 text-sm">No ads playing</p>
+                        <span className="text-gray-400 text-sm">No ads playing</span>
                       )}
                     </div>
 
                     {/* Progress */}
                     <div>
                       <h4 className="text-sm font-semibold text-gray-700 mb-1">Progress</h4>
-                      {screen.screenMetrics?.currentAd?.adDuration ? (
-                        <AdProgressBar
+                      {screen.screenMetrics?.currentAd && screen.screenMetrics.currentAd.adDuration ? (
+                        <AdProgressBar 
                           adDuration={screen.screenMetrics.currentAd.adDuration}
                           isPlaying={screen.isOnline}
                           className="w-full"
                           startTime={screen.screenMetrics.currentAd.startTime}
-                          realTimeData={
-                            screen.screenMetrics.currentAd.currentTime !== undefined
-                              ? {
-                                  currentTime: screen.screenMetrics.currentAd.currentTime,
-                                  progress: screen.screenMetrics.currentAd.progress || 0,
-                                  state: (screen.screenMetrics.currentAd.state || "playing") as "ended" | "playing" | "paused" | "buffering" | "loading",
-                                }
-                              : undefined
-                          }
+                          realTimeData={screen.screenMetrics.currentAd.currentTime !== undefined ? {
+                            currentTime: screen.screenMetrics.currentAd.currentTime,
+                            progress: screen.screenMetrics.currentAd.progress || 0,
+                            state: (screen.screenMetrics.currentAd.state || 'playing') as "ended" | "playing" | "paused" | "buffering" | "loading"
+                          } : undefined}
                         />
                       ) : (
-                        <p className="text-gray-400 text-sm">-</p>
+                        <span className="text-gray-400 text-sm">-</span>
                       )}
                     </div>
                   </div>
@@ -328,10 +388,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
                     <h4 className="text-sm text-gray-600">Location:</h4>
                     <p className="text-sm font-semibold text-gray-700">
-                      {screen.currentLocation?.address ||
-                        (screen.currentLocation?.lat && screen.currentLocation?.lng
-                          ? `Lat: ${screen.currentLocation.lat.toFixed(6)}, Lng: ${screen.currentLocation.lng.toFixed(6)}`
-                          : "Location not available")}
+                      {screen.currentLocation?.address || 
+                       (screen.currentLocation?.lat && screen.currentLocation?.lng ? 
+                        `Location: ${screen.currentLocation.lat.toFixed(6)}, ${screen.currentLocation.lng.toFixed(6)}` : 
+                        'Location not available')}
                     </p>
                   </div>
                 </div>

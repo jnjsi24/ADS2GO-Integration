@@ -11,6 +11,12 @@ export const GET_ALL_MATERIALS = gql`
       requirements
       category
       driverId
+      # Inspection/compliance fields resolved from DeviceCompliance
+      materialCondition
+      inspectionPhotos { url uploadedAt uploadedBy description month status }
+      photoComplianceStatus
+      lastInspectionDate
+      nextInspectionDue
       driver {
         driverId
         fullName
@@ -93,6 +99,11 @@ export const GET_MATERIALS_BY_CATEGORY_AND_VEHICLE = gql`
       requirements
       category
       driverId
+      materialCondition
+      inspectionPhotos { url uploadedAt uploadedBy description month status }
+      photoComplianceStatus
+      lastInspectionDate
+      nextInspectionDue
       driver {
         driverId
         fullName
@@ -119,6 +130,11 @@ export const GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE = gql`
       requirements
       category
       driverId
+      materialCondition
+      inspectionPhotos { url uploadedAt uploadedBy description month status }
+      photoComplianceStatus
+      lastInspectionDate
+      nextInspectionDue
       driver {
         driverId
         fullName
@@ -173,6 +189,41 @@ export const GET_MATERIAL_USAGE_HISTORY = gql`
         createdAt
         updatedAt
       }
+    }
+  }
+`;
+
+// Fetch deployments by STRING materialId (e.g., "DGL-HEADDRESS-CAR-007")
+export const GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING = gql`
+  query GetDeploymentsByMaterialIdString($materialId: String!) {
+    getDeploymentsByMaterialIdString(materialId: $materialId) {
+      id
+      adDeploymentId
+      materialId
+      driverId
+      currentStatus
+      adId
+      lcdSlots {
+        id
+        adId
+        slotNumber
+        status
+        startTime
+        endTime
+        deployedAt
+        completedAt
+        mediaFile
+        ad {
+          id
+          title
+          adFormat
+          mediaFile
+          startTime
+          endTime
+        }
+      }
+      createdAt
+      updatedAt
     }
   }
 `;

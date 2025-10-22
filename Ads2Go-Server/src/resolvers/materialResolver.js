@@ -266,6 +266,7 @@ const materialResolvers = {
           return {
             id: id,
             materialId: record.materialId?.toString(),
+            materialStringId: material.materialId,
             driverId: record.driverId,
             driverInfo: record.driverInfo,
             assignedAt: record.assignedAt?.toISOString(),
@@ -293,6 +294,66 @@ const materialResolvers = {
         
       } catch (error) {
         console.error('Error fetching material usage history:', error);
+        return {
+          success: false,
+          message: error.message,
+          usageHistory: []
+        };
+      }
+    },
+
+    // Get usage history for a specific driver (Admin-only)
+    getDriverUsageHistory: async (_, { driverId }, { user }) => {
+      checkAdmin(user); // Only admin can access
+      try {
+        console.log(`📊 Fetching usage history for driver ${driverId}`);
+
+        // Verify driver exists
+        const driver = await Driver.findOne({ driverId });
+        if (!driver) {
+          throw new Error('Driver not found');
+        }
+
+        // Get usage history
+        const usageHistory = await MaterialUsageHistory.getDriverUsageHistory(driverId);
+
+        // Shape records; include material string id if populated
+        const validatedHistory = usageHistory.map(record => {
+          const id = record.id || record._id?.toString();
+          if (!id) throw new Error('Usage history record missing ID');
+          const mat = record.materialId; // populated doc or ObjectId
+          const materialIdStr = typeof mat === 'object' && mat !== null && mat._id ? mat._id.toString() : (mat?.toString?.() || null);
+          const materialStringId = typeof mat === 'object' && mat !== null && mat.materialId ? mat.materialId : null;
+          return {
+            id,
+            materialId: materialIdStr,
+            materialStringId,
+            driverId: record.driverId,
+            driverInfo: record.driverInfo,
+            assignedAt: record.assignedAt ? new Date(record.assignedAt).toISOString() : null,
+            unassignedAt: record.unassignedAt ? new Date(record.unassignedAt).toISOString() : null,
+            mountedAt: record.mountedAt ? new Date(record.mountedAt).toISOString() : null,
+            dismountedAt: record.dismountedAt ? new Date(record.dismountedAt).toISOString() : null,
+            usageDuration: record.usageDuration || null,
+            assignmentReason: record.assignmentReason,
+            unassignmentReason: record.unassignmentReason || null,
+            customDismountReason: record.customDismountReason || null,
+            assignedByAdmin: record.assignedByAdmin || null,
+            unassignedByAdmin: record.unassignedByAdmin || null,
+            notes: record.notes || null,
+            isActive: record.isActive,
+            createdAt: record.createdAt ? new Date(record.createdAt).toISOString() : null,
+            updatedAt: record.updatedAt ? new Date(record.updatedAt).toISOString() : null
+          };
+        });
+
+        return {
+          success: true,
+          message: `Found ${validatedHistory.length} usage history entries`,
+          usageHistory: validatedHistory
+        };
+      } catch (error) {
+        console.error('Error fetching driver usage history:', error);
         return {
           success: false,
           message: error.message,
@@ -447,51 +508,6 @@ const materialResolvers = {
 
   // ScreenTracking collection deprecated: skip creating ScreenTracking records
 
-      // Create DeviceCompliance record using GraphQL mutation approach
-      try {
-        
-        // Check if DeviceCompliance record already exists
-        const existingDeviceCompliance = await DeviceCompliance.findOne({ materialId: material.id });
-        
-        if (!existingDeviceCompliance) {
-          console.log(`📝 Creating new DeviceCompliance record for material: ${material.materialId}`);
-          
-          const deviceCompliance = new DeviceCompliance({
-            materialId: material.id, // Use ObjectId reference
-            driverId: null, // No driver assigned yet
-            location: {
-              type: 'Point',
-              coordinates: [0, 0] // Default coordinates - will be updated when device reports location
-            },
-            address: 'Location not set',
-            deviceStatus: 'OFFLINE',
-            isOnline: false,
-            lastSeen: new Date(),
-            materialCondition: 'GOOD',
-            isActive: true,
-            // Add unique fields to avoid duplicate key errors
-            totalAdImpressions: 0,
-            totalViewCount: 0,
-            qrCodeScans: 0,
-            interactions: 0,
-            uptimePercentage: 0,
-            batteryLevel: 0,
-            signalStrength: 0,
-            totalDistanceTraveled: 0
-          });
-          
-          await deviceCompliance.save();
-          console.log(`✅ Created DeviceCompliance record for material: ${material.materialId}`);
-        } else {
-          console.log(`ℹ️ DeviceCompliance already exists for material: ${material.materialId}`);
-        }
-      } catch (error) {
-        console.error(`❌ Error creating DeviceCompliance:`, error);
-        console.error(`❌ Error details:`, error.message);
-        console.error(`❌ Stack trace:`, error.stack);
-        // Don't throw error - DeviceCompliance is optional
-      }
-
               console.log(`🎯 Returning created material: ${material.materialId} with ID: ${material.id}`);
       return material;
     },
@@ -590,6 +606,37 @@ const materialResolvers = {
             // Don't fail the main operation if usage history update fails
           }
         }
+
+        // Create DeviceCompliance on first mount and initialize inspection schedule
+        try {
+          let tracking = await DeviceCompliance.findOne({ materialId: material._id });
+          if (input.mountedAt) {
+            if (!tracking) {
+              tracking = new DeviceCompliance({
+                materialId: material._id,
+                driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
+                monthlyPhotos: [],
+                photoComplianceStatus: 'PENDING'
+              });
+            }
+            const mountedDate = new Date(input.mountedAt);
+            if (!tracking.lastInspectionDate) {
+              tracking.lastInspectionDate = mountedDate;
+            }
+            const next = new Date(mountedDate);
+            next.setMonth(next.getMonth() + 1);
+            tracking.nextInspectionDue = next;
+            await tracking.save();
+          } else if (tracking) {
+            // If mountedAt is cleared, also clear inspection schedule to avoid stale dates
+            tracking.lastInspectionDate = tracking.lastInspectionDate || null;
+            tracking.nextInspectionDue = tracking.nextInspectionDue || null;
+            await tracking.save();
+          }
+        } catch (inspectionErr) {
+          console.error('Error initializing inspection schedule:', inspectionErr);
+          // Non-fatal: do not block the main update
+        }
       }
       // Handle dismounting (when dismountedAt is set)
       if (input.dismountedAt !== undefined) {
@@ -621,6 +668,9 @@ const materialResolvers = {
       if (input.description !== undefined) material.description = input.description;
       if (input.requirements !== undefined) material.requirements = input.requirements;
       if (input.category !== undefined) material.category = input.category;
+      if (input.materialCondition !== undefined) {
+        material.materialCondition = input.materialCondition;
+      }
       
       // Prevent direct driver assignment through updateMaterial
       if (input.driverId !== undefined && input.driverId !== null) {
@@ -897,18 +947,15 @@ const materialResolvers = {
           throw new Error('You can only upload photos for your assigned materials');
         }
 
-        // Find or create device compliance record
+        // Require mountedAt before allowing any compliance record creation or photo uploads
+        if (!material.mountedAt) {
+          throw new Error('Material is not mounted. Set mountedAt before uploading monthly photos.');
+        }
+
+        // Find device compliance record (must exist after mounting)
         let deviceCompliance = await DeviceCompliance.findOne({ materialId: material._id });
-        
         if (!deviceCompliance) {
-          console.log(`📝 Creating new DeviceCompliance record for material ${material.materialId}`);
-          deviceCompliance = new DeviceCompliance({
-            materialId: material._id,
-            driverId: material.driverId ? await Driver.findOne({ driverId: material.driverId }).select('_id') : null,
-            materialCondition: 'GOOD',
-            monthlyPhotos: [],
-            photoComplianceStatus: 'COMPLIANT'
-          });
+          throw new Error('Device compliance record not found for this material');
         }
 
         // Add monthly photo using the existing method
@@ -923,7 +970,6 @@ const materialResolvers = {
             id: deviceCompliance._id.toString(),
             materialId: deviceCompliance.materialId.toString(),
             driverId: deviceCompliance.driverId?.toString(),
-            materialCondition: deviceCompliance.materialCondition,
             monthlyPhotos: (deviceCompliance.monthlyPhotos || []).map(photo => ({
               month: photo.month,
               status: photo.status,
@@ -942,6 +988,117 @@ const materialResolvers = {
         console.error('Error uploading monthly photo:', error);
         throw new Error(error.message || 'Failed to upload monthly photo');
       }
+    },
+
+    // Admin moderation: approve a monthly photo entry
+    approveMonthlyPhoto: async (_, { materialId, month, adminNotes, condition }, { user }) => {
+      checkAdmin(user);
+      const material = await Material.findById(materialId);
+      if (!material) throw new Error('Material not found');
+
+      let tracking = await DeviceCompliance.findOne({ materialId: material._id });
+      if (!tracking) throw new Error('No device compliance record found for this material');
+
+      // Find month entry
+      const entry = (tracking.monthlyPhotos || []).find(p => p.month === month);
+      if (!entry) throw new Error('No photo found for specified month');
+
+      entry.status = 'APPROVED';
+      if (adminNotes) entry.adminNotes = adminNotes;
+
+      // Update compliance status and dates
+      tracking.photoComplianceStatus = 'COMPLIANT';
+      tracking.lastPhotoUpload = entry.uploadedAt || new Date();
+      const next = new Date(tracking.lastPhotoUpload);
+      next.setMonth(next.getMonth() + 1);
+      tracking.nextPhotoDue = next;
+
+      // Also treat approved monthly photo as the inspection for this period
+      const inspectionDate = entry.uploadedAt ? new Date(entry.uploadedAt) : new Date();
+      tracking.lastInspectionDate = inspectionDate;
+      const nextInspection = new Date(inspectionDate);
+      nextInspection.setMonth(nextInspection.getMonth() + 1);
+      tracking.nextInspectionDue = nextInspection;
+      if (condition) {
+        // Mirror condition to Material model instead of DeviceCompliance
+        material.materialCondition = condition;
+        await material.save();
+      }
+
+      // Mirror first approved photo into inspectionPhotos if available
+      if (Array.isArray(entry.photoUrls) && entry.photoUrls.length > 0) {
+        const firstUrl = entry.photoUrls[0];
+        if (!tracking.inspectionPhotos) tracking.inspectionPhotos = [];
+        // Avoid duplicates: only push if different from last
+        const lastUrl = tracking.inspectionPhotos[tracking.inspectionPhotos.length - 1];
+        if (firstUrl && firstUrl !== lastUrl) {
+          tracking.inspectionPhotos.push(firstUrl);
+        }
+      }
+
+      await tracking.save();
+
+      return {
+        success: true,
+        message: 'Monthly photo approved',
+        materialTracking: {
+          id: tracking._id.toString(),
+          materialId: tracking.materialId.toString(),
+          driverId: tracking.driverId?.toString(),
+          monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
+            month: photo.month,
+            status: photo.status,
+            photoUrls: photo.photoUrls,
+            uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+            uploadedBy: photo.uploadedBy,
+            adminNotes: photo.adminNotes
+          })),
+          photoComplianceStatus: tracking.photoComplianceStatus,
+          lastPhotoUpload: tracking.lastPhotoUpload ? tracking.lastPhotoUpload.toISOString() : null,
+          nextPhotoDue: tracking.nextPhotoDue ? tracking.nextPhotoDue.toISOString() : null
+        }
+      };
+    },
+
+    // Admin moderation: reject a monthly photo entry
+    rejectMonthlyPhoto: async (_, { materialId, month, adminNotes }, { user }) => {
+      checkAdmin(user);
+      const material = await Material.findById(materialId);
+      if (!material) throw new Error('Material not found');
+
+      let tracking = await DeviceCompliance.findOne({ materialId: material._id });
+      if (!tracking) throw new Error('No device compliance record found for this material');
+
+      const entry = (tracking.monthlyPhotos || []).find(p => p.month === month);
+      if (!entry) throw new Error('No photo found for specified month');
+
+      entry.status = 'REJECTED';
+      if (adminNotes) entry.adminNotes = adminNotes;
+
+      // Set status to NON_COMPLIANT, next due unchanged or sooner if desired
+      tracking.photoComplianceStatus = 'NON_COMPLIANT';
+      await tracking.save();
+
+      return {
+        success: true,
+        message: 'Monthly photo rejected',
+        materialTracking: {
+          id: tracking._id.toString(),
+          materialId: tracking.materialId.toString(),
+          driverId: tracking.driverId?.toString(),
+          monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
+            month: photo.month,
+            status: photo.status,
+            photoUrls: photo.photoUrls,
+            uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
+            uploadedBy: photo.uploadedBy,
+            adminNotes: photo.adminNotes
+          })),
+          photoComplianceStatus: tracking.photoComplianceStatus,
+          lastPhotoUpload: tracking.lastPhotoUpload ? tracking.lastPhotoUpload.toISOString() : null,
+          nextPhotoDue: tracking.nextPhotoDue ? tracking.nextPhotoDue.toISOString() : null
+        }
+      };
     }
   },
 
@@ -1044,7 +1201,7 @@ const materialResolvers = {
     lastInspectionDate: async (parent) => {
       try {
         const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
-        const date = tracking?.lastPhotoUpload || parent.lastInspectionDate;
+        const date = tracking?.lastInspectionDate || parent.lastInspectionDate;
         if (!date) return null;
         return date.toISOString();
       } catch (error) {
@@ -1056,7 +1213,7 @@ const materialResolvers = {
     nextInspectionDue: async (parent) => {
       try {
         const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
-        const date = tracking?.nextPhotoDue || parent.nextInspectionDue;
+        const date = tracking?.nextInspectionDue || parent.nextInspectionDue;
         if (!date) return null;
         return date.toISOString();
       } catch (error) {

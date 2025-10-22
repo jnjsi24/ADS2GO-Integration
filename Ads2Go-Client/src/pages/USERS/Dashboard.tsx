@@ -13,7 +13,9 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GET_USER_ANALYTICS } from '../../graphql/user/queries/getUserAnalytics';
 import { motion, Transition, AnimatePresence } from 'framer-motion';
-import { RotateCcw, ArrowUpRight, ChevronDown } from 'lucide-react';
+import { RotateCcw, ArrowUpRight, ChevronDown, Monitor, Play, Activity } from 'lucide-react';
+import playbackWebSocketService from '../../services/playbackWebSocketService';
+import RealtimeMetrics from '../../components/RealtimeMetrics';
 
 // NotificationList Component
 const notifications = [
@@ -385,7 +387,12 @@ const Dashboard = () => {
         </div>
       </div>
       
-      {/* No Analytics Data Message - Common for both */}
+      {/* Real-Time Metrics */}
+      <div className="mb-6">
+        <RealtimeMetrics />
+      </div>
+
+      {/* No Analytics Data Message */}
       {analyticsError && analyticsError.message === 'Failed to fetch analytics data' && (
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center">
@@ -411,6 +418,7 @@ const Dashboard = () => {
                     </svg>
                     Refresh Data
                   </button>
+                </div>
                 </div>
               </div>
             </div>

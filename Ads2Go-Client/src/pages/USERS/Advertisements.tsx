@@ -33,6 +33,7 @@ type Ad = {
   vehicleType: string;
   price: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING';
+  paymentStatus?: string | null;
   createdAt: string;
   startTime: string;
   endTime: string;
@@ -109,6 +110,18 @@ const Advertisements: React.FC = () => {
   });
   
   const ads: Ad[] = data?.getMyAds || [];
+  
+  // Debug payment status
+  useEffect(() => {
+    if (data?.getMyAds) {
+      console.log('Advertisements - Ads data:', data.getMyAds.map(ad => ({
+        id: ad.id,
+        title: ad.title,
+        status: ad.status,
+        paymentStatus: ad.paymentStatus
+      })));
+    }
+  }, [data]);
   
   const formatDate = (dateValue: string | number) => {
     if (!dateValue) return 'N/A';
@@ -765,6 +778,21 @@ const Advertisements: React.FC = () => {
 
                     {/* Bottom section (sticky at bottom) */}
                     <div className="mt-auto pt-4">
+                      {/* Proceed to Pay Badge - Only show for APPROVED ads with PENDING payment */}
+                      {ad.status === "APPROVED" && ad.paymentStatus === "PENDING" && (
+                        <div className="mb-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/ad-details/${ad.id}`);
+                            }}
+                            className="inline-block px-2 py-1 text-xs font-semibold bg-orange-200 text-orange-800 rounded shadow-sm hover:bg-orange-300 transition-colors duration-200 cursor-pointer"
+                          >
+                            💳 Proceed to Pay
+                          </button>
+                        </div>
+                      )}
+                      
                       <div className="text-sm text-[#1B5087] font-medium">
                         {ad.startTime && ad.endTime ? (
                           formatDateRange(ad.startTime, ad.endTime)
@@ -802,6 +830,7 @@ const Advertisements: React.FC = () => {
                     >
                       {formatStatus(ad.status)}
                     </span>
+                    
                     {ad.status === "REJECTED" && ad.reasonForReject && (
                       <div className="mt-1 text-xs text-red-600 bg-white/90 px-2 py-1 rounded shadow-sm backdrop-blur-sm">
                         {ad.reasonForReject}

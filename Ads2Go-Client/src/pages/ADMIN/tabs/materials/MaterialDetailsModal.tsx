@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check, Calendar, UserPlus, UserX, QrCode, History } from 'lucide-react';
+import { useQuery, useMutation } from '@apollo/client';
+import { X, Check, Calendar, UserPlus, UserX, QrCode, History, Edit3 } from 'lucide-react';
 import MaterialUsageHistoryModal from './MaterialUsageHistoryModal';
+import { GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING, GET_MATERIAL_USAGE_HISTORY, GET_ALL_MATERIALS } from '../../../../graphql/admin/queries/materials';
+import { APPROVE_MONTHLY_PHOTO, REJECT_MONTHLY_PHOTO } from '../../../../graphql/admin/mutations/compliance';
+import { UPDATE_MATERIAL } from '../../../../graphql/admin/mutations/materials';
 
 interface Driver {
   driverId: string;
@@ -33,7 +37,7 @@ interface Material {
   dismountedAt?: string;
   createdAt: string;
   updatedAt: string;
-  materialCondition?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'DAMAGED';
+  materialCondition?: 'GOOD' | 'FADED' | 'DAMAGED' | 'REMOVED';
   inspectionPhotos?: InspectionPhoto[];
   photoComplianceStatus?: 'COMPLIANT' | 'NON_COMPLIANT' | 'PENDING';
   lastInspectionDate?: string;
@@ -72,6 +76,227 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showUsageHistory, setShowUsageHistory] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [modalImageSrc, setModalImageSrc] = useState('');
+  const [isEditingCondition, setIsEditingCondition] = useState(false);
+  const [selectedCondition, setSelectedCondition] = useState<string>('');
+  const [isUpdatingCondition, setIsUpdatingCondition] = useState(false);
+
+  // Mutations for photo approval
+  const [approveMonthlyPhoto] = useMutation(APPROVE_MONTHLY_PHOTO);
+  const [rejectMonthlyPhoto] = useMutation(REJECT_MONTHLY_PHOTO);
+  const [updateMaterial] = useMutation(UPDATE_MATERIAL);
+
+  const [reviewLoading, setReviewLoading] = useState<string | null>(null); // month key while processing
+
+  const handleApproveMonth = async (month: string) => {
+    if (!material) return;
+    
+    // Show confirmation dialog
+    const shouldProceed = window.confirm(`Approve photo for ${month}?`);
+    if (!shouldProceed) return;
+    
+    setReviewLoading(month);
+    
+    try {
+      // Default to GOOD condition if not set
+      const condition = material.materialCondition || 'GOOD';
+      const adminNotes = `Approved by admin on ${new Date().toISOString()}`;
+      
+      console.log('Approving photo with:', {
+        materialId: material.id,
+        month,
+        condition,
+        adminNotes
+      });
+      
+      const { data, errors } = await approveMonthlyPhoto({
+        variables: { 
+          materialId: material.id, 
+          month,
+          condition,
+          adminNotes
+        },
+        context: { 
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          } 
+        },
+        refetchQueries: [
+          { 
+            query: GET_ALL_MATERIALS,
+          },
+          'GetAllMaterials'
+        ]
+      });
+      
+      console.log('Approval response:', { data, errors });
+      
+      if (errors) {
+        throw new Error(errors.map(e => e.message).join('\n'));
+      }
+      
+      if (data?.approveMonthlyPhoto?.success) {
+        alert(`✅ Successfully approved photo for ${month}`);
+        
+        // Refresh the material data by closing and reopening the modal
+        if (onClose) {
+          const currentMaterial = material;
+          onClose();
+          // Reopen the modal after a short delay to allow the cache to update
+          setTimeout(() => {
+            if (onClose) onClose();
+            // Re-fetch the material data
+            if (currentMaterial) {
+              // This will trigger a refetch when the modal reopens
+              setTimeout(() => {
+                if (onClose) onClose();
+              }, 100);
+            }
+          }, 300);
+        }
+      } else {
+        throw new Error(data?.approveMonthlyPhoto?.message || 'Approval failed: No success response');
+      }
+    } catch (error) {
+      console.error('Approve failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`❌ Failed to approve photo: ${errorMessage}`);
+    } finally {
+      setReviewLoading(null);
+    }
+  };
+
+  const handleRejectMonth = async (month: string) => {
+    if (!material) return;
+    
+    // Get rejection reason from user
+    const reason = window.prompt('Please enter the reason for rejection:');
+    if (!reason) {
+      return; // User cancelled
+    }
+    
+    setReviewLoading(month);
+    
+    try {
+      const adminNotes = `Rejected by admin: ${reason} - ${new Date().toISOString()}`;
+      
+      console.log('Rejecting photo with:', {
+        materialId: material.id,
+        month,
+        adminNotes
+      });
+      
+      const { data, errors } = await rejectMonthlyPhoto({
+        variables: { 
+          materialId: material.id, 
+          month,
+          adminNotes
+        },
+        context: { 
+          headers: { 
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          } 
+        },
+        refetchQueries: [
+          { 
+            query: GET_ALL_MATERIALS,
+          },
+          'GetAllMaterials'
+        ]
+      });
+      
+      console.log('Rejection response:', { data, errors });
+      
+      if (errors) {
+        throw new Error(errors.map(e => e.message).join('\n'));
+      }
+      
+      if (data?.rejectMonthlyPhoto?.success) {
+        alert(`✅ Successfully rejected photo for ${month}`);
+        
+        // Refresh the material data by closing and reopening the modal
+        if (onClose) {
+          const currentMaterial = material;
+          onClose();
+          // Reopen the modal after a short delay to allow the cache to update
+          setTimeout(() => {
+            if (onClose) onClose();
+            // Re-fetch the material data
+            if (currentMaterial) {
+              // This will trigger a refetch when the modal reopens
+              setTimeout(() => {
+                if (onClose) onClose();
+              }, 100);
+            }
+          }, 300);
+        }
+      } else {
+        throw new Error(data?.rejectMonthlyPhoto?.message || 'Rejection failed: No success response');
+      }
+    } catch (error) {
+      console.error('Reject failed:', error);
+      alert(`Failed to reject photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setReviewLoading(null);
+    }
+  };
+
+  // Condition options based on backend schema
+  const conditionOptions = [
+    { value: 'GOOD', label: 'Good', color: 'bg-blue-200 text-blue-800' },
+    { value: 'FADED', label: 'Faded', color: 'bg-yellow-200 text-yellow-800' },
+    { value: 'DAMAGED', label: 'Damaged', color: 'bg-red-200 text-red-800' },
+    { value: 'REMOVED', label: 'Removed', color: 'bg-gray-200 text-gray-800' }
+  ];
+
+  // Initialize selected condition when material changes
+  useEffect(() => {
+    if (material?.materialCondition) {
+      setSelectedCondition(material.materialCondition);
+    }
+  }, [material?.materialCondition]);
+
+  const handleStartEditingCondition = () => {
+    setIsEditingCondition(true);
+    setSelectedCondition(material?.materialCondition || 'GOOD');
+  };
+
+  const handleCancelEditingCondition = () => {
+    setIsEditingCondition(false);
+    setSelectedCondition(material?.materialCondition || 'GOOD');
+  };
+
+  const handleSaveCondition = async () => {
+    if (!material || !selectedCondition) return;
+    
+    setIsUpdatingCondition(true);
+    try {
+      await updateMaterial({
+        variables: {
+          id: material.id,
+          input: {
+            materialCondition: selectedCondition
+          }
+        },
+        context: {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      });
+      
+      setIsEditingCondition(false);
+      // The material will be refetched automatically due to Apollo cache
+    } catch (error) {
+      console.error('Error updating material condition:', error);
+      alert('Failed to update material condition. Please try again.');
+    } finally {
+      setIsUpdatingCondition(false);
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -121,6 +346,73 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
       return 'N/A';
     }
   };
+
+  // Fetch assigned ads via deployments by STRING materialId (hook must be called unconditionally)
+  const { data: deploymentsData, loading: deploymentsLoading, error: deploymentsError } = useQuery(
+    GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING,
+    {
+      variables: { materialId: material?.materialId || '' },
+      skip: !material?.materialId,
+      fetchPolicy: 'cache-and-network',
+      context: {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    }
+  );
+
+  // Driver usage history for this material
+  const { data: usageData, loading: usageLoading, error: usageError } = useQuery(
+    GET_MATERIAL_USAGE_HISTORY,
+    {
+      variables: { materialId: material?.id || '' },
+      skip: !material?.id,
+      fetchPolicy: 'cache-and-network',
+      context: {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
+      }
+    }
+  );
+
+  const lcdSlots = (deploymentsData?.getDeploymentsByMaterialIdString?.lcdSlots || [])
+    .slice()
+    .sort((a: any, b: any) => (a.slotNumber || 0) - (b.slotNumber || 0));
+  const runningSlots = lcdSlots.filter((s: any) => s.status === 'RUNNING');
+  const scheduledSlots = lcdSlots.filter((s: any) => s.status === 'SCHEDULED');
+
+  // Extract detailed GraphQL error info when available
+  const detailedErrorMessage = (() => {
+    if (!deploymentsError) return '';
+    try {
+      const anyErr: any = deploymentsError as any;
+      const parts: string[] = [];
+      if (deploymentsError.message) parts.push(deploymentsError.message);
+      if (Array.isArray(anyErr.graphQLErrors) && anyErr.graphQLErrors.length) {
+        parts.push(
+          ...anyErr.graphQLErrors.map((e: any) => e?.message).filter(Boolean)
+        );
+      }
+      const net = anyErr.networkError;
+      if (net) {
+        if (typeof net.statusCode !== 'undefined') parts.push(`statusCode=${net.statusCode}`);
+        const resultErrors = net?.result?.errors;
+        if (Array.isArray(resultErrors) && resultErrors.length) {
+          parts.push(
+            ...resultErrors.map((e: any) => e?.message || JSON.stringify(e)).filter(Boolean)
+          );
+        }
+        if (net?.result && !resultErrors) {
+          parts.push(JSON.stringify(net.result));
+        }
+      }
+      return parts.filter(Boolean).join(' | ');
+    } catch {
+      return deploymentsError.message;
+    }
+  })();
 
   if (!isOpen || !material) return null;
 
@@ -364,6 +656,54 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                   Slot 2
                 </button>
               </div>
+
+              {/* Assigned Ads List */}
+              <div className="mt-6">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-md font-bold text-gray-800">Assigned Ads</h4>
+                  <div className="text-xs text-gray-600 flex items-center gap-3">
+                    {deploymentsLoading ? (
+                      <span>Loading…</span>
+                    ) : (
+                      <>
+                        <span>
+                          Total: {lcdSlots.length}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">RUNNING: {runningSlots.length}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">SCHEDULED: {scheduledSlots.length}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                {deploymentsError && (
+                  <div className="text-xs text-red-600 mt-1 break-words">
+                    Failed to load assigned ads: {detailedErrorMessage}
+                  </div>
+                )}
+                <div className="mt-2 space-y-2">
+                  {lcdSlots.length === 0 && !deploymentsLoading && !deploymentsError && (
+                    <div className="p-3 border rounded text-sm text-gray-500 bg-gray-50">No ads assigned</div>
+                  )}
+                  {lcdSlots.map((slot: any) => (
+                    <div key={`${slot.id || slot.adId}-${slot.slotNumber}`} className="border rounded p-3 bg-white shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 border">Slot {slot.slotNumber}</span>
+                          <span className="text-sm font-semibold">{slot.ad?.title || `Ad ${slot.adId}`}</span>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${slot.status === 'RUNNING' ? 'bg-green-100 text-green-700' : slot.status === 'SCHEDULED' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
+                          {slot.status}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        <span>Start: {formatDate(slot.ad?.startTime)}</span>
+                        <span className="mx-2">•</span>
+                        <span>End: {formatDate(slot.ad?.endTime)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
@@ -374,25 +714,69 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
             </h4>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <span className="text-sm font-semibold text-gray-700">Condition:</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-700">Condition:</span>
+                  {!isEditingCondition && (
+                    <button
+                      onClick={handleStartEditingCondition}
+                      className="group flex items-center text-gray-700 rounded-md overflow-hidden h-6 w-7 hover:w-14 transition-[width] duration-300"
+                    >
+                      <Edit3 className="w-4 h-4 flex-shrink-0 mx-auto ml-1.5 group-hover:ml-1 transition-all duration-300" />
+                      <span className="opacity-0 group-hover:opacity-100 ml-1 group-hover:mr-3 whitespace-nowrap text-xs transition-all duration-300">
+                        Edit
+                      </span>
+                    </button>
+                  )}
+                </div>
                 <div className="mt-1">
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      material.materialCondition === 'EXCELLENT'
-                        ? 'bg-green-200 text-green-800'
-                        : material.materialCondition === 'GOOD'
-                        ? 'bg-blue-200 text-blue-800'
-                        : material.materialCondition === 'FAIR'
-                        ? 'bg-yellow-200 text-yellow-800'
-                        : material.materialCondition === 'POOR'
-                        ? 'bg-orange-200 text-orange-800'
-                        : material.materialCondition === 'DAMAGED'
-                        ? 'bg-red-200 text-red-800'
-                        : 'bg-gray-200 text-gray-800'
-                    }`}
-                  >
-                    {material.materialCondition || 'GOOD'}
-                  </span>
+                  {isEditingCondition ? (
+                    <div className="space-y-2">
+                      <select
+                        value={selectedCondition}
+                        onChange={(e) => setSelectedCondition(e.target.value)}
+                        className="w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={isUpdatingCondition}
+                      >
+                        {conditionOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex justify-between gap-2">
+                        <button
+                          onClick={handleCancelEditingCondition}
+                          disabled={isUpdatingCondition}
+                          className="px-3 py-1 text-black border text-xs rounded hover:bg-gray-100 disabled:bg-gray-400 flex items-center gap-1"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSaveCondition}
+                          disabled={isUpdatingCondition}
+                          className="px-3 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 disabled:bg-gray-400 flex items-center gap-1"
+                        >
+                          {isUpdatingCondition ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        material.materialCondition === 'GOOD'
+                          ? 'bg-blue-200 text-blue-800'
+                          : material.materialCondition === 'FADED'
+                          ? 'bg-yellow-200 text-yellow-800'
+                          : material.materialCondition === 'DAMAGED'
+                          ? 'bg-red-200 text-red-800'
+                          : material.materialCondition === 'REMOVED'
+                          ? 'bg-gray-200 text-gray-800'
+                          : 'bg-gray-200 text-gray-800'
+                      }`}
+                    >
+                      {conditionOptions.find(opt => opt.value === material.materialCondition)?.label || 'Good'}
+                    </span>
+                  )}
                 </div>
               </div>
               <div>
@@ -416,13 +800,28 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
               <div>
                 <span className="text-sm font-semibold text-gray-700">Last Inspection:</span>
                 <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                  {formatDate(material.lastInspectionDate) || 'N/A'}
+                  {(() => {
+                    // Prefer explicit lastInspectionDate; fallback to mountedAt
+                    const d = material.lastInspectionDate || material.mountedAt;
+                    return formatDate(d) || 'N/A';
+                  })()}
                 </div>
               </div>
               <div>
                 <span className="text-sm font-semibold text-gray-700">Next Inspection Due:</span>
                 <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
-                  {formatDate(material.nextInspectionDue) || 'N/A'}
+                  {(() => {
+                    if (material.nextInspectionDue) return formatDate(material.nextInspectionDue);
+                    // Derive from lastInspectionDate or mountedAt when not provided
+                    const base = material.lastInspectionDate || material.mountedAt;
+                    if (!base) return 'N/A';
+                    try {
+                      const dt = new Date(base);
+                      if (isNaN(dt.getTime())) return 'N/A';
+                      dt.setMonth(dt.getMonth() + 1);
+                      return formatDate(dt.toISOString());
+                    } catch { return 'N/A'; }
+                  })()}
                 </div>
               </div>
             </div>
@@ -447,17 +846,51 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                             {photo.status}
                           </span>
                         </div>
-                        <span className="text-xs text-gray-500">{formatDate(photo.uploadedAt)}</span>
+                        {photo.status === 'PENDING' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="px-2 py-1 text-xs rounded bg-green-500 text-white hover:bg-green-600 disabled:bg-green-300"
+                              disabled={reviewLoading === photo.month}
+                              onClick={() => handleApproveMonth(photo.month)}
+                            >
+                              {reviewLoading === photo.month ? 'Approving…' : 'Approve'}
+                            </button>
+                            <button
+                              className="px-2 py-1 text-xs rounded bg-red-500 text-white hover:bg-red-600 disabled:bg-red-300"
+                              disabled={reviewLoading === photo.month}
+                              onClick={() => handleRejectMonth(photo.month)}
+                            >
+                              {reviewLoading === photo.month ? 'Rejecting…' : 'Reject'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <img
-                          src={photo.url}
-                          alt={`Inspection photo for ${photo.month}`}
-                          className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} object-cover rounded border`}
-                          onError={(e) => {
-                            e.currentTarget.src = '/placeholder-image.png';
-                          }}
-                        />
+                        <div className="relative group">
+                          <img
+                            src={photo.url}
+                            alt={`Inspection photo for ${photo.month}`}
+                            className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} object-cover rounded border cursor-pointer hover:opacity-90 transition-opacity`}
+                            onError={(e) => {
+                              e.currentTarget.src = '/placeholder-image.png';
+                            }}
+                            onClick={() => {
+                              setModalImageSrc(photo.url);
+                              setShowImageModal(true);
+                            }}
+                          />
+                          <button 
+                            className="absolute inset-0 group-hover:bg-opacity-20 transition-all rounded border flex items-center justify-center"
+                            onClick={() => {
+                              setModalImageSrc(photo.url);
+                              setShowImageModal(true);
+                            }}
+                          >
+                            <span className="absolute top-1 left-1 text-black bg-gray-200 w-32 h-5 flex items-center justify-center rounded-md text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              Click to view
+                            </span>
+                          </button>
+                        </div>
                         <div className="flex-1">
                           {photo.description && (
                             <p className="text-sm text-gray-600 mb-1">{photo.description}</p>
@@ -477,6 +910,49 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Driver History Section */}
+          <div className="mt-10 space-y-3">
+            <h4 className="text-md font-bold text-gray-800">Driver History</h4>
+            {usageError && (
+              <div className="text-xs text-red-600">Failed to load driver history</div>
+            )}
+            {usageLoading ? (
+              <div className="text-sm text-gray-500">Loading…</div>
+            ) : (() => {
+              const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
+              if (!history.length) {
+                return <div className="text-sm text-gray-500">No driver history found for this material.</div>;
+              }
+              return (
+                <div className="space-y-2">
+                  {history.map((h: any) => (
+                    <div key={h.id} className="border rounded p-3 bg-gray-50 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-full bg-gray-200">{h.driverInfo?.fullName || h.driverId}</span>
+                        {h.isActive ? (
+                          <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700">ACTIVE</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-gray-200">ENDED</span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-700">
+                        <div>
+                          Assigned: {h.assignedAt ? formatDate(h.assignedAt) : 'N/A'}
+                          {h.unassignedAt && <span> → {formatDate(h.unassignedAt)}</span>}
+                        </div>
+                        <div>
+                          Mounted: {h.mountedAt ? formatDate(h.mountedAt) : 'N/A'}
+                          {h.dismountedAt && <span> • Dismounted: {formatDate(h.dismountedAt)}</span>}
+                        </div>
+                        {/* Reason removed per request */}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -532,6 +1008,20 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
           materialName={material.materialId}
         />
       </div>
+
+      {/* Image Pop-up Modal - Outside the main modal container for full page coverage */}
+      {showImageModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] p-4"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div className="relative bg-white rounded-lg p-6 w-auto max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-center items-center h-full">
+              <img src={modalImageSrc} alt="Enlarged Inspection Photo" className="object-contain max-h-[85vh] w-full" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -74,7 +74,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const { data, loading, error: queryError, refetch } = useQuery(GET_ADMIN_GENERAL_NOTIFICATIONS, {
     fetchPolicy: 'cache-and-network',
     skip: !isAuthenticated || !admin,
-    pollInterval: 60000, // Refresh every 60 seconds (reduced frequency)
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle notifications data loading with useEffect instead of onCompleted
@@ -102,7 +102,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Fetch pending ads
   const { data: pendingAdsData, loading: pendingAdsLoading, error: pendingAdsError } = useQuery(GET_PENDING_ADS, {
     skip: !isAuthenticated || !admin,
-    pollInterval: 60000, // Reduced frequency
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle pending ads data loading with useEffect instead of onCompleted
@@ -127,7 +127,7 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   // Fetch pending materials
   const { data: pendingMaterialsData, loading: pendingMaterialsLoading, error: pendingMaterialsError } = useQuery(GET_PENDING_MATERIALS, {
     skip: !isAuthenticated || !admin,
-    pollInterval: 60000, // Reduced frequency
+    pollInterval: 30000, // Refresh every 30 seconds for more frequent updates
   });
 
   // Handle pending materials data loading with useEffect instead of onCompleted
@@ -154,20 +154,21 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const totalPendingCount = unreadCount + pendingAds.length + pendingMaterials.length;
   const totalDisplayCount = enableNotificationBadge ? totalPendingCount : 0;
 
-  // Debug logging (reduced frequency)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔔 AdminNotificationContext Debug:', {
-      notificationsCount: notifications.length,
-      unreadCount,
-      enableNotificationBadge,
-      displayBadgeCount,
-      pendingAdsCount: pendingAds.length,
-      pendingMaterialsCount: pendingMaterials.length,
-      totalPendingCount,
-      totalDisplayCount,
-      notifications: notifications.map(n => ({ id: n.id, title: n.title, read: n.read }))
-    });
-  }
+  // Debug logging (only when data actually changes)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔔 AdminNotificationContext Debug:', {
+        notificationsCount: notifications.length,
+        unreadCount,
+        enableNotificationBadge,
+        displayBadgeCount,
+        pendingAdsCount: pendingAds.length,
+        pendingMaterialsCount: pendingMaterials.length,
+        totalPendingCount,
+        totalDisplayCount
+      });
+    }
+  }, [notifications.length, unreadCount, enableNotificationBadge, displayBadgeCount, pendingAds.length, pendingMaterials.length, totalPendingCount, totalDisplayCount]);
 
   const refetchNotifications = async () => {
     console.log('🔔 AdminNotificationContext: Manual refresh triggered');

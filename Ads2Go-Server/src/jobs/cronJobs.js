@@ -174,6 +174,55 @@ class CronJobs {
     this.jobs.set('onlineHours', onlineHoursTask);
     this.jobs.set('eightHourCheck', eightHourCheckTask);
 
+    // Daily driver compliance reminder - runs every day at 10:00 AM PH time
+    const complianceReminderTask = cron.schedule('0 10 * * *', async () => {
+      try {
+        const DeviceCompliance = require('../models/deviceCompliance');
+        const Driver = require('../models/Driver');
+        const DriverNotificationService = require('../services/notifications/DriverNotificationService');
+        const now = new Date();
+        const phNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Manila' }));
+        const tomorrow = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 1);
+        const dayAfter = new Date(phNow.getFullYear(), phNow.getMonth(), phNow.getDate() + 2);
+
+        // Find materials whose nextInspectionDue is tomorrow (within [tomorrow, dayAfter))
+        const dueSoon = await DeviceCompliance.find({
+          nextInspectionDue: { $gte: tomorrow, $lt: dayAfter }
+        }).lean();
+
+        for (const dc of dueSoon) {
+          // dc.driverId may be ObjectId or null; look up by material to find current driver if needed
+          let driver = null;
+          if (dc.driverId) {
+            driver = await Driver.findById(dc.driverId);
+          } else {
+            const Material = require('../models/Material');
+            const mat = await Material.findById(dc.materialId);
+            if (mat?.driverId) driver = await Driver.findOne({ driverId: mat.driverId });
+          }
+          if (!driver) continue;
+
+          try {
+            await DriverNotificationService.sendGenericNotification(
+              driver._id,
+              'Monthly Photo Due Tomorrow',
+              'Your monthly inspection photo is due tomorrow. Please prepare to upload your compliance photo.',
+              { type: 'COMPLIANCE_DUE_SOON', materialId: String(dc.materialId), nextInspectionDue: dc.nextInspectionDue }
+            );
+          } catch (notifyErr) {
+            console.error('❌ Error sending driver compliance reminder:', notifyErr);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Compliance reminder job failed:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Manila'
+    });
+
+    this.jobs.set('complianceReminder', complianceReminderTask);
+
     // Start all cron jobs
     this.jobs.forEach((job, name) => {
       job.start();

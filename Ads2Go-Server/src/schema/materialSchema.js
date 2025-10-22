@@ -90,6 +90,7 @@ module.exports = gql`
     driverId: ID
     mountedAt: String
     dismountedAt: String
+    materialCondition: MaterialCondition
   }
 
   type MaterialAssignmentResult {
@@ -157,6 +158,9 @@ extend type Query {
   
   # Get usage history for a specific material (Admin-only)
   getMaterialUsageHistory(materialId: ID!): MaterialUsageHistoryResponse!
+
+    # Get usage history for a specific driver (Admin-only)
+    getDriverUsageHistory(driverId: ID!): MaterialUsageHistoryResponse!
 }
 
   type Mutation {
@@ -171,6 +175,10 @@ extend type Query {
 
     # Driver photo upload
     uploadMonthlyPhoto(materialId: ID!, photoUrls: [String!]!, month: String!, description: String): MaterialPhotoUploadResult
+
+    # Admin moderation for monthly compliance photos
+    approveMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String, condition: MaterialCondition): PhotoModerationResult
+    rejectMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String): PhotoModerationResult
   }
 
   type MaterialPhotoTracking {
@@ -190,6 +198,12 @@ extend type Query {
     materialTracking: MaterialPhotoTracking
   }
 
+  type PhotoModerationResult {
+    success: Boolean!
+    message: String!
+    materialTracking: MaterialPhotoTracking
+  }
+
   type AdminInfo {
     adminId: String!
     adminName: String!
@@ -199,6 +213,7 @@ extend type Query {
   type MaterialUsageHistory {
     id: ID!
     materialId: ID!
+    materialStringId: String
     driverId: String!
     driverInfo: DriverInfo!
     assignedAt: String!

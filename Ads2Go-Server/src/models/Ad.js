@@ -87,8 +87,8 @@ const AdSchema = new mongoose.Schema({
   },
   paymentStatus: {
     type: String,
-    enum: ['PENDING', 'PAID', 'FAILED', 'REFUNDED'],
-    default: 'PENDING'
+    enum: [null, 'PENDING', 'PAID', 'FAILED'],
+    default: null
   },
 
   impressions: { type: Number, default: 0 },

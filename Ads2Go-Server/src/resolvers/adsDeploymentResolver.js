@@ -496,6 +496,46 @@ const adsDeploymentResolvers = {
 
       const lcdSlots = await AdsDeployment.getLCDDeployments(materialId);
       return lcdSlots.filter(slot => ['SCHEDULED', 'RUNNING'].includes(slot.status));
+    },
+
+    // Fetch deployment document by STRING materialId (e.g., DGL-HEADDRESS-CAR-007)
+    getDeploymentsByMaterialIdString: async (_, { materialId }, { user }) => {
+      checkAuth(user);
+      // Single deployment doc per materialId; includes lcdSlots for HEADDRESS/LCD
+      const deployment = await AdsDeployment.findOne({ materialId })
+        .populate({ path: 'adId', populate: { path: 'planId', model: 'AdsPlan' } })
+        .populate({ path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } })
+        .populate('driverId');
+
+      if (!deployment) return null;
+
+      // Normalize driverId to string id if populated
+      if (deployment.driverId && typeof deployment.driverId === 'object') {
+        deployment.driverId = deployment.driverId._id;
+      }
+
+      // Ensure each slot exposes a minimal `ad` object even if not fully populated
+      if (deployment.lcdSlots && Array.isArray(deployment.lcdSlots)) {
+        for (const slot of deployment.lcdSlots) {
+          if (!slot) continue;
+          // Default
+          slot.ad = slot.ad || { id: '', title: 'Unknown Ad', description: '', adFormat: '', mediaFile: '' };
+          if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
+            slot.ad = {
+              id: slot.adId._id ? slot.adId._id.toString() : '',
+              title: slot.adId.title || 'Unknown Ad',
+              description: slot.adId.description || '',
+              adFormat: slot.adId.adFormat || '',
+              mediaFile: slot.adId.mediaFile || '',
+              startTime: slot.adId.startTime ? new Date(slot.adId.startTime).toISOString() : null,
+              endTime: slot.adId.endTime ? new Date(slot.adId.endTime).toISOString() : null
+            };
+            slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
+          }
+        }
+      }
+
+      return deployment;
     }
   },
 
