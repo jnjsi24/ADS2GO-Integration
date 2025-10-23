@@ -172,13 +172,13 @@ export default function MaterialsScreen() {
       if (!response.ok) {
         // Handle 404 gracefully - device may have been unregistered
         if (response.status === 404) {
-          console.log('ℹ️ No device tracking found - device may not be registered yet or was unregistered');
+          // Device not registered - this is normal
           setAnalytics(null);
           return;
         }
         
-        // For other errors, log but don't crash
-        console.warn(`⚠️ Analytics endpoint returned status: ${response.status}`);
+        // Handle other errors
+        console.warn(`Analytics endpoint error: ${response.status}`);
         setAnalytics(null);
         return;
       }

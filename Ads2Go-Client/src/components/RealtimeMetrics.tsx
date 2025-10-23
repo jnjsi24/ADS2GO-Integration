@@ -103,20 +103,15 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
 
   // WebSocket integration for real-time updates
   useEffect(() => {
-    console.log('🔌 [RealtimeMetrics] Setting up WebSocket connection');
-    
     // Check initial WebSocket connection status
     if (playbackWebSocketService.isWebSocketConnected()) {
       setConnectionStatus('connected');
-      console.log('🔌 [RealtimeMetrics] WebSocket already connected');
     } else {
       setConnectionStatus('connecting');
-      console.log('🔌 [RealtimeMetrics] WebSocket connecting...');
     }
     
     // Subscribe to real-time device updates
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
-      console.log('🔌 [RealtimeMetrics] Received WebSocket update:', update);
       
       // Update connection status to connected when we receive any update
       if (connectionStatus !== 'connected') {
@@ -146,7 +141,6 @@ const RealtimeMetrics: React.FC<RealtimeMetricsProps> = ({ className = '' }) => 
 
     // Cleanup subscription on unmount
     return () => {
-      console.log('🔌 [RealtimeMetrics] Cleaning up WebSocket subscription');
       clearInterval(statusCheckInterval);
       unsubscribe();
     };

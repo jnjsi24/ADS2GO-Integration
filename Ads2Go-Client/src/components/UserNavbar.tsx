@@ -200,7 +200,6 @@ const SideNavbar: React.FC = () => {
         <ul className="space-y-5 mt-16">
           {navLinks.map(link => {
             const isActive = window.location.pathname === link.path;
-            console.log(`Nav item ${link.label}: path=${link.path}, current=${window.location.pathname}, isActive=${isActive}`);
             return (
               <NavigationItem
                 key={link.label}

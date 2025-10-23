@@ -47,6 +47,7 @@ module.exports = gql`
     category: MaterialCategory!
     driverId: String             # stored as system driverId (e.g. DRV-001), not ObjectId
     driver: DriverInfo           # Driver details if assigned
+    assignedDate: String         # When admin assigned driver to material
     mountedAt: String
     dismountedAt: String
     createdAt: String
@@ -114,6 +115,8 @@ module.exports = gql`
     uploadedAt: String!
     uploadedBy: String!
     adminNotes: String
+    reviewedBy: String
+    reviewedAt: String
   }
 
   type MaterialWithTracking {
@@ -179,6 +182,9 @@ extend type Query {
     # Admin moderation for monthly compliance photos
     approveMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String, condition: MaterialCondition): PhotoModerationResult
     rejectMonthlyPhoto(materialId: ID!, month: String!, adminNotes: String): PhotoModerationResult
+
+    # Admin utility: Sync mountedAt dates from Material to MaterialUsageHistory
+    syncUsageHistoryMountedDates: SyncResult
   }
 
   type MaterialPhotoTracking {
@@ -236,5 +242,11 @@ extend type Query {
     success: Boolean!
     message: String!
     usageHistory: [MaterialUsageHistory!]!
+  }
+
+  type SyncResult {
+    success: Boolean!
+    message: String!
+    updatedCount: Int
   }
 `;

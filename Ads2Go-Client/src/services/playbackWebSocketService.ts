@@ -11,6 +11,17 @@ interface PlaybackUpdate {
   isOnline?: boolean;
   lastSeen?: string;
   devices?: any[];
+  // GPS data from real-time WebSocket updates (NEW: included in adPlaybackUpdate)
+  gpsData?: {
+    lat: number;
+    lng: number;
+    speed: number;      // meters per second
+    heading: number;    // degrees (0-360)
+    accuracy: number;   // meters
+    altitude?: number;  // meters
+    timestamp: string;  // ISO string
+  };
+  // Legacy location field for backwards compatibility
   location?: {
     lat: number;
     lng: number;
@@ -77,6 +88,13 @@ class PlaybackWebSocketService {
 
     try {
       const wsUrl = this.getWebSocketUrl();
+      
+      // Skip WebSocket connection in development if server is not available
+      if (process.env.NODE_ENV === 'development' && this.reconnectAttempts > 5) {
+        console.log('🔌 [Admin WebSocket] Skipping connection attempts in development mode');
+        return;
+      }
+      
       // Only log connection attempts in verbose mode
       if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_DEBUG_WEBSOCKET === 'true') {
         console.log('🔌 [Admin WebSocket] Connecting to:', wsUrl);
@@ -204,7 +222,6 @@ class PlaybackWebSocketService {
       };
 
       this.ws.onclose = (event) => {
-        console.log('🔌 [Admin WebSocket] Connection closed:', event.code, event.reason);
         this.isConnected = false;
         this.ws = null;
         this.clearPingInterval();
@@ -212,14 +229,15 @@ class PlaybackWebSocketService {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
         } else {
-          console.error('🔌 [Admin WebSocket] Max reconnection attempts reached');
+          console.warn('🔌 [Admin WebSocket] Max reconnection attempts reached, giving up');
         }
       };
 
       this.ws.onerror = (error) => {
-        console.error('🔌 [Admin WebSocket] Connection error:', error);
-        console.error('🔌 [Admin WebSocket] WebSocket state:', this.ws?.readyState);
-        console.error('🔌 [Admin WebSocket] WebSocket URL:', wsUrl);
+        // Only log error details on first attempt to avoid spam
+        if (this.reconnectAttempts === 0) {
+          console.warn('🔌 [Admin WebSocket] Connection failed, will retry...');
+        }
         this.isConnected = false;
       };
 
@@ -232,7 +250,6 @@ class PlaybackWebSocketService {
     this.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
     
-    console.log(`🔌 [Admin WebSocket] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
     
     this.reconnectInterval = setTimeout(() => {
       this.connect();

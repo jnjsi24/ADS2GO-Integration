@@ -11,8 +11,6 @@ export const APPROVE_MONTHLY_PHOTO = gql`
         photoComplianceStatus
         lastPhotoUpload
         nextPhotoDue
-        lastInspectionDate
-        nextInspectionDue
         materialCondition
         monthlyPhotos { month status photoUrls uploadedAt uploadedBy adminNotes }
       }

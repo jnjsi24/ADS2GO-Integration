@@ -197,24 +197,14 @@ const ScreenTracking: React.FC = () => {
   // Fetch historical route data
   const fetchHistoricalRoute = async (materialId: string, date: string) => {
     try {
-      console.log('🚀 Starting historical route fetch:', { materialId, date });
       setLoadingHistorical(true);
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '');
       const url = `${baseUrl}/api/enhancedRoute/route/${materialId}?date=${date}`;
-      console.log('📡 Fetching from URL:', url);
       
       const response = await fetch(url);
-      console.log('📊 Response status:', response.status);
-      
       const result = await response.json();
-      console.log('📋 Response data:', result);
       
       if (result.success) {
-        console.log('✅ Historical route data received:', result.data);
-        console.log('🗺️ Route points count:', result.data.route?.length);
-        console.log('📍 First point:', result.data.route?.[0]);
-        console.log('📍 Last point:', result.data.route?.[result.data.route.length - 1]);
-        console.log('📊 Full route data structure:', JSON.stringify(result.data, null, 2));
         setHistoricalRouteData(result.data);
         return result.data;
       } else {
@@ -262,25 +252,6 @@ const ScreenTracking: React.FC = () => {
     // will fetch its own data directly from the API
   }, [activeTab, selectedScreen, selectedDate]);
 
-  // Debug: Log when historicalRouteData changes
-  useEffect(() => {
-    if (historicalRouteData) {
-      console.log('🔄 Historical route data updated:', {
-        date: selectedDate,
-        routeLength: historicalRouteData.route?.length,
-        firstPoint: historicalRouteData.route?.[0] ? {
-          lat: historicalRouteData.route[0].lat,
-          lng: historicalRouteData.route[0].lng,
-          timestamp: historicalRouteData.route[0].timestamp
-        } : null,
-        lastPoint: historicalRouteData.route?.length > 0 ? {
-          lat: historicalRouteData.route[historicalRouteData.route.length - 1].lat,
-          lng: historicalRouteData.route[historicalRouteData.route.length - 1].lng,
-          timestamp: historicalRouteData.route[historicalRouteData.route.length - 1].timestamp
-        } : null
-      });
-    }
-  }, [historicalRouteData, selectedDate]);
 
   // Fetch materials list
   const fetchMaterials = async () => {
@@ -288,7 +259,6 @@ const ScreenTracking: React.FC = () => {
       setMaterialsLoading(true);
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const materialsUrl = `${baseUrl}/material`;
-      console.log('Fetching materials from:', materialsUrl);
       
       const response = await fetch(materialsUrl, {
         headers: {
@@ -296,11 +266,8 @@ const ScreenTracking: React.FC = () => {
         }
       });
       
-      console.log('Materials response status:', response.status);
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('Materials fetched:', data);
         setMaterials(data.materials || []);
       } else {
         const errorText = await response.text();
@@ -323,7 +290,6 @@ const ScreenTracking: React.FC = () => {
       // Fetch compliance report (no auth required for this endpoint)
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
       const apiUrl = `${baseUrl}/screenTracking/compliance?date=${selectedDate}`;
-      console.log('Making request to:', apiUrl);
       
       const complianceResponse = await fetch(apiUrl, {
         headers: {
@@ -331,23 +297,10 @@ const ScreenTracking: React.FC = () => {
         }
       });
       
-      console.log('Compliance response status:', complianceResponse.status);
-      
       if (complianceResponse.ok) {
         const complianceData = await complianceResponse.json();
-        console.log('Compliance data received:', complianceData);
-        console.log('Screens in response:', complianceData.data?.screens);
-        console.log('Number of screens:', complianceData.data?.screens?.length || 0);
-        
         setComplianceReport(complianceData.data);
         const screensData = complianceData.data?.screens || [];
-        console.log('🔍 [API Response] Screen data structure:', screensData.length > 0 ? {
-          firstScreen: screensData[0],
-          availableFields: Object.keys(screensData[0] || {}),
-          hasSlot1DeviceId: 'slot1DeviceId' in (screensData[0] || {}),
-          hasSlot2DeviceId: 'slot2DeviceId' in (screensData[0] || {}),
-          hasDeviceId: 'deviceId' in (screensData[0] || {})
-        } : 'No screens data');
         setScreens(screensData); // Individual device records for screen list
         
         // Set material screens for map display with validation
@@ -467,22 +420,15 @@ const ScreenTracking: React.FC = () => {
 
   // WebSocket integration for real-time updates
   useEffect(() => {
-    console.log('🔌 [ScreenTracking] Setting up WebSocket connection');
-    
     // Check initial WebSocket connection status
     if (playbackWebSocketService.isWebSocketConnected()) {
       setConnectionStatus('connected');
-      console.log('🔌 [ScreenTracking] WebSocket already connected');
     } else {
       setConnectionStatus('connecting');
-      console.log('🔌 [ScreenTracking] WebSocket connecting...');
     }
     
     // Subscribe to real-time device updates
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
-      console.log('🔌 [ScreenTracking] Received WebSocket update:', update);
-      console.log('🔌 [ScreenTracking] Update type:', update.type);
-      console.log('🔌 [ScreenTracking] Update data:', JSON.stringify(update, null, 2));
       
       // Update connection status to connected when we receive any update
       if (connectionStatus !== 'connected') {
@@ -514,7 +460,6 @@ const ScreenTracking: React.FC = () => {
 
     // Cleanup subscription on unmount
     return () => {
-      console.log('🔌 [ScreenTracking] Cleaning up WebSocket subscription');
       clearInterval(statusCheckInterval);
       unsubscribe();
     };
@@ -522,18 +467,7 @@ const ScreenTracking: React.FC = () => {
 
   // Helper function to update device status in real-time
   const updateDeviceStatus = useCallback((deviceId: string, isOnline: boolean, lastSeen?: string) => {
-    console.log(`🔄 [ScreenTracking] Updating device ${deviceId}:`, { isOnline, lastSeen });
-    
     setScreens(prevScreens => {
-      console.log(`🔄 [ScreenTracking] Current screens before update:`, prevScreens.length);
-      console.log(`🔍 [WebSocket Debug] Looking for deviceId: ${deviceId}`);
-      console.log(`🔍 [WebSocket Debug] Available screen deviceIds:`, prevScreens.map(s => ({
-        materialId: s.materialId,
-        deviceId: s.deviceId,
-        slot1DeviceId: s.slot1DeviceId,
-        slot2DeviceId: s.slot2DeviceId
-      })));
-      
       const updatedScreens = prevScreens.map(screen => {
         // Check if this device matches either slot or the main device ID
         const isSlot1Device = screen.slot1DeviceId === deviceId;
@@ -590,7 +524,6 @@ const ScreenTracking: React.FC = () => {
 
   // Helper function to update all devices at once
   const updateAllDevices = useCallback((devices: any[]) => {
-    console.log('🔄 [ScreenTracking] Updating all devices from WebSocket:', devices);
     
     if (!devices || devices.length === 0) return;
     
@@ -929,7 +862,36 @@ const ScreenTracking: React.FC = () => {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
+                  min={(() => {
+                    // Get the material creation date for validation
+                    if (selectedScreen && selectedScreen.materialId && materials.length > 0) {
+                      const material = materials.find(m => m.materialId === selectedScreen.materialId);
+                      if (material && material.createdAt) {
+                        // Return the creation date as min date
+                        return new Date(material.createdAt).toISOString().split('T')[0];
+                      }
+                    }
+                    // Default: Allow dates from 30 days ago
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    return thirtyDaysAgo.toISOString().split('T')[0];
+                  })()}
+                  max={new Date().toISOString().split('T')[0]}
                   className="border border-gray-300 rounded-md px-3 py-2"
+                  title={(() => {
+                    if (selectedScreen && selectedScreen.materialId && materials.length > 0) {
+                      const material = materials.find(m => m.materialId === selectedScreen.materialId);
+                      if (material && material.createdAt) {
+                        const createdDate = new Date(material.createdAt).toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        });
+                        return `Material created on ${createdDate}. Only dates from this date onwards are available.`;
+                      }
+                    }
+                    return 'Select a date to view historical route';
+                  })()}
                 />
               )}
               <button
@@ -1113,7 +1075,6 @@ const ScreenTracking: React.FC = () => {
                         date={selectedDate}
                         snapToRoads={snapToRoads}
                         onRouteLoad={(data) => {
-                          console.log('Route loaded:', data);
                           setHistoricalRouteData(data);
                         }}
                         onLoadingChange={(isLoading) => {

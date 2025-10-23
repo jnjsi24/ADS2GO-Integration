@@ -151,13 +151,16 @@ const Dashboard = () => {
     variables: { period: analyticsPeriod },
     // pollInterval: 5000, // Temporarily disabled to prevent repeated errors
     errorPolicy: 'all', // Allow partial data even with errors
-    onError: (error) => {
-      // Don't log "User analytics not found" as an error - it's expected for new users
-      if (error.message !== 'Failed to fetch analytics data') {
-        console.error('Analytics fetch error:', error);
-      }
-    },
   });
+
+  // Handle analytics errors using useEffect (Apollo v3.14 recommended approach)
+  useEffect(() => {
+    if (analyticsError && 
+        analyticsError.message !== 'Failed to fetch analytics data' &&
+        analyticsError.message !== 'signal timed out') {
+      console.error('Analytics fetch error:', analyticsError);
+    }
+  }, [analyticsError]);
 
   // Get user's first name from localStorage on component mount
   useEffect(() => {

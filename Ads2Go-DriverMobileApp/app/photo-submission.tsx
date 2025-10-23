@@ -172,19 +172,16 @@ export default function PhotoSubmission() {
         let anyDue = false;
         let earliestDue: Date | null = null;
         
-        console.log('📸 Photo submission data check:', {
-          currentMonth,
-          materials: response.getDriverMaterials.materials.map((m: Material) => ({
-            id: m.id,
-            materialId: m.materialId,
-            nextPhotoDue: m.materialTracking?.nextPhotoDue,
-            monthlyPhotos: m.materialTracking?.monthlyPhotos,
-            hasCurrentPhoto: hasCurrentMonthPhoto(m)
-          }))
-        });
+        // Checking photo submission status
         
         response.getDriverMaterials.materials.forEach((material: Material) => {
           const dueStr = material.materialTracking?.nextPhotoDue;
+          console.log('🔍 Driver app received data:', {
+            materialId: material.materialId,
+            nextPhotoDue: dueStr,
+            mountedAt: material.mountedAt,
+            materialTracking: material.materialTracking
+          });
           let due: Date | null = null;
           if (dueStr) {
             const d = new Date(dueStr);
@@ -215,9 +212,14 @@ export default function PhotoSubmission() {
         });
 
         setIsPhotoDay(anyDue);
-        // Set next photo day if available - simplified to avoid TypeScript issues
+        // Set next photo day if available - show actual date
         if (earliestDue) {
-          setNextPhotoDay('Next inspection due');
+          const formattedDate = earliestDue.toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+          setNextPhotoDay(formattedDate);
         }
       }
     } catch (error) {

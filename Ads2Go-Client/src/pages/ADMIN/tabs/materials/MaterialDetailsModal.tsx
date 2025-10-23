@@ -33,6 +33,7 @@ interface Material {
   category: 'DIGITAL' | 'NON_DIGITAL';
   driverId?: string;
   driver?: Driver;
+  assignedDate?: string;
   mountedAt?: string;
   dismountedAt?: string;
   createdAt: string;
@@ -93,10 +94,17 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
     if (!material) return;
     setReviewLoading(month);
     try {
-      await approveMonthlyPhoto({
+      const result = await approveMonthlyPhoto({
         variables: { materialId: material.id, month },
-        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } },
+        refetchQueries: ['GetAllMaterials'] // Refetch the materials list to update the UI
       });
+      
+      if (result.data?.approveMonthlyPhoto?.success) {
+        alert('Photo approved successfully!');
+      } else {
+        alert('Failed to approve photo.');
+      }
     } catch (e) {
       console.error('Approve failed:', e);
       alert('Failed to approve photo.');
@@ -109,10 +117,17 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
     if (!material) return;
     setReviewLoading(month);
     try {
-      await rejectMonthlyPhoto({
+      const result = await rejectMonthlyPhoto({
         variables: { materialId: material.id, month },
-        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        context: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } },
+        refetchQueries: ['GetAllMaterials'] // Refetch the materials list to update the UI
       });
+      
+      if (result.data?.rejectMonthlyPhoto?.success) {
+        alert('Photo rejected successfully!');
+      } else {
+        alert('Failed to reject photo.');
+      }
     } catch (e) {
       console.error('Reject failed:', e);
       alert('Failed to reject photo.');
@@ -404,6 +419,23 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
 
           {/* Dates */}
           <div className={`grid ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2'} gap-4 mb-6`}>
+            {/* Assigned Date */}
+            <div>
+              <span className="text-sm font-semibold text-gray-700">Assigned Date:</span>
+              <div className="w-full text-sm px-3 py-2 bg-gray-50 shadow-md border rounded-lg mt-1">
+                {(() => {
+                  // Try material.assignedDate first, then fall back to the current usage history entry
+                  if (material.assignedDate) {
+                    return formatDate(material.assignedDate);
+                  }
+                  // Fallback: get from current active usage history (no unassignedAt date)
+                  const history = usageData?.getMaterialUsageHistory?.usageHistory || [];
+                  const currentEntry = history.find((h: any) => h.assignedAt && !h.unassignedAt);
+                  return currentEntry?.assignedAt ? formatDate(currentEntry.assignedAt) : 'N/A';
+                })()}
+              </div>
+            </div>
+
             {/* Mounted Date */}
             <div>
               <div className="flex items-center justify-between">
@@ -572,10 +604,22 @@ const MaterialDetailsModal: React.FC<MaterialDetailsModalProps> = ({
                           {slot.status}
                         </span>
                       </div>
-                      <div className="mt-1 text-xs text-gray-600">
-                        <span>Start: {formatDate(slot.ad?.startTime)}</span>
-                        <span className="mx-2">•</span>
-                        <span>End: {formatDate(slot.ad?.endTime)}</span>
+                      <div className="mt-2 space-y-1">
+                        {slot.ad?.createdAt && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Created:</span> {formatDate(slot.ad.createdAt)}
+                          </div>
+                        )}
+                        {slot.deployedAt && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Deployed:</span> {formatDate(slot.deployedAt)}
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-600">
+                          <span>Start: {formatDate(slot.ad?.startTime)}</span>
+                          <span className="mx-2">•</span>
+                          <span>End: {formatDate(slot.ad?.endTime)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}

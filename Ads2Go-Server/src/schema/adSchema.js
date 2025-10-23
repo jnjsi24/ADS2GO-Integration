@@ -5,8 +5,10 @@ const adTypeDefs = gql`
     PENDING
     APPROVED
     REJECTED
+    SCHEDULED
     RUNNING
     ENDED
+    CANCELLED
   }
 
   enum AdType {

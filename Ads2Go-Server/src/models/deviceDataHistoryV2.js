@@ -390,6 +390,19 @@ DeviceDataHistoryV2Schema.methods.addDailyData = function(dailyData) {
 
 DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
   if (this.dailyData && this.dailyData.length > 0) {
+    // ✅ FIXED: Calculate compliance rate based on days with 8+ hours
+    const compliantDays = this.dailyData.filter(day => {
+      // Check if day has hoursTracking with COMPLIANT status
+      if (day.hoursTracking && day.hoursTracking.complianceStatus === 'COMPLIANT') {
+        return true;
+      }
+      // Fallback: check if totalHoursOnline >= 8
+      return (day.totalHoursOnline || 0) >= 8;
+    }).length;
+    
+    const totalDays = this.dailyData.length;
+    const compliancePercentage = totalDays > 0 ? (compliantDays / totalDays) * 100 : 0;
+    
     this.lifetimeTotals = {
       totalAdPlays: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlays || 0), 0),
       totalQRScans: this.dailyData.reduce((sum, day) => sum + (day.totalQRScans || 0), 0),
@@ -397,9 +410,9 @@ DeviceDataHistoryV2Schema.methods.updateLifetimeTotals = function() {
       totalHoursOnline: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0),
       totalAdImpressions: this.dailyData.reduce((sum, day) => sum + (day.totalAdImpressions || 0), 0),
       totalAdPlayTime: this.dailyData.reduce((sum, day) => sum + (day.totalAdPlayTime || 0), 0),
-      totalDays: this.dailyData.length,
-      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / this.dailyData.length,
-      complianceRate: this.dailyData.reduce((sum, day) => sum + (day.complianceData?.complianceRate || 0), 0) / this.dailyData.length
+      totalDays: totalDays,
+      averageDailyHours: this.dailyData.reduce((sum, day) => sum + (day.totalHoursOnline || 0), 0) / totalDays,
+      complianceRate: Math.round(compliancePercentage * 100) / 100 // ✅ Fixed: % of days meeting 8-hour target
     };
   }
   

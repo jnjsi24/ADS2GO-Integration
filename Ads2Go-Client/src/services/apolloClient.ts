@@ -126,6 +126,13 @@ const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) 
     });
   }
   if (networkError) {
+    // Suppress timeout errors for analytics queries - they're handled in the component
+    if (networkError.message === 'signal timed out' && 
+        (operation.operationName === 'getUserAnalytics' || 
+         operation.operationName === 'GetUserAnalytics')) {
+      console.log(`[GraphQL]: Analytics query timed out - this can happen with large datasets`);
+      return;
+    }
     console.error(`[Network error]: ${networkError}`);
   }
 });

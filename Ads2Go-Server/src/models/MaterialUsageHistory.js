@@ -159,4 +159,35 @@ MaterialUsageHistorySchema.statics.getDriverUsageHistory = async function(driver
   }));
 };
 
+// Static method to sync mountedAt dates from Material to MaterialUsageHistory
+MaterialUsageHistorySchema.statics.syncMountedDates = async function() {
+  const Material = require('./Material');
+  
+  try {
+    // Find all active usage history records that don't have mountedAt but their material does
+    const recordsToUpdate = await this.find({
+      isActive: true,
+      mountedAt: null
+    }).populate('materialId', 'mountedAt materialId');
+    
+    let updatedCount = 0;
+    
+    for (const record of recordsToUpdate) {
+      if (record.materialId && record.materialId.mountedAt) {
+        record.mountedAt = record.materialId.mountedAt;
+        await record.save();
+        updatedCount++;
+        console.log(`✅ Synced mountedAt date for material ${record.materialId.materialId}, driver ${record.driverId}: ${record.mountedAt}`);
+      }
+    }
+    
+    console.log(`🎯 Synced ${updatedCount} usage history records with mountedAt dates`);
+    return { success: true, updatedCount };
+    
+  } catch (error) {
+    console.error('❌ Error syncing mountedAt dates:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = mongoose.models.MaterialUsageHistory || mongoose.model('MaterialUsageHistory', MaterialUsageHistorySchema);

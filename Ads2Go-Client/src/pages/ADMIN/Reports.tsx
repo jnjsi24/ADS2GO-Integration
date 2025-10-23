@@ -55,6 +55,8 @@ const Reports: React.FC = () => {
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('All Types');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
   const [expandedRow, setExpandedRow] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -68,6 +70,7 @@ const Reports: React.FC = () => {
   const statusFilterOptions = ['All Status', 'Pending', 'In Progress', 'Resolved', 'Closed'];
   const userTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'CONTENT_VIOLATION', 'FEATURE_REQUEST', 'OTHER'];
   const driverTypeFilterOptions = ['All Types', 'BUG', 'PAYMENT', 'ACCOUNT', 'VEHICLE_ISSUE', 'MATERIAL_ISSUE', 'APP_ISSUE', 'OTHER'];
+  const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -156,6 +159,19 @@ const Reports: React.FC = () => {
       report.reportType === selectedTypeFilter.toUpperCase().replace(' ', '_');
     
     return matchesSearch && matchesStatus && matchesType;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Alphabetical (A-Z)':
+        return a.title.localeCompare(b.title);
+      case 'Alphabetical (Z-A)':
+        return b.title.localeCompare(a.title);
+      default:
+        return 0;
+    }
   }) || [];
 
   // Pagination logic
@@ -286,11 +302,23 @@ const Reports: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   // Show loading state while authentication is being checked
@@ -441,6 +469,39 @@ const Reports: React.FC = () => {
                   )}
                 </AnimatePresence>
               </div>
+              <div className="relative w-full sm:w-36">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 lg:pl-6 pr-3 lg:pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{sortBy}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                    >
+                      {sortByOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
@@ -486,9 +547,7 @@ const Reports: React.FC = () => {
       )}
 
       {/* Table Header */}
-      {loading ? (
-        <AdminLoader />
-      ) : error ? (
+      {error ? (
         <div className="text-center py-10 text-red-500">Error: {error.message}</div>
       ) : filteredReports.length === 0 ? (
         <div className="text-center py-10 text-gray-500">

@@ -25,9 +25,9 @@ function RootLayoutNav() {
             name="photo-submission" 
             options={{ 
               title: 'Photo Submission',
-              // Lock this screen: disable swipe/back gesture globally for this route
-              gestureEnabled: false,
-              fullScreenGestureEnabled: false,
+              // Enable swipe/back gesture for this route
+              gestureEnabled: true,
+              fullScreenGestureEnabled: true,
               animation: 'slide_from_right'
             }} 
           />

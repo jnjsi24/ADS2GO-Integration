@@ -312,6 +312,15 @@ const resolvers = {
         console.error('Error fetching driver for report:', error);
         return null;
       }
+    },
+    createdAt: (parent) => {
+      return parent.createdAt ? parent.createdAt.toISOString() : null;
+    },
+    updatedAt: (parent) => {
+      return parent.updatedAt ? parent.updatedAt.toISOString() : null;
+    },
+    resolvedAt: (parent) => {
+      return parent.resolvedAt ? parent.resolvedAt.toISOString() : null;
     }
   }
 };

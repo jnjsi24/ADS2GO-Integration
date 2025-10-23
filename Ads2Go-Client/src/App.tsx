@@ -65,9 +65,7 @@ import SadminNotifications from './pages/SUPERADMIN/SadminNotifications';
 import SadminAnalytics from './pages/SUPERADMIN/SadminAnalytics';
 
 // Initialize Firebase when the app starts
-console.log('🚀 Initializing Firebase...');
 import('./firebase/init')
-  .then(() => console.log('🔥 Firebase initialization complete'))
   .catch((error) => console.error('❌ Firebase initialization failed:', error));
 
 // Separate components for admin and user routes to avoid conditional hooks
@@ -309,10 +307,7 @@ const UserAppContent: React.FC = () => {
             googleUserData={(() => {
               try {
                 const data = sessionStorage.getItem('googleOAuthData');
-                console.log('🔍 Raw sessionStorage data:', data);
-                const parsed = data ? JSON.parse(data) : null;
-                console.log('🔍 Parsed Google OAuth data:', parsed);
-                return parsed;
+                return data ? JSON.parse(data) : null;
               } catch (error) {
                 console.error('Error parsing Google OAuth data:', error);
                 return null;

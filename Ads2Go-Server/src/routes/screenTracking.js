@@ -237,13 +237,23 @@ router.get('/route/:deviceId', async (req, res) => {
       });
     }
 
-    console.log(`✅ [ROUTE API] Found device tracking - materialId: ${deviceTracking.materialId}, deviceId: ${deviceTracking.deviceId}`);
+    console.log(`✅ [ROUTE API] Found device tracking - materialId: ${deviceTracking.materialId}`);
+    console.log(`📊 [ROUTE API] Device session info:`, {
+      hasCurrentSession: !!deviceTracking.currentSession,
+      sessionDate: deviceTracking.currentSession?.date,
+      sessionStartTime: deviceTracking.currentSession?.startTime,
+      sessionHours: deviceTracking.currentSession?.totalHoursOnline,
+      sessionActive: deviceTracking.currentSession?.isActive,
+      requestedDate: date
+    });
 
     let locationHistory = [];
     let historicalData = null;
     
     // If date is provided, look in historical data first
     if (date) {
+      console.log(`🔍 [ROUTE API] Date parameter provided: ${date} - will check historical data first`);
+
       
       // Import DeviceDataHistoryV2 model
       const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
@@ -393,6 +403,119 @@ router.get('/route/:deviceId', async (req, res) => {
       };
     }
 
+    // Include session status data for the 8-hour requirement display
+    let sessionStatus = null;
+    
+    console.log(`📊 [ROUTE API] Checking session data for ${deviceId}:`, {
+      hasCurrentSession: !!deviceTracking.currentSession,
+      sessionDate: deviceTracking.currentSession?.date,
+      startTime: deviceTracking.currentSession?.startTime,
+      totalHoursOnline: deviceTracking.currentSession?.totalHoursOnline,
+      isActive: deviceTracking.currentSession?.isActive
+    });
+    
+    // Safety check: If no currentSession exists but we're returning route data, create a session
+    // This handles edge cases where route data exists but session wasn't initialized
+    if (!deviceTracking.currentSession && routeData.length > 0) {
+      console.log(`⚠️ [ROUTE API] No currentSession found but route data exists - creating session`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Check if the requested date is today or a past date
+      const requestedDate = date ? new Date(date) : today;
+      requestedDate.setHours(0, 0, 0, 0);
+      const isToday = requestedDate.getTime() === today.getTime();
+      
+      // Determine session status based on date and hours
+      let sessionIsActive = isToday; // Active only if today
+      let sessionEndTime = null;
+      let sessionComplianceStatus = 'PENDING';
+      
+      if (!isToday) {
+        // Historical data - session has ended
+        sessionEndTime = routeData[routeData.length - 1].timestamp ? new Date(routeData[routeData.length - 1].timestamp) : new Date();
+        sessionComplianceStatus = totalHoursOnline >= 8 ? 'COMPLIANT' : 'NON_COMPLIANT';
+      } else {
+        // Today's data - check if already reached 8 hours
+        sessionComplianceStatus = totalHoursOnline >= 8 ? 'COMPLIANT' : 'PENDING';
+      }
+      
+      deviceTracking.currentSession = {
+        date: new Date(requestedDate.getFullYear(), requestedDate.getMonth(), requestedDate.getDate()),
+        startTime: routeData[0].timestamp ? new Date(routeData[0].timestamp) : new Date(),
+        endTime: sessionEndTime,
+        totalHoursOnline: totalHoursOnline || 0,
+        totalDistanceTraveled: totalDistance || 0,
+        isActive: sessionIsActive,
+        targetHours: 8,
+        complianceStatus: sessionComplianceStatus,
+        locationHistory: []
+      };
+      
+      await deviceTracking.save();
+      console.log(`✅ [ROUTE API] Created currentSession for ${deviceId}:`, {
+        date: requestedDate.toISOString().split('T')[0],
+        isToday,
+        isActive: sessionIsActive,
+        hours: totalHoursOnline,
+        status: sessionComplianceStatus
+      });
+    }
+    
+    if (deviceTracking.currentSession) {
+      const session = deviceTracking.currentSession;
+      const currentHours = session.totalHoursOnline || 0;
+      const targetHours = session.targetHours || 8;
+      const remainingHours = Math.max(0, targetHours - currentHours);
+      const progressPercent = Math.min(100, (currentHours / targetHours) * 100);
+      
+      sessionStatus = {
+        isActive: session.isActive || false,
+        startTime: session.startTime,
+        endTime: session.endTime || null,
+        currentHours: currentHours,
+        targetHours: targetHours,
+        remainingHours: remainingHours,
+        progressPercent: progressPercent,
+        complianceStatus: session.complianceStatus || 'PENDING'
+      };
+      
+      console.log(`✅ [ROUTE API] Session status created:`, sessionStatus);
+    } else {
+      console.log(`❌ [ROUTE API] No currentSession found for ${deviceId}`);
+    }
+
+    // ✅ Get overall compliance rate from DeviceDataHistoryV2
+    let overallCompliance = null;
+    try {
+      const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+      const deviceHistory = await DeviceDataHistoryV2.findOne({
+        materialId: deviceTracking.materialId
+      });
+      
+      if (deviceHistory && deviceHistory.lifetimeTotals) {
+        const complianceRate = deviceHistory.lifetimeTotals.complianceRate || 0;
+        let rating = 'AVERAGE';
+        
+        if (complianceRate >= 90) {
+          rating = 'VERY GOOD';
+        } else if (complianceRate >= 75) {
+          rating = 'GOOD';
+        }
+        
+        overallCompliance = {
+          complianceRate: Math.round(complianceRate * 100) / 100,
+          rating: rating,
+          totalDays: deviceHistory.lifetimeTotals.totalDays || 0,
+          compliantDays: Math.round((deviceHistory.lifetimeTotals.totalDays || 0) * (complianceRate / 100))
+        };
+        
+        console.log(`📊 [ROUTE API] Overall compliance for ${deviceId}: ${complianceRate.toFixed(2)}% (${rating})`);
+      }
+    } catch (error) {
+      console.error(`⚠️ [ROUTE API] Error fetching overall compliance:`, error.message);
+    }
+
     res.json({
       success: true,
       message: 'Route data retrieved successfully',
@@ -411,7 +534,9 @@ router.get('/route/:deviceId', async (req, res) => {
           totalQRScans: totalQRScans,
           totalHoursOnline: totalHoursOnline,
           ...additionalMetrics
-        }
+        },
+        sessionStatus: sessionStatus, // Daily session status
+        overallCompliance: overallCompliance // ✅ NEW: Overall compliance rating
       }
     });
 
@@ -726,12 +851,23 @@ router.get('/path/:deviceId', async (req, res) => {
 
 // GET /compliance - Get compliance report
 router.get('/compliance', async (req, res) => {
+  const requestStartTime = Date.now();
+  console.log('🕐 [COMPLIANCE] Request started at:', new Date().toISOString());
+  
   try {
-    const { date } = req.query;
+    const { date, skipGeocoding } = req.query;
     const targetDate = date ? new Date(date) : new Date();
+    const shouldSkipGeocoding = skipGeocoding === 'true';
     
-    // Clear failed geocoding cache to retry with improved logic
-    clearFailedGeocodingCache();
+    // ✨ OPTIMIZATION: Skip geocoding if requested (for faster initial loads)
+    if (shouldSkipGeocoding) {
+      console.log('⚡ Skipping geocoding for faster response');
+    }
+    
+    // Clear failed geocoding cache to retry with improved logic (only if geocoding)
+    if (!shouldSkipGeocoding) {
+      clearFailedGeocodingCache();
+    }
 
     // First, get all registered devices from tablet system
     const Tablet = require('../models/Tablet');
@@ -811,6 +947,98 @@ router.get('/compliance', async (req, res) => {
       });
     } catch (error) {
       console.error('Error fetching driver information:', error);
+    }
+    
+    // ✅ NEW: Query historical data if date parameter is provided
+    const DeviceDataHistoryV2 = require('../models/deviceDataHistoryV2');
+    const historicalDataMap = new Map(); // materialId -> daily metrics
+    
+    if (date) {
+      // User selected a historical date - fetch data from DeviceDataHistoryV2
+      const targetDateOnly = new Date(targetDate);
+      targetDateOnly.setHours(0, 0, 0, 0);
+      
+      console.log(`📅 [HISTORICAL MODE] Fetching data for ${targetDateOnly.toISOString().split('T')[0]}`);
+      
+      // ⚡ OPTIMIZATION: Fetch all materials in PARALLEL instead of sequentially
+      const historicalFetchStartTime = Date.now();
+      
+      const historicalDataPromises = registeredMaterialIds.map(async (materialId) => {
+        try {
+          console.log(`🔍 [HISTORICAL] Looking for materialId: ${materialId}`);
+          const queryStartTime = Date.now();
+          
+          // ⚡ OPTIMIZATION: Use aggregation to only fetch the specific date we need
+          // This dramatically reduces data transfer (MBs → KBs per query)
+          const result = await DeviceDataHistoryV2.aggregate([
+            // Match the material
+            { $match: { materialId } },
+            // Unwind the dailyData array
+            { $unwind: '$dailyData' },
+            // Match the specific date
+            { 
+              $match: { 
+                'dailyData.date': {
+                  $gte: new Date(targetDateOnly),
+                  $lt: new Date(new Date(targetDateOnly).setDate(targetDateOnly.getDate() + 1))
+                }
+              } 
+            },
+            // Project only the fields we need
+            {
+              $project: {
+                materialId: 1,
+                totalHoursOnline: '$dailyData.totalHoursOnline',
+                totalDistanceTraveled: '$dailyData.totalDistanceTraveled',
+                totalAdPlays: '$dailyData.totalAdPlays',
+                totalQRScans: '$dailyData.totalQRScans',
+                complianceStatus: '$dailyData.hoursTracking.complianceStatus'
+              }
+            },
+            // Limit to 1 result
+            { $limit: 1 }
+          ]);
+          
+          const queryDuration = Date.now() - queryStartTime;
+          console.log(`⏱️ [HISTORICAL] Optimized query for ${materialId} took ${queryDuration}ms`);
+          
+          if (result && result.length > 0) {
+            const dayData = result[0];
+            console.log(`✅ [HISTORICAL] Found data for ${materialId} on ${targetDateOnly.toISOString().split('T')[0]}`);
+            
+            return {
+              materialId,
+              data: {
+                totalHoursOnline: dayData.totalHoursOnline || 0,
+                totalDistanceTraveled: dayData.totalDistanceTraveled || 0,
+                totalAdPlays: dayData.totalAdPlays || 0,
+                totalQRScans: dayData.totalQRScans || 0,
+                complianceStatus: dayData.complianceStatus || 'PENDING'
+              }
+            };
+          } else {
+            console.log(`⚠️ [HISTORICAL] No data for ${materialId} on ${targetDateOnly.toISOString().split('T')[0]}`);
+            return null;
+          }
+        } catch (error) {
+          console.error(`❌ [HISTORICAL] Error fetching data for ${materialId}:`, error);
+          return null;
+        }
+      });
+      
+      // Wait for all queries to complete in parallel
+      const historicalResults = await Promise.all(historicalDataPromises);
+      
+      // Populate the historicalDataMap with results
+      historicalResults.forEach(result => {
+        if (result && result.data) {
+          historicalDataMap.set(result.materialId, result.data);
+          console.log(`✅ [HISTORICAL] Found data for ${result.materialId}: ${result.data.totalHoursOnline}h, ${result.data.totalDistanceTraveled.toFixed(2)}km`);
+        }
+      });
+      
+      const historicalFetchDuration = Date.now() - historicalFetchStartTime;
+      console.log(`📊 [HISTORICAL] Loaded data for ${historicalDataMap.size}/${registeredMaterialIds.length} materials in ${historicalFetchDuration}ms (${(historicalFetchDuration / 1000).toFixed(2)}s)`);
     }
     
     // First, group all devices by material
@@ -901,32 +1129,76 @@ router.get('/compliance', async (req, res) => {
         });
       }
       
-      // Sum up all metrics from the car record
-      group.totalAdPlays += device.totalAdPlays || 0;
-      group.totalQRScans += device.totalQRScans || 0;
+      // ✅ MASTER-SLAVE FAILOVER: Determine which slot is the master for this material
+      // Priority: Slot 1 (if online) → Slot 2 (if Slot 1 offline) → null (if both offline)
+      let masterSlotNumber = null;
+      
+      if (device.slots && device.slots.length > 0) {
+        const slot1 = device.slots.find(s => s.slotNumber === 1 && s.deviceId);
+        const slot2 = device.slots.find(s => s.slotNumber === 2 && s.deviceId);
+        
+        // Check online status using DeviceStatusManager (real-time)
+        const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+        const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+        
+        if (slot1Online) {
+          masterSlotNumber = 1; // Slot 1 is master when online
+          logger.screenTracking(`👑 [Master Selection] Material ${materialId}: Slot 1 is master (online)`);
+        } else if (slot2Online) {
+          masterSlotNumber = 2; // Slot 2 becomes master when Slot 1 is offline
+          logger.screenTracking(`👑 [Master Selection] Material ${materialId}: Slot 2 is master (failover - Slot 1 offline)`);
+        } else {
+          logger.screenTracking(`⚠️ [Master Selection] Material ${materialId}: No slots online, using car-level data`);
+        }
+      }
+      
+      // ✅ NEW: Only sum metrics from car record (car-level aggregates already exist)
+      // Note: Car-level metrics are the source of truth for the material
       group.totalDistanceTraveled += device.totalDistanceTraveled || 0;
       group.totalHoursOnline += device.totalHoursOnline || 0;
-      group.totalAdImpressions += device.totalAdImpressions || 0;
-      group.totalAdPlayTime += device.totalAdPlayTime || 0;
       
       // Use the most recent lastSeen
       if (!group.lastSeen || (device.lastSeen && device.lastSeen > group.lastSeen)) {
         group.lastSeen = device.lastSeen;
       }
       
-      // Use the most recent location
+      // Use the most recent location (from the master slot if available)
       if (device.currentLocation && (!group.currentLocation || 
           (device.lastSeen && group.lastSeen && device.lastSeen > group.lastSeen))) {
         group.currentLocation = device.currentLocation;
       }
       
-      // Merge arrays
-      if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
-      if (device.qrScans) group.qrScans.push(...device.qrScans);
+      // ✅ NEW: Filter arrays to only include data from the MASTER slot
+      // This prevents double-counting when both slots report the same ad play/QR scan
+      if (masterSlotNumber) {
+        // Only include entries from the master slot
+        if (device.adPlaybacks) {
+          const masterPlaybacks = device.adPlaybacks.filter(p => p.slotNumber === masterSlotNumber);
+          group.adPlaybacks.push(...masterPlaybacks);
+          logger.screenTracking(`📊 [Master Filter] Material ${materialId}: ${masterPlaybacks.length}/${device.adPlaybacks.length} ad playbacks from Slot ${masterSlotNumber}`);
+        }
+        if (device.qrScans) {
+          const masterScans = device.qrScans.filter(q => q.slotNumber === masterSlotNumber);
+          group.qrScans.push(...masterScans);
+          logger.screenTracking(`📊 [Master Filter] Material ${materialId}: ${masterScans.length}/${device.qrScans.length} QR scans from Slot ${masterSlotNumber}`);
+        }
+      } else {
+        // Fallback: If no master slot determined, use all data (backwards compatibility)
+        if (device.adPlaybacks) group.adPlaybacks.push(...device.adPlaybacks);
+        if (device.qrScans) group.qrScans.push(...device.qrScans);
+      }
+      
+      // These arrays don't have slotNumber, so merge all (they're car-level data)
       if (device.locationHistory) group.locationHistory.push(...device.locationHistory);
       if (device.hourlyStats) group.hourlyStats.push(...device.hourlyStats);
       if (device.adPerformance) group.adPerformance.push(...device.adPerformance);
       if (device.alerts) group.alerts.push(...device.alerts);
+      
+      // ✅ Recalculate totals from filtered arrays (only master slot data)
+      group.totalAdPlays = group.adPlaybacks.length;
+      group.totalQRScans = group.qrScans.length;
+      group.totalAdImpressions = group.adPlaybacks.reduce((sum, p) => sum + (p.impressions || 0), 0);
+      group.totalAdPlayTime = group.adPlaybacks.reduce((sum, p) => sum + (p.viewTime || 0), 0);
       
       // Use the most recent screen metrics
       if (device.screenMetrics && Object.keys(device.screenMetrics).length > 0) {
@@ -963,10 +1235,23 @@ router.get('/compliance', async (req, res) => {
         return;
       }
       
-      // Calculate totals
-      const deviceHours = group.totalHoursOnline || 0;
-      const deviceDistance = group.totalDistanceTraveled || 0;
-      const isDeviceOnline = group.isOnline;
+      // Calculate totals - use historical data if available
+      let deviceHours, deviceDistance;
+      
+      if (historicalDataMap.has(materialId)) {
+        // Historical mode - use data from DeviceDataHistoryV2
+        const historicalData = historicalDataMap.get(materialId);
+        deviceHours = historicalData.totalHoursOnline;
+        deviceDistance = historicalData.totalDistanceTraveled;
+        console.log(`📅 [HISTORICAL USED] ${materialId}: Hours=${deviceHours}h, Distance=${deviceDistance.toFixed(2)}km (from historical data)`);
+      } else {
+        // Real-time mode - use current DeviceTracking data
+        deviceHours = group.totalHoursOnline || 0;
+        deviceDistance = group.totalDistanceTraveled || 0;
+        console.log(`⏱️ [REAL-TIME USED] ${materialId}: Hours=${deviceHours}h, Distance=${deviceDistance.toFixed(2)}km (from DeviceTracking)`);
+      }
+      
+      const isDeviceOnline = group.isOnline; // Always use real-time status for online/offline indication
       const isDeviceCompliant = deviceHours >= 8; // 8 hours target for compliance
       
       totalHours += deviceHours;
@@ -1008,32 +1293,37 @@ router.get('/compliance', async (req, res) => {
           }
           
           if (!address && lat && lng) {
-            // Check cache first
-            const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
-            if (geocodingCache.has(cacheKey)) {
-              address = geocodingCache.get(cacheKey);
-              // Only log cached address in verbose mode
-              if (process.env.VERBOSE_LOGS === 'true') {
-                logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
-              }
+            // ✨ OPTIMIZATION: Skip geocoding if requested for faster response
+            if (shouldSkipGeocoding) {
+              address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
             } else {
-              try {
-                // Only log geocoding in verbose mode
+              // Check cache first
+              const cacheKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+              if (geocodingCache.has(cacheKey)) {
+                address = geocodingCache.get(cacheKey);
+                // Only log cached address in verbose mode
                 if (process.env.VERBOSE_LOGS === 'true') {
-                  logger.debug(`🗺️ [${materialId}] Geocoding coordinates: ${lat}, ${lng}`);
+                  logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
                 }
-                address = await OSMService.reverseGeocode(lat, lng);
-                // Cache the result
-                geocodingCache.set(cacheKey, address);
-                // Only log geocoded result in verbose mode
-                if (process.env.VERBOSE_LOGS === 'true') {
-                  logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+              } else {
+                try {
+                  // Only log geocoding in verbose mode
+                  if (process.env.VERBOSE_LOGS === 'true') {
+                    logger.debug(`🗺️ [${materialId}] Geocoding coordinates: ${lat}, ${lng}`);
+                  }
+                  address = await OSMService.reverseGeocode(lat, lng);
+                  // Cache the result
+                  geocodingCache.set(cacheKey, address);
+                  // Only log geocoded result in verbose mode
+                  if (process.env.VERBOSE_LOGS === 'true') {
+                    logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+                  }
+                } catch (error) {
+                  console.warn(`🗺️ [${materialId}] Geocoding failed for ${lat}, ${lng}:`, error.message);
+                  address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                  // Cache the fallback too
+                  geocodingCache.set(cacheKey, address);
                 }
-              } catch (error) {
-                console.warn(`🗺️ [${materialId}] Geocoding failed for ${lat}, ${lng}:`, error.message);
-                address = `Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                // Cache the fallback too
-                geocodingCache.set(cacheKey, address);
               }
             }
           } else if (!address) {
@@ -1062,23 +1352,28 @@ router.get('/compliance', async (req, res) => {
           });
           
           if (!address) {
-            // Check cache first
-            const cacheKey = `${deviceLocation.lat.toFixed(6)},${deviceLocation.lng.toFixed(6)}`;
-            if (geocodingCache.has(cacheKey)) {
-              address = geocodingCache.get(cacheKey);
-              logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+            // ✨ OPTIMIZATION: Skip geocoding if requested for faster response
+            if (shouldSkipGeocoding) {
+              address = `Location: ${deviceLocation.lat.toFixed(6)}, ${deviceLocation.lng.toFixed(6)}`;
             } else {
-              try {
-                console.log(`🗺️ [${materialId}] Geocoding coordinates: ${deviceLocation.lat}, ${deviceLocation.lng}`);
-                address = await OSMService.reverseGeocode(deviceLocation.lat, deviceLocation.lng);
-                // Cache the result
-                geocodingCache.set(cacheKey, address);
-                logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
-              } catch (error) {
-                console.warn(`🗺️ [${materialId}] Geocoding failed for ${deviceLocation.lat}, ${deviceLocation.lng}:`, error.message);
-                address = `Location: ${deviceLocation.lat.toFixed(6)}, ${deviceLocation.lng.toFixed(6)}`;
-                // Cache the fallback too
-                geocodingCache.set(cacheKey, address);
+              // Check cache first
+              const cacheKey = `${deviceLocation.lat.toFixed(6)},${deviceLocation.lng.toFixed(6)}`;
+              if (geocodingCache.has(cacheKey)) {
+                address = geocodingCache.get(cacheKey);
+                logger.debug(`🗺️ [${materialId}] Using cached address for ${cacheKey}: ${address}`);
+              } else {
+                try {
+                  console.log(`🗺️ [${materialId}] Geocoding coordinates: ${deviceLocation.lat}, ${deviceLocation.lng}`);
+                  address = await OSMService.reverseGeocode(deviceLocation.lat, deviceLocation.lng);
+                  // Cache the result
+                  geocodingCache.set(cacheKey, address);
+                  logger.debug(`🗺️ [${materialId}] Geocoded and cached address for ${cacheKey}: ${address}`);
+                } catch (error) {
+                  console.warn(`🗺️ [${materialId}] Geocoding failed for ${deviceLocation.lat}, ${deviceLocation.lng}:`, error.message);
+                  address = `Location: ${deviceLocation.lat.toFixed(6)}, ${deviceLocation.lng.toFixed(6)}`;
+                  // Cache the fallback too
+                  geocodingCache.set(cacheKey, address);
+                }
               }
             }
           }
@@ -1115,7 +1410,8 @@ router.get('/compliance', async (req, res) => {
         combinedStatus = 'BOTH SLOTS OFFLINE';
       }
 
-      // Determine which device ID to use based on online status
+      // ✅ FIXED: Determine which device ID to use with correct master-slave priority
+      // Priority: Slot 1 (master) → Slot 2 (failover) → fallback to first device
       let primaryDeviceId = group.devices[0].device.deviceId; // Default to first device
       
       // Debug logging
@@ -1125,29 +1421,22 @@ router.get('/compliance', async (req, res) => {
         devices: group.devices.map(d => ({ deviceId: d.device.deviceId, slotNumber: d.device.slotNumber }))
       });
       
-      if (group.slotStatus.slot2.online && !group.slotStatus.slot1.online) {
-        // If only slot 2 is online, use slot 2 device ID
-        const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
-        if (slot2Device) {
-          primaryDeviceId = slot2Device.device.deviceId;
-          logger.screenTracking(`🔍 [compliance] Using slot 2 device: ${primaryDeviceId}`);
-        }
-      } else if (group.slotStatus.slot1.online && !group.slotStatus.slot2.online) {
-        // If only slot 1 is online, use slot 1 device ID
+      if (group.slotStatus.slot1.online) {
+        // ✅ Slot 1 is master when online (highest priority)
         const slot1Device = group.devices.find(d => d.device.slotNumber === 1);
         if (slot1Device) {
           primaryDeviceId = slot1Device.device.deviceId;
-          logger.screenTracking(`🔍 [compliance] Using slot 1 device: ${primaryDeviceId}`);
+          logger.screenTracking(`👑 [compliance] Using Slot 1 device (master): ${primaryDeviceId}`);
         }
-      } else if (group.slotStatus.slot1.online && group.slotStatus.slot2.online) {
-        // If both slots are online, prefer slot 2 (the connected one)
+      } else if (group.slotStatus.slot2.online) {
+        // ✅ Slot 2 becomes master when Slot 1 is offline (failover)
         const slot2Device = group.devices.find(d => d.device.slotNumber === 2);
         if (slot2Device) {
           primaryDeviceId = slot2Device.device.deviceId;
-          logger.screenTracking(`🔍 [compliance] Using slot 2 device (both online): ${primaryDeviceId}`);
+          logger.screenTracking(`👑 [compliance] Using Slot 2 device (failover - Slot 1 offline): ${primaryDeviceId}`);
         }
       } else {
-        logger.screenTracking(`🔍 [compliance] Using default device: ${primaryDeviceId}`);
+        logger.screenTracking(`⚠️ [compliance] No slots online, using default device: ${primaryDeviceId}`);
       }
 
       // Get driver information for this material
@@ -1158,7 +1447,7 @@ router.get('/compliance', async (req, res) => {
                             group.slotStatus.slot2?.online ? group.slotStatus.slot2.deviceId : 
                             group.slotStatus.slot1?.deviceId || group.slotStatus.slot2?.deviceId;
 
-      individualScreens.push({
+      const screenData = {
         deviceId: primaryDeviceId, // Use the appropriate device ID based on online status
         displayId: displayId, // Just material ID, no slot suffix
         materialId: materialId, // Use the materialId from tablet registration
@@ -1207,7 +1496,12 @@ router.get('/compliance', async (req, res) => {
         totalQRScans: group.totalQRScans,
         totalAdImpressions: group.totalAdImpressions,
         totalAdPlayTime: group.totalAdPlayTime
-      });
+      };
+      
+      // Log what's being sent to frontend
+      console.log(`📤 [RESPONSE] Sending to frontend for ${materialId}: currentHours=${screenData.currentHours}h, hoursRemaining=${screenData.hoursRemaining}h, totalDistanceToday=${screenData.totalDistanceToday}km`);
+      
+      individualScreens.push(screenData);
     }
 
     // Create material-level records for map display (one per material)
@@ -1285,6 +1579,10 @@ router.get('/compliance', async (req, res) => {
       materialScreens: materialScreens // Material-level records for map display
     };
 
+    const requestDuration = Date.now() - requestStartTime;
+    console.log(`✅ [COMPLIANCE] Sending response after ${requestDuration}ms (${(requestDuration/1000).toFixed(2)}s)`);
+    console.log(`📊 [COMPLIANCE] Sending ${individualScreens.length} screens`);
+    
     res.json({
       success: true,
       data: complianceReport
@@ -2368,13 +2666,24 @@ router.get('/driver/:driverId', checkDriver, async (req, res) => {
     // Get driver details
     const driver = await Driver.findOne({ driverId: driverId });
     
+    // Helper to format date to ISO string (same as GraphQL resolver)
+    const formatDateField = (dateValue) => {
+      if (!dateValue) return null;
+      if (dateValue instanceof Date) return dateValue.toISOString();
+      if (typeof dateValue === 'string') return dateValue;
+      return null;
+    };
+    
     // Base response data
     const baseData = {
       driverId: driverId,
       vehiclePlateNumber: driver?.vehiclePlateNumber || 'Unknown',
       vehicleType: driver?.vehicleType || 'Unknown',
+      vehicleModel: driver?.vehicleModel || 'Unknown',
       materialId: material.materialId,
       materialType: material.materialType,
+      // ✅ Use same logic as GraphQL resolver to match Profile tab display
+      materialAssignedDate: formatDateField(material.assignedDate) || formatDateField(material.mountedAt) || formatDateField(material.createdAt),
       isOnline: deviceTracking.isOnline,
       lastSeen: deviceTracking.lastSeen,
       currentLocation: deviceTracking.currentLocation,

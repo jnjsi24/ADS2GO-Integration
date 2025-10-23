@@ -154,27 +154,10 @@ export const AdminNotificationProvider: React.FC<AdminNotificationProviderProps>
   const totalPendingCount = unreadCount + pendingAds.length + pendingMaterials.length;
   const totalDisplayCount = enableNotificationBadge ? totalPendingCount : 0;
 
-  // Debug logging (only when data actually changes)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔔 AdminNotificationContext Debug:', {
-        notificationsCount: notifications.length,
-        unreadCount,
-        enableNotificationBadge,
-        displayBadgeCount,
-        pendingAdsCount: pendingAds.length,
-        pendingMaterialsCount: pendingMaterials.length,
-        totalPendingCount,
-        totalDisplayCount
-      });
-    }
-  }, [notifications.length, unreadCount, enableNotificationBadge, displayBadgeCount, pendingAds.length, pendingMaterials.length, totalPendingCount, totalDisplayCount]);
 
   const refetchNotifications = async () => {
-    console.log('🔔 AdminNotificationContext: Manual refresh triggered');
     try {
       const result = await refetch();
-      console.log('🔔 AdminNotificationContext: Manual refresh result:', result);
     } catch (error) {
       console.error('🔔 AdminNotificationContext: Manual refresh error:', error);
     }

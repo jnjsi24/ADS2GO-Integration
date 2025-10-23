@@ -104,6 +104,47 @@ router.post('/registerTablet', async (req, res) => {
       });
     }
 
+    // ✅ NEW: Check 8-hour completion lock (blocks 12 AM - 7:59 AM after completing 8 hours)
+    const DeviceTracking = require('../models/deviceTracking');
+    const existingTracking = await DeviceTracking.findOne({ materialId });
+    
+    if (existingTracking && existingTracking.currentSession) {
+      const now = new Date();
+      const currentHour = now.getHours(); // 0-23
+      
+      // Check if current time is between 12:00 AM (0) and 7:59 AM (7)
+      const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
+      
+      if (isBeforeEightAM && existingTracking.currentSession.completedAt) {
+        // Check if completedAt was yesterday or earlier (not today)
+        const completedDate = new Date(existingTracking.currentSession.completedAt);
+        completedDate.setHours(0, 0, 0, 0);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const wasCompletedBeforeToday = completedDate.getTime() < today.getTime();
+        
+        if (wasCompletedBeforeToday) {
+          console.log(`🔒 [Registration Blocked] ${materialId} completed 8 hours yesterday, cannot start before 8 AM`);
+          console.log(`   Completed at: ${existingTracking.currentSession.completedAt.toISOString()}`);
+          console.log(`   Current time: ${now.toISOString()}, Hour: ${currentHour}`);
+          
+          return res.status(403).json({
+            success: false,
+            blocked: true,
+            message: 'Ad player is locked until 8:00 AM',
+            reason: '8_HOUR_LOCK',
+            details: {
+              completedAt: existingTracking.currentSession.completedAt,
+              unlockTime: '8:00 AM',
+              currentHour: currentHour
+            }
+          });
+        }
+      }
+    }
+
     // Find the tablet document for this material
     // Try to find by materialId first (string format)
     let tablet = await Tablet.findOne({ materialId });
@@ -218,7 +259,7 @@ router.post('/registerTablet', async (req, res) => {
             totalHoursOnline: 0,
             totalDistanceTraveled: 0,
             targetHours: 8,
-            complianceStatus: 'NON_COMPLIANT',
+            complianceStatus: 'PENDING', // ✅ Start as PENDING - will become COMPLIANT at 8hrs or NON_COMPLIANT if session ends early
             isActive: true
           }
         });

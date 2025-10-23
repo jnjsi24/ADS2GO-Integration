@@ -88,8 +88,79 @@ export default function HomeScreen() {
     }
   };
 
+  const check8HourLock = async () => {
+    try {
+      console.log('🔍 [Lock Check] Checking for 8-hour completion lock...');
+      
+      // Get 8-hour completion data from AsyncStorage
+      const completionDataStr = await AsyncStorage.getItem('8hourCompletion');
+      
+      if (!completionDataStr) {
+        console.log('✅ [Lock Check] No completion data found, app is unlocked');
+        return { isLocked: false };
+      }
+      
+      const completionData = JSON.parse(completionDataStr);
+      console.log('📋 [Lock Check] Completion data found:', completionData);
+      
+      // Check current time
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Check if current time is between 12 AM and 8 AM
+      const isBeforeEightAM = currentHour >= 0 && currentHour < 8;
+      
+      if (!isBeforeEightAM) {
+        console.log(`✅ [Lock Check] Current time is ${currentHour}:00, after 8 AM - app is unlocked`);
+        // Clear the completion data since it's past 8 AM
+        await AsyncStorage.removeItem('8hourCompletion');
+        return { isLocked: false };
+      }
+      
+      // Check if completion was yesterday or today
+      const completedAt = new Date(completionData.completedAt);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const completedDate = new Date(completedAt.getFullYear(), completedAt.getMonth(), completedAt.getDate());
+      
+      // If completed today or yesterday, and it's before 8 AM, lock the app
+      const wasCompletedBeforeToday = completedDate.getTime() < today.getTime();
+      const wasCompletedToday = completedDate.getTime() === today.getTime();
+      
+      if (wasCompletedBeforeToday || wasCompletedToday) {
+        console.log(`🔒 [Lock Check] App is LOCKED until 8:00 AM (completed at ${completedAt.toISOString()})`);
+        
+        // Show lock alert
+        Alert.alert(
+          '🔒 Ad Player Locked',
+          `You completed your 8-hour requirement on ${completedAt.toLocaleDateString()}.\n\nTotal Hours: ${completionData.totalHours?.toFixed(2)} hours\n\nThe ad player is locked until 8:00 AM.\n\nPlease try again after 8:00 AM.`,
+          [{ text: 'OK' }],
+          { cancelable: false }
+        );
+        
+        return { isLocked: true };
+      }
+      
+      console.log('✅ [Lock Check] Completion was from an older date, app is unlocked');
+      // Clear old completion data
+      await AsyncStorage.removeItem('8hourCompletion');
+      return { isLocked: false };
+      
+    } catch (error) {
+      console.error('❌ [Lock Check] Error checking 8-hour lock:', error);
+      // On error, don't lock the app
+      return { isLocked: false };
+    }
+  };
+
   const initializeApp = async () => {
     try {
+      // ✅ NEW: Check for 8-hour completion lock
+      const lockCheck = await check8HourLock();
+      if (lockCheck.isLocked) {
+        setLoading(false);
+        return; // Exit early, app is locked
+      }
+      
       // Get location
       let currentLocation = null;
       let { status } = await Location.requestForegroundPermissionsAsync();

@@ -436,14 +436,27 @@ class DeviceStatusService {
 
   async handlePlaybackUpdate(deviceId, message) {
     try {
-      console.log(`🎬 [Playback Update] ${deviceId}:`, {
+      // Log playback update (with GPS info if available)
+      const logData = {
         adId: message.adId,
         adTitle: message.adTitle,
         state: message.state,
         currentTime: message.currentTime,
         duration: message.duration,
         progress: message.progress
-      });
+      };
+      
+      // Add GPS data to log if available
+      if (message.gpsData) {
+        logData.gps = {
+          lat: message.gpsData.lat,
+          lng: message.gpsData.lng,
+          speed: `${(message.gpsData.speed * 3.6).toFixed(1)} km/h`,
+          accuracy: `${message.gpsData.accuracy}m`
+        };
+      }
+      
+      console.log(`🎬 [Playback Update] ${deviceId}:`, logData);
 
       // Store current playback state for synchronization
       const connection = this.activeConnections.get(deviceId);
@@ -455,6 +468,7 @@ class DeviceStatusService {
           currentTime: message.currentTime,
           duration: message.duration,
           progress: message.progress,
+          gpsData: message.gpsData, // Store GPS data
           timestamp: new Date().toISOString()
         };
       }
@@ -462,11 +476,157 @@ class DeviceStatusService {
       // Update the database with current ad information
       await this.updateCurrentAd(deviceId, message);
 
+      // Process GPS data if available (real-time location tracking)
+      if (message.gpsData) {
+        await this.processGPSData(deviceId, message.gpsData, message.adDetails);
+      }
+
       // Broadcast the playback update to all admin clients
       this.broadcastPlaybackUpdate(deviceId, message);
 
     } catch (error) {
       console.error(`Error handling playback update for device ${deviceId}:`, error);
+    }
+  }
+
+  async processGPSData(deviceId, gpsData, adDetails) {
+    try {
+      const connection = this.activeConnections.get(deviceId);
+      const materialId = connection?.materialId || adDetails?.materialId;
+      const deviceSlot = connection?.slotNumber || adDetails?.slotNumber;
+
+      if (!materialId || !deviceSlot) {
+        // Skip GPS processing if we don't have materialId or slot
+        return;
+      }
+
+      // Validate GPS data
+      const { lat, lng, speed, heading, accuracy, altitude, timestamp } = gpsData;
+      
+      // Skip invalid GPS coordinates
+      if (!lat || !lng || lat === 0 && lng === 0) {
+        return;
+      }
+
+      // Log GPS processing occasionally (5% of updates)
+      if (Math.random() < 0.05) {
+        console.log(`📍 [GPS WebSocket] Processing GPS from ${deviceId}:`, {
+          materialId,
+          slot: deviceSlot,
+          lat: lat.toFixed(6),
+          lng: lng.toFixed(6),
+          speed: `${(speed * 3.6).toFixed(1)} km/h`,
+          accuracy: `${accuracy}m`
+        });
+      }
+
+      // Update device tracking with GPS data
+      const DeviceTracking = require('../models/deviceTracking');
+      let carTracking = await DeviceTracking.findByMaterialId(materialId);
+
+      if (!carTracking) {
+        // Device tracking record not found - skip GPS update
+        // The HTTP fallback will create the record if needed
+        return;
+      }
+
+      // Check if we should update the location (avoid excessive updates)
+      const shouldUpdate = await this.shouldUpdateGPSLocation(
+        carTracking,
+        lat,
+        lng,
+        accuracy,
+        timestamp
+      );
+
+      if (!shouldUpdate) {
+        return; // Skip this update
+      }
+
+      // Update current location
+      carTracking.currentLocation = {
+        type: 'Point',
+        coordinates: [lng, lat],
+        accuracy,
+        speed: speed || 0,
+        heading: heading || 0,
+        altitude: altitude || undefined,
+        timestamp: new Date(timestamp || Date.now())
+      };
+
+      // Add to location history (for route tracking)
+      if (!carTracking.locationHistory) {
+        carTracking.locationHistory = [];
+      }
+
+      carTracking.locationHistory.push({
+        type: 'Point',
+        coordinates: [lng, lat],
+        timestamp: new Date(timestamp || Date.now()),
+        speed: speed || 0,
+        heading: heading || 0,
+        accuracy
+      });
+
+      // Keep only last 1000 location points to avoid excessive storage
+      if (carTracking.locationHistory.length > 1000) {
+        carTracking.locationHistory = carTracking.locationHistory.slice(-1000);
+      }
+
+      // Update distance traveled
+      if (carTracking.currentSession && speed > 0) {
+        const timeDiff = Date.now() - new Date(carTracking.currentSession.lastOnlineUpdate).getTime();
+        const hours = timeDiff / (1000 * 60 * 60);
+        const distanceKm = (speed * 3.6) * hours; // speed in km/h * hours
+        
+        if (distanceKm > 0 && distanceKm < 10) { // Sanity check: less than 10km per update
+          carTracking.currentSession.totalDistanceTraveled += distanceKm;
+        }
+      }
+
+      // Save the updated tracking record
+      await carTracking.save();
+
+    } catch (error) {
+      console.error(`Error processing GPS data for device ${deviceId}:`, error);
+    }
+  }
+
+  async shouldUpdateGPSLocation(carTracking, lat, lng, accuracy, timestamp) {
+    try {
+      // Always update if no current location
+      if (!carTracking.currentLocation) {
+        return true;
+      }
+
+      const currentLoc = carTracking.currentLocation;
+      const [currentLng, currentLat] = currentLoc.coordinates || [0, 0];
+
+      // Calculate distance between current and new location (simple approximation)
+      const latDiff = lat - currentLat;
+      const lngDiff = lng - currentLng;
+      const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff) * 111000; // Rough meters
+
+      // Update if moved more than 5 meters
+      if (distance > 5) {
+        return true;
+      }
+
+      // Update if accuracy improved significantly
+      if (accuracy < (currentLoc.accuracy || 999) * 0.7) {
+        return true;
+      }
+
+      // Update if more than 10 seconds have passed
+      const timeDiff = Date.now() - new Date(currentLoc.timestamp || 0).getTime();
+      if (timeDiff > 10000) {
+        return true;
+      }
+
+      return false; // Skip this update
+    } catch (error) {
+      console.error('Error in shouldUpdateGPSLocation:', error);
+      return false;
     }
   }
 
@@ -564,7 +724,27 @@ class DeviceStatusService {
     }
   }
 
-  broadcastPlaybackUpdate(deviceId, playbackData) {
+  async broadcastPlaybackUpdate(deviceId, playbackData) {
+    // ✅ NEW: Fetch session status to include in real-time updates
+    let sessionStatus = null;
+    try {
+      const deviceTracking = await DeviceTracking.findByDeviceId(deviceId);
+      if (deviceTracking && deviceTracking.currentSession) {
+        sessionStatus = {
+          isActive: deviceTracking.currentSession.isActive || false,
+          startTime: deviceTracking.currentSession.startTime,
+          endTime: deviceTracking.currentSession.endTime,
+          currentHours: deviceTracking.currentSession.totalHoursOnline || 0,
+          targetHours: deviceTracking.currentSession.targetHours || 8,
+          remainingHours: Math.max(0, (deviceTracking.currentSession.targetHours || 8) - (deviceTracking.currentSession.totalHoursOnline || 0)),
+          progressPercent: Math.min(100, ((deviceTracking.currentSession.totalHoursOnline || 0) / (deviceTracking.currentSession.targetHours || 8)) * 100),
+          complianceStatus: deviceTracking.currentSession.complianceStatus || 'PENDING'
+        };
+      }
+    } catch (error) {
+      console.error(`Error fetching session status for ${deviceId}:`, error);
+    }
+    
     const updateMessage = {
       type: 'adPlaybackUpdate',
       deviceId: deviceId,
@@ -574,13 +754,38 @@ class DeviceStatusService {
       currentTime: playbackData.currentTime,
       duration: playbackData.duration,
       progress: playbackData.progress,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      gpsData: playbackData.gpsData || null,  // Include GPS data if available (real-time location)
+      sessionStatus: sessionStatus  // ✅ NEW: Include session status for real-time driver progress
     };
     
     // Broadcast to all connections (both status and playback connections)
     this.broadcast(updateMessage);
     
-    console.log(`📡 [Broadcast] Playback update for ${deviceId}: ${playbackData.adTitle} - ${playbackData.state} (${playbackData.progress}%)`);
+    // Enhanced logging with GPS and session info if available
+    const logData = {
+      adTitle: playbackData.adTitle,
+      state: playbackData.state,
+      progress: `${playbackData.progress}%`
+    };
+    
+    if (playbackData.gpsData) {
+      logData.gps = {
+        lat: playbackData.gpsData.lat.toFixed(6),
+        lng: playbackData.gpsData.lng.toFixed(6),
+        speed: `${(playbackData.gpsData.speed * 3.6).toFixed(1)} km/h`
+      };
+    }
+    
+    if (sessionStatus) {
+      logData.session = {
+        hours: `${sessionStatus.currentHours.toFixed(2)}/${sessionStatus.targetHours}`,
+        progress: `${sessionStatus.progressPercent.toFixed(1)}%`,
+        status: sessionStatus.complianceStatus
+      };
+    }
+    
+    console.log(`📡 [Broadcast] Playback update for ${deviceId}:`, logData);
   }
 
   removeConnection(deviceId) {

@@ -121,12 +121,6 @@ const Login: React.FC = () => {
       sessionStorage.setItem('user', JSON.stringify(user));
       sessionStorage.setItem('userFirstName', firstName);
       
-      console.log('User data stored successfully:', {
-        user,
-        firstName,
-        storageKeys: ['user', 'currentUser', 'authData', 'userFirstName']
-      });
-      
     } catch (error) {
       console.error('Error storing user data:', error);
     }
@@ -151,9 +145,6 @@ const Login: React.FC = () => {
       if (user) {
         // Store user data immediately after successful login
         storeUserData(user);
-        
-        // Login successful - the UserAuthContext will handle navigation
-        console.log('Login successful, user:', user);
       } else {
         setError('Login failed. Please check your credentials.');
       }

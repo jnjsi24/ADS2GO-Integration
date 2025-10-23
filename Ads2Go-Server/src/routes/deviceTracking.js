@@ -435,7 +435,37 @@ router.post('/ad-playback', async (req, res) => {
       });
     }
     
-    // Add ad playback to the tracking record
+    // ✅ MASTER-SLAVE: Determine if this is the master slot
+    // Priority: Slot 1 (if online) → Slot 2 (if Slot 1 offline)
+    let isMasterSlot = false;
+    
+    if (deviceTracking.slots && deviceTracking.slots.length > 0) {
+      const slot1 = deviceTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
+      const slot2 = deviceTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
+      
+      // Get online status from DeviceStatusManager
+      const deviceStatusService = require('../services/deviceStatusService');
+      const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+      const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+      
+      const currentSlotNumber = parseInt(deviceSlot);
+      
+      if (slot1Online && currentSlotNumber === 1) {
+        isMasterSlot = true; // Slot 1 is master when online
+        console.log(`👑 [AdPlayback] Slot 1 is master - counting analytics`);
+      } else if (!slot1Online && slot2Online && currentSlotNumber === 2) {
+        isMasterSlot = true; // Slot 2 becomes master when Slot 1 is offline
+        console.log(`👑 [AdPlayback] Slot 2 is master (failover) - counting analytics`);
+      } else {
+        console.log(`💤 [AdPlayback] Slot ${currentSlotNumber} is slave - NOT counting in totals`);
+      }
+    } else {
+      // Fallback: if no slot info, accept all data (backwards compatibility)
+      isMasterSlot = true;
+      console.log(`⚠️ [AdPlayback] No slot info, accepting all data (fallback)`);
+    }
+    
+    // Add ad playback to the tracking record (always store, with slotNumber)
     const adPlayback = {
       adId,
       userId,
@@ -451,9 +481,16 @@ router.post('/ad-playback', async (req, res) => {
     };
     
     deviceTracking.adPlaybacks.push(adPlayback);
-    deviceTracking.totalAdPlays += 1;
-    deviceTracking.totalAdPlayTime += parseInt(viewTime);
-    deviceTracking.totalAdImpressions += 1;
+    
+    // ✅ Only increment totals if this is the master slot
+    if (isMasterSlot) {
+      deviceTracking.totalAdPlays += 1;
+      deviceTracking.totalAdPlayTime += parseInt(viewTime);
+      deviceTracking.totalAdImpressions += 1;
+      console.log(`✅ [AdPlayback] Master slot - incremented totals`);
+    } else {
+      console.log(`💤 [AdPlayback] Slave slot - skipped incrementing totals`);
+    }
     
     // Clean up old ad playbacks (keep only last 800)
     deviceTracking.cleanupAdPlaybacks();
@@ -558,7 +595,37 @@ router.post('/qr-scan', async (req, res) => {
       });
     }
 
-    // Track QR scan using the new schema
+    // ✅ MASTER-SLAVE: Determine if this is the master slot
+    // Priority: Slot 1 (if online) → Slot 2 (if Slot 1 offline)
+    let isMasterSlot = false;
+    
+    if (deviceTracking.slots && deviceTracking.slots.length > 0) {
+      const slot1 = deviceTracking.slots.find(s => s.slotNumber === 1 && s.deviceId);
+      const slot2 = deviceTracking.slots.find(s => s.slotNumber === 2 && s.deviceId);
+      
+      // Get online status from DeviceStatusManager
+      const deviceStatusService = require('../services/deviceStatusService');
+      const slot1Online = slot1 && slot1.deviceId && deviceStatusService.getDeviceStatus(slot1.deviceId)?.isOnline;
+      const slot2Online = slot2 && slot2.deviceId && deviceStatusService.getDeviceStatus(slot2.deviceId)?.isOnline;
+      
+      const currentSlotNumber = parseInt(deviceSlot);
+      
+      if (slot1Online && currentSlotNumber === 1) {
+        isMasterSlot = true; // Slot 1 is master when online
+        console.log(`👑 [QRScan] Slot 1 is master - counting analytics`);
+      } else if (!slot1Online && slot2Online && currentSlotNumber === 2) {
+        isMasterSlot = true; // Slot 2 becomes master when Slot 1 is offline
+        console.log(`👑 [QRScan] Slot 2 is master (failover) - counting analytics`);
+      } else {
+        console.log(`💤 [QRScan] Slot ${currentSlotNumber} is slave - NOT counting in totals`);
+      }
+    } else {
+      // Fallback: if no slot info, accept all data (backwards compatibility)
+      isMasterSlot = true;
+      console.log(`⚠️ [QRScan] No slot info, accepting all data (fallback)`);
+    }
+    
+    // Track QR scan using the new schema (always store, with slotNumber)
     const slot = deviceTracking.getSlot(parseInt(deviceSlot));
     if (slot) {
       // Add QR scan to the device tracking
@@ -566,7 +633,14 @@ router.post('/qr-scan', async (req, res) => {
         ...qrScanData,
         slotNumber: parseInt(deviceSlot)
       });
-      deviceTracking.totalQRScans += 1;
+      
+      // ✅ Only increment totals if this is the master slot
+      if (isMasterSlot) {
+        deviceTracking.totalQRScans += 1;
+        console.log(`✅ [QRScan] Master slot - incremented totals`);
+      } else {
+        console.log(`💤 [QRScan] Slave slot - skipped incrementing totals`);
+      }
       
       await deviceTracking.save();
     }

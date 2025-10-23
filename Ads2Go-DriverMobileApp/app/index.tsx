@@ -46,14 +46,7 @@ export default function IndexScreen() {
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const currentMonth = today.toISOString().slice(0,7); // YYYY-MM
         
-        console.log('🔍 Checking photo compliance:', {
-          currentMonth,
-          materials: mats.map((m: any) => ({
-            id: m.id,
-            nextPhotoDue: m?.materialTracking?.nextPhotoDue,
-            monthlyPhotos: m?.materialTracking?.monthlyPhotos
-          }))
-        });
+        // Checking photo compliance status
         
         const anyDue = mats.some((m: any) => {
           const dueStr = m?.materialTracking?.nextPhotoDue;

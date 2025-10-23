@@ -79,17 +79,6 @@ const PaymentHistory: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useUserAuth();
 
-  // Debug authentication status
-  useEffect(() => {
-    console.log('PaymentHistory - User auth status:', {
-      user: user ? { id: user.userId, email: user.email, role: user.role } : null,
-      tokens: {
-        adminToken: localStorage.getItem('adminToken') ? 'exists' : 'missing',
-        userToken: localStorage.getItem('userToken') ? 'exists' : 'missing',
-        token: localStorage.getItem('token') ? 'exists' : 'missing'
-      }
-    });
-  }, [user]);
   const [showPlanDropdown, setShowPlanDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedPlanFilter, setSelectedPlanFilter] = useState('All Plans');
@@ -100,7 +89,11 @@ const PaymentHistory: React.FC = () => {
 
   const { loading, error, data, refetch } = useQuery(GET_USER_ADS_WITH_PAYMENTS, {
     fetchPolicy: "network-only",
-    onError: (error) => {
+  });
+
+  // Handle errors using useEffect (Apollo v3.14 recommended approach)
+  useEffect(() => {
+    if (error) {
       console.error('PaymentHistory - GraphQL Error:', error);
       console.error('PaymentHistory - Error details:', {
         message: error.message,
@@ -108,18 +101,13 @@ const PaymentHistory: React.FC = () => {
         networkError: error.networkError,
         extraInfo: error.extraInfo
       });
-    },
-    onCompleted: (data) => {
-      console.log('PaymentHistory - Query completed successfully:', data);
     }
-  });
+  }, [error]);
 
   const [payments, setPayments] = useState<PaymentItem[]>([]);
 
   useEffect(() => {
     if (data) {
-      console.log('PaymentHistory - Raw data received:', data);
-      console.log('PaymentHistory - getUserAdsWithPayments:', data.getUserAdsWithPayments);
       
       const mappedPayments = data.getUserAdsWithPayments.map(({ ad, payment }: any) => {
         const durationDays = ad.durationDays || ad.planId?.durationDays || 0;
@@ -180,10 +168,7 @@ const PaymentHistory: React.FC = () => {
           adStatus: ad.status || "PENDING", // Include ad approval status (this is the actual status from database)
         };
       });
-      console.log('PaymentHistory - Mapped payments:', mappedPayments);
       setPayments(mappedPayments);
-    } else {
-      console.log('PaymentHistory - No data received yet');
     }
   }, [data]);
 
@@ -216,22 +201,8 @@ const PaymentHistory: React.FC = () => {
     }
 
     const matches = matchesSearchTerm && matchesStatus && matchesPlan;
-    console.log('PaymentHistory - Filtering item:', item.productName, 'matches:', matches, {
-      matchesSearchTerm,
-      matchesPlan,
-      matchesStatus,
-      searchTerm,
-      selectedPlanFilter,
-      selectedStatusFilter,
-      itemStatus: item.status,
-      itemAdStatus: item.adStatus
-    });
-
     return matches;
   });
-
-  console.log('PaymentHistory - Total payments:', payments.length);
-  console.log('PaymentHistory - Filtered payments:', filteredPayments.length);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;

@@ -568,8 +568,26 @@ const AdDetailsPage: React.FC = () => {
         // Update device status in real-time
         updateDeviceStatus(update.deviceId, update.isOnline ?? false, update.lastSeen);
       } else if (update.type === 'locationUpdate') {
-        // Handle real-time location updates
+        // Handle real-time location updates (legacy)
         updateDeviceLocation(update.deviceId, update.location);
+      } else if (update.type === 'adPlaybackUpdate' && update.gpsData) {
+        // ✅ NEW: Extract GPS from playback updates (real-time - every 1-5 seconds)
+        const locationData = {
+          lat: update.gpsData.lat,
+          lng: update.gpsData.lng,
+          speed: update.gpsData.speed * 3.6, // Convert m/s to km/h
+          heading: update.gpsData.heading,
+          accuracy: update.gpsData.accuracy,
+          timestamp: update.gpsData.timestamp,
+          address: '', // Will be geocoded if needed
+          isOnline: true // Device is online if sending playback updates
+        };
+        
+        // Update device location in real-time
+        updateDeviceLocation(update.deviceId, locationData);
+        
+        // Also update device online status
+        updateDeviceStatus(update.deviceId, true, update.timestamp);
       }
     });
 

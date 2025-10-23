@@ -292,6 +292,7 @@ app.use('/api/enhancedRoute', require('./routes/enhancedRouteAPI'));
 app.use('/api/device-hours', deviceHoursNotificationRoutes);
 app.use('/api/device-offline', deviceOfflineNotificationRoutes);
 app.use('/api/cleanup-notifications', require('./routes/cleanupNotifications'));
+app.use('/api/admin', require('./routes/createIndexes'));
   
   // GraphQL file uploads middleware (must come after regular upload route)
   app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 4 }));

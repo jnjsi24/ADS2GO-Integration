@@ -13,6 +13,16 @@ interface AdDetails {
   totalAds: number;
 }
 
+interface GPSData {
+  lat: number;
+  lng: number;
+  speed: number;      // meters per second
+  heading: number;    // degrees (0-360)
+  accuracy: number;   // meters
+  altitude?: number;  // meters
+  timestamp: string;  // ISO string
+}
+
 interface PlaybackUpdate {
   type: 'adPlaybackUpdate';
   deviceId: string;
@@ -30,6 +40,7 @@ interface PlaybackUpdate {
   hasJustFinished?: boolean;
   adDetails?: AdDetails;
   startTime?: string;
+  gpsData?: GPSData;  // NEW: Real-time GPS data
 }
 
 class PlaybackWebSocketService {
@@ -52,6 +63,7 @@ class PlaybackWebSocketService {
   private onUnlock: ((message: any) => void) | null = null;
   private onFullscreen: ((message: any) => void) | null = null;
   private onExitFullscreen: ((message: any) => void) | null = null;
+  private onStop8Hours: ((message: any) => void) | null = null;
   private syncRequestInterval: NodeJS.Timeout | null = null;
   private lastSyncTime: number = 0;
 
@@ -152,6 +164,9 @@ class PlaybackWebSocketService {
           const message = JSON.parse(event.data);
           if (message.type === 'pong') {
             console.log('🔌 [WebSocket] Received pong');
+          } else if (message.type === 'stop8Hours') {
+            console.log('🛑 [WebSocket] Received 8-hour completion STOP command:', message);
+            this.handleStop8Hours(message);
           } else if (message.type === 'slotSync') {
             console.log('🔄 [WebSocket] Received slot sync command:', message);
             this.handleSlotSync(message);
@@ -327,7 +342,8 @@ class PlaybackWebSocketService {
         currentTime: this.currentPlaybackData.currentTime!,
         duration: this.currentPlaybackData.duration!,
         progress: this.currentPlaybackData.progress!,
-        startTime: this.currentPlaybackData.startTime
+        startTime: this.currentPlaybackData.startTime,
+        gpsData: this.currentPlaybackData.gpsData  // Include GPS data if available
       };
 
       this.ws.send(JSON.stringify(update));
@@ -578,6 +594,36 @@ class PlaybackWebSocketService {
     }
   }
 
+  // Handle 8-hour completion stop command from server
+  private handleStop8Hours(message: any) {
+    try {
+      console.log('🛑 [WebSocket] Handling 8-hour completion STOP command:', message);
+      console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
+      console.log(`🔒 Ad player will be locked until ${message.unlockTime}`);
+      
+      // Emit stop8Hours event to trigger shutdown sequence
+      if (this.onStop8Hours) {
+        this.onStop8Hours(message);
+      }
+      
+      // Also save the completion data to AsyncStorage for lock check on next launch
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      AsyncStorage.setItem('8hourCompletion', JSON.stringify({
+        completedAt: message.completedAt,
+        totalHours: message.totalHours,
+        unlockTime: message.unlockTime,
+        deviceId: message.deviceId
+      })).catch((error: any) => {
+        console.error('❌ Error saving 8-hour completion data:', error);
+      });
+      
+      // Disconnect WebSocket (server will close it anyway)
+      this.disconnect();
+    } catch (error) {
+      console.error('❌ [WebSocket] Error handling 8-hour stop command:', error);
+    }
+  }
+
   // Request synchronization with other slots
   requestSync() {
     if (this.isConnected && this.ws && this.materialId && this.slotNumber) {
@@ -680,6 +726,10 @@ class PlaybackWebSocketService {
 
   setExitFullscreenCallback(callback: (message: any) => void) {
     this.onExitFullscreen = callback;
+  }
+
+  setStop8HoursCallback(callback: (message: any) => void) {
+    this.onStop8Hours = callback;
   }
 
   isWebSocketConnected(): boolean {

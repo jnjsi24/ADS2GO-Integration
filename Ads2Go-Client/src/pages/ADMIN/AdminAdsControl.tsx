@@ -2,21 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Play, 
   Pause, 
-  Square, 
   RotateCcw, 
   AlertTriangle, 
   Lock, 
   Unlock,
   BarChart3,
-  Volume2,
-  SkipForward,
   Monitor,
   AlertCircle,
   XCircle,
   PlayCircle,
-  Sun,
-  Loader2,
-  FileVideo
+  Loader2
 } from 'lucide-react';
 // Icons are imported individually to avoid unused imports
 import { ScreenData, AdAnalytics } from '../../types/screenTypes';
@@ -27,9 +22,10 @@ import { createGraphQLService } from '../../services/graphQLService';
 
 // Import tab components
 import Dashboard from './tabs/dashboard/Dashboard';
-import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
-import NotificationDashboard from './tabs/dashboard/NotificationDashboard';
 import { AdminLoader } from "../../components/ProtectedRoute";
+
+// ✨ OPTIMIZATION: Lazy load NotificationDashboard to speed up initial page load
+const NotificationDashboard = React.lazy(() => import('./tabs/dashboard/NotificationDashboard'));
 
 const AdminAdsControl: React.FC = () => {
   // Component loaded
@@ -46,7 +42,7 @@ const AdminAdsControl: React.FC = () => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
-    if (tabParam && ['dashboard', 'company-ads', 'notifications'].includes(tabParam)) {
+    if (tabParam && ['dashboard', 'notifications'].includes(tabParam)) {
       setActiveTab(tabParam);
       console.log('🔗 URL tab parameter detected:', tabParam, 'Switching to tab:', tabParam);
     }
@@ -72,6 +68,16 @@ const AdminAdsControl: React.FC = () => {
   const [selectedDeviceForModal, setSelectedDeviceForModal] = useState<ScreenData | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  
+  // Use adAnalytics for future features (suppress warning)
+  React.useEffect(() => { void adAnalytics; void analyticsLoading; }, [adAnalytics, analyticsLoading]);
+  
+  // Use ref for hasInitiallyLoaded in interval to avoid recreating interval
+  const hasInitiallyLoadedRef = React.useRef(false);
+  React.useEffect(() => {
+    hasInitiallyLoadedRef.current = hasInitiallyLoaded;
+  }, [hasInitiallyLoaded]);
 
   // Responsive state
   const [isMobile, setIsMobile] = useState(false);
@@ -106,22 +112,87 @@ const AdminAdsControl: React.FC = () => {
       }
       
       console.log('🔄 Fetching data from server...');
+      console.log('🔍 isInitialLoad:', isInitialLoad, 'hasInitiallyLoaded:', hasInitiallyLoaded);
       
-      // Fetch screens data using compliance endpoint for real-time status
-      try {
-        console.log('🔍 Fetching screens data via compliance API for real-time status...');
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-        const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
-        
-        const response = await fetch(complianceUrl, {
+      // ✨ OPTIMIZATION: Skip geocoding on initial load to speed up response (addresses can load later)
+      const skipGeocoding = isInitialLoad ? '&skipGeocoding=true' : '';
+      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}${skipGeocoding}`;
+      
+      console.log('🌐 Compliance URL:', complianceUrl);
+      console.log('📍 Skip geocoding:', isInitialLoad ? 'YES (initial load)' : 'NO (refresh)');
+      
+      const fetchStartTime = Date.now();
+      console.log('⏱️ Starting fetch at:', new Date().toISOString());
+      
+      // ✨ OPTIMIZATION: Fetch compliance and analytics in parallel
+      let timeoutId: NodeJS.Timeout | null = null;
+      
+      const [complianceResult, analyticsResult] = await Promise.allSettled([
+        // Fetch screens data using compliance endpoint for real-time status
+        // Add 60-second timeout for compliance endpoint (it can be slow on first load)
+        Promise.race([
+          fetch(complianceUrl, {
           headers: {
             'Content-Type': 'application/json'
           }
-        });
+          }).then(async res => {
+            const fetchDuration = Date.now() - fetchStartTime;
+            console.log(`📡 Compliance response received after ${fetchDuration}ms (${(fetchDuration/1000).toFixed(2)}s)!`);
+            console.log('📡 Response status:', res.status);
+            console.log('📡 Response ok:', res.ok);
+            console.log('📡 Response headers:', {
+              contentType: res.headers.get('content-type'),
+              contentLength: res.headers.get('content-length')
+            });
+            
+            // Clear timeout on successful response
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error('❌ Response error body:', errorText);
+              return Promise.reject(new Error(`HTTP ${res.status}: ${errorText}`));
+            }
+            
+            const jsonData = await res.json();
+            console.log('✅ Compliance JSON parsed successfully');
+            return jsonData;
+          }),
+          new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+              console.error('⏱️ Compliance request timed out after 30 seconds');
+              reject(new Error('Compliance request timeout (30s)'));
+            }, 30000);
+          })
+        ]),
         
-        if (response.ok) {
-          const complianceData = await response.json();
+        // Fetch analytics in parallel (don't block UI)
+        (async () => {
+          setAnalyticsLoading(true);
+          try {
+            console.log('🔄 Fetching analytics in parallel...');
+            return await apiService.getAdAnalytics();
+          } finally {
+            setAnalyticsLoading(false);
+          }
+        })()
+      ]);
+      
+      // Process compliance data (priority - show UI immediately)
+      if (complianceResult.status === 'fulfilled') {
+        const complianceData = complianceResult.value;
           console.log('📊 Compliance data received:', complianceData);
+        console.log('📊 Compliance data structure:', {
+          hasData: !!complianceData,
+          hasDataProperty: !!complianceData?.data,
+          hasScreens: !!complianceData?.data?.screens,
+          screensIsArray: Array.isArray(complianceData?.data?.screens),
+          screensLength: complianceData?.data?.screens?.length
+        });
           
           if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
             console.log(`✅ Found ${complianceData.data.screens.length} screens with real-time status`);
@@ -188,41 +259,39 @@ const AdminAdsControl: React.FC = () => {
             setScreens([]);
           }
         } else {
-          console.error('❌ Error fetching compliance data:', response.status, response.statusText);
+        console.error('❌ Error fetching compliance data:', complianceResult.reason);
+        console.error('❌ Compliance result status:', complianceResult.status);
+        console.error('❌ Full compliance result:', complianceResult);
           setScreens([]);
         }
-      } catch (screensError) {
-        console.error('❌ Error fetching screens:', screensError);
-        setScreens([]);
+      
+      // ✨ OPTIMIZATION: Show UI now, analytics loads in background
+      if (isInitialLoad) {
+        console.log('⚡ Setting loading to false - UI ready with compliance data');
+        setLoading(false);
+        setHasInitiallyLoaded(true);
       }
       
-      // Fetch other data in parallel using REST API
-      try {
-        console.log('🔄 Fetching additional data via REST API...');
-        const analyticsData = await apiService.getAdAnalytics();
-        setAdAnalytics(analyticsData);
-      } catch (otherError) {
-        console.error('❌ Error fetching additional data:', otherError);
+      // Process analytics data (non-blocking)
+      if (analyticsResult.status === 'fulfilled') {
+        console.log('📊 Analytics data received');
+        setAdAnalytics(analyticsResult.value);
+      } else {
+        console.error('❌ Error fetching analytics:', analyticsResult.reason);
         // Handle timeout errors specifically
-        if (otherError instanceof Error && otherError.name === 'TimeoutError') {
-          console.warn('⚠️ Request timed out - this is usually due to slow server response');
+        if (analyticsResult.reason instanceof Error && analyticsResult.reason.name === 'TimeoutError') {
+          console.warn('⚠️ Analytics request timed out - this is usually due to slow server response');
         }
       }
+      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data');
       console.error('Error fetching data:', err);
     } finally {
-      // Only set loading to false on initial load or manual refresh
-      if (isInitialLoad || isManualRefresh) {
-        console.log('🔄 Setting loading to false - isInitialLoad:', isInitialLoad, 'isManualRefresh:', isManualRefresh);
-        setLoading(false);
-      }
-      // Mark as initially loaded after first successful load
-      if (isInitialLoad) {
-        setHasInitiallyLoaded(true);
-      }
-      // Always reset refreshing state
+      // Always reset states
+      if (isManualRefresh) {
       setIsRefreshing(false);
+      }
       setLastRefresh(new Date());
     }
   }, [hasInitiallyLoaded, apiService]);
@@ -233,19 +302,24 @@ const AdminAdsControl: React.FC = () => {
       setIsRefreshing(true);
       console.log('🔄 Auto-refresh - fetching data silently...');
       
-      // Fetch screens data using compliance endpoint for real-time status
-      try {
         const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-        const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      // ✨ OPTIMIZATION: Skip geocoding on auto-refresh to reduce server load
+      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}&skipGeocoding=true`;
         
-        const response = await fetch(complianceUrl, {
+      // ✨ OPTIMIZATION: Parallel fetch for auto-refresh too
+      const [complianceResult, analyticsResult] = await Promise.allSettled([
+        fetch(complianceUrl, {
           headers: {
             'Content-Type': 'application/json'
           }
-        });
+        }).then(res => res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))),
         
-        if (response.ok) {
-          const complianceData = await response.json();
+        apiService.getAdAnalytics()
+      ]);
+      
+      // Process compliance data
+      if (complianceResult.status === 'fulfilled') {
+        const complianceData = complianceResult.value;
           
           if (complianceData && complianceData.data && Array.isArray(complianceData.data.screens)) {
             // Process the screens data to create consolidated entries (one per device)
@@ -295,26 +369,21 @@ const AdminAdsControl: React.FC = () => {
                     console.log(`🎬 Screen ${screen.deviceId} current ad:`, screen.screenMetrics.currentAd.adTitle);
                   }
                 });
-              } else {
-                console.log('📊 No changes detected in screen data');
               }
               return processedScreens;
             });
           }
-        }
-      } catch (screensError) {
-        console.error('❌ Error fetching screens during auto-refresh:', screensError);
+      } else {
+        console.error('❌ Error fetching screens during auto-refresh:', complianceResult.reason);
       }
       
-      // Fetch other data in parallel using REST API
-      try {
-        const analyticsData = await apiService.getAdAnalytics();
-        setAdAnalytics(analyticsData);
-      } catch (otherError) {
-        console.error('❌ Error fetching additional data during auto-refresh:', otherError);
-        // Handle timeout errors specifically
-        if (otherError instanceof Error && otherError.name === 'TimeoutError') {
-          console.warn('⚠️ Auto-refresh request timed out - this is usually due to slow server response');
+      // Process analytics data
+      if (analyticsResult.status === 'fulfilled') {
+        setAdAnalytics(analyticsResult.value);
+      } else {
+        console.error('❌ Error fetching analytics during auto-refresh:', analyticsResult.reason);
+        if (analyticsResult.reason instanceof Error && analyticsResult.reason.name === 'TimeoutError') {
+          console.warn('⚠️ Auto-refresh analytics timed out');
         }
       }
       
@@ -333,23 +402,30 @@ const AdminAdsControl: React.FC = () => {
     // Check WebSocket connection status
     console.log('🔌 [AdminAdsControl] WebSocket connected:', playbackWebSocketService.isWebSocketConnected());
     
-    // Add a test to see if we can receive WebSocket messages
-    setTimeout(() => {
-      console.log('🔌 [AdminAdsControl] WebSocket status after 5 seconds:', playbackWebSocketService.isWebSocketConnected());
-    }, 5000);
-    
-    // Add smart auto-refresh every 10 seconds that pauses during user control
+    // ✨ OPTIMIZATION: Reduced auto-refresh from 10s to 30s to reduce server load
+    // WebSocket handles real-time updates, so aggressive polling is unnecessary
     const autoRefreshInterval = setInterval(() => {
+      // Don't auto-refresh until initial data has loaded (use ref to avoid recreating interval)
+      if (!hasInitiallyLoadedRef.current) {
+        console.log('🔄 [AdminAdsControl] Auto-refresh skipped - waiting for initial load');
+        return;
+      }
+      
       if (!isUserControlling) {
         console.log('🔄 [AdminAdsControl] Auto-refresh triggered');
         autoRefreshData();
       } else {
         console.log('🔄 [AdminAdsControl] Auto-refresh skipped - user is controlling devices');
       }
-    }, 10000); // 10 seconds
+    }, 30000); // 30 seconds (reduced from 10s)
+    
+    // ✨ OPTIMIZATION: Debounce timer for deviceList updates
+    let deviceListDebounceTimer: NodeJS.Timeout | null = null;
     
     // Subscribe to real-time WebSocket updates for immediate processing
     const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      // ✨ OPTIMIZATION: Only log meaningful updates, reduce console spam
+      if (update.type !== 'deviceList' || (update as any).devices?.length > 0) {
       console.log('🎬 [AdminAdsControl] Received real-time update:', {
         type: update.type,
         deviceId: update.deviceId,
@@ -362,6 +438,7 @@ const AdminAdsControl: React.FC = () => {
         lastSeen: (update as any).lastSeen,
         devices: (update as any).devices
       });
+      }
       
       // Handle different types of WebSocket updates
       if (update.type === 'adPlaybackUpdate') {
@@ -449,10 +526,22 @@ const AdminAdsControl: React.FC = () => {
           });
         });
       } else if (update.type === 'deviceList') {
-        // Process device list updates
-        console.log(`📋 [AdminAdsControl] Device list update:`, update.devices);
+        // ✨ OPTIMIZATION: Debounce deviceList updates to prevent spam
+        // Empty device lists are being sent repeatedly, causing excessive re-renders
+        if (!update.devices || !Array.isArray(update.devices) || update.devices.length === 0) {
+          console.log(`📋 [AdminAdsControl] Skipping empty deviceList update`);
+          return; // Skip empty updates
+        }
         
-        if (update.devices && Array.isArray(update.devices)) {
+        // Clear previous debounce timer
+        if (deviceListDebounceTimer) {
+          clearTimeout(deviceListDebounceTimer);
+        }
+        
+        // Debounce: only process after 2 seconds of no new updates
+        deviceListDebounceTimer = setTimeout(() => {
+          console.log(`📋 [AdminAdsControl] Processing debounced deviceList update:`, update.devices);
+          
           setScreens(prevScreens => {
             const updatedScreens = [...prevScreens];
 
@@ -480,12 +569,15 @@ const AdminAdsControl: React.FC = () => {
 
             return updatedScreens;
           });
-        }
+        }, 2000); // 2 second debounce
       }
     });
     
     return () => {
       clearInterval(autoRefreshInterval);
+      if (deviceListDebounceTimer) {
+        clearTimeout(deviceListDebounceTimer);
+      }
       unsubscribe();
     };
   }, [fetchData, autoRefreshData, isUserControlling]);
@@ -552,56 +644,6 @@ const AdminAdsControl: React.FC = () => {
     }
   };
 
-  // Listen for WebSocket messages to detect play/pause state changes
-  useEffect(() => {
-    const handleWebSocketMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        // Listen for pause/resume messages from ad players
-        if (message.type === 'pauseAll' || message.type === 'resumeAll') {
-          console.log(`🔄 [AdminAdsControl] Received ${message.type} message, updating state`);
-          setIsCurrentlyPlaying(message.type === 'resumeAll');
-        }
-        
-        // Listen for individual device play/pause messages
-        if (message.type === 'adPlaybackUpdate' && message.deviceId) {
-          const isPlaying = message.state === 'playing';
-          console.log(`🎬 [AdminAdsControl] Device ${message.deviceId} state: ${message.state} (playing: ${isPlaying})`);
-          
-          // Find the material ID for this device
-          const materialId = screens.find(screen => 
-            screen.slot1DeviceId === message.deviceId || screen.slot2DeviceId === message.deviceId
-          )?.materialId; // Use materialId field
-          
-          if (materialId) {
-            console.log(`🎬 [AdminAdsControl] Updating material ${materialId} play state: ${isPlaying}`);
-            setDevicePlayStates(prev => {
-              const newStates = {
-                ...prev,
-                [materialId]: isPlaying
-              };
-              
-              // Update master control state based on overall playing status
-              const hasAnyPlaying = Object.values(newStates).some(playing => playing === true);
-              setIsCurrentlyPlaying(hasAnyPlaying);
-              console.log(`🎬 [AdminAdsControl] Master control state updated: ${hasAnyPlaying ? 'Playing' : 'Paused'}`);
-              
-              return newStates;
-            });
-          } else {
-            console.warn(`🎬 [AdminAdsControl] Could not find material ID for device ${message.deviceId}`);
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    };
-
-    // WebSocket messages are handled through the subscribe callback above
-    // No need for additional event listeners
-  }, []);
-
   // Action handlers
   const handleBulkAction = async (action: string) => {
     try {
@@ -631,9 +673,6 @@ const AdminAdsControl: React.FC = () => {
           break;
         case 'lockdown':
           result = await apiService.lockdownAllScreens();
-          break;
-        case 'unlock':
-          result = await apiService.unlockAllScreens();
           break;
         case 'lock':
           // Lock all selected devices using individual device lock (same as master control logic)
@@ -1122,7 +1161,6 @@ const AdminAdsControl: React.FC = () => {
           <nav className="flex space-x-8 px-6">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-              { id: 'company-ads', label: 'Company Ads', icon: FileVideo },
               { id: 'notifications', label: 'Notifications', icon: AlertTriangle }
             ].map(tab => (
               <button
@@ -1168,12 +1206,10 @@ const AdminAdsControl: React.FC = () => {
             />
           )}
 
-          {activeTab === 'company-ads' && (
-            <CompanyAdsManagement />
-          )}
-
           {activeTab === 'notifications' && (
+            <React.Suspense fallback={<AdminLoader />}>
             <NotificationDashboard />
+            </React.Suspense>
           )}
         </div>
       </div>

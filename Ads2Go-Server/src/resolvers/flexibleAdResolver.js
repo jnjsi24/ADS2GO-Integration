@@ -181,6 +181,49 @@ module.exports = {
         throw new Error('Ad length must be 20, 40, or 60 seconds');
       }
 
+      // ✅ NEW: Auto-detect video duration and validate
+      const VideoDurationService = require('../services/videoDurationService');
+      let actualVideoDuration = adLengthSeconds; // Default to selected length
+      
+      try {
+        console.log(`🎬 Auto-detecting video duration for flexible ad...`);
+        actualVideoDuration = await VideoDurationService.getVideoDuration(mediaFile);
+        console.log(`✅ Video duration detected: ${actualVideoDuration}s (selected: ${adLengthSeconds}s)`);
+        
+        // Validate video duration is within acceptable range of selected length
+        // Allow ±5 seconds tolerance to handle encoding/metadata discrepancies
+        // (e.g., 20s ad can be 15-25s, 40s ad can be 35-45s)
+        const tolerance = 5;
+        const minAllowed = adLengthSeconds - tolerance;
+        const maxAllowed = adLengthSeconds + tolerance;
+        
+        if (actualVideoDuration < minAllowed || actualVideoDuration > maxAllowed) {
+          throw new Error(
+            `Video duration (${actualVideoDuration}s) doesn't match selected ad length (${adLengthSeconds}s). ` +
+            `For a ${adLengthSeconds}-second ad slot, your video must be between ${minAllowed}-${maxAllowed} seconds. ` +
+            `Please either:\n` +
+            `• Upload a video that's ${minAllowed}-${maxAllowed} seconds long, or\n` +
+            `• Select a different ad length option (20s, 40s, or 60s) that matches your video duration.`
+          );
+        }
+        
+        // Additional validation: minimum 5 seconds
+        if (actualVideoDuration < 5) {
+          throw new Error(`Video duration (${actualVideoDuration}s) is too short. Minimum duration is 5 seconds.`);
+        }
+        
+        console.log(`✅ Video duration ${actualVideoDuration}s is valid for ${adLengthSeconds}s ad slot (within ${minAllowed}-${maxAllowed}s range)`);
+        
+      } catch (error) {
+        // Re-throw validation errors
+        if (error.message.includes('doesn\'t match selected') || error.message.includes('too short')) {
+          throw error;
+        }
+        // For other errors (e.g., network issues), warn but continue with selected duration
+        console.warn('⚠️ Could not detect video duration, using selected duration:', error.message);
+        actualVideoDuration = adLengthSeconds; // Fallback to user selection
+      }
+
       // Validate duration - only allow 1-6 months (30-180 days)
       const allowedDurations = [30, 60, 90, 120, 150, 180];
       if (!allowedDurations.includes(durationDays)) {
@@ -192,11 +235,11 @@ module.exports = {
         throw new Error(`Maximum ${pricingConfig.maxDevices} devices allowed for this combination`);
       }
 
-      // Get price for duration
+      // Get price for duration (use selected length for pricing, since that's what user chose)
       const pricePerPlay = pricingConfig.getPriceWithAdLength(durationDays, adLengthSeconds);
       
-      // Calculate pricing
-      const pricing = calculatePricing(pricePerPlay, adLengthSeconds, numberOfDevices, durationDays);
+      // Calculate pricing (use actual duration for accurate play count calculations)
+      const pricing = calculatePricing(pricePerPlay, actualVideoDuration, numberOfDevices, durationDays);
       
       // Use provided price if available, otherwise use calculated price
       const finalPrice = price || pricing.totalPrice;
@@ -215,7 +258,12 @@ module.exports = {
         );
         
         if (sortedMaterials.length === 0) {
-          throw new Error('No compatible materials found for this configuration');
+          throw new Error('No compatible materials found for this configuration. All materials are either full, not mounted, or have no driver assigned.');
+        }
+        
+        // ✅ NEW: Check if we have enough materials BEFORE trying to select
+        if (sortedMaterials.length < numberOfDevices) {
+          throw new Error(`Only ${sortedMaterials.length} device${sortedMaterials.length === 1 ? '' : 's'} available, but you requested ${numberOfDevices}. Please reduce the number of devices or wait for more slots to become available.`);
         }
 
         // Select materials for the requested number of devices
@@ -257,11 +305,12 @@ module.exports = {
         
         // Check if we have enough devices
         if (selectedMaterials.length < numberOfDevices) {
-          throw new Error(`Only ${selectedMaterials.length} devices available, but ${numberOfDevices} requested`);
+          throw new Error(`Only ${selectedMaterials.length} device${selectedMaterials.length === 1 ? '' : 's'} available with open slots, but you requested ${numberOfDevices}. Please reduce the number of devices or try a different date.`);
         }
       } catch (error) {
         console.error('❌ Smart material selection failed:', error.message);
-        throw new Error('No compatible materials found for this configuration');
+        // Pass through the detailed error message instead of generic one
+        throw error;
       }
 
       // Create a single ad that handles multiple devices
@@ -277,7 +326,7 @@ module.exports = {
         price: finalPrice,
         durationDays,
         numberOfDevices, // This is the key - store the number of devices in the ad
-        adLengthSeconds,
+        adLengthSeconds: actualVideoDuration, // ✅ Use actual detected duration, not user selection
         playsPerDayPerDevice: pricing.playsPerDayPerDevice,
         totalPlaysPerDay: pricing.totalPlaysPerDay, // Total plays across all devices
         pricePerPlay,
@@ -297,15 +346,23 @@ module.exports = {
 
       const savedAd = await ad.save();
 
-      // Reserve slots for all target devices (regardless of payment status)
-      // This must be done outside of any transaction to ensure it executes
+      // ✅ NEW: Reserve slots for all target devices with expiration
       try {
+        // Set reservation expiration (7 days from now)
+        const reservationExpires = new Date();
+        reservationExpires.setDate(reservationExpires.getDate() + 7);
+        
         for (const material of selectedMaterials) {
           let availability = await MaterialAvailability.findOne({ materialId: material._id });
           if (!availability) {
             availability = new MaterialAvailability({ 
               materialId: material._id, 
-              totalSlots: 5 
+              totalSlots: 5,
+              occupiedSlots: 0,
+              availableSlots: 5,
+              currentAds: [],
+              scheduledAds: [],
+              status: 'AVAILABLE'
             });
           }
 
@@ -316,22 +373,18 @@ module.exports = {
             throw new Error(`Slots no longer available for device ${material.materialId}. Another user may have reserved them.`);
           }
 
-          // Add this ad to the material's current ads (reserve the slot)
-          availability.currentAds = availability.currentAds || [];
-          availability.currentAds.push({
-            adId: savedAd._id,
-            startTime: savedAd.startTime,
-            endTime: savedAd.endTime,
-            slotNumber: availability.currentAds.length + 1
-          });
-
-          availability.occupiedSlots = availability.currentAds.length;
-          availability.availableSlots = availability.totalSlots - availability.occupiedSlots;
-          availability.updateAvailabilityDates();
+          // Reserve slot using the new method
+          const slotNumber = availability.reserveSlot(savedAd._id, savedAd.startTime, savedAd.endTime, reservationExpires);
           await availability.save();
 
-          console.log(`✅ Reserved slot for ad: ${material.materialId} - ${availability.occupiedSlots}/${availability.totalSlots} slots used`);
+          console.log(`✅ Reserved slot ${slotNumber} for ad on ${material.materialId} (expires: ${reservationExpires.toISOString()})`);
+          console.log(`📊 Material ${material.materialId}: ${availability.currentAds.length} current, ${availability.scheduledAds.length} scheduled`);
         }
+        
+        // Store reservation expiration in ad
+        savedAd.reservationExpires = reservationExpires;
+        await savedAd.save();
+        
       } catch (availabilityError) {
         console.error('❌ Error reserving slots:', availabilityError);
         // If slot reservation fails, delete the ad to maintain consistency
@@ -344,6 +397,7 @@ module.exports = {
       }
 
       console.log(`✅ Flexible ad created successfully: ${savedAd.title} for ${numberOfDevices} devices (${savedAd._id})`);
+      console.log(`📹 Video duration: ${actualVideoDuration}s (user selected: ${adLengthSeconds}s ad slot)`);
       return savedAd;
     }
   }

@@ -141,6 +141,7 @@ const DocumentImage: React.FC<{
 };
 
 const statusFilterOptions = ['All Status', 'Active', 'Pending', 'Rejected'];
+const sortByOptions = ['Newest First', 'Oldest First', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 const monthOptions = [
   'All Months', 'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -164,6 +165,8 @@ const ManageDrivers: React.FC = () => {
   const [showYearDropdown, setShowYearDropdown] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState('All Months');
   const [selectedYear, setSelectedYear] = useState('All Years');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [sortBy, setSortBy] = useState('Newest First');
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -284,6 +287,23 @@ const ManageDrivers: React.FC = () => {
       matchesDate = matchesMonth && matchesYear;
     }
     return matchesSearch && matchesStatus && matchesDate;
+  }).sort((a, b) => {
+    switch (sortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Alphabetical (A-Z)':
+        const aName = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bName = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return aName.localeCompare(bName);
+      case 'Alphabetical (Z-A)':
+        const aNameZA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const bNameZA = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return bNameZA.localeCompare(aNameZA);
+      default:
+        return 0;
+    }
   });
 
   const handleApprove = async (driverId: string) => {
@@ -636,6 +656,36 @@ const ManageDrivers: React.FC = () => {
                         className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
                       >
                         {year}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <div className="relative flex-1 sm:flex-none sm:w-36">
+              <button
+                onClick={() => setShowSortDropdown(!showSortDropdown)}
+                className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-4 pr-3 py-3 shadow-md focus:outline-none bg-white gap-2"
+              >
+                <span className="truncate">{sortBy}</span>
+                <ChevronDown size={16} className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {showSortDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                    className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden"
+                  >
+                    {sortByOptions.map(option => (
+                      <button
+                        key={option}
+                        onClick={() => { setSortBy(option); setShowSortDropdown(false); }}
+                        className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                      >
+                        {option}
                       </button>
                     ))}
                   </motion.div>

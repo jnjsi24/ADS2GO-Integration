@@ -179,11 +179,33 @@ module.exports = {
         // AUTO-SET MOUNTED DATE: When device connects, automatically set mountedAt
         try {
           const Material = require('../models/Material');
+          const MaterialUsageHistory = require('../models/MaterialUsageHistory');
           const material = await Material.findOne({ materialId: materialId });
           if (material && !material.mountedAt) {
-            material.mountedAt = new Date();
+            const mountedDate = new Date();
+            material.mountedAt = mountedDate;
             await material.save();
             console.log(`🎯 Auto-set mountedAt date for material ${materialId} when device connected via GraphQL`);
+
+            // Also update usage history if there's an active driver
+            if (material.driverId) {
+              try {
+                const usageHistory = await MaterialUsageHistory.findOne({
+                  materialId: material._id,
+                  driverId: material.driverId,
+                  isActive: true
+                });
+                
+                if (usageHistory) {
+                  usageHistory.mountedAt = mountedDate;
+                  await usageHistory.save();
+                  console.log(`✅ Auto-synced mountedAt date to usage history for material ${materialId}, driver ${material.driverId}`);
+                }
+              } catch (usageError) {
+                console.error('Error syncing mountedAt to usage history:', usageError);
+                // Don't fail the main operation
+              }
+            }
           }
         } catch (mountError) {
           console.error('Error auto-setting mountedAt date:', mountError);

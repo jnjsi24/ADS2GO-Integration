@@ -11,6 +11,7 @@ export const GET_ALL_ADS = gql`
       adType
       adFormat
       status
+      paymentStatus
       startTime
       endTime
       mediaFile
@@ -225,6 +226,8 @@ export const GET_ALL_DEPLOYMENTS = gql`
         adId
         slotNumber
         status
+        startTime
+        endTime
         deployedAt
         completedAt
         removedAt
@@ -237,6 +240,7 @@ export const GET_ALL_DEPLOYMENTS = gql`
           description
           adFormat
           mediaFile
+          createdAt
         }
       }
       startTime
@@ -474,7 +478,8 @@ export interface Ad {
   description: string;
   adType: 'DIGITAL' | 'NON_DIGITAL';
   adFormat: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'ENDED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SCHEDULED' | 'RUNNING' | 'ENDED' | 'CANCELLED';
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | null;
   startTime: string;
   endTime: string;
   mediaFile: string;
@@ -501,6 +506,8 @@ export interface LCDSlot {
   adId: string;
   slotNumber: number;
   status: 'SCHEDULED' | 'RUNNING' | 'COMPLETED' | 'PAUSED' | 'CANCELLED' | 'REMOVED';
+  startTime?: string;
+  endTime?: string;
   deployedAt?: string;
   completedAt?: string;
   removedAt?: string;

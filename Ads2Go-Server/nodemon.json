@@ -1,5 +1,5 @@
 {
-  "watch": ["src/index.js", "src/schema/", "src/resolvers/", "src/models/", "src/middleware/"],
+  "watch": ["src/index.js", "src/schema/", "src/resolvers/", "src/models/", "src/middleware/", "src/routes/"],
   "ext": "js,json,graphql",
   "ignore": ["node_modules/"],
   "exec": "node src/index.js"

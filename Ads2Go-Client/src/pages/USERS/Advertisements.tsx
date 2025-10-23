@@ -112,16 +112,6 @@ const Advertisements: React.FC = () => {
   const ads: Ad[] = data?.getMyAds || [];
   
   // Debug payment status
-  useEffect(() => {
-    if (data?.getMyAds) {
-      console.log('Advertisements - Ads data:', data.getMyAds.map(ad => ({
-        id: ad.id,
-        title: ad.title,
-        status: ad.status,
-        paymentStatus: ad.paymentStatus
-      })));
-    }
-  }, [data]);
   
   const formatDate = (dateValue: string | number) => {
     if (!dateValue) return 'N/A';

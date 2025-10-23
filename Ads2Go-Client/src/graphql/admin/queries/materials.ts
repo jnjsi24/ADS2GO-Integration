@@ -24,6 +24,7 @@ export const GET_ALL_MATERIALS = gql`
         contactNumber
         vehiclePlateNumber
       }
+      assignedDate
       mountedAt
       dismountedAt
       createdAt
@@ -111,6 +112,7 @@ export const GET_MATERIALS_BY_CATEGORY_AND_VEHICLE = gql`
         contactNumber
         vehiclePlateNumber
       }
+      assignedDate
       mountedAt
       dismountedAt
       createdAt
@@ -142,6 +144,7 @@ export const GET_MATERIALS_BY_CATEGORY_VEHICLE_AND_TYPE = gql`
         contactNumber
         vehiclePlateNumber
       }
+      assignedDate
       mountedAt
       dismountedAt
       createdAt
@@ -220,6 +223,7 @@ export const GET_DEPLOYMENTS_BY_MATERIAL_ID_STRING = gql`
           mediaFile
           startTime
           endTime
+          createdAt
         }
       }
       createdAt

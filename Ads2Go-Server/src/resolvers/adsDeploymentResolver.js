@@ -9,6 +9,38 @@ const Ad = require('../models/Ad');
 const Payment = require('../models/Payment');
 const { checkAuth, checkAdmin } = require('../middleware/auth');
 
+/**
+ * Helper function to safely convert any date value to ISO string
+ * Handles: Date objects, timestamps (number/string), and ISO strings
+ */
+function toISOString(value) {
+  if (!value) return null;
+  
+  // If already a Date object, convert to ISO
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // If it's a number or numeric string (timestamp), convert to Date first
+  if (typeof value === 'number' || (typeof value === 'string' && /^\d+$/.test(value))) {
+    const timestamp = typeof value === 'string' ? parseInt(value, 10) : value;
+    return new Date(timestamp).toISOString();
+  }
+  
+  // If it's already an ISO string, return as-is
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return value;
+  }
+  
+  // Fallback: try to create a Date and convert
+  try {
+    return new Date(value).toISOString();
+  } catch (error) {
+    console.error('❌ Failed to convert date:', value, error);
+    return null;
+  }
+}
+
 const adsDeploymentResolvers = {
   Query: {
     getAllDeployments: async (_, __, { user }) => {
@@ -31,13 +63,37 @@ const adsDeploymentResolvers = {
         })
         .sort({ createdAt: -1 });
 
+      // Convert to plain objects to ensure date transformations stick
+      const plainDeployments = deployments.map(d => {
+        const obj = d.toObject();
+        // Add id field (virtual field from Mongoose)
+        obj.id = d._id.toString();
+        return obj;
+      });
+      
       // Process deployments and populate ad data for lcdSlots
-      await Promise.all(deployments.map(async (d) => {
+      await Promise.all(plainDeployments.map(async (d) => {
+        // ✅ Ensure dates are properly formatted as ISO strings
+        d.createdAt = toISOString(d.createdAt);
+        d.updatedAt = toISOString(d.updatedAt);
+        
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
         
         // Handle lcdSlots adId field - keep it as ID string, not populated object
         if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
           await Promise.all(d.lcdSlots.map(async (slot) => {
+            // Add id field for each slot (from _id)
+            if (slot._id) {
+              slot.id = slot._id.toString();
+            }
+            
+            // ✅ Ensure slot dates are properly formatted
+            slot.startTime = toISOString(slot.startTime);
+            slot.endTime = toISOString(slot.endTime);
+            slot.deployedAt = toISOString(slot.deployedAt);
+            slot.completedAt = toISOString(slot.completedAt);
+            slot.removedAt = toISOString(slot.removedAt);
+            
             // Ensure ad object always exists with safe defaults
             slot.ad = {
               id: '',
@@ -114,7 +170,7 @@ const adsDeploymentResolvers = {
         }
       }));
 
-      return deployments;
+      return plainDeployments;
     },
 
     getDeploymentsByDriver: async (_, { driverId }, { user }) => {
@@ -140,12 +196,34 @@ const adsDeploymentResolvers = {
         })
         .sort({ startTime: -1 });
 
-      deployments.forEach(d => {
+      // Convert to plain objects to ensure date transformations stick
+      const plainDeployments = deployments.map(d => {
+        const obj = d.toObject();
+        // Add id field (virtual field from Mongoose)
+        obj.id = d._id.toString();
+        return obj;
+      });
+      
+      plainDeployments.forEach(d => {
+        // ✅ Ensure dates are properly formatted
+        d.createdAt = toISOString(d.createdAt);
+        d.updatedAt = toISOString(d.updatedAt);
+        
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
         
         // Handle lcdSlots adId field - keep it as ID string, not populated object
         if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
           d.lcdSlots.forEach(slot => {
+            // Add id field for each slot (from _id)
+            if (slot._id) {
+              slot.id = slot._id.toString();
+            }
+            
+            // ✅ Ensure slot dates are properly formatted
+            slot.deployedAt = toISOString(slot.deployedAt);
+            slot.completedAt = toISOString(slot.completedAt);
+            slot.removedAt = toISOString(slot.removedAt);
+            
             // Ensure ad object always exists with safe defaults
             slot.ad = {
               id: '',
@@ -189,7 +267,7 @@ const adsDeploymentResolvers = {
         }
       });
 
-      return deployments;
+      return plainDeployments;
     },
 
     getDeploymentsByAd: async (_, { adId }, { user }) => {
@@ -221,11 +299,20 @@ const adsDeploymentResolvers = {
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
+        // ✅ Ensure dates are properly formatted
+        d.createdAt = toISOString(d.createdAt);
+        d.updatedAt = toISOString(d.updatedAt);
+        
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
         
         // Handle lcdSlots adId field - keep it as ID string, not populated object
         if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
           d.lcdSlots.forEach(slot => {
+            // ✅ Ensure slot dates are properly formatted
+            slot.deployedAt = toISOString(slot.deployedAt);
+            slot.completedAt = toISOString(slot.completedAt);
+            slot.removedAt = toISOString(slot.removedAt);
+            
             // Ensure ad object always exists with safe defaults
             slot.ad = {
               id: '',
@@ -298,11 +385,20 @@ const adsDeploymentResolvers = {
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
+        // ✅ Ensure dates are properly formatted
+        d.createdAt = toISOString(d.createdAt);
+        d.updatedAt = toISOString(d.updatedAt);
+        
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
         
         // Handle lcdSlots adId field - keep it as ID string, not populated object
         if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
           d.lcdSlots.forEach(slot => {
+            // ✅ Ensure slot dates are properly formatted
+            slot.deployedAt = toISOString(slot.deployedAt);
+            slot.completedAt = toISOString(slot.completedAt);
+            slot.removedAt = toISOString(slot.removedAt);
+            
             // Ensure ad object always exists with safe defaults
             slot.ad = {
               id: '',
@@ -376,11 +472,20 @@ const adsDeploymentResolvers = {
         .sort({ startTime: -1 });
 
       deployments.forEach(d => {
+        // ✅ Ensure dates are properly formatted
+        d.createdAt = toISOString(d.createdAt);
+        d.updatedAt = toISOString(d.updatedAt);
+        
         if (d.driverId && typeof d.driverId === 'object') d.driverId = d.driverId._id;
         
         // Handle lcdSlots adId field - keep it as ID string, not populated object
         if (d.lcdSlots && Array.isArray(d.lcdSlots)) {
           d.lcdSlots.forEach(slot => {
+            // ✅ Ensure slot dates are properly formatted
+            slot.deployedAt = toISOString(slot.deployedAt);
+            slot.completedAt = toISOString(slot.completedAt);
+            slot.removedAt = toISOString(slot.removedAt);
+            
             // Ensure ad object always exists with safe defaults
             slot.ad = {
               id: '',
@@ -502,12 +607,18 @@ const adsDeploymentResolvers = {
     getDeploymentsByMaterialIdString: async (_, { materialId }, { user }) => {
       checkAuth(user);
       // Single deployment doc per materialId; includes lcdSlots for HEADDRESS/LCD
-      const deployment = await AdsDeployment.findOne({ materialId })
+      const deploymentDoc = await AdsDeployment.findOne({ materialId })
         .populate({ path: 'adId', populate: { path: 'planId', model: 'AdsPlan' } })
         .populate({ path: 'lcdSlots.adId', populate: { path: 'planId', model: 'AdsPlan' } })
         .populate('driverId');
 
-      if (!deployment) return null;
+      if (!deploymentDoc) return null;
+
+      // Convert to plain object to ensure transformations stick
+      const deployment = deploymentDoc.toObject();
+      
+      // Add id field (from _id)
+      deployment.id = deploymentDoc._id.toString();
 
       // Normalize driverId to string id if populated
       if (deployment.driverId && typeof deployment.driverId === 'object') {
@@ -518,6 +629,29 @@ const adsDeploymentResolvers = {
       if (deployment.lcdSlots && Array.isArray(deployment.lcdSlots)) {
         for (const slot of deployment.lcdSlots) {
           if (!slot) continue;
+          
+          // Format slot dates
+          if (slot.deployedAt) {
+            slot.deployedAt = toISOString(slot.deployedAt);
+          }
+          if (slot.completedAt) {
+            slot.completedAt = toISOString(slot.completedAt);
+          }
+          if (slot.removedAt) {
+            slot.removedAt = toISOString(slot.removedAt);
+          }
+          if (slot.startTime) {
+            slot.startTime = toISOString(slot.startTime);
+          }
+          if (slot.endTime) {
+            slot.endTime = toISOString(slot.endTime);
+          }
+          
+          // Add id field for slot
+          if (slot._id) {
+            slot.id = slot._id.toString();
+          }
+          
           // Default
           slot.ad = slot.ad || { id: '', title: 'Unknown Ad', description: '', adFormat: '', mediaFile: '' };
           if (slot.adId && typeof slot.adId === 'object' && slot.adId._id) {
@@ -527,12 +661,21 @@ const adsDeploymentResolvers = {
               description: slot.adId.description || '',
               adFormat: slot.adId.adFormat || '',
               mediaFile: slot.adId.mediaFile || '',
-              startTime: slot.adId.startTime ? new Date(slot.adId.startTime).toISOString() : null,
-              endTime: slot.adId.endTime ? new Date(slot.adId.endTime).toISOString() : null
+              startTime: slot.adId.startTime ? toISOString(slot.adId.startTime) : null,
+              endTime: slot.adId.endTime ? toISOString(slot.adId.endTime) : null,
+              createdAt: slot.adId.createdAt ? toISOString(slot.adId.createdAt) : null
             };
             slot.adId = slot.adId._id ? slot.adId._id.toString() : '';
           }
         }
+      }
+      
+      // Format deployment dates
+      if (deployment.createdAt) {
+        deployment.createdAt = toISOString(deployment.createdAt);
+      }
+      if (deployment.updatedAt) {
+        deployment.updatedAt = toISOString(deployment.updatedAt);
       }
 
       return deployment;
@@ -708,41 +851,30 @@ const adsDeploymentResolvers = {
   // Field resolvers
   LCDSlot: {
     ad: async (parent) => {
-      console.log('🔍 LCDSlot.ad resolver called with parent:', JSON.stringify(parent, null, 2));
-      
       // If the ad field is already populated and has an id, return it
       if (parent.ad && parent.ad.id) {
-        console.log('✅ Using existing ad field:', parent.ad);
         return parent.ad;
       }
       
       // If adId exists, try to fetch the ad
       if (parent.adId) {
         try {
-          console.log('🔍 Fetching ad for adId:', parent.adId);
           const ad = await Ad.findById(parent.adId);
           if (ad) {
-            const adData = {
+            return {
               id: ad._id.toString(),
               title: ad.title || 'Unknown Ad',
               description: ad.description || '',
               adFormat: ad.adFormat || '',
               mediaFile: ad.mediaFile || ''
             };
-            console.log('✅ Fetched ad data:', adData);
-            return adData;
-          } else {
-            console.log('❌ Ad not found for adId:', parent.adId);
           }
         } catch (error) {
-          console.error('❌ Error fetching ad for LCDSlot:', error);
+          console.error('Error fetching ad for LCDSlot:', error);
         }
-      } else {
-        console.log('❌ No adId found in parent:', parent);
       }
       
       // Return default ad object if nothing else works
-      console.log('⚠️ Returning default ad object');
       return {
         id: '',
         title: 'Unknown Ad',

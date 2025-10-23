@@ -11,6 +11,7 @@ import {
   Monitor,
   Calendar,
   PlayCircle,
+  Building2,
   BarChart3,
   ChevronDown,
   Check,
@@ -35,7 +36,7 @@ import {
 } from '../../graphql/admin/ads';
 import ScheduleTab from './tabs/manageAds/ScheduleTab';
 import DeploymentTab from './tabs/manageAds/DeploymentTab';
-import PlanAvailabilityTab from './tabs/manageAds/PlanAvailabilityTab';
+import CompanyAdsManagement from './tabs/manageAds/CompanyAdsManagement';
 import DateFilter from '../../components/DateFilter';
 import CalendarWidget from '../../components/CalendarWidget';
 import { AdminLoader } from "../../components/ProtectedRoute";
@@ -45,16 +46,20 @@ const ManageAds: React.FC = () => {
   const location = useLocation();
   
   // Tab management
-  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'availability'>('ads');
+  const [activeTab, setActiveTab] = useState<'ads' | 'schedule' | 'deployment' | 'company-ads'>('ads');
   
   // Existing state
   const [searchTerm, setSearchTerm] = useState('');
   // Status filter options
-  const statusFilterOptions = ['All Status', 'Approved', 'Pending', 'Running', 'Rejected'];
+  const statusFilterOptions = ['All Status', 'Approved', 'Pending', 'Scheduled', 'Running', 'Rejected'];
   const deploymentStatusFilterOptions = ['All Status', 'RUNNING', 'SCHEDULED', 'COMPLETED', 'PAUSED'];
+  const sortByOptions = ['Newest First', 'Oldest First', 'Start Date (Newest)', 'End Date (Soonest)', 'Alphabetical (A-Z)', 'Alphabetical (Z-A)'];
 
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All Status');
+  
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [selectedSortBy, setSelectedSortBy] = useState('Newest First');
   const [showAdDetailsModal, setShowAdDetailsModal] = useState(false);
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
   const [isAdModalOpen, setIsAdModalOpen] = useState(false);
@@ -426,11 +431,11 @@ const ManageAds: React.FC = () => {
     { id: 'ads', label: 'All Ads', icon: Monitor },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'deployment', label: 'Deployment', icon: PlayCircle },
-    { id: 'availability', label: 'Material Slot Checker', icon: CalendarRange }
+    { id: 'company-ads', label: 'Company Ads', icon: Building2 }
   ];
 
-  // Filter functions
-  const filteredAds = data?.getAllAds?.filter((ad: Ad) => {
+  // Filter and sort functions
+  const filteredAds = (data?.getAllAds?.filter((ad: Ad) => {
     const matchesSearch =
       ad.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (ad.userId?.firstName && ad.userId?.lastName && `${ad.userId.firstName} ${ad.userId.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -439,12 +444,28 @@ const ManageAds: React.FC = () => {
     const matchesStatus = adsStatusFilter === 'All Status' || ad.status.toLowerCase() === adsStatusFilter.toLowerCase();
 
     return matchesSearch && matchesStatus;
-  }) || [];
-
-
-  if (loading) {
-    return <AdminLoader />;
-  }
+  }) || []).sort((a: Ad, b: Ad) => {
+    switch (selectedSortBy) {
+      case 'Newest First':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'Oldest First':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'Start Date (Newest)':
+        const aStart = a.startDate ? new Date(a.startDate).getTime() : 0;
+        const bStart = b.startDate ? new Date(b.startDate).getTime() : 0;
+        return bStart - aStart;
+      case 'End Date (Soonest)':
+        const aEnd = a.endDate ? new Date(a.endDate).getTime() : Infinity;
+        const bEnd = b.endDate ? new Date(b.endDate).getTime() : Infinity;
+        return aEnd - bEnd;
+      case 'Alphabetical (A-Z)':
+        return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+      case 'Alphabetical (Z-A)':
+        return b.title.toLowerCase().localeCompare(a.title.toLowerCase());
+      default:
+        return 0;
+    }
+  });
 
   if (error) {
     return (
@@ -582,6 +603,47 @@ const ManageAds: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Sort By Filter - Only for Ads tab */}
+            {activeTab === 'ads' && (
+              <div className="relative w-48">
+                <button
+                  onClick={() => setShowSortDropdown(!showSortDropdown)}
+                  className="flex items-center justify-between w-full text-xs text-black rounded-lg pl-6 pr-4 py-3 shadow-md focus:outline-none bg-white gap-2"
+                >
+                  <span className="truncate">{selectedSortBy}</span>
+                  <ChevronDown
+                    size={16}
+                    className={`flex-shrink-0 transform transition-transform duration-200 ${showSortDropdown ? 'rotate-180' : 'rotate-0'}`}
+                  />
+                </button>
+
+                <AnimatePresence>
+                  {showSortDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute z-10 top-full mt-2 w-full rounded-lg shadow-lg bg-white overflow-hidden max-h-60 overflow-y-auto"
+                    >
+                      {sortByOptions.map((sortOption) => (
+                        <button
+                          key={sortOption}
+                          onClick={() => {
+                            setSelectedSortBy(sortOption);
+                            setShowSortDropdown(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                        >
+                          {sortOption}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
           
           {/* Bottom row: Refresh button */}
@@ -628,10 +690,10 @@ const ManageAds: React.FC = () => {
                 <h3 className="text-sm text-center font-medium text-gray-500">Pending</h3>
               </div>
               <div className="bg-white p-4 rounded-lg">
-                <p className="text-3xl text-center font-bold text-red-600">
-                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'REJECTED').length || 0}
+                <p className="text-3xl text-center font-bold text-purple-600">
+                  {data?.getAllAds?.filter((ad: Ad) => ad.status === 'SCHEDULED').length || 0}
                 </p>
-                <h3 className="text-sm text-center font-medium text-gray-500">Rejected</h3>
+                <h3 className="text-sm text-center font-medium text-gray-500">Scheduled</h3>
               </div>
             </div>
 
@@ -760,9 +822,9 @@ const ManageAds: React.FC = () => {
             onStatusChange={setDeploymentStatusFilter}
           />
         )}
-
-        {/* Plan Availability Tab */}
-        {activeTab === 'availability' && <PlanAvailabilityTab />}
+        {activeTab === 'company-ads' && (
+          <CompanyAdsManagement />
+        )}
       </div>
 
       {/* Ad Details Modal */}

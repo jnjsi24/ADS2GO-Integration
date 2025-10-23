@@ -257,6 +257,7 @@ const DeviceTrackingSchema = new mongoose.Schema({
     date: { type: Date, required: true },
     startTime: { type: Date, required: true },
     endTime: { type: Date },
+    completedAt: { type: Date }, // ✅ NEW: When 8-hour requirement was completed
     totalHoursOnline: { type: Number, default: 0 }, // in hours
     totalDistanceTraveled: { type: Number, default: 0 }, // in km
     locationHistory: [LocationPointSchema],
@@ -1349,9 +1350,14 @@ DeviceTrackingSchema.methods.calculateAndUpdateOnlineHours = function() {
   // Cap at 8 hours max per day
   this.currentSession.totalHoursOnline = Math.min(8, Math.max(0, this.currentSession.totalHoursOnline));
   
-  // Update compliance status
-  this.currentSession.complianceStatus = 
-    this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'NON_COMPLIANT';
+  // Update compliance status (only for ACTIVE sessions)
+  // For active sessions: COMPLIANT if >= 8 hours, otherwise PENDING (still working towards goal)
+  // For ended sessions: Status is set by endDailySession() method
+  if (this.currentSession.isActive) {
+    this.currentSession.complianceStatus = 
+      this.currentSession.totalHoursOnline >= this.currentSession.targetHours ? 'COMPLIANT' : 'PENDING';
+  }
+  // If session is not active, don't change the status (it was already set by endDailySession)
   
   // Always update total lifetime hours for the current day (not cumulative)
   this.totalHoursOnline = Math.round(this.currentSession.totalHoursOnline * 100) / 100;

@@ -4,6 +4,7 @@ const hoursUpdateService = require('../services/hoursUpdateService');
 const userAnalyticsSyncJob = require('./userAnalyticsSyncJob');
 const driverSalaryJob = require('./driverSalaryJob');
 const deviceHoursNotificationService = require('../services/deviceHoursNotificationService');
+const adSchedulingJob = require('./adSchedulingJob');
 const logger = require('../utils/logger');
 
 class CronJobs {
@@ -29,6 +30,9 @@ class CronJobs {
 
     // Start the driver salary job (monthly generation and daily updates)
     driverSalaryJob.start();
+
+    // Start the ad scheduling job (hourly checks for scheduled ads and expired reservations)
+    adSchedulingJob.start();
 
     // Frequent archive job - runs every 3 minutes to capture real-time updates
     const frequentArchiveTask = cron.schedule('*/3 * * * *', async () => {
@@ -255,6 +259,12 @@ class CronJobs {
 
     // Stop the user analytics sync job
     userAnalyticsSyncJob.stop();
+
+    // Stop the ad scheduling job
+    adSchedulingJob.stop();
+
+    // Stop the driver salary job
+    driverSalaryJob.stop();
 
     this.jobs.forEach((job, name) => {
       job.stop();

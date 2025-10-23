@@ -352,6 +352,19 @@ const resolvers = {
         throw new Error(error.message || 'Failed to update report');
       }
     }
+  },
+  
+  // Field resolvers to convert dates to ISO strings
+  UserReport: {
+    createdAt: (parent) => {
+      return parent.createdAt ? parent.createdAt.toISOString() : null;
+    },
+    updatedAt: (parent) => {
+      return parent.updatedAt ? parent.updatedAt.toISOString() : null;
+    },
+    resolvedAt: (parent) => {
+      return parent.resolvedAt ? parent.resolvedAt.toISOString() : null;
+    }
   }
 };
 

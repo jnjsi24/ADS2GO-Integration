@@ -76,9 +76,15 @@ const AdSchema = new mongoose.Schema({
   // Approval & tracking
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'RUNNING', 'ENDED'],
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'SCHEDULED', 'RUNNING', 'ENDED', 'CANCELLED'],
     default: 'PENDING',
     required: true
+  },
+  
+  // ✅ NEW: Slot reservation expiration (for unpaid ads)
+  reservationExpires: {
+    type: Date,
+    default: null
   },
   adStatus: {
     type: String,

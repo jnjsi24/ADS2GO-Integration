@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@apollo/client";
 import { GET_OWN_ADMIN_DETAILS } from "../../graphql/admin";
 import { GET_ADMIN_DASHBOARD_STATS, GET_PENDING_ADS } from "../../graphql/admin/queries";
@@ -8,7 +8,7 @@ import DynamicNotificationList from "./tabs/dashboard/DynamicNotificationList";
 import DeviceNotificationList from "./tabs/dashboard/DeviceNotificationList";
 import { AdminLoader } from "../../components/ProtectedRoute";
 import SubtleLoader from "../../components/SubtleLoader";
-import { Monitor, PlayCircle, Users, Car, FileText, AlertCircle, ArrowUpRight } from "lucide-react";
+import { Monitor, PlayCircle, Users, Car, FileText, ArrowUpRight } from "lucide-react";
 import { motion, Transition } from "framer-motion";
 // Import ScreenStatus interface from ScreenTracking for consistency
 interface ScreenStatus {
@@ -122,7 +122,12 @@ const Dashboard = () => {
   // Screen data states
   const [screens, setScreens] = useState<ScreenStatus[]>([]);
   const [screenLoading, setScreenLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [screenError, setScreenError] = useState<string | null>(null);
+  
+  // Track if initial fetch has been triggered to prevent duplicates
+  const hasInitialFetchTriggered = useRef(false);
+  const lastFetchTime = useRef(0);
 
   // Auto detect sidebar collapse based on window width
   useEffect(() => {
@@ -147,7 +152,7 @@ const Dashboard = () => {
   });
 
   // Fetch pending user reports
-  const { data: userReportsData, loading: userReportsLoading, error: userReportsError, refetch: refetchUserReports } = useQuery(GET_ALL_USER_REPORTS, {
+  const { data: userReportsData, loading: userReportsLoading, refetch: refetchUserReports } = useQuery(GET_ALL_USER_REPORTS, {
     variables: {
       filters: { status: 'PENDING' },
       limit: 5,
@@ -157,7 +162,7 @@ const Dashboard = () => {
   });
 
   // Fetch pending driver reports
-  const { data: driverReportsData, loading: driverReportsLoading, error: driverReportsError, refetch: refetchDriverReports } = useQuery(GET_ALL_DRIVER_REPORTS, {
+  const { data: driverReportsData, loading: driverReportsLoading, refetch: refetchDriverReports } = useQuery(GET_ALL_DRIVER_REPORTS, {
     variables: {
       filters: { status: 'PENDING' },
       limit: 5,
@@ -175,22 +180,39 @@ const Dashboard = () => {
   }, [data]);
 
   // Fetch screen data with useCallback to prevent unnecessary re-renders
-  const fetchScreenData = useCallback(async () => {
+  const fetchScreenData = useCallback(async (isInitialLoad: boolean = false) => {
     try {
+      // ✅ DEBOUNCE: Prevent rapid consecutive fetches (minimum 2 seconds between requests)
+      const now = Date.now();
+      const timeSinceLastFetch = now - lastFetchTime.current;
+      if (timeSinceLastFetch < 2000 && !isInitialLoad) {
+        console.log(`⏭️ [AdminDashboard] Skipping fetch - too soon (${timeSinceLastFetch}ms since last fetch)`);
+        return;
+      }
+      lastFetchTime.current = now;
+      
       setScreenLoading(true);
       setScreenError(null);
       
       // Use compliance endpoint for consistent data with ScreenTracking page
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace('/graphql', '').replace(/\/$/, '');
-      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}`;
+      
+      // ⚡ OPTIMIZATION: Skip geocoding on initial load for faster response
+      const skipGeocoding = isInitialLoad || !hasInitiallyLoaded;
+      const complianceUrl = `${baseUrl}/screenTracking/compliance?date=${new Date().toISOString().split('T')[0]}${skipGeocoding ? '&skipGeocoding=true' : ''}`;
       
       console.log('🔍 [AdminDashboard] Fetching screen data from compliance endpoint:', complianceUrl);
+      console.log(`📍 [AdminDashboard] Skip geocoding: ${skipGeocoding ? 'YES' : 'NO'} (isInitialLoad: ${isInitialLoad}, hasInitiallyLoaded: ${hasInitiallyLoaded})`);
       
+      const startTime = Date.now();
       const response = await fetch(complianceUrl, {
         headers: {
           'Content-Type': 'application/json'
         }
       });
+      const fetchDuration = Date.now() - startTime;
+      
+      console.log(`⏱️ [AdminDashboard] Compliance response received after ${fetchDuration}ms (${(fetchDuration / 1000).toFixed(2)}s)`);
       
       if (response.ok) {
         const complianceData = await response.json();
@@ -214,11 +236,11 @@ const Dashboard = () => {
     } finally {
       setScreenLoading(false);
     }
-  }, []);
+  }, [hasInitiallyLoaded]);
 
   // Centralized refresh system - refreshes all data every 15 seconds
-  const refreshAllData = useCallback(async () => {
-    console.log('🔄 [AdminDashboard] Centralized refresh triggered');
+  const refreshAllData = useCallback(async (isInitialLoad: boolean = false) => {
+    console.log(`🔄 [AdminDashboard] Centralized refresh triggered (isInitialLoad: ${isInitialLoad})`);
     
     // Refresh all GraphQL queries
     try {
@@ -227,7 +249,7 @@ const Dashboard = () => {
         refetchPendingAds(),
         refetchUserReports(),
         refetchDriverReports(),
-        fetchScreenData()
+        fetchScreenData(isInitialLoad)
       ]);
       console.log('✅ [AdminDashboard] All data refreshed successfully');
     } catch (error) {
@@ -237,16 +259,30 @@ const Dashboard = () => {
 
   // Initial data fetch and setup centralized refresh
   useEffect(() => {
-    // Initial fetch
-    refreshAllData();
+    // ✅ OPTIMIZATION: Prevent duplicate initial fetches
+    if (hasInitialFetchTriggered.current) {
+      console.log('⏭️ [AdminDashboard] Skipping duplicate initial fetch');
+      return;
+    }
     
-    // Set up centralized auto-refresh every 15 seconds
-    const refreshInterval = setInterval(refreshAllData, 15000);
+    hasInitialFetchTriggered.current = true;
+    
+    // Initial fetch with skipGeocoding enabled
+    console.log('🚀 [AdminDashboard] Initial data fetch started (ONCE)');
+    refreshAllData(true);
+    
+    // Set up centralized auto-refresh every 15 seconds (without skipGeocoding)
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 [AdminDashboard] Auto-refresh interval triggered');
+      refreshAllData(false);
+    }, 15000);
     
     return () => {
+      console.log('🧹 [AdminDashboard] Cleaning up refresh interval');
       clearInterval(refreshInterval);
     };
-  }, [refreshAllData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track initial load completion
   useEffect(() => {
@@ -427,7 +463,7 @@ const Dashboard = () => {
                   <p className="text-2xl font-bold text-blue-600">
                     {screens.filter(s => {
                       const currentAd = s.screenMetrics?.currentAd;
-                      return s.isOnline && currentAd && ['playing', 'buffering', 'loading'].includes(currentAd.state);
+                      return s.isOnline && currentAd && currentAd.state && ['playing', 'buffering', 'loading'].includes(currentAd.state);
                     }).length}
                   </p>
                   <p className="text-sm text-gray-600">Playing Ads</p>

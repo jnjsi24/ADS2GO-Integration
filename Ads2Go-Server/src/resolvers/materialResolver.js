@@ -174,6 +174,15 @@ const materialResolvers = {
             const tracking = await DeviceCompliance.findOne({ materialId: material.id });
             const materialObj = material.toObject();
             
+            // Debug logging for tracking data
+            if (tracking) {
+              console.log(`🔍 Material ${material.materialId} tracking data:`, {
+                nextPhotoDue: tracking.nextPhotoDue,
+                lastPhotoUpload: tracking.lastPhotoUpload,
+                photoComplianceStatus: tracking.photoComplianceStatus
+              });
+            }
+            
             // Helper to format date to ISO string
             const formatDateField = (dateValue) => {
               if (!dateValue) return null;
@@ -189,7 +198,7 @@ const materialResolvers = {
               materialName: `${materialObj.materialType} - ${materialObj.materialId}`,
               description: materialObj.description || '',
               status: materialObj.dismountedAt ? 'DISMOUNTED' : 'MOUNTED',
-              assignedDate: formatDateField(materialObj.mountedAt) || formatDateField(materialObj.createdAt) || new Date().toISOString(),
+              assignedDate: formatDateField(materialObj.assignedDate) || formatDateField(materialObj.mountedAt) || formatDateField(materialObj.createdAt) || new Date().toISOString(),
               mountedAt: formatDateField(materialObj.mountedAt),
               location: materialObj.driver ? {
                 address: '',
@@ -197,8 +206,8 @@ const materialResolvers = {
               } : null,
               materialTracking: tracking ? {
                 photoComplianceStatus: tracking.photoComplianceStatus,
-                nextPhotoDue: tracking.nextPhotoDue,
-                lastPhotoUpload: tracking.lastPhotoUpload,
+                nextPhotoDue: formatDateField(tracking.nextPhotoDue),
+                lastPhotoUpload: formatDateField(tracking.lastPhotoUpload),
                 monthlyPhotos: (tracking.monthlyPhotos || []).map(photo => ({
                   month: photo.month,
                   status: photo.status,
@@ -600,6 +609,9 @@ const materialResolvers = {
             if (usageHistory) {
               usageHistory.mountedAt = input.mountedAt ? new Date(input.mountedAt) : null;
               await usageHistory.save();
+              console.log(`✅ Updated usage history mountedAt for material ${material.materialId}, driver ${material.driverId}: ${usageHistory.mountedAt}`);
+            } else {
+              console.log(`⚠️ No active usage history found for material ${material.materialId}, driver ${material.driverId}`);
             }
           } catch (error) {
             console.error('Error updating usage history mounted date:', error);
@@ -625,12 +637,12 @@ const materialResolvers = {
             }
             const next = new Date(mountedDate);
             next.setMonth(next.getMonth() + 1);
-            tracking.nextInspectionDue = next;
+            tracking.nextPhotoDue = next;
             await tracking.save();
           } else if (tracking) {
             // If mountedAt is cleared, also clear inspection schedule to avoid stale dates
             tracking.lastInspectionDate = tracking.lastInspectionDate || null;
-            tracking.nextInspectionDue = tracking.nextInspectionDue || null;
+            tracking.nextPhotoDue = tracking.nextPhotoDue || null;
             await tracking.save();
           }
         } catch (inspectionErr) {
@@ -654,6 +666,9 @@ const materialResolvers = {
             if (usageHistory) {
               usageHistory.dismountedAt = new Date(input.dismountedAt);
               await usageHistory.save();
+              console.log(`✅ Updated usage history dismountedAt for material ${material.materialId}, driver ${material.driverId}: ${usageHistory.dismountedAt}`);
+            } else {
+              console.log(`⚠️ No active usage history found for material ${material.materialId}, driver ${material.driverId}`);
             }
           } catch (error) {
             console.error('Error updating usage history dismounted date:', error);
@@ -822,6 +837,7 @@ const materialResolvers = {
       // Only assign the driver to the material, but don't mark as mounted yet
       // mountedAt should be set separately when the material is physically mounted
       availableMaterial.driverId = driver.driverId;
+      availableMaterial.assignedDate = new Date(); // ✅ Set assignedDate when admin assigns driver
       availableMaterial.mountedAt = null; // Will be set when material is actually mounted
       availableMaterial.dismountedAt = null; // Reset dismountedAt
       
@@ -835,7 +851,7 @@ const materialResolvers = {
       ]);
 
       // Create usage history entry
-      await MaterialUsageHistory.createUsageEntry(
+      const usageEntry = await MaterialUsageHistory.createUsageEntry(
         availableMaterial._id,
         driver.driverId,
         {
@@ -852,6 +868,13 @@ const materialResolvers = {
           adminEmail: user.email
         }
       );
+
+      // If the material already has a mountedAt date, sync it to the usage history
+      if (availableMaterial.mountedAt && usageEntry) {
+        usageEntry.mountedAt = availableMaterial.mountedAt;
+        await usageEntry.save();
+        console.log(`✅ Synced existing mountedAt date to usage history for material ${availableMaterial.materialId}, driver ${driver.driverId}: ${usageEntry.mountedAt}`);
+      }
 
       return {
         success: true,
@@ -888,6 +911,7 @@ const materialResolvers = {
       // Unassign the material and reset dates
       const dismountDate = new Date();
       material.driverId = null;
+      material.assignedDate = null; // ✅ Reset assigned date so it gets a fresh date on re-assignment
       material.mountedAt = null; // Reset mounted date
       material.dismountedAt = dismountDate; // Set dismounted date to now
       await material.save();
@@ -1004,6 +1028,8 @@ const materialResolvers = {
       if (!entry) throw new Error('No photo found for specified month');
 
       entry.status = 'APPROVED';
+      entry.reviewedBy = user.id; // Store admin ID who approved
+      entry.reviewedAt = new Date(); // Store timestamp when admin approved
       if (adminNotes) entry.adminNotes = adminNotes;
 
       // Update compliance status and dates
@@ -1014,16 +1040,23 @@ const materialResolvers = {
       tracking.nextPhotoDue = next;
 
       // Also treat approved monthly photo as the inspection for this period
-      const inspectionDate = entry.uploadedAt ? new Date(entry.uploadedAt) : new Date();
+      // Set inspection date to when admin approved, not when driver uploaded
+      const inspectionDate = new Date(); // Current date when admin approves
       tracking.lastInspectionDate = inspectionDate;
       const nextInspection = new Date(inspectionDate);
       nextInspection.setMonth(nextInspection.getMonth() + 1);
-      tracking.nextInspectionDue = nextInspection;
+      tracking.nextPhotoDue = nextInspection;
+      
+      // Also update Material model to keep both in sync
+      material.lastInspectionDate = inspectionDate;
+      material.nextInspectionDue = nextInspection;
+      
       if (condition) {
         // Mirror condition to Material model instead of DeviceCompliance
         material.materialCondition = condition;
-        await material.save();
       }
+      
+      await material.save();
 
       // Mirror first approved photo into inspectionPhotos if available
       if (Array.isArray(entry.photoUrls) && entry.photoUrls.length > 0) {
@@ -1051,7 +1084,9 @@ const materialResolvers = {
             photoUrls: photo.photoUrls,
             uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
             uploadedBy: photo.uploadedBy,
-            adminNotes: photo.adminNotes
+            adminNotes: photo.adminNotes,
+            reviewedBy: photo.reviewedBy,
+            reviewedAt: photo.reviewedAt ? photo.reviewedAt.toISOString() : null
           })),
           photoComplianceStatus: tracking.photoComplianceStatus,
           lastPhotoUpload: tracking.lastPhotoUpload ? tracking.lastPhotoUpload.toISOString() : null,
@@ -1073,6 +1108,8 @@ const materialResolvers = {
       if (!entry) throw new Error('No photo found for specified month');
 
       entry.status = 'REJECTED';
+      entry.reviewedBy = user.id; // Store admin ID who rejected
+      entry.reviewedAt = new Date(); // Store timestamp when admin rejected
       if (adminNotes) entry.adminNotes = adminNotes;
 
       // Set status to NON_COMPLIANT, next due unchanged or sooner if desired
@@ -1092,13 +1129,39 @@ const materialResolvers = {
             photoUrls: photo.photoUrls,
             uploadedAt: photo.uploadedAt ? photo.uploadedAt.toISOString() : null,
             uploadedBy: photo.uploadedBy,
-            adminNotes: photo.adminNotes
+            adminNotes: photo.adminNotes,
+            reviewedBy: photo.reviewedBy,
+            reviewedAt: photo.reviewedAt ? photo.reviewedAt.toISOString() : null
           })),
           photoComplianceStatus: tracking.photoComplianceStatus,
           lastPhotoUpload: tracking.lastPhotoUpload ? tracking.lastPhotoUpload.toISOString() : null,
           nextPhotoDue: tracking.nextPhotoDue ? tracking.nextPhotoDue.toISOString() : null
         }
       };
+    },
+
+    // Admin utility: Sync mountedAt dates from Material to MaterialUsageHistory
+    syncUsageHistoryMountedDates: async (_, __, { user }) => {
+      checkAdmin(user);
+      
+      try {
+        const result = await MaterialUsageHistory.syncMountedDates();
+        
+        return {
+          success: result.success,
+          message: result.success 
+            ? `Successfully synced ${result.updatedCount} usage history records`
+            : `Failed to sync: ${result.error}`,
+          updatedCount: result.updatedCount || 0
+        };
+      } catch (error) {
+        console.error('Error in syncUsageHistoryMountedDates resolver:', error);
+        return {
+          success: false,
+          message: `Failed to sync usage history: ${error.message}`,
+          updatedCount: 0
+        };
+      }
     }
   },
 
@@ -1158,6 +1221,11 @@ const materialResolvers = {
       return parent.dismountedAt.toISOString();
     },
     
+    assignedDate: (parent) => {
+      if (!parent.assignedDate) return null;
+      return parent.assignedDate.toISOString();
+    },
+    
     // Material condition and inspection fields - fetch from deviceCompliance collection
     materialCondition: async (parent) => {
       try {
@@ -1213,7 +1281,8 @@ const materialResolvers = {
     nextInspectionDue: async (parent) => {
       try {
         const tracking = await DeviceCompliance.findOne({ materialId: parent._id });
-        const date = tracking?.nextInspectionDue || parent.nextInspectionDue;
+        // DeviceCompliance uses 'nextPhotoDue', Material uses 'nextInspectionDue'
+        const date = tracking?.nextPhotoDue || parent.nextInspectionDue;
         if (!date) return null;
         return date.toISOString();
       } catch (error) {

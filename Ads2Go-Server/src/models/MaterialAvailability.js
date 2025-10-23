@@ -42,7 +42,7 @@ const MaterialAvailabilitySchema = new mongoose.Schema({
     default: null
   },
   
-  // Current ads occupying slots
+  // Current ads occupying slots (ads that are currently running)
   currentAds: [{
     adId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -62,6 +62,37 @@ const MaterialAvailabilitySchema = new mongoose.Schema({
       required: true,
       min: 1,
       max: 5
+    }
+  }],
+  
+  // ✅ NEW: Scheduled/future ads with reserved slots
+  scheduledAds: [{
+    adId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Ad',
+      required: true
+    },
+    startTime: {
+      type: Date,
+      required: true
+    },
+    endTime: {
+      type: Date,
+      required: true
+    },
+    slotNumber: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5
+    },
+    reservedAt: {
+      type: Date,
+      default: Date.now
+    },
+    reservationExpires: {
+      type: Date,
+      default: null
     }
   }],
   
@@ -116,15 +147,41 @@ MaterialAvailabilitySchema.pre('save', function(next) {
 // Method to check if material can accept new ad
 MaterialAvailabilitySchema.methods.canAcceptAd = function(startTime, endTime) {
   if (this.status !== 'AVAILABLE') return false;
-  if (this.availableSlots <= 0) return false;
+  if (this.totalSlots <= 0) return false;
   
-  // A material can accept ads as long as it has available slots
-  // Time conflicts are handled at the slot level, not the material level
-  // Multiple ads can run on the same material at the same time if there are enough slots
-  return true;
+  // ✅ NEW: Check for time period conflicts with both current and scheduled ads
+  const requestStart = new Date(startTime);
+  const requestEnd = new Date(endTime);
+  
+  // Find all ads that overlap with the requested time period
+  const overlappingAds = [
+    ...this.currentAds,
+    ...this.scheduledAds
+  ].filter(ad => {
+    const adStart = new Date(ad.startTime);
+    const adEnd = new Date(ad.endTime);
+    
+    // Check if time periods overlap
+    // Overlap occurs if: (StartA < EndB) AND (EndA > StartB)
+    return (requestStart < adEnd && requestEnd > adStart);
+  });
+  
+  // Count how many slots are occupied during the requested time period
+  const slotsOccupiedDuringPeriod = overlappingAds.length;
+  
+  // Check if there's at least one free slot during the requested period
+  const hasAvailableSlot = slotsOccupiedDuringPeriod < this.totalSlots;
+  
+  // Log for debugging
+  if (!hasAvailableSlot) {
+    console.log(`⚠️  Material has no available slots during ${requestStart.toISOString()} - ${requestEnd.toISOString()}`);
+    console.log(`   Total slots: ${this.totalSlots}, Occupied: ${slotsOccupiedDuringPeriod}`);
+  }
+  
+  return hasAvailableSlot;
 };
 
-// Method to add ad to material
+// Method to add ad to material (for currently running ads)
 MaterialAvailabilitySchema.methods.addAd = function(adId, startTime, endTime) {
   if (!this.canAcceptAd(startTime, endTime)) {
     throw new Error('Cannot add ad: no available slots or time conflict');
@@ -133,7 +190,7 @@ MaterialAvailabilitySchema.methods.addAd = function(adId, startTime, endTime) {
   // Find next available slot number
   const usedSlots = this.currentAds.map(ad => ad.slotNumber);
   let slotNumber = 1;
-  while (usedSlots.includes(slotNumber)) {
+  while (usedSlots.includes(slotNumber) && slotNumber <= this.totalSlots) {
     slotNumber++;
   }
   
@@ -151,14 +208,114 @@ MaterialAvailabilitySchema.methods.addAd = function(adId, startTime, endTime) {
   this.updateAvailabilityDates();
 };
 
+// ✅ NEW: Method to reserve slot for scheduled/future ad
+MaterialAvailabilitySchema.methods.reserveSlot = function(adId, startTime, endTime, reservationExpires = null) {
+  if (!this.canAcceptAd(startTime, endTime)) {
+    throw new Error('Cannot reserve slot: no available slots or time conflict during requested period');
+  }
+  
+  // Find next available slot number during the requested time period
+  const requestStart = new Date(startTime);
+  const requestEnd = new Date(endTime);
+  
+  // Get all slots that will be in use during this period
+  const usedSlotsDuringPeriod = [
+    ...this.currentAds,
+    ...this.scheduledAds
+  ]
+    .filter(ad => {
+      const adStart = new Date(ad.startTime);
+      const adEnd = new Date(ad.endTime);
+      return (requestStart < adEnd && requestEnd > adStart);
+    })
+    .map(ad => ad.slotNumber);
+  
+  // Find first available slot number
+  let slotNumber = 1;
+  while (usedSlotsDuringPeriod.includes(slotNumber) && slotNumber <= this.totalSlots) {
+    slotNumber++;
+  }
+  
+  if (slotNumber > this.totalSlots) {
+    throw new Error('No available slot number found');
+  }
+  
+  // Add to scheduledAds
+  this.scheduledAds.push({
+    adId,
+    startTime,
+    endTime,
+    slotNumber,
+    reservedAt: new Date(),
+    reservationExpires
+  });
+  
+  console.log(`✅ Reserved slot ${slotNumber} for ad ${adId} during ${startTime} - ${endTime}`);
+  
+  // Update availability dates
+  this.updateAvailabilityDates();
+  
+  return slotNumber;
+};
+
 // Method to remove ad from material
 MaterialAvailabilitySchema.methods.removeAd = function(adId) {
   this.currentAds = this.currentAds.filter(ad => ad.adId.toString() !== adId.toString());
+  this.scheduledAds = this.scheduledAds.filter(ad => ad.adId.toString() !== adId.toString());
   this.occupiedSlots = this.currentAds.length;
   this.availableSlots = this.totalSlots - this.occupiedSlots;
   
   // Update next available date
   this.updateAvailabilityDates();
+};
+
+// ✅ NEW: Method to release expired slot reservations
+MaterialAvailabilitySchema.methods.releaseExpiredReservations = function() {
+  const now = new Date();
+  const expiredCount = this.scheduledAds.filter(ad => 
+    ad.reservationExpires && ad.reservationExpires < now
+  ).length;
+  
+  if (expiredCount > 0) {
+    this.scheduledAds = this.scheduledAds.filter(ad => 
+      !ad.reservationExpires || ad.reservationExpires >= now
+    );
+    
+    console.log(`🧹 Released ${expiredCount} expired reservation(s) for material`);
+    this.updateAvailabilityDates();
+  }
+  
+  return expiredCount;
+};
+
+// ✅ NEW: Method to move scheduled ad to current ads when start time arrives
+MaterialAvailabilitySchema.methods.activateScheduledAds = function() {
+  const now = new Date();
+  const adsToActivate = this.scheduledAds.filter(ad => new Date(ad.startTime) <= now);
+  
+  if (adsToActivate.length > 0) {
+    // Move from scheduledAds to currentAds
+    for (const ad of adsToActivate) {
+      this.currentAds.push({
+        adId: ad.adId,
+        startTime: ad.startTime,
+        endTime: ad.endTime,
+        slotNumber: ad.slotNumber
+      });
+    }
+    
+    // Remove from scheduledAds
+    this.scheduledAds = this.scheduledAds.filter(ad => new Date(ad.startTime) > now);
+    
+    // Update counts
+    this.occupiedSlots = this.currentAds.length;
+    this.availableSlots = this.totalSlots - this.occupiedSlots;
+    this.updateAvailabilityDates();
+    
+    console.log(`✅ Activated ${adsToActivate.length} scheduled ad(s) to current ads`);
+  }
+  
+  return adsToActivate.map(ad => ad.adId);
 };
 
 // Method to update availability dates

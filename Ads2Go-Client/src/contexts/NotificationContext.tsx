@@ -68,7 +68,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   // Handle notification preferences data
   useEffect(() => {
     if (preferencesData) {
-      console.log('🔔 Notification preferences loaded:', preferencesData);
       if (preferencesData?.getUserNotificationPreferences) {
         setEnableNotificationBadge(preferencesData.getUserNotificationPreferences.enableNotificationBadge);
       }
@@ -95,16 +94,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   // Handle notifications data
   useEffect(() => {
     if (data) {
-      console.log('🔔 NotificationContext: Query completed with data:', data);
       if (data?.getUserNotifications) {
-        // Debug the createdAt values
-        data.getUserNotifications.forEach((notif: Notification, index: number) => {
-          console.log(`🔔 Notification ${index + 1} createdAt:`, notif.createdAt, typeof notif.createdAt);
-        });
         setNotifications(data.getUserNotifications);
-        console.log('🔔 NotificationContext: Set notifications:', data.getUserNotifications);
       } else {
-        console.log('🔔 NotificationContext: No notifications found');
         setNotifications([]);
       }
       setIsLoading(false);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Dimensions, StatusBar, Platform, Alert } from 'react-native';
 // Using expo-av for compatibility with Expo SDK 49
 // TODO: Migrate to expo-video when upgrading to Expo SDK 54+
 import { Video, ResizeMode } from 'expo-av';
@@ -10,6 +10,7 @@ import tabletRegistrationService from '../services/tabletRegistration';
 import playbackWebSocketService from '../services/playbackWebSocketService';
 import companyAdService, { CompanyAd } from '../services/companyAdService';
 import offlineQueueService from '../services/offlineQueueService';
+import adaptiveGPSService from '../services/adaptiveGPSService';
 
 // API Base URL - should match the one in tabletRegistration service
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.7:5000';
@@ -64,6 +65,7 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncData, setSyncData] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [currentGPS, setCurrentGPS] = useState<any>(null); // Store current GPS data
   const videoRef = useRef<Video>(null);
 
   // Cache key for storing ads locally
@@ -89,6 +91,57 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
     checkRegistration();
   }, []);
 
+  // Initialize Adaptive GPS Service
+  useEffect(() => {
+    if (isRegistered) {
+      console.log('📍 [AdPlayer] Starting adaptive GPS tracking');
+      
+      // Start GPS tracking with callback
+      adaptiveGPSService.startTracking(
+        (gpsData) => {
+          // Update current GPS state
+          setCurrentGPS(gpsData);
+          
+          // Only log occasionally to reduce noise
+          if (Math.random() < 0.05) { // 5% of updates
+            console.log('📍 [AdPlayer] GPS updated:', {
+              speed: `${(gpsData.speed * 3.6).toFixed(1)} km/h`,
+              accuracy: `${gpsData.accuracy.toFixed(1)}m`
+            });
+          }
+        },
+        {
+          isAdPlaying: isPlaying && !isPaused,
+          currentSpeed: 0 // Will be updated from GPS data
+        }
+      );
+    }
+
+    return () => {
+      // Stop GPS tracking when component unmounts
+      if (isRegistered) {
+        console.log('📍 [AdPlayer] Stopping adaptive GPS tracking');
+        adaptiveGPSService.stopTracking();
+      }
+    };
+  }, [isRegistered]);
+
+  // Update GPS config when ad playback state changes
+  useEffect(() => {
+    if (isRegistered && adaptiveGPSService.isActive()) {
+      const isAdPlaying = isPlaying && !isPaused;
+      adaptiveGPSService.updateConfig({
+        isAdPlaying,
+        currentSpeed: currentGPS?.speed || 0
+      });
+      
+      // Only log state changes
+      if (Math.random() < 0.2) { // 20% of state changes
+        console.log(`📍 [AdPlayer] GPS config updated: Ad ${isAdPlaying ? 'playing' : 'paused/stopped'}`);
+      }
+    }
+  }, [isPlaying, isPaused, isRegistered]);
+
   // Setup WebSocket synchronization
   useEffect(() => {
     if (isRegistered) {
@@ -108,6 +161,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       playbackWebSocketService.setLockdownCallback(handleLockdown);
       // Set up unlock callback
       playbackWebSocketService.setUnlockCallback(handleUnlock);
+      // Set up 8-hour stop callback
+      playbackWebSocketService.setStop8HoursCallback(handleStop8Hours);
       
       // Connect to WebSocket
       playbackWebSocketService.connect().then((connected) => {
@@ -596,6 +651,56 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
       console.log('🔓 [AdPlayer] New isLocked state:', false);
     } catch (error) {
       console.error('❌ [AdPlayer] Error handling unlock:', error);
+    }
+  };
+
+  // Handle 8-hour completion stop command from server
+  const handleStop8Hours = (message: any) => {
+    try {
+      console.log('🛑 [AdPlayer] Received 8-hour completion STOP command:', message);
+      console.log(`🎉 Congratulations! You completed ${message.totalHours?.toFixed(2)} hours`);
+      console.log(`🔒 Ad player will be locked until ${message.unlockTime}`);
+      
+      // 1. Stop GPS tracking
+      console.log('📍 [AdPlayer] Stopping GPS tracking...');
+      adaptiveGPSService.stopTracking();
+      
+      // 2. Stop ad playback
+      console.log('⏸️ [AdPlayer] Stopping ad playback...');
+      if (videoRef.current) {
+        videoRef.current.pauseAsync().catch(err => {
+          console.log('⏸️ [AdPlayer] Video pause error (expected):', err.message);
+        });
+      }
+      
+      // 3. Clear current ad
+      setCurrentAd(null);
+      setIsPlaying(false);
+      setIsPaused(true);
+      
+      // 4. Lock the screen
+      console.log('🔒 [AdPlayer] Locking ad player...');
+      onLockStateChange?.(true);
+      
+      // 5. Show completion alert
+      Alert.alert(
+        '🎉 8 Hours Completed!',
+        `Congratulations! You have completed your 8-hour daily requirement.\n\nTotal Hours: ${message.totalHours?.toFixed(2)} hours\n\nThe ad player is now locked until ${message.unlockTime}.\n\nThank you for your service!`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to home screen or close app
+              console.log('✅ [AdPlayer] User acknowledged 8-hour completion');
+            }
+          }
+        ],
+        { cancelable: false }
+      );
+      
+      console.log('✅ [AdPlayer] 8-hour completion sequence complete');
+    } catch (error) {
+      console.error('❌ [AdPlayer] Error handling 8-hour stop:', error);
     }
   };
 
@@ -1303,8 +1408,20 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
   // Check network connectivity
   const checkNetworkStatus = async () => {
     try {
+      // First check if we can reach the server directly
+      const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
+      const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
+      
+      if (serverAccessible) {
+        console.log('🎬 [AD_PLAYBACK] Server is accessible, network is online');
+        setNetworkStatus(true);
+        return true;
+      }
+      
+      // Fallback to NetInfo if server check fails
       const state = await NetInfo.fetch();
       const isConnected = state.isConnected && state.isInternetReachable;
+      console.log('🎬 [AD_PLAYBACK] NetInfo check:', { isConnected, isInternetReachable: state.isInternetReachable });
       setNetworkStatus(isConnected || false);
       return isConnected;
     } catch (err) {
@@ -1488,8 +1605,12 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
 
   // Monitor network status changes
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: any) => {
-      const isConnected = state.isConnected && state.isInternetReachable;
+    const unsubscribe = NetInfo.addEventListener(async (state: any) => {
+      // Use server accessibility check instead of just NetInfo
+      const { default: tabletRegistrationService } = await import('../services/tabletRegistration');
+      const serverAccessible = await tabletRegistrationService.checkServerAccessibility();
+      
+      const isConnected = serverAccessible || (state.isConnected && state.isInternetReachable);
       setNetworkStatus(isConnected || false);
       
       // If we regain connection and we're in offline mode, try to refresh
@@ -1914,7 +2035,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                         adIndex: currentAdIndex,
                         totalAds: ads.length
                       },
-                      startTime: new Date().toISOString()
+                      startTime: new Date().toISOString(),
+                      gpsData: currentGPS // Include real-time GPS data
                     });
                     
                     // Mark that WebSocket updates have started and video has actually started
@@ -1961,7 +2083,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                     isCompanyAd: currentAdIndex === -1,
                     adIndex: currentAdIndex,
                     totalAds: ads.length
-                  }
+                  },
+                  gpsData: currentGPS // Include real-time GPS data
                 });
               } else if (currentAd && !status.isPlaying && status.positionMillis > 0 && status.isLoaded && !isTransitioning) {
                 // Video is paused (but loaded)
@@ -1990,7 +2113,8 @@ const AdPlayer: React.FC<AdPlayerProps> = ({ materialId, slotNumber, onAdError, 
                     isCompanyAd: currentAdIndex === -1,
                     adIndex: currentAdIndex,
                     totalAds: ads.length
-                  }
+                  },
+                  gpsData: currentGPS // Include real-time GPS data
                 });
               } else if (currentAd && (!status.isLoaded || !status.isPlaying)) {
                 // Video is buffering/loading - DON'T send any updates, just stop the interval

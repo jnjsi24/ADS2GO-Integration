@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import API_CONFIG from '../../config/api';
 import RouteMapView from '../../components/RouteMapView';
+import playbackWebSocketService from '../../services/playbackWebSocketService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -49,6 +50,7 @@ interface DriverInfo {
   driverId: string;
   materialId: string;
   deviceId: string;
+  materialAssignedDate?: string; // Date when driver was assigned to material
 }
 
 const RouteTab: React.FC = () => {
@@ -62,32 +64,200 @@ const RouteTab: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
+  const [isRealTimeActive, setIsRealTimeActive] = useState(false);
+  
+  // Session status state (8-hour requirement)
+  const [sessionStatus, setSessionStatus] = useState<{
+    isActive: boolean;
+    startTime: string | null;
+    endTime: string | null;
+    currentHours: number;
+    targetHours: number;
+    remainingHours: number;
+    progressPercent: number;
+    complianceStatus: 'PENDING' | 'COMPLIANT' | 'NON_COMPLIANT';
+  } | null>(null);
+  
+  // ✅ NEW: Overall compliance rating state
+  const [overallCompliance, setOverallCompliance] = useState<{
+    complianceRate: number;
+    rating: 'VERY GOOD' | 'GOOD' | 'AVERAGE';
+    totalDays: number;
+    compliantDays: number;
+  } | null>(null);
+  
+  // Ad player online status
+  const [isAdPlayerOnline, setIsAdPlayerOnline] = useState(false);
+  const [lastSeenTime, setLastSeenTime] = useState<Date | null>(null);
+  
+  // ✅ NEW: Midnight reset mode - show only last location marker
+  const [showOnlyLastLocation, setShowOnlyLastLocation] = useState(false);
+  const [lastLocationPoint, setLastLocationPoint] = useState<RoutePoint | null>(null);
   useEffect(() => {
-    console.log('🔄 [Route Tab] Date changed to:', selectedDate.toISOString().split('T')[0]);
-    loadDriverInfoAndRoute(false); // Initial load with loading screen
-
-    // Auto-refresh every 30 seconds for today's date only
-    let refreshInterval: ReturnType<typeof setInterval> | null = null;
+    // ✅ CRITICAL FIX: Use local date comparison to avoid timezone issues
+    const selectedYear = selectedDate.getFullYear();
+    const selectedMonth = selectedDate.getMonth();
+    const selectedDay = selectedDate.getDate();
     
-    const isToday = selectedDate.toDateString() === new Date().toDateString();
+    const now = new Date();
+    const nowYear = now.getFullYear();
+    const nowMonth = now.getMonth();
+    const nowDay = now.getDate();
+    
+    const isToday = selectedYear === nowYear && selectedMonth === nowMonth && selectedDay === nowDay;
+    
+    const selectedDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+    
+    console.log('🔄 [Route Tab] Date changed:', {
+      selectedDateStr,
+      isToday,
+      selectedDate: selectedDate.toString(),
+      now: now.toString()
+    });
+    
+    loadDriverInfoAndRoute(false); // Initial load with loading screen
+    
     if (isToday) {
-      console.log('📅 [Route Tab] Today detected - enabling auto-refresh');
-      refreshInterval = setInterval(() => {
-        console.log('🔄 Auto-refreshing route data...');
-        loadDriverInfoAndRoute(true); // Silent background refresh
-      }, 30000); // 30 seconds
+      console.log('📅 [Route Tab] Today detected - enabling real-time WebSocket updates');
+      setIsRealTimeActive(true);
     } else {
-      console.log('📅 [Route Tab] Historical date - no auto-refresh');
+      console.log('📅 [Route Tab] Historical date - real-time updates disabled');
+      setIsRealTimeActive(false);
+    }
+  }, [selectedDate]); // Reload when date changes
+
+  // WebSocket subscription for real-time GPS updates (today's date only)
+  useEffect(() => {
+    if (!isRealTimeActive || !driverInfo?.deviceId || driverInfo.deviceId === 'No Device') {
+      return;
     }
 
-    // Cleanup interval on unmount or date change
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+    console.log('🔌 [Route Tab] Setting up WebSocket for real-time GPS tracking');
+
+    const unsubscribe = playbackWebSocketService.subscribe((update) => {
+      // Only process updates for our device
+      if (update.deviceId !== driverInfo.deviceId) {
+        return;
       }
+
+      // ✅ Update ad player online status
+      if (update.type === 'adPlaybackUpdate') {
+        setIsAdPlayerOnline(true); // Ad player is online if sending updates
+        setLastSeenTime(new Date(update.timestamp || new Date()));
+      }
+      
+      // Handle device status updates
+      if (update.type === 'deviceUpdate') {
+        setIsAdPlayerOnline(update.isOnline || false);
+        if (update.lastSeen) {
+          setLastSeenTime(new Date(update.lastSeen));
+        }
+      }
+      
+      // ✅ Handle session status updates from WebSocket
+      if (update.type === 'adPlaybackUpdate' && update.sessionStatus) {
+        setSessionStatus({
+          isActive: update.sessionStatus.isActive,
+          startTime: update.sessionStatus.startTime,
+          endTime: update.sessionStatus.endTime || null,
+          currentHours: update.sessionStatus.currentHours,
+          targetHours: update.sessionStatus.targetHours,
+          remainingHours: update.sessionStatus.remainingHours,
+          progressPercent: update.sessionStatus.progressPercent,
+          complianceStatus: update.sessionStatus.complianceStatus
+        });
+      }
+      
+      // Handle GPS data from adPlaybackUpdate messages
+      if (update.type === 'adPlaybackUpdate' && update.gpsData) {
+        // ✅ NEW: Exit midnight reset mode when device comes online
+        if (showOnlyLastLocation) {
+          console.log('🌅 [Route Tab] Device came online, exiting midnight reset mode');
+          setShowOnlyLastLocation(false);
+          setLastLocationPoint(null);
+        }
+        
+        const newPoint: RoutePoint = {
+          lat: update.gpsData.lat,
+          lng: update.gpsData.lng,
+          timestamp: update.gpsData.timestamp,
+          speed: update.gpsData.speed * 3.6, // Convert m/s to km/h
+          heading: update.gpsData.heading,
+          accuracy: update.gpsData.accuracy,
+          address: '' // Will be geocoded if needed
+        };
+
+        // Update route data with new GPS point
+        setRouteData(prev => {
+          if (!prev) {
+            // Initialize route data if it doesn't exist
+            return {
+              deviceId: driverInfo.deviceId,
+              materialId: driverInfo.materialId,
+              route: [newPoint],
+              metrics: {
+                totalDistance: 0,
+                totalDuration: 0,
+                averageSpeed: newPoint.speed,
+                pointCount: 1,
+                startTime: newPoint.timestamp,
+                endTime: newPoint.timestamp
+              }
+            };
+          }
+
+          // Add new point to existing route
+          const updatedRoute = [...prev.route, newPoint];
+          
+          // Update metrics
+          const startTime = prev.metrics.startTime || newPoint.timestamp;
+          const endTime = newPoint.timestamp;
+          const duration = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000;
+          
+          // Calculate total distance
+          let totalDistance = prev.metrics.totalDistance || 0;
+          if (prev.route.length > 0) {
+            const lastPoint = prev.route[prev.route.length - 1];
+            totalDistance += calculateDistance(
+              lastPoint.lat, lastPoint.lng,
+              newPoint.lat, newPoint.lng
+            );
+          }
+
+          const averageSpeed = duration > 0 ? (totalDistance / duration) * 3600 : 0;
+
+          return {
+            ...prev,
+            route: updatedRoute,
+            metrics: {
+              totalDistance,
+              totalDuration: duration,
+              averageSpeed,
+              pointCount: updatedRoute.length,
+              startTime,
+              endTime
+            }
+          };
+        });
+
+        setLastUpdate(new Date());
+        
+        // Log occasionally for debugging
+        if (Math.random() < 0.1) {
+          console.log('📍 [Route Tab] Real-time GPS update received:', {
+            speed: `${newPoint.speed.toFixed(1)} km/h`,
+            accuracy: `${newPoint.accuracy.toFixed(1)}m`,
+            points: (routeData?.route?.length || 0) + 1
+          });
+        }
+      }
+    });
+
+    return () => {
+      console.log('🔌 [Route Tab] Cleaning up WebSocket subscription');
+      unsubscribe();
     };
-  }, [selectedDate]); // Reload when date changes
+  }, [isRealTimeActive, driverInfo?.deviceId]);
 
   const loadDriverInfoAndRoute = async (silentRefresh = false) => {
     try {
@@ -183,25 +353,68 @@ const RouteTab: React.FC = () => {
 
       const materialId = driverData.data.materialId || 'Not Assigned';
       const deviceId = driverData.data.deviceId || 'No Device';
+      // ✅ Get assigned date - try screenTracking API first, then GraphQL (same as Profile tab)
+      let materialAssignedDate = driverData.data.materialAssignedDate;
+      
+      if (!materialAssignedDate) {
+        console.log('⚠️ [Route Tab] No materialAssignedDate in screenTracking API, fetching from GraphQL...');
+        try {
+          const materialsResponse = await fetch(`${API_CONFIG.BASE_URL}/graphql`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              query: `
+                query GetDriverMaterials($driverId: ID!) {
+                  getDriverMaterials(driverId: $driverId) {
+                    success
+                    materials {
+                      assignedDate
+                    }
+                  }
+                }
+              `,
+              variables: { driverId },
+            }),
+          });
+          
+          const materialsResult = await materialsResponse.json();
+          if (materialsResult.data?.getDriverMaterials?.success) {
+            const materials = materialsResult.data.getDriverMaterials.materials;
+            if (materials && materials.length > 0 && materials[0].assignedDate) {
+              materialAssignedDate = materials[0].assignedDate;
+              console.log('✅ [Route Tab] Got assigned date from GraphQL:', materialAssignedDate);
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ [Route Tab] Could not fetch from GraphQL:', error);
+        }
+      }
+
+      console.log('📅 [Route Tab] Final Material Assigned Date:', materialAssignedDate);
 
       setDriverInfo({
         driverId,
         materialId,
-        deviceId
+        deviceId,
+        materialAssignedDate: materialAssignedDate || undefined
       });
 
-      // Use deviceId if available, otherwise use materialId as fallback
-      const identifierForRoute = (deviceId && deviceId !== 'Unknown' && deviceId !== 'No Device') 
-        ? deviceId 
-        : materialId;
+      // ✅ FIXED: Enhanced route endpoint requires materialId, not deviceId
+      // Use materialId as primary identifier for route fetching
+      const identifierForRoute = (materialId && materialId !== 'Not Assigned') 
+        ? materialId 
+        : null;
 
-      console.log('🆔 [Route Tab] Using identifier for route:', identifierForRoute);
+      console.log('🆔 [Route Tab] Using materialId for route:', identifierForRoute);
 
-      // Only fetch route data if we have a valid identifier
-      if (identifierForRoute && identifierForRoute !== 'Not Assigned') {
+      // Only fetch route data if we have a valid materialId
+      if (identifierForRoute) {
         await fetchDriverRouteData(identifierForRoute);
       } else {
-        console.log('ℹ️ [Route Tab] No valid identifier, skipping route fetch - device not registered');
+        console.log('ℹ️ [Route Tab] No valid materialId, skipping route fetch - device not registered');
         // No valid device, but show the page anyway
         setRouteData(null);
       }
@@ -226,22 +439,64 @@ const RouteTab: React.FC = () => {
     }
   };
 
-  const fetchDriverRouteData = async (deviceId: string) => {
+  const checkMidnightResetMode = async (materialId: string) => {
     try {
-      // Get auth token
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // ✅ CRITICAL FIX: Use local date comparison to avoid timezone issues
+      const selectedYear = selectedDate.getFullYear();
+      const selectedMonth = selectedDate.getMonth();
+      const selectedDay = selectedDate.getDate();
+      
+      const nowYear = now.getFullYear();
+      const nowMonth = now.getMonth();
+      const nowDay = now.getDate();
+      
+      const isToday = selectedYear === nowYear && selectedMonth === nowMonth && selectedDay === nowDay;
+      
+      console.log('🔍 [Midnight Reset] Check started:', {
+        selectedDate: `${selectedYear}-${selectedMonth + 1}-${selectedDay}`,
+        today: `${nowYear}-${nowMonth + 1}-${nowDay}`,
+        isToday,
+        currentHour
+      });
+      
+      // Only apply midnight reset if viewing today's date AND between 12 AM - 8 AM
+      const isMidnightResetTime = isToday && currentHour >= 0 && currentHour < 8;
+      
+      if (!isMidnightResetTime) {
+        console.log('✅ [Midnight Reset] Not in reset mode - clearing flags:', {
+          isToday,
+          currentHour,
+          reason: !isToday ? 'Historical date' : 'Outside reset hours'
+        });
+        setShowOnlyLastLocation(false);
+        setLastLocationPoint(null);
+        return false;
+      }
+      
+      console.log('🌙 [Midnight Reset] In reset mode (12 AM - 8 AM), checking for yesterday\'s last location...');
+      
+      // ✅ CRITICAL FIX: Get yesterday's date using local time
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayYear = yesterday.getFullYear();
+      const yesterdayMonth = String(yesterday.getMonth() + 1).padStart(2, '0');
+      const yesterdayDay = String(yesterday.getDate()).padStart(2, '0');
+      const yesterdayStr = `${yesterdayYear}-${yesterdayMonth}-${yesterdayDay}`;
+      
+      // Fetch yesterday's route data to get last location
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        console.warn('No auth token found for route data fetch');
-        setRouteData(null);
-        return;
+        console.warn('No auth token for midnight reset check');
+        return false;
       }
-
-      // Format date for API (YYYY-MM-DD)
-      const dateStr = selectedDate.toISOString().split('T')[0];
-      const url = `${API_CONFIG.BASE_URL}/screenTracking/route/${deviceId}?date=${dateStr}`;
       
-      console.log('🗺️ Fetching route data for date:', dateStr);
-
+      // ✅ Use enhanced route endpoint with materialId (required by API)
+      const url = `${API_CONFIG.BASE_URL}/api/enhancedRoute/route/${materialId}?date=${yesterdayStr}`;
+      console.log('🌐 [Midnight Reset] Fetching yesterday\'s data (Enhanced API):', url);
+      
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -250,38 +505,224 @@ const RouteTab: React.FC = () => {
       });
       
       if (!response.ok) {
-        console.warn('Route endpoint failed:', response.status);
+        console.log('⚠️ [Midnight Reset] No yesterday data available');
+        setShowOnlyLastLocation(false);
+        setLastLocationPoint(null);
+        return false;
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data?.route && result.data.route.length > 0) {
+        // Get the last point from yesterday's route
+        const lastPoint = result.data.route[result.data.route.length - 1];
+        console.log('📍 [Midnight Reset] Found yesterday\'s last location:', {
+          lat: lastPoint.lat,
+          lng: lastPoint.lng,
+          timestamp: lastPoint.timestamp
+        });
+        
+        setLastLocationPoint(lastPoint);
+        setShowOnlyLastLocation(true);
+        return true;
+      } else {
+        console.log('⚠️ [Midnight Reset] No route points from yesterday');
+        setShowOnlyLastLocation(false);
+        setLastLocationPoint(null);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ [Midnight Reset] Error checking midnight reset mode:', error);
+      setShowOnlyLastLocation(false);
+      setLastLocationPoint(null);
+      return false;
+    }
+  };
+
+  const fetchDriverRouteData = async (materialId: string) => {
+    try {
+      // ✅ CRITICAL FIX: Get local date string to avoid UTC timezone issues
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const isToday = dateStr === todayStr;
+      
+      console.log(`🌐 [Route Tab] === START FETCH === Date Analysis:`, {
+        selectedDateStr: selectedDate.toDateString(),
+        selectedDateISO: selectedDate.toISOString(),
+        dateStrForAPI: dateStr,
+        todayStr,
+        isToday,
+        selectedDateFull: selectedDate.toString(),
+        nowFull: now.toString()
+      });
+      
+      console.log(`🌐 [Route Tab] State before fetch:`, {
+        showOnlyLastLocation,
+        hasLastLocationPoint: !!lastLocationPoint,
+        hasRouteData: !!routeData
+      });
+      
+      // ✅ CRITICAL FIX: Clear midnight reset state IMMEDIATELY for historical dates
+      // This prevents race conditions where component renders with stale state
+      if (!isToday) {
+        console.log('📅 [Route Tab] Historical date detected - clearing midnight reset state IMMEDIATELY');
+        setShowOnlyLastLocation(false);
+        setLastLocationPoint(null);
+      }
+      
+      // ✅ Check if we're in midnight reset mode (12 AM - 8 AM) - only for TODAY
+      const inResetMode = await checkMidnightResetMode(materialId);
+      
+      console.log(`🌐 [Route Tab] After midnight check:`, {
+        inResetMode,
+        showOnlyLastLocation,
+        isToday
+      });
+      
+      // ✅ CRITICAL FIX: During midnight reset mode, DON'T fetch today's data
+      // Just show the last seen marker from yesterday
+      if (inResetMode) {
+        console.log('🌙 [Route Tab] In midnight reset mode - skipping API call, showing only last location marker');
+        setRouteData(null); // Clear any existing route data
+        setSessionStatus(null);
+        setOverallCompliance(null);
+        return; // Exit early, don't fetch today's data
+      }
+      
+      // Get auth token
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.warn('No auth token found for route data fetch');
         setRouteData(null);
         return;
       }
+
+      console.log(`🌐 [Route Tab] Fetching route data for ${dateStr} (isToday: ${isToday})`);
       
-      let result: any;
-      try {
-        const ct = response.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          result = await response.json();
+      // ✅ FIXED: Match Admin Client behavior - use appropriate endpoint based on date
+      if (isToday) {
+        // For TODAY - fetch session/compliance data only (GPS comes from WebSocket)
+        const sessionUrl = `${API_CONFIG.BASE_URL}/screenTracking/route/${driverInfo?.deviceId || materialId}?date=${dateStr}`;
+
+        console.log(`📅 [Route Tab] Today detected - fetching session data only:`, sessionUrl);
+        
+        const sessionResponse = await fetch(sessionUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+        if (sessionResponse.ok) {
+          try {
+            const sessionResult = await sessionResponse.json();
+            
+            if (sessionResult.success && sessionResult.data) {
+              console.log('✅ [Session API] Today\'s data:', {
+                hasRoute: !!sessionResult.data.route,
+                routePoints: sessionResult.data.route?.length,
+                hasSessionStatus: !!sessionResult.data.sessionStatus,
+                hasOverallCompliance: !!sessionResult.data.overallCompliance
+              });
+              
+              setRouteData(sessionResult.data);
+              
+              if (sessionResult.data.sessionStatus) {
+                setSessionStatus({
+                  isActive: sessionResult.data.sessionStatus.isActive,
+                  startTime: sessionResult.data.sessionStatus.startTime,
+                  endTime: sessionResult.data.sessionStatus.endTime || null,
+                  currentHours: sessionResult.data.sessionStatus.currentHours,
+                  targetHours: sessionResult.data.sessionStatus.targetHours,
+                  remainingHours: sessionResult.data.sessionStatus.remainingHours,
+                  progressPercent: sessionResult.data.sessionStatus.progressPercent,
+                  complianceStatus: sessionResult.data.sessionStatus.complianceStatus
+                });
+              }
+              
+              if (sessionResult.data.overallCompliance) {
+                setOverallCompliance({
+                  complianceRate: sessionResult.data.overallCompliance.complianceRate,
+                  rating: sessionResult.data.overallCompliance.rating,
+                  totalDays: sessionResult.data.overallCompliance.totalDays,
+                  compliantDays: sessionResult.data.overallCompliance.compliantDays
+                });
+              }
+            } else {
+              console.warn('⚠️ [Session API] No data for today');
+        setRouteData(null);
+            }
+          } catch (e) {
+            console.warn('Failed to parse session data:', e);
+            setRouteData(null);
+          }
         } else {
-          const text = await response.text();
-          console.warn('Unexpected content-type for route data:', ct, text?.slice(0, 200));
+          console.warn('Session endpoint failed:', sessionResponse.status);
           setRouteData(null);
-          return;
+        }
+      } else {
+        // For HISTORICAL dates - use enhanced route endpoint (same as Admin Client)
+        const enhancedUrl = `${API_CONFIG.BASE_URL}/api/enhancedRoute/route/${materialId}?date=${dateStr}`;
+        
+        console.log(`📅 [Route Tab] Historical date - fetching clean GPS data:`, enhancedUrl);
+        
+        const enhancedResponse = await fetch(enhancedUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (enhancedResponse.ok) {
+          try {
+            const enhancedResult = await enhancedResponse.json();
+            
+            console.log('📦 [Enhanced API] Full response:', {
+              success: enhancedResult.success,
+              hasData: !!enhancedResult.data,
+              dataKeys: enhancedResult.data ? Object.keys(enhancedResult.data) : [],
+              message: enhancedResult.message
+            });
+            
+            if (enhancedResult.success && enhancedResult.data) {
+              console.log('✅ [Enhanced API] Historical GPS data:', {
+                date: dateStr,
+                pointCount: enhancedResult.data.route?.length,
+                hasMetrics: !!enhancedResult.data.metrics,
+                totalDistance: enhancedResult.data.metrics?.totalDistance,
+                firstPoint: enhancedResult.data.route?.[0],
+                lastPoint: enhancedResult.data.route?.[enhancedResult.data.route?.length - 1]
+              });
+              
+              console.log('🔄 [Enhanced API] Setting route data with', enhancedResult.data.route?.length, 'points');
+              setRouteData(enhancedResult.data);
+              
+              // For historical dates, session status won't be in enhanced API
+              // Clear session status for historical views
+              console.log('🔄 [Enhanced API] Clearing session status for historical view');
+              setSessionStatus(null);
+              setOverallCompliance(null);
+              
+              console.log('✅ [Enhanced API] Route data set complete');
+        } else {
+              console.warn('⚠️ [Enhanced API] No historical data for', dateStr, '- Response:', enhancedResult);
+          setRouteData(null);
         }
       } catch (e) {
-        console.warn('Failed to parse route data:', e);
+            console.error('❌ [Enhanced API] Failed to parse enhanced route data:', e);
         setRouteData(null);
-        return;
       }
-      
-      if (result.success) {
-        console.log('✅ Route data received successfully');
-        console.log('📊 Route points:', result.data?.route?.length || 0);
-        console.log('📍 First point:', result.data?.route?.[0]);
-        console.log('📍 Last point:', result.data?.route?.[result.data.route?.length - 1]);
-        console.log('📈 Metrics:', result.data?.metrics);
-        setRouteData(result.data);
       } else {
-        console.warn('❌ Route data fetch unsuccessful:', result.message);
+          console.error('❌ [Enhanced API] Endpoint failed with status:', enhancedResponse.status);
+          const errorText = await enhancedResponse.text().catch(() => 'Could not read error');
+          console.error('❌ [Enhanced API] Error response:', errorText);
         setRouteData(null);
+        }
       }
     } catch (err) {
       console.error('Error fetching route data:', err);
@@ -512,24 +953,48 @@ const RouteTab: React.FC = () => {
     >
       {/* Header */}
       <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
         <Text style={styles.headerTitle}>Route Tracking</Text>
         <Text style={styles.headerSubtitle}>GPS Route Visualization</Text>
+          </View>
+          
+          {/* Ad Player Online Status Indicator */}
+          <View style={[styles.onlineStatusBadge, isAdPlayerOnline ? styles.onlineStatusOnline : styles.onlineStatusOffline]}>
+            <View style={[styles.statusDot, isAdPlayerOnline && styles.statusDotOnline]} />
+            <Text style={[styles.onlineStatusText, isAdPlayerOnline && styles.onlineStatusTextOnline]}>
+              {isAdPlayerOnline ? 'ONLINE' : 'OFFLINE'}
+            </Text>
+          </View>
+        </View>
         
-        {/* Auto-refresh indicator */}
+        {/* Real-time WebSocket indicator */}
         {lastUpdate && (
           <View style={styles.refreshIndicator}>
             <Ionicons 
-              name="sync" 
+              name={isRealTimeActive ? "flash" : "sync"} 
               size={12} 
-              color={selectedDate.toDateString() === new Date().toDateString() ? '#22c55e' : '#9ca3af'} 
+              color={isRealTimeActive ? '#22c55e' : '#9ca3af'} 
             />
             <Text style={styles.refreshText}>
-              {selectedDate.toDateString() === new Date().toDateString() 
-                ? `Auto-updating • Last: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+              {isRealTimeActive 
+                ? `⚡ Real-time • Last: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
                 : `Updated: ${lastUpdate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
               }
             </Text>
           </View>
+        )}
+        
+        {/* Show last seen time when offline */}
+        {!isAdPlayerOnline && lastSeenTime && (
+          <Text style={styles.lastSeenText}>
+            Last seen: {lastSeenTime.toLocaleString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              hour: 'numeric', 
+              minute: '2-digit'
+            })}
+          </Text>
         )}
         
         {driverInfo && (
@@ -552,6 +1017,151 @@ const RouteTab: React.FC = () => {
         )}
       </View>
 
+      {/* Session Status Card (8-Hour Requirement) */}
+      {selectedDate.toDateString() === new Date().toDateString() && (
+        <View style={styles.sessionCard}>
+          <View style={styles.sessionHeader}>
+            <Ionicons name="time-outline" size={24} color="#3b82f6" />
+            <Text style={styles.sessionTitle}>Daily 8-Hour Requirement</Text>
+          </View>
+          
+          {/* ✅ NEW: Overall Compliance Rating */}
+          {overallCompliance && (
+            <View style={[
+              styles.overallComplianceCard,
+              overallCompliance.rating === 'VERY GOOD' && styles.veryGoodCard,
+              overallCompliance.rating === 'GOOD' && styles.goodCard,
+              overallCompliance.rating === 'AVERAGE' && styles.averageCard
+            ]}>
+              <View style={styles.ratingRow}>
+                <View style={styles.ratingBadge}>
+                  <Text style={[
+                    styles.ratingText,
+                    overallCompliance.rating === 'VERY GOOD' && { color: '#16a34a' },
+                    overallCompliance.rating === 'GOOD' && { color: '#2563eb' },
+                    overallCompliance.rating === 'AVERAGE' && { color: '#f59e0b' }
+                  ]}>
+                    {overallCompliance.rating === 'VERY GOOD' && '🌟 VERY GOOD'}
+                    {overallCompliance.rating === 'GOOD' && '✅ GOOD'}
+                    {overallCompliance.rating === 'AVERAGE' && '⚠️ AVERAGE'}
+                  </Text>
+                </View>
+                <Text style={styles.compliancePercent}>
+                  {overallCompliance.complianceRate.toFixed(1)}%
+                </Text>
+              </View>
+              <Text style={styles.complianceSubtext}>
+                {overallCompliance.compliantDays} of {overallCompliance.totalDays} days completed (since first trip)
+              </Text>
+            </View>
+          )}
+          
+          {sessionStatus && sessionStatus.currentHours >= sessionStatus.targetHours ? (
+            // ✅ ACTUALLY COMPLETED (reached 8 hours)
+            <View style={styles.sessionCompleted}>
+              <Ionicons name="checkmark-circle" size={48} color="#22c55e" />
+              <Text style={styles.sessionCompletedTitle}>8-Hour Requirement Completed! 🎯</Text>
+              <Text style={styles.sessionCompletedText}>
+                You completed {sessionStatus.currentHours.toFixed(2)} hours today
+              </Text>
+              <Text style={styles.sessionCompletedTime}>
+                {new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit'
+                })} - {sessionStatus.endTime ? new Date(sessionStatus.endTime).toLocaleTimeString('en-US', { 
+                  hour: 'numeric', 
+                  minute: '2-digit'
+                }) : 'In Progress'}
+              </Text>
+            </View>
+          ) : sessionStatus ? (
+            // ⏳ IN PROGRESS (has sessionStatus but not yet 8 hours - show progress)
+            <View style={styles.sessionContent}>
+              <View style={styles.sessionStats}>
+                <View style={styles.sessionStatItem}>
+                  <Text style={styles.sessionStatLabel}>Current Hours</Text>
+                  <Text style={styles.sessionStatValue}>
+                    {sessionStatus.currentHours.toFixed(2)} / {sessionStatus.targetHours}h
+                  </Text>
+                </View>
+                <View style={styles.sessionStatItem}>
+                  <Text style={styles.sessionStatLabel}>Remaining</Text>
+                  <Text style={styles.sessionStatValue}>
+                    {sessionStatus.remainingHours.toFixed(2)}h
+                  </Text>
+                </View>
+                <View style={styles.sessionStatItem}>
+                  <Text style={styles.sessionStatLabel}>Status</Text>
+                  <Text style={[
+                    styles.sessionStatValue,
+                    { 
+                      color: overallCompliance?.rating === 'VERY GOOD' ? '#16a34a' : 
+                             overallCompliance?.rating === 'GOOD' ? '#2563eb' : '#f59e0b'
+                    }
+                  ]}>
+                    {overallCompliance?.rating === 'VERY GOOD' && '🌟 VERY GOOD'}
+                    {overallCompliance?.rating === 'GOOD' && '✅ GOOD'}
+                    {overallCompliance?.rating === 'AVERAGE' && '⚠️ AVERAGE'}
+                    {!overallCompliance && 'N/A'}
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Progress Bar */}
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBarBg}>
+                  <View style={[
+                    styles.progressBarFill,
+                    { 
+                      width: `${sessionStatus.progressPercent}%`,
+                      backgroundColor: overallCompliance?.rating === 'VERY GOOD' ? '#16a34a' : 
+                                       overallCompliance?.rating === 'GOOD' ? '#2563eb' : 
+                                       overallCompliance?.rating === 'AVERAGE' ? '#f59e0b' : '#3b82f6'
+                    }
+                  ]} />
+                </View>
+                <Text style={styles.progressText}>
+                  {sessionStatus.progressPercent.toFixed(1)}% Complete
+                </Text>
+              </View>
+              
+              <View style={styles.sessionTimeInfo}>
+                <Text style={styles.sessionTimeText}>
+                  Started: {new Date(sessionStatus.startTime).toLocaleTimeString('en-US', { 
+                    hour: 'numeric', 
+                    minute: '2-digit',
+                    hour12: true 
+                  })}
+                </Text>
+                {sessionStatus.complianceStatus === 'COMPLIANT' && sessionStatus.endTime && (
+                  <Text style={[styles.sessionTimeText, { color: '#22c55e', fontWeight: '600' }]}>
+                    ✅ Completed at {new Date(sessionStatus.endTime).toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      minute: '2-digit',
+                      hour12: true 
+                    })}
+                  </Text>
+                )}
+              </View>
+            </View>
+          ) : (
+            // Session Not Started - Only shows if sessionStatus is null
+            <View style={styles.sessionNotStarted}>
+              <Ionicons name="tablet-portrait-outline" size={48} color="#9ca3af" />
+              <Text style={styles.sessionNotStartedText}>
+                Session will start automatically when ad player opens
+              </Text>
+              <View style={styles.autoStartInfo}>
+                <Ionicons name="information-circle" size={20} color="#3b82f6" />
+                <Text style={styles.autoStartText}>
+                  Your 8-hour tracking begins automatically when the ad player device connects and starts running.
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Date Selector */}
       <View style={styles.controlsCard}>
         <View style={styles.controlsRow}>
@@ -572,7 +1182,16 @@ const RouteTab: React.FC = () => {
 
           <TouchableOpacity 
             style={styles.todayButton}
-            onPress={() => setSelectedDate(new Date())}
+            onPress={() => {
+              const now = new Date();
+              // ✅ Create today's date at midnight to avoid timezone issues
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+              console.log('🎯 [Today Button] Clicked:', {
+                dateStr: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+                dateString: today.toDateString()
+              });
+              setSelectedDate(today);
+            }}
           >
             <Text style={styles.todayButtonText}>Today</Text>
           </TouchableOpacity>
@@ -596,10 +1215,46 @@ const RouteTab: React.FC = () => {
             </View>
             
             <ScrollView style={styles.dateList}>
-              {/* Generate last 30 days */}
-              {Array.from({ length: 30 }, (_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
+              {/* Generate dates from assigned date to today */}
+              {(() => {
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                
+                // ✅ Calculate days to show based on assigned date
+                let daysToShow = 0; // Default to 0 (show nothing if no assigned date)
+                
+                if (driverInfo?.materialAssignedDate) {
+                  const assignedDate = new Date(driverInfo.materialAssignedDate);
+                  assignedDate.setHours(0, 0, 0, 0);
+                  
+                  // Calculate days from assignment to today
+                  const daysSinceAssignment = Math.floor((now.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                  daysToShow = daysSinceAssignment;
+                  
+                  console.log('📅 [Date Dropdown] Calculated:', {
+                    assignedDate: assignedDate.toDateString(),
+                    today: now.toDateString(),
+                    daysSinceAssignment,
+                    daysToShow
+                  });
+                } else {
+                  console.log('⚠️ [Date Dropdown] No assigned date - showing no dates');
+                }
+                
+                // If no dates to show, display a message
+                if (daysToShow === 0) {
+                  return (
+                    <View style={styles.noDateContainer}>
+                      <Ionicons name="calendar-outline" size={48} color="#9ca3af" />
+                      <Text style={styles.noDateText}>No dates available</Text>
+                      <Text style={styles.noDateSubtext}>No material assigned yet</Text>
+                    </View>
+                  );
+                }
+                
+                return Array.from({ length: daysToShow }, (_, i) => {
+                  // ✅ CRITICAL FIX: Create date at midnight to avoid timezone issues
+                  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i, 0, 0, 0, 0);
                 const isSelected = date.toDateString() === selectedDate.toDateString();
                 
                 return (
@@ -607,6 +1262,15 @@ const RouteTab: React.FC = () => {
                     key={i}
                     style={[styles.dateItem, isSelected && styles.dateItemSelected]}
                     onPress={() => {
+                      const selectedYear = date.getFullYear();
+                      const selectedMonth = date.getMonth() + 1;
+                      const selectedDay = date.getDate();
+                      const dateStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+                      
+                      console.log(`🎯 [Date Picker] Selected:`, {
+                        dateStr,
+                        dateString: date.toDateString()
+                      });
                       setSelectedDate(date);
                       setShowDatePicker(false);
                     }}
@@ -627,7 +1291,8 @@ const RouteTab: React.FC = () => {
                     {i === 0 && <Text style={styles.todayBadge}>Today</Text>}
                   </TouchableOpacity>
                 );
-              })}
+                });
+              })()}
             </ScrollView>
           </View>
         </View>
@@ -769,12 +1434,48 @@ const RouteTab: React.FC = () => {
       {/* Interactive Route Map */}
       <View style={styles.mapContainer}>
         <View style={styles.mapWrapper}>
+          {/* ✅ FIXED: Show single marker during midnight reset mode, otherwise show full route */}
+          {(() => {
+            // During midnight reset mode (12 AM - 8 AM on current day):
+            // - showOnlyLastLocation = true
+            // - lastLocationPoint = yesterday's last GPS location
+            // - routeData = null (we skip the API call)
+            const shouldShowSingleMarker = showOnlyLastLocation && lastLocationPoint;
+            
+            console.log('🗺️ [Map Render] Decision:', {
+              date: selectedDate.toDateString(),
+              showOnlyLastLocation,
+              hasLastLocationPoint: !!lastLocationPoint,
+              hasRouteData: !!routeData?.route,
+              routePointCount: routeData?.route?.length || 0,
+              shouldShowSingleMarker,
+              willShow: shouldShowSingleMarker ? 'SINGLE MARKER (Midnight Reset)' : 'FULL ROUTE'
+            });
+            
+            return shouldShowSingleMarker ? (
+              <>
+                <RouteMapView 
+                  route={[lastLocationPoint]} 
+                  style={styles.map}
+                  showSpeedColors={false}
+                  showWaypoints={false}
+                />
+                <View style={styles.midnightResetBanner}>
+                  <Ionicons name="moon" size={16} color="#f59e0b" />
+                  <Text style={styles.midnightResetText}>
+                    Showing last location from yesterday (driver completed 8 hours). New route will appear when ad player starts at 8 AM.
+                  </Text>
+                </View>
+              </>
+            ) : (
           <RouteMapView 
             route={routeData?.route || []} 
             style={styles.map}
             showSpeedColors={false}
             showWaypoints={false}
           />
+            );
+          })()}
         </View>
       </View>
 
@@ -911,6 +1612,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -919,6 +1626,42 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     color: '#6b7280',
+    marginTop: 4,
+  },
+  onlineStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
+  },
+  onlineStatusOnline: {
+    backgroundColor: '#dcfce7',
+  },
+  onlineStatusOffline: {
+    backgroundColor: '#fee2e2',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
+  statusDotOnline: {
+    backgroundColor: '#22c55e',
+  },
+  onlineStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  onlineStatusTextOnline: {
+    color: '#16a34a',
+  },
+  lastSeenText: {
+    fontSize: 12,
+    color: '#9ca3af',
     marginTop: 4,
   },
   refreshIndicator: {
@@ -1078,6 +1821,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  midnightResetBanner: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(251, 191, 36, 0.95)',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  midnightResetText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#78350f',
+    fontWeight: '500',
+    lineHeight: 16,
   },
   map: {
     height: 300,
@@ -1255,6 +2022,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 4,
   },
+  noDateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
+  },
+  noDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+  },
+  noDateSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
   
   // Timeline Styles
   timelineContainer: {
@@ -1325,6 +2110,178 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     marginTop: 4,
     fontWeight: '600',
+  },
+  
+  // Session Status Styles (8-Hour Requirement)
+  sessionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  sessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sessionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginLeft: 8,
+  },
+  sessionContent: {
+    gap: 16,
+  },
+  sessionStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sessionStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 8,
+  },
+  sessionStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  sessionStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  progressContainer: {
+    gap: 8,
+  },
+  progressBarBg: {
+    height: 12,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+    textAlign: 'center',
+  },
+  sessionTimeInfo: {
+    gap: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  sessionTimeText: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  sessionCompleted: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  sessionCompletedTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#22c55e',
+    marginTop: 8,
+  },
+  sessionCompletedText: {
+    fontSize: 15,
+    color: '#6b7280',
+  },
+  sessionCompletedTime: {
+    fontSize: 13,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  sessionNotStarted: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 16,
+  },
+  sessionNotStartedText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  autoStartInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#eff6ff',
+    padding: 16,
+    borderRadius: 10,
+    gap: 12,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3b82f6',
+  },
+  autoStartText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e40af',
+    lineHeight: 20,
+  },
+  
+  // ✅ NEW: Overall Compliance Rating Styles
+  overallComplianceCard: {
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  veryGoodCard: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#16a34a',
+  },
+  goodCard: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  averageCard: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#f59e0b',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ratingText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  compliancePercent: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  complianceSubtext: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginTop: 4,
   },
 });
 
